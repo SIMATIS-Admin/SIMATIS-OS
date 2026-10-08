@@ -17,6 +17,7 @@ import { instances, type Instance } from '../instances/schema.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
 import { CHAMPS_EXCLUABLES, OBJETS, reglagesSchema } from '../connecteurs/hubspot/reglages.js';
+import { changeOpportunite, ChangementInvalide, getPipeline } from '../crm/pipeline.js';
 import { connexions } from '../connexions/schema.js';
 import { syncNow } from '../connexions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
@@ -135,6 +136,40 @@ export function registerApi(app: FastifyInstance, { db, secretsDir, realWrites }
   app.post<Create>(
     '/api/i/:slug/contacts',
     creation(contactSchema, (i, input) => createContact(db, i, input, connexionDeps)),
+  );
+
+  app.get<SlugParams>(
+    '/api/i/:slug/pipeline',
+    onInstance((i) => getPipeline(db, i)),
+  );
+
+  const changementSchema = z.union([
+    z.object({ etape: z.string().min(1).max(100) }).strict(),
+    z
+      .object({ clos: z.enum(['gagne', 'perdu']), motif: z.string().trim().max(200).nullish() })
+      .strict(),
+    z.object({ rouvrir: z.literal(true) }).strict(),
+  ]);
+  type Patch = ById & { Body: unknown };
+  app.patch<Patch>(
+    '/api/i/:slug/opportunites/:id',
+    onInstance<Patch>(async (i, request, reply) => {
+      const parsed = changementSchema.safeParse(request.body);
+      if (!parsed.success || !UUID.test(request.params.id)) {
+        return reply.code(400).send({ error: 'Changement invalide' });
+      }
+      try {
+        const done = await changeOpportunite(db, i, request.params.id, parsed.data, connexionDeps);
+        return (
+          done ?? reply.code(404).send({ error: 'Opportunité introuvable dans cette instance' })
+        );
+      } catch (error) {
+        if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+        if (error instanceof ChangementInvalide)
+          return reply.code(400).send({ error: error.message });
+        throw error;
+      }
+    }),
   );
 
   app.get<SlugParams>(

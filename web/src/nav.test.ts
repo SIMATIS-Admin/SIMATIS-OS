@@ -43,7 +43,8 @@ describe('nav', () => {
   it('marks only built screens as built', () => {
     expect(isBuilt('entreprises')).toBe(true);
     expect(isBuilt('contacts')).toBe(true);
-    expect(isBuilt('pipeline')).toBe(false);
+    expect(isBuilt('pipeline')).toBe(true);
+    expect(isBuilt('brief')).toBe(false);
   });
 
   it('reorders favourites before or after a target', () => {
