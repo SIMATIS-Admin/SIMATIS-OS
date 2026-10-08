@@ -181,7 +181,11 @@ document.addEventListener('input', e => {
   const el = e.target.closest('[data-input]');
   if (el && ACTIONS[el.dataset.input]) ACTIONS[el.dataset.input](el.dataset, el, e);
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && OVER) closeOver(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && OVER) closeOver();
+  const el = e.target.closest('[data-act][tabindex]');
+  if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); el.click(); }
+});
 window.addEventListener('hashchange', () => { const before = S.inst + S.view; fromHash(); if (before !== S.inst + S.view) render(); });
 
 function boot() { S = load(); if (!S.data || !S.data.demo) S = freshState(); fromHash(); render(); }

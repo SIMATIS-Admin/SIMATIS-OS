@@ -142,7 +142,7 @@ VIEWS.prospection = () => {
   if (!b) return { title: 'Prospection', sub: 'Sélection de contacts et brouillons, sans envoi automatique.', body: `<div class="panel empty"><p>Aucune base de prospection pour cette instance.</p><button class="btn primary" data-act="go" data-v="bases">Créer une base</button></div>` };
   const C = S.camp && S.camp.inst === S.inst ? S.camp : (S.camp = { inst: S.inst, step: 'config', on: Object.fromEntries(REGLES.map(r => [r.id, r.id !== 'expert' || INST().modules.includes('relais')])), limite: 30, mix: 60 });
   let reste = b.lignes; const lignes = REGLES.map((r, k) => { const n = Math.round(b.lignes * r.n); const on = C.on[r.id]; if (on) reste -= n; return { r, n, on, k }; });
-  const nb = Math.min(C.limite, reste), nouv = Math.round(nb * C.mix / 100);
+  C.dispo = reste; const nb = Math.min(C.limite, reste), nouv = Math.round(nb * C.mix / 100);
   const config = `<div class="grid g-main">
     <div class="panel"><div class="panel-h"><div><h2>Règles de sélection</h2><div class="small muted">Base : ${esc(b.nom)}, <span class="num">${b.lignes.toLocaleString('fr-FR')}</span> lignes</div></div>${gauge('L3')}</div>
       <div class="panel-b"><ol class="steps">${lignes.map(({ r, n, on, k }) => `<li class="${on ? '' : 'off'}"><span class="k">${k + 1}</span><div><b>${r.l}</b><div class="small muted">${r.d}</div></div><div style="text-align:right"><div class="minus">− ${n}</div>${r.fixe ? `<span class="lock" title="Règle toujours active">${ic('lock')}toujours</span>` : `<label class="small"><input type="checkbox" ${on ? 'checked' : ''} data-change="camp-rule" data-id="${r.id}"> active</label>`}</div></li>`).join('')}</ol></div></div>
@@ -159,7 +159,7 @@ VIEWS.prospection = () => {
     actions: `<button class="btn" data-act="camp-back">Revoir les règles</button>${C.step === 'resultat' ? `<button class="btn go" data-act="camp-draft">Préparer les ${sel.length} brouillons</button>` : ''}`,
     body: `${C.step === 'fait' ? `<div class="alert blue" style="margin-bottom:16px">${ic('check')}<div>${sel.length} brouillons préparés et regroupés dans <a href="#" data-act="go" data-v="validations">À valider</a>. Journal de statuts écrit en ajout seul : <b>${esc(C.fichier)}</b>.</div></div>` : ''}
     <div class="grid g-main"><div class="panel"><div class="panel-h"><h2>Contacts retenus</h2><span class="muted small">${nouv} nouveaux, ${sel.length - nouv} relances</span></div>
-      <table class="tbl"><thead><tr><th>Société</th><th>Fonction</th><th>Origine</th><th>Type</th><th>Repère temporel</th></tr></thead><tbody>${sel.slice(0, 12).map(x => `<tr><td><b>${esc(x.soc)}</b></td><td>${esc(x.f)}</td><td>${esc(x.o)}</td><td><span class="badge ${x.t === 'Nouveau' ? 'blue' : ''}">${x.t}</span></td><td class="small">${esc(x.rep)}</td></tr>`).join('')}<tr><td colspan="5" class="muted small">et ${sel.length - 12} autres contacts</td></tr></tbody></table></div>
+      <table class="tbl"><thead><tr><th>Société</th><th>Fonction</th><th>Origine</th><th>Type</th><th>Repère temporel</th></tr></thead><tbody>${sel.slice(0, 12).map(x => `<tr><td><b>${esc(x.soc)}</b></td><td>${esc(x.f)}</td><td>${esc(x.o)}</td><td><span class="badge ${x.t === 'Nouveau' ? 'blue' : ''}">${x.t}</span></td><td class="small">${esc(x.rep)}</td></tr>`).join('')}${sel.length > 12 ? `<tr><td colspan="5" class="muted small">et ${sel.length - 12} autres contacts</td></tr>` : ''}</tbody></table></div>
       <div class="panel"><div class="panel-h"><h2>Résumé de l'exécution</h2>${who('os')}</div><div class="panel-b report-col">
         <h4>Exclusions notables</h4><ul><li>2 sociétés écartées : compte actif trouvé par le domaine d'email alors que le nom différait</li><li>1 contact écarté : réponse reçue depuis une autre adresse il y a 3 semaines</li>${C.on.expert ? '<li>3 comptes en attente d\'accord préalable d\'un expert</li>' : ''}</ul>
         <h4>Sources utilisées</h4><ul><li>${esc(b.nom)}</li><li>${b.lignes > 1000 ? '7' : '3'} journaux de statuts</li><li>${esc(INST().outil)}, messagerie et agenda du mandat</li></ul>
@@ -172,7 +172,8 @@ Object.assign(ACTIONS, {
   'camp-mix': (ds, el) => { S.camp.mix = +el.value; const y = scrollY; render(); scrollTo(0, y); document.querySelector('[data-input="camp-mix"]')?.focus(); },
   'camp-back': () => { S.camp.step = 'config'; render(); },
   'camp-run': () => {
-    const C = S.camp, n = C.limite, nouv = Math.round(n * C.mix / 100);
+    const C = S.camp, n = Math.min(C.limite, C.dispo || 0), nouv = Math.round(n * C.mix / 100);
+    if (!n) { toast('Aucun contact disponible : importez d\'abord des contacts dans la base'); return; }
     C.liste = Array.from({ length: n }, (_, k) => { const o = FICTIFS.o[k % 4]; return { soc: FICTIFS.soc[k % 15] + (k >= 15 ? ' ' + (k > 22 ? 'Sud' : 'Est') : ''), f: FICTIFS.f[k % 6], o, t: k < nouv ? 'Nouveau' : 'Relance', rep: o === 'Salon 2023' ? 'Rencontre au salon 2023' : o === 'Anciens prospects' ? 'Échange de 2022' : o === 'Contacts réseau' ? 'Recommandation du réseau' : 'Profil repéré en septembre' }; });
     C.step = 'resultat'; logAction(`Sélection de campagne simulée : ${n} contacts`, 'L3', 'os'); render();
   },

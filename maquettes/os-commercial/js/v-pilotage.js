@@ -3,7 +3,7 @@
 const late = () => D().taches.filter(t => !t.fait && diffDays(t.echeance) < 0);
 const todayTasks = () => D().taches.filter(t => !t.fait && diffDays(t.echeance) === 0);
 const rdvToday = () => D().rdv.filter(r => diffDays(r.date) === 0);
-const devisARelancer = () => D().devis.filter(d => d.statut === 'transmis' && diffDays(d.envoye) <= -7);
+const devisARelancer = () => D().devis.filter(d => d.statut === 'transmis' && diffDays(d.envoye) <= -10);
 
 VIEWS.brief = () => {
   const d = D(), inst = INST();
@@ -120,7 +120,7 @@ function vDetail(v) {
     main = `<p>${v.liste.length} brouillons personnalisés, un par contact retenu. Exemple pour le premier :</p>
       <div class="mail"><div class="mail-h"><div><span>À</span>${esc(ex.f)}, ${esc(ex.soc)}</div><div><span>Objet</span><b>Votre organisation commerciale</b></div></div>
       <div class="mail-b">${email('Madame, Monsieur', '', [`${ex.rep}, nous avions évoqué l'organisation commerciale de ${esc(ex.soc)}.`, 'Je vous propose un échange de trente minutes pour voir si une direction commerciale à temps partagé aurait du sens pour vous.'], sl)}</div></div>
-      <table class="tbl small" style="margin-top:14px"><thead><tr><th>Société</th><th>Type</th><th>Repère temporel</th></tr></thead><tbody>${v.liste.slice(1, 6).map(x => `<tr><td>${esc(x.soc)}</td><td>${x.t}</td><td>${esc(x.rep)}</td></tr>`).join('')}<tr><td colspan="3" class="muted">et ${v.liste.length - 6} autres</td></tr></tbody></table>`;
+      <table class="tbl small" style="margin-top:14px"><thead><tr><th>Société</th><th>Type</th><th>Repère temporel</th></tr></thead><tbody>${v.liste.slice(1, 6).map(x => `<tr><td>${esc(x.soc)}</td><td>${x.t}</td><td>${esc(x.rep)}</td></tr>`).join('')}${v.liste.length > 6 ? `<tr><td colspan="3" class="muted">et ${v.liste.length - 6} autres</td></tr>` : ''}</tbody></table>`;
     buttons = `<button class="btn go" data-act="v-ok" data-id="${v.id}">${ic('check')}Créer les ${v.liste.length} brouillons dans Gmail</button><button class="btn ghost danger" data-act="v-no" data-id="${v.id}">Écarter le lot</button>`;
     hint = 'Rien ne part sans vous : chaque brouillon s\'envoie depuis Gmail.';
   } else if (v.type === 'accord') {
