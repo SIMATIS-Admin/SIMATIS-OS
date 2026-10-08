@@ -10,6 +10,7 @@ import {
   syncConnexion,
   writeVia,
 } from '../../connexions/service.js';
+import { buildApp } from '../../app.js';
 import { createEntreprise } from '../../crm/service.js';
 import { withInstance } from '../../db/context.js';
 import type { Instance } from '../../instances/schema.js';
@@ -303,6 +304,45 @@ describe('HubSpot mirror', () => {
     await expect(
       inA((tx) => writeVia(tx, a, 'crm', { op: 'deal.stage', data: {} }, deps())),
     ).rejects.toBeInstanceOf(EcritureRefusee);
+  });
+
+  it('serves the settings screen without ever sending the token, and saves the settings', async () => {
+    const app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
+    try {
+      const res = await app.inject({ method: 'GET', url: '/api/i/mandat-hubspot/connexions' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain(TOKEN);
+      expect(res.json()).toMatchObject({
+        connexions: [
+          { kind: 'crm', fournisseur: 'hubspot', secret: { nom: 'HUBSPOT_TOKEN', present: true } },
+        ],
+        ecrituresReelles: false,
+      });
+
+      const bad = await app.inject({
+        method: 'PATCH',
+        url: '/api/i/mandat-hubspot/connexions/crm',
+        payload: { sens: 'partout' },
+      });
+      expect(bad.statusCode).toBe(400);
+      const saved = await app.inject({
+        method: 'PATCH',
+        url: '/api/i/mandat-hubspot/connexions/crm',
+        payload: { frequence: '1h', champsExclus: ['phone', 'annualrevenue'] },
+      });
+      expect(saved.json()).toMatchObject({
+        reglages: { frequence: '1h', champsExclus: ['phone', 'annualrevenue'] },
+      });
+
+      const sync = await app.inject({
+        method: 'POST',
+        url: '/api/i/mandat-hubspot/connexions/crm/sync',
+      });
+      expect(sync.statusCode).toBe(200);
+      expect(sync.json()).toHaveProperty('lus');
+    } finally {
+      await app.close();
+    }
   });
 
   it('explains a missing token without leaking any secret', async () => {
