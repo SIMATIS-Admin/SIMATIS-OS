@@ -5,6 +5,14 @@ const todayTasks = () => D().taches.filter(t => !t.fait && diffDays(t.echeance) 
 const rdvToday = () => D().rdv.filter(r => diffDays(r.date) === 0);
 const devisARelancer = () => !allowed('devis') ? [] : D().devis.filter(d => d.statut === 'transmis' && diffDays(d.envoye) <= -10);
 
+/* Tâches réalisées sur une période : emails, appels et autres tâches (historique de l'outil du mandat). */
+function activite(depuis, jusqua = 0) {
+  const a = D().activites.filter(x => { const n = diffDays(x.date); return n >= depuis && n <= jusqua; });
+  const email = a.reduce((t, x) => t + x.email, 0), appel = a.reduce((t, x) => t + x.appel, 0), autre = a.reduce((t, x) => t + x.autre, 0);
+  return { email, appel, autre, total: email + appel + autre };
+}
+const dernierOuvre = () => { const d = new Date(TODAY); do d.setDate(d.getDate() - 1); while (d.getDay() === 0 || d.getDay() === 6); return iso(d); };
+
 VIEWS.brief = () => {
   const d = D(), inst = INST();
   const nV = pending(), nL = late().length, nR = rdvToday().length, nD = devisARelancer().length;
@@ -16,17 +24,21 @@ VIEWS.brief = () => {
     ...late().map(t => ({ t: '<span class="late">Retard</span>', html: `<b>${esc(t.titre)}</b><div class="small muted">Échue ${rel(t.echeance)}, ${t.canal}</div>`, act: `<button class="btn sm" data-act="task-done" data-id="${t.id}">Marquer fait</button>` })),
     ...todayTasks().map(t => ({ t: 'Jour', html: `<b>${esc(t.titre)}</b><div class="small muted">${t.canal === 'appel' ? 'Fiche d\'appel prête' : t.canal}</div>`, act: `<button class="btn sm" data-act="task-done" data-id="${t.id}">Marquer fait</button>` }))
   ];
-  const parScore = ['chaude', 'tiede', 'faible', 'froid'].map(k => ({ k, n: d.opps.filter(o => !o.clos && cat(total(o.score)).k === k).length }));
-  const maxS = Math.max(1, ...parScore.map(x => x.n));
-  const sig = d.signaux.slice(0, 2);
+  const veille = dernierOuvre(), nVeille = diffDays(veille);
+  const per = [
+    { l: diffDays(veille) === -1 ? 'Hier' : 'Dernier jour ouvré', s: fdate(veille), v: activite(nVeille, nVeille) },
+    { l: '7 derniers jours', s: 'avec aujourd\'hui', v: activite(-6) },
+    { l: '30 derniers jours', s: 'avec aujourd\'hui', v: activite(-29) }
+  ];
+  const auj = activite(0);
   return {
     title: 'Brief du jour',
     body: `
     <section class="brief-hero">
       <div style="position:relative;z-index:1">
         <h1>Bonjour, nous sommes ${jour}.</h1>
-        <p class="lead">${phrase.length ? phrase.join(', ') + '.' : 'Rien ne vous attend ce matin. Profitez-en pour avancer le plan d\'action.'}</p>
-        <p>La routine de ${routine.rythme.match(/\d+h\d+/)[0]} a préparé le terrain. Rien n'a été envoyé : tout ce qui engage attend votre décision.</p>
+        <p class="lead">${phrase.length ? phrase.join(', ') + '.' : 'Rien ne vous attend ce matin.'}</p>
+        <p>La routine de ${(routine.params?.heure) || '7h00'} a préparé le terrain. Rien n'a été envoyé : tout ce qui engage attend votre décision.</p>
       </div>
       <div class="brief-counts">
         <button data-act="go" data-v="validations"><span class="n">${nV}</span><span class="l">à valider</span></button>
@@ -36,29 +48,20 @@ VIEWS.brief = () => {
       </div>
     </section>
     <div class="grid g-main" style="margin-top:18px">
-      <div class="stack">
-        <div class="panel"><div class="panel-h"><h2>Votre journée</h2><span class="muted small">${items.length} élément${items.length > 1 ? 's' : ''}</span></div>
-          <div class="panel-b">${items.length ? `<ul class="timeline">${items.map(i => `<li><span class="t">${i.t}</span><div>${i.html}</div>${i.act}</li>`).join('')}</ul>` : '<div class="empty">Journée libre. Les signaux de détection sont un bon point de départ.</div>'}</div></div>
-        <div class="panel"><div class="panel-h"><h2>Signaux à regarder</h2><button class="btn ghost sm" data-act="go" data-v="detection">Tous les signaux</button></div>
-          <div class="panel-b">${sig.length ? sig.map(s => `<div style="padding:6px 0"><span class="badge ${s.force === 'fort' ? 'green' : ''}">${esc(s.type)}</span> <b>${esc(s.soc)}</b> ${esc(s.txt)}. <span class="muted small">Source : ${esc(s.source)}, ${rel(s.date)}.</span></div>`).join('') : '<div class="empty">Aucun signal cette semaine.</div>'}</div></div>
-      </div>
-      <div class="stack">
-        <div class="panel"><div class="panel-h"><h2>Rapport de la routine</h2>${who('os')}</div>
-          <div class="panel-b report-col">
-            <div class="small muted">${esc(routine.nom)}, ${rel(routine.dernier)}</div>
-            <h4>Ce qui a été fait</h4><ul>${routine.rapport.fait.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
-            <h4>Ce qui attend votre validation</h4><ul>${routine.rapport.attente.map(x => `<li>${esc(x)}</li>`).join('') || '<li>Rien</li>'}</ul>
-            ${routine.rapport.echec.length ? `<h4>Ce qui a échoué</h4><ul>${routine.rapport.echec.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-          </div></div>
-        <div class="panel"><div class="panel-h"><h2>Pipeline par score</h2><button class="btn ghost sm" data-act="go" data-v="pipeline">Ouvrir</button></div>
-          <div class="panel-b bars">${parScore.map(x => `<div class="row"><span>${cat({ chaude: 12, tiede: 8, faible: 4, froid: 0 }[x.k]).nom}</span><div class="bar" style="width:${x.n / maxS * 100}%;background:${{ chaude: '#2F8F5B', tiede: '#C98A12', faible: '#164A88', froid: '#B9C3D0' }[x.k]}"></div><span class="v">${x.n}</span></div>`).join('')}</div></div>
-      </div>
+      <div class="panel"><div class="panel-h"><h2>Votre journée</h2><span class="muted small">${items.length} élément${items.length > 1 ? 's' : ''}</span></div>
+        <div class="panel-b">${items.length ? `<ul class="timeline">${items.map(i => `<li><span class="t">${i.t}</span><div>${i.html}</div>${i.act}</li>`).join('')}</ul>` : '<div class="empty">Journée libre.</div>'}</div></div>
+      <div class="panel"><div class="panel-h"><h2>Tâches réalisées ${tip(`Tâches marquées faites dans ${inst.outil}, par canal. Les autres tâches regroupent tout ce qui n'est ni un email ni un appel (préparation, mise à jour, rendez-vous).`)}</h2>${auj.total ? `<span class="small muted">Aujourd'hui : <b class="num">${auj.total}</b></span>` : ''}</div>
+        <div class="panel-b activ">${per.map(p => `<div class="activ-row"><div><b>${p.l}</b><div class="small muted">${p.s}</div></div><div class="activ-n num">${p.v.total}<small>tâches</small></div>
+          <div class="activ-d"><span>${ic('send')}<b class="num">${p.v.email}</b> email${p.v.email > 1 ? 's' : ''}</span><span>${ic('phone')}<b class="num">${p.v.appel}</b> appel${p.v.appel > 1 ? 's' : ''}</span><span class="muted"><b class="num">${p.v.autre}</b> autre${p.v.autre > 1 ? 's' : ''}</span></div></div>`).join('')}</div></div>
     </div>`
   };
 };
 
 Object.assign(ACTIONS, {
-  'task-done': ds => { const t = byId(D().taches, ds.id); t.fait = true; logAction(`Tâche marquée faite : ${t.titre}`, 'L2'); render(); toast('Tâche marquée faite'); }
+  'task-done': ds => {
+    const t = byId(D().taches, ds.id); t.fait = true;
+    const a = D().activites.find(x => x.date === dp(0)) || (D().activites.unshift({ date: dp(0), email: 0, appel: 0, autre: 0 }), D().activites[0]);
+    a[t.canal === 'email' ? 'email' : t.canal === 'appel' ? 'appel' : 'autre']++; logAction(`Tâche marquée faite : ${t.titre}`, 'L2'); render(); toast('Tâche marquée faite'); }
 });
 
 /* ---------- File de validation ---------- */

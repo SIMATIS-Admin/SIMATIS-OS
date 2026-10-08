@@ -1,6 +1,6 @@
 /* Noyau de la maquette : état, navigation, interface commune. */
 
-const STORE_KEY = 'simatis-os-maquette-v3';
+const STORE_KEY = 'simatis-os-maquette-v4';
 const VIEWS = {};
 const ACTIONS = {};
 let S;
@@ -79,6 +79,8 @@ const IC = {
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>',
   menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
   down: '<path d="M6 9l6 6 6-6"/>',
+  building: '<rect x="4" y="2" width="16" height="20" rx="1"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   star: '<polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3 12 2"/>',
   phone: '<path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.7a2 2 0 01-.5 2.1L8 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.7.7a2 2 0 011.7 2z"/>'
 };
@@ -90,7 +92,7 @@ const NAV = [
   { g: 'Pilotage', items: [['routines', 'Routines Claude', 'clock'], ['brief', 'Brief du jour', 'sun'], ['validations', 'À valider', 'inbox'], ['tableau', 'Tableau de bord', 'chart']] },
   { g: 'Stratégie', items: [['demarrage', 'Démarrage du mandat', 'flag', 'demarrage']] },
   { g: 'Générer la demande', items: [['prospection', 'Prospection', 'send'], ['bases', 'Bases vivantes', 'db']] },
-  { g: 'Convertir', items: [['pipeline', 'Pipeline', 'kanban'], ['agenda', 'Rendez-vous', 'cal'], ['devis', 'Devis', 'file', 'devis'], ['relais', 'Relais internes', 'users', 'relais']] },
+  { g: 'Convertir', items: [['pipeline', 'Pipeline', 'kanban'], ['entreprises', 'Entreprises', 'building'], ['contacts', 'Contacts', 'users'], ['agenda', 'Rendez-vous', 'cal'], ['devis', 'Devis', 'file', 'devis'], ['relais', 'Relais internes', 'users', 'relais']] },
   { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic'], ['detection', 'Détection', 'pulse'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
 ];
 const NAV_ITEMS = NAV.flatMap(g => g.items);
@@ -101,6 +103,7 @@ const isFav = id => (S.favs || []).includes(id);
 
 function go(view, inst) {
   if (inst) S.inst = inst;
+  if (S.view !== view) S.crmQ = '';
   S.view = view; S.menuOpen = false; S.instMenu = false;
   location.hash = `#/${S.inst}/${view}`;
   render(); window.scrollTo(0, 0);

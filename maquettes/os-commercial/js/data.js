@@ -64,8 +64,8 @@ const AUTONOMIE_DEFAUT = [
 /* ------------------------------------------------------------------ */
 
 const INSTANCES = [
-  { id: 'simatis', nom: 'Mon activité', sous: 'Développement SIMATIS', outil: 'Pipeline natif', c: '#41A594', modules: ['diagnostic', 'devis'],
-    conn: [['Pipeline', 'Pipeline natif de l\'OS', 'ok'], ['Messagerie', 'Gmail SIMATIS', 'ok'], ['Agenda', 'Agenda SIMATIS', 'ok']] },
+  { id: 'simatis', nom: 'Mon activité', sous: 'Développement SIMATIS', outil: 'HubSpot (simulé)', crm: 'HubSpot', c: '#41A594', modules: ['diagnostic', 'devis'],
+    conn: [['CRM', 'HubSpot SIMATIS', 'ok'], ['Messagerie', 'Gmail SIMATIS', 'ok'], ['Agenda', 'Agenda SIMATIS', 'ok']] },
   { id: 'helioval', nom: 'Helioval', sous: "Mandat fictif : bureau d'études", outil: 'HubSpot (simulé)', crm: 'HubSpot', situation: 'Système à structurer', c: '#4C8DD6', modules: ['relais'],
     conn: [['CRM', 'HubSpot du mandat', 'ok'], ['Messagerie', 'Gmail du mandat', 'ok'], ['Agenda', 'Agenda du mandat', 'ok']] },
   { id: 'aquaterra', nom: 'Aquaterra', sous: "Mandat fictif : équipements", outil: 'Pipeline natif', situation: 'Système à créer', c: '#9A7BE0', modules: ['demarrage'],
@@ -80,10 +80,23 @@ function seedInstance(cfg) {
     taches: cfg.taches || [], rdv: cfg.rdv || [], devis: cfg.devis || [],
     validations: cfg.validations || [], journal: cfg.journal || [], notes: cfg.notes || [],
     bases: cfg.bases || [], signaux: cfg.signaux || [], diagnostics: cfg.diagnostics || [],
-    routines: cfg.routines, plan: cfg.plan, funnel: cfg.funnel, autonomie: AUTONOMIE_DEFAUT.map(a => ({ ...a })),
-    relais: cfg.relais || [], campagnes: cfg.campagnes || [], temps: cfg.temps || 0
+    routines: cfg.routines.map(r => ({ ...r, params: { ...PARAMS_DEFAUT[r.id] } })), plan: cfg.plan, funnel: cfg.funnel, autonomie: AUTONOMIE_DEFAUT.map(a => ({ ...a })),
+    relais: cfg.relais || [], campagnes: cfg.campagnes || [], temps: cfg.temps || 0,
+    activites: activitesSeed(cfg.rythme ?? 1)
   };
   return d;
+}
+
+/* Historique fictif des tâches réalisées, jour par jour, sur 45 jours ouvrés : emails, appels, autres tâches. */
+function activitesSeed(r) {
+  const out = [];
+  if (!r) return out;
+  for (let n = 1; n <= 45; n++) {
+    const d = new Date(TODAY); d.setDate(d.getDate() - n);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    out.push({ date: iso(d), email: Math.round(((n * 7) % 9 + 3) * r), appel: Math.round(((n * 5) % 4 + 1) * r), autre: (n * 2) % 3 });
+  }
+  return out;
 }
 
 const email = (c, objet, lignes, slots, rappel) =>
@@ -92,6 +105,13 @@ const email = (c, objet, lignes, slots, rappel) =>
   `<p>Bien à vous,</p>`;
 
 /* Les routines sont des skills Claude, exécutées avec les connexions de l'instance et d'aucune autre. */
+/* Paramètres modifiables de chaque routine. Le rythme affiché en découle. */
+const PARAMS_DEFAUT = {
+  'r-quot': { heure: '7h00', jours: 'Jours ouvrés', max: 20, canaux: ['email', 'appel'], retard: 30, creneaux: 3, delai: 3, plages: '9h30-12h00 et 14h00-17h00' },
+  'r-nett': { declenchement: 'Après chaque envoi de relances', suivi: 21 },
+  'r-hebdo': { jour: 'Lundi', heure: '8h00' },
+  'r-evt': { devis: 10, stop: true }
+};
 const routinesStd = (extra, crm = 'le pipeline') => [
   { id: 'r-quot', nom: 'Routine quotidienne de relance', rythme: 'Chaque jour ouvré à 7h00, ou à la demande', actif: true, dernier: dp(0), rapport: extra.quot,
     etapes: [`Lire les tâches de relance échues et du jour dans ${crm}`, 'Vérifier l\'historique de messagerie de chaque contact', 'Chercher trois créneaux libres dans l\'agenda', 'Rédiger les brouillons dans Gmail, sans signature', 'Préparer les fiches et le planning d\'appels', 'Produire le brief du jour'] },
@@ -106,7 +126,7 @@ const routinesStd = (extra, crm = 'le pipeline') => [
 const SEED = () => {
   const data = {};
 
-  /* ---------- Mon activité (SIMATIS) : pipeline natif ---------- */
+  /* ---------- Mon activité (SIMATIS) : HubSpot simulé ---------- */
   const sS = [
     { id: 's1', nom: 'Ateliers Morvan', secteur: 'Chaudronnerie', ville: 'Villefranche-sur-Saône', taille: 45, domaine: 'ateliers-morvan.fr' },
     { id: 's2', nom: 'Lumibat Systèmes', secteur: 'Éclairage industriel', ville: 'Grenoble', taille: 30, domaine: 'lumibat.fr' },
@@ -153,10 +173,10 @@ const SEED = () => {
   const vS = [
     { id: 'v1', type: 'email', niv: 'L1', titre: 'Relance de la proposition', soc: 's1', contact: 'c1', origine: 'Routine quotidienne', objet: 'Votre proposition de direction commerciale partagée',
       corps: email('Madame Morvan', '', ['Je reviens vers vous au sujet de la proposition transmise la semaine dernière pour Ateliers Morvan.', 'Je vous propose d\'en parler 30 minutes pour répondre à vos questions et ajuster le calendrier de démarrage si besoin.'], creneaux(0)),
-      controles: ['Historique Gmail : 4 échanges, dernier il y a 6 jours', 'Pipeline : proposition envoyée, pas de réponse', 'Créneaux vérifiés dans votre agenda'], source: 'Pipeline natif + Gmail', confiance: 'élevée' },
+      controles: ['Historique Gmail : 4 échanges, dernier il y a 6 jours', 'HubSpot : proposition envoyée, pas de réponse', 'Créneaux vérifiés dans votre agenda'], source: 'HubSpot + Gmail', confiance: 'élevée' },
     { id: 'v2', type: 'email', niv: 'L1', titre: 'Deuxième relance', soc: 's4', contact: 'c4', origine: 'Routine quotidienne', objet: 'Votre organisation commerciale',
       corps: email('Monsieur Weber', '', ['Nous avions échangé sur LinkedIn en septembre au sujet du développement commercial d\'Oxalis Conseil.', 'Le Diagnostic d\'Endurance Commerciale permet de situer en une heure trente la solidité de votre système de vente. Je vous le propose sans engagement.'], creneaux(1)),
-      controles: ['Historique Gmail : 2 messages sans réponse', 'Escalade : deuxième relance (la suivante sera la porte de sortie)', 'Créneaux vérifiés dans votre agenda'], source: 'Pipeline natif + Gmail', confiance: 'élevée' },
+      controles: ['Historique Gmail : 2 messages sans réponse', 'Escalade : deuxième relance (la suivante sera la porte de sortie)', 'Créneaux vérifiés dans votre agenda'], source: 'HubSpot + Gmail', confiance: 'élevée' },
     { id: 'v3', type: 'tache', niv: 'L2', titre: 'Créer une tâche de suivi', soc: 's5', contact: 'c5', origine: 'Routine quotidienne',
       detail: 'Restitution du diagnostic prévue : créer une tâche « Préparer la restitution » pour la veille du rendez-vous.', echeance: dp(3), source: 'Agenda', confiance: 'élevée' },
     { id: 'v4', type: 'note', niv: 'L2', titre: 'Note proposée pour le second cerveau', origine: 'Boucle d\'apprentissage',
@@ -206,18 +226,18 @@ const SEED = () => {
     routines: routinesStd({
       quot: { fait: ['2 brouillons de relance préparés', '1 tâche de suivi proposée', 'Brief du jour produit'], attente: ['4 éléments à valider'], echec: [] },
       hebdo: { fait: ['Revue du pipeline par score', '1 note proposée pour le second cerveau'], attente: ['Devis Gérard & Fils : prix à fixer'], echec: [] }
-    }),
+    }, 'HubSpot'),
     plan: [
       { b: 'Cible', txt: 'PME industrielles BtoB de 20 à 100 salariés, Auvergne-Rhône-Alpes, sans directeur commercial. Persona : dirigeant fondateur.', ok: true },
       { b: 'Types d\'affaires visés', txt: 'Nouveaux clients d\'abord, puis recommandations du réseau.', ok: true },
-      { b: 'Information et outillage', txt: 'Pipeline natif de l\'OS, base de prospects dirigeants, veille des signaux de recrutement commercial.', ok: true },
+      { b: 'Information et outillage', txt: 'HubSpot SIMATIS, base de prospects dirigeants, veille des signaux de recrutement commercial.', ok: true },
       { b: 'Message', txt: 'Enjeu : un système de vente qui tient dans la durée. Leviers dominants : Sécurité, Argent.', ok: true },
       { b: 'Règles de qualification', txt: 'Grille sur 15 ; au-dessus de 12, rendez-vous de cadrage ; entre 8 et 11, nourrir.', ok: true },
       { b: 'Plan de canaux', txt: 'Email et LinkedIn en séquence courte, diagnostic offert comme porte d\'entrée, réseau pour sécuriser.', ok: false },
       { b: 'Pilotage', txt: 'Taux de réponse, rendez-vous obtenus, opportunités qualifiées, pipeline par score.', ok: false }
     ],
     funnel: { leads: 60, l2p: 30, p2d: 45, d2c: 35, panier: 16000, objectif: 150000 },
-    temps: 6
+    temps: 6, rythme: 0.7
   });
 
   /* ---------- Helioval (mandat fictif, CRM HubSpot simulé) ---------- */
@@ -311,7 +331,7 @@ const SEED = () => {
       { b: 'Pilotage', txt: 'Bilan mensuel au dirigeant : rendez-vous, pipeline, conversions.', ok: true }
     ],
     funnel: { leads: 90, l2p: 20, p2d: 60, d2c: 40, panier: 15000, objectif: 400000 },
-    temps: 14
+    temps: 14, rythme: 1.3
   });
 
   /* ---------- Aquaterra (mandat fictif, système à créer) ---------- */
@@ -350,7 +370,7 @@ const SEED = () => {
       { b: 'Pilotage', txt: '', ok: false }
     ],
     funnel: { leads: 25, l2p: 35, p2d: 50, d2c: 40, panier: 9000, objectif: 120000 },
-    temps: 4
+    temps: 4, rythme: 0.4
   });
 
   /* ---------- Démonstration : Dupont Industrie ---------- */

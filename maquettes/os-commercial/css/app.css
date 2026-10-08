@@ -94,6 +94,7 @@ a { color: var(--navy-3); }
 .conn-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .conn { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-s); }
 .conn.non { background: var(--amber-bg); border-color: #F1D79A; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .rt-steps { margin: 6px 0 0; padding-left: 20px; font-size: 15px; }
 .rt-steps li { padding: 3px 0; color: var(--ink-2); }
 .rt-steps li.blocked { color: var(--red); }
@@ -214,6 +215,17 @@ textarea.input { min-height: 90px; resize: vertical; }
 .brief-counts .n { font: 600 28px var(--f-num); display: block; }
 .brief-counts .l { font-size: 14px; color: #C5D6EC; }
 .brief-counts .warn .n { color: #FFCF7A; }
+.search { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 420px; color: var(--ink-3); }
+.search svg { width: 17px; height: 17px; flex: none; }
+.link { background: none; border: 0; padding: 0; color: var(--navy-3); text-decoration: underline; cursor: pointer; font: inherit; text-align: left; }
+.activ-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line-2); align-items: center; }
+.activ-row:first-child { padding-top: 0; }
+.activ-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.activ-n { font-size: 26px; font-weight: 600; color: var(--navy); text-align: right; line-height: 1; }
+.activ-n small { font: 400 13px var(--f-body); color: var(--ink-3); margin-left: 5px; }
+.activ-d { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; color: var(--ink-2); }
+.activ-d span { display: inline-flex; align-items: center; gap: 5px; }
+.activ-d svg { width: 14px; height: 14px; color: var(--ink-3); }
 
 .timeline { list-style: none; margin: 0; padding: 0; }
 .timeline li { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line-2); align-items: start; }

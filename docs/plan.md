@@ -207,6 +207,8 @@ Point de départ : la maquette. Pour chaque partie, Marc dit ce qu'il garde, ce 
 
 Statut : à relire
 
+- **Décidé** : l'instance SIMATIS a son HubSpot. Chaque mandat garde le CRM choisi par le client ; quand il en a un, entreprises, contacts et pipeline de l'OS en sont le miroir exact (le CRM fait foi). Sans CRM, l'OS tient lui-même le pipeline.
+
 - **Proposé** : entreprises, contacts, opportunités (étape, montant, échéance), activités (email, rendez-vous, appel, note), tâches.
 - **À trancher** : ces objets suffisent-ils ? Lesquels manquent ? Pour l'instance SIMATIS, existe-t-il un HubSpot SIMATIS, ou l'OS est-il lui-même le CRM de SIMATIS ?
 - La grille de scoring détaillée est une méthode propriétaire : elle vivra dans la configuration privée de l'instance, jamais dans le dépôt.
@@ -215,7 +217,7 @@ Statut : à relire
 
 Statut : validée (retours de Marc sur la maquette, 8 octobre 2026)
 
-- **Décidé** : Brief du jour et Tableau de bord gardés tels quels. À valider regroupe les relances à planifier et les brouillons à envoyer. Brouillons Gmail toujours créés sans signature.
+- **Décidé** : Brief du jour allégé : plus de signaux, de rapport de routine ni de pipeline par score. Il affiche les tâches réalisées hier, sur 7 jours et sur 30 jours, avec le détail emails et appels. Tableau de bord gardé tel quel. À valider regroupe les relances à planifier et les brouillons à envoyer. Brouillons Gmail toujours créés sans signature.
 - **Transverse** : favoris par utilisateur en haut du menu (par défaut Pipeline, Brief du jour, Prospection) ; pas de sous-titre sous les titres, une infobulle quand un élément n'est pas évident.
 
 - **Dans la maquette** : ce qui attend Marc le matin, la file des propositions à valider, l'entonnoir lead → prospect → devis → commande avec simulation de l'objectif annuel.
@@ -236,6 +238,7 @@ Statut : reportée
 Statut : à relire (Prospection et Bases vivantes prioritaires, Détection reportée)
 
 - **Décidé** : les règles de sélection s'affichent explicitement (base utilisée, ciblage, exclusions). Les bases vivantes seront branchées sur une base de données commune, en conception avec un partenaire (détails dans le second cerveau).
+- **Prospection** : Marc doit l'essayer avant de trancher ; le fonctionnement actuel ne le convainc pas encore.
 - **Détection** : reportée, à repenser (d'où vient la donnée, ce qu'un clic doit produire).
 
 - **Dans la maquette** : signaux faibles, règles de sélection et lots de brouillons, bases importées et enrichies.
@@ -254,7 +257,7 @@ Statut : à relire (Pipeline indispensable)
 
 Statut : à relire (Routines Claude prioritaires)
 
-- **Décidé** : les Routines Claude sont en tête du menu. Ce sont les skills Claude que Marc utilise chaque jour (relance quotidienne, nettoyage des tâches) ; il veut les lancer depuis l'OS, instance par instance, avec les connexions de l'instance (CRM, Gmail, agenda) et aucune autre.
+- **Décidé** : les Routines Claude sont en tête du menu. Ce sont les skills Claude que Marc utilise chaque jour (relance quotidienne, nettoyage des tâches) ; il veut les lancer depuis l'OS, instance par instance, avec les connexions de l'instance (CRM, Gmail, agenda) et aucune autre. Les paramètres de chaque routine (heure, jours, tâches traitées, nombre de brouillons, créneaux) se règlent depuis l'OS, par instance.
 - Autonomie, Journal d'audit et vue du second cerveau : pas prioritaires.
 
 - **Dans la maquette** : rythmes automatiques, réglage des niveaux L0 à L3, fiche second cerveau.
