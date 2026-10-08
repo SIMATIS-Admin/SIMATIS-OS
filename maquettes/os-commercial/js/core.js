@@ -144,7 +144,7 @@ function shell(body, v) {
 
 function render() {
   const root = document.getElementById('root');
-  if (S.view !== 'portefeuille' && !allowed(S.view)) S.view = 'brief';
+  if (S.view !== 'portefeuille' && !allowed(S.view)) { S.view = 'brief'; history.replaceState(null, '', `#/${S.inst}/brief`); }
   const viewId = S.view === 'portefeuille' ? 'portefeuille' : S.view;
   const V = VIEWS[viewId] || VIEWS.brief;
   const out = V();
