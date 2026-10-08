@@ -29,6 +29,7 @@ node_modules/
 dist/
 build/
 .claude/settings.local.json
+.claude/worktrees/
 
 # Ancienne maquette CRM : contient un nom de mandat réel, reste locale
 maquettes/index.html
