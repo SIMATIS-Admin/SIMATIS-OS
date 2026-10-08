@@ -1,6 +1,8 @@
 import { buildApp } from './app.js';
 import { loadConfig, type Config } from './config.js';
 import { createDb } from './db.js';
+import './connexions/index.js';
+import { startScheduler } from './connexions/service.js';
 import { appDatabaseUrl, ensureAppRole, lectureRoleOf } from './db/roles.js';
 import { seedDemoIfEmpty } from './demo/seed.js';
 import { runMigrations } from './migrate.js';
@@ -44,9 +46,15 @@ async function prepareDatabase(): Promise<void> {
   }
 }
 
+let stopScheduler = () => {};
 try {
   await prepareDatabase();
   await app.listen({ host: config.host, port: config.port });
+  stopScheduler = startScheduler(db, {
+    secretsDir: config.secretsDir,
+    realWrites: config.realWrites,
+    onError: (err) => app.log.warn({ err }, 'connection scheduler pass failed'),
+  });
 } catch (err) {
   app.log.fatal({ err }, 'startup failed');
   await pool.end();
@@ -56,6 +64,7 @@ try {
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
     app.log.info({ signal }, 'shutting down');
+    stopScheduler();
     void app
       .close()
       .then(() => pool.end())

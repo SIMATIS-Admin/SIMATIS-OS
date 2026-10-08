@@ -1,5 +1,11 @@
 import { parseArgs } from 'node:util';
+import type { Frequence, Kind } from '../connexions/schema.js';
+import { configureConnexion, FREQUENCES, syncNow } from '../connexions/service.js';
 import type { Database } from '../db.js';
+import { withInstance } from '../db/context.js';
+import { connexions } from '../connexions/schema.js';
+import { eq } from 'drizzle-orm';
+import { currentInstance } from '../db/columns.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import type { InstanceType } from '../instances/schema.js';
 import { createToken, listTokens, revokeToken } from '../mcp/tokens.js';
@@ -18,12 +24,27 @@ export const USAGE = `Commandes :
   demo:seed
   token:create --nom <nom> (--instance <slug> | --portefeuille)
   token:list
-  token:revoke --id <id>`;
+  token:revoke --id <id>
+  connexion:set --slug <slug> --kind crm|messagerie|agenda --fournisseur <f> [--frequence 5min|15min|1h|1j|manuel]
+  connexion:list --slug <slug>
+  connexion:sync --slug <slug> --kind crm|messagerie|agenda`;
 
-type Deps = { db: Database; out: (line: string) => void };
+type Deps = {
+  db: Database;
+  out: (line: string) => void;
+  secretsDir?: string;
+  realWrites?: boolean;
+};
+
+async function requireActive(db: Database, slug: string) {
+  const instance = (await listInstances(db)).find((i) => i.slug === slug);
+  if (!instance) throw new Error(`Instance inconnue ou archivée : ${slug}`);
+  return instance;
+}
 
 // Returns the process exit code. Runs on the owner connection.
-export async function runCommand(argv: string[], { db, out }: Deps): Promise<number> {
+export async function runCommand(argv: string[], deps: Deps): Promise<number> {
+  const { db, out } = deps;
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -35,9 +56,12 @@ export async function runCommand(argv: string[], { db, out }: Deps): Promise<num
       instance: { type: 'string' },
       portefeuille: { type: 'boolean', default: false },
       id: { type: 'string' },
+      kind: { type: 'string' },
+      fournisseur: { type: 'string' },
+      frequence: { type: 'string' },
     },
   });
-  const need = (name: 'slug' | 'nom' | 'type' | 'id'): string => {
+  const need = (name: 'slug' | 'nom' | 'type' | 'id' | 'kind' | 'fournisseur'): string => {
     const value = values[name];
     if (!value) throw new Error(`Option manquante : --${name}`);
     return value;
@@ -100,6 +124,40 @@ export async function runCommand(argv: string[], { db, out }: Deps): Promise<num
             : 'Jeton introuvable ou déjà révoqué.',
         );
         return 0;
+      case 'connexion:set': {
+        const instance = await requireActive(db, need('slug'));
+        const frequence = (values.frequence ?? '15min') as Frequence;
+        if (!(frequence in FREQUENCES)) throw new Error(`Fréquence invalide : ${frequence}`);
+        await withInstance(db, instance.id, (tx) =>
+          configureConnexion(tx, {
+            kind: need('kind') as Kind,
+            fournisseur: need('fournisseur'),
+            reglages: { frequence },
+          }),
+        );
+        out(`Connexion ${need('kind')} réglée pour ${instance.slug} : ${need('fournisseur')}`);
+        return 0;
+      }
+      case 'connexion:list': {
+        const instance = await requireActive(db, need('slug'));
+        const rows = await withInstance(db, instance.id, (tx) =>
+          tx.select().from(connexions).where(eq(connexions.instanceId, currentInstance)),
+        );
+        for (const c of rows) {
+          out(
+            `${c.kind.padEnd(11)} ${c.fournisseur.padEnd(14)} ${c.etat.padEnd(15)} ${c.derniereSynchro?.toISOString() ?? 'jamais'}${c.derniereErreur ? `  ${c.derniereErreur}` : ''}`,
+          );
+        }
+        return 0;
+      }
+      case 'connexion:sync': {
+        const report = await syncNow(db, need('slug'), need('kind') as Kind, {
+          secretsDir: deps.secretsDir ?? './secrets/instances',
+          realWrites: deps.realWrites ?? false,
+        });
+        out(`Synchronisé : ${report.lus} lus, ${report.crees} créés, ${report.maj} mis à jour.`);
+        return 0;
+      }
       default:
         out(USAGE);
         return 1;
