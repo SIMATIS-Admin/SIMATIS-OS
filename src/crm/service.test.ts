@@ -16,6 +16,8 @@ import {
   searchEntreprises,
 } from './service.js';
 
+const deps = { secretsDir: '/nonexistent', realWrites: false };
+
 describe('CRM objects', () => {
   let t: TestApp;
   let simatis: Instance;
@@ -79,13 +81,19 @@ describe('CRM objects', () => {
   });
 
   it('creates native records without source id, and journals them', async () => {
-    const e = await createEntreprise(t.app.db, aquaterra.id, { nom: 'Serres du Vercors' });
+    const e = await createEntreprise(t.app.db, aquaterra, { nom: 'Serres du Vercors' }, deps);
     expect(e).toMatchObject({ source: 'natif', sourceId: null, instanceId: aquaterra.id });
-    const c = await createContact(t.app.db, aquaterra.id, {
-      nom: 'Inès Faure',
-      email: 'i.faure@serres-vercors.example',
-      entrepriseId: e.id,
-    });
+    if ('simulation' in e) throw new Error('unexpected simulation');
+    const c = await createContact(
+      t.app.db,
+      aquaterra,
+      {
+        nom: 'Inès Faure',
+        email: 'i.faure@serres-vercors.example',
+        entrepriseId: e.id,
+      },
+      deps,
+    );
     expect(c).toMatchObject({ entrepriseId: e.id, source: 'natif' });
     const { rows } = await t.owner.pool.query<{ action: string }>(
       'select action from journal where instance_id = $1 order by id desc limit 2',
@@ -100,7 +108,7 @@ describe('CRM objects', () => {
   it('refuses to attach a contact to a company of another instance', async () => {
     const [morvan] = await searchEntreprises(t.app.db, simatis.id, 'Ateliers Morvan');
     await expect(
-      createContact(t.app.db, aquaterra.id, { nom: 'X', entrepriseId: morvan?.id }),
+      createContact(t.app.db, aquaterra, { nom: 'X', entrepriseId: morvan?.id }, deps),
     ).rejects.toThrow(/inconnue/);
   });
 
@@ -113,7 +121,7 @@ describe('CRM objects', () => {
       }),
     );
     await expect(
-      createEntreprise(t.app.db, helioval.id, { nom: 'Nouvelle' }),
+      createEntreprise(t.app.db, helioval, { nom: 'Nouvelle' }, deps),
     ).rejects.toBeInstanceOf(CrmIndisponible);
   });
 

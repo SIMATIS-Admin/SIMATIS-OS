@@ -85,4 +85,23 @@ describe('admin CLI and instance lifecycle', () => {
     expect(await run('instance:explode')).toBe(1);
     expect(lines.join('\n')).toMatch(/instance:create/);
   });
+
+  it('opens and closes the per-instance real-write lock, never for a prospect', async () => {
+    expect(await run('instance:ecritures', '--slug', 'beta', '--on')).toBe(0);
+    expect(lines.join('\n')).toMatch(
+      /autorisées pour beta \(effectives seulement avec REAL_WRITES=on\)/,
+    );
+    const { rows } = await t.owner.pool.query<{ on: boolean }>(
+      "select (config->>'ecrituresReelles')::boolean as on from instances where slug = 'beta'",
+    );
+    expect(rows[0]?.on).toBe(true);
+    expect(await run('instance:ecritures', '--slug', 'beta', '--off')).toBe(0);
+    expect(await run('instance:ecritures', '--slug', 'beta')).toBe(1);
+
+    expect(
+      await run('instance:create', '--slug', 'demo-x', '--nom', 'Démo', '--type', 'prospect'),
+    ).toBe(0);
+    expect(await run('instance:ecritures', '--slug', 'demo-x', '--on')).toBe(1);
+    expect(lines.join('\n')).toMatch(/prospect/);
+  });
 });

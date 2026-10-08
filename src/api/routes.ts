@@ -16,6 +16,10 @@ import { withInstance } from '../db/context.js';
 import { instances, type Instance } from '../instances/schema.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
+import { CHAMPS_EXCLUABLES, OBJETS, reglagesSchema } from '../connecteurs/hubspot/reglages.js';
+import { connexions } from '../connexions/schema.js';
+import { syncNow } from '../connexions/service.js';
+import { loadInstanceSecrets } from '../secrets.js';
 import { getFavoris, setFavoris } from '../preferences/service.js';
 import { propositions } from '../propositions/schema.js';
 
@@ -58,7 +62,10 @@ const favorisSchema = z.object({
   favoris: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,40}$/)).max(30),
 });
 
-export function registerApi(app: FastifyInstance, { db }: { db: Database }): void {
+export type ApiDeps = { db: Database; secretsDir: string; realWrites: boolean };
+
+export function registerApi(app: FastifyInstance, { db, secretsDir, realWrites }: ApiDeps): void {
+  const connexionDeps = { secretsDir, realWrites };
   app.get('/api/instances', async () => (await listInstances(db)).map(summary));
 
   // Every /api/i/:slug/… route: unknown or archived instance → 404, never another instance's data.
@@ -106,13 +113,16 @@ export function registerApi(app: FastifyInstance, { db }: { db: Database }): voi
   type Create = SlugParams & { Body: unknown };
   const creation = <S extends z.ZodType>(
     schema: S,
-    create: (instanceId: string, input: z.infer<S>) => Promise<unknown>,
+    create: (instance: Instance, input: z.infer<S>) => Promise<unknown>,
   ) =>
     onInstance<Create>(async (i, request, reply) => {
       const parsed = schema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
       try {
-        return reply.code(201).send(await create(i.id, parsed.data));
+        const created = await create(i, parsed.data);
+        const simulated =
+          typeof created === 'object' && created !== null && 'simulation' in created;
+        return reply.code(simulated ? 202 : 201).send(created);
       } catch (error) {
         if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
         throw error;
@@ -120,11 +130,11 @@ export function registerApi(app: FastifyInstance, { db }: { db: Database }): voi
     });
   app.post<Create>(
     '/api/i/:slug/entreprises',
-    creation(entrepriseSchema, (i, input) => createEntreprise(db, i, input)),
+    creation(entrepriseSchema, (i, input) => createEntreprise(db, i, input, connexionDeps)),
   );
   app.post<Create>(
     '/api/i/:slug/contacts',
-    creation(contactSchema, (i, input) => createContact(db, i, input)),
+    creation(contactSchema, (i, input) => createContact(db, i, input, connexionDeps)),
   );
 
   app.get<SlugParams>(
@@ -194,6 +204,88 @@ export function registerApi(app: FastifyInstance, { db }: { db: Database }): voi
         }),
       ),
     ),
+  );
+
+  // Connection settings for the Paramètres screen. Secret values never leave the server: only
+  // whether the expected token is present.
+  const SECRET_ATTENDU: Record<string, string> = { hubspot: 'HUBSPOT_TOKEN' };
+  app.get<SlugParams>(
+    '/api/i/:slug/connexions',
+    onInstance(async (i) => {
+      const secrets = await loadInstanceSecrets(secretsDir, i.slug);
+      const rows = await withInstance(db, i.id, (tx) =>
+        tx.select().from(connexions).where(eq(connexions.instanceId, currentInstance)),
+      );
+      return {
+        connexions: rows.map((c) => ({
+          kind: c.kind,
+          fournisseur: c.fournisseur,
+          etat: c.etat,
+          reglages: c.reglages,
+          derniereSynchro: c.derniereSynchro,
+          derniereErreur: c.derniereErreur,
+          secret: SECRET_ATTENDU[c.fournisseur]
+            ? {
+                nom: SECRET_ATTENDU[c.fournisseur],
+                present: !!secrets[SECRET_ATTENDU[c.fournisseur] ?? ''],
+              }
+            : null,
+        })),
+        options: { objets: OBJETS, champs: CHAMPS_EXCLUABLES },
+        ecrituresReelles: realWrites && i.config.ecrituresReelles === true,
+      };
+    }),
+  );
+
+  const reglagesCrmSchema = reglagesSchema
+    .pick({ frequence: true, sens: true, objets: true, champsExclus: true })
+    .partial()
+    .strict();
+  app.patch<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/connexions/crm',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = reglagesCrmSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Réglages invalides' });
+      return withInstance(db, i.id, async (tx) => {
+        const [current] = await tx
+          .select()
+          .from(connexions)
+          .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'crm')));
+        if (!current || current.fournisseur !== 'hubspot') {
+          return reply.code(404).send({ error: 'Aucun CRM HubSpot branché sur cette instance' });
+        }
+        const reglages = { ...current.reglages, ...parsed.data };
+        await tx
+          .update(connexions)
+          .set({ reglages, updatedAt: new Date() })
+          .where(eq(connexions.id, current.id));
+        const changes = Object.keys(parsed.data).join(', ');
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: `Réglages du CRM modifiés (${changes})${parsed.data.sens === 'deux_sens' ? ' : écriture dans HubSpot autorisée' : ''}`,
+          niveau: 'L2',
+        });
+        return { reglages };
+      });
+    }),
+  );
+
+  type SyncRoute = { Params: { slug: string; kind: string } };
+  app.post<SyncRoute>(
+    '/api/i/:slug/connexions/:kind/sync',
+    onInstance<SyncRoute>(async (i, request, reply) => {
+      const kind = request.params.kind;
+      if (kind !== 'crm' && kind !== 'messagerie' && kind !== 'agenda') {
+        return reply.code(404).send({ error: 'Connexion inconnue' });
+      }
+      try {
+        return await syncNow(db, i.slug, kind, connexionDeps);
+      } catch (error) {
+        return reply
+          .code(502)
+          .send({ error: error instanceof Error ? error.message : String(error) });
+      }
+    }),
   );
 
   app.get('/api/preferences', async () => ({ favoris: await getFavoris(db, UTILISATEUR) }));

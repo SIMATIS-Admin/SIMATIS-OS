@@ -121,3 +121,37 @@ export const createContact = (
   slug: string,
   input: { nom: string; fonction?: string; email?: string; entrepriseId?: string | null },
 ) => sendJson<{ id: string }>('POST', inst(slug, 'contacts'), input);
+
+export type ReglagesCrm = {
+  frequence?: '5min' | '15min' | '1h' | '1j' | 'manuel';
+  sens?: 'deux_sens' | 'lecture';
+  objets?: string[];
+  champsExclus?: string[];
+};
+
+export type ConnexionInfo = {
+  kind: 'crm' | 'messagerie' | 'agenda';
+  fournisseur: string;
+  etat: 'ok' | 'non_configuree' | 'erreur';
+  reglages: ReglagesCrm & Record<string, unknown>;
+  derniereSynchro: string | null;
+  derniereErreur: string | null;
+  secret: { nom: string; present: boolean } | null;
+};
+
+export type ConnexionsReponse = {
+  connexions: ConnexionInfo[];
+  options: { objets: string[]; champs: { cle: string; libelle: string }[] };
+  ecrituresReelles: boolean;
+};
+
+export const fetchConnexions = (slug: string) =>
+  getJson<ConnexionsReponse>(inst(slug, 'connexions'));
+export const saveReglagesCrm = (slug: string, reglages: ReglagesCrm) =>
+  sendJson<{ reglages: ReglagesCrm }>('PATCH', inst(slug, 'connexions/crm'), reglages);
+export const syncConnexion = (slug: string, kind: string) =>
+  sendJson<{ lus: number; crees: number; maj: number }>(
+    'POST',
+    inst(slug, `connexions/${encodeURIComponent(kind)}/sync`),
+    {},
+  );

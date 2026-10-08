@@ -7,6 +7,9 @@ export type SyncCtx = {
   tx: Tx;
   secrets: Record<string, string>;
   reglages: Reglages;
+  connexionId: string;
+  // Last successful sync, null on the first pass (full history).
+  derniereSynchro: Date | null;
   // False unless both real-write locks are on (see propositions/service.ts canWriteReal).
   reel: boolean;
 };

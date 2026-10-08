@@ -14,6 +14,7 @@ import {
   createInstance,
   listInstances,
   purgeInstance,
+  setEcrituresReelles,
 } from '../instances/service.js';
 
 export const USAGE = `Commandes :
@@ -21,6 +22,7 @@ export const USAGE = `Commandes :
   instance:create --slug <slug> --nom "<nom>" --type propre|mandat|prospect
   instance:archive --slug <slug>
   instance:purge --slug <slug> --confirmer
+  instance:ecritures --slug <slug> --on|--off   (second verrou des écritures réelles)
   demo:seed
   token:create --nom <nom> (--instance <slug> | --portefeuille)
   token:list
@@ -55,6 +57,8 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
       confirmer: { type: 'boolean', default: false },
       instance: { type: 'string' },
       portefeuille: { type: 'boolean', default: false },
+      on: { type: 'boolean', default: false },
+      off: { type: 'boolean', default: false },
       id: { type: 'string' },
       kind: { type: 'string' },
       fournisseur: { type: 'string' },
@@ -81,6 +85,15 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
           type: need('type') as InstanceType,
         });
         out(`Instance créée : ${created.slug} (${created.type})`);
+        return 0;
+      }
+      case 'instance:ecritures': {
+        if (values.on === values.off) throw new Error('Préciser --on ou --off');
+        const i = await setEcrituresReelles(db, need('slug'), values.on);
+        out(
+          `Écritures réelles ${i.config.ecrituresReelles ? 'autorisées' : 'désactivées'} pour ${i.slug}` +
+            (i.config.ecrituresReelles ? ' (effectives seulement avec REAL_WRITES=on).' : '.'),
+        );
         return 0;
       }
       case 'instance:archive':
