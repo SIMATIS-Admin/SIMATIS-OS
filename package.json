@@ -18,7 +18,8 @@
     "test": "vitest run",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
     "db:generate": "drizzle-kit generate",
-    "dev:web": "vite"
+    "dev:web": "vite",
+    "admin": "tsx --env-file=.env src/admin/main.ts"
   },
   "dependencies": {
     "@fastify/static": "^10.1.5",

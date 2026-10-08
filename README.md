@@ -21,15 +21,27 @@ Le plan de développement est dans [docs/plan.md](docs/plan.md). Les règles de 
 Prérequis : Docker Desktop, lancé.
 
 1. Copier la configuration : `cp .env.example .env`.
-2. Dans `.env`, renseigner `POSTGRES_PASSWORD` avec un mot de passe sans caractère spécial : `openssl rand -hex 24`.
+2. Dans `.env`, renseigner `POSTGRES_PASSWORD` et `APP_DB_PASSWORD` avec deux mots de passe différents, sans caractère spécial : `openssl rand -hex 24`.
 3. Lancer : `docker compose up -d --build`.
-4. Vérifier : ouvrir http://localhost:4300/health, qui doit afficher `"status":"ok"`.
+4. Ouvrir http://localhost:4300 : l'OS s'affiche, avec les instances fictives de la maquette si la base était vide.
 
 Arrêter : `docker compose stop`. Relancer : `docker compose start`.
 
 **Ne jamais lancer `docker compose down -v`** : le `-v` efface la base.
 
 Si un port est déjà pris, changer `APP_PORT` ou `DB_PORT` dans `.env`.
+
+## Administrer les instances
+
+Dans Docker : `docker compose exec app node dist/admin/main.js <commande>`. Hors Docker : `npm run admin -- <commande>`.
+
+- `instance:list` : toutes les instances, actives et archivées.
+- `instance:create --slug <slug> --nom "<nom>" --type propre|mandat|prospect`
+- `instance:archive --slug <slug>`
+- `instance:purge --slug <slug> --confirmer` : supprime les données métier de l'instance (irréversible), garde son journal et l'archive.
+- `demo:seed` : charge les instances fictives, seulement dans une base vide.
+
+Les secrets d'une instance vont dans `secrets/instances/<slug>.env` (jamais commité).
 
 ## Développer
 

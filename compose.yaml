@@ -28,9 +28,14 @@ services:
     environment:
       # Built here so the host-side DATABASE_URL in .env never leaks into the container.
       DATABASE_URL: postgres://${POSTGRES_USER:-simatis}:${POSTGRES_PASSWORD:?À définir dans .env}@db:5432/${POSTGRES_DB:-simatis}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?À définir dans .env}
       HOST: 0.0.0.0
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SECRETS_DIR: /app/secrets/instances
+      REAL_WRITES: ${REAL_WRITES:-off}
+    volumes:
+      - ./secrets:/app/secrets:ro
     ports:
       - '127.0.0.1:${APP_PORT:-4300}:3000'
     healthcheck:
