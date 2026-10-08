@@ -1,5 +1,6 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Executor } from '../db.js';
+import { currentInstance } from '../db/columns.js';
 import { logEvent } from '../journal/service.js';
 import { autonomie } from './schema.js';
 
@@ -77,7 +78,7 @@ export async function niveauAction(tx: Executor, action: string): Promise<Niveau
   const [row] = await tx
     .select({ niveau: autonomie.niveau })
     .from(autonomie)
-    .where(eq(autonomie.action, action));
+    .where(and(eq(autonomie.instanceId, currentInstance), eq(autonomie.action, action)));
   return row?.niveau ?? d.defaut;
 }
 
@@ -96,7 +97,7 @@ export async function setNiveau(
   await tx
     .insert(autonomie)
     .values({
-      instanceId: sql`nullif(current_setting('app.instance_id', true), '')::uuid`,
+      instanceId: currentInstance,
       action,
       niveau,
     })

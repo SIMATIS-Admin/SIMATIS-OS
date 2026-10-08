@@ -13,9 +13,11 @@ export const metierColumns = () => ({
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Instance of the transaction context (withInstance). Queries also filter on it explicitly, because
+// the owner connection (startup, CLI) bypasses Row-Level Security.
 // nullif: once set locally on a pooled connection, the setting reads '' afterwards, and ''::uuid
 // would make every query fail. Without a context, no row is visible.
-const currentInstance = sql`nullif(current_setting('app.instance_id', true), '')::uuid`;
+export const currentInstance = sql`nullif(current_setting('app.instance_id', true), '')::uuid`;
 
 // Row-Level Security policy every business table declares (also enables RLS on the table).
 export const instanceIsolation = (table: string) =>

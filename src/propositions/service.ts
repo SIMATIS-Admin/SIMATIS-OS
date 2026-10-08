@@ -1,5 +1,6 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Tx } from '../db.js';
+import { currentInstance } from '../db/columns.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { niveauAction } from './autonomie.js';
@@ -81,7 +82,7 @@ export async function propose(
   const [created] = await tx
     .insert(propositions)
     .values({
-      instanceId: sql`nullif(current_setting('app.instance_id', true), '')::uuid`,
+      instanceId: currentInstance,
       type: input.type,
       contenu,
       auteur: input.auteur,
@@ -106,7 +107,10 @@ export async function decide(
   id: string,
   { decision, par, contenu }: { decision: 'valider' | 'ecarter'; par: string; contenu?: unknown },
 ): Promise<Proposition> {
-  const [p] = await tx.select().from(propositions).where(eq(propositions.id, id));
+  const [p] = await tx
+    .select()
+    .from(propositions)
+    .where(and(eq(propositions.instanceId, currentInstance), eq(propositions.id, id)));
   if (!p) throw new Error('Proposition introuvable');
   if (p.statut !== 'proposee') throw new Error(`Proposition déjà traitée (${p.statut})`);
   if (par === p.auteur) {

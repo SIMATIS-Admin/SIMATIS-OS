@@ -3,6 +3,7 @@ import type pg from 'pg';
 import { z } from 'zod';
 import { entreprises } from '../crm/schema.js';
 import type { Database, Tx } from '../db.js';
+import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
@@ -93,7 +94,7 @@ registerTool({
         creeeLe: propositions.createdAt,
       })
       .from(propositions)
-      .where(eq(propositions.statut, 'proposee'))
+      .where(and(eq(propositions.instanceId, currentInstance), eq(propositions.statut, 'proposee')))
       .orderBy(desc(propositions.createdAt))
       .limit(50),
 });
@@ -125,8 +126,16 @@ registerTool({
           const [aValider] = await tx
             .select({ n: count() })
             .from(propositions)
-            .where(and(eq(propositions.statut, 'proposee')));
-          const [nbEntreprises] = await tx.select({ n: count() }).from(entreprises);
+            .where(
+              and(
+                eq(propositions.instanceId, currentInstance),
+                eq(propositions.statut, 'proposee'),
+              ),
+            );
+          const [nbEntreprises] = await tx
+            .select({ n: count() })
+            .from(entreprises)
+            .where(eq(entreprises.instanceId, currentInstance));
           return {
             slug: i.slug,
             nom: i.nom,

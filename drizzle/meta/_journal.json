@@ -50,6 +50,13 @@
       "when": 1791478706127,
       "tag": "0006_vues_lecture",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791479355935,
+      "tag": "0007_connexions",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
-import { desc, sql } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { Executor } from '../db.js';
+import { currentInstance } from '../db/columns.js';
 import { journal } from './schema.js';
 
 export type JournalEvent = {
@@ -12,7 +13,7 @@ export type JournalEvent = {
 // The instance comes from the transaction context set by withInstance, never from the caller.
 export async function logEvent(tx: Executor, event: JournalEvent): Promise<void> {
   await tx.insert(journal).values({
-    instanceId: sql`nullif(current_setting('app.instance_id', true), '')::uuid`,
+    instanceId: currentInstance,
     acteur: event.acteur,
     action: event.action,
     niveau: event.niveau ?? null,
@@ -21,5 +22,10 @@ export async function logEvent(tx: Executor, event: JournalEvent): Promise<void>
 }
 
 export async function recentEvents(tx: Executor, limit = 50) {
-  return tx.select().from(journal).orderBy(desc(journal.at), desc(journal.id)).limit(limit);
+  return tx
+    .select()
+    .from(journal)
+    .where(eq(journal.instanceId, currentInstance))
+    .orderBy(desc(journal.at), desc(journal.id))
+    .limit(limit);
 }
