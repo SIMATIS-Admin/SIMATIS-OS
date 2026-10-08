@@ -53,7 +53,7 @@ Object.assign(ACTIONS, {
   'task-done': ds => {
     const t = byId(D().taches, ds.id); t.fait = true;
     const a = D().activites.find(x => x.date === dp(0)) || (D().activites.unshift({ date: dp(0), email: 0, appel: 0, autre: 0 }), D().activites[0]);
-    a[t.canal === 'email' ? 'email' : t.canal === 'appel' ? 'appel' : 'autre']++; logAction(`Tâche marquée faite : ${t.titre}`, 'L2'); render(); toast(INST().crm ? `Tâche marquée faite dans ${INST().crm}` : 'Tâche marquée faite'); },
+    a[t.canal === 'email' ? 'email' : t.canal === 'appel' ? 'appel' : 'autre']++; logAction(`Tâche marquée faite : ${t.titre}`, 'L2'); render(); toast(crmEcrit() ? `Tâche marquée faite dans ${crmEcrit()}` : 'Tâche marquée faite'); },
   'brief-f': ds => { S.briefF = ds.f; render(); }
 });
 

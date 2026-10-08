@@ -101,6 +101,8 @@ const NAV_ITEMS = NAV.flatMap(g => g.items);
 const navItem = id => NAV_ITEMS.find(([v]) => v === id);
 /* Un écran réservé à un module (Devis : brique propre à Marc) n'existe pas dans les autres instances. */
 const allowed = (id, inst = INST()) => { const it = navItem(id); return !it || !it[3] || inst.modules.includes(it[3]); };
+/* CRM dans lequel l'OS écrit, ou null si l'instance n'en a pas ou le synchronise en lecture seule. */
+const crmEcrit = () => INST().crm && !/lecture seule/.test(D().reglages?.crm?.sens || '') ? INST().crm : null;
 const isFav = id => (S.favs || []).includes(id);
 
 function go(view, inst) {
