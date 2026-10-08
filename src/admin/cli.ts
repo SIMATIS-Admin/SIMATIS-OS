@@ -2,6 +2,7 @@ import { parseArgs } from 'node:util';
 import type { Database } from '../db.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import type { InstanceType } from '../instances/schema.js';
+import { createToken, listTokens, revokeToken } from '../mcp/tokens.js';
 import {
   archiveInstance,
   createInstance,
@@ -14,7 +15,10 @@ export const USAGE = `Commandes :
   instance:create --slug <slug> --nom "<nom>" --type propre|mandat|prospect
   instance:archive --slug <slug>
   instance:purge --slug <slug> --confirmer
-  demo:seed`;
+  demo:seed
+  token:create --nom <nom> (--instance <slug> | --portefeuille)
+  token:list
+  token:revoke --id <id>`;
 
 type Deps = { db: Database; out: (line: string) => void };
 
@@ -28,9 +32,12 @@ export async function runCommand(argv: string[], { db, out }: Deps): Promise<num
       nom: { type: 'string' },
       type: { type: 'string' },
       confirmer: { type: 'boolean', default: false },
+      instance: { type: 'string' },
+      portefeuille: { type: 'boolean', default: false },
+      id: { type: 'string' },
     },
   });
-  const need = (name: 'slug' | 'nom' | 'type'): string => {
+  const need = (name: 'slug' | 'nom' | 'type' | 'id'): string => {
     const value = values[name];
     if (!value) throw new Error(`Option manquante : --${name}`);
     return value;
@@ -67,6 +74,30 @@ export async function runCommand(argv: string[], { db, out }: Deps): Promise<num
           (await seedDemoIfEmpty(db))
             ? 'Instances fictives chargées.'
             : 'Base non vide : rien chargé.',
+        );
+        return 0;
+      case 'token:create': {
+        const { token } = await createToken(db, {
+          nom: need('nom'),
+          portee: values.portefeuille ? 'portefeuille' : 'instance',
+          instanceSlug: values.instance,
+        });
+        out('Jeton MCP (affiché une seule fois, à copier maintenant) :');
+        out(token);
+        return 0;
+      }
+      case 'token:list':
+        for (const j of await listTokens(db)) {
+          out(
+            `${j.id}  ${j.nom.padEnd(20)} ${j.portee.padEnd(12)} ${(j.instance ?? '-').padEnd(16)} ${j.revokedAt ? 'révoqué' : 'actif'}`,
+          );
+        }
+        return 0;
+      case 'token:revoke':
+        out(
+          (await revokeToken(db, need('id')))
+            ? 'Jeton révoqué.'
+            : 'Jeton introuvable ou déjà révoqué.',
         );
         return 0;
       default:

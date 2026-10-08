@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { inject } from 'vitest';
 import { createDb, type Database } from '../src/db.js';
-import { appDatabaseUrl, ensureAppRole } from '../src/db/roles.js';
+import { appDatabaseUrl, ensureAppRole, lectureRoleOf } from '../src/db/roles.js';
 import { runMigrations } from '../src/migrate.js';
 
 export type TestDatabase = {
@@ -36,12 +36,16 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 // Roles are global to the Postgres server; test files run in parallel, so each gets its own.
 export const testRoleName = (testDb: TestDatabase) => `app_${testDb.name}`;
 
-export const dropRole = (role: string) => runAdmin(`DROP ROLE IF EXISTS ${role}`);
+export const dropRole = async (role: string) => {
+  await runAdmin(`DROP ROLE IF EXISTS ${role}`);
+  await runAdmin(`DROP ROLE IF EXISTS ${lectureRoleOf(role)}`);
+};
 
 export type TestApp = {
   owner: { db: Database; pool: pg.Pool };
   app: { db: Database; pool: pg.Pool };
   appUrl: string;
+  lectureRole: string;
   drop: () => Promise<void>;
 };
 
@@ -59,6 +63,7 @@ export async function setupTestApp(): Promise<TestApp> {
     owner,
     app,
     appUrl,
+    lectureRole: lectureRoleOf(role),
     drop: async () => {
       await app.pool.end();
       await owner.pool.end();
