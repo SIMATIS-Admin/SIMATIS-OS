@@ -6,6 +6,8 @@ export type InstanceConfig = {
   sous?: string;
   couleur?: string;
   modules?: string[];
+  // Second lock for real writes to third-party tools (the first is REAL_WRITES on the server).
+  ecrituresReelles?: boolean;
 };
 
 export const instances = pgTable('instances', {
