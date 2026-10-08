@@ -5,7 +5,7 @@ Système d'exploitation interne de SIMATIS (direction commerciale en mode partag
 
 ## Vérifier son travail
 
-    npm run verify      # lint, types, tests unitaires, build (créé au lot 0)
+    npm run verify      # format, lint, types, tests, build
 
 Committer seulement un changement vérifié. La CI rejoue ces commandes sur chaque PR. Un changement d'interface se vérifie aussi dans le navigateur, pas seulement par les tests.
 
@@ -40,6 +40,12 @@ Committer seulement un changement vérifié. La CI rejoue ces commandes sur chaq
 
 - Jamais `docker compose down -v` : le `-v` supprime la base et les sauvegardes.
 <!-- coding.md:end -->
+
+## Tests (règle permanente)
+
+- Chaque nouvelle fonctionnalité arrive avec ses tests, écrits avant ou avec le code, et lancés (`npm run verify`) avant chaque commit.
+- Après chaque push sur une PR : relancer les tests en local et suivre la CI jusqu'au vert.
+- Jamais de merge avec des tests rouges ou une CI non verte.
 
 ## Confidentialité (règle absolue)
 

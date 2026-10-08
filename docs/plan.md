@@ -142,6 +142,7 @@ Statut : à faire
 - Configuration non secrète par instance, en base, validée par un schéma. Chaque partie métier y déclare ses propres réglages.
 - Secrets chargés depuis `secrets/instances/<instance>.env`. Le démarrage échoue avec un message clair s'il manque un secret pour une connexion activée.
 - Conventions imposées à toute table métier : identifiant d'instance, source et identifiant d'origine pour les données copiées, Row-Level Security, dates de création et de mise à jour.
+- L'app se connecte avec un rôle applicatif sans privilège de superutilisateur ni de propriétaire des tables, sinon la Row-Level Security est contournée. Les migrations gardent un rôle propriétaire distinct.
 - Journal d'audit en ajout seul, imposé par la base.
 - Commandes d'administration, lancées par l'agent : créer, archiver, purger une instance.
 - Instances fictives de la maquette pour la démonstration.
