@@ -64,7 +64,7 @@ const AUTONOMIE_DEFAUT = [
 /* ------------------------------------------------------------------ */
 
 const INSTANCES = [
-  { id: 'simatis', nom: 'Mon activité', sous: 'Développement SIMATIS', outil: 'Pipeline natif', c: '#41A594', modules: ['diagnostic'] },
+  { id: 'simatis', nom: 'Mon activité', sous: 'Développement SIMATIS', outil: 'Pipeline natif', c: '#41A594', modules: ['diagnostic', 'devis'] },
   { id: 'helioval', nom: 'Helioval', sous: "Mandat fictif : bureau d'études", outil: 'HubSpot (simulé)', situation: 'Système à structurer', c: '#4C8DD6', modules: ['relais'] },
   { id: 'aquaterra', nom: 'Aquaterra', sous: "Mandat fictif : équipements", outil: 'Pipeline natif', situation: 'Système à créer', c: '#9A7BE0', modules: ['demarrage'] },
   { id: 'demo', nom: 'Dupont Industrie', sous: 'Démonstration prospect', outil: 'Données fictives', c: '#E3A33B', demo: true, modules: ['diagnostic'] }
@@ -106,7 +106,11 @@ const SEED = () => {
     { id: 's5', nom: 'Mécanique Bréval', secteur: 'Usinage de précision', ville: 'Annecy', taille: 58, domaine: 'breval-meca.fr' },
     { id: 's6', nom: 'Vitrage Rhodanien', secteur: 'Miroiterie', ville: 'Vienne', taille: 25, domaine: 'vitrage-rhodanien.fr' },
     { id: 's7', nom: 'Bio Sillon', secteur: 'Agroalimentaire', ville: 'Bourg-en-Bresse', taille: 40, domaine: 'biosillon.fr' },
-    { id: 's8', nom: 'Kéramos Industrie', secteur: 'Céramique technique', ville: 'Limoges', taille: 85, domaine: 'keramos-industrie.fr' }
+    { id: 's8', nom: 'Kéramos Industrie', secteur: 'Céramique technique', ville: 'Limoges', taille: 85, domaine: 'keramos-industrie.fr' },
+    { id: 's9', nom: 'Tôlerie Achard', secteur: 'Tôlerie fine', ville: 'Roanne', taille: 36, domaine: 'tolerie-achard.fr' },
+    { id: 's10', nom: 'Distillerie Vauclair', secteur: 'Boissons', ville: 'Die', taille: 28, domaine: 'distillerie-vauclair.fr' },
+    { id: 's11', nom: 'Plasturgie Mornand', secteur: 'Plasturgie', ville: 'Oyonnax', taille: 64, domaine: 'mornand-plasturgie.fr' },
+    { id: 's12', nom: 'Électro-Savoie Services', secteur: 'Maintenance électrique', ville: 'Chambéry', taille: 42, domaine: 'electro-savoie.fr' }
   ];
   const cS = [
     { id: 'c1', soc: 's1', nom: 'Hélène Morvan', fonction: 'Dirigeante', email: 'h.morvan@ateliers-morvan.fr', role: 'Décideur' },
@@ -116,7 +120,11 @@ const SEED = () => {
     { id: 'c5', soc: 's5', nom: 'Pierre Bréval', fonction: 'Président', email: 'p.breval@breval-meca.fr', role: 'Décideur' },
     { id: 'c6', soc: 's6', nom: 'Nadia Benali', fonction: 'Directrice administrative', email: 'n.benali@vitrage-rhodanien.fr', role: 'Prescriptrice' },
     { id: 'c7', soc: 's7', nom: 'François Lacroix', fonction: 'Dirigeant', email: 'f.lacroix@biosillon.fr', role: 'Décideur' },
-    { id: 'c8', soc: 's8', nom: 'Claire Dumas', fonction: 'Directrice commerciale adjointe', email: 'c.dumas@keramos-industrie.fr', role: 'Influenceuse' }
+    { id: 'c8', soc: 's8', nom: 'Claire Dumas', fonction: 'Directrice commerciale adjointe', email: 'c.dumas@keramos-industrie.fr', role: 'Influenceuse' },
+    { id: 'c9', soc: 's9', nom: 'Didier Achard', fonction: 'Gérant', email: 'd.achard@tolerie-achard.fr', role: 'Décideur' },
+    { id: 'c10', soc: 's10', nom: 'Agnès Vauclair', fonction: 'Présidente', email: 'a.vauclair@distillerie-vauclair.fr', role: 'Décideur' },
+    { id: 'c11', soc: 's11', nom: 'Karim Haddad', fonction: 'Directeur général', email: 'k.haddad@mornand-plasturgie.fr', role: 'Décideur' },
+    { id: 'c12', soc: 's12', nom: 'Élodie Brun', fonction: 'Directrice', email: 'e.brun@electro-savoie.fr', role: 'Décideur' }
   ];
   const sc = (b, d, bu, t, e) => ({ besoin: b, decideur: d, budget: bu, timing: t, engagement: e });
   const oS = [
@@ -127,7 +135,11 @@ const SEED = () => {
     { id: 'o5', soc: 's5', contact: 'c5', titre: 'Diagnostic d\'Endurance Commerciale', etape: 'qualification', montant: 18000, score: sc(2, 3, 2, 1, 2), potentiel: 'eleve', faisab: 'faible', source: 'Réseau', echeance: dp(4), prochaine: 'Restitution du diagnostic', maj: dp(-4) },
     { id: 'o6', soc: 's6', contact: 'c6', titre: 'Premier contact', etape: 'detection', montant: 0, score: sc(1, 1, 0, 1, 0), potentiel: 'limite', faisab: 'faible', source: 'Signal : recrutement', echeance: dp(7), prochaine: 'Identifier le dirigeant', maj: dp(-1) },
     { id: 'o7', soc: 's7', contact: 'c7', titre: 'Mise en place d\'un CRM et de rituels', etape: 'prospection', montant: 12000, score: sc(2, 3, 1, 2, 1), potentiel: 'limite', faisab: 'forte', source: 'Email', echeance: dp(1), prochaine: 'Proposer un diagnostic offert', maj: dp(-8) },
-    { id: 'o8', soc: 's8', contact: 'c8', titre: 'Direction commerciale partagée', etape: 'detection', montant: 0, score: sc(2, 1, 1, 1, 0), potentiel: 'eleve', faisab: 'faible', source: 'Signal : nouveau site', echeance: dp(10), prochaine: 'Trouver un accès au dirigeant', maj: dp(-3) }
+    { id: 'o8', soc: 's8', contact: 'c8', titre: 'Direction commerciale partagée', etape: 'detection', montant: 0, score: sc(2, 1, 1, 1, 0), potentiel: 'eleve', faisab: 'faible', source: 'Signal : nouveau site', echeance: dp(10), prochaine: 'Trouver un accès au dirigeant', maj: dp(-3) },
+    { id: 'o9', soc: 's9', contact: 'c9', titre: 'Direction commerciale partagée', etape: 'negociation', clos: 'gagne', montant: 21000, score: sc(3, 3, 3, 3, 3), potentiel: 'eleve', faisab: 'forte', source: 'Réseau', echeance: dp(-20), prochaine: 'Démarrage de la mission', maj: dp(-20) },
+    { id: 'o10', soc: 's10', contact: 'c10', titre: 'Diagnostic d\'Endurance Commerciale', etape: 'proposition', clos: 'perdu', motif: 'Budget reporté', montant: 7500, score: sc(2, 3, 1, 1, 2), potentiel: 'limite', faisab: 'forte', source: 'Salon', echeance: dp(-35), prochaine: 'Recontacter au prochain exercice', maj: dp(-35) },
+    { id: 'o11', soc: 's11', contact: 'c11', titre: 'Structuration de l\'équipe commerciale', etape: 'qualification', clos: 'perdu', motif: 'Recrutement en interne', montant: 15000, score: sc(2, 2, 1, 1, 1), potentiel: 'eleve', faisab: 'faible', source: 'LinkedIn', echeance: dp(-50), prochaine: 'Aucune', maj: dp(-50) },
+    { id: 'o12', soc: 's12', contact: 'c12', titre: 'Diagnostic puis plan d\'action', etape: 'negociation', clos: 'gagne', montant: 11000, score: sc(3, 3, 2, 3, 3), potentiel: 'eleve', faisab: 'forte', source: 'Recommandation', echeance: dp(-12), prochaine: 'Restitution du diagnostic', maj: dp(-12) }
   ];
   const vS = [
     { id: 'v1', type: 'email', niv: 'L1', titre: 'Relance de la proposition', soc: 's1', contact: 'c1', origine: 'Routine quotidienne', objet: 'Votre proposition de direction commerciale partagée',
@@ -139,7 +151,11 @@ const SEED = () => {
     { id: 'v3', type: 'tache', niv: 'L2', titre: 'Créer une tâche de suivi', soc: 's5', contact: 'c5', origine: 'Routine quotidienne',
       detail: 'Restitution du diagnostic prévue : créer une tâche « Préparer la restitution » pour la veille du rendez-vous.', echeance: dp(3), source: 'Agenda', confiance: 'élevée' },
     { id: 'v4', type: 'note', niv: 'L2', titre: 'Note proposée pour le second cerveau', origine: 'Boucle d\'apprentissage',
-      detail: 'Affaire perdue chez un prospect du transport : le dirigeant a préféré recruter un directeur commercial salarié. Enseignement proposé : poser dès le premier rendez-vous la question « recrutement ou temps partagé ? ».', destination: 'Méthodes > Démarrer un mandat', source: 'Clôture d\'affaire', confiance: 'moyenne' }
+      detail: 'Affaire perdue chez un prospect du transport : le dirigeant a préféré recruter un directeur commercial salarié. Enseignement proposé : poser dès le premier rendez-vous la question « recrutement ou temps partagé ? ».', destination: 'Méthodes > Démarrer un mandat', source: 'Clôture d\'affaire', confiance: 'moyenne' },
+    { id: 'v5', type: 'tache', niv: 'L2', titre: 'Relance à planifier', soc: 's7', contact: 'c7', origine: 'Second cerveau : suivi des relances',
+      detail: 'Dernier échange il y a 8 jours sans suite. Le suivi des relances prévoit un appel avant la troisième relance écrite : créer la tâche « Appeler Bio Sillon ».', echeance: dp(1), source: 'Second cerveau + Gmail', confiance: 'élevée' },
+    { id: 'v6', type: 'tache', niv: 'L2', titre: 'Relance à planifier', soc: 's8', contact: 'c8', origine: 'Second cerveau : suivi des relances',
+      detail: 'Signal repéré (ouverture d\'un second site), contact identifié mais pas encore sollicité. Créer la tâche « Premier message à Claire Dumas » sous une semaine.', echeance: dp(5), source: 'Second cerveau + Détection', confiance: 'moyenne' }
   ];
   data.simatis = seedInstance({
     societes: sS, contacts: cS, opps: oS, validations: vS,
@@ -170,7 +186,8 @@ const SEED = () => {
     ],
     bases: [
       { id: 'b1', nom: 'Prospects dirigeants PME', emplacement: 'Google Drive : Bases/prospects-dirigeants.xlsx', lignes: 412, onglets: ['Salon 2024', 'Réseau', 'LinkedIn', 'Synthèse'],
-        statuts: { 'Non contacté': 241, 'Pas de réponse': 96, 'Réponse positive': 18, 'Réponse négative': 31, 'Invalide': 26 }, maj: dp(-1) }
+        statuts: { 'Non contacté': 241, 'Pas de réponse': 96, 'Réponse positive': 18, 'Réponse négative': 31, 'Invalide': 26 }, maj: dp(-1),
+        cible: [['Secteurs', 'Industrie, BTP, services aux entreprises'], ['Taille', '20 à 100 salariés'], ['Zone', 'Auvergne-Rhône-Alpes'], ['Fonction visée', 'Dirigeant, président ou directeur général'], ['Repère temporel', 'Obligatoire : salon, réseau ou échange daté']], horsCible: 0.1 }
     ],
     journal: [
       { date: dp(-1), par: 'os', action: 'Journal de statuts écrit : 12 contacts passés en « Déjà contacté »', niv: 'L3' },
@@ -217,7 +234,9 @@ const SEED = () => {
     { id: 'ho3', soc: 'h3', contact: 'hc3', titre: 'Accompagnement certification', etape: 'negociation', montant: 31000, score: sc(3, 3, 3, 3, 3), potentiel: 'eleve', faisab: 'forte', source: 'Client existant', echeance: dp(6), prochaine: 'Réponse sur la remise demandée', maj: dp(-2) },
     { id: 'ho4', soc: 'h4', contact: 'hc4', titre: 'Plan pluriannuel de travaux', etape: 'prospection', montant: 40000, score: sc(2, 2, 1, 1, 1), potentiel: 'eleve', faisab: 'faible', source: 'Base de prospection', echeance: dp(-2), prochaine: 'Première relance', maj: dp(-15) },
     { id: 'ho5', soc: 'h5', contact: 'hc5', titre: 'Audit réglementaire', etape: 'prospection', montant: 6800, score: sc(2, 3, 1, 2, 1), potentiel: 'limite', faisab: 'forte', source: 'Base de prospection', echeance: dp(2), prochaine: 'Appel de qualification', maj: dp(-6) },
-    { id: 'ho6', soc: 'h6', contact: 'hc6', titre: 'Étude de faisabilité', etape: 'detection', montant: 0, score: sc(1, 3, 0, 1, 0), potentiel: 'limite', faisab: 'faible', source: 'Signal : agrandissement', echeance: dp(9), prochaine: 'Qualifier le projet', maj: dp(-1) }
+    { id: 'ho6', soc: 'h6', contact: 'hc6', titre: 'Étude de faisabilité', etape: 'detection', montant: 0, score: sc(1, 3, 0, 1, 0), potentiel: 'limite', faisab: 'faible', source: 'Signal : agrandissement', echeance: dp(9), prochaine: 'Qualifier le projet', maj: dp(-1) },
+    { id: 'ho7', soc: 'h4', contact: 'hc4', titre: 'Audit énergétique réglementaire', etape: 'negociation', clos: 'gagne', montant: 18000, score: sc(3, 3, 3, 3, 3), potentiel: 'eleve', faisab: 'forte', source: 'Client existant', echeance: dp(-25), prochaine: 'Mission en cours', maj: dp(-25) },
+    { id: 'ho8', soc: 'h6', contact: 'hc6', titre: 'Étude de chaufferie bois', etape: 'proposition', clos: 'perdu', motif: 'Choix d\'un concurrent', montant: 9500, score: sc(2, 3, 2, 1, 1), potentiel: 'limite', faisab: 'forte', source: 'Base de prospection', echeance: dp(-40), prochaine: 'Aucune', maj: dp(-40) }
   ];
   const vH = [
     { id: 'hv1', type: 'email', niv: 'L1', titre: 'Relance du devis envoyé', soc: 'h1', contact: 'hc1', origine: 'Routine quotidienne', objet: 'Audit des utilités : votre devis',
@@ -253,7 +272,8 @@ const SEED = () => {
     ],
     bases: [
       { id: 'hb1', nom: 'Base prospects maître', emplacement: 'Drive du mandat : Base de données/base-maitre.xlsx', lignes: 1240, onglets: ['Salon 2023', 'Anciens prospects', 'Contacts réseau', 'Sales Navigator', 'Suivi Gmail', 'Synthèse'],
-        statuts: { 'Non contacté': 702, 'Pas de réponse': 318, 'Réponse positive': 41, 'Réponse négative': 77, 'Invalide': 102 }, maj: dp(0), concurrent: true }
+        statuts: { 'Non contacté': 702, 'Pas de réponse': 318, 'Réponse positive': 41, 'Réponse négative': 77, 'Invalide': 102 }, maj: dp(0), concurrent: true,
+        cible: [['Secteurs', 'Industrie, agroalimentaire, santé privée'], ['Taille', 'Plus de 50 salariés'], ['Zone', 'Rhône-Alpes'], ['Fonction visée', 'Directeur technique, de site ou de maintenance'], ['Repère temporel', 'Obligatoire : salon, ancien échange ou réseau']], horsCible: 0.12 }
     ],
     campagnes: [
       { id: 'cp1', date: dp(-7), selection: 30, brouillons: 30, reponses: 3, rdv: 1, fichier: 'Statuts_exceptions_part7.csv' },
@@ -372,7 +392,6 @@ const DEMO_SCENARIO = [
   { v: 'detection', t: 'Détection', d: 'Les signaux repérés sans contact.' },
   { v: 'prospection', t: 'Prospection', d: 'Sélection de contacts et brouillons, sans envoi.' },
   { v: 'pipeline', t: 'Lead qualifié', d: 'Score sur 15 et décision explicite.' },
-  { v: 'devis', t: 'Devis', d: 'L\'OS prépare, le pilote fixe le prix.' },
   { v: 'validations', t: 'Relance', d: 'Le brouillon attend la décision du pilote.' },
   { v: 'brief', t: 'Brief et revue', d: 'Ce que le pilote voit chaque matin.' }
 ];

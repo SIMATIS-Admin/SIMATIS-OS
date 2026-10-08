@@ -3,7 +3,7 @@
 VIEWS.routines = () => {
   const r = D().routines;
   return {
-    title: 'Routines', sub: 'Ce que l\'OS fait pour vous à rythme régulier. Chaque exécution laisse un rapport court.',
+    title: 'Routines Claude',
     body: `<div class="grid g2">${r.map(x => `<div class="panel"><div class="panel-h"><div><h2>${esc(x.nom)}</h2><div class="small muted">${esc(x.rythme)}</div></div>
         <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${x.actif ? 'checked' : ''} data-change="rt-toggle" data-id="${x.id}" style="accent-color:var(--teal)">${x.actif ? 'Active' : 'En pause'}</label></div>
       <div class="panel-b report-col"><p class="small" style="color:var(--ink-2)">${esc(x.contenu)}</p>
@@ -12,7 +12,7 @@ VIEWS.routines = () => {
         ${x.rapport.attente.length ? `<h4>En attente de validation</h4><ul>${x.rapport.attente.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
         ${x.rapport.echec.length ? `<h4>Échecs</h4><ul>${x.rapport.echec.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}</div>
       <div class="decision"><button class="btn sm" data-act="rt-run" data-id="${x.id}" ${x.actif ? '' : 'disabled'}>${ic('play')}Exécuter maintenant</button><span class="hint">Exécution simulée, rien n'est envoyé.</span></div></div>`).join('')}</div>
-    <p class="small muted" style="margin-top:14px">Le mode d'exécution réel des routines (sessions Claude Code, tâches planifiées ou scripts autonomes) reste à décider.</p>`
+    <p class="small muted" style="margin-top:14px">Ces routines sont des skills Claude lancées à heure fixe (par exemple la routine quotidienne de relance). Le lien direct avec Claude reste à construire.</p>`
   };
 };
 Object.assign(ACTIONS, {
@@ -39,7 +39,7 @@ VIEWS.autonomie = () => {
   const a = D().autonomie;
   const rank = n => +n.slice(1);
   return {
-    title: 'Autonomie et garde-fous', sub: 'Jusqu\'où l\'OS peut aller seul, action par action. Certaines limites ne se déverrouillent pas.',
+    title: 'Autonomie et garde-fous',
     body: `<div class="grid g4" style="margin-bottom:18px">${Object.entries(NIVEAUX).map(([k, n]) => `<div class="panel panel-b">${gauge(k)}<p class="small" style="margin:8px 0 0;color:var(--ink-2)">${n.d}</p></div>`).join('')}</div>
     <div class="panel"><table class="tbl"><thead><tr><th>Action</th><th>Niveau</th><th>Limite</th></tr></thead><tbody>${a.map(x => {
       const max = x.fixe && x.niv !== 'interdit' && x.id !== 'envoi' ? rank(x.niv) : x.id === 'envoi' ? 2 : 3;
@@ -57,7 +57,7 @@ VIEWS.journal = () => {
   const f = S.jFilter || 'tout';
   const j = D().journal.filter(x => f === 'tout' || x.par === f);
   return {
-    title: "Journal d'audit", sub: 'Qui a fait quoi, quand, à quel niveau d\'autonomie. Les contenus sensibles ne sont pas recopiés.',
+    title: "Journal d'audit",
     actions: `<div class="seg"><button class="${f === 'tout' ? 'on' : ''}" data-act="j-f" data-f="tout">Tout</button><button class="${f === 'os' ? 'on' : ''}" data-act="j-f" data-f="os">L'OS</button><button class="${f === 'pilote' ? 'on' : ''}" data-act="j-f" data-f="pilote">Vous</button></div>`,
     body: `<div class="panel">${j.length ? `<table class="tbl"><thead><tr><th>Date</th><th>Par</th><th>Action</th><th>Niveau</th></tr></thead><tbody>${j.map(x => `<tr><td class="num small">${fdate(x.date)}</td><td>${who(x.par)}</td><td>${esc(x.action)}</td><td>${x.niv ? gauge(x.niv) : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucune entrée pour ce filtre.</div>'}</div>`
   };
@@ -69,7 +69,7 @@ VIEWS.cerveau = () => {
   const d = D(), inst = INST();
   const auto = d.autonomie.filter(a => a.niv !== 'interdit').map(a => `${a.action.split(',')[0]} : ${a.niv}`).slice(0, 5);
   return {
-    title: 'Second cerveau', sub: 'La mémoire durable : stratégie, offre, méthodes, décisions et leurs raisons. Jamais de contacts ni de pipeline.',
+    title: 'Second cerveau',
     body: `<div class="grid g-main"><div class="stack">
       <div class="panel"><div class="panel-h"><h2>Notes écrites par l'OS</h2><span class="badge">toujours en brouillon</span></div>
         <div class="panel-b">${d.notes.length ? d.notes.map(n => `<div style="padding:10px 0;border-bottom:1px solid var(--line-2)"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(n.titre)}</b><span class="badge amber">brouillon</span></div><p class="small" style="margin:4px 0;color:var(--ink-2)">${esc(n.txt)}</p><div class="small muted">${fdate(n.date)}, vers ${esc(n.dest)}</div></div>`).join('') : '<div class="empty">Aucune note pour l\'instant. Les affaires gagnées ou perdues en proposeront.</div>'}</div></div>

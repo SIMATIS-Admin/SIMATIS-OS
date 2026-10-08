@@ -11,7 +11,7 @@ const PLAN_SUGG = {
 VIEWS.plan = () => {
   const p = D().plan, ok = p.filter(b => b.ok).length;
   return {
-    title: "Plan d'action commercial", sub: 'Sept blocs, dans cet ordre. Chaque action découle d\'une décision, chaque décision d\'une qualification.',
+    title: "Plan d'action commercial",
     actions: `<span class="badge ${ok === 7 ? 'green' : 'amber'}">${ok} blocs validés sur 7</span>`,
     body: `<div class="panel"><div class="panel-b">${p.map((b, k) => `<div class="plan-b ${b.ok ? 'ok' : ''}">
       <span class="k">${b.ok ? ic('check').replace('stroke-width="1.8"', 'stroke-width="3" width="14" height="14"') : k + 1}</span>
@@ -46,7 +46,7 @@ VIEWS.demarrage = () => {
   const steps = ['Entretien de démarrage avec le dirigeant', 'Fiche d\'instance créée (comptes, règles, autonomie)', 'Socle commercial validé : offres, cas clients, aides, critères', 'Cible et segments prioritaires', 'Plan d\'action en sept blocs', 'Pipeline natif ou CRM léger mis en place avec le client', 'Liste des prescripteurs institutionnels', 'Programme de clients pilotes'];
   const n = D0.demarrage.filter(Boolean).length;
   return {
-    title: 'Démarrage du mandat', sub: 'La même méthode, adaptée à la situation de départ.',
+    title: 'Démarrage du mandat',
     body: `<div class="grid g3">${sits.map(([t, d]) => `<div class="panel panel-b" style="${t === inst.situation ? 'border-color:var(--teal);box-shadow:inset 0 0 0 1px var(--teal)' : ''}"><h3>${t}</h3><p class="small" style="margin-top:6px;color:var(--ink-2)">${d}</p>${t === inst.situation ? '<span class="badge green">Situation de ce mandat</span>' : ''}</div>`).join('')}</div>
     <div class="panel" style="margin-top:18px"><div class="panel-h"><h2>Étapes</h2><span class="badge">${n} sur ${steps.length}</span></div><div class="panel-b">
       ${steps.map((s, k) => `<label class="check"><input type="checkbox" ${D0.demarrage[k] ? 'checked' : ''} data-change="dem" data-k="${k}"><span>${s}${k === 2 && pending() ? ' <a href="#" data-act="go" data-v="validations" class="small">proposition à valider</a>' : ''}${k === 4 ? ' <a href="#" data-act="go" data-v="plan" class="small">ouvrir le plan</a>' : ''}</span></label>`).join('')}
@@ -82,7 +82,7 @@ VIEWS.diagnostic = () => {
   if (!sel) return { title: 'Diagnostic', body: '<div class="panel empty">Aucun diagnostic pour cette instance.</div>' };
   const p = profil(sel.dims);
   return {
-    title: "Diagnostic d'Endurance Commerciale", sub: "Le profil commercial de l'entreprise, jamais celui d'une personne.",
+    title: "Diagnostic d'Endurance Commerciale",
     actions: `<button class="btn" disabled title="Le questionnaire d'entretien n'est pas inclus dans la maquette">Nouveau diagnostic</button>`,
     body: `<div class="grid g-main"><div class="panel"><div class="panel-h"><div><h2>${esc(soc(sel.soc).nom)}</h2><div class="small muted">Entretien du ${fdate(sel.date)}</div></div><span class="badge ${sel.statut === 'Restitué' ? 'green' : 'amber'}">${esc(sel.statut)}</span></div>
       <div class="panel-b"><div class="profil">${radar(sel.dims)}<div style="flex:1;min-width:220px"><div class="small muted">Profil</div><div style="font:800 30px var(--f-title);color:var(--navy)">${p.nom}</div><p style="color:var(--ink-2)">${p.d}</p>
@@ -106,7 +106,7 @@ VIEWS.detection = () => {
   const d = D(); const sig = d.signaux.filter(s => !s.traite);
   const sources = d.veille || (d.veille = { 'Offres d\'emploi publiques': true, 'Presse régionale': true, 'Registres publics (créations, permis)': true, 'LinkedIn (changements de poste)': true, 'Appels d\'offres publics': false });
   return {
-    title: 'Détection', sub: 'Repérer sans contacter. On détecte d\'abord, on prospecte ensuite.',
+    title: 'Détection',
     body: `<div class="grid g-main"><div class="panel"><div class="panel-h"><h2>Signaux récents</h2><span class="muted small">${sig.length}</span></div>
       ${sig.length ? `<table class="tbl"><thead><tr><th>Société</th><th>Signal</th><th>Force</th><th></th></tr></thead><tbody>${sig.map(s => `<tr><td><b>${esc(s.soc)}</b><div class="small muted">${esc(s.type)}</div></td><td>${esc(s.txt)}<div class="small muted">Source : ${esc(s.source)}, ${rel(s.date)}</div></td><td><span class="badge ${s.force === 'fort' ? 'green' : ''}">${s.force}</span></td><td style="white-space:nowrap"><button class="btn sm" data-act="sig-opp" data-id="${s.id}">Créer une opportunité</button> <button class="btn ghost sm" data-act="sig-ign" data-id="${s.id}">Ignorer</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun nouveau signal. La veille tourne chaque nuit.</div>'}</div>
       <div class="panel"><div class="panel-h"><h2>Sources de veille</h2>${gauge('L3')}</div><div class="panel-b">
@@ -135,28 +135,42 @@ const REGLES = [
   { id: 'expert', l: 'Exclure les comptes suivis par un expert sans accord préalable', d: 'Protège les relations existantes.', n: 0.017 },
   { id: 'historique', l: "Vérifier l'historique de messagerie et du CRM", d: 'Un échange récent retire le contact de la sélection.', n: 0.007, fixe: true }
 ];
+const CIBLE_DEFAUT = [['Secteurs', 'À définir'], ['Taille', 'À définir'], ['Zone', 'À définir'], ['Fonction visée', 'À définir']];
 const FICTIFS = { soc: ['Usinage Perret', 'Atelier Blanc', 'Cartonnerie Rivière', 'Forges de Saint-Clair', 'Plastiques Morel', 'Transports Ravier', 'Salaisons du Haut-Doubs', 'Thermique Delorme', 'Câblerie Viallon', 'Laboratoire Orvel', 'Menuiserie Ferraz', 'Brasserie du Lac', 'Imprimerie Mauduit', 'Peinture Industrielle Rey', 'Fromagerie Bouvard'], f: ['Directeur général', 'Responsable maintenance', 'Directrice de site', 'Responsable QSE', 'Gérant', 'Directeur technique'], o: ['Salon 2023', 'Anciens prospects', 'Contacts réseau', 'Sales Navigator'] };
 
 VIEWS.prospection = () => {
   const d = D(), b = d.bases[0];
-  if (!b) return { title: 'Prospection', sub: 'Sélection de contacts et brouillons, sans envoi automatique.', body: `<div class="panel empty"><p>Aucune base de prospection pour cette instance.</p><button class="btn primary" data-act="go" data-v="bases">Créer une base</button></div>` };
+  if (!b) return { title: 'Prospection', body: `<div class="panel empty"><p>Aucune base de prospection pour cette instance.</p><button class="btn primary" data-act="go" data-v="bases">Créer une base</button></div>` };
   const C = S.camp && S.camp.inst === S.inst ? S.camp : (S.camp = { inst: S.inst, step: 'config', on: Object.fromEntries(REGLES.map(r => [r.id, r.id !== 'expert' || INST().modules.includes('relais')])), limite: 30, mix: 60 });
-  let reste = b.lignes; const lignes = REGLES.map((r, k) => { const n = Math.round(b.lignes * r.n); const on = C.on[r.id]; if (on) reste -= n; return { r, n, on, k }; });
+  const cible = b.cible || CIBLE_DEFAUT, horsCible = Math.round(b.lignes * (b.horsCible ?? 0.1));
+  let reste = b.lignes - horsCible; const lignes = REGLES.map((r, k) => { const n = Math.round(b.lignes * r.n); const on = C.on[r.id]; if (on) reste -= n; return { r, n, on, k }; });
+  reste = Math.max(0, reste);
   C.dispo = reste; const nb = Math.min(C.limite, reste), nouv = Math.round(nb * C.mix / 100);
   const config = `<div class="grid g-main">
-    <div class="panel"><div class="panel-h"><div><h2>Règles de sélection</h2><div class="small muted">Base : ${esc(b.nom)}, <span class="num">${b.lignes.toLocaleString('fr-FR')}</span> lignes</div></div>${gauge('L3')}</div>
-      <div class="panel-b"><ol class="steps">${lignes.map(({ r, n, on, k }) => `<li class="${on ? '' : 'off'}"><span class="k">${k + 1}</span><div><b>${r.l}</b><div class="small muted">${r.d}</div></div><div style="text-align:right"><div class="minus">− ${n}</div>${r.fixe ? `<span class="lock" title="Règle toujours active">${ic('lock')}toujours</span>` : `<label class="small"><input type="checkbox" ${on ? 'checked' : ''} data-change="camp-rule" data-id="${r.id}"> active</label>`}</div></li>`).join('')}</ol></div></div>
+    <div class="panel"><div class="panel-h"><h2>Règles de sélection ${tip("La sélection part de la base ci-dessous, garde les contacts qui correspondent au ciblage, puis retire ceux qu'il ne faut pas solliciter. Ce qui reste est disponible pour la prochaine campagne.")}</h2>${gauge('L3')}</div>
+      <div class="panel-b">
+        <h3 class="rule-h"><span class="k">1</span>Base utilisée</h3>
+        <table class="tbl small"><tbody>
+          <tr><td class="muted">Base</td><td><b>${esc(b.nom)}</b>, <span class="num">${b.lignes.toLocaleString('fr-FR')}</span> lignes <a href="#" data-act="go" data-v="bases" class="small">voir la base</a></td></tr>
+          <tr><td class="muted">Source</td><td>${esc(b.emplacement)}</td></tr>
+          <tr><td class="muted">Mise à jour</td><td>${b.maj ? rel(b.maj) : 'jamais'}</td></tr></tbody></table>
+        <h3 class="rule-h"><span class="k">2</span>Ciblage <span class="minus">− ${horsCible} hors cible</span></h3>
+        <table class="tbl small"><tbody>${cible.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table>
+        <h3 class="rule-h"><span class="k">3</span>Exclusions</h3>
+        <ol class="steps">${lignes.map(({ r, n, on }) => `<li class="${on ? '' : 'off'}"><span class="k">${ic('x')}</span><div><b>${r.l}</b><div class="small muted">${r.d}</div></div><div style="text-align:right"><div class="minus">− ${n}</div>${r.fixe ? `<span class="lock" title="Règle toujours active">${ic('lock')}toujours</span>` : `<label class="small"><input type="checkbox" ${on ? 'checked' : ''} data-change="camp-rule" data-id="${r.id}"> active</label>`}</div></li>`).join('')}</ol>
+        <p class="small muted" style="margin-top:10px">Ciblage et exclusions se règlent par instance. Ils seront éditables ici une fois la base de données commune branchée.</p></div></div>
     <div class="stack"><div class="panel panel-b"><div class="small muted">Contacts disponibles</div><div class="result-n">${reste}</div>
       <label class="field" style="margin-top:16px"><span>Contacts par exécution : <b class="num">${C.limite}</b></span><input type="range" min="10" max="50" step="5" value="${C.limite}" data-input="camp-lim" style="width:100%;accent-color:var(--navy)"></label>
       <label class="field"><span>Nouveaux contacts / relances : <b class="num">${C.mix} %</b> / <b class="num">${100 - C.mix} %</b></span><input type="range" min="0" max="100" step="10" value="${C.mix}" data-input="camp-mix" style="width:100%;accent-color:var(--navy)"></label>
       <button class="btn primary" style="width:100%;justify-content:center" data-act="camp-run">${ic('play')}Lancer la sélection en simulation</button>
       <p class="small muted" style="margin-top:10px">La simulation ne modifie rien. Vous voyez la liste avant tout brouillon.</p></div>
       ${d.campagnes.length ? `<div class="panel"><div class="panel-h"><h2>Campagnes précédentes</h2></div><table class="tbl small"><thead><tr><th>Date</th><th class="r">Brouillons</th><th class="r">Réponses</th><th class="r">RDV</th></tr></thead><tbody>${d.campagnes.map(c => `<tr><td>${fdate(c.date)}<div class="small muted">${esc(c.fichier)}</div></td><td class="r num">${c.brouillons}</td><td class="r num">${c.reponses}</td><td class="r num">${c.rdv}</td></tr>`).join('')}</tbody></table></div>` : ''}</div></div>`;
-  if (C.step === 'config') return { title: 'Prospection', sub: 'La décision précède le canal : qui, et pourquoi, avant l\'outil.', body: config };
+  const nouveau = `<button class="btn" data-act="contact-new">${ic('users')}Nouveau contact</button>`;
+  if (C.step === 'config') return { title: 'Prospection', actions: nouveau, body: config };
   const sel = C.liste;
   return {
-    title: 'Prospection', sub: `Simulation : ${sel.length} contacts sélectionnés, rien n'est écrit.`,
-    actions: `<button class="btn" data-act="camp-back">Revoir les règles</button>${C.step === 'resultat' ? `<button class="btn go" data-act="camp-draft">Préparer les ${sel.length} brouillons</button>` : ''}`,
+    title: 'Prospection',
+    actions: `<span class="badge blue">Simulation : ${sel.length} contacts, rien n'est écrit</span><button class="btn" data-act="camp-back">Revoir les règles</button>${C.step === 'resultat' ? `<button class="btn go" data-act="camp-draft">Préparer les ${sel.length} brouillons</button>` : ''}`,
     body: `${C.step === 'fait' ? `<div class="alert blue" style="margin-bottom:16px">${ic('check')}<div>${sel.length} brouillons préparés et regroupés dans <a href="#" data-act="go" data-v="validations">À valider</a>. Journal de statuts écrit en ajout seul : <b>${esc(C.fichier)}</b>.</div></div>` : ''}
     <div class="grid g-main"><div class="panel"><div class="panel-h"><h2>Contacts retenus</h2><span class="muted small">${nouv} nouveaux, ${sel.length - nouv} relances</span></div>
       <table class="tbl"><thead><tr><th>Société</th><th>Fonction</th><th>Origine</th><th>Type</th><th>Repère temporel</th></tr></thead><tbody>${sel.slice(0, 12).map(x => `<tr><td><b>${esc(x.soc)}</b></td><td>${esc(x.f)}</td><td>${esc(x.o)}</td><td><span class="badge ${x.t === 'Nouveau' ? 'blue' : ''}">${x.t}</span></td><td class="small">${esc(x.rep)}</td></tr>`).join('')}${sel.length > 12 ? `<tr><td colspan="5" class="muted small">et ${sel.length - 12} autres contacts</td></tr>` : ''}</tbody></table></div>
@@ -170,6 +184,16 @@ Object.assign(ACTIONS, {
   'camp-rule': (ds, el) => { S.camp.on[ds.id] = el.checked; render(); },
   'camp-lim': (ds, el) => { S.camp.limite = +el.value; const y = scrollY; render(); scrollTo(0, y); document.querySelector('[data-input="camp-lim"]')?.focus(); },
   'camp-mix': (ds, el) => { S.camp.mix = +el.value; const y = scrollY; render(); scrollTo(0, y); document.querySelector('[data-input="camp-mix"]')?.focus(); },
+  'contact-new': () => openModal('Nouveau contact', () => `<p class="small muted">Le contact rejoint la base ${esc(D().bases[0].nom)} avec le statut « Non contacté ».</p>
+    <div class="grid g2"><label class="field"><span>Nom</span><input class="input" id="nc-nom"></label><label class="field"><span>Fonction</span><input class="input" id="nc-fct"></label></div>
+    <div class="grid g2"><label class="field"><span>Société</span><input class="input" id="nc-soc"></label><label class="field"><span>Email</span><input class="input" id="nc-mail" type="email"></label></div>
+    <label class="field"><span>Repère temporel</span><input class="input" id="nc-rep" placeholder="Rencontré au salon, recommandé par…"></label>
+    <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="contact-new-ok">Ajouter à la base</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
+  'contact-new-ok': () => {
+    const nom = document.getElementById('nc-nom').value.trim(); if (!nom) { document.getElementById('nc-nom').focus(); return; }
+    const b = D().bases[0]; b.lignes += 1; b.statuts['Non contacté'] += 1; b.maj = dp(0);
+    logAction(`Contact ajouté à la base ${b.nom}`, 'L2'); OVER = null; render(); toast('Contact ajouté, disponible pour la prochaine sélection');
+  },
   'camp-back': () => { S.camp.step = 'config'; render(); },
   'camp-run': () => {
     const C = S.camp, n = Math.min(C.limite, C.dispo || 0), nouv = Math.round(n * C.mix / 100);
@@ -203,14 +227,22 @@ VIEWS.bases = () => {
         <tr><td class="muted">Clé de dédoublonnage</td><td>Nom de société normalisé et domaine d'email (le domaine prime)</td></tr>
         <tr><td class="muted">Statuts</td><td>${Object.keys(b.statuts).join(', ')}</td></tr>
         <tr><td class="muted">Suivi</td><td>Nombre d'emails envoyés, premier et dernier envoi, date de réponse</td></tr>
-        <tr><td class="muted">Fraîcheur</td><td>Contacts antérieurs à 2023 marqués anciens</td></tr></tbody></table></div>
+        <tr><td class="muted">Fraîcheur</td><td>Contacts antérieurs à 2023 marqués anciens</td></tr>
+        <tr><td class="muted">Utilisée par</td><td>Prospection : sélection des contacts et brouillons</td></tr>
+        <tr><td class="muted">Connexion</td><td><span class="badge amber">À brancher</span> Base de données commune, en conception</td></tr></tbody></table></div>
       <div><h3>Instantanés</h3>${b.snap ? `<div class="alert blue" style="margin-top:8px">${ic('clock')}<div><b>${fdate(b.snap.date)}</b> ${esc(b.snap.label)}<div style="margin-top:6px"><button class="btn sm" data-act="base-restore" data-id="${b.id}">Restaurer</button></div></div></div>` : '<p class="small muted" style="margin-top:8px">Aucun instantané récent. Un instantané est pris automatiquement avant chaque modification de masse.</p>'}
       <h3 style="margin-top:14px">Garde-fous</h3><ul class="checks small"><li>Journal des statuts en ajout seul</li><li>Simulation avant toute modification de masse</li><li>Une valeur validée par un humain n'est jamais écrasée</li><li>Aucune suppression : archivage</li></ul></div></div></div></div>`;
   };
   return {
-    title: 'Bases vivantes', sub: 'Vos fichiers restent la référence. L\'OS les lit, les enrichit et trace chaque changement.',
+    title: 'Bases vivantes',
     actions: `<button class="btn primary" data-act="base-new">Créer une base</button>`,
-    body: d.bases.length ? `<div class="stack">${d.bases.map(card).join('')}</div>` : `<div class="panel empty"><p>Pas encore de base pour cette instance.</p><p class="small">Partez d'un fichier (liste de salon, export) : l'OS propose un schéma, vous le validez.</p></div>`
+    body: `<details class="help"><summary>${ic('info')}Qu'est-ce qu'une base vivante ?</summary><div class="help-b">
+      <p style="margin-top:0">Une base vivante est un fichier de contacts que l'OS tient à jour au lieu de le figer : chaque envoi, réponse ou rebond met à jour le statut du contact.</p>
+      <ol><li><b>Une source de référence.</b> Aujourd'hui un fichier (Drive, XLSX). Demain, la base de données commune en cours de conception. L'OS ne remplace pas la source, il la lit.</li>
+      <li><b>L'OS l'entretient.</b> Il importe de nouvelles listes, écarte les doublons, complète les champs vides et tient un journal des statuts en ajout seul : qui a été contacté, quand, avec quelle réponse.</li>
+      <li><b>La prospection y pioche.</b> Chaque sélection part d'une base vivante et retire automatiquement les contacts déjà sollicités, invalides ou exclus.</li></ol>
+      <p class="small muted" style="margin-bottom:0">Rien n'est supprimé : on archive. Un instantané est pris avant toute modification de masse.</p></div></details>
+    ${d.bases.length ? `<div class="stack">${d.bases.map(card).join('')}</div>` : `<div class="panel empty"><p>Pas encore de base pour cette instance.</p><p class="small">Partez d'un fichier (liste de salon, export) : l'OS propose un schéma, vous le validez.</p></div>`}`
   };
 };
 Object.assign(ACTIONS, {
