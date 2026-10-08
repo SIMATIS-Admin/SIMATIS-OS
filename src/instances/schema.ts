@@ -1,0 +1,24 @@
+import { jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
+export type InstanceType = 'propre' | 'mandat' | 'prospect';
+
+export type InstanceConfig = {
+  sous?: string;
+  couleur?: string;
+  modules?: string[];
+};
+
+export const instances = pgTable('instances', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),
+  nom: text('nom').notNull(),
+  type: text('type', { enum: ['propre', 'mandat', 'prospect'] }).notNull(),
+  statut: text('statut', { enum: ['actif', 'archive'] })
+    .notNull()
+    .default('actif'),
+  config: jsonb('config').$type<InstanceConfig>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Instance = typeof instances.$inferSelect;

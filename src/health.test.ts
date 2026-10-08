@@ -3,17 +3,18 @@ import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, type TestDatabase } from '../test/database.js';
 import { buildApp } from './app.js';
-import { createDb } from './db.js';
+import { createDb, type Database } from './db.js';
 
 describe('GET /health', () => {
   let testDb: TestDatabase;
   let pool: pg.Pool;
+  let db: Database;
   let app: FastifyInstance;
 
   beforeAll(async () => {
     testDb = await createTestDatabase();
-    ({ pool } = createDb(testDb.url));
-    app = buildApp({ pool, version: '1.2.3' });
+    ({ pool, db } = createDb(testDb.url));
+    app = buildApp({ pool, db, version: '1.2.3' });
   });
 
   afterAll(async () => {
@@ -35,8 +36,10 @@ describe('GET /health', () => {
   });
 
   it('reports degraded with 503 when the database is unreachable', async () => {
-    const { pool: deadPool } = createDb('postgres://simatis:secret@127.0.0.1:1/simatis');
-    const deadApp = buildApp({ pool: deadPool, version: '1.2.3' });
+    const { pool: deadPool, db: deadDb } = createDb(
+      'postgres://simatis:secret@127.0.0.1:1/simatis',
+    );
+    const deadApp = buildApp({ pool: deadPool, db: deadDb, version: '1.2.3' });
     try {
       const response = await deadApp.inject({ method: 'GET', url: '/health' });
 
