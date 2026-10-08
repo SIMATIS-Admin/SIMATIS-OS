@@ -10,24 +10,23 @@ Double-cliquez sur `index.html`. Vos actions sont mémorisées dans le navigateu
 
 ## Ce qu'on peut tester
 
+Priorité actuelle : l'activité commerciale de SIMATIS. Les écrans en favoris (étoile) s'affichent en haut du menu ; par défaut **Pipeline**, **Brief du jour** et **Prospection**. Cliquez sur l'étoile à côté d'un titre pour ajouter ou retirer un favori.
+
 | Écran | Ce qu'il montre |
 | --- | --- |
 | **Brief du jour** | Ce qui vous attend ce matin et le rapport de la routine de nuit. |
-| **À valider** | Le cœur de l'OS : brouillons d'emails, tâches, modifications de base, notes. Vous validez, modifiez ou écartez. |
+| **À valider** | Les relances à planifier et les brouillons à envoyer. Vous validez, modifiez ou écartez. Les brouillons Gmail sont créés sans signature. |
 | **Tableau de bord** | L'entonnoir lead → prospect → devis → commande, avec curseurs pour simuler l'objectif annuel. |
-| **Plan d'action** | La trame en sept blocs ; l'OS peut proposer une rédaction, vous validez. |
-| **Démarrage du mandat** | Les trois situations de départ et les étapes (instance Aquaterra). |
-| **Diagnostic** | Profil d'une entreprise sur trois dimensions (exemple fictif, sans le questionnaire). |
-| **Détection** | Signaux faibles repérés, transformables en opportunités. |
-| **Prospection** | Règles de sélection, simulation, puis lot de brouillons et journal de statuts en ajout seul. |
-| **Bases vivantes** | Descripteur, statuts, import, enrichissement, instantanés, alerte d'édition concurrente. |
-| **Pipeline** | Étapes en glisser-déposer, ou matrice potentiel × faisabilité ; fiche avec scoring sur 15. |
+| **Prospection** | Règles de sélection explicites (base utilisée, ciblage, exclusions), simulation, puis lot de brouillons. |
+| **Bases vivantes** | Ce qu'est une base vivante, statuts, import, enrichissement, instantanés. Branchement à la base de données commune à venir. |
+| **Pipeline** | Étapes en glisser-déposer avec le taux de conversion entre chaque étape, colonnes Gagnées et Perdues ; ou matrice potentiel × faisabilité. |
 | **Rendez-vous** | Préparation (questions selon les trous de qualification, binôme) et compte rendu. |
-| **Devis** | L'OS prépare les lignes, vous fixez les prix ; transmission sur accord explicite. |
+| **Devis** | Brique propre à l'activité SIMATIS, absente des mandats. L'OS prépare les lignes, vous fixez les prix. |
 | **Relais internes** | Points mensuels avec les experts du mandat (instance Helioval). |
-| **Routines, Autonomie, Journal, Second cerveau** | Les instruments de bord : rythmes, niveaux L0 à L3 avec limites verrouillées, traçabilité, fiche d'instance sans secret. |
 
-Le sélecteur en haut à gauche change d'instance (activité propre, deux mandats fictifs, démonstration) et ouvre le **Portefeuille**, qui ne croise que des compteurs. L'instance **Dupont Industrie** affiche le bandeau de démonstration et le scénario en huit étapes.
+**Plus tard** (menu replié en bas) : Plan d'action, Diagnostic, Détection, Routines Claude, Autonomie, Journal d'audit, Second cerveau. Ces écrans restent consultables mais seront refaits.
+
+Le sélecteur en haut à gauche change d'instance (activité propre, deux mandats fictifs, démonstration) et ouvre le **Portefeuille**, qui ne croise que des compteurs. L'instance **Dupont Industrie** affiche le bandeau de démonstration et le scénario en sept étapes.
 
 ## Ce que la maquette ne tranche pas
 

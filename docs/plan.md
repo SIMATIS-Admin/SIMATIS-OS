@@ -213,35 +213,48 @@ Statut : à relire
 
 ### M2 — Pilotage : Brief du jour, À valider, Tableau de bord
 
-Statut : à relire
+Statut : validée (retours de Marc sur la maquette, 8 octobre 2026)
+
+- **Décidé** : Brief du jour et Tableau de bord gardés tels quels. À valider regroupe les relances à planifier et les brouillons à envoyer. Brouillons Gmail toujours créés sans signature.
+- **Transverse** : favoris par utilisateur en haut du menu (par défaut Pipeline, Brief du jour, Prospection) ; pas de sous-titre sous les titres, une infobulle quand un élément n'est pas évident.
 
 - **Dans la maquette** : ce qui attend Marc le matin, la file des propositions à valider, l'entonnoir lead → prospect → devis → commande avec simulation de l'objectif annuel.
 - **À trancher** : contenu du brief, types de propositions utiles en premier, indicateurs et seuils de l'entonnoir.
 
 ### M3 — Stratégie : Plan d'action, Démarrage du mandat, Diagnostic
 
-Statut : à relire
+Statut : reportée
+
+- **Plan d'action** : à redéfinir comme une liste d'actions élémentaires à court, moyen et long terme, pas une déclinaison de la stratégie.
+- **Diagnostic** : parcours en trois étapes (préparer la présentation, exécuter, analyser et produire le rapport). Un mandant ne voit que son propre diagnostic et son dernier test.
 
 - **Dans la maquette** : la trame en sept blocs, les trois situations de départ d'un mandat, le profil d'entreprise sur trois dimensions.
 - **À trancher** : ce qui sert dès la première version ; ce qui relève d'une méthode propriétaire et doit rester dans la configuration privée.
 
 ### M4 — Générer la demande : Détection, Prospection, Bases vivantes
 
-Statut : à relire
+Statut : à relire (Prospection et Bases vivantes prioritaires, Détection reportée)
+
+- **Décidé** : les règles de sélection s'affichent explicitement (base utilisée, ciblage, exclusions). Les bases vivantes seront branchées sur une base de données commune, en conception avec un partenaire (détails dans le second cerveau).
+- **Détection** : reportée, à repenser (d'où vient la donnée, ce qu'un clic doit produire).
 
 - **Dans la maquette** : signaux faibles, règles de sélection et lots de brouillons, bases importées et enrichies.
 - **À trancher** : sources des signaux, outils de prospection à brancher, formats d'import.
 
 ### M5 — Convertir : Pipeline, Rendez-vous, Devis, Relais internes
 
-Statut : à relire
+Statut : à relire (Pipeline indispensable)
+
+- **Décidé** : taux de conversion entre chaque étape du pipeline, colonnes Gagnées et Perdues. Le Devis est une brique propre à l'instance SIMATIS, jamais exposée aux mandats.
 
 - **Dans la maquette** : pipeline en colonnes ou en matrice, préparation et compte rendu de rendez-vous, devis préparé par l'OS, points mensuels avec les experts du mandat.
 - **À trancher** : étapes du pipeline par défaut et par mandat, trame de préparation de rendez-vous, place du devis (dans l'OS ou dans HubSpot).
 
 ### M6 — Instruments de bord : Routines, Autonomie, Second cerveau
 
-Statut : à relire
+Statut : reportée
+
+- Les routines sont les skills Claude planifiées (« Routines Claude »). Autonomie, Journal d'audit et vue du second cerveau : pas prioritaires.
 
 - **Dans la maquette** : rythmes automatiques, réglage des niveaux L0 à L3, fiche second cerveau.
 - **À trancher** : routines utiles et leur rythme ; niveaux d'autonomie par défaut d'un nouveau mandat ; synchro vers le second cerveau (emplacement, rythme, contenu : fiches de synthèse, comptes rendus, décisions, jamais de contacts ni de pipeline).

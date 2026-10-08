@@ -1,11 +1,13 @@
 /* Noyau de la maquette : état, navigation, interface commune. */
 
-const STORE_KEY = 'simatis-os-maquette-v1';
+const STORE_KEY = 'simatis-os-maquette-v2';
 const VIEWS = {};
 const ACTIONS = {};
 let S;
 
-function freshState() { return { inst: 'simatis', view: 'brief', data: SEED(), vqFilter: 'tout', vqSel: null, pipeMode: 'board', menuOpen: false }; }
+/* Favoris propres à l'utilisateur, pas à l'instance : ils suivent Marc d'un mandat à l'autre. */
+const FAVS_DEFAUT = ['pipeline', 'brief', 'prospection'];
+function freshState() { return { inst: 'simatis', view: 'brief', data: SEED(), vqFilter: 'tout', vqSel: null, pipeMode: 'board', menuOpen: false, favs: FAVS_DEFAUT.slice() }; }
 function load() {
   try { const raw = localStorage.getItem(STORE_KEY); if (raw) return JSON.parse(raw); } catch (e) { /* stockage indisponible : on repart des données de démo */ }
   return freshState();
@@ -43,6 +45,7 @@ const gauge = niv => {
   const n = +niv.slice(1);
   return `<span class="gauge l${n}" title="${esc(NIVEAUX[niv].d)}"><i>${[0, 1, 2, 3].map(k => `<b class="${k <= n ? 'on' : ''}"></b>`).join('')}</i><strong>${niv}</strong> ${NIVEAUX[niv].nom}</span>`;
 };
+const tip = txt => `<span class="tip" tabindex="0" role="img" aria-label="${esc(txt)}" data-tip="${esc(txt)}">${ic('info')}</span>`;
 const who = (par) => par === 'os' ? `<span class="who"><span class="dot"></span>Préparé par l'OS</span>` : `<span class="who pilote"><span class="dot"></span>Décidé par vous</span>`;
 const pending = () => D().validations.filter(v => !v.statut).length;
 
@@ -76,18 +79,25 @@ const IC = {
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>',
   menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
   down: '<path d="M6 9l6 6 6-6"/>',
+  star: '<polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3 12 2"/>',
   phone: '<path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.7a2 2 0 01-.5 2.1L8 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.7.7a2 2 0 011.7 2z"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
 
 /* ---------- Navigation ---------- */
+/* Le groupe « later » regroupe les écrans reportés : encore accessibles, mais repliés par défaut. */
 const NAV = [
   { g: 'Pilotage', items: [['brief', 'Brief du jour', 'sun'], ['validations', 'À valider', 'inbox'], ['tableau', 'Tableau de bord', 'chart']] },
-  { g: 'Stratégie', items: [['plan', "Plan d'action", 'map'], ['demarrage', 'Démarrage du mandat', 'flag', 'demarrage'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic']] },
-  { g: 'Générer la demande', items: [['detection', 'Détection', 'pulse'], ['prospection', 'Prospection', 'send'], ['bases', 'Bases vivantes', 'db']] },
-  { g: 'Convertir', items: [['pipeline', 'Pipeline', 'kanban'], ['agenda', 'Rendez-vous', 'cal'], ['devis', 'Devis', 'file'], ['relais', 'Relais internes', 'users', 'relais']] },
-  { g: 'Instruments de bord', items: [['routines', 'Routines', 'clock'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
+  { g: 'Stratégie', items: [['demarrage', 'Démarrage du mandat', 'flag', 'demarrage']] },
+  { g: 'Générer la demande', items: [['prospection', 'Prospection', 'send'], ['bases', 'Bases vivantes', 'db']] },
+  { g: 'Convertir', items: [['pipeline', 'Pipeline', 'kanban'], ['agenda', 'Rendez-vous', 'cal'], ['devis', 'Devis', 'file', 'devis'], ['relais', 'Relais internes', 'users', 'relais']] },
+  { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic'], ['detection', 'Détection', 'pulse'], ['routines', 'Routines Claude', 'clock'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
 ];
+const NAV_ITEMS = NAV.flatMap(g => g.items);
+const navItem = id => NAV_ITEMS.find(([v]) => v === id);
+/* Un écran réservé à un module (Devis : brique propre à Marc) n'existe pas dans les autres instances. */
+const allowed = (id, inst = INST()) => { const it = navItem(id); return !it || !it[3] || inst.modules.includes(it[3]); };
+const isFav = id => (S.favs || []).includes(id);
 
 function go(view, inst) {
   if (inst) S.inst = inst;
@@ -103,13 +113,17 @@ function fromHash() {
 /* ---------- Rendu ---------- */
 function shell(body, v) {
   const inst = INST();
-  const nav = NAV.map(g => {
-    const items = g.items.filter(([, , , mod]) => !mod || inst.modules.includes(mod));
+  const link = ([id, l, i]) => {
+    const n = id === 'validations' ? pending() : 0;
+    return `<a href="#/${inst.id}/${id}" data-act="go" data-v="${id}" class="${S.view === id ? 'on' : ''}">${ic(i)}<span class="lbl">${l}</span>${n ? `<span class="badge">${n}</span>` : ''}<span class="fav ${isFav(id) ? 'on' : ''}" data-act="fav" data-v="${id}" role="button" title="${isFav(id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${ic('star')}</span></a>`;
+  };
+  const favs = (S.favs || []).map(navItem).filter(it => it && allowed(it[0], inst));
+  const laterOpen = S.navLater || NAV.find(g => g.later).items.some(([id]) => id === S.view);
+  const nav = (favs.length ? `<div class="nav-group favs"><span>${ic('star')}Favoris</span>${favs.map(link).join('')}</div>` : '') + NAV.map(g => {
+    const items = g.items.filter(([id]) => allowed(id, inst));
     if (!items.length) return '';
-    return `<div class="nav-group"><span>${g.g}</span>${items.map(([id, l, i]) => {
-      const n = id === 'validations' ? pending() : 0;
-      return `<a href="#/${inst.id}/${id}" data-act="go" data-v="${id}" class="${S.view === id ? 'on' : ''}">${ic(i)}${l}${n ? `<span class="badge">${n}</span>` : ''}</a>`;
-    }).join('')}</div>`;
+    if (g.later) return `<div class="nav-group later"><button class="later-btn" data-act="nav-later" aria-expanded="${!!laterOpen}">${g.g}<span class="chev ${laterOpen ? 'open' : ''}">${ic('down')}</span></button>${laterOpen ? items.map(link).join('') : ''}</div>`;
+    return `<div class="nav-group"><span>${g.g}</span>${items.map(link).join('')}</div>`;
   }).join('');
   const menu = S.instMenu ? `<div class="inst-menu" role="menu">${INSTANCES.map(i => `<button data-act="inst" data-id="${i.id}" class="${i.id === S.inst ? 'on' : ''}"><span class="inst-dot" style="background:${i.c}"></span><span><b>${esc(i.nom)}</b><small>${esc(i.sous)}</small></span></button>`).join('')}<hr><button data-act="go" data-v="portefeuille"><span class="inst-dot" style="background:var(--navy)"></span><span><b>Portefeuille</b><small>Vue transversale, métadonnées seulement</small></span></button></div>` : '';
   const demo = inst.demo ? `<div class="demo-band"><b>Démonstration.</b> Données fictives, aucun envoi possible.<div class="scenario">${DEMO_SCENARIO.map((s, k) => `<a href="#/demo/${s.v}" data-act="go" data-v="${s.v}" class="${S.view === s.v ? 'on' : ''}" title="${esc(s.d)}">${k + 1}. ${s.t}</a>`).join('')}</div><button class="btn sm" data-act="reset-demo">Réinitialiser la démo</button></div>` : '';
@@ -122,7 +136,7 @@ function shell(body, v) {
       <div class="side-foot">Maquette, données fictives.<br>Outil connecté : ${esc(inst.outil)}.<br><button data-act="reset-all">Tout réinitialiser</button></div>
     </aside>
     <main class="main">${demo}
-      <div class="top"><div><button class="btn ghost menu-btn" data-act="menu" aria-label="Menu">${ic('menu')}</button><h1>${v.title}</h1>${v.sub ? `<div class="sub">${v.sub}</div>` : ''}</div><div class="top-actions">${v.actions || ''}</div></div>
+      <div class="top"><div><button class="btn ghost menu-btn" data-act="menu" aria-label="Menu">${ic('menu')}</button><h1>${v.title}</h1>${navItem(S.view) ? `<button class="fav-top ${isFav(S.view) ? 'on' : ''}" data-act="fav" data-v="${S.view}" title="${isFav(S.view) ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-pressed="${isFav(S.view)}">${ic('star')}</button>` : ''}</div><div class="top-actions">${v.actions || ''}</div></div>
       <div class="content">${body}</div>
     </main>
   </div>`;
@@ -130,6 +144,7 @@ function shell(body, v) {
 
 function render() {
   const root = document.getElementById('root');
+  if (S.view !== 'portefeuille' && !allowed(S.view)) S.view = 'brief';
   const viewId = S.view === 'portefeuille' ? 'portefeuille' : S.view;
   const V = VIEWS[viewId] || VIEWS.brief;
   const out = V();
@@ -161,10 +176,16 @@ Object.assign(ACTIONS, {
   go: (ds, el, e) => { e.preventDefault(); go(ds.v); },
   inst: ds => { S.instMenu = false; go(S.view === 'portefeuille' ? 'brief' : S.view, ds.id); },
   'inst-menu': () => { S.instMenu = !S.instMenu; render(); },
+  fav: (ds, el, e) => {
+    e.preventDefault(); e.stopPropagation();
+    S.favs = isFav(ds.v) ? S.favs.filter(x => x !== ds.v) : [...(S.favs || []), ds.v];
+    render(); toast(isFav(ds.v) ? 'Ajouté aux favoris' : 'Retiré des favoris');
+  },
+  'nav-later': () => { S.navLater = !S.navLater; render(); },
   menu: () => { S.menuOpen = !S.menuOpen; render(); },
   close: () => closeOver(),
   'reset-demo': () => { S.data.demo = SEED().demo; OVER = null; go('brief', 'demo'); toast('Démonstration réinitialisée'); },
-  'reset-all': () => { if (confirm('Remettre toutes les données de la maquette à zéro ?')) { const keep = S.inst; S = freshState(); S.inst = keep; OVER = null; render(); toast('Maquette réinitialisée'); } }
+  'reset-all': () => { if (confirm('Remettre toutes les données de la maquette à zéro ?')) { const keep = S.inst, favs = S.favs; S = freshState(); S.inst = keep; S.favs = favs; OVER = null; render(); toast('Maquette réinitialisée'); } }
 });
 
 document.addEventListener('click', e => {
@@ -188,4 +209,4 @@ document.addEventListener('keydown', e => {
 });
 window.addEventListener('hashchange', () => { const before = S.inst + S.view; fromHash(); if (before !== S.inst + S.view) render(); });
 
-function boot() { S = load(); if (!S.data || !S.data.demo) S = freshState(); fromHash(); render(); }
+function boot() { S = load(); if (!S.data || !S.data.demo) S = freshState(); if (!S.favs) S.favs = FAVS_DEFAUT.slice(); fromHash(); render(); }

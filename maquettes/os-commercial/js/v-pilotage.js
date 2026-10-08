@@ -3,7 +3,7 @@
 const late = () => D().taches.filter(t => !t.fait && diffDays(t.echeance) < 0);
 const todayTasks = () => D().taches.filter(t => !t.fait && diffDays(t.echeance) === 0);
 const rdvToday = () => D().rdv.filter(r => diffDays(r.date) === 0);
-const devisARelancer = () => D().devis.filter(d => d.statut === 'transmis' && diffDays(d.envoye) <= -10);
+const devisARelancer = () => !allowed('devis') ? [] : D().devis.filter(d => d.statut === 'transmis' && diffDays(d.envoye) <= -10);
 
 VIEWS.brief = () => {
   const d = D(), inst = INST();
@@ -16,11 +16,11 @@ VIEWS.brief = () => {
     ...late().map(t => ({ t: '<span class="late">Retard</span>', html: `<b>${esc(t.titre)}</b><div class="small muted">Échue ${rel(t.echeance)}, ${t.canal}</div>`, act: `<button class="btn sm" data-act="task-done" data-id="${t.id}">Marquer fait</button>` })),
     ...todayTasks().map(t => ({ t: 'Jour', html: `<b>${esc(t.titre)}</b><div class="small muted">${t.canal === 'appel' ? 'Fiche d\'appel prête' : t.canal}</div>`, act: `<button class="btn sm" data-act="task-done" data-id="${t.id}">Marquer fait</button>` }))
   ];
-  const parScore = ['chaude', 'tiede', 'faible', 'froid'].map(k => ({ k, n: d.opps.filter(o => cat(total(o.score)).k === k).length }));
+  const parScore = ['chaude', 'tiede', 'faible', 'froid'].map(k => ({ k, n: d.opps.filter(o => !o.clos && cat(total(o.score)).k === k).length }));
   const maxS = Math.max(1, ...parScore.map(x => x.n));
   const sig = d.signaux.slice(0, 2);
   return {
-    title: 'Brief du jour', sub: `${esc(inst.nom)}. ${esc(inst.sous)}.`,
+    title: 'Brief du jour',
     body: `
     <section class="brief-hero">
       <div style="position:relative;z-index:1">
@@ -32,7 +32,7 @@ VIEWS.brief = () => {
         <button data-act="go" data-v="validations"><span class="n">${nV}</span><span class="l">à valider</span></button>
         <button data-act="go" data-v="pipeline" class="${nL ? 'warn' : ''}"><span class="n">${nL}</span><span class="l">tâches en retard</span></button>
         <button data-act="go" data-v="agenda"><span class="n">${nR}</span><span class="l">rendez-vous aujourd'hui</span></button>
-        <button data-act="go" data-v="devis"><span class="n">${nD}</span><span class="l">devis à relancer</span></button>
+        ${allowed('devis') ? `<button data-act="go" data-v="devis"><span class="n">${nD}</span><span class="l">devis à relancer</span></button>` : ''}
       </div>
     </section>
     <div class="grid g-main" style="margin-top:18px">
@@ -73,7 +73,7 @@ VIEWS.validations = () => {
   const sel = byId(all, S.vqSel);
   const types = [...new Set(all.filter(v => !v.statut).map(v => v.type))];
   return {
-    title: 'À valider', sub: "L'OS a préparé. Vous décidez de ce qui part.",
+    title: 'À valider',
     body: `<div class="vq">
       <div class="panel">
         <div class="vq-filter">
@@ -92,7 +92,7 @@ VIEWS.validations = () => {
 
 function vDetail(v) {
   const c = v.contact ? contact(v.contact) : null;
-  const meta = `<div class="meta-row" style="margin-bottom:12px"><span>${gauge(v.niv)}</span><span>Source : <b>${esc(v.source)}</b></span><span>Confiance : <b>${esc(v.confiance)}</b></span></div>`;
+  const meta = `<div class="meta-row" style="margin-bottom:12px"><span>${gauge(v.niv)} ${tip(`Niveau d'autonomie de l'OS pour cette action (${v.niv} : ${NIVEAUX[v.niv].d}). Il va de L0, l'OS suggère seulement, à L3, l'OS agit seul. Plus il y a de barres colorées, plus l'OS peut agir sans vous.`)}</span><span>Source : <b>${esc(v.source)}</b></span><span>Confiance : <b>${esc(v.confiance)}</b></span></div>`;
   let main = '', buttons = '', hint = '';
   const done = v.statut ? `<div class="alert ${v.statut === 'valide' ? 'blue' : 'amber'}">${ic('info')}<div>${v.statut === 'valide' ? 'Validé' : 'Écarté'} par vous. ${v.resultat ? esc(v.resultat) : ''}</div></div>` : '';
   if (v.type === 'email') {
@@ -102,7 +102,7 @@ function vDetail(v) {
     buttons = `<button class="btn go" data-act="v-ok" data-id="${v.id}">${ic('check')}Créer le brouillon dans Gmail</button>
       <button class="btn" data-act="v-edit" data-id="${v.id}">${ic('edit')}${S.editing === v.id ? 'Terminer la modification' : 'Modifier le texte'}</button>
       <button class="btn ghost danger" data-act="v-no" data-id="${v.id}">Écarter</button>`;
-    hint = "Le brouillon apparaît dans Gmail avec votre signature. C'est vous qui l'envoyez.";
+    hint = "Le brouillon est créé dans Gmail sans signature : Gmail ajoute la vôtre. C'est vous qui l'envoyez.";
   } else if (v.type === 'tache') {
     main = `<p>${esc(v.detail)}</p><div class="meta-row"><span>Contact : <b>${esc(c.nom)}</b>, ${esc(soc(v.soc).nom)}</span><span>Échéance proposée : <b>${fdate(v.echeance)}</b></span></div>`;
     buttons = `<button class="btn go" data-act="v-ok" data-id="${v.id}">${ic('check')}Créer la tâche</button><button class="btn ghost danger" data-act="v-no" data-id="${v.id}">Écarter</button>`;
@@ -169,15 +169,16 @@ VIEWS.tableau = () => {
   const prospects = f.leads * f.l2p / 100, devis = prospects * f.p2d / 100, cmd = devis * f.d2c / 100, ca = cmd * f.panier;
   const annuel = ca * 12, besoinLeads = f.objectif / 12 / (f.l2p / 100 * f.p2d / 100 * f.d2c / 100 * f.panier);
   const max = f.leads;
-  const pipeTotal = d.opps.reduce((a, o) => a + o.montant, 0);
-  const chaudes = d.opps.filter(o => total(o.score) >= 12);
+  const ouvertes = d.opps.filter(o => !o.clos);
+  const pipeTotal = ouvertes.reduce((a, o) => a + o.montant, 0);
+  const chaudes = ouvertes.filter(o => total(o.score) >= 12);
   const camp = d.campagnes[0];
   const row = (lbl, val, w, slider, unit) => `<div class="funnel-row"><div class="lbl">${lbl}${slider ? `<input type="range" ${slider} aria-label="${lbl.replace(/<[^>]+>/g, '')}">` : ''}</div><div class="funnel-bar" style="width:${Math.max(1, w)}%"></div><div class="v">${val}${unit || ''}</div></div>`;
   return {
-    title: 'Tableau de bord', sub: 'Des indicateurs de conversion, pas de volume.',
+    title: 'Tableau de bord',
     body: `
     <div class="grid g3">
-      <div class="panel kpi"><span class="l">Pipeline ouvert</span><span class="v">${eurTxt(pipeTotal)}</span><span class="small muted">${d.opps.length} opportunités</span></div>
+      <div class="panel kpi"><span class="l">Pipeline ouvert</span><span class="v">${eurTxt(pipeTotal)}</span><span class="small muted">${ouvertes.length} opportunités</span></div>
       <div class="panel kpi"><span class="l">Opportunités chaudes (12 et plus)</span><span class="v">${chaudes.length}</span><span class="small muted">${eurTxt(chaudes.reduce((a, o) => a + o.montant, 0))}</span></div>
       <div class="panel kpi"><span class="l">Taux de réponse, dernière campagne</span><span class="v">${camp ? Math.round(camp.reponses / camp.brouillons * 100) + ' %' : '<span style="font:600 20px var(--f-title)">Pas encore</span>'}</span><span class="small muted">${camp ? camp.rdv + ' rendez-vous obtenu' + (camp.rdv > 1 ? 's' : '') : 'Aucune campagne lancée'}</span></div>
     </div>
@@ -208,7 +209,7 @@ VIEWS.portefeuille = () => {
     return { i, v: d.validations.filter(v => !v.statut).length, l: d.taches.filter(t => !t.fait && diffDays(t.echeance) < 0).length, r: d.rdv.filter(r => diffDays(r.date) >= 0 && diffDays(r.date) <= 7).length, t: d.temps, ro: d.routines.filter(r => r.actif).length };
   });
   return {
-    title: 'Portefeuille', sub: 'Toutes vos instances, sans croiser leur contenu.',
+    title: 'Portefeuille',
     body: `<div class="alert blue" style="margin-bottom:18px">${ic('lock')}<div>Cette vue ne montre que des compteurs. Aucun contact, aucun échange et aucun montant d'un mandat n'apparaît dans un autre. Le périmètre exact de ce qui peut être croisé reste à décider.</div></div>
     <div class="panel"><table class="tbl"><thead><tr><th>Instance</th><th>Situation</th><th class="r">À valider</th><th class="r">Tâches en retard</th><th class="r">Rendez-vous 7 j</th><th class="r">Temps cette semaine</th><th class="r">Routines actives</th></tr></thead>
     <tbody>${rows.map(x => `<tr class="click" data-act="inst" data-id="${x.i.id}"><td><span class="inst-dot" style="display:inline-block;background:${x.i.c};margin-right:8px"></span><b>${esc(x.i.nom)}</b><div class="small muted">${esc(x.i.sous)}</div></td><td>${x.i.demo ? '<span class="badge amber">Démonstration</span>' : esc(x.i.situation || 'Activité propre')}</td><td class="r num">${x.v}</td><td class="r num ${x.l ? 'late' : ''}">${x.l}</td><td class="r num">${x.r}</td><td class="r num">${x.t} h</td><td class="r num">${x.ro}/4</td></tr>`).join('')}</tbody></table></div>

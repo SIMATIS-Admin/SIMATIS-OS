@@ -3,19 +3,32 @@
 const MOTIFS = ['Budget reporté', 'Choix d\'un concurrent', 'Projet abandonné', 'Recrutement en interne', 'Pas de réponse', 'Autre'];
 
 /* ---------- Pipeline ---------- */
+/* Étape la plus avancée atteinte : une affaire gagnée a atteint la commande (rang 5). */
+const rang = o => o.clos === 'gagne' ? ETAPES.length : ETAPES.findIndex(e => e.id === o.etape);
+function conversions(opps) {
+  const atteint = k => opps.filter(o => rang(o) >= k).length;
+  return ETAPES.map((e, k) => { const den = atteint(k); return den ? Math.round(atteint(k + 1) / den * 100) : null; });
+}
+const CONV_TIP = "Taux de conversion : part des opportunités arrivées à l'étape de gauche qui ont atteint l'étape de droite. Les affaires ouvertes, gagnées et perdues sont toutes comptées ; une affaire perdue compte jusqu'à l'étape où elle s'est arrêtée.";
+
 VIEWS.pipeline = () => {
   const d = D(), mode = S.pipeMode;
   const opps = d.opps.filter(o => !o.clos);
-  const card = o => { const lt = diffDays(o.echeance) < 0; return `<div class="card" draggable="true" data-drag="${o.id}" data-act="opp" data-id="${o.id}" tabindex="0">
+  const conv = conversions(d.opps);
+  const card = o => { const lt = !o.clos && diffDays(o.echeance) < 0; return `<div class="card" draggable="true" data-drag="${o.id}" data-act="opp" data-id="${o.id}" tabindex="0">
       <div class="soc">${esc(soc(o.soc).nom)}</div><div class="ttl">${esc(o.titre)}</div>
-      <div class="next ${lt ? 'late' : ''}">${esc(o.prochaine)}, ${rel(o.echeance)}</div>
+      ${o.clos === 'perdu' ? `<div class="motif">Perdue en ${ETAPES.find(e => e.id === o.etape).nom.toLowerCase()}${o.motif ? ' : ' + esc(o.motif.toLowerCase()) : ''}</div>` : o.clos ? '' : `<div class="next ${lt ? 'late' : ''}">${esc(o.prochaine)}, ${rel(o.echeance)}</div>`}
       <div class="ft">${scoreBadge(o.score)}<span class="small">${o.montant ? eur(o.montant) : '<span class="muted">à estimer</span>'}</span></div></div>`; };
-  const board = `<div class="board">${ETAPES.map(e => { const os = opps.filter(o => o.etape === e.id); return `<div class="col" data-drop="${e.id}"><div class="col-h"><b>${e.nom} <span class="muted">${os.length}</span></b><span>${eurTxt(os.reduce((a, o) => a + o.montant, 0))}</span></div>${os.map(card).join('') || '<div class="small muted" style="padding:8px">Glissez une carte ici</div>'}</div>`; }).join('')}</div>`;
+  const col = (id, nom, os, cls = '') => `<div class="col ${cls}" data-drop="${id}"><div class="col-h"><b>${nom} <span class="muted">${os.length}</span></b><span>${eurTxt(os.reduce((a, o) => a + o.montant, 0))}</span></div>${os.map(card).join('') || '<div class="small muted" style="padding:8px">Glissez une carte ici</div>'}</div>`;
+  const arrow = (k, de, vers) => `<div class="conv" aria-label="${de} vers ${vers} : ${conv[k] == null ? 'pas de donnée' : conv[k] + ' %'}"><span class="pct ${conv[k] != null && conv[k] < 30 ? 'low' : ''}">${conv[k] == null ? '–' : conv[k] + '%'}</span><span class="arr">→</span>${k === 0 ? tip(CONV_TIP) : ''}</div>`;
+  const noms = [...ETAPES.map(e => e.nom), 'Commande'];
+  const board = `<div class="board">${ETAPES.map((e, k) => col(e.id, e.nom, opps.filter(o => o.etape === e.id)) + arrow(k, noms[k], noms[k + 1])).join('')}
+    ${col('gagne', 'Gagnées', d.opps.filter(o => o.clos === 'gagne'), 'won closed')}${col('perdu', 'Perdues', d.opps.filter(o => o.clos === 'perdu'), 'lost closed')}</div>`;
   const cells = [['eleve-forte', 'Potentiel élevé, faisabilité forte'], ['eleve-faible', 'Potentiel élevé, faisabilité faible'], ['limite-forte', 'Potentiel limité, faisabilité forte'], ['limite-faible', 'Potentiel limité, faisabilité faible']];
   const matrix = `<div class="matrix"><div class="ax y">Potentiel élevé</div>${cells.slice(0, 2).map(cellH).join('')}<div class="ax y">Potentiel limité</div>${cells.slice(2).map(cellH).join('')}<div></div><div class="ax">Faisabilité forte</div><div class="ax">Faisabilité faible</div></div>`;
   function cellH([k, l]) { const m = MATRICE[k]; const os = opps.filter(o => `${o.potentiel}-${o.faisab}` === k); return `<div class="cell ${m.k}" aria-label="${l}"><h3>${m.nom}<span class="num small muted">${os.length}</span></h3><p>${m.d}</p>${os.map(o => `<span class="pill" data-act="opp" data-id="${o.id}">${scoreBadge(o.score)}${esc(soc(o.soc).nom)}</span>`).join('')}</div>`; }
   return {
-    title: 'Pipeline', sub: `${INST().outil}. Chaque opportunité a un score sur 15 et une décision explicite.`,
+    title: 'Pipeline',
     actions: `<div class="seg"><button class="${mode === 'board' ? 'on' : ''}" data-act="pipe-mode" data-m="board">Étapes</button><button class="${mode === 'matrice' ? 'on' : ''}" data-act="pipe-mode" data-m="matrice">Matrice</button></div><button class="btn primary" data-act="opp-new">Nouvelle opportunité</button>`,
     body: mode === 'board' ? board : matrix,
     after: () => {
@@ -23,7 +36,17 @@ VIEWS.pipeline = () => {
       document.querySelectorAll('[data-drop]').forEach(col => {
         col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop'); });
         col.addEventListener('dragleave', () => col.classList.remove('drop'));
-        col.addEventListener('drop', e => { e.preventDefault(); const o = byId(D().opps, e.dataTransfer.getData('text/plain')); if (o && o.etape !== col.dataset.drop) { o.etape = col.dataset.drop; o.maj = dp(0); logAction(`Étape changée : ${soc(o.soc).nom} → ${ETAPES.find(x => x.id === o.etape).nom}`, 'L2'); toast('Étape mise à jour'); } render(); });
+        col.addEventListener('drop', e => {
+          e.preventDefault(); col.classList.remove('drop');
+          const o = byId(D().opps, e.dataTransfer.getData('text/plain')), cible = col.dataset.drop;
+          if (!o) return;
+          // Gagner ou perdre passe toujours par la fenêtre de clôture, pour garder le motif et l'enseignement.
+          if (cible === 'gagne' || cible === 'perdu') { if (o.clos !== cible) ACTIONS['opp-close']({ id: o.id, r: cible }); return; }
+          if (o.etape === cible && !o.clos) return;
+          const rouverte = !!o.clos; o.clos = null; o.motif = null; o.etape = cible; o.maj = dp(0);
+          logAction(`${rouverte ? 'Opportunité rouverte' : 'Étape changée'} : ${soc(o.soc).nom} → ${ETAPES.find(x => x.id === o.etape).nom}`, 'L2');
+          render(); toast(rouverte ? 'Opportunité rouverte' : 'Étape mise à jour');
+        });
       });
     }
   };
@@ -47,10 +70,11 @@ function oppDrawer(id) {
     <div class="alert blue">${ic('info')}<div>Décision : <b>${m.nom}</b>. ${m.d}</div></div>
     <h3 style="margin-top:18px">Prochaine action</h3><p style="margin-top:4px">${esc(o.prochaine)} <span class="${diffDays(o.echeance) < 0 ? 'late' : 'muted'} small">(${rel(o.echeance)})</span></p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
-      <button class="btn primary" data-act="devis-new" data-id="${o.id}">${ic('file')}Préparer un devis</button>
+      ${o.clos ? `<span class="badge ${o.clos === 'gagne' ? 'green' : 'red'}">${o.clos === 'gagne' ? 'Gagnée' : 'Perdue'}${o.motif ? ' : ' + esc(o.motif) : ''}</span><button class="btn" data-act="opp-reopen" data-id="${o.id}">Rouvrir</button>` : `
+      ${allowed('devis') ? `<button class="btn primary" data-act="devis-new" data-id="${o.id}">${ic('file')}Préparer un devis</button>` : ''}
       <button class="btn" data-act="rdv-new" data-id="${o.id}">${ic('cal')}Planifier un rendez-vous</button>
       <button class="btn go" data-act="opp-close" data-id="${o.id}" data-r="gagne">Gagnée</button>
-      <button class="btn danger" data-act="opp-close" data-id="${o.id}" data-r="perdu">Perdue</button></div>
+      <button class="btn danger" data-act="opp-close" data-id="${o.id}" data-r="perdu">Perdue</button>`}</div>
     <h3 style="margin-top:22px">Historique</h3><ul class="hist">${(o.hist || []).map(h => `<li><span class="d">${fdate(h.date)}</span><span>${esc(h.txt)}</span></li>`).join('')}<li><span class="d">${fdate(o.maj)}</span><span>Dernière mise à jour</span></li></ul>`;
   }, s.nom);
 }
@@ -73,11 +97,12 @@ Object.assign(ACTIONS, {
   'opp-close-ok': ds => {
     const o = byId(D().opps, ds.id), gagne = ds.r === 'gagne';
     const motif = document.getElementById('motif')?.value, lecon = document.getElementById('lecon').value.trim();
-    o.clos = gagne ? 'gagne' : 'perdu';
+    o.clos = gagne ? 'gagne' : 'perdu'; o.motif = gagne ? null : motif; o.maj = dp(0);
     D().validations.unshift({ id: uid('v'), type: 'note', niv: 'L2', titre: `Enseignement : affaire ${gagne ? 'gagnée' : 'perdue'}`, origine: "Boucle d'apprentissage", detail: `Affaire ${gagne ? 'gagnée' : 'perdue'} dans le secteur ${soc(o.soc).secteur.toLowerCase()}${motif ? ', motif : ' + motif.toLowerCase() : ''}. ${lecon || 'Enseignement à préciser.'}`, destination: 'Méthodes (forme dépersonnalisée)', source: 'Clôture d\'affaire', confiance: 'à relire' });
     logAction(`Opportunité ${gagne ? 'gagnée' : 'perdue'} : ${soc(o.soc).nom}`, 'L2');
     OVER = null; render(); toast('Clôturée. Une note est proposée dans À valider.');
   },
+  'opp-reopen': ds => { const o = byId(D().opps, ds.id); o.clos = null; o.motif = null; o.maj = dp(0); logAction(`Opportunité rouverte : ${soc(o.soc).nom}`, 'L2'); OVER = null; render(); toast('Opportunité rouverte'); },
   'opp-new': () => openModal('Nouvelle opportunité', () => `<label class="field"><span>Société</span><input class="input" id="no-soc" placeholder="Nom de la société"></label><label class="field"><span>Objet</span><input class="input" id="no-titre" placeholder="Ce que vous pourriez vendre"></label><label class="field"><span>Source</span><select class="input" id="no-src"><option>Réseau</option><option>Salon</option><option>Lead entrant</option><option>LinkedIn</option><option>Recommandation</option></select></label><div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="opp-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
   'opp-new-ok': () => {
     const nom = document.getElementById('no-soc').value.trim(); if (!nom) { document.getElementById('no-soc').focus(); return; }
@@ -100,7 +125,7 @@ const QUESTIONS = {
 VIEWS.agenda = () => {
   const r = D().rdv.slice().sort((a, b) => a.date.localeCompare(b.date));
   return {
-    title: 'Rendez-vous', sub: 'Préparer avant, consigner après. Le CRM se met à jour à partir du compte rendu.',
+    title: 'Rendez-vous',
     body: `<div class="panel">${r.length ? `<table class="tbl"><thead><tr><th>Date</th><th>Rendez-vous</th><th>Lieu</th><th>Binôme</th><th></th></tr></thead><tbody>${r.map(x => `<tr><td class="num">${fdate(x.date)}<div class="small muted">${x.heure}</div></td><td><b>${esc(x.titre)}</b>${x.cr ? '<div class="small" style="color:var(--green)">Compte rendu fait</div>' : ''}</td><td>${esc(x.lieu)}</td><td>${x.binome ? esc(x.binome) : '<span class="muted">Seul</span>'}</td><td style="white-space:nowrap"><button class="btn sm" data-act="rdv-prep" data-id="${x.id}">Préparer</button> ${diffDays(x.date) <= 0 && !x.cr ? `<button class="btn go sm" data-act="rdv-cr" data-id="${x.id}">Compte rendu</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun rendez-vous planifié.</div>'}</div>`
   };
 };
@@ -146,7 +171,7 @@ const STATUT_DEVIS = { brouillon: ['Brouillon', 'amber'], valide: ['Validé par 
 VIEWS.devis = () => {
   const list = D().devis;
   return {
-    title: 'Devis', sub: "L'OS prépare les lignes à partir de l'historique. Le prix, c'est vous qui le fixez.",
+    title: 'Devis',
     body: `<div class="panel">${list.length ? `<table class="tbl"><thead><tr><th>Numéro</th><th>Client</th><th>Statut</th><th class="r">Montant</th><th>Suivi</th></tr></thead><tbody>${list.map(d => { const o = byId(D().opps, d.opp); const st = STATUT_DEVIS[d.statut]; const ar = d.statut === 'transmis' && diffDays(d.envoye) <= -10; return `<tr class="click" data-act="devis-open" data-id="${d.id}"><td class="num">${esc(d.num)}</td><td><b>${esc(soc(o.soc).nom)}</b><div class="small muted">${esc(o.titre)}</div></td><td><span class="badge ${st[1]}">${st[0]}</span></td><td class="r">${d.lignes.some(l => l.pu == null) ? '<span class="muted">prix à fixer</span>' : eur(devisTotal(d))}</td><td class="small">${d.statut === 'transmis' ? `Envoyé ${rel(d.envoye)}${ar ? ' <span class="late">à relancer</span>' : ''}` : '<span class="muted">En préparation</span>'}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">Aucun devis. Préparez-en un depuis une opportunité du pipeline.</div>'}</div>`
   };
 };
@@ -194,7 +219,7 @@ Object.assign(ACTIONS, {
 VIEWS.relais = () => {
   const r = D().relais;
   return {
-    title: 'Relais internes', sub: 'Les experts du mandat qui vous confient des contacts, et ceux que vous devez consulter avant un contact.',
+    title: 'Relais internes',
     body: `<div class="panel"><table class="tbl"><thead><tr><th>Contributeur</th><th class="r">Contacts confiés</th><th class="r">Tâches ouvertes</th><th class="r">Contacts non traités</th><th>Prochain point</th><th></th></tr></thead><tbody>${r.map((x, k) => `<tr><td><b>${esc(x.nom)}</b></td><td class="r num">${x.confies}</td><td class="r num">${x.taches}</td><td class="r num ${x.nonTraites ? 'late' : ''}">${x.nonTraites}</td><td>${fdate(x.prochain)} <span class="small muted">(${rel(x.prochain)})</span></td><td><button class="btn sm" data-act="relais-prep" data-k="${k}">Préparer le point mensuel</button></td></tr>`).join('')}</tbody></table></div>
     <div class="alert blue" style="margin-top:16px">${ic('info')}<div>Règle de ce mandat : un client suivi par un expert n'est jamais contacté sans son accord préalable. C'est un paramètre de l'instance, modifiable dans les règles de prospection.</div></div>`
   };
