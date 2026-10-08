@@ -1,38 +1,73 @@
 /* Instruments de bord : routines, autonomie, journal d'audit, second cerveau. */
 
+const CONN_TIP = "Chaque instance a ses propres connexions. Une routine n'utilise que celles de l'instance choisie : si l'une manque, la routine s'arrête, et rien ne part depuis une autre boîte.";
+/* Étapes qui ont besoin d'une connexion donnée : sans elle, la routine s'arrête là. */
+const besoin = txt => /messagerie|Gmail/i.test(txt) ? 'Messagerie' : /agenda/i.test(txt) ? 'Agenda' : null;
+const connOk = nom => { const c = (INST().conn || []).find(x => x[0] === nom); return !c || c[2] === 'ok'; };
+
 VIEWS.routines = () => {
-  const r = D().routines;
+  const r = D().routines, inst = INST();
+  const conn = inst.conn || [];
   return {
     title: 'Routines Claude',
-    body: `<div class="grid g2">${r.map(x => `<div class="panel"><div class="panel-h"><div><h2>${esc(x.nom)}</h2><div class="small muted">${esc(x.rythme)}</div></div>
+    body: `<div class="panel" style="margin-bottom:18px"><div class="panel-h"><h2>Connexions de ${inst.id === 'simatis' ? 'mon activité' : 'ce mandat'} ${tip(CONN_TIP)}</h2>${inst.crm ? `<span class="small muted">Synchronisé ${S.sync?.[inst.id] ? 'à l\'instant' : 'il y a 5 min'}</span>` : ''}</div>
+      <div class="panel-b conn-row">${conn.map(([k, nom, etat]) => `<div class="conn ${etat}"><span class="small muted">${esc(k)}</span><b>${esc(nom)}</b><span class="badge ${etat === 'ok' ? 'green' : 'amber'}">${etat === 'ok' ? 'Connecté' : 'Non configuré'}</span></div>`).join('')}</div></div>
+    <div class="grid g2">${r.map(x => `<div class="panel"><div class="panel-h"><div><h2>${esc(x.nom)}</h2><div class="small muted">${esc(x.rythme)}</div></div>
         <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${x.actif ? 'checked' : ''} data-change="rt-toggle" data-id="${x.id}" style="accent-color:var(--teal)">${x.actif ? 'Active' : 'En pause'}</label></div>
-      <div class="panel-b report-col"><p class="small" style="color:var(--ink-2)">${esc(x.contenu)}</p>
-        <div class="small muted">Dernière exécution : ${rel(x.dernier)}</div>
+      <div class="panel-b report-col">
+        <h4 style="margin-top:0">Ce que fait la routine</h4><ol class="rt-steps">${(x.etapes || []).map(e => `<li class="${besoin(e) && !connOk(besoin(e)) ? 'blocked' : ''}">${esc(e)}</li>`).join('')}</ol>
+        <div class="small muted" style="margin-top:10px">Dernière exécution : ${rel(x.dernier)}</div>
         <h4>Fait</h4><ul>${x.rapport.fait.map(f => `<li>${esc(f)}</li>`).join('') || '<li>Rien</li>'}</ul>
         ${x.rapport.attente.length ? `<h4>En attente de validation</h4><ul>${x.rapport.attente.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
         ${x.rapport.echec.length ? `<h4>Échecs</h4><ul>${x.rapport.echec.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}</div>
-      <div class="decision"><button class="btn sm" data-act="rt-run" data-id="${x.id}" ${x.actif ? '' : 'disabled'}>${ic('play')}Exécuter maintenant</button><span class="hint">Exécution simulée, rien n'est envoyé.</span></div></div>`).join('')}</div>
-    <p class="small muted" style="margin-top:14px">Ces routines sont des skills Claude lancées à heure fixe (par exemple la routine quotidienne de relance). Le lien direct avec Claude reste à construire.</p>`
+      <div class="decision"><button class="btn primary sm" data-act="rt-run" data-id="${x.id}" ${x.actif ? '' : 'disabled'}>${ic('play')}Lancer maintenant</button><span class="hint">Rien n'est envoyé : les brouillons attendent dans Gmail.</span></div></div>`).join('')}</div>`
   };
 };
 Object.assign(ACTIONS, {
   'rt-toggle': (ds, el) => { const x = byId(D().routines, ds.id); x.actif = el.checked; logAction(`Routine ${el.checked ? 'activée' : 'mise en pause'} : ${x.nom}`, 'L2'); render(); },
   'rt-run': ds => {
-    const x = byId(D().routines, ds.id), d = D();
-    const t = d.taches.find(t => !t.fait && diffDays(t.echeance) <= 0 && t.canal === 'email' && !t.prepare);
-    const fait = ['Lecture des tâches, de la messagerie et de l\'agenda'];
-    if (t && x.id === 'r-quot') {
-      t.prepare = true; const o = byId(d.opps, t.opp); const c = contact(o.contact);
+    const x = byId(D().routines, ds.id);
+    S.run = { id: x.id, k: 0, err: null, fin: false };
+    openModal(esc(x.nom), runBody);
+    const tick = setInterval(() => {
+      const R = S.run; if (!R || R.id !== x.id) return clearInterval(tick);
+      const etape = x.etapes[R.k], b = besoin(etape);
+      if (b && !connOk(b)) { R.err = `${b} non configurée pour ${INST().nom} : la routine s'arrête ici.`; }
+      else R.k++;
+      if (R.err || R.k >= x.etapes.length) { clearInterval(tick); R.fin = true; finRoutine(x, R); }
+      if (OVER || R.fin) render();
+    }, 450);
+  },
+  'rt-voir': () => { S.run = null; OVER = null; S.vqFilter = 'tout'; go('validations'); }
+});
+function runBody() {
+  const R = S.run, x = byId(D().routines, R.id);
+  return `<p class="small muted" style="margin-top:0">Instance : <b>${esc(INST().nom)}</b>. Connexions utilisées : ${(INST().conn || []).filter(c => c[2] === 'ok').map(c => esc(c[1])).join(', ')}.</p>
+    <ol class="rt-steps run">${x.etapes.map((e, k) => `<li class="${k < R.k ? 'done' : k === R.k && R.err ? 'blocked' : k === R.k && !R.fin ? 'cur' : ''}">${esc(e)}</li>`).join('')}</ol>
+    ${R.err ? `<div class="alert amber" style="margin-top:12px">${ic('info')}<div>${esc(R.err)}</div></div>` : ''}
+    ${R.fin && !R.err ? `<div class="alert blue" style="margin-top:12px">${ic('check')}<div>${esc(R.bilan)}</div></div>` : ''}
+    ${R.fin ? `<div style="display:flex;gap:8px;margin-top:14px">${R.n ? `<button class="btn go" data-act="rt-voir">Voir dans À valider</button>` : ''}<button class="btn ghost" data-act="close">Fermer</button></div>` : ''}`;
+}
+function finRoutine(x, R) {
+  const d = D(), fait = [];
+  let n = 0;
+  if (!R.err && x.id === 'r-quot') {
+    d.taches.filter(t => !t.fait && diffDays(t.echeance) <= 0 && t.canal === 'email' && !t.prepare && t.opp).forEach(t => {
+      t.prepare = true; const o = byId(d.opps, t.opp), c = contact(o.contact);
       d.validations.unshift({ id: uid('v'), type: 'email', niv: 'L1', titre: 'Relance préparée par la routine', soc: o.soc, contact: o.contact, origine: x.nom, objet: o.titre,
         corps: email(c.nom, '', ['Je reviens vers vous suite à notre dernier échange.', 'Seriez-vous disponible pour en reparler brièvement ?'], creneaux(4)),
         controles: ['Historique de messagerie consulté', 'Tâche échue ' + rel(t.echeance), 'Créneaux vérifiés dans l\'agenda'], source: INST().outil, confiance: 'élevée' });
-      fait.push('1 brouillon de relance préparé');
-    }
-    fait.push(x.id === 'r-hebdo' ? 'Revue du pipeline par score' : 'Rapport produit');
-    x.dernier = dp(0); x.rapport = { fait, attente: [`${pending()} élément${pending() > 1 ? 's' : ''} à valider`], echec: [] };
-    logAction(`Routine exécutée : ${x.nom}`, 'L3', 'os'); render(); toast('Routine exécutée, rapport mis à jour');
-  }
-});
+      n++;
+    });
+    const appels = d.taches.filter(t => !t.fait && diffDays(t.echeance) <= 0 && t.canal === 'appel').length;
+    fait.push(`${n} brouillon${n > 1 ? 's' : ''} de relance préparé${n > 1 ? 's' : ''} dans Gmail`, `Planning d'appels : ${appels} appel${appels > 1 ? 's' : ''}`, 'Brief du jour produit');
+  } else if (!R.err) fait.push(...x.etapes.map(e => e + ' : fait'));
+  R.n = n || pending();
+  R.bilan = x.id === 'r-quot' ? `${fait[0]}. ${pending()} élément${pending() > 1 ? 's' : ''} en attente de votre décision.` : 'Routine terminée. Rien n\'a été envoyé.';
+  x.dernier = dp(0);
+  x.rapport = { fait: R.err ? x.etapes.slice(0, R.k) : fait, attente: [`${pending()} élément${pending() > 1 ? 's' : ''} à valider`], echec: R.err ? [R.err] : [] };
+  logAction(`Routine Claude exécutée : ${x.nom}${R.err ? ' (arrêtée)' : ''}`, 'L3', 'os');
+}
 
 /* ---------- Autonomie ---------- */
 VIEWS.autonomie = () => {

@@ -64,10 +64,14 @@ const AUTONOMIE_DEFAUT = [
 /* ------------------------------------------------------------------ */
 
 const INSTANCES = [
-  { id: 'simatis', nom: 'Mon activité', sous: 'Développement SIMATIS', outil: 'Pipeline natif', c: '#41A594', modules: ['diagnostic', 'devis'] },
-  { id: 'helioval', nom: 'Helioval', sous: "Mandat fictif : bureau d'études", outil: 'HubSpot (simulé)', situation: 'Système à structurer', c: '#4C8DD6', modules: ['relais'] },
-  { id: 'aquaterra', nom: 'Aquaterra', sous: "Mandat fictif : équipements", outil: 'Pipeline natif', situation: 'Système à créer', c: '#9A7BE0', modules: ['demarrage'] },
-  { id: 'demo', nom: 'Dupont Industrie', sous: 'Démonstration prospect', outil: 'Données fictives', c: '#E3A33B', demo: true, modules: ['diagnostic'] }
+  { id: 'simatis', nom: 'Mon activité', sous: 'Développement SIMATIS', outil: 'Pipeline natif', c: '#41A594', modules: ['diagnostic', 'devis'],
+    conn: [['Pipeline', 'Pipeline natif de l\'OS', 'ok'], ['Messagerie', 'Gmail SIMATIS', 'ok'], ['Agenda', 'Agenda SIMATIS', 'ok']] },
+  { id: 'helioval', nom: 'Helioval', sous: "Mandat fictif : bureau d'études", outil: 'HubSpot (simulé)', crm: 'HubSpot', situation: 'Système à structurer', c: '#4C8DD6', modules: ['relais'],
+    conn: [['CRM', 'HubSpot du mandat', 'ok'], ['Messagerie', 'Gmail du mandat', 'ok'], ['Agenda', 'Agenda du mandat', 'ok']] },
+  { id: 'aquaterra', nom: 'Aquaterra', sous: "Mandat fictif : équipements", outil: 'Pipeline natif', situation: 'Système à créer', c: '#9A7BE0', modules: ['demarrage'],
+    conn: [['Pipeline', 'Pipeline natif de l\'OS', 'ok'], ['Messagerie', 'Gmail du mandat', 'non'], ['Agenda', 'Agenda du mandat', 'non']] },
+  { id: 'demo', nom: 'Dupont Industrie', sous: 'Démonstration prospect', outil: 'Données fictives', c: '#E3A33B', demo: true, modules: ['diagnostic'],
+    conn: [['CRM', 'Données fictives', 'ok'], ['Messagerie', 'Aucun envoi possible', 'ok'], ['Agenda', 'Agenda fictif', 'ok']] }
 ];
 
 function seedInstance(cfg) {
@@ -87,11 +91,16 @@ const email = (c, objet, lignes, slots, rappel) =>
   (slots ? `<p>Seriez-vous disponible à l'un de ces créneaux ?</p><ul>${slots.map(s => `<li>${s}</li>`).join('')}</ul>` : '') +
   `<p>Bien à vous,</p>`;
 
-const routinesStd = (extra) => [
-  { id: 'r-quot', nom: 'Routine quotidienne', rythme: 'Chaque jour ouvré à 7h00', actif: true, contenu: 'Tâches en retard, brouillons de relance, planning d\'appels, leads entrants, brief du pilote', dernier: dp(0), rapport: extra.quot },
-  { id: 'r-hebdo', nom: 'Revue hebdomadaire', rythme: 'Lundi à 8h00', actif: true, contenu: 'Pipeline par niveau de score, devis à relancer, causes de perte, notes proposées', dernier: dp(-((TODAY.getDay() + 6) % 7)), rapport: extra.hebdo },
-  { id: 'r-mens', nom: 'Revue mensuelle', rythme: 'Premier lundi du mois', actif: true, contenu: 'Priorités et stratégie, entretien du second cerveau, qualité des bases', dernier: dp(-21), rapport: { fait: ['Contrôle qualité des bases : 3 doublons proposés à la fusion'], attente: ['2 notes à relire dans le second cerveau'], echec: [] } },
-  { id: 'r-evt', nom: 'Sur événement', rythme: 'Nouveau lead, réponse reçue, devis sans réponse depuis 10 jours', actif: true, contenu: 'Qualification du lead, arrêt de séquence sur réponse, relance de devis', dernier: dp(-1), rapport: { fait: ['1 réponse reçue : séquence arrêtée'], attente: [], echec: [] } }
+/* Les routines sont des skills Claude, exécutées avec les connexions de l'instance et d'aucune autre. */
+const routinesStd = (extra, crm = 'le pipeline') => [
+  { id: 'r-quot', nom: 'Routine quotidienne de relance', rythme: 'Chaque jour ouvré à 7h00, ou à la demande', actif: true, dernier: dp(0), rapport: extra.quot,
+    etapes: [`Lire les tâches de relance échues et du jour dans ${crm}`, 'Vérifier l\'historique de messagerie de chaque contact', 'Chercher trois créneaux libres dans l\'agenda', 'Rédiger les brouillons dans Gmail, sans signature', 'Préparer les fiches et le planning d\'appels', 'Produire le brief du jour'] },
+  { id: 'r-nett', nom: 'Nettoyage des tâches après relance', rythme: 'Après chaque envoi de relances, ou à la demande', actif: true, dernier: dp(-1), rapport: { fait: ['3 tâches clôturées : envoi réel constaté'], attente: ['2 tâches de suivi proposées'], echec: [] },
+    etapes: ['Constater dans Gmail les relances réellement envoyées', `Clôturer les tâches correspondantes dans ${crm}`, 'Proposer les tâches de suivi à recréer, à valider'] },
+  { id: 'r-hebdo', nom: 'Revue hebdomadaire', rythme: 'Lundi à 8h00', actif: true, dernier: dp(-((TODAY.getDay() + 6) % 7)), rapport: extra.hebdo,
+    etapes: [`Relire ${crm} par niveau de score`, 'Lister les devis à relancer et les causes de perte', 'Proposer des notes pour le second cerveau'] },
+  { id: 'r-evt', nom: 'Sur événement', rythme: 'Nouveau lead, réponse reçue, devis sans réponse depuis 10 jours', actif: true, dernier: dp(-1), rapport: { fait: ['1 réponse reçue : séquence arrêtée'], attente: [], echec: [] },
+    etapes: ['Qualifier le nouveau lead', 'Arrêter la séquence dès qu\'un contact répond', 'Préparer la relance d\'un devis sans réponse'] }
 ];
 
 const SEED = () => {
@@ -291,7 +300,7 @@ const SEED = () => {
     routines: routinesStd({
       quot: { fait: ['1 tâche clôturée (envoi réel constaté)', '1 brouillon de relance de devis', 'Planning d\'appels : 2 appels'], attente: ['4 éléments à valider'], echec: ['Lecture HubSpot : 1 tentative reprise après limite de débit'] },
       hebdo: { fait: ['Revue du pipeline par score', 'Devis Polytherm : relance à prévoir'], attente: [], echec: [] }
-    }),
+    }, 'HubSpot'),
     plan: [
       { b: 'Cible', txt: 'Industriels et établissements de santé privés de plus de 50 salariés, consommateurs d\'énergie.', ok: true },
       { b: 'Types d\'affaires visés', txt: 'Clients existants (rebond d\'une offre à l\'autre), puis nouveaux clients issus de la base.', ok: true },

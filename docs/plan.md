@@ -245,16 +245,17 @@ Statut : à relire (Prospection et Bases vivantes prioritaires, Détection repor
 
 Statut : à relire (Pipeline indispensable)
 
-- **Décidé** : taux de conversion entre chaque étape du pipeline, colonnes Gagnées et Perdues. Le Devis est une brique propre à l'instance SIMATIS, jamais exposée aux mandats.
+- **Décidé** : taux de conversion entre chaque étape du pipeline, colonnes Gagnées et Perdues. Pour un mandat sous HubSpot, le pipeline de l'OS est le reflet exact du pipeline HubSpot : HubSpot fait foi, les changements faits dans l'OS y sont écrits. Objectif : que Marc n'ait plus à ouvrir HubSpot. Le Devis est une brique propre à l'instance SIMATIS, jamais exposée aux mandats.
 
 - **Dans la maquette** : pipeline en colonnes ou en matrice, préparation et compte rendu de rendez-vous, devis préparé par l'OS, points mensuels avec les experts du mandat.
 - **À trancher** : étapes du pipeline par défaut et par mandat, trame de préparation de rendez-vous, place du devis (dans l'OS ou dans HubSpot).
 
 ### M6 — Instruments de bord : Routines, Autonomie, Second cerveau
 
-Statut : reportée
+Statut : à relire (Routines Claude prioritaires)
 
-- Les routines sont les skills Claude planifiées (« Routines Claude »). Autonomie, Journal d'audit et vue du second cerveau : pas prioritaires.
+- **Décidé** : les Routines Claude sont en tête du menu. Ce sont les skills Claude que Marc utilise chaque jour (relance quotidienne, nettoyage des tâches) ; il veut les lancer depuis l'OS, instance par instance, avec les connexions de l'instance (CRM, Gmail, agenda) et aucune autre.
+- Autonomie, Journal d'audit et vue du second cerveau : pas prioritaires.
 
 - **Dans la maquette** : rythmes automatiques, réglage des niveaux L0 à L3, fiche second cerveau.
 - **À trancher** : routines utiles et leur rythme ; niveaux d'autonomie par défaut d'un nouveau mandat ; synchro vers le second cerveau (emplacement, rythme, contenu : fiches de synthèse, comptes rendus, décisions, jamais de contacts ni de pipeline).
@@ -268,7 +269,9 @@ Statut : à relire
 
 ### M8 — Connexions
 
-Statut : à relire
+Statut : à relire (prioritaire : connexions du premier mandat sous HubSpot)
+
+- **Décidé** : connexions établies par mandat (HubSpot, Gmail et agenda du mandat), utilisées par les Routines Claude et par le pipeline miroir.
 
 - **SIMATIS** : Gmail et agenda de Marc. Un email validé devient un brouillon Gmail, que Marc envoie lui-même.
 - **Mandats** : HubSpot (jeton d'application privée par compte client), Gmail et agenda du client (identifiant Google propre au Workspace du client). Procédures d'ouverture et de fin de mandat.
