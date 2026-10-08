@@ -1,0 +1,31 @@
+# Secrets et configuration locale
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials*
+*.local.*
+
+# Données réelles / exports (jamais dans le dépôt public)
+data/
+private/
+exports/
+*.csv
+*.xlsx
+*.xls
+*.docx
+*.pdf
+
+# Second cerveau (privé, ne doit jamais être copié ici)
+second-cerveau/
+Second Cerveau/
+brain/
+
+# Divers
+.DS_Store
+node_modules/
+dist/
+build/
+.claude/settings.local.json
