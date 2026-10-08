@@ -96,3 +96,31 @@ export async function purgeInstance(db: Executor, slug: string): Promise<Instanc
     return row ?? instance;
   });
 }
+
+// Second real-write lock, per instance (the first is REAL_WRITES on the server). A prospect
+// (demo) instance never writes to a real tool.
+export async function setEcrituresReelles(
+  db: Executor,
+  slug: string,
+  on: boolean,
+): Promise<Instance> {
+  const instance = await requireInstance(db, slug);
+  if (on && instance.type === 'prospect') {
+    throw new Error('Un mandat prospect (démonstration) ne peut pas écrire dans un outil réel.');
+  }
+  return withInstance(db, instance.id, async (tx) => {
+    const [row] = await tx
+      .update(instances)
+      .set({ config: { ...instance.config, ecrituresReelles: on }, updatedAt: new Date() })
+      .where(eq(instances.id, instance.id))
+      .returning();
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: on
+        ? 'Écritures réelles autorisées pour cette instance'
+        : 'Écritures réelles désactivées pour cette instance',
+      niveau: 'L2',
+    });
+    return row ?? instance;
+  });
+}
