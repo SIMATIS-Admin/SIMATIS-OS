@@ -243,7 +243,11 @@ export function registerApi(app: FastifyInstance, { db, secretsDir, realWrites }
 
   // Connection settings for the Paramètres screen. Secret values never leave the server: only
   // whether the expected token is present.
-  const SECRET_ATTENDU: Record<string, string> = { hubspot: 'HUBSPOT_TOKEN' };
+  const SECRET_ATTENDU: Record<string, string> = {
+    hubspot: 'HUBSPOT_TOKEN',
+    gmail: 'GOOGLE_REFRESH_TOKEN',
+    'google-agenda': 'GOOGLE_REFRESH_TOKEN',
+  };
   app.get<SlugParams>(
     '/api/i/:slug/connexions',
     onInstance(async (i) => {
@@ -298,6 +302,56 @@ export function registerApi(app: FastifyInstance, { db, secretsDir, realWrites }
         await logEvent(tx, {
           acteur: 'pilote',
           action: `Réglages du CRM modifiés (${changes})${parsed.data.sens === 'deux_sens' ? ' : écriture dans HubSpot autorisée' : ''}`,
+          niveau: 'L2',
+        });
+        return { reglages };
+      });
+    }),
+  );
+
+  const frequence = z.enum(['5min', '15min', '1h', '1j', 'manuel']);
+  const reglagesGoogle = {
+    messagerie: z
+      .object({
+        frequence,
+        historiqueMois: z.union([z.literal(3), z.literal(12), z.literal(24)]),
+        contenu: z.enum(['extraits', 'complet']),
+      })
+      .partial()
+      .strict(),
+    agenda: z
+      .object({
+        frequence,
+        calendriers: z.array(z.string().trim().min(1).max(200)).min(1).max(10),
+        tamponMin: z.number().int().min(0).max(120),
+      })
+      .partial()
+      .strict(),
+  };
+  type KindRoute = { Params: { slug: string; kind: string }; Body: unknown };
+  app.patch<KindRoute>(
+    '/api/i/:slug/connexions/:kind',
+    onInstance<KindRoute>(async (i, request, reply) => {
+      const kind = request.params.kind;
+      if (kind !== 'messagerie' && kind !== 'agenda') {
+        return reply.code(404).send({ error: 'Connexion inconnue' });
+      }
+      const parsed = reglagesGoogle[kind].safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Réglages invalides' });
+      return withInstance(db, i.id, async (tx) => {
+        const [current] = await tx
+          .select()
+          .from(connexions)
+          .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, kind)));
+        if (!current) return reply.code(404).send({ error: `Aucune ${kind} branchée` });
+        const reglages = { ...current.reglages, ...parsed.data };
+        await tx
+          .update(connexions)
+          .set({ reglages, updatedAt: new Date() })
+          .where(eq(connexions.id, current.id));
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: `Réglages ${kind} modifiés (${Object.keys(parsed.data).join(', ')})`,
           niveau: 'L2',
         });
         return { reglages };

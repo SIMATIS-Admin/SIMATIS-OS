@@ -149,6 +149,16 @@ export const fetchConnexions = (slug: string) =>
   getJson<ConnexionsReponse>(inst(slug, 'connexions'));
 export const saveReglagesCrm = (slug: string, reglages: ReglagesCrm) =>
   sendJson<{ reglages: ReglagesCrm }>('PATCH', inst(slug, 'connexions/crm'), reglages);
+export const saveReglages = (
+  slug: string,
+  kind: 'messagerie' | 'agenda',
+  reglages: Record<string, unknown>,
+) =>
+  sendJson<{ reglages: Record<string, unknown> }>(
+    'PATCH',
+    inst(slug, `connexions/${kind}`),
+    reglages,
+  );
 export const syncConnexion = (slug: string, kind: string) =>
   sendJson<{ lus: number; crees: number; maj: number }>(
     'POST',

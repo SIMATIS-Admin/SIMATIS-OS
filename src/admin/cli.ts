@@ -1,11 +1,13 @@
 import { parseArgs } from 'node:util';
+import { connectGoogle } from '../connecteurs/google/oauth.js';
 import type { Frequence, Kind } from '../connexions/schema.js';
 import { configureConnexion, FREQUENCES, syncNow } from '../connexions/service.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { connexions } from '../connexions/schema.js';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
+import { loadInstanceSecrets, writeGoogleToken } from '../secrets.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import type { InstanceType } from '../instances/schema.js';
 import { createToken, listTokens, revokeToken } from '../mcp/tokens.js';
@@ -29,13 +31,22 @@ export const USAGE = `Commandes :
   token:revoke --id <id>
   connexion:set --slug <slug> --kind crm|messagerie|agenda --fournisseur <f> [--frequence 5min|15min|1h|1j|manuel]
   connexion:list --slug <slug>
-  connexion:sync --slug <slug> --kind crm|messagerie|agenda`;
+  connexion:sync --slug <slug> --kind crm|messagerie|agenda
+  google:connect --slug <slug>   (sur l'ordinateur de l'OS, avec un navigateur)`;
+
+type GoogleConnect = (options: {
+  clientId: string;
+  clientSecret: string;
+  open: (url: string) => void;
+}) => Promise<{ refresh_token: string; scope: string }>;
 
 type Deps = {
   db: Database;
   out: (line: string) => void;
   secretsDir?: string;
   realWrites?: boolean;
+  openUrl?: (url: string) => void;
+  connectGoogle?: GoogleConnect;
 };
 
 async function requireActive(db: Database, slug: string) {
@@ -161,6 +172,60 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
             `${c.kind.padEnd(11)} ${c.fournisseur.padEnd(14)} ${c.etat.padEnd(15)} ${c.derniereSynchro?.toISOString() ?? 'jamais'}${c.derniereErreur ? `  ${c.derniereErreur}` : ''}`,
           );
         }
+        return 0;
+      }
+      case 'google:connect': {
+        const instance = await requireActive(db, need('slug'));
+        const dir = deps.secretsDir ?? './secrets/instances';
+        const secrets = await loadInstanceSecrets(dir, instance.slug);
+        if (!secrets.GOOGLE_CLIENT_ID || !secrets.GOOGLE_CLIENT_SECRET) {
+          throw new Error(
+            `GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET manquent dans ${dir}/${instance.slug}.env (identifiant OAuth « application de bureau » du Google de l'instance).`,
+          );
+        }
+        const connect: GoogleConnect =
+          deps.connectGoogle ?? ((o) => connectGoogle({ ...o, fetch: (u, i) => fetch(u, i) }));
+        out(`Autorisez l'accès avec le compte Google de ${instance.nom}, à cette adresse :`);
+        const token = await connect({
+          clientId: secrets.GOOGLE_CLIENT_ID,
+          clientSecret: secrets.GOOGLE_CLIENT_SECRET,
+          open: (url) => {
+            out(url);
+            deps.openUrl?.(url);
+          },
+        });
+        await writeGoogleToken(dir, instance.slug, token);
+        await withInstance(db, instance.id, async (tx) => {
+          const existing = await tx
+            .select({ kind: connexions.kind })
+            .from(connexions)
+            .where(eq(connexions.instanceId, currentInstance));
+          const kinds = new Set(existing.map((c) => c.kind));
+          if (!kinds.has('messagerie')) {
+            await configureConnexion(tx, {
+              kind: 'messagerie',
+              fournisseur: 'gmail',
+              reglages: { frequence: 'manuel', historiqueMois: 12, contenu: 'extraits' },
+            });
+          }
+          if (!kinds.has('agenda')) {
+            await configureConnexion(tx, {
+              kind: 'agenda',
+              fournisseur: 'google-agenda',
+              reglages: { frequence: 'manuel', calendriers: ['primary'], tamponMin: 15 },
+            });
+          }
+          await tx
+            .update(connexions)
+            .set({ etat: 'ok', derniereErreur: null, updatedAt: new Date() })
+            .where(
+              and(
+                eq(connexions.instanceId, currentInstance),
+                inArray(connexions.kind, ['messagerie', 'agenda']),
+              ),
+            );
+        });
+        out(`Google connecté pour ${instance.slug} : messagerie et agenda branchés.`);
         return 0;
       }
       case 'connexion:sync': {

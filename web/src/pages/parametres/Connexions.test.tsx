@@ -6,6 +6,7 @@ import { Connexions } from './Connexions.js';
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let tokenPresent = true;
+let avecGoogle = false;
 
 const reponse = () => ({
   connexions: [
@@ -18,6 +19,19 @@ const reponse = () => ({
       derniereErreur: null,
       secret: { nom: 'HUBSPOT_TOKEN', present: tokenPresent },
     },
+    ...(avecGoogle
+      ? [
+          {
+            kind: 'messagerie',
+            fournisseur: 'gmail',
+            etat: 'ok',
+            reglages: { historiqueMois: 12, contenu: 'extraits' },
+            derniereSynchro: null,
+            derniereErreur: null,
+            secret: { nom: 'GOOGLE_REFRESH_TOKEN', present: true },
+          },
+        ]
+      : []),
   ],
   options: {
     objets: ['entreprises', 'contacts', 'transactions', 'taches'],
@@ -42,6 +56,7 @@ describe('Paramètres > Connexions', () => {
   beforeEach(() => {
     calls = [];
     tokenPresent = true;
+    avecGoogle = false;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -76,5 +91,24 @@ describe('Paramètres > Connexions', () => {
     tokenPresent = false;
     render(<Connexions slug="helioval" />);
     expect(await screen.findByText('secrets/instances/helioval.env')).toBeTruthy();
+  });
+
+  it('shows the Gmail locks and saves the history depth', async () => {
+    avecGoogle = true;
+    render(<Connexions slug="helioval" />);
+    expect(await screen.findByText(/sans signature/)).toBeTruthy();
+    expect(screen.getByText(/Aucun envoi direct/)).toBeTruthy();
+    fireEvent.change(screen.getByDisplayValue('12 mois'), { target: { value: '24' } });
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith('/connexions/messagerie'))).toBe(true),
+    );
+    expect(calls.find((c) => c.url.endsWith('/connexions/messagerie'))?.body).toEqual({
+      historiqueMois: 24,
+    });
+  });
+
+  it('gives the command to connect Google when messaging is missing', async () => {
+    render(<Connexions slug="helioval" />);
+    expect((await screen.findAllByText(/google:connect --slug helioval/)).length).toBe(2);
   });
 });
