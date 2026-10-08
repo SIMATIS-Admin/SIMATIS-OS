@@ -108,6 +108,7 @@
     ],
     "contacts": [
       {
+        "ref": "c1",
         "entreprise": "s1",
         "nom": "Hélène Morvan",
         "fonction": "Dirigeante",
@@ -115,6 +116,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "c2",
         "entreprise": "s2",
         "nom": "Julien Roux",
         "fonction": "Gérant",
@@ -122,6 +124,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "c3",
         "entreprise": "s3",
         "nom": "Sandrine Gérard",
         "fonction": "Directrice générale",
@@ -129,6 +132,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "c4",
         "entreprise": "s4",
         "nom": "Thomas Weber",
         "fonction": "Associé fondateur",
@@ -136,6 +140,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "c5",
         "entreprise": "s5",
         "nom": "Pierre Bréval",
         "fonction": "Président",
@@ -143,6 +148,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "c6",
         "entreprise": "s6",
         "nom": "Nadia Benali",
         "fonction": "Directrice administrative",
@@ -150,6 +156,7 @@
         "role": "Prescriptrice"
       },
       {
+        "ref": "c7",
         "entreprise": "s7",
         "nom": "François Lacroix",
         "fonction": "Dirigeant",
@@ -157,6 +164,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "c8",
         "entreprise": "s8",
         "nom": "Claire Dumas",
         "fonction": "Directrice commerciale adjointe",
@@ -164,6 +172,7 @@
         "role": "Influenceuse"
       },
       {
+        "ref": "c9",
         "entreprise": "s9",
         "nom": "Didier Achard",
         "fonction": "Gérant",
@@ -171,6 +180,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "c10",
         "entreprise": "s10",
         "nom": "Agnès Vauclair",
         "fonction": "Présidente",
@@ -178,6 +188,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "c11",
         "entreprise": "s11",
         "nom": "Karim Haddad",
         "fonction": "Directeur général",
@@ -185,11 +196,336 @@
         "role": "Décideur"
       },
       {
+        "ref": "c12",
         "entreprise": "s12",
         "nom": "Élodie Brun",
         "fonction": "Directrice",
         "email": "e.brun@electro-savoie.fr",
         "role": "Décideur"
+      }
+    ],
+    "opportunites": [
+      {
+        "ref": "o1",
+        "entreprise": "s1",
+        "contact": "c1",
+        "titre": "Direction commerciale partagée",
+        "etape": "proposition",
+        "montant": 24000,
+        "echeanceJours": 2,
+        "clos": null,
+        "motif": null,
+        "origine": "Diagnostic",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 2,
+          "timing": 3,
+          "engagement": 3
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Relancer la proposition envoyée"
+      },
+      {
+        "ref": "o2",
+        "entreprise": "s2",
+        "contact": "c2",
+        "titre": "Diagnostic puis plan d'action",
+        "etape": "qualification",
+        "montant": 9000,
+        "echeanceJours": 0,
+        "clos": null,
+        "motif": null,
+        "origine": "Salon",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 3,
+          "budget": 1,
+          "timing": 2,
+          "engagement": 2
+        },
+        "potentiel": "eleve",
+        "faisabilite": "faible",
+        "prochaineEtape": "Rendez-vous de diagnostic"
+      },
+      {
+        "ref": "o3",
+        "entreprise": "s3",
+        "contact": "c3",
+        "titre": "Structuration de l'équipe commerciale",
+        "etape": "negociation",
+        "montant": 32000,
+        "echeanceJours": 5,
+        "clos": null,
+        "motif": null,
+        "origine": "Recommandation",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 3,
+          "timing": 2,
+          "engagement": 3
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Point sur les conditions"
+      },
+      {
+        "ref": "o4",
+        "entreprise": "s4",
+        "contact": "c4",
+        "titre": "Accompagnement prospection",
+        "etape": "prospection",
+        "montant": 6000,
+        "echeanceJours": -3,
+        "clos": null,
+        "motif": null,
+        "origine": "LinkedIn",
+        "qualification": {
+          "besoin": 1,
+          "decideur": 3,
+          "budget": 1,
+          "timing": 1,
+          "engagement": 1
+        },
+        "potentiel": "limite",
+        "faisabilite": "forte",
+        "prochaineEtape": "Deuxième relance"
+      },
+      {
+        "ref": "o5",
+        "entreprise": "s5",
+        "contact": "c5",
+        "titre": "Diagnostic d'Endurance Commerciale",
+        "etape": "qualification",
+        "montant": 18000,
+        "echeanceJours": 4,
+        "clos": null,
+        "motif": null,
+        "origine": "Réseau",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 3,
+          "budget": 2,
+          "timing": 1,
+          "engagement": 2
+        },
+        "potentiel": "eleve",
+        "faisabilite": "faible",
+        "prochaineEtape": "Restitution du diagnostic"
+      },
+      {
+        "ref": "o6",
+        "entreprise": "s6",
+        "contact": "c6",
+        "titre": "Premier contact",
+        "etape": "detection",
+        "montant": 0,
+        "echeanceJours": 7,
+        "clos": null,
+        "motif": null,
+        "origine": "Signal : recrutement",
+        "qualification": {
+          "besoin": 1,
+          "decideur": 1,
+          "budget": 0,
+          "timing": 1,
+          "engagement": 0
+        },
+        "potentiel": "limite",
+        "faisabilite": "faible",
+        "prochaineEtape": "Identifier le dirigeant"
+      },
+      {
+        "ref": "o7",
+        "entreprise": "s7",
+        "contact": "c7",
+        "titre": "Mise en place d'un CRM et de rituels",
+        "etape": "prospection",
+        "montant": 12000,
+        "echeanceJours": 1,
+        "clos": null,
+        "motif": null,
+        "origine": "Email",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 3,
+          "budget": 1,
+          "timing": 2,
+          "engagement": 1
+        },
+        "potentiel": "limite",
+        "faisabilite": "forte",
+        "prochaineEtape": "Proposer un diagnostic offert"
+      },
+      {
+        "ref": "o8",
+        "entreprise": "s8",
+        "contact": "c8",
+        "titre": "Direction commerciale partagée",
+        "etape": "detection",
+        "montant": 0,
+        "echeanceJours": 10,
+        "clos": null,
+        "motif": null,
+        "origine": "Signal : nouveau site",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 1,
+          "budget": 1,
+          "timing": 1,
+          "engagement": 0
+        },
+        "potentiel": "eleve",
+        "faisabilite": "faible",
+        "prochaineEtape": "Trouver un accès au dirigeant"
+      },
+      {
+        "ref": "o9",
+        "entreprise": "s9",
+        "contact": "c9",
+        "titre": "Direction commerciale partagée",
+        "etape": "negociation",
+        "montant": 21000,
+        "echeanceJours": -20,
+        "clos": "gagne",
+        "motif": null,
+        "origine": "Réseau",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 3,
+          "timing": 3,
+          "engagement": 3
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Démarrage de la mission"
+      },
+      {
+        "ref": "o10",
+        "entreprise": "s10",
+        "contact": "c10",
+        "titre": "Diagnostic d'Endurance Commerciale",
+        "etape": "proposition",
+        "montant": 7500,
+        "echeanceJours": -35,
+        "clos": "perdu",
+        "motif": "Budget reporté",
+        "origine": "Salon",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 3,
+          "budget": 1,
+          "timing": 1,
+          "engagement": 2
+        },
+        "potentiel": "limite",
+        "faisabilite": "forte",
+        "prochaineEtape": "Recontacter au prochain exercice"
+      },
+      {
+        "ref": "o11",
+        "entreprise": "s11",
+        "contact": "c11",
+        "titre": "Structuration de l'équipe commerciale",
+        "etape": "qualification",
+        "montant": 15000,
+        "echeanceJours": -50,
+        "clos": "perdu",
+        "motif": "Recrutement en interne",
+        "origine": "LinkedIn",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 2,
+          "budget": 1,
+          "timing": 1,
+          "engagement": 1
+        },
+        "potentiel": "eleve",
+        "faisabilite": "faible",
+        "prochaineEtape": "Aucune"
+      },
+      {
+        "ref": "o12",
+        "entreprise": "s12",
+        "contact": "c12",
+        "titre": "Diagnostic puis plan d'action",
+        "etape": "negociation",
+        "montant": 11000,
+        "echeanceJours": -12,
+        "clos": "gagne",
+        "motif": null,
+        "origine": "Recommandation",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 2,
+          "timing": 3,
+          "engagement": 3
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Restitution du diagnostic"
+      }
+    ],
+    "taches": [
+      {
+        "opportunite": "o1",
+        "contact": "c1",
+        "titre": "Relancer Ateliers Morvan",
+        "canal": "email",
+        "echeanceJours": -1,
+        "fait": false
+      },
+      {
+        "opportunite": "o4",
+        "contact": "c4",
+        "titre": "Deuxième relance Oxalis Conseil",
+        "canal": "email",
+        "echeanceJours": -3,
+        "fait": false
+      },
+      {
+        "opportunite": "o7",
+        "contact": "c7",
+        "titre": "Appeler Bio Sillon",
+        "canal": "appel",
+        "echeanceJours": 0,
+        "fait": false
+      },
+      {
+        "opportunite": "o5",
+        "contact": "c5",
+        "titre": "Préparer la restitution Bréval",
+        "canal": "tache",
+        "echeanceJours": 3,
+        "fait": false
+      },
+      {
+        "opportunite": "o3",
+        "contact": "c3",
+        "titre": "Confirmer le rendez-vous de conditions",
+        "canal": "email",
+        "echeanceJours": 0,
+        "fait": false
+      },
+      {
+        "opportunite": "o8",
+        "contact": "c8",
+        "titre": "Appeler Kéramos Industrie",
+        "canal": "appel",
+        "echeanceJours": 0,
+        "fait": false
+      },
+      {
+        "opportunite": "o2",
+        "contact": "c2",
+        "titre": "Envoyer le compte rendu de diagnostic",
+        "canal": "tache",
+        "echeanceJours": 0,
+        "fait": false
       }
     ]
   },
@@ -254,6 +590,7 @@
     ],
     "contacts": [
       {
+        "ref": "hc1",
         "entreprise": "h1",
         "nom": "Marc-Antoine Ferrand",
         "fonction": "Directeur industriel",
@@ -261,6 +598,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "hc2",
         "entreprise": "h2",
         "nom": "Isabelle Chomel",
         "fonction": "Responsable QSE",
@@ -268,6 +606,7 @@
         "role": "Prescriptrice"
       },
       {
+        "ref": "hc3",
         "entreprise": "h3",
         "nom": "Rémi Garnier",
         "fonction": "Directeur de site",
@@ -275,6 +614,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "hc4",
         "entreprise": "h4",
         "nom": "Sophie Martel",
         "fonction": "Directrice des services techniques",
@@ -282,6 +622,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "hc5",
         "entreprise": "h5",
         "nom": "Yann Le Goff",
         "fonction": "Gérant",
@@ -289,11 +630,240 @@
         "role": "Décideur"
       },
       {
+        "ref": "hc6",
         "entreprise": "h6",
         "nom": "Olivier Bellecombe",
         "fonction": "Dirigeant",
         "email": "o.bellecombe@scierie-bellecombe.fr",
         "role": "Décideur"
+      }
+    ],
+    "opportunites": [
+      {
+        "ref": "ho1",
+        "entreprise": "h1",
+        "contact": "hc1",
+        "titre": "Audit des utilités",
+        "etape": "proposition",
+        "montant": 14500,
+        "echeanceJours": 1,
+        "clos": null,
+        "motif": null,
+        "origine": "Salon",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 2,
+          "timing": 2,
+          "engagement": 2
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Relancer le devis"
+      },
+      {
+        "ref": "ho2",
+        "entreprise": "h2",
+        "contact": "hc2",
+        "titre": "Étude de récupération de chaleur",
+        "etape": "qualification",
+        "montant": 22000,
+        "echeanceJours": 3,
+        "clos": null,
+        "motif": null,
+        "origine": "Base de prospection",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 1,
+          "budget": 2,
+          "timing": 2,
+          "engagement": 2
+        },
+        "potentiel": "eleve",
+        "faisabilite": "faible",
+        "prochaineEtape": "Rendez-vous en binôme avec un chef de projet"
+      },
+      {
+        "ref": "ho3",
+        "entreprise": "h3",
+        "contact": "hc3",
+        "titre": "Accompagnement certification",
+        "etape": "negociation",
+        "montant": 31000,
+        "echeanceJours": 6,
+        "clos": null,
+        "motif": null,
+        "origine": "Client existant",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 3,
+          "timing": 3,
+          "engagement": 3
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Réponse sur la remise demandée"
+      },
+      {
+        "ref": "ho4",
+        "entreprise": "h4",
+        "contact": "hc4",
+        "titre": "Plan pluriannuel de travaux",
+        "etape": "prospection",
+        "montant": 40000,
+        "echeanceJours": -2,
+        "clos": null,
+        "motif": null,
+        "origine": "Base de prospection",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 2,
+          "budget": 1,
+          "timing": 1,
+          "engagement": 1
+        },
+        "potentiel": "eleve",
+        "faisabilite": "faible",
+        "prochaineEtape": "Première relance"
+      },
+      {
+        "ref": "ho5",
+        "entreprise": "h5",
+        "contact": "hc5",
+        "titre": "Audit réglementaire",
+        "etape": "prospection",
+        "montant": 6800,
+        "echeanceJours": 2,
+        "clos": null,
+        "motif": null,
+        "origine": "Base de prospection",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 3,
+          "budget": 1,
+          "timing": 2,
+          "engagement": 1
+        },
+        "potentiel": "limite",
+        "faisabilite": "forte",
+        "prochaineEtape": "Appel de qualification"
+      },
+      {
+        "ref": "ho6",
+        "entreprise": "h6",
+        "contact": "hc6",
+        "titre": "Étude de faisabilité",
+        "etape": "detection",
+        "montant": 0,
+        "echeanceJours": 9,
+        "clos": null,
+        "motif": null,
+        "origine": "Signal : agrandissement",
+        "qualification": {
+          "besoin": 1,
+          "decideur": 3,
+          "budget": 0,
+          "timing": 1,
+          "engagement": 0
+        },
+        "potentiel": "limite",
+        "faisabilite": "faible",
+        "prochaineEtape": "Qualifier le projet"
+      },
+      {
+        "ref": "ho7",
+        "entreprise": "h4",
+        "contact": "hc4",
+        "titre": "Audit énergétique réglementaire",
+        "etape": "negociation",
+        "montant": 18000,
+        "echeanceJours": -25,
+        "clos": "gagne",
+        "motif": null,
+        "origine": "Client existant",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 3,
+          "timing": 3,
+          "engagement": 3
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Mission en cours"
+      },
+      {
+        "ref": "ho8",
+        "entreprise": "h6",
+        "contact": "hc6",
+        "titre": "Étude de chaufferie bois",
+        "etape": "proposition",
+        "montant": 9500,
+        "echeanceJours": -40,
+        "clos": "perdu",
+        "motif": "Choix d'un concurrent",
+        "origine": "Base de prospection",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 3,
+          "budget": 2,
+          "timing": 1,
+          "engagement": 1
+        },
+        "potentiel": "limite",
+        "faisabilite": "forte",
+        "prochaineEtape": "Aucune"
+      }
+    ],
+    "taches": [
+      {
+        "opportunite": "ho1",
+        "contact": "hc1",
+        "titre": "Relancer le devis Fonderies du Gier",
+        "canal": "email",
+        "echeanceJours": -1,
+        "fait": false
+      },
+      {
+        "opportunite": "ho4",
+        "contact": "hc4",
+        "titre": "Première relance Clinique des Monts",
+        "canal": "email",
+        "echeanceJours": -2,
+        "fait": false
+      },
+      {
+        "opportunite": "ho5",
+        "contact": "hc5",
+        "titre": "Appeler Imprimerie Vercors",
+        "canal": "appel",
+        "echeanceJours": 0,
+        "fait": false
+      },
+      {
+        "opportunite": "ho6",
+        "contact": "hc6",
+        "titre": "Appeler Scierie Bellecombe",
+        "canal": "appel",
+        "echeanceJours": 0,
+        "fait": false
+      },
+      {
+        "opportunite": "ho3",
+        "contact": "hc3",
+        "titre": "Relancer Polytherm sur la remise",
+        "canal": "email",
+        "echeanceJours": 0,
+        "fait": false
+      },
+      {
+        "opportunite": "ho2",
+        "contact": "hc2",
+        "titre": "Caler le binôme Laiterie Saint-Rambert",
+        "canal": "tache",
+        "echeanceJours": 0,
+        "fait": false
       }
     ]
   },
@@ -334,6 +904,7 @@
     ],
     "contacts": [
       {
+        "ref": "ac1",
         "entreprise": "a1",
         "nom": "Bernard Guichard",
         "fonction": "Associé gérant",
@@ -341,6 +912,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "ac2",
         "entreprise": "a2",
         "nom": "Léa Valmont",
         "fonction": "Dirigeante",
@@ -348,11 +920,98 @@
         "role": "Décideur"
       },
       {
+        "ref": "ac3",
         "entreprise": "a3",
         "nom": "Hugo Carrel",
         "fonction": "Directeur",
         "email": "h.carrel@golf-lacbleu.fr",
         "role": "Décideur"
+      }
+    ],
+    "opportunites": [
+      {
+        "ref": "ao1",
+        "entreprise": "a1",
+        "contact": "ac1",
+        "titre": "Client pilote testeur",
+        "etape": "qualification",
+        "montant": 8500,
+        "echeanceJours": 4,
+        "clos": null,
+        "motif": null,
+        "origine": "Prescripteur",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 1,
+          "timing": 2,
+          "engagement": 3
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Vérifier l'aide mobilisable"
+      },
+      {
+        "ref": "ao2",
+        "entreprise": "a2",
+        "contact": "ac2",
+        "titre": "Équipement de deux serres",
+        "etape": "prospection",
+        "montant": 15000,
+        "echeanceJours": 8,
+        "clos": null,
+        "motif": null,
+        "origine": "Salon régional",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 3,
+          "budget": 1,
+          "timing": 1,
+          "engagement": 1
+        },
+        "potentiel": "eleve",
+        "faisabilite": "faible",
+        "prochaineEtape": "Premier appel"
+      },
+      {
+        "ref": "ao3",
+        "entreprise": "a3",
+        "contact": "ac3",
+        "titre": "Arrosage du parcours",
+        "etape": "detection",
+        "montant": 0,
+        "echeanceJours": 15,
+        "clos": null,
+        "motif": null,
+        "origine": "Signal : appel à projets",
+        "qualification": {
+          "besoin": 1,
+          "decideur": 1,
+          "budget": 1,
+          "timing": 0,
+          "engagement": 0
+        },
+        "potentiel": "limite",
+        "faisabilite": "faible",
+        "prochaineEtape": "Qualifier le besoin"
+      }
+    ],
+    "taches": [
+      {
+        "opportunite": null,
+        "contact": null,
+        "titre": "Valider le socle commercial",
+        "canal": "tache",
+        "echeanceJours": 1,
+        "fait": false
+      },
+      {
+        "opportunite": null,
+        "contact": null,
+        "titre": "Lister les prescripteurs institutionnels",
+        "canal": "tache",
+        "echeanceJours": 5,
+        "fait": false
       }
     ]
   },
@@ -393,6 +1052,7 @@
     ],
     "contacts": [
       {
+        "ref": "dc1",
         "entreprise": "d1",
         "nom": "Laurent Roche",
         "fonction": "Gérant",
@@ -400,6 +1060,7 @@
         "role": "Décideur"
       },
       {
+        "ref": "dc2",
         "entreprise": "d2",
         "nom": "Camille Faure",
         "fonction": "Directrice des achats",
@@ -407,12 +1068,82 @@
         "role": "Décideur"
       },
       {
+        "ref": "dc3",
         "entreprise": "d3",
         "nom": "Antoine Rival",
         "fonction": "Président",
         "email": "a.rival@cartonnages-rival.fr",
         "role": "Décideur"
       }
-    ]
+    ],
+    "opportunites": [
+      {
+        "ref": "do1",
+        "entreprise": "d1",
+        "contact": "dc1",
+        "titre": "Pièces sur mesure",
+        "etape": "qualification",
+        "montant": 18000,
+        "echeanceJours": 2,
+        "clos": null,
+        "motif": null,
+        "origine": "Lead entrant",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 2,
+          "timing": 2,
+          "engagement": 1
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Préparer le devis"
+      },
+      {
+        "ref": "do2",
+        "entreprise": "d2",
+        "contact": "dc2",
+        "titre": "Contrat annuel",
+        "etape": "proposition",
+        "montant": 42000,
+        "echeanceJours": 3,
+        "clos": null,
+        "motif": null,
+        "origine": "Prospection",
+        "qualification": {
+          "besoin": 3,
+          "decideur": 3,
+          "budget": 3,
+          "timing": 2,
+          "engagement": 2
+        },
+        "potentiel": "eleve",
+        "faisabilite": "forte",
+        "prochaineEtape": "Relancer le devis"
+      },
+      {
+        "ref": "do3",
+        "entreprise": "d3",
+        "contact": "dc3",
+        "titre": "Renouvellement",
+        "etape": "prospection",
+        "montant": 12000,
+        "echeanceJours": 6,
+        "clos": null,
+        "motif": null,
+        "origine": "Client existant",
+        "qualification": {
+          "besoin": 2,
+          "decideur": 3,
+          "budget": 1,
+          "timing": 1,
+          "engagement": 1
+        },
+        "potentiel": "limite",
+        "faisabilite": "forte",
+        "prochaineEtape": "Proposer un point annuel"
+      }
+    ],
+    "taches": []
   }
 ]

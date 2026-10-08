@@ -8,6 +8,35 @@ export type Entreprise = {
   taille: number | null;
   domaine: string | null;
   nbContacts: number;
+  oppsOuvertes: number;
+  montantOuvert: number;
+};
+
+export type OppLigne = {
+  id: string;
+  titre: string;
+  etape: string;
+  montant: number | null;
+  echeance: string | null;
+  clos: 'gagne' | 'perdu' | null;
+  motif: string | null;
+};
+
+export type FicheEntreprise = Omit<Entreprise, 'nbContacts'> & {
+  contacts: { id: string; nom: string; fonction: string | null; role: string | null }[];
+  opportunites: OppLigne[];
+};
+
+export type FicheContact = {
+  id: string;
+  nom: string;
+  fonction: string | null;
+  email: string | null;
+  telephone: string | null;
+  role: string | null;
+  entreprise: { id: string; nom: string } | null;
+  opportunites: OppLigne[];
+  taches: { id: string; titre: string; canal: string; echeance: string | null }[];
 };
 
 export type Contact = {
@@ -17,6 +46,7 @@ export type Contact = {
   email: string | null;
   role: string | null;
   entreprise: string | null;
+  entrepriseId: string | null;
 };
 
 export type JournalEntry = {
@@ -50,7 +80,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 const getJson = <T>(url: string) => request<T>(url);
-const sendJson = <T>(method: 'PUT' | 'PATCH', url: string, payload: unknown) =>
+const sendJson = <T>(method: 'PUT' | 'PATCH' | 'POST', url: string, payload: unknown) =>
   request<T>(url, {
     method,
     headers: { 'content-type': 'application/json' },
@@ -78,3 +108,16 @@ export const fetchEntreprises = (slug: string, q: string) =>
 
 export const fetchContacts = (slug: string, q: string) =>
   getJson<Contact[]>(`/api/i/${encodeURIComponent(slug)}/contacts?q=${encodeURIComponent(q)}`);
+
+export const fetchEntreprise = (slug: string, id: string) =>
+  getJson<FicheEntreprise>(inst(slug, `entreprises/${encodeURIComponent(id)}`));
+export const fetchContact = (slug: string, id: string) =>
+  getJson<FicheContact>(inst(slug, `contacts/${encodeURIComponent(id)}`));
+export const createEntreprise = (
+  slug: string,
+  input: { nom: string; secteur?: string; ville?: string },
+) => sendJson<{ id: string }>('POST', inst(slug, 'entreprises'), input);
+export const createContact = (
+  slug: string,
+  input: { nom: string; fonction?: string; email?: string; entrepriseId?: string | null },
+) => sendJson<{ id: string }>('POST', inst(slug, 'contacts'), input);

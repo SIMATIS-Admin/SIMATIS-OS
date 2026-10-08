@@ -1,7 +1,15 @@
 import { and, count, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { searchContacts, searchEntreprises } from '../crm/service.js';
+import {
+  createContact,
+  createEntreprise,
+  CrmIndisponible,
+  getContact,
+  getEntreprise,
+  searchContacts,
+  searchEntreprises,
+} from '../crm/service.js';
 import type { Database } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
@@ -26,6 +34,26 @@ const summary = (i: Instance) => ({
 });
 
 const renameSchema = z.object({ nom: z.string().trim().min(1).max(80) });
+const texte = z.string().trim().max(200).nullish();
+const entrepriseSchema = z.object({
+  nom: z.string().trim().min(1).max(200),
+  secteur: texte,
+  ville: texte,
+  taille: z.number().int().min(0).max(1_000_000).nullish(),
+  domaine: texte,
+});
+const contactSchema = z.object({
+  nom: z.string().trim().min(1).max(200),
+  fonction: texte,
+  email: z
+    .email()
+    .nullish()
+    .or(z.literal('').transform(() => null)),
+  telephone: texte,
+  role: texte,
+  entrepriseId: z.uuid().nullish(),
+});
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const favorisSchema = z.object({
   favoris: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,40}$/)).max(30),
 });
@@ -57,6 +85,46 @@ export function registerApi(app: FastifyInstance, { db }: { db: Database }): voi
   app.get<Search>(
     '/api/i/:slug/contacts',
     onInstance<Search>((i, r) => searchContacts(db, i.id, r.query.q ?? '')),
+  );
+
+  type ById = { Params: { slug: string; id: string } };
+  const byId = (load: (instanceId: string, id: string) => Promise<unknown>) =>
+    onInstance<ById>(async (i, request, reply) => {
+      const { id } = request.params;
+      const found = UUID.test(id) ? await load(i.id, id) : null;
+      return found ?? reply.code(404).send({ error: 'Fiche introuvable dans cette instance' });
+    });
+  app.get<ById>(
+    '/api/i/:slug/entreprises/:id',
+    byId((i, id) => getEntreprise(db, i, id)),
+  );
+  app.get<ById>(
+    '/api/i/:slug/contacts/:id',
+    byId((i, id) => getContact(db, i, id)),
+  );
+
+  type Create = SlugParams & { Body: unknown };
+  const creation = <S extends z.ZodType>(
+    schema: S,
+    create: (instanceId: string, input: z.infer<S>) => Promise<unknown>,
+  ) =>
+    onInstance<Create>(async (i, request, reply) => {
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
+      try {
+        return reply.code(201).send(await create(i.id, parsed.data));
+      } catch (error) {
+        if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+        throw error;
+      }
+    });
+  app.post<Create>(
+    '/api/i/:slug/entreprises',
+    creation(entrepriseSchema, (i, input) => createEntreprise(db, i, input)),
+  );
+  app.post<Create>(
+    '/api/i/:slug/contacts',
+    creation(contactSchema, (i, input) => createContact(db, i, input)),
   );
 
   app.get<SlugParams>(

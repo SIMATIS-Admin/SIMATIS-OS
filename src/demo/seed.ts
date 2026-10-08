@@ -1,8 +1,87 @@
-import { contacts, entreprises } from '../crm/schema.js';
-import type { Database } from '../db.js';
+import { contacts, entreprises, opportunites, taches, type Qualification } from '../crm/schema.js';
+import type { Database, Tx } from '../db.js';
 import { instances, type InstanceType } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import fixtures from './fixtures.json' with { type: 'json' };
+
+type Fixture = (typeof fixtures)[number];
+
+// Calendar day in Paris, `days` from now, as YYYY-MM-DD.
+export function parisDay(days: number, now = new Date()): string {
+  const shifted = new Date(now.getTime() + days * 864e5);
+  return shifted.toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+}
+
+// Fills one instance with the mockup's fictive companies, contacts, deals and tasks. Dates are
+// offsets from today, so the demo always looks current.
+export async function loadDemoData(tx: Tx, instanceId: string, f: Fixture, now = new Date()) {
+  const ref = new Map<string, string>();
+  const id = (key: string | null) => (key ? (ref.get(key) ?? null) : null);
+
+  for (const e of f.entreprises) {
+    const [row] = await tx
+      .insert(entreprises)
+      .values({
+        instanceId,
+        nom: e.nom,
+        secteur: e.secteur,
+        ville: e.ville,
+        taille: e.taille,
+        domaine: e.domaine,
+      })
+      .returning({ id: entreprises.id });
+    if (row) ref.set(e.ref, row.id);
+  }
+  for (const c of f.contacts) {
+    const [row] = await tx
+      .insert(contacts)
+      .values({
+        instanceId,
+        entrepriseId: id(c.entreprise),
+        nom: c.nom,
+        fonction: c.fonction,
+        email: c.email,
+        role: c.role,
+      })
+      .returning({ id: contacts.id });
+    if (row) ref.set(c.ref, row.id);
+  }
+  for (const o of f.opportunites) {
+    const [row] = await tx
+      .insert(opportunites)
+      .values({
+        instanceId,
+        entrepriseId: id(o.entreprise),
+        contactId: id(o.contact),
+        titre: o.titre,
+        etape: o.etape,
+        montant: o.montant,
+        echeance: o.echeanceJours === null ? null : parisDay(o.echeanceJours, now),
+        clos: o.clos as 'gagne' | 'perdu' | null,
+        motif: o.motif,
+        origine: o.origine,
+        qualification: o.qualification as Qualification | null,
+        potentiel: o.potentiel,
+        faisabilite: o.faisabilite,
+        prochaineEtape: o.prochaineEtape,
+      })
+      .returning({ id: opportunites.id });
+    if (row) ref.set(o.ref, row.id);
+  }
+  for (const t of f.taches) {
+    const echeance =
+      t.echeanceJours === null ? null : new Date(`${parisDay(t.echeanceJours, now)}T10:00:00Z`);
+    await tx.insert(taches).values({
+      instanceId,
+      opportuniteId: id(t.opportunite),
+      contactId: id(t.contact),
+      titre: t.titre,
+      canal: t.canal as 'email' | 'appel' | 'tache',
+      echeance,
+      faitAt: t.fait ? echeance : null,
+    });
+  }
+}
 
 // Loads the mockup's fictive instances, only into an empty database: real instances are never touched.
 export async function seedDemoIfEmpty(db: Database): Promise<boolean> {
@@ -17,35 +96,7 @@ export async function seedDemoIfEmpty(db: Database): Promise<boolean> {
         type: f.type as InstanceType,
         config: f.config,
       });
-
-      const ids = new Map<string, string>();
-      for (const e of f.entreprises) {
-        const [row] = await tx
-          .insert(entreprises)
-          .values({
-            instanceId: instance.id,
-            nom: e.nom,
-            secteur: e.secteur,
-            ville: e.ville,
-            taille: e.taille,
-            domaine: e.domaine,
-          })
-          .returning({ id: entreprises.id });
-        if (row) ids.set(e.ref, row.id);
-      }
-
-      if (f.contacts.length > 0) {
-        await tx.insert(contacts).values(
-          f.contacts.map((c) => ({
-            instanceId: instance.id,
-            entrepriseId: ids.get(c.entreprise) ?? null,
-            nom: c.nom,
-            fonction: c.fonction,
-            email: c.email,
-            role: c.role,
-          })),
-        );
-      }
+      await loadDemoData(tx, instance.id, f);
     }
     return true;
   });
