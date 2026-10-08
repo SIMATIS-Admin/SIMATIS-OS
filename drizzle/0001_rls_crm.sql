@@ -1,0 +1,4 @@
+ALTER TABLE "contacts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "entreprises" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "contacts_instance_isolation" ON "contacts" AS PERMISSIVE FOR ALL TO public USING (instance_id = nullif(current_setting('app.instance_id', true), '')::uuid) WITH CHECK (instance_id = nullif(current_setting('app.instance_id', true), '')::uuid);--> statement-breakpoint
+CREATE POLICY "entreprises_instance_isolation" ON "entreprises" AS PERMISSIVE FOR ALL TO public USING (instance_id = nullif(current_setting('app.instance_id', true), '')::uuid) WITH CHECK (instance_id = nullif(current_setting('app.instance_id', true), '')::uuid);

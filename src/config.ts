@@ -11,16 +11,27 @@ const schema = z.object({
       (value) => /^postgres(ql)?:\/\//.test(value),
       'doit commencer par postgres:// ou postgresql://',
     ),
+  APP_DB_PASSWORD: z.string({ error: 'obligatoire' }).min(1, 'obligatoire'),
+  APP_DB_ROLE: z
+    .string()
+    .regex(/^[a-z_][a-z0-9_]{0,62}$/, 'lettres minuscules, chiffres et _ uniquement')
+    .default('simatis_app'),
   HOST: z.string().min(1).default('127.0.0.1'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  SECRETS_DIR: z.string().min(1).default('./secrets/instances'),
+  REAL_WRITES: z.enum(['off', 'on']).default('off'),
 });
 
 export type Config = {
   databaseUrl: string;
+  appDbRole: string;
+  appDbPassword: string;
   host: string;
   port: number;
   logLevel: z.infer<typeof schema>['LOG_LEVEL'];
+  secretsDir: string;
+  realWrites: boolean;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -31,6 +42,15 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       .join(' ; ');
     throw new Error(`Configuration invalide — ${details}`);
   }
-  const { DATABASE_URL, HOST, PORT, LOG_LEVEL } = result.data;
-  return { databaseUrl: DATABASE_URL, host: HOST, port: PORT, logLevel: LOG_LEVEL };
+  const e = result.data;
+  return {
+    databaseUrl: e.DATABASE_URL,
+    appDbRole: e.APP_DB_ROLE,
+    appDbPassword: e.APP_DB_PASSWORD,
+    host: e.HOST,
+    port: e.PORT,
+    logLevel: e.LOG_LEVEL,
+    secretsDir: e.SECRETS_DIR,
+    realWrites: e.REAL_WRITES === 'on',
+  };
 }

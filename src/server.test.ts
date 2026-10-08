@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createTestDatabase, type TestDatabase } from '../test/database.js';
+import { createTestDatabase, dropRole, testRoleName, type TestDatabase } from '../test/database.js';
 
 async function freePort(): Promise<number> {
   const server = createServer().listen(0, '127.0.0.1');
@@ -16,6 +16,7 @@ async function freePort(): Promise<number> {
 function startServer(env: NodeJS.ProcessEnv): { child: ChildProcess; output: () => string } {
   const parentEnv = { ...process.env };
   delete parentEnv.DATABASE_URL;
+  delete parentEnv.APP_DB_PASSWORD;
   const child = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
     env: { ...parentEnv, LOG_LEVEL: 'warn', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -47,12 +48,15 @@ describe('server entry point', () => {
 
   afterAll(async () => {
     await testDb.drop();
+    await dropRole(testRoleName(testDb));
   });
 
-  it('migrates, serves /health, and stops cleanly on SIGTERM', async () => {
+  it('migrates, serves the API as the restricted role, and stops cleanly on SIGTERM', async () => {
     const port = await freePort();
     const { child, output } = startServer({
       DATABASE_URL: testDb.url,
+      APP_DB_ROLE: testRoleName(testDb),
+      APP_DB_PASSWORD: 'server-test-password',
       HOST: '127.0.0.1',
       PORT: String(port),
     });
@@ -60,6 +64,9 @@ describe('server entry point', () => {
       const response = await waitForHealth(`http://127.0.0.1:${port}/health`, 30_000);
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ status: 'ok', database: 'ok' });
+
+      const entreprises = await fetch(`http://127.0.0.1:${port}/api/i/simatis/entreprises`);
+      expect(((await entreprises.json()) as unknown[]).length).toBe(12);
     } finally {
       child.kill('SIGTERM');
     }
