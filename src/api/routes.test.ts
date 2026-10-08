@@ -15,6 +15,10 @@ describe('API instances, entreprises, contacts', () => {
     const response = await app.inject({ method: 'GET', url });
     return { status: response.statusCode, body: response.json<Row[] & Row>() };
   };
+  const send = async (method: 'PUT' | 'PATCH', url: string, payload: unknown) => {
+    const response = await app.inject({ method, url, payload: payload as object });
+    return { status: response.statusCode, body: response.json<Row>() };
+  };
 
   beforeAll(async () => {
     t = await setupTestApp();
@@ -71,5 +75,53 @@ describe('API instances, entreprises, contacts', () => {
     const { status, body } = await get('/api/i/inconnue/contacts');
     expect(status).toBe(404);
     expect(body).toEqual({ error: 'Instance inconnue' });
+  });
+
+  it('returns 404 for the journal of an unknown instance (no fallback to another)', async () => {
+    expect((await get('/api/i/inconnu/journal')).status).toBe(404);
+  });
+
+  it('shows the journal of the instance only', async () => {
+    const { status, body } = await get('/api/i/helioval/journal');
+    expect(status).toBe(200);
+    expect(body.length).toBeGreaterThan(0);
+    expect(body.every((e) => String(e.action).includes('Helioval'))).toBe(true);
+  });
+
+  it('returns only counters in the portfolio', async () => {
+    const { body } = await get('/api/portefeuille');
+    expect(body).toHaveLength(4);
+    for (const row of body) {
+      expect(Object.keys(row).sort()).toEqual(
+        ['aValider', 'nom', 'rdv7j', 'routinesActives', 'slug', 'tachesEnRetard', 'type'].sort(),
+      );
+    }
+  });
+
+  it('keeps favourites per user, with the mockup default, and validates them', async () => {
+    expect((await get('/api/preferences')).body).toEqual({
+      favoris: ['pipeline', 'brief', 'prospection'],
+    });
+    const saved = await send('PUT', '/api/preferences', { favoris: ['contacts', 'pipeline'] });
+    expect(saved.body).toEqual({ favoris: ['contacts', 'pipeline'] });
+    expect((await get('/api/preferences')).body).toEqual({ favoris: ['contacts', 'pipeline'] });
+    expect((await send('PUT', '/api/preferences', { favoris: ['<script>'] })).status).toBe(400);
+  });
+
+  it('renames a mandate, journals it, and refuses to rename the own activity', async () => {
+    const renamed = await send('PATCH', '/api/i/aquaterra/instance', {
+      nom: 'Aquaterra Équipements',
+    });
+    expect(renamed.body).toMatchObject({ slug: 'aquaterra', nom: 'Aquaterra Équipements' });
+    expect((await get('/api/i/aquaterra/instance')).body).toMatchObject({
+      nom: 'Aquaterra Équipements',
+      type: 'mandat',
+      statut: 'actif',
+      ecrituresReelles: false,
+    });
+    const journal = await get('/api/i/aquaterra/journal');
+    expect(String(journal.body[0]?.action)).toMatch(/renommée/);
+    expect((await send('PATCH', '/api/i/simatis/instance', { nom: 'Autre' })).status).toBe(400);
+    expect((await send('PATCH', '/api/i/aquaterra/instance', { nom: '' })).status).toBe(400);
   });
 });
