@@ -34,8 +34,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SECRETS_DIR: /app/secrets/instances
       REAL_WRITES: ${REAL_WRITES:-off}
+      BACKUP_STATUS_FILE: /app/backup-status/last.json
     volumes:
       - ./secrets:/app/secrets:ro
+      - backup-status:/app/backup-status:ro
     ports:
       - '127.0.0.1:${APP_PORT:-4300}:3000'
     healthcheck:
@@ -45,5 +47,27 @@ services:
       retries: 5
       start_period: 20s
 
+  backup:
+    build: ./backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-simatis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?À définir dans .env}
+      POSTGRES_DB: ${POSTGRES_DB:-simatis}
+      # Local repository by default (same machine: test only). Off-site: an s3:… URL, see .env.example.
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-/backups/restic}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?À définir dans .env}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - backup-status:/status
+      - backup-local:/backups
+      - ./secrets:/secrets:ro
+
 volumes:
   db-data:
+  backup-status:
+  backup-local:

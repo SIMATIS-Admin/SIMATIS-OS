@@ -21,6 +21,7 @@ const schema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   SECRETS_DIR: z.string().min(1).default('./secrets/instances'),
   REAL_WRITES: z.enum(['off', 'on']).default('off'),
+  BACKUP_STATUS_FILE: z.string().min(1).default('./backup-status/last.json'),
 });
 
 export type Config = {
@@ -32,6 +33,7 @@ export type Config = {
   logLevel: z.infer<typeof schema>['LOG_LEVEL'];
   secretsDir: string;
   realWrites: boolean;
+  backupStatusFile: string;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -52,5 +54,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     logLevel: e.LOG_LEVEL,
     secretsDir: e.SECRETS_DIR,
     realWrites: e.REAL_WRITES === 'on',
+    backupStatusFile: e.BACKUP_STATUS_FILE,
   };
 }

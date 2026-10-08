@@ -15,6 +15,7 @@ describe('loadConfig', () => {
       logLevel: 'info',
       secretsDir: './secrets/instances',
       realWrites: false,
+      backupStatusFile: './backup-status/last.json',
     });
   });
 
