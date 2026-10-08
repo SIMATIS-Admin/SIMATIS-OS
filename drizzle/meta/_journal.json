@@ -36,6 +36,20 @@
       "when": 1791475039488,
       "tag": "0004_propositions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791478704430,
+      "tag": "0005_jetons",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791478706127,
+      "tag": "0006_vues_lecture",
+      "breakpoints": true
     }
   ]
 }

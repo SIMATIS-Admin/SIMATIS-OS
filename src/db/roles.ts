@@ -2,6 +2,10 @@ import type pg from 'pg';
 
 const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
 
+// NOLOGIN role the app switches to (SET LOCAL ROLE) for requete_lecture: it can only read the
+// instance-filtered v_* views.
+export const lectureRoleOf = (role: string) => `${role}_lecture`;
+
 export function appDatabaseUrl(ownerUrl: string, role: string, password: string): string {
   const url = new URL(ownerUrl);
   url.username = role;
@@ -43,6 +47,24 @@ export async function ensureAppRole(
     );
     if (journal[0]?.exists) {
       await client.query(`REVOKE UPDATE, DELETE, TRUNCATE ON TABLE journal FROM ${role}`);
+    }
+
+    // v_* views run with the owner's rights: writing through them would bypass Row-Level Security.
+    const lecture = lectureRoleOf(role);
+    const { rows: lectureRows } = await client.query<{ exists: boolean }>(
+      'select exists (select 1 from pg_roles where rolname = $1) as exists',
+      [lecture],
+    );
+    if (!lectureRows[0]?.exists) await client.query(`CREATE ROLE ${lecture} NOLOGIN`);
+    await client.query(`GRANT ${lecture} TO ${role}`);
+    await client.query(`GRANT USAGE ON SCHEMA public TO ${lecture}`);
+    const { rows: views } = await client.query<{ name: string }>(
+      "select table_name as name from information_schema.views where table_schema = 'public' and table_name like 'v\\_%'",
+    );
+    for (const { name } of views) {
+      const view = client.escapeIdentifier(name);
+      await client.query(`REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON ${view} FROM ${role}`);
+      await client.query(`GRANT SELECT ON ${view} TO ${lecture}`);
     }
   } finally {
     client.release();

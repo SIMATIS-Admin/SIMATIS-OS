@@ -1,7 +1,7 @@
 import { buildApp } from './app.js';
 import { loadConfig, type Config } from './config.js';
 import { createDb } from './db.js';
-import { appDatabaseUrl, ensureAppRole } from './db/roles.js';
+import { appDatabaseUrl, ensureAppRole, lectureRoleOf } from './db/roles.js';
 import { seedDemoIfEmpty } from './demo/seed.js';
 import { runMigrations } from './migrate.js';
 import { readVersion } from './version.js';
@@ -23,6 +23,8 @@ const app = buildApp({
   db,
   version: readVersion(),
   backupStatusFile: config.backupStatusFile,
+  lectureRole: lectureRoleOf(config.appDbRole),
+  realWrites: config.realWrites,
   logger: { level: config.logLevel },
 });
 
