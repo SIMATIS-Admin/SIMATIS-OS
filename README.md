@@ -1,6 +1,6 @@
 # SIMATIS OS
 
-Système d'exploitation interne de SIMATIS (direction commerciale à temps partagé).
+Système d'exploitation interne de SIMATIS (direction commerciale en mode partagé).
 
 > **Dépôt public.** Il ne contient que du code, de la documentation générique et des données fictives.
 > Toute information confidentielle ou métier vit dans le « second cerveau », qui est privé.
