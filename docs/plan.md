@@ -1,6 +1,8 @@
 # Plan de développement — SIMATIS OS
 
 > Rien de confidentiel ici : les mandats, sociétés et personnes cités sont fictifs.
+>
+> Découpage et décisions techniques validés le 8 octobre 2026. Les parties métier restent à détailler avec Marc.
 
 ## Objectif
 
