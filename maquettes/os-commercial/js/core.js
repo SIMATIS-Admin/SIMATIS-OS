@@ -1,13 +1,17 @@
 /* Noyau de la maquette : état, navigation, interface commune. */
 
-const STORE_KEY = 'simatis-os-maquette-v5';
+const STORE_KEY = 'simatis-os-maquette-v6';
 const VIEWS = {};
 const ACTIONS = {};
 let S;
 
 /* Favoris propres à l'utilisateur, pas à l'instance : ils suivent Marc d'un mandat à l'autre. */
 const FAVS_DEFAUT = ['pipeline', 'brief', 'prospection'];
-function freshState() { return { inst: 'simatis', view: 'brief', data: SEED(), vqFilter: 'tout', vqSel: null, pipeMode: 'board', menuOpen: false, favs: FAVS_DEFAUT.slice() }; }
+/* Noms réels éventuels : fichier js/instances.local.js, ignoré par git, jamais dans le dépôt public. */
+const localNoms = i => { const n = (window.INSTANCES_LOCAL || {})[i.id]; return n ? { ...i, nom: n } : i; };
+const buildInstances = () => INSTANCES.map(i => localNoms(JSON.parse(JSON.stringify(i))));
+const TYPES_INST = [['propre', 'Mon activité'], ['mandat', 'Mandats en cours'], ['prospect', 'Mandats prospects']];
+function freshState() { return { inst: 'simatis', view: 'brief', data: SEED(), instances: buildInstances(), vqFilter: 'tout', vqSel: null, pipeMode: 'board', menuOpen: false, favs: FAVS_DEFAUT.slice() }; }
 function load() {
   try { const raw = localStorage.getItem(STORE_KEY); if (raw) return JSON.parse(raw); } catch (e) { /* stockage indisponible : on repart des données de démo */ }
   return freshState();
@@ -17,7 +21,7 @@ function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } ca
 /* ---------- Utilitaires ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const D = () => S.data[S.inst];
-const INST = () => INSTANCES.find(i => i.id === S.inst);
+const INST = () => S.instances.find(i => i.id === S.inst);
 const byId = (arr, id) => arr.find(x => x.id === id);
 const soc = id => byId(D().societes, id) || { nom: '?' };
 const contact = id => byId(D().contacts, id) || { nom: '?' };
@@ -132,8 +136,10 @@ function shell(body, v) {
     if (g.later) return `<div class="nav-group later"><button class="later-btn" data-act="nav-later" aria-expanded="${!!laterOpen}">${g.g}<span class="chev ${laterOpen ? 'open' : ''}">${ic('down')}</span></button>${laterOpen ? items.map(link).join('') : ''}</div>`;
     return `<div class="nav-group"><span>${g.g}</span>${items.map(link).join('')}</div>`;
   }).join('');
-  const menu = S.instMenu ? `<div class="inst-menu" role="menu">${INSTANCES.map(i => `<button data-act="inst" data-id="${i.id}" class="${i.id === S.inst ? 'on' : ''}"><span class="inst-dot" style="background:${i.c}"></span><span><b>${esc(i.nom)}</b><small>${esc(i.sous)}</small></span></button>`).join('')}<hr><button data-act="go" data-v="portefeuille"><span class="inst-dot" style="background:var(--navy)"></span><span><b>Portefeuille</b><small>Vue transversale, métadonnées seulement</small></span></button></div>` : '';
-  const demo = inst.demo ? `<div class="demo-band"><b>Démonstration.</b> Données fictives, aucun envoi possible.<div class="scenario">${DEMO_SCENARIO.map((s, k) => `<a href="#/demo/${s.v}" data-act="go" data-v="${s.v}" class="${S.view === s.v ? 'on' : ''}" title="${esc(s.d)}">${k + 1}. ${s.t}</a>`).join('')}</div><button class="btn sm" data-act="reset-demo">Réinitialiser la démo</button></div>` : '';
+  const instBtn = i => `<button data-act="inst" data-id="${i.id}" class="${i.id === S.inst ? 'on' : ''}"><span class="inst-dot" style="background:${i.c}"></span><span><b>${esc(i.nom)}</b><small>${esc(i.sous)}</small></span></button>`;
+  const menu = S.instMenu ? `<div class="inst-menu" role="menu">${TYPES_INST.map(([t, l]) => { const is = S.instances.filter(i => i.type === t); return is.length ? `<div class="inst-sec">${l}</div>${is.map(instBtn).join('')}` : ''; }).join('')}
+    <button data-act="prospect-new"><span class="inst-dot plus">+</span><span><b>Nouveau mandat prospect</b><small>Démonstration, données fictives</small></span></button><hr><button data-act="go" data-v="portefeuille"><span class="inst-dot" style="background:var(--navy)"></span><span><b>Portefeuille</b><small>Vue transversale, métadonnées seulement</small></span></button></div>` : '';
+  const demo = inst.demo ? `<div class="demo-band"><b>Mandat prospect, mode démonstration.</b> Données fictives, aucun envoi possible.<div class="scenario">${DEMO_SCENARIO.map((s, k) => `<a href="#/${inst.id}/${s.v}" data-act="go" data-v="${s.v}" class="${S.view === s.v ? 'on' : ''}" title="${esc(s.d)}">${k + 1}. ${s.t}</a>`).join('')}</div><button class="btn sm" data-act="reset-demo">Réinitialiser la démo</button></div>` : '';
   return `<div class="app">
     <aside class="side ${S.menuOpen ? 'open' : ''}">
       <div class="brand"><div class="brand-mark">S</div><div class="brand-name">SIMATIS <span>OS</span></div></div>
@@ -213,8 +219,18 @@ Object.assign(ACTIONS, {
   'nav-later': () => { S.navLater = !S.navLater; render(); },
   menu: () => { S.menuOpen = !S.menuOpen; render(); },
   close: () => closeOver(),
-  'reset-demo': () => { S.data.demo = SEED().demo; OVER = null; go('brief', 'demo'); toast('Démonstration réinitialisée'); },
-  'reset-all': () => { if (confirm('Remettre toutes les données de la maquette à zéro ?')) { const keep = S.inst, favs = S.favs; S = freshState(); S.inst = keep; S.favs = favs; OVER = null; render(); toast('Maquette réinitialisée'); } }
+  'reset-demo': () => { const seed = SEED(); S.data[S.inst] = seed[S.inst] || seed.demo; OVER = null; go('brief'); toast('Démonstration réinitialisée'); },
+  'prospect-new': () => { S.instMenu = false; openModal('Nouveau mandat prospect', () => `<p style="margin-top:0">Un espace de démonstration, rempli de données fictives, pour montrer l'OS à ce prospect ou le lui confier.</p>
+    <label class="field"><span>Nom du prospect</span><input class="input" id="np-nom" placeholder="Nom de l'entreprise"></label>
+    <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="prospect-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`); },
+  'prospect-new-ok': () => {
+    const nom = document.getElementById('np-nom').value.trim(); if (!nom) { document.getElementById('np-nom').focus(); return; }
+    const id = uid('p'), cols = ['#E3A33B', '#D46A8C', '#5BB0C9', '#8C9A3B'];
+    S.instances.push({ id, nom, sous: 'Mandat prospect', type: 'prospect', demo: true, outil: 'Données fictives', c: cols[S.instances.filter(i => i.type === 'prospect').length % cols.length], modules: ['diagnostic'],
+      conn: [['CRM', 'Données fictives', 'ok'], ['Messagerie', 'Aucun envoi possible', 'ok'], ['Agenda', 'Agenda fictif', 'ok']] });
+    S.data[id] = SEED().demo; OVER = null; go('brief', id); toast('Mandat prospect créé, avec des données fictives');
+  },
+  'reset-all': () => { if (confirm('Remettre toutes les données de la maquette à zéro ?')) { const keep = S.inst, favs = S.favs; S = freshState(); S.inst = S.data[keep] ? keep : 'simatis'; S.favs = favs; OVER = null; render(); toast('Maquette réinitialisée'); } }
 });
 
 document.addEventListener('click', e => {
@@ -238,4 +254,8 @@ document.addEventListener('keydown', e => {
 });
 window.addEventListener('hashchange', () => { const before = S.inst + S.view; fromHash(); if (before !== S.inst + S.view) render(); });
 
-function boot() { S = load(); if (!S.data || !S.data.demo) S = freshState(); if (!S.favs) S.favs = FAVS_DEFAUT.slice(); fromHash(); render(); }
+function boot() {
+  S = load(); if (!S.data || !S.instances) S = freshState(); if (!S.favs) S.favs = FAVS_DEFAUT.slice();
+  S.instances = S.instances.map(localNoms);
+  fromHash(); render();
+}

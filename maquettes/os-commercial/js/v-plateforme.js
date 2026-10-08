@@ -115,7 +115,7 @@ const champ = (f, v, attrs) => {
 const verrou = txt => `<div class="lock" style="margin-top:6px">${ic('lock')}${txt}</div>`;
 
 VIEWS.parametres = () => {
-  const inst = INST(), R = D().reglages, tab = S.paramTab || 'connexions';
+  const inst = INST(), R = D().reglages, tab = S.paramTab || 'instance';
   const etat = c => connEtat(c) === 'ok' ? '<span class="badge green">Connecté</span>' : `<span class="badge amber">Non configuré</span>`;
   const conn = c => {
     const [k, nom] = c, ok = connEtat(c) === 'ok';
@@ -143,12 +143,30 @@ VIEWS.parametres = () => {
     <div class="panel-b">${(PARAMS_DEF[x.id] || []).map(f => champ(f, x.params[f.k], `data-change="rt-param" data-id="${x.id}" data-k="${f.k}"`)).join('') || '<p class="muted small" style="margin:0">Rien à régler.</p>'}</div></div>`;
   return {
     title: 'Paramètres',
-    actions: `<div class="seg"><button class="${tab === 'connexions' ? 'on' : ''}" data-act="param-tab" data-tab="connexions">Connexions</button><button class="${tab === 'routines' ? 'on' : ''}" data-act="param-tab" data-tab="routines">Routines Claude</button></div>`,
+    actions: `<div class="seg"><button class="${tab === 'instance' ? 'on' : ''}" data-act="param-tab" data-tab="instance">${inst.type === 'propre' ? 'Activité' : 'Mandat'}</button><button class="${tab === 'connexions' ? 'on' : ''}" data-act="param-tab" data-tab="connexions">Connexions</button><button class="${tab === 'routines' ? 'on' : ''}" data-act="param-tab" data-tab="routines">Routines Claude</button></div>`,
     body: `<div class="alert blue" style="margin-bottom:18px">${ic('lock')}<div>Réglages de <b>${esc(inst.nom)}</b> uniquement. Chaque instance a ses propres connexions ; les accès eux-mêmes ne sont jamais stockés dans l'OS.</div></div>
-      ${tab === 'connexions' ? `<div class="stack">${(inst.conn || []).map(conn).join('')}</div>`
+      ${tab === 'instance' ? instanceTab(inst) : tab === 'connexions' ? `<div class="stack">${(inst.conn || []).map(conn).join('')}</div>`
         : `<div class="grid g2">${D().routines.map(routine).join('')}</div><p class="small muted" style="margin-top:12px">Les règles de rédaction (vouvoiement, sans signature, contrôles avant envoi) restent celles des skills Claude.</p>`}`
   };
 };
+const TYPE_NOM = { propre: 'Mon activité', mandat: 'Mandat en cours', prospect: 'Mandat prospect' };
+function instanceTab(inst) {
+  const ligne = (l, v) => `<tr><td class="muted">${l}</td><td>${v}</td></tr>`;
+  const fiche = `<div class="panel"><div class="panel-h"><h2>${esc(inst.nom)}</h2><span class="badge ${inst.type === 'prospect' ? 'amber' : inst.type === 'mandat' ? 'blue' : 'green'}">${TYPE_NOM[inst.type]}</span></div>
+    <div class="panel-b">${inst.type === 'propre' ? '' : `<label class="field"><span>Nom affiché</span><input class="input" value="${esc(inst.nom)}" data-change="inst-nom"></label>`}
+    <table class="tbl small"><tbody>${ligne('Type', TYPE_NOM[inst.type])}${ligne('Outil de référence', esc(inst.outil))}${inst.situation ? ligne('Situation de départ', esc(inst.situation)) : ''}${ligne('Données', inst.demo ? 'Fictives, propres à cet espace' : 'Copie de travail des outils du client')}</tbody></table></div></div>`;
+  if (inst.type === 'prospect') return `<div class="grid g2">${fiche}
+    <div class="stack">
+      <div class="panel"><div class="panel-h"><h2>Démonstration</h2></div><div class="panel-b">
+        <p style="margin-top:0">Montrez l'OS vous-même depuis cet espace, ou confiez au prospect une copie isolée : il explore le CRM et les routines avec des données fictives, sans aucune connexion et sans accès à vos autres instances.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="demo-share">${ic('send')}Partager une démo isolée</button><button class="btn" data-act="reset-demo">Réinitialiser les données</button></div></div></div>
+      <div class="panel"><div class="panel-h"><h2>Le prospect a signé ?</h2></div><div class="panel-b">
+        <p style="margin-top:0">Transformez cet espace en mandat en cours. Les données fictives sont retirées, puis vous branchez les outils du client.</p>
+        <button class="btn go" data-act="prospect-convert">${ic('check')}Transformer en mandat en cours</button></div></div>
+    </div></div>`;
+  if (inst.type === 'mandat') return `<div class="grid g2">${fiche}<div class="panel"><div class="panel-h"><h2>Fin de mandat</h2></div><div class="panel-b"><p style="margin:0">À la fin du mandat, l'instance est archivée puis sa copie de travail purgée. Rien à exporter : le client a déjà tout dans ses outils.</p></div></div></div>`;
+  return fiche;
+}
 const setParam = (x, f, el) => {
   if (f.t === 'checks') x.params[f.k] = [...document.querySelectorAll(`[data-change="rt-param"][data-id="${x.id}"][data-k="${f.k}"]:checked`)].map(i => i.value);
   else if (f.t === 'bool') x.params[f.k] = el.checked;
@@ -158,6 +176,30 @@ const setParam = (x, f, el) => {
 const saved = () => { const y = scrollY; render(); scrollTo(0, y); toast('Réglage enregistré'); };
 Object.assign(ACTIONS, {
   'param-tab': ds => { S.paramTab = ds.tab; render(); },
+  'inst-nom': (ds, el) => { const v = el.value.trim(); if (!v) return render(); INST().nom = v; logAction(`Instance renommée : ${v}`, 'L2'); saved(); },
+  'demo-share': () => openModal('Partager une démo isolée', () => { const L = (S.demoLiens || {})[S.inst]; return L
+    ? `<p style="margin-top:0">Lien prêt (simulation) :</p><div class="mail-h" style="border:1px solid var(--line);border-radius:var(--r-s)"><span class="num">${esc(L.url)}</span></div>
+       <ul class="checks small" style="margin-top:12px"><li>Copie des données fictives de cet espace, à l'instant du partage</li><li>Aucune connexion : rien ne part, rien n'est lu chez vous</li><li>Aucun accès à vos autres instances</li><li>Valable ${esc(L.duree)}, révocable à tout moment</li></ul>
+       <div style="display:flex;gap:8px;margin-top:12px"><button class="btn" data-act="close">Fermer</button><button class="btn ghost danger" data-act="demo-revoke">Révoquer le lien</button></div>`
+    : `<p style="margin-top:0">Le prospect reçoit une copie de cet espace de démonstration : il peut tout essayer, rien de ce qu'il fait ne vous touche.</p>
+       <label class="field"><span>Durée de validité</span><select class="input" id="dl-duree"><option>7 jours</option><option selected>30 jours</option><option>90 jours</option></select></label>
+       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="demo-share-ok">Créer le lien</button><button class="btn ghost" data-act="close">Annuler</button></div>`; }),
+  'demo-share-ok': () => { const duree = document.getElementById('dl-duree').value; (S.demoLiens = S.demoLiens || {})[S.inst] = { duree, url: `https://demo.simatis.example/${uid('')}` }; logAction(`Démo isolée partagée (${duree})`, 'L2'); render(); },
+  'demo-revoke': () => { delete S.demoLiens[S.inst]; logAction('Lien de démo révoqué', 'L2'); OVER = null; render(); toast('Lien révoqué'); },
+  'prospect-convert': () => openModal('Transformer en mandat en cours', () => `<p style="margin-top:0"><b>${esc(INST().nom)}</b> devient un mandat en cours.</p>
+    <label class="field"><span>Outil du client</span><select class="input" id="pc-crm"><option value="HubSpot">HubSpot</option><option value="">Pas de CRM : l'OS tient le pipeline</option></select></label>
+    <ul class="checks small"><li>Les données fictives sont retirées : l'espace repart vide</li><li>Les connexions du client (CRM, Gmail, agenda) sont à établir dans Paramètres</li><li>Les liens de démo déjà partagés restent des copies isolées, jusqu'à leur expiration</li></ul>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn go" data-act="prospect-convert-ok">Transformer</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
+  'prospect-convert-ok': () => {
+    const inst = INST(), crm = document.getElementById('pc-crm').value;
+    Object.assign(inst, { type: 'mandat', demo: false, sous: 'Mandat en cours', crm: crm || undefined, outil: crm || 'Pipeline natif', modules: [],
+      conn: [[crm ? 'CRM' : 'Pipeline', crm ? `${crm} du mandat` : 'Pipeline natif de l\'OS', crm ? 'non' : 'ok'], ['Messagerie', 'Gmail du mandat', 'non'], ['Agenda', 'Agenda du mandat', 'non']] });
+    // Le mandat en cours rejoint la fin de la liste des mandats en cours.
+    S.instances = [...S.instances.filter(i => i !== inst), inst];
+    S.data[inst.id] = emptySeed(crm); 
+    logAction(`Mandat prospect transformé en mandat en cours : ${inst.nom}`, 'L2');
+    OVER = null; S.paramTab = 'connexions'; render(); toast('Mandat en cours créé : branchez maintenant les outils du client');
+  },
   'rt-param': (ds, el) => { const x = byId(D().routines, ds.id); setParam(x, PARAMS_DEF[x.id].find(f => f.k === ds.k), el); x.rythme = rythme(x); logAction(`Réglage modifié : ${x.nom}`, 'L2'); saved(); },
   reg: (ds, el) => { D().reglages[ds.g][ds.k] = el.value; logAction(`Connexion réglée : ${ds.g}, ${ds.k}`, 'L2'); saved(); },
   'reg-num': (ds, el) => { const n = +el.value; D().reglages[ds.g][ds.k] = Math.min(+ds.max, Math.max(+ds.min, isNaN(n) ? +ds.min : n)); saved(); },

@@ -29,7 +29,17 @@ Priorité actuelle : l'activité commerciale de SIMATIS. Les écrans en favoris 
 
 **Plus tard** (menu replié en bas) : Plan d'action, Diagnostic, Détection, Autonomie, Journal d'audit, Second cerveau. Ces écrans restent consultables mais seront refaits.
 
-Le sélecteur en haut à gauche change d'instance (activité propre, deux mandats fictifs, démonstration) et ouvre le **Portefeuille**, qui ne croise que des compteurs. L'instance **Dupont Industrie** affiche le bandeau de démonstration et le scénario en sept étapes.
+Le sélecteur en haut à gauche range les instances en trois groupes : **Mon activité** (SIMATIS), **Mandats en cours** (Helioval, Aquaterra) et **Mandats prospects** (Dupont Industrie). Un mandat prospect est un espace de démonstration aux données fictives : on le montre soi-même ou on en partage une copie isolée avec le prospect. « Nouveau mandat prospect » en crée un. Dans **Paramètres**, onglet Mandat, un prospect qui signe se transforme en mandat en cours : l'espace repart vide et il reste à brancher les outils du client. Le **Portefeuille** ne croise que des compteurs.
+
+### Vrais noms, sur votre poste seulement
+
+Le dépôt est public : il ne contient que des noms fictifs. Pour voir les vrais noms de vos mandats sur votre poste, créez `js/instances.local.js` (ignoré par git, jamais publié) :
+
+```js
+window.INSTANCES_LOCAL = { helioval: 'Nom du premier mandat', demo: 'Nom du mandat prospect' };
+```
+
+Seuls les noms changent : les données affichées restent fictives.
 
 ## Ce que la maquette ne tranche pas
 

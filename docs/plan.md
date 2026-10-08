@@ -29,8 +29,9 @@ Statuts possibles : à relire, validée, en cours, livrée.
 ### Instances
 
 - **SIMATIS** : l'instance propre, unique, branchée sur les outils de Marc.
-- **Un mandat = une instance**, branchée sur les outils du client (son HubSpot, son Gmail, son agenda…).
-- **Démonstration** : des données fictives.
+- **Mandat en cours = une instance**, branchée sur les outils du client (son HubSpot, son Gmail, son agenda…). Le premier mandat en cours est sous HubSpot et a déjà un historique : ses données sont reprises à la première synchronisation.
+- **Mandat prospect** : une instance de démonstration aux données fictives, pour présenter le modèle et le CRM. Marc la montre lui-même ou en partage une copie isolée (sans connexion, durée limitée, révocable). Quand le prospect signe, elle devient un mandat en cours : données fictives retirées, outils du client à brancher.
+- Les vrais noms des mandats ne figurent jamais dans le dépôt : ils vivent dans la configuration de l'instance, hors git.
 
 Chaque instance a sa configuration et ses accès. Aucune ne lit les données d'une autre, SIMATIS compris. Seul le portefeuille croise les instances, et uniquement par des compteurs.
 
@@ -287,3 +288,4 @@ Statut : à relire (prioritaire : connexions du premier mandat sous HubSpot)
 - Brief et routines rédigés par IA côté serveur (demande une clé d'API et un budget).
 - Envoi direct d'emails, sous double verrou.
 - Hébergement sur serveur, avec accès à distance pour les agents.
+- Démo isolée partageable avec un prospect : demande l'hébergement sur serveur.
