@@ -15,6 +15,20 @@
       "when": 1791473488540,
       "tag": "0001_rls_crm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791473764614,
+      "tag": "0002_journal",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791473774803,
+      "tag": "0003_journal_append_only",
+      "breakpoints": true
     }
   ]
 }
