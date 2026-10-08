@@ -217,7 +217,8 @@ Statut : à relire
 
 Statut : validée (retours de Marc sur la maquette, 8 octobre 2026)
 
-- **Décidé** : Brief du jour allégé : plus de signaux, de rapport de routine ni de pipeline par score. Il affiche les tâches réalisées hier, sur 7 jours et sur 30 jours, avec le détail emails et appels. Tableau de bord gardé tel quel. À valider regroupe les relances à planifier et les brouillons à envoyer. Brouillons Gmail toujours créés sans signature.
+- **Décidé** : Brief du jour réduit à deux blocs : « Votre journée » (rendez-vous et tâches du jour lues dans le CRM, d'où Marc lance la routine quotidienne) et les tâches réalisées hier, sur 7 jours et sur 30 jours, avec le détail emails et appels.
+- **Décidé** : un écran Paramètres, par instance, regroupe les connexions (fréquence et sens de synchronisation, objets et champs exclus) et les réglages des routines Claude, pour alléger les autres pages. Tableau de bord gardé tel quel. À valider regroupe les relances à planifier et les brouillons à envoyer. Brouillons Gmail toujours créés sans signature.
 - **Transverse** : favoris par utilisateur en haut du menu (par défaut Pipeline, Brief du jour, Prospection) ; pas de sous-titre sous les titres, une infobulle quand un élément n'est pas évident.
 
 - **Dans la maquette** : ce qui attend Marc le matin, la file des propositions à valider, l'entonnoir lead → prospect → devis → commande avec simulation de l'objectif annuel.

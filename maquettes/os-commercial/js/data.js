@@ -82,10 +82,19 @@ function seedInstance(cfg) {
     bases: cfg.bases || [], signaux: cfg.signaux || [], diagnostics: cfg.diagnostics || [],
     routines: cfg.routines.map(r => ({ ...r, params: { ...PARAMS_DEFAUT[r.id] } })), plan: cfg.plan, funnel: cfg.funnel, autonomie: AUTONOMIE_DEFAUT.map(a => ({ ...a })),
     relais: cfg.relais || [], campagnes: cfg.campagnes || [], temps: cfg.temps || 0,
-    activites: activitesSeed(cfg.rythme ?? 1)
+    activites: activitesSeed(cfg.rythme ?? 1),
+    reglages: JSON.parse(JSON.stringify(REGLAGES_DEFAUT))
   };
   return d;
 }
+
+/* Réglages des connexions, par instance (modifiés dans Paramètres). */
+const CHAMPS_CRM = ['Nom et prénom', 'Email', 'Téléphone', 'Fonction', 'Propriétaire', 'Montant', 'Étape', 'Date de clôture', 'Notes', 'Historique des emails', 'Chiffre d\'affaires annuel', 'Champs personnalisés'];
+const REGLAGES_DEFAUT = {
+  crm: { freq: 'Toutes les 15 minutes', sens: 'Dans les deux sens', objets: ['entreprises', 'contacts', 'transactions', 'taches'], exclus: ['Chiffre d\'affaires annuel', 'Champs personnalisés'] },
+  gmail: { histo: '12 mois', contenu: 'Extraits seulement' },
+  agenda: { calendriers: 'Agenda principal', tampon: 15 }
+};
 
 /* Historique fictif des tâches réalisées, jour par jour, sur 45 jours ouvrés : emails, appels, autres tâches. */
 function activitesSeed(r) {
@@ -192,7 +201,10 @@ const SEED = () => {
       { id: 't1', titre: 'Relancer Ateliers Morvan', opp: 'o1', echeance: dp(-1), canal: 'email', fait: false },
       { id: 't2', titre: 'Deuxième relance Oxalis Conseil', opp: 'o4', echeance: dp(-3), canal: 'email', fait: false },
       { id: 't3', titre: 'Appeler Bio Sillon', opp: 'o7', echeance: dp(0), canal: 'appel', fait: false },
-      { id: 't4', titre: 'Préparer la restitution Bréval', opp: 'o5', echeance: dp(3), canal: 'tâche', fait: false }
+      { id: 't4', titre: 'Préparer la restitution Bréval', opp: 'o5', echeance: dp(3), canal: 'tâche', fait: false },
+      { id: 't5', titre: 'Confirmer le rendez-vous de conditions', opp: 'o3', echeance: dp(0), canal: 'email', fait: false },
+      { id: 't6', titre: 'Appeler Kéramos Industrie', opp: 'o8', echeance: dp(0), canal: 'appel', fait: false },
+      { id: 't7', titre: 'Envoyer le compte rendu de diagnostic', opp: 'o2', echeance: dp(0), canal: 'tâche', fait: false }
     ],
     rdv: [
       { id: 'r1', opp: 'o2', titre: 'Diagnostic Lumibat Systèmes', date: dp(0), heure: '14h00', lieu: 'Visio', binome: null },
@@ -285,7 +297,9 @@ const SEED = () => {
       { id: 'ht1', titre: 'Relancer le devis Fonderies du Gier', opp: 'ho1', echeance: dp(-1), canal: 'email', fait: false },
       { id: 'ht2', titre: 'Première relance Clinique des Monts', opp: 'ho4', echeance: dp(-2), canal: 'email', fait: false },
       { id: 'ht3', titre: 'Appeler Imprimerie Vercors', opp: 'ho5', echeance: dp(0), canal: 'appel', fait: false },
-      { id: 'ht4', titre: 'Appeler Scierie Bellecombe', opp: 'ho6', echeance: dp(0), canal: 'appel', fait: false }
+      { id: 'ht4', titre: 'Appeler Scierie Bellecombe', opp: 'ho6', echeance: dp(0), canal: 'appel', fait: false },
+      { id: 'ht5', titre: 'Relancer Polytherm sur la remise', opp: 'ho3', echeance: dp(0), canal: 'email', fait: false },
+      { id: 'ht6', titre: 'Caler le binôme Laiterie Saint-Rambert', opp: 'ho2', echeance: dp(0), canal: 'tâche', fait: false }
     ],
     rdv: [
       { id: 'hr1', opp: 'ho2', titre: 'Découverte Laiterie Saint-Rambert', date: dp(3), heure: '10h30', lieu: 'Sur site', binome: 'Cheffe de projet efficacité (fictive)' },

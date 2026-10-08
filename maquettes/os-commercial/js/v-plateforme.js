@@ -33,36 +33,27 @@ const rythme = x => {
   if (x.id === 'r-hebdo') return `${p.jour} à ${p.heure}`;
   return x.rythme;
 };
-const resume = x => {
-  const p = x.params || {};
-  if (x.id === 'r-quot') return [`${(p.canaux || []).map(c => c === 'email' ? 'emails' : 'appels').join(' et ') || 'aucune tâche'}`, `${p.max} brouillon${p.max > 1 ? 's' : ''} au plus`, `retard ≤ ${p.retard} j`, p.creneaux ? `${p.creneaux} créneau${p.creneaux > 1 ? 'x' : ''} dès J+${p.delai}` : 'sans créneau', p.plages];
-  if (x.id === 'r-nett') return [`suivi à ${p.suivi} jours`];
-  if (x.id === 'r-evt') return [`devis relancé à ${p.devis} jours`, p.stop ? 'arrêt sur réponse' : 'pas d\'arrêt sur réponse'];
-  return [];
-};
 
-const CONN_TIP = "Chaque instance a ses propres connexions. Une routine n'utilise que celles de l'instance choisie : si l'une manque, la routine s'arrête, et rien ne part depuis une autre boîte.";
 /* Étapes qui ont besoin d'une connexion donnée : sans elle, la routine s'arrête là. */
 const besoin = txt => /messagerie|Gmail/i.test(txt) ? 'Messagerie' : /agenda/i.test(txt) ? 'Agenda' : null;
-const connOk = nom => { const c = (INST().conn || []).find(x => x[0] === nom); return !c || c[2] === 'ok'; };
+const connEtat = c => D().reglages.etat?.[c[0]] ?? c[2];
+const connOk = nom => { const c = (INST().conn || []).find(x => x[0] === nom); return !c || connEtat(c) === 'ok'; };
 
 VIEWS.routines = () => {
   const r = D().routines, inst = INST();
   const conn = inst.conn || [];
   return {
     title: 'Routines Claude',
-    body: `<div class="panel" style="margin-bottom:18px"><div class="panel-h"><h2>Connexions de ${inst.id === 'simatis' ? 'mon activité' : 'ce mandat'} ${tip(CONN_TIP)}</h2>${inst.crm ? `<span class="small muted">Synchronisé ${S.sync?.[inst.id] ? 'à l\'instant' : 'il y a 5 min'}</span>` : ''}</div>
-      <div class="panel-b conn-row">${conn.map(([k, nom, etat]) => `<div class="conn ${etat}"><span class="small muted">${esc(k)}</span><b>${esc(nom)}</b><span class="badge ${etat === 'ok' ? 'green' : 'amber'}">${etat === 'ok' ? 'Connecté' : 'Non configuré'}</span></div>`).join('')}</div></div>
-    <div class="grid g2">${r.map(x => `<div class="panel"><div class="panel-h"><div><h2>${esc(x.nom)}</h2><div class="small muted">${esc(rythme(x))}</div></div>
+    actions: `<span class="small muted">${conn.map(c => `${esc(c[1])} ${connEtat(c) === 'ok' ? '✓' : '(non configuré)'}`).join(' · ')}</span><button class="btn" data-act="go-params" data-tab="routines">${ic('gear')}Réglages</button>`,
+    body: `    <div class="grid g2">${r.map(x => `<div class="panel"><div class="panel-h"><div><h2>${esc(x.nom)}</h2><div class="small muted">${esc(rythme(x))}</div></div>
         <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${x.actif ? 'checked' : ''} data-change="rt-toggle" data-id="${x.id}" style="accent-color:var(--teal)">${x.actif ? 'Active' : 'En pause'}</label></div>
       <div class="panel-b report-col">
-        ${resume(x).length ? `<div class="chips">${resume(x).map(c => `<span class="badge">${esc(c)}</span>`).join('')}</div>` : ''}
         <h4 style="margin-top:0">Ce que fait la routine</h4><ol class="rt-steps">${(x.etapes || []).map(e => `<li class="${besoin(e) && !connOk(besoin(e)) ? 'blocked' : ''}">${esc(e)}</li>`).join('')}</ol>
         <div class="small muted" style="margin-top:10px">Dernière exécution : ${rel(x.dernier)}</div>
         <h4>Fait</h4><ul>${x.rapport.fait.map(f => `<li>${esc(f)}</li>`).join('') || '<li>Rien</li>'}</ul>
         ${x.rapport.attente.length ? `<h4>En attente de validation</h4><ul>${x.rapport.attente.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
         ${x.rapport.echec.length ? `<h4>Échecs</h4><ul>${x.rapport.echec.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}</div>
-      <div class="decision"><button class="btn primary sm" data-act="rt-run" data-id="${x.id}" ${x.actif ? '' : 'disabled'}>${ic('play')}Lancer maintenant</button><button class="btn sm" data-act="rt-params" data-id="${x.id}">${ic('sliders')}Paramètres</button><span class="hint">Rien n'est envoyé : les brouillons attendent dans Gmail.</span></div></div>`).join('')}</div>`
+      <div class="decision"><button class="btn primary sm" data-act="rt-run" data-id="${x.id}" ${x.actif ? '' : 'disabled'}>${ic('play')}Lancer maintenant</button><span class="hint">Rien n'est envoyé : les brouillons attendent dans Gmail.</span></div></div>`).join('')}</div>`
   };
 };
 Object.assign(ACTIONS, {
@@ -80,35 +71,12 @@ Object.assign(ACTIONS, {
       if (OVER || R.fin) render();
     }, 450);
   },
-  'rt-params': ds => {
-    const x = byId(D().routines, ds.id), p = x.params || (x.params = {});
-    openDrawer(`<h2>Paramètres</h2><div class="small muted">${esc(x.nom)}, ${esc(INST().nom)}</div>`, () => `
-      <form id="rt-form">${(PARAMS_DEF[x.id] || []).map(f => {
-        const v = p[f.k];
-        if (f.t === 'select') return `<label class="field"><span>${f.l}</span><select class="input" name="${f.k}">${f.o.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
-        if (f.t === 'number') return `<label class="field"><span>${f.l}</span><span style="display:flex;gap:8px;align-items:center"><input class="input num" style="width:100px" type="number" name="${f.k}" min="${f.min}" max="${f.max}" value="${v}"><span class="small muted">${f.u}</span></span></label>`;
-        if (f.t === 'checks') return `<div class="field"><span>${f.l}</span>${f.o.map(([k, l]) => `<label class="check"><input type="checkbox" name="${f.k}" value="${k}" ${(v || []).includes(k) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`;
-        return `<label class="check"><input type="checkbox" name="${f.k}" ${v ? 'checked' : ''}><span>${f.l}</span></label>`;
-      }).join('')}</form>
-      <p class="small muted">Ces réglages s'appliquent à ${esc(INST().nom)} seulement. Les règles de rédaction (vouvoiement, sans signature, contrôles avant envoi) restent celles de la skill.</p>
-      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" data-act="rt-params-ok" data-id="${x.id}">Enregistrer</button><button class="btn ghost" data-act="close">Annuler</button></div>`, x.nom);
-  },
-  'rt-params-ok': ds => {
-    const x = byId(D().routines, ds.id), f = document.getElementById('rt-form');
-    (PARAMS_DEF[x.id] || []).forEach(d => {
-      if (d.t === 'checks') x.params[d.k] = [...f.querySelectorAll(`[name="${d.k}"]:checked`)].map(i => i.value);
-      else if (d.t === 'bool') x.params[d.k] = f.querySelector(`[name="${d.k}"]`).checked;
-      else if (d.t === 'number') { const n = +f.querySelector(`[name="${d.k}"]`).value; x.params[d.k] = Math.min(d.max, Math.max(d.min, isNaN(n) ? d.min : n)); }
-      else x.params[d.k] = f.querySelector(`[name="${d.k}"]`).value;
-    });
-    x.rythme = rythme(x);
-    logAction(`Paramètres modifiés : ${x.nom}`, 'L2'); OVER = null; render(); toast('Paramètres enregistrés');
-  },
+  'go-params': ds => { S.paramTab = ds.tab; go('parametres'); },
   'rt-voir': () => { S.run = null; OVER = null; S.vqFilter = 'tout'; go('validations'); }
 });
 function runBody() {
   const R = S.run, x = byId(D().routines, R.id);
-  return `<p class="small muted" style="margin-top:0">Instance : <b>${esc(INST().nom)}</b>. Connexions utilisées : ${(INST().conn || []).filter(c => c[2] === 'ok').map(c => esc(c[1])).join(', ')}.</p>
+  return `<p class="small muted" style="margin-top:0">Instance : <b>${esc(INST().nom)}</b>. Connexions utilisées : ${(INST().conn || []).filter(c => connEtat(c) === 'ok').map(c => esc(c[1])).join(', ')}.</p>
     <ol class="rt-steps run">${x.etapes.map((e, k) => `<li class="${k < R.k ? 'done' : k === R.k && R.err ? 'blocked' : k === R.k && !R.fin ? 'cur' : ''}">${esc(e)}</li>`).join('')}</ol>
     ${R.err ? `<div class="alert amber" style="margin-top:12px">${ic('info')}<div>${esc(R.err)}</div></div>` : ''}
     ${R.fin && !R.err ? `<div class="alert blue" style="margin-top:12px">${ic('check')}<div>${esc(R.bilan)}</div></div>` : ''}
@@ -127,7 +95,7 @@ function finRoutine(x, R) {
       n++;
     });
     const appels = canaux.includes('appel') ? d.taches.filter(t => !t.fait && diffDays(t.echeance) <= 0 && t.canal === 'appel').length : 0;
-    fait.push(`${n} brouillon${n > 1 ? 's' : ''} de relance préparé${n > 1 ? 's' : ''} dans Gmail`, canaux.includes('appel') ? `Planning d'appels : ${appels} appel${appels > 1 ? 's' : ''}` : 'Appels non traités (désactivés dans les paramètres)', 'Brief du jour produit');
+    fait.push(`${n} brouillon${n > 1 ? 's' : ''} de relance préparé${n > 1 ? 's' : ''} dans Gmail`, canaux.includes('appel') ? `Planning d'appels : ${appels} appel${appels > 1 ? 's' : ''}` : 'Appels non traités (désactivés dans Paramètres)', 'Brief du jour produit');
   } else if (!R.err) fait.push(...x.etapes.map(e => e + ' : fait'));
   R.n = n || pending();
   R.bilan = x.id === 'r-quot' ? `${fait[0]}. ${pending()} élément${pending() > 1 ? 's' : ''} en attente de votre décision.` : 'Routine terminée. Rien n\'a été envoyé.';
@@ -135,6 +103,68 @@ function finRoutine(x, R) {
   x.rapport = { fait: R.err ? x.etapes.slice(0, R.k) : fait, attente: [`${pending()} élément${pending() > 1 ? 's' : ''} à valider`], echec: R.err ? [R.err] : [] };
   logAction(`Routine Claude exécutée : ${x.nom}${R.err ? ' (arrêtée)' : ''}`, 'L3', 'os');
 }
+
+/* ---------- Paramètres : connexions et réglages des routines, par instance ---------- */
+const OBJETS_CRM = [['entreprises', 'Entreprises'], ['contacts', 'Contacts'], ['transactions', 'Transactions (pipeline)'], ['taches', 'Tâches'], ['notes', 'Notes'], ['emails', 'Emails enregistrés']];
+const champ = (f, v, attrs) => {
+  if (f.t === 'select') return `<label class="field"><span>${f.l}</span><select class="input" ${attrs}>${f.o.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+  if (f.t === 'number') return `<label class="field"><span>${f.l}</span><span style="display:flex;gap:8px;align-items:center"><input class="input num" style="width:100px" type="number" min="${f.min}" max="${f.max}" value="${v}" ${attrs}><span class="small muted">${f.u}</span></span></label>`;
+  if (f.t === 'checks') return `<div class="field"><span>${f.l}</span><div class="checks-row">${f.o.map(([k, l]) => `<label class="check"><input type="checkbox" value="${k}" ${(v || []).includes(k) ? 'checked' : ''} ${attrs}><span>${l}</span></label>`).join('')}</div></div>`;
+  return `<label class="check"><input type="checkbox" ${v ? 'checked' : ''} ${attrs}><span>${f.l}</span></label>`;
+};
+const verrou = txt => `<div class="lock" style="margin-top:6px">${ic('lock')}${txt}</div>`;
+
+VIEWS.parametres = () => {
+  const inst = INST(), R = D().reglages, tab = S.paramTab || 'connexions';
+  const etat = c => connEtat(c) === 'ok' ? '<span class="badge green">Connecté</span>' : `<span class="badge amber">Non configuré</span>`;
+  const conn = c => {
+    const [k, nom] = c, ok = connEtat(c) === 'ok';
+    const head = `<div class="panel-h"><div><h2>${esc(nom)}</h2><div class="small muted">${esc(k)}</div></div>${etat(c)}</div>`;
+    if (!ok) return `<div class="panel">${head}<div class="panel-b"><p style="margin-top:0">Sans cette connexion, les routines s'arrêtent à l'étape qui en a besoin. Rien ne part depuis la boîte d'une autre instance.</p><button class="btn primary" data-act="conn-on" data-k="${esc(k)}">Connecter</button></div></div>`;
+    if (k === 'CRM' && inst.crm) return `<div class="panel">${head}<div class="panel-b">
+      <div class="grid g2">${champ({ t: 'select', l: 'Fréquence de synchronisation', o: ['Toutes les 5 minutes', 'Toutes les 15 minutes', 'Toutes les heures', 'Une fois par jour', 'À la demande seulement'] }, R.crm.freq, 'data-change="reg" data-g="crm" data-k="freq"')}
+      ${champ({ t: 'select', l: 'Sens', o: ['Dans les deux sens', `De ${inst.crm} vers l'OS (lecture seule)`] }, R.crm.sens, 'data-change="reg" data-g="crm" data-k="sens"')}</div>
+      ${champ({ t: 'checks', l: 'Objets synchronisés', o: OBJETS_CRM }, R.crm.objets, 'data-change="reg-list" data-g="crm" data-k="objets"')}
+      <div class="field"><span>Champs synchronisés ${tip(`Décochez un champ pour l'exclure : l'OS ne le lit plus et ne l'écrit jamais dans ${inst.crm}.`)}</span><div class="checks-row">${CHAMPS_CRM.map(f => `<label class="check"><input type="checkbox" ${R.crm.exclus.includes(f) ? '' : 'checked'} data-change="reg-champ" data-f="${esc(f)}"><span>${esc(f)}</span></label>`).join('')}</div></div>
+      ${verrou(`${inst.crm} fait foi en cas d'écart. Aucune suppression n'est jamais écrite.`)}</div>
+      <div class="decision"><button class="btn" data-act="crm-sync">Synchroniser maintenant</button><span class="hint">Dernière synchronisation : ${S.sync?.[S.inst] ? 'à l\'instant' : 'il y a 5 min'}.</span></div></div>`;
+    if (k === 'CRM' || k === 'Pipeline') return `<div class="panel">${head}<div class="panel-b"><p style="margin:0">${inst.demo ? 'Données fictives de démonstration.' : 'Pas de CRM chez ce client : pipeline, entreprises et contacts sont tenus par l\'OS. Rien à synchroniser.'}</p></div></div>`;
+    if (k === 'Messagerie') return `<div class="panel">${head}<div class="panel-b"><div class="grid g2">
+      ${champ({ t: 'select', l: 'Historique lu', o: ['3 mois', '12 mois', '24 mois'] }, R.gmail.histo, 'data-change="reg" data-g="gmail" data-k="histo"')}
+      ${champ({ t: 'select', l: 'Contenu lu', o: ['Extraits seulement', 'Corps complet'] }, R.gmail.contenu, 'data-change="reg" data-g="gmail" data-k="contenu"')}</div>
+      ${verrou('Brouillons créés sans signature : Gmail ajoute la vôtre.')}${verrou('Aucun envoi direct : vous envoyez depuis Gmail.')}</div></div>`;
+    return `<div class="panel">${head}<div class="panel-b"><div class="grid g2">
+      ${champ({ t: 'select', l: 'Calendriers lus', o: ['Agenda principal', 'Agenda principal et agendas partagés'] }, R.agenda.calendriers, 'data-change="reg" data-g="agenda" data-k="calendriers"')}
+      ${champ({ t: 'number', l: 'Marge autour des rendez-vous', min: 0, max: 60, u: 'minutes' }, R.agenda.tampon, 'data-change="reg-num" data-g="agenda" data-k="tampon" data-min="0" data-max="60"')}</div>
+      ${verrou('L\'OS lit les disponibilités ; il ne crée un rendez-vous qu\'après votre accord.')}</div></div>`;
+  };
+  const routine = x => `<div class="panel"><div class="panel-h"><div><h2>${esc(x.nom)}</h2><div class="small muted">${esc(rythme(x))}</div></div>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${x.actif ? 'checked' : ''} data-change="rt-toggle" data-id="${x.id}" style="accent-color:var(--teal)">${x.actif ? 'Active' : 'En pause'}</label></div>
+    <div class="panel-b">${(PARAMS_DEF[x.id] || []).map(f => champ(f, x.params[f.k], `data-change="rt-param" data-id="${x.id}" data-k="${f.k}"`)).join('') || '<p class="muted small" style="margin:0">Rien à régler.</p>'}</div></div>`;
+  return {
+    title: 'Paramètres',
+    actions: `<div class="seg"><button class="${tab === 'connexions' ? 'on' : ''}" data-act="param-tab" data-tab="connexions">Connexions</button><button class="${tab === 'routines' ? 'on' : ''}" data-act="param-tab" data-tab="routines">Routines Claude</button></div>`,
+    body: `<div class="alert blue" style="margin-bottom:18px">${ic('lock')}<div>Réglages de <b>${esc(inst.nom)}</b> uniquement. Chaque instance a ses propres connexions ; les accès eux-mêmes ne sont jamais stockés dans l'OS.</div></div>
+      ${tab === 'connexions' ? `<div class="stack">${(inst.conn || []).map(conn).join('')}</div>`
+        : `<div class="grid g2">${D().routines.map(routine).join('')}</div><p class="small muted" style="margin-top:12px">Les règles de rédaction (vouvoiement, sans signature, contrôles avant envoi) restent celles des skills Claude.</p>`}`
+  };
+};
+const setParam = (x, f, el) => {
+  if (f.t === 'checks') x.params[f.k] = [...document.querySelectorAll(`[data-change="rt-param"][data-id="${x.id}"][data-k="${f.k}"]:checked`)].map(i => i.value);
+  else if (f.t === 'bool') x.params[f.k] = el.checked;
+  else if (f.t === 'number') { const n = +el.value; x.params[f.k] = Math.min(f.max, Math.max(f.min, isNaN(n) ? f.min : n)); }
+  else x.params[f.k] = el.value;
+};
+const saved = () => { const y = scrollY; render(); scrollTo(0, y); toast('Réglage enregistré'); };
+Object.assign(ACTIONS, {
+  'param-tab': ds => { S.paramTab = ds.tab; render(); },
+  'rt-param': (ds, el) => { const x = byId(D().routines, ds.id); setParam(x, PARAMS_DEF[x.id].find(f => f.k === ds.k), el); x.rythme = rythme(x); logAction(`Réglage modifié : ${x.nom}`, 'L2'); saved(); },
+  reg: (ds, el) => { D().reglages[ds.g][ds.k] = el.value; logAction(`Connexion réglée : ${ds.g}, ${ds.k}`, 'L2'); saved(); },
+  'reg-num': (ds, el) => { const n = +el.value; D().reglages[ds.g][ds.k] = Math.min(+ds.max, Math.max(+ds.min, isNaN(n) ? +ds.min : n)); saved(); },
+  'reg-list': (ds, el) => { const l = D().reglages[ds.g][ds.k]; D().reglages[ds.g][ds.k] = el.checked ? [...new Set([...l, el.value])] : l.filter(v => v !== el.value); saved(); },
+  'reg-champ': (ds, el) => { const c = D().reglages.crm; c.exclus = el.checked ? c.exclus.filter(f => f !== ds.f) : [...c.exclus, ds.f]; logAction(`Champ ${el.checked ? 'synchronisé' : 'exclu'} : ${ds.f}`, 'L2'); saved(); },
+  'conn-on': ds => { (D().reglages.etat = D().reglages.etat || {})[ds.k] = 'ok'; logAction(`Connexion établie (simulée) : ${ds.k}`, 'L2'); render(); toast('Connexion établie (simulation)'); }
+});
 
 /* ---------- Autonomie ---------- */
 VIEWS.autonomie = () => {

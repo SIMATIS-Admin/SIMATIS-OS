@@ -9,7 +9,7 @@ function conversions(opps) {
   const atteint = k => opps.filter(o => rang(o) >= k).length;
   return ETAPES.map((e, k) => { const den = atteint(k); return den ? Math.round(atteint(k + 1) / den * 100) : null; });
 }
-const MIROIR_TIP = (crm, quoi = 'Ce pipeline est le reflet exact du pipeline') => `${quoi} ${crm} de l'instance, qui fait foi. Ce que vous changez ici est écrit dans ${crm} ; ce qui change dans ${crm} remonte ici à chaque synchronisation (toutes les 15 minutes, ou à la demande).`;
+const MIROIR_TIP = (crm, quoi = 'Ce pipeline est le reflet exact du pipeline') => `${quoi} ${crm} de l'instance, qui fait foi. Ce que vous changez ici est écrit dans ${crm} ; ce qui change dans ${crm} remonte ici à chaque synchronisation (${D().reglages.crm.freq.toLowerCase()}, ou à la demande ; réglable dans Paramètres).`;
 /* Badge et bouton de synchronisation, communs au pipeline, aux entreprises et aux contacts d'une instance sous CRM. */
 const miroir = quoi => INST().crm ? `<span class="badge blue">Miroir ${INST().crm}, synchronisé ${S.sync?.[S.inst] ? 'à l\'instant' : 'il y a 5 min'}</span>${tip(MIROIR_TIP(INST().crm, quoi))}<button class="btn" data-act="crm-sync">Synchroniser</button>` : '';
 const CONV_TIP = "Taux de conversion : part des opportunités arrivées à l'étape de gauche qui ont atteint l'étape de droite. Les affaires ouvertes, gagnées et perdues sont toutes comptées ; une affaire perdue compte jusqu'à l'étape où elle s'est arrêtée.";
