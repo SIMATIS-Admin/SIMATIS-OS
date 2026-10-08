@@ -10,13 +10,22 @@ export default tseslint.config(
     languageOptions: {
       globals: globals.node,
       parserOptions: {
-        projectService: { allowDefaultProject: ['eslint.config.js'] },
+        projectService: { allowDefaultProject: ['eslint.config.js', 'scripts/*.cjs'] },
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    files: ['eslint.config.js'],
+    files: ['eslint.config.js', 'scripts/*.cjs'],
     ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    files: ['scripts/*.cjs'],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
+    files: ['web/**/*.{ts,tsx}'],
+    languageOptions: { globals: globals.browser },
   },
 );

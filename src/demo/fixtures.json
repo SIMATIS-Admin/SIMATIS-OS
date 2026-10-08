@@ -1,0 +1,418 @@
+[
+  {
+    "slug": "simatis",
+    "nom": "SIMATIS",
+    "type": "propre",
+    "config": {
+      "sous": "Mon activité",
+      "couleur": "#41A594",
+      "modules": ["diagnostic", "devis"]
+    },
+    "entreprises": [
+      {
+        "ref": "s1",
+        "nom": "Ateliers Morvan",
+        "secteur": "Chaudronnerie",
+        "ville": "Villefranche-sur-Saône",
+        "taille": 45,
+        "domaine": "ateliers-morvan.fr"
+      },
+      {
+        "ref": "s2",
+        "nom": "Lumibat Systèmes",
+        "secteur": "Éclairage industriel",
+        "ville": "Grenoble",
+        "taille": 30,
+        "domaine": "lumibat.fr"
+      },
+      {
+        "ref": "s3",
+        "nom": "Transports Gérard & Fils",
+        "secteur": "Transport routier",
+        "ville": "Valence",
+        "taille": 70,
+        "domaine": "gerard-transports.fr"
+      },
+      {
+        "ref": "s4",
+        "nom": "Oxalis Conseil",
+        "secteur": "Conseil RH",
+        "ville": "Lyon",
+        "taille": 12,
+        "domaine": "oxalis-conseil.fr"
+      },
+      {
+        "ref": "s5",
+        "nom": "Mécanique Bréval",
+        "secteur": "Usinage de précision",
+        "ville": "Annecy",
+        "taille": 58,
+        "domaine": "breval-meca.fr"
+      },
+      {
+        "ref": "s6",
+        "nom": "Vitrage Rhodanien",
+        "secteur": "Miroiterie",
+        "ville": "Vienne",
+        "taille": 25,
+        "domaine": "vitrage-rhodanien.fr"
+      },
+      {
+        "ref": "s7",
+        "nom": "Bio Sillon",
+        "secteur": "Agroalimentaire",
+        "ville": "Bourg-en-Bresse",
+        "taille": 40,
+        "domaine": "biosillon.fr"
+      },
+      {
+        "ref": "s8",
+        "nom": "Kéramos Industrie",
+        "secteur": "Céramique technique",
+        "ville": "Limoges",
+        "taille": 85,
+        "domaine": "keramos-industrie.fr"
+      },
+      {
+        "ref": "s9",
+        "nom": "Tôlerie Achard",
+        "secteur": "Tôlerie fine",
+        "ville": "Roanne",
+        "taille": 36,
+        "domaine": "tolerie-achard.fr"
+      },
+      {
+        "ref": "s10",
+        "nom": "Distillerie Vauclair",
+        "secteur": "Boissons",
+        "ville": "Die",
+        "taille": 28,
+        "domaine": "distillerie-vauclair.fr"
+      },
+      {
+        "ref": "s11",
+        "nom": "Plasturgie Mornand",
+        "secteur": "Plasturgie",
+        "ville": "Oyonnax",
+        "taille": 64,
+        "domaine": "mornand-plasturgie.fr"
+      },
+      {
+        "ref": "s12",
+        "nom": "Électro-Savoie Services",
+        "secteur": "Maintenance électrique",
+        "ville": "Chambéry",
+        "taille": 42,
+        "domaine": "electro-savoie.fr"
+      }
+    ],
+    "contacts": [
+      {
+        "entreprise": "s1",
+        "nom": "Hélène Morvan",
+        "fonction": "Dirigeante",
+        "email": "h.morvan@ateliers-morvan.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s2",
+        "nom": "Julien Roux",
+        "fonction": "Gérant",
+        "email": "j.roux@lumibat.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s3",
+        "nom": "Sandrine Gérard",
+        "fonction": "Directrice générale",
+        "email": "s.gerard@gerard-transports.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s4",
+        "nom": "Thomas Weber",
+        "fonction": "Associé fondateur",
+        "email": "t.weber@oxalis-conseil.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s5",
+        "nom": "Pierre Bréval",
+        "fonction": "Président",
+        "email": "p.breval@breval-meca.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s6",
+        "nom": "Nadia Benali",
+        "fonction": "Directrice administrative",
+        "email": "n.benali@vitrage-rhodanien.fr",
+        "role": "Prescriptrice"
+      },
+      {
+        "entreprise": "s7",
+        "nom": "François Lacroix",
+        "fonction": "Dirigeant",
+        "email": "f.lacroix@biosillon.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s8",
+        "nom": "Claire Dumas",
+        "fonction": "Directrice commerciale adjointe",
+        "email": "c.dumas@keramos-industrie.fr",
+        "role": "Influenceuse"
+      },
+      {
+        "entreprise": "s9",
+        "nom": "Didier Achard",
+        "fonction": "Gérant",
+        "email": "d.achard@tolerie-achard.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s10",
+        "nom": "Agnès Vauclair",
+        "fonction": "Présidente",
+        "email": "a.vauclair@distillerie-vauclair.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s11",
+        "nom": "Karim Haddad",
+        "fonction": "Directeur général",
+        "email": "k.haddad@mornand-plasturgie.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "s12",
+        "nom": "Élodie Brun",
+        "fonction": "Directrice",
+        "email": "e.brun@electro-savoie.fr",
+        "role": "Décideur"
+      }
+    ]
+  },
+  {
+    "slug": "helioval",
+    "nom": "Helioval",
+    "type": "mandat",
+    "config": {
+      "sous": "Mandat fictif : bureau d'études",
+      "couleur": "#4C8DD6",
+      "modules": ["relais"]
+    },
+    "entreprises": [
+      {
+        "ref": "h1",
+        "nom": "Fonderies du Gier",
+        "secteur": "Fonderie",
+        "ville": "Rive-de-Gier",
+        "taille": 120,
+        "domaine": "fonderies-gier.fr"
+      },
+      {
+        "ref": "h2",
+        "nom": "Laiterie Saint-Rambert",
+        "secteur": "Agroalimentaire",
+        "ville": "Saint-Rambert",
+        "taille": 90,
+        "domaine": "laiterie-strambert.fr"
+      },
+      {
+        "ref": "h3",
+        "nom": "Polytherm",
+        "secteur": "Plasturgie",
+        "ville": "Oyonnax",
+        "taille": 150,
+        "domaine": "polytherm.fr"
+      },
+      {
+        "ref": "h4",
+        "nom": "Clinique des Monts",
+        "secteur": "Santé privée",
+        "ville": "Chambéry",
+        "taille": 210,
+        "domaine": "clinique-monts.fr"
+      },
+      {
+        "ref": "h5",
+        "nom": "Imprimerie Vercors",
+        "secteur": "Imprimerie",
+        "ville": "Romans",
+        "taille": 48,
+        "domaine": "imprimerie-vercors.fr"
+      },
+      {
+        "ref": "h6",
+        "nom": "Scierie Bellecombe",
+        "secteur": "Bois",
+        "ville": "Albertville",
+        "taille": 35,
+        "domaine": "scierie-bellecombe.fr"
+      }
+    ],
+    "contacts": [
+      {
+        "entreprise": "h1",
+        "nom": "Marc-Antoine Ferrand",
+        "fonction": "Directeur industriel",
+        "email": "ma.ferrand@fonderies-gier.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "h2",
+        "nom": "Isabelle Chomel",
+        "fonction": "Responsable QSE",
+        "email": "i.chomel@laiterie-strambert.fr",
+        "role": "Prescriptrice"
+      },
+      {
+        "entreprise": "h3",
+        "nom": "Rémi Garnier",
+        "fonction": "Directeur de site",
+        "email": "r.garnier@polytherm.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "h4",
+        "nom": "Sophie Martel",
+        "fonction": "Directrice des services techniques",
+        "email": "s.martel@clinique-monts.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "h5",
+        "nom": "Yann Le Goff",
+        "fonction": "Gérant",
+        "email": "y.legoff@imprimerie-vercors.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "h6",
+        "nom": "Olivier Bellecombe",
+        "fonction": "Dirigeant",
+        "email": "o.bellecombe@scierie-bellecombe.fr",
+        "role": "Décideur"
+      }
+    ]
+  },
+  {
+    "slug": "aquaterra",
+    "nom": "Aquaterra",
+    "type": "mandat",
+    "config": {
+      "sous": "Mandat fictif : équipements",
+      "couleur": "#9A7BE0",
+      "modules": ["demarrage"]
+    },
+    "entreprises": [
+      {
+        "ref": "a1",
+        "nom": "GAEC des Trois Sources",
+        "secteur": "Exploitation agricole",
+        "ville": "Bourg-en-Bresse",
+        "taille": 6,
+        "domaine": "gaec-troissources.fr"
+      },
+      {
+        "ref": "a2",
+        "nom": "Pépinières Valmont",
+        "secteur": "Horticulture",
+        "ville": "Montélimar",
+        "taille": 22,
+        "domaine": "pepinieres-valmont.fr"
+      },
+      {
+        "ref": "a3",
+        "nom": "Golf du Lac Bleu",
+        "secteur": "Loisirs",
+        "ville": "Annecy",
+        "taille": 15,
+        "domaine": "golf-lacbleu.fr"
+      }
+    ],
+    "contacts": [
+      {
+        "entreprise": "a1",
+        "nom": "Bernard Guichard",
+        "fonction": "Associé gérant",
+        "email": "b.guichard@gaec-troissources.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "a2",
+        "nom": "Léa Valmont",
+        "fonction": "Dirigeante",
+        "email": "l.valmont@pepinieres-valmont.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "a3",
+        "nom": "Hugo Carrel",
+        "fonction": "Directeur",
+        "email": "h.carrel@golf-lacbleu.fr",
+        "role": "Décideur"
+      }
+    ]
+  },
+  {
+    "slug": "demo",
+    "nom": "Dupont Industrie",
+    "type": "prospect",
+    "config": {
+      "sous": "Mandat prospect fictif",
+      "couleur": "#E3A33B",
+      "modules": ["diagnostic"]
+    },
+    "entreprises": [
+      {
+        "ref": "d1",
+        "nom": "Métallerie Roche",
+        "secteur": "Métallerie",
+        "ville": "Lyon",
+        "taille": 38,
+        "domaine": "metallerie-roche.fr"
+      },
+      {
+        "ref": "d2",
+        "nom": "Agro Delta",
+        "secteur": "Agroalimentaire",
+        "ville": "Mâcon",
+        "taille": 64,
+        "domaine": "agrodelta.fr"
+      },
+      {
+        "ref": "d3",
+        "nom": "Cartonnages Rival",
+        "secteur": "Emballage",
+        "ville": "Saint-Étienne",
+        "taille": 52,
+        "domaine": "cartonnages-rival.fr"
+      }
+    ],
+    "contacts": [
+      {
+        "entreprise": "d1",
+        "nom": "Laurent Roche",
+        "fonction": "Gérant",
+        "email": "l.roche@metallerie-roche.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "d2",
+        "nom": "Camille Faure",
+        "fonction": "Directrice des achats",
+        "email": "c.faure@agrodelta.fr",
+        "role": "Décideur"
+      },
+      {
+        "entreprise": "d3",
+        "nom": "Antoine Rival",
+        "fonction": "Président",
+        "email": "a.rival@cartonnages-rival.fr",
+        "role": "Décideur"
+      }
+    ]
+  }
+]

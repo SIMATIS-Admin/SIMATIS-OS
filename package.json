@@ -9,20 +9,24 @@
   },
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && vite build",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "dev:web": "vite"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.5",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.5",
     "pg": "^8.23.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -30,6 +34,9 @@
     "@testcontainers/postgresql": "^12.2.0",
     "@types/node": "^24.19.1",
     "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.12.0",
     "globals": "^17.13.0",
@@ -37,6 +44,7 @@
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",
+    "vite": "^8.3.4",
     "vitest": "^5.0.3"
   }
 }
