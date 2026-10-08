@@ -64,6 +64,20 @@
       "when": 1791483182196,
       "tag": "0008_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791483872722,
+      "tag": "0009_crm_opportunites",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791483892464,
+      "tag": "0010_vues_opportunites",
+      "breakpoints": true
     }
   ]
 }

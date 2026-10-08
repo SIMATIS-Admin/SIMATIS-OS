@@ -6,6 +6,10 @@ export const VUES = {
   v_entreprises: 'id, nom, secteur, ville, taille, domaine, source, created_at, updated_at',
   v_contacts:
     'id, entreprise_id, nom, fonction, email, telephone, role, source, created_at, updated_at',
+  v_opportunites:
+    'id, entreprise_id, contact_id, titre, etape, montant, echeance, clos, motif, origine, potentiel, faisabilite, prochaine_etape, source, created_at, updated_at',
+  v_taches:
+    'id, opportunite_id, contact_id, titre, canal, echeance, fait_at, prepare, source, created_at',
   v_propositions: 'id, type, contenu, auteur, statut, niveau, decide_par, decide_at, created_at',
   v_journal: 'id, at, acteur, action, niveau, details',
 };

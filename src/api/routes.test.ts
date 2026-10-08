@@ -15,7 +15,7 @@ describe('API instances, entreprises, contacts', () => {
     const response = await app.inject({ method: 'GET', url });
     return { status: response.statusCode, body: response.json<Row[] & Row>() };
   };
-  const send = async (method: 'PUT' | 'PATCH', url: string, payload: unknown) => {
+  const send = async (method: 'PUT' | 'PATCH' | 'POST', url: string, payload: unknown) => {
     const response = await app.inject({ method, url, payload: payload as object });
     return { status: response.statusCode, body: response.json<Row>() };
   };
@@ -123,5 +123,29 @@ describe('API instances, entreprises, contacts', () => {
     expect(String(journal.body[0]?.action)).toMatch(/renommée/);
     expect((await send('PATCH', '/api/i/simatis/instance', { nom: 'Autre' })).status).toBe(400);
     expect((await send('PATCH', '/api/i/aquaterra/instance', { nom: '' })).status).toBe(400);
+  });
+
+  it('opens a company sheet, but never one of another instance', async () => {
+    const [plasturgie] = (await get('/api/i/simatis/entreprises?q=plast')).body;
+    const id = String(plasturgie?.id);
+    const fiche = await get(`/api/i/simatis/entreprises/${id}`);
+    expect(fiche.status).toBe(200);
+    expect(fiche.body).toMatchObject({ nom: 'Plasturgie Mornand' });
+    expect((await get(`/api/i/helioval/entreprises/${id}`)).status).toBe(404);
+    expect((await get('/api/i/simatis/entreprises/pas-un-uuid')).status).toBe(404);
+  });
+
+  it('creates a contact in an instance without CRM, and validates the fields', async () => {
+    const created = await send('POST', '/api/i/aquaterra/contacts', {
+      nom: 'Paul Brunet',
+      fonction: 'Gérant',
+      email: 'p.brunet@exemple.test',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ nom: 'Paul Brunet', source: 'natif' });
+    expect((await send('POST', '/api/i/aquaterra/contacts', { nom: '' })).status).toBe(400);
+    expect(
+      (await send('POST', '/api/i/aquaterra/contacts', { nom: 'X', email: 'pas-un-email' })).status,
+    ).toBe(400);
   });
 });
