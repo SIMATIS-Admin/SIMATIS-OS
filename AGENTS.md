@@ -5,7 +5,7 @@ Système d'exploitation interne de SIMATIS (direction commerciale en mode partag
 
 ## Vérifier son travail
 
-    npm run verify      # lint, types, tests unitaires, build (créé au lot 0)
+    npm run verify      # format, lint, types, tests, build
 
 Committer seulement un changement vérifié. La CI rejoue ces commandes sur chaque PR. Un changement d'interface se vérifie aussi dans le navigateur, pas seulement par les tests.
 
