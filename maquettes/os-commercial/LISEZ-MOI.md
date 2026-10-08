@@ -14,14 +14,15 @@ Priorité actuelle : l'activité commerciale de SIMATIS. Les écrans en favoris 
 
 | Écran | Ce qu'il montre |
 | --- | --- |
-| **Routines Claude** | En tête du menu. Les connexions de l'instance (CRM, Gmail, agenda) et les routines, à lancer d'un clic : relance quotidienne, nettoyage des tâches, revues. Bouton « Paramètres » : heure, jours, tâches traitées, nombre de brouillons, créneaux proposés. Sans Gmail configuré (Aquaterra), la routine s'arrête au lieu d'utiliser une autre boîte. |
-| **Brief du jour** | Ce qui vous attend ce matin et les tâches réalisées (hier, 7 jours, 30 jours), avec le détail emails et appels. |
+| **Routines Claude** | En tête du menu. Les connexions de l'instance (CRM, Gmail, agenda) et les routines, à lancer d'un clic : relance quotidienne, nettoyage des tâches, revues. Sans Gmail configuré (Aquaterra), la routine s'arrête au lieu d'utiliser une autre boîte. |
+| **Brief du jour** | Votre journée : rendez-vous et tâches du jour issues de HubSpot, filtrables par canal, avec le bouton pour lancer la routine quotidienne. À côté, les tâches réalisées (hier, 7 jours, 30 jours), détail emails et appels. |
 | **À valider** | Les relances à planifier et les brouillons à envoyer. Vous validez, modifiez ou écartez. Les brouillons Gmail sont créés sans signature. |
 | **Tableau de bord** | L'entonnoir lead → prospect → devis → commande, avec curseurs pour simuler l'objectif annuel. |
 | **Prospection** | Règles de sélection explicites (base utilisée, ciblage, exclusions), simulation, puis lot de brouillons. |
 | **Bases vivantes** | Ce qu'est une base vivante, statuts, import, enrichissement, instantanés. Branchement à la base de données commune à venir. |
 | **Pipeline** | Étapes en glisser-déposer avec le taux de conversion entre chaque étape, colonnes Gagnées et Perdues ; ou matrice potentiel × faisabilité. Pour un mandat sous HubSpot (Helioval), le pipeline est le miroir de HubSpot, avec synchronisation à la demande. |
 | **Entreprises, Contacts** | Les fiches de l'instance, avec recherche. Sous HubSpot (Mon activité, Helioval), ce sont des miroirs de HubSpot, comme le pipeline. |
+| **Paramètres** | Par instance. Connexions : HubSpot (fréquence, sens, objets et champs synchronisés), Gmail, agenda. Routines Claude : heure, jours, tâches traitées, brouillons, créneaux. |
 | **Rendez-vous** | Préparation (questions selon les trous de qualification, binôme) et compte rendu. |
 | **Devis** | Brique propre à l'activité SIMATIS, absente des mandats. L'OS prépare les lignes, vous fixez les prix. |
 | **Relais internes** | Points mensuels avec les experts du mandat (instance Helioval). |

@@ -3,7 +3,6 @@
 const late = () => D().taches.filter(t => !t.fait && diffDays(t.echeance) < 0);
 const todayTasks = () => D().taches.filter(t => !t.fait && diffDays(t.echeance) === 0);
 const rdvToday = () => D().rdv.filter(r => diffDays(r.date) === 0);
-const devisARelancer = () => !allowed('devis') ? [] : D().devis.filter(d => d.statut === 'transmis' && diffDays(d.envoye) <= -10);
 
 /* Tâches réalisées sur une période : emails, appels et autres tâches (historique de l'outil du mandat). */
 function activite(depuis, jusqua = 0) {
@@ -13,44 +12,37 @@ function activite(depuis, jusqua = 0) {
 }
 const dernierOuvre = () => { const d = new Date(TODAY); do d.setDate(d.getDate() - 1); while (d.getDay() === 0 || d.getDay() === 6); return iso(d); };
 
+const CANAL = { email: ['send', 'Email'], appel: ['phone', 'Appel'], 'tâche': ['check', 'Tâche'] };
 VIEWS.brief = () => {
-  const d = D(), inst = INST();
-  const nV = pending(), nL = late().length, nR = rdvToday().length, nD = devisARelancer().length;
-  const jour = TODAY.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const phrase = [nV && `${nV} décision${nV > 1 ? 's' : ''} vous attend${nV > 1 ? 'ent' : ''}`, nL && `${nL} tâche${nL > 1 ? 's' : ''} en retard`, nR && `${nR} rendez-vous aujourd'hui`].filter(Boolean);
-  const routine = d.routines[0];
-  const items = [
-    ...rdvToday().map(r => ({ t: r.heure, html: `<b>${esc(r.titre)}</b><div class="small muted">${esc(r.lieu)}${r.binome ? ', en binôme avec ' + esc(r.binome) : ''}</div>`, act: `<button class="btn sm" data-act="rdv-prep" data-id="${r.id}">Préparer</button>` })),
-    ...late().map(t => ({ t: '<span class="late">Retard</span>', html: `<b>${esc(t.titre)}</b><div class="small muted">Échue ${rel(t.echeance)}, ${t.canal}</div>`, act: `<button class="btn sm" data-act="task-done" data-id="${t.id}">Marquer fait</button>` })),
-    ...todayTasks().map(t => ({ t: 'Jour', html: `<b>${esc(t.titre)}</b><div class="small muted">${t.canal === 'appel' ? 'Fiche d\'appel prête' : t.canal}</div>`, act: `<button class="btn sm" data-act="task-done" data-id="${t.id}">Marquer fait</button>` }))
-  ];
+  const inst = INST(), f = S.briefF || 'tout';
+  const src = inst.crm ? `Tâches ${inst.crm}` : 'Tâches de l\'OS';
+  const taches = [...late(), ...todayTasks()].filter(t => f === 'tout' || t.canal === f);
+  const nb = k => [...late(), ...todayTasks()].filter(t => k === 'tout' || t.canal === k).length;
+  const rdv = rdvToday();
+  const ligne = t => {
+    const o = t.opp ? byId(D().opps, t.opp) : null, c = o ? contact(o.contact) : null, [ico, lbl] = CANAL[t.canal] || CANAL['tâche'];
+    const ech = diffDays(t.echeance) < 0 ? `<span class="late">En retard, échue ${rel(t.echeance)}</span>` : 'Aujourd\'hui';
+    return `<li><span class="canal" title="${lbl}">${ic(ico)}</span><div>${o ? `<button class="link strong" data-act="opp" data-id="${o.id}">${esc(t.titre)}</button>` : `<b>${esc(t.titre)}</b>`}
+      <div class="small muted">${c ? esc(c.nom) + ', ' + esc(soc(o.soc).nom) + ' · ' : ''}${ech}${t.prepare ? ' · <span class="badge green">Brouillon prêt dans Gmail</span>' : ''}</div></div>
+      <button class="btn sm" data-act="task-done" data-id="${t.id}">Marquer fait</button></li>`;
+  };
   const veille = dernierOuvre(), nVeille = diffDays(veille);
   const per = [
-    { l: diffDays(veille) === -1 ? 'Hier' : 'Dernier jour ouvré', s: fdate(veille), v: activite(nVeille, nVeille) },
+    { l: nVeille === -1 ? 'Hier' : 'Dernier jour ouvré', s: fdate(veille), v: activite(nVeille, nVeille) },
     { l: '7 derniers jours', s: 'avec aujourd\'hui', v: activite(-6) },
     { l: '30 derniers jours', s: 'avec aujourd\'hui', v: activite(-29) }
   ];
-  const auj = activite(0);
+  const auj = activite(0), quot = D().routines.find(r => r.id === 'r-quot');
   return {
     title: 'Brief du jour',
-    body: `
-    <section class="brief-hero">
-      <div style="position:relative;z-index:1">
-        <h1>Bonjour, nous sommes ${jour}.</h1>
-        <p class="lead">${phrase.length ? phrase.join(', ') + '.' : 'Rien ne vous attend ce matin.'}</p>
-        <p>La routine de ${(routine.params?.heure) || '7h00'} a préparé le terrain. Rien n'a été envoyé : tout ce qui engage attend votre décision.</p>
-      </div>
-      <div class="brief-counts">
-        <button data-act="go" data-v="validations"><span class="n">${nV}</span><span class="l">à valider</span></button>
-        <button data-act="go" data-v="pipeline" class="${nL ? 'warn' : ''}"><span class="n">${nL}</span><span class="l">tâches en retard</span></button>
-        <button data-act="go" data-v="agenda"><span class="n">${nR}</span><span class="l">rendez-vous aujourd'hui</span></button>
-        ${allowed('devis') ? `<button data-act="go" data-v="devis"><span class="n">${nD}</span><span class="l">devis à relancer</span></button>` : ''}
-      </div>
-    </section>
-    <div class="grid g-main" style="margin-top:18px">
-      <div class="panel"><div class="panel-h"><h2>Votre journée</h2><span class="muted small">${items.length} élément${items.length > 1 ? 's' : ''}</span></div>
-        <div class="panel-b">${items.length ? `<ul class="timeline">${items.map(i => `<li><span class="t">${i.t}</span><div>${i.html}</div>${i.act}</li>`).join('')}</ul>` : '<div class="empty">Journée libre.</div>'}</div></div>
-      <div class="panel"><div class="panel-h"><h2>Tâches réalisées ${tip(`Tâches marquées faites dans ${inst.outil}, par canal. Les autres tâches regroupent tout ce qui n'est ni un email ni un appel (préparation, mise à jour, rendez-vous).`)}</h2>${auj.total ? `<span class="small muted">Aujourd'hui : <b class="num">${auj.total}</b></span>` : ''}</div>
+    actions: quot ? `<button class="btn primary" data-act="rt-run" data-id="r-quot" ${quot.actif ? '' : 'disabled'}>${ic('play')}Lancer la routine quotidienne</button>` : '',
+    body: `<div class="grid g-main">
+      <div class="panel"><div class="panel-h"><h2>Votre journée <span class="badge ${inst.crm ? 'blue' : ''}">${src}</span></h2><span class="muted small">${nb('tout')} à faire</span></div>
+        <div class="vq-filter">${[['tout', 'Toutes'], ['email', 'Emails'], ['appel', 'Appels'], ['tâche', 'Autres']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="brief-f" data-f="${k}">${l} (${nb(k)})</button>`).join('')}</div>
+        <div class="panel-b">
+          ${rdv.length && f === 'tout' ? `<h4 class="sec-h">Rendez-vous</h4><ul class="tasks">${rdv.map(r => `<li><span class="canal">${ic('cal')}</span><div><b>${r.heure}, ${esc(r.titre)}</b><div class="small muted">${esc(r.lieu)}${r.binome ? ', en binôme avec ' + esc(r.binome) : ''}</div></div><button class="btn sm" data-act="rdv-prep" data-id="${r.id}">Préparer</button></li>`).join('')}</ul><h4 class="sec-h">Tâches du jour</h4>` : ''}
+          ${taches.length ? `<ul class="tasks">${taches.map(ligne).join('')}</ul>` : '<div class="empty">Aucune tâche pour ce filtre.</div>'}</div></div>
+      <div class="panel"><div class="panel-h"><h2>Tâches réalisées ${tip(`Tâches marquées faites dans ${inst.outil}, par canal. Les autres tâches regroupent tout ce qui n'est ni un email ni un appel.`)}</h2>${auj.total ? `<span class="small muted">Aujourd'hui : <b class="num">${auj.total}</b></span>` : ''}</div>
         <div class="panel-b activ">${per.map(p => `<div class="activ-row"><div><b>${p.l}</b><div class="small muted">${p.s}</div></div><div class="activ-n num">${p.v.total}<small>tâches</small></div>
           <div class="activ-d"><span>${ic('send')}<b class="num">${p.v.email}</b> email${p.v.email > 1 ? 's' : ''}</span><span>${ic('phone')}<b class="num">${p.v.appel}</b> appel${p.v.appel > 1 ? 's' : ''}</span><span class="muted"><b class="num">${p.v.autre}</b> autre${p.v.autre > 1 ? 's' : ''}</span></div></div>`).join('')}</div></div>
     </div>`
@@ -61,7 +53,8 @@ Object.assign(ACTIONS, {
   'task-done': ds => {
     const t = byId(D().taches, ds.id); t.fait = true;
     const a = D().activites.find(x => x.date === dp(0)) || (D().activites.unshift({ date: dp(0), email: 0, appel: 0, autre: 0 }), D().activites[0]);
-    a[t.canal === 'email' ? 'email' : t.canal === 'appel' ? 'appel' : 'autre']++; logAction(`Tâche marquée faite : ${t.titre}`, 'L2'); render(); toast('Tâche marquée faite'); }
+    a[t.canal === 'email' ? 'email' : t.canal === 'appel' ? 'appel' : 'autre']++; logAction(`Tâche marquée faite : ${t.titre}`, 'L2'); render(); toast(crmEcrit() ? `Tâche marquée faite dans ${crmEcrit()}` : 'Tâche marquée faite'); },
+  'brief-f': ds => { S.briefF = ds.f; render(); }
 });
 
 /* ---------- File de validation ---------- */

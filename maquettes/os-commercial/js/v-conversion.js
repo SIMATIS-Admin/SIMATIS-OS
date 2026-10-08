@@ -9,7 +9,7 @@ function conversions(opps) {
   const atteint = k => opps.filter(o => rang(o) >= k).length;
   return ETAPES.map((e, k) => { const den = atteint(k); return den ? Math.round(atteint(k + 1) / den * 100) : null; });
 }
-const MIROIR_TIP = (crm, quoi = 'Ce pipeline est le reflet exact du pipeline') => `${quoi} ${crm} de l'instance, qui fait foi. Ce que vous changez ici est écrit dans ${crm} ; ce qui change dans ${crm} remonte ici à chaque synchronisation (toutes les 15 minutes, ou à la demande).`;
+const MIROIR_TIP = (crm, quoi = 'Ce pipeline est le reflet exact du pipeline') => `${quoi} ${crm} de l'instance, qui fait foi. ${crmEcrit() ? `Ce que vous changez ici est écrit dans ${crm}` : 'Synchronisation en lecture seule : rien n\'est écrit dans ' + crm} ; ce qui change dans ${crm} remonte ici à chaque synchronisation (${D().reglages.crm.freq.toLowerCase()}, ou à la demande ; réglable dans Paramètres).`;
 /* Badge et bouton de synchronisation, communs au pipeline, aux entreprises et aux contacts d'une instance sous CRM. */
 const miroir = quoi => INST().crm ? `<span class="badge blue">Miroir ${INST().crm}, synchronisé ${S.sync?.[S.inst] ? 'à l\'instant' : 'il y a 5 min'}</span>${tip(MIROIR_TIP(INST().crm, quoi))}<button class="btn" data-act="crm-sync">Synchroniser</button>` : '';
 const CONV_TIP = "Taux de conversion : part des opportunités arrivées à l'étape de gauche qui ont atteint l'étape de droite. Les affaires ouvertes, gagnées et perdues sont toutes comptées ; une affaire perdue compte jusqu'à l'étape où elle s'est arrêtée.";
@@ -48,7 +48,7 @@ VIEWS.pipeline = () => {
           if (o.etape === cible && !o.clos) return;
           const rouverte = !!o.clos; o.clos = null; o.motif = null; o.etape = cible; o.maj = dp(0);
           logAction(`${rouverte ? 'Opportunité rouverte' : 'Étape changée'} : ${soc(o.soc).nom} → ${ETAPES.find(x => x.id === o.etape).nom}`, 'L2');
-          render(); toast((rouverte ? 'Opportunité rouverte' : 'Étape mise à jour') + (INST().crm ? ` dans ${INST().crm}` : ''));
+          render(); toast((rouverte ? 'Opportunité rouverte' : 'Étape mise à jour') + (crmEcrit() ? ` dans ${crmEcrit()}` : ''));
         });
       });
     }
@@ -168,13 +168,13 @@ function ctDrawer(id) {
     <h3 style="margin-top:18px">Opportunités</h3>${oppLignes(D().opps.filter(o => o.contact === id))}
     <h3 style="margin-top:18px">Tâches ouvertes</h3>${(() => { const ts = D().taches.filter(t => !t.fait && D().opps.some(o => o.id === t.opp && o.contact === id)); return ts.length ? `<ul class="hist">${ts.map(t => `<li><span class="d">${fdate(t.echeance)}</span><span>${esc(t.titre)}</span></li>`).join('')}</ul>` : '<p class="muted small">Aucune.</p>'; })()}`, c.nom);
 }
-const ecritCrm = () => INST().crm ? ` et écrit dans ${INST().crm}` : '';
+const ecritCrm = () => crmEcrit() ? ` et écrit dans ${crmEcrit()}` : '';
 Object.assign(ACTIONS, {
   'crm-q': (ds, el) => { S.crmQ = el.value; const pos = el.selectionStart; render(); const i = document.querySelector('[data-input="crm-q"]'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } },
   'soc-open': ds => socDrawer(ds.id),
   'ct-open': ds => ctDrawer(ds.id),
   'soc-new': () => openModal('Nouvelle entreprise', () => `<label class="field"><span>Nom</span><input class="input" id="ns-nom"></label><div class="grid g2"><label class="field"><span>Secteur</span><input class="input" id="ns-sec"></label><label class="field"><span>Ville</span><input class="input" id="ns-vil"></label></div>
-    ${INST().crm ? `<p class="small muted">L'entreprise sera aussi créée dans ${INST().crm}.</p>` : ''}<div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="soc-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
+    ${crmEcrit() ? `<p class="small muted">L'entreprise sera aussi créée dans ${crmEcrit()}.</p>` : ''}<div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="soc-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
   'soc-new-ok': () => {
     const nom = document.getElementById('ns-nom').value.trim(); if (!nom) { document.getElementById('ns-nom').focus(); return; }
     D().societes.push({ id: uid('s'), nom, secteur: document.getElementById('ns-sec').value.trim() || 'À compléter', ville: document.getElementById('ns-vil').value.trim(), taille: null, domaine: '' });
@@ -182,11 +182,11 @@ Object.assign(ACTIONS, {
   },
   'ct-new': () => openModal('Nouveau contact', () => `<div class="grid g2"><label class="field"><span>Nom</span><input class="input" id="nct-nom"></label><label class="field"><span>Fonction</span><input class="input" id="nct-fct"></label></div>
     <div class="grid g2"><label class="field"><span>Entreprise</span><select class="input" id="nct-soc">${D().societes.slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(x => `<option value="${x.id}">${esc(x.nom)}</option>`).join('')}</select></label><label class="field"><span>Email</span><input class="input" id="nct-mail" type="email"></label></div>
-    ${INST().crm ? `<p class="small muted">Le contact sera aussi créé dans ${INST().crm}.</p>` : ''}<div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="ct-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
+    ${crmEcrit() ? `<p class="small muted">Le contact sera aussi créé dans ${crmEcrit()}.</p>` : ''}<div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="ct-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
   'ct-new-ok': () => {
     const nom = document.getElementById('nct-nom').value.trim(); if (!nom) { document.getElementById('nct-nom').focus(); return; }
     D().contacts.push({ id: uid('c'), soc: document.getElementById('nct-soc').value, nom, fonction: document.getElementById('nct-fct').value.trim(), email: document.getElementById('nct-mail').value.trim(), role: '' });
-    logAction(`Contact créé : ${nom}${INST().crm ? ' (écrit dans ' + INST().crm + ')' : ''}`, 'L2'); OVER = null; render(); toast(`Contact ajouté${ecritCrm()}`);
+    logAction(`Contact créé : ${nom}${crmEcrit() ? ' (écrit dans ' + crmEcrit() + ')' : ''}`, 'L2'); OVER = null; render(); toast(`Contact ajouté${ecritCrm()}`);
   }
 });
 

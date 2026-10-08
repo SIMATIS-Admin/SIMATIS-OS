@@ -1,6 +1,6 @@
 /* Noyau de la maquette : état, navigation, interface commune. */
 
-const STORE_KEY = 'simatis-os-maquette-v4';
+const STORE_KEY = 'simatis-os-maquette-v5';
 const VIEWS = {};
 const ACTIONS = {};
 let S;
@@ -80,6 +80,7 @@ const IC = {
   menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
   down: '<path d="M6 9l6 6 6-6"/>',
   building: '<rect x="4" y="2" width="16" height="20" rx="1"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   star: '<polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3 12 2"/>',
   phone: '<path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.7a2 2 0 01-.5 2.1L8 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.7.7a2 2 0 011.7 2z"/>'
@@ -93,12 +94,15 @@ const NAV = [
   { g: 'Stratégie', items: [['demarrage', 'Démarrage du mandat', 'flag', 'demarrage']] },
   { g: 'Générer la demande', items: [['prospection', 'Prospection', 'send'], ['bases', 'Bases vivantes', 'db']] },
   { g: 'Convertir', items: [['pipeline', 'Pipeline', 'kanban'], ['entreprises', 'Entreprises', 'building'], ['contacts', 'Contacts', 'users'], ['agenda', 'Rendez-vous', 'cal'], ['devis', 'Devis', 'file', 'devis'], ['relais', 'Relais internes', 'users', 'relais']] },
+  { g: 'Réglages', items: [['parametres', 'Paramètres', 'gear']] },
   { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic'], ['detection', 'Détection', 'pulse'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
 ];
 const NAV_ITEMS = NAV.flatMap(g => g.items);
 const navItem = id => NAV_ITEMS.find(([v]) => v === id);
 /* Un écran réservé à un module (Devis : brique propre à Marc) n'existe pas dans les autres instances. */
 const allowed = (id, inst = INST()) => { const it = navItem(id); return !it || !it[3] || inst.modules.includes(it[3]); };
+/* CRM dans lequel l'OS écrit, ou null si l'instance n'en a pas ou le synchronise en lecture seule. */
+const crmEcrit = () => INST().crm && !/lecture seule/.test(D().reglages?.crm?.sens || '') ? INST().crm : null;
 const isFav = id => (S.favs || []).includes(id);
 
 function go(view, inst) {
