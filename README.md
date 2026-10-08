@@ -14,4 +14,4 @@ Système d'exploitation interne de SIMATIS (direction commerciale en mode partag
 
 ## Démarrage
 
-Le plan de développement est dans [docs/plan.md](docs/plan.md). Les règles de contribution (dont la confidentialité) sont dans [CLAUDE.md](CLAUDE.md).
+Le plan de développement est dans [docs/plan.md](docs/plan.md). Les règles de contribution (dont la confidentialité) sont dans [AGENTS.md](AGENTS.md).
