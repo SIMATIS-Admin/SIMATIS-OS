@@ -9,7 +9,9 @@ function conversions(opps) {
   const atteint = k => opps.filter(o => rang(o) >= k).length;
   return ETAPES.map((e, k) => { const den = atteint(k); return den ? Math.round(atteint(k + 1) / den * 100) : null; });
 }
-const MIROIR_TIP = crm => `Ce pipeline est le reflet exact du pipeline ${crm} du mandat, qui fait foi. Ce que vous changez ici est écrit dans ${crm} ; ce qui change dans ${crm} remonte ici à chaque synchronisation (toutes les 15 minutes, ou à la demande).`;
+const MIROIR_TIP = (crm, quoi = 'Ce pipeline est le reflet exact du pipeline') => `${quoi} ${crm} de l'instance, qui fait foi. Ce que vous changez ici est écrit dans ${crm} ; ce qui change dans ${crm} remonte ici à chaque synchronisation (toutes les 15 minutes, ou à la demande).`;
+/* Badge et bouton de synchronisation, communs au pipeline, aux entreprises et aux contacts d'une instance sous CRM. */
+const miroir = quoi => INST().crm ? `<span class="badge blue">Miroir ${INST().crm}, synchronisé ${S.sync?.[S.inst] ? 'à l\'instant' : 'il y a 5 min'}</span>${tip(MIROIR_TIP(INST().crm, quoi))}<button class="btn" data-act="crm-sync">Synchroniser</button>` : '';
 const CONV_TIP = "Taux de conversion : part des opportunités arrivées à l'étape de gauche qui ont atteint l'étape de droite. Les affaires ouvertes, gagnées et perdues sont toutes comptées ; une affaire perdue compte jusqu'à l'étape où elle s'est arrêtée.";
 
 VIEWS.pipeline = () => {
@@ -30,7 +32,7 @@ VIEWS.pipeline = () => {
   function cellH([k, l]) { const m = MATRICE[k]; const os = opps.filter(o => `${o.potentiel}-${o.faisab}` === k); return `<div class="cell ${m.k}" aria-label="${l}"><h3>${m.nom}<span class="num small muted">${os.length}</span></h3><p>${m.d}</p>${os.map(o => `<span class="pill" data-act="opp" data-id="${o.id}">${scoreBadge(o.score)}${esc(soc(o.soc).nom)}</span>`).join('')}</div>`; }
   return {
     title: 'Pipeline',
-    actions: `${INST().crm ? `<span class="badge blue">Miroir ${INST().crm}, synchronisé ${S.sync?.[S.inst] ? 'à l\'instant' : 'il y a 5 min'}</span>${tip(MIROIR_TIP(INST().crm))}<button class="btn" data-act="crm-sync">Synchroniser</button>` : ''}<div class="seg"><button class="${mode === 'board' ? 'on' : ''}" data-act="pipe-mode" data-m="board">Étapes</button><button class="${mode === 'matrice' ? 'on' : ''}" data-act="pipe-mode" data-m="matrice">Matrice</button></div><button class="btn primary" data-act="opp-new">Nouvelle opportunité</button>`,
+    actions: `${miroir()}<div class="seg"><button class="${mode === 'board' ? 'on' : ''}" data-act="pipe-mode" data-m="board">Étapes</button><button class="${mode === 'matrice' ? 'on' : ''}" data-act="pipe-mode" data-m="matrice">Matrice</button></div><button class="btn primary" data-act="opp-new">Nouvelle opportunité</button>`,
     body: mode === 'board' ? board : matrix,
     after: () => {
       document.querySelectorAll('[data-drag]').forEach(c => c.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', c.dataset.drag)));
@@ -52,7 +54,7 @@ VIEWS.pipeline = () => {
     }
   };
 };
-ACTIONS['crm-sync'] = () => { (S.sync = S.sync || {})[S.inst] = true; logAction(`Synchronisation ${INST().crm} : pipeline à jour`, 'L3', 'os'); render(); toast(`Pipeline à jour : aucun écart avec ${INST().crm}`); };
+ACTIONS['crm-sync'] = () => { (S.sync = S.sync || {})[S.inst] = true; logAction(`Synchronisation ${INST().crm} : pipeline à jour`, 'L3', 'os'); render(); toast(`Données à jour : aucun écart avec ${INST().crm}`); };
 ACTIONS['pipe-mode'] = ds => { S.pipeMode = ds.m; render(); };
 
 /* ---------- Fiche opportunité ---------- */
@@ -113,6 +115,78 @@ Object.assign(ACTIONS, {
     D().contacts.push({ id: cid, soc: sid, nom: 'Interlocuteur à identifier', fonction: '', email: '', role: '' });
     D().opps.push({ id: newId, soc: sid, contact: cid, titre: document.getElementById('no-titre').value.trim() || 'À préciser', etape: 'detection', montant: 0, score: { besoin: 0, decideur: 0, budget: 0, timing: 0, engagement: 0 }, potentiel: 'limite', faisab: 'faible', source: document.getElementById('no-src').value, echeance: dp(7), prochaine: 'Qualifier', maj: dp(0) });
     logAction(`Opportunité créée : ${nom}`, 'L2'); OVER = null; render(); oppDrawer(newId);
+  }
+});
+
+/* ---------- Entreprises et contacts ---------- */
+const filtre = (...champs) => { const q = (S.crmQ || '').trim().toLowerCase(); return !q || champs.some(c => String(c || '').toLowerCase().includes(q)); };
+const recherche = place => `<label class="search">${ic('search')}<input class="input" type="search" placeholder="${place}" value="${esc(S.crmQ || '')}" data-input="crm-q" aria-label="${place}"></label>`;
+const oppsDe = sid => D().opps.filter(o => o.soc === sid);
+const etapeNom = o => o.clos === 'gagne' ? 'Gagnée' : o.clos === 'perdu' ? 'Perdue' : ETAPES.find(e => e.id === o.etape).nom;
+
+VIEWS.entreprises = () => {
+  const d = D();
+  const list = d.societes.filter(x => filtre(x.nom, x.secteur, x.ville)).sort((a, b) => a.nom.localeCompare(b.nom));
+  return {
+    title: 'Entreprises',
+    actions: `${miroir('Cette liste est le reflet exact des entreprises')}<button class="btn primary" data-act="soc-new">Nouvelle entreprise</button>`,
+    body: `<div class="panel"><div class="panel-h">${recherche('Rechercher une entreprise, un secteur, une ville')}<span class="small muted">${list.length} entreprise${list.length > 1 ? 's' : ''}</span></div>
+      <table class="tbl"><thead><tr><th>Entreprise</th><th>Secteur</th><th>Ville</th><th class="r">Salariés</th><th class="r">Contacts</th><th>Opportunités</th></tr></thead><tbody>
+      ${list.map(x => { const os = oppsDe(x.id), ouv = os.filter(o => !o.clos); return `<tr class="click" data-act="soc-open" data-id="${x.id}"><td><b>${esc(x.nom)}</b>${x.domaine ? `<div class="small muted">${esc(x.domaine)}</div>` : ''}</td><td>${esc(x.secteur)}</td><td>${esc(x.ville)}</td><td class="r num">${x.taille ?? ''}</td><td class="r num">${d.contacts.filter(c => c.soc === x.id).length}</td><td class="small">${ouv.length ? `${ouv.length} ouverte${ouv.length > 1 ? 's' : ''}, ${eurTxt(ouv.reduce((a, o) => a + o.montant, 0))}` : os.length ? `<span class="muted">${etapeNom(os[0])}</span>` : '<span class="muted">Aucune</span>'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">Aucune entreprise ne correspond.</td></tr>'}
+      </tbody></table></div>`
+  };
+};
+
+VIEWS.contacts = () => {
+  const d = D();
+  const list = d.contacts.filter(c => filtre(c.nom, c.fonction, soc(c.soc).nom, c.email)).sort((a, b) => a.nom.localeCompare(b.nom));
+  return {
+    title: 'Contacts',
+    actions: `${miroir('Cette liste est le reflet exact des contacts')}<button class="btn primary" data-act="ct-new">Nouveau contact</button>`,
+    body: `<div class="panel"><div class="panel-h">${recherche('Rechercher un nom, une fonction, une entreprise')}<span class="small muted">${list.length} contact${list.length > 1 ? 's' : ''}</span></div>
+      <table class="tbl"><thead><tr><th>Contact</th><th>Fonction</th><th>Entreprise</th><th>Email</th><th>Rôle</th></tr></thead><tbody>
+      ${list.map(c => `<tr class="click" data-act="ct-open" data-id="${c.id}"><td><b>${esc(c.nom)}</b></td><td>${esc(c.fonction)}</td><td>${esc(soc(c.soc).nom)}</td><td class="small">${esc(c.email)}</td><td>${c.role ? `<span class="badge">${esc(c.role)}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Aucun contact ne correspond.</td></tr>'}
+      </tbody></table></div>`
+  };
+};
+
+const oppLignes = os => os.length ? `<ul class="hist">${os.map(o => `<li><span class="d">${etapeNom(o)}</span><span><button class="link" data-act="opp" data-id="${o.id}">${esc(o.titre)}</button> ${o.montant ? eur(o.montant) : ''}</span></li>`).join('')}</ul>` : '<p class="muted small">Aucune opportunité.</p>';
+function socDrawer(id) {
+  const x = byId(D().societes, id); if (!x) return;
+  openDrawer(`<h2>${esc(x.nom)}</h2><div class="small muted">${esc(x.secteur)}${x.ville ? ', ' + esc(x.ville) : ''}</div>`, () => {
+    const cs = D().contacts.filter(c => c.soc === id);
+    return `<div class="meta-row" style="margin-bottom:14px">${x.taille ? `<span><b class="num">${x.taille}</b> salariés</span>` : ''}${x.domaine ? `<span>${esc(x.domaine)}</span>` : ''}${INST().crm ? `<span class="badge blue">Fiche ${INST().crm}</span>` : ''}</div>
+      <h3>Contacts</h3>${cs.length ? `<ul class="hist">${cs.map(c => `<li><span class="d">${esc(c.role || '')}</span><span><button class="link" data-act="ct-open" data-id="${c.id}">${esc(c.nom)}</button>, ${esc(c.fonction)}</span></li>`).join('')}</ul>` : '<p class="muted small">Aucun contact.</p>'}
+      <h3 style="margin-top:18px">Opportunités</h3>${oppLignes(oppsDe(id))}`;
+  }, x.nom);
+}
+function ctDrawer(id) {
+  const c = byId(D().contacts, id); if (!c) return; const x = soc(c.soc);
+  openDrawer(`<h2>${esc(c.nom)}</h2><div class="small muted">${esc(c.fonction)}${x.nom !== '?' ? ', ' + esc(x.nom) : ''}</div>`, () => `
+    <div class="meta-row" style="margin-bottom:14px"><span>${esc(c.email) || '<span class="muted">Email inconnu</span>'}</span>${c.role ? `<span class="badge">${esc(c.role)}</span>` : ''}${INST().crm ? `<span class="badge blue">Fiche ${INST().crm}</span>` : ''}</div>
+    <h3>Entreprise</h3><p style="margin-top:4px"><button class="link" data-act="soc-open" data-id="${c.soc}">${esc(x.nom)}</button></p>
+    <h3 style="margin-top:18px">Opportunités</h3>${oppLignes(D().opps.filter(o => o.contact === id))}
+    <h3 style="margin-top:18px">Tâches ouvertes</h3>${(() => { const ts = D().taches.filter(t => !t.fait && D().opps.some(o => o.id === t.opp && o.contact === id)); return ts.length ? `<ul class="hist">${ts.map(t => `<li><span class="d">${fdate(t.echeance)}</span><span>${esc(t.titre)}</span></li>`).join('')}</ul>` : '<p class="muted small">Aucune.</p>'; })()}`, c.nom);
+}
+const ecritCrm = () => INST().crm ? ` et écrit dans ${INST().crm}` : '';
+Object.assign(ACTIONS, {
+  'crm-q': (ds, el) => { S.crmQ = el.value; const pos = el.selectionStart; render(); const i = document.querySelector('[data-input="crm-q"]'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } },
+  'soc-open': ds => socDrawer(ds.id),
+  'ct-open': ds => ctDrawer(ds.id),
+  'soc-new': () => openModal('Nouvelle entreprise', () => `<label class="field"><span>Nom</span><input class="input" id="ns-nom"></label><div class="grid g2"><label class="field"><span>Secteur</span><input class="input" id="ns-sec"></label><label class="field"><span>Ville</span><input class="input" id="ns-vil"></label></div>
+    ${INST().crm ? `<p class="small muted">L'entreprise sera aussi créée dans ${INST().crm}.</p>` : ''}<div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="soc-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
+  'soc-new-ok': () => {
+    const nom = document.getElementById('ns-nom').value.trim(); if (!nom) { document.getElementById('ns-nom').focus(); return; }
+    D().societes.push({ id: uid('s'), nom, secteur: document.getElementById('ns-sec').value.trim() || 'À compléter', ville: document.getElementById('ns-vil').value.trim(), taille: null, domaine: '' });
+    logAction(`Entreprise créée : ${nom}${INST().crm ? ' (écrite dans ' + INST().crm + ')' : ''}`, 'L2'); OVER = null; render(); toast(`Entreprise ajoutée${ecritCrm()}`);
+  },
+  'ct-new': () => openModal('Nouveau contact', () => `<div class="grid g2"><label class="field"><span>Nom</span><input class="input" id="nct-nom"></label><label class="field"><span>Fonction</span><input class="input" id="nct-fct"></label></div>
+    <div class="grid g2"><label class="field"><span>Entreprise</span><select class="input" id="nct-soc">${D().societes.slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(x => `<option value="${x.id}">${esc(x.nom)}</option>`).join('')}</select></label><label class="field"><span>Email</span><input class="input" id="nct-mail" type="email"></label></div>
+    ${INST().crm ? `<p class="small muted">Le contact sera aussi créé dans ${INST().crm}.</p>` : ''}<div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="ct-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`),
+  'ct-new-ok': () => {
+    const nom = document.getElementById('nct-nom').value.trim(); if (!nom) { document.getElementById('nct-nom').focus(); return; }
+    D().contacts.push({ id: uid('c'), soc: document.getElementById('nct-soc').value, nom, fonction: document.getElementById('nct-fct').value.trim(), email: document.getElementById('nct-mail').value.trim(), role: '' });
+    logAction(`Contact créé : ${nom}${INST().crm ? ' (écrit dans ' + INST().crm + ')' : ''}`, 'L2'); OVER = null; render(); toast(`Contact ajouté${ecritCrm()}`);
   }
 });
 

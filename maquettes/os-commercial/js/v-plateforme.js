@@ -1,5 +1,46 @@
 /* Instruments de bord : routines, autonomie, journal d'audit, second cerveau. */
 
+/* Paramètres modifiables par routine : ce que Marc règle sans toucher à la skill. */
+const HEURES = ['6h00', '6h30', '7h00', '7h30', '8h00', '8h30', '9h00'];
+const PARAMS_DEF = {
+  'r-quot': [
+    { k: 'heure', l: 'Heure de lancement', t: 'select', o: HEURES },
+    { k: 'jours', l: 'Jours', t: 'select', o: ['Jours ouvrés', 'Du lundi au jeudi', 'Tous les jours'] },
+    { k: 'canaux', l: 'Tâches traitées', t: 'checks', o: [['email', 'Relances par email'], ['appel', 'Appels']] },
+    { k: 'retard', l: 'Reprendre les tâches en retard depuis au plus', t: 'number', min: 0, max: 90, u: 'jours' },
+    { k: 'max', l: 'Brouillons au plus par exécution', t: 'number', min: 1, max: 50, u: 'brouillons' },
+    { k: 'creneaux', l: 'Créneaux proposés dans chaque email', t: 'number', min: 0, max: 3, u: 'créneaux' },
+    { k: 'delai', l: 'Premier créneau proposé au plus tôt dans', t: 'number', min: 1, max: 15, u: 'jours ouvrés' },
+    { k: 'plages', l: 'Plages horaires des créneaux', t: 'select', o: ['9h30-12h00 et 14h00-17h00', '9h00-12h00 seulement', '14h00-18h00 seulement'] }
+  ],
+  'r-nett': [
+    { k: 'declenchement', l: 'Déclenchement', t: 'select', o: ['Après chaque envoi de relances', 'Chaque jour à 18h00', 'À la demande seulement'] },
+    { k: 'suivi', l: 'Tâche de suivi proposée à', t: 'number', min: 1, max: 60, u: 'jours' }
+  ],
+  'r-hebdo': [
+    { k: 'jour', l: 'Jour', t: 'select', o: ['Lundi', 'Vendredi'] },
+    { k: 'heure', l: 'Heure', t: 'select', o: HEURES }
+  ],
+  'r-evt': [
+    { k: 'devis', l: 'Relancer un devis sans réponse après', t: 'number', min: 3, max: 30, u: 'jours' },
+    { k: 'stop', l: 'Arrêter la séquence dès qu\'un contact répond', t: 'bool' }
+  ]
+};
+const rythme = x => {
+  const p = x.params || {};
+  if (x.id === 'r-quot') return `${p.jours === 'Tous les jours' ? 'Tous les jours' : p.jours === 'Jours ouvrés' ? 'Chaque jour ouvré' : p.jours} à ${p.heure}, ou à la demande`;
+  if (x.id === 'r-nett') return p.declenchement;
+  if (x.id === 'r-hebdo') return `${p.jour} à ${p.heure}`;
+  return x.rythme;
+};
+const resume = x => {
+  const p = x.params || {};
+  if (x.id === 'r-quot') return [`${(p.canaux || []).map(c => c === 'email' ? 'emails' : 'appels').join(' et ') || 'aucune tâche'}`, `${p.max} brouillon${p.max > 1 ? 's' : ''} au plus`, `retard ≤ ${p.retard} j`, p.creneaux ? `${p.creneaux} créneau${p.creneaux > 1 ? 'x' : ''} dès J+${p.delai}` : 'sans créneau', p.plages];
+  if (x.id === 'r-nett') return [`suivi à ${p.suivi} jours`];
+  if (x.id === 'r-evt') return [`devis relancé à ${p.devis} jours`, p.stop ? 'arrêt sur réponse' : 'pas d\'arrêt sur réponse'];
+  return [];
+};
+
 const CONN_TIP = "Chaque instance a ses propres connexions. Une routine n'utilise que celles de l'instance choisie : si l'une manque, la routine s'arrête, et rien ne part depuis une autre boîte.";
 /* Étapes qui ont besoin d'une connexion donnée : sans elle, la routine s'arrête là. */
 const besoin = txt => /messagerie|Gmail/i.test(txt) ? 'Messagerie' : /agenda/i.test(txt) ? 'Agenda' : null;
@@ -12,15 +53,16 @@ VIEWS.routines = () => {
     title: 'Routines Claude',
     body: `<div class="panel" style="margin-bottom:18px"><div class="panel-h"><h2>Connexions de ${inst.id === 'simatis' ? 'mon activité' : 'ce mandat'} ${tip(CONN_TIP)}</h2>${inst.crm ? `<span class="small muted">Synchronisé ${S.sync?.[inst.id] ? 'à l\'instant' : 'il y a 5 min'}</span>` : ''}</div>
       <div class="panel-b conn-row">${conn.map(([k, nom, etat]) => `<div class="conn ${etat}"><span class="small muted">${esc(k)}</span><b>${esc(nom)}</b><span class="badge ${etat === 'ok' ? 'green' : 'amber'}">${etat === 'ok' ? 'Connecté' : 'Non configuré'}</span></div>`).join('')}</div></div>
-    <div class="grid g2">${r.map(x => `<div class="panel"><div class="panel-h"><div><h2>${esc(x.nom)}</h2><div class="small muted">${esc(x.rythme)}</div></div>
+    <div class="grid g2">${r.map(x => `<div class="panel"><div class="panel-h"><div><h2>${esc(x.nom)}</h2><div class="small muted">${esc(rythme(x))}</div></div>
         <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${x.actif ? 'checked' : ''} data-change="rt-toggle" data-id="${x.id}" style="accent-color:var(--teal)">${x.actif ? 'Active' : 'En pause'}</label></div>
       <div class="panel-b report-col">
+        ${resume(x).length ? `<div class="chips">${resume(x).map(c => `<span class="badge">${esc(c)}</span>`).join('')}</div>` : ''}
         <h4 style="margin-top:0">Ce que fait la routine</h4><ol class="rt-steps">${(x.etapes || []).map(e => `<li class="${besoin(e) && !connOk(besoin(e)) ? 'blocked' : ''}">${esc(e)}</li>`).join('')}</ol>
         <div class="small muted" style="margin-top:10px">Dernière exécution : ${rel(x.dernier)}</div>
         <h4>Fait</h4><ul>${x.rapport.fait.map(f => `<li>${esc(f)}</li>`).join('') || '<li>Rien</li>'}</ul>
         ${x.rapport.attente.length ? `<h4>En attente de validation</h4><ul>${x.rapport.attente.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
         ${x.rapport.echec.length ? `<h4>Échecs</h4><ul>${x.rapport.echec.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}</div>
-      <div class="decision"><button class="btn primary sm" data-act="rt-run" data-id="${x.id}" ${x.actif ? '' : 'disabled'}>${ic('play')}Lancer maintenant</button><span class="hint">Rien n'est envoyé : les brouillons attendent dans Gmail.</span></div></div>`).join('')}</div>`
+      <div class="decision"><button class="btn primary sm" data-act="rt-run" data-id="${x.id}" ${x.actif ? '' : 'disabled'}>${ic('play')}Lancer maintenant</button><button class="btn sm" data-act="rt-params" data-id="${x.id}">${ic('sliders')}Paramètres</button><span class="hint">Rien n'est envoyé : les brouillons attendent dans Gmail.</span></div></div>`).join('')}</div>`
   };
 };
 Object.assign(ACTIONS, {
@@ -38,6 +80,30 @@ Object.assign(ACTIONS, {
       if (OVER || R.fin) render();
     }, 450);
   },
+  'rt-params': ds => {
+    const x = byId(D().routines, ds.id), p = x.params || (x.params = {});
+    openDrawer(`<h2>Paramètres</h2><div class="small muted">${esc(x.nom)}, ${esc(INST().nom)}</div>`, () => `
+      <form id="rt-form">${(PARAMS_DEF[x.id] || []).map(f => {
+        const v = p[f.k];
+        if (f.t === 'select') return `<label class="field"><span>${f.l}</span><select class="input" name="${f.k}">${f.o.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+        if (f.t === 'number') return `<label class="field"><span>${f.l}</span><span style="display:flex;gap:8px;align-items:center"><input class="input num" style="width:100px" type="number" name="${f.k}" min="${f.min}" max="${f.max}" value="${v}"><span class="small muted">${f.u}</span></span></label>`;
+        if (f.t === 'checks') return `<div class="field"><span>${f.l}</span>${f.o.map(([k, l]) => `<label class="check"><input type="checkbox" name="${f.k}" value="${k}" ${(v || []).includes(k) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`;
+        return `<label class="check"><input type="checkbox" name="${f.k}" ${v ? 'checked' : ''}><span>${f.l}</span></label>`;
+      }).join('')}</form>
+      <p class="small muted">Ces réglages s'appliquent à ${esc(INST().nom)} seulement. Les règles de rédaction (vouvoiement, sans signature, contrôles avant envoi) restent celles de la skill.</p>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" data-act="rt-params-ok" data-id="${x.id}">Enregistrer</button><button class="btn ghost" data-act="close">Annuler</button></div>`, x.nom);
+  },
+  'rt-params-ok': ds => {
+    const x = byId(D().routines, ds.id), f = document.getElementById('rt-form');
+    (PARAMS_DEF[x.id] || []).forEach(d => {
+      if (d.t === 'checks') x.params[d.k] = [...f.querySelectorAll(`[name="${d.k}"]:checked`)].map(i => i.value);
+      else if (d.t === 'bool') x.params[d.k] = f.querySelector(`[name="${d.k}"]`).checked;
+      else if (d.t === 'number') { const n = +f.querySelector(`[name="${d.k}"]`).value; x.params[d.k] = Math.min(d.max, Math.max(d.min, isNaN(n) ? d.min : n)); }
+      else x.params[d.k] = f.querySelector(`[name="${d.k}"]`).value;
+    });
+    x.rythme = rythme(x);
+    logAction(`Paramètres modifiés : ${x.nom}`, 'L2'); OVER = null; render(); toast('Paramètres enregistrés');
+  },
   'rt-voir': () => { S.run = null; OVER = null; S.vqFilter = 'tout'; go('validations'); }
 });
 function runBody() {
@@ -52,15 +118,16 @@ function finRoutine(x, R) {
   const d = D(), fait = [];
   let n = 0;
   if (!R.err && x.id === 'r-quot') {
-    d.taches.filter(t => !t.fait && diffDays(t.echeance) <= 0 && t.canal === 'email' && !t.prepare && t.opp).forEach(t => {
+    const p = x.params || {}, canaux = p.canaux || ['email', 'appel'];
+    d.taches.filter(t => canaux.includes('email') && !t.fait && diffDays(t.echeance) <= 0 && -diffDays(t.echeance) <= (p.retard ?? 30) && t.canal === 'email' && !t.prepare && t.opp).slice(0, p.max || 20).forEach(t => {
       t.prepare = true; const o = byId(d.opps, t.opp), c = contact(o.contact);
       d.validations.unshift({ id: uid('v'), type: 'email', niv: 'L1', titre: 'Relance préparée par la routine', soc: o.soc, contact: o.contact, origine: x.nom, objet: o.titre,
-        corps: email(c.nom, '', ['Je reviens vers vous suite à notre dernier échange.', 'Seriez-vous disponible pour en reparler brièvement ?'], creneaux(4)),
+        corps: email(c.nom, '', ['Je reviens vers vous suite à notre dernier échange.', 'Seriez-vous disponible pour en reparler brièvement ?'], p.creneaux ? creneaux(4).slice(0, p.creneaux) : null),
         controles: ['Historique de messagerie consulté', 'Tâche échue ' + rel(t.echeance), 'Créneaux vérifiés dans l\'agenda'], source: INST().outil, confiance: 'élevée' });
       n++;
     });
-    const appels = d.taches.filter(t => !t.fait && diffDays(t.echeance) <= 0 && t.canal === 'appel').length;
-    fait.push(`${n} brouillon${n > 1 ? 's' : ''} de relance préparé${n > 1 ? 's' : ''} dans Gmail`, `Planning d'appels : ${appels} appel${appels > 1 ? 's' : ''}`, 'Brief du jour produit');
+    const appels = canaux.includes('appel') ? d.taches.filter(t => !t.fait && diffDays(t.echeance) <= 0 && t.canal === 'appel').length : 0;
+    fait.push(`${n} brouillon${n > 1 ? 's' : ''} de relance préparé${n > 1 ? 's' : ''} dans Gmail`, canaux.includes('appel') ? `Planning d'appels : ${appels} appel${appels > 1 ? 's' : ''}` : 'Appels non traités (désactivés dans les paramètres)', 'Brief du jour produit');
   } else if (!R.err) fait.push(...x.etapes.map(e => e + ' : fait'));
   R.n = n || pending();
   R.bilan = x.id === 'r-quot' ? `${fait[0]}. ${pending()} élément${pending() > 1 ? 's' : ''} en attente de votre décision.` : 'Routine terminée. Rien n\'a été envoyé.';
