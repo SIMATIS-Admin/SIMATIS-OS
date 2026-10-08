@@ -20,6 +20,8 @@ Le plan a deux blocs, menés en parallèle :
 | **Socle technique** | L'agent | Posé tout de suite, sur ce poste. Ne dépend d'aucun choix métier. Plan détaillé dans `docs/plans/`, puis implémentation, partie par partie. |
 | **Parties métier** | Marc | Marc les détaille avec l'agent, en partant de la maquette. Une partie validée reçoit son plan détaillé, puis elle est construite sur le socle. |
 
+**Plan d'implémentation complet de la maquette** : `docs/plans/2026-10-08-implementation-maquette.md` (15 lots, dans l'ordre des priorités de Marc).
+
 Chaque partie avance par branche, PR, revue et merge. À la fin de chacune, l'agent explique à Marc comment tester.
 
 Statuts possibles : à relire, validée, en cours, livrée.
@@ -138,7 +140,7 @@ En attendant le choix du fournisseur, le développement se fait sur un dépôt d
 
 Statut : à faire
 
-- Instances `propre`, `mandat`, `demo` ; statuts actif ou archivé.
+- Instances `propre`, `mandat`, `prospect` ; statuts actif ou archivé.
 - Configuration non secrète par instance, en base, validée par un schéma. Chaque partie métier y déclare ses propres réglages.
 - Secrets chargés depuis `secrets/instances/<instance>.env`. Le démarrage échoue avec un message clair s'il manque un secret pour une connexion activée.
 - Conventions imposées à toute table métier : identifiant d'instance, source et identifiant d'origine pour les données copiées, Row-Level Security, dates de création et de mise à jour.
