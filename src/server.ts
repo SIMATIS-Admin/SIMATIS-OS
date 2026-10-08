@@ -18,7 +18,13 @@ try {
 const { db, pool } = createDb(
   appDatabaseUrl(config.databaseUrl, config.appDbRole, config.appDbPassword),
 );
-const app = buildApp({ pool, db, version: readVersion(), logger: { level: config.logLevel } });
+const app = buildApp({
+  pool,
+  db,
+  version: readVersion(),
+  backupStatusFile: config.backupStatusFile,
+  logger: { level: config.logLevel },
+});
 
 // An idle client losing its connection (database restart) must not crash the process.
 pool.on('error', (err) => app.log.warn({ err }, 'idle database client error'));

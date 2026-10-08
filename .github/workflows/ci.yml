@@ -18,3 +18,4 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: docker build -t simatis-os:ci .
+      - run: docker build -t simatis-os-backup:ci ./backup
