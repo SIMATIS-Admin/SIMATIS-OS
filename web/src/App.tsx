@@ -7,6 +7,7 @@ import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
 import { Journal } from './pages/Journal.js';
 import { Parametres } from './pages/Parametres.js';
+import { Pipeline } from './pages/Pipeline.js';
 import { Portefeuille } from './pages/Portefeuille.js';
 import { Sidebar } from './shell/Sidebar.js';
 
@@ -66,6 +67,8 @@ export function App() {
         return <Entreprises key={current.slug} slug={current.slug} />;
       case 'contacts':
         return <Contacts key={current.slug} slug={current.slug} />;
+      case 'pipeline':
+        return <Pipeline key={current.slug} slug={current.slug} />;
       case 'journal':
         return <Journal key={current.slug} slug={current.slug} />;
       case 'parametres':

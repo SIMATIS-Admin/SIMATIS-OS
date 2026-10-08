@@ -155,3 +155,47 @@ export const syncConnexion = (slug: string, kind: string) =>
     inst(slug, `connexions/${encodeURIComponent(kind)}/sync`),
     {},
   );
+
+export type Qualification = {
+  besoin: number;
+  decideur: number;
+  budget: number;
+  timing: number;
+  engagement: number;
+};
+
+export type PipelineOpp = {
+  id: string;
+  titre: string;
+  etape: string;
+  clos: 'gagne' | 'perdu' | null;
+  motif: string | null;
+  montant: number | null;
+  echeance: string | null;
+  qualification: Qualification | null;
+  potentiel: string | null;
+  faisabilite: string | null;
+  prochaineEtape: string | null;
+  entreprise: string | null;
+  contact: string | null;
+};
+
+export type Pipeline = {
+  source: 'natif' | 'hubspot';
+  ecrit: boolean;
+  derniereSynchro: string | null;
+  etapes: { id: string; label: string }[];
+  conversions: (number | null)[];
+  opportunites: PipelineOpp[];
+};
+
+export type Changement =
+  { etape: string } | { clos: 'gagne' | 'perdu'; motif?: string | null } | { rouvrir: true };
+
+export const fetchPipeline = (slug: string) => getJson<Pipeline>(inst(slug, 'pipeline'));
+export const changeOpportunite = (slug: string, id: string, change: Changement) =>
+  sendJson<{ opportunite: PipelineOpp; simulation: boolean }>(
+    'PATCH',
+    inst(slug, `opportunites/${encodeURIComponent(id)}`),
+    change,
+  );
