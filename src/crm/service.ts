@@ -1,5 +1,7 @@
 import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { connexions } from '../connexions/schema.js';
+import { writeVia, type ConnexionDeps } from '../connexions/service.js';
+import type { Instance } from '../instances/schema.js';
 import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
@@ -170,25 +172,54 @@ export async function getContact(db: Executor, instanceId: string, id: string) {
   });
 }
 
-// A record created in an instance with an external CRM must go to that CRM (M8a). Until then, only
-// instances without CRM (pipeline kept by the OS) or with fictive data can create records.
-async function assertNativeCreation(tx: Tx): Promise<void> {
+type CreationDeps = ConnexionDeps;
+
+// Simulated creation: real writes are off, nothing was created anywhere.
+export type Simulation = { simulation: true; message: string };
+
+// Where a new record goes: the OS itself (no CRM, or fictive data), or the instance's CRM first,
+// and then its copy. Returns the HubSpot id, or a Simulation when real writes are off.
+async function createInCrm(
+  tx: Tx,
+  instance: Instance,
+  op: 'company.create' | 'contact.create',
+  data: Record<string, unknown>,
+  deps: CreationDeps,
+): Promise<{ sourceId: string } | Simulation | null> {
   const [crm] = await tx
     .select({ fournisseur: connexions.fournisseur, reglages: connexions.reglages })
     .from(connexions)
     .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'crm')));
-  if (crm && crm.fournisseur !== 'fake' && crm.fournisseur !== 'natif') {
+  if (!crm || crm.fournisseur === 'fake' || crm.fournisseur === 'natif') return null;
+  // A CRM without an explicit direction is read-only, the safe default.
+  if ((crm.reglages.sens ?? 'lecture') === 'lecture') {
     throw new CrmIndisponible(
-      crm.reglages.sens === 'lecture'
-        ? 'CRM en lecture seule : créez la fiche dans le CRM, elle arrivera à la prochaine synchronisation.'
-        : 'CRM non branché : la création chez le CRM arrive avec le connecteur HubSpot.',
+      'CRM en lecture seule : créez la fiche dans le CRM, elle arrivera à la prochaine synchronisation.',
     );
   }
+  let result;
+  try {
+    result = await writeVia(tx, instance, 'crm', { op, data }, deps);
+  } catch (error) {
+    throw new CrmIndisponible(
+      `Création refusée par le CRM : ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (result.simulation) {
+    return {
+      simulation: true,
+      message:
+        "Simulation : la fiche aurait été créée dans le CRM du client. Les écritures réelles sont désactivées, rien n'a été créé.",
+    };
+  }
+  if (typeof result.id !== 'string')
+    throw new CrmIndisponible('Le CRM n’a pas renvoyé d’identifiant');
+  return { sourceId: result.id };
 }
 
 export async function createEntreprise(
   db: Executor,
-  instanceId: string,
+  instance: Instance,
   input: {
     nom: string;
     secteur?: string | null;
@@ -196,12 +227,18 @@ export async function createEntreprise(
     taille?: number | null;
     domaine?: string | null;
   },
+  deps: CreationDeps,
 ) {
-  return withInstance(db, instanceId, async (tx) => {
-    await assertNativeCreation(tx);
+  return withInstance(db, instance.id, async (tx) => {
+    const crm = await createInCrm(tx, instance, 'company.create', input, deps);
+    if (crm && 'simulation' in crm) return crm;
     const [row] = await tx
       .insert(entreprises)
-      .values({ instanceId: currentInstance, ...input })
+      .values({
+        instanceId: currentInstance,
+        ...input,
+        ...(crm ? { source: 'hubspot', sourceId: crm.sourceId } : {}),
+      })
       .returning();
     if (!row) throw new Error('Entreprise non créée');
     await logEvent(tx, { acteur: 'pilote', action: `Entreprise créée : ${row.nom}`, niveau: 'L2' });
@@ -211,7 +248,7 @@ export async function createEntreprise(
 
 export async function createContact(
   db: Executor,
-  instanceId: string,
+  instance: Instance,
   input: {
     nom: string;
     fonction?: string | null;
@@ -220,9 +257,9 @@ export async function createContact(
     role?: string | null;
     entrepriseId?: string | null;
   },
+  deps: CreationDeps,
 ) {
-  return withInstance(db, instanceId, async (tx) => {
-    await assertNativeCreation(tx);
+  return withInstance(db, instance.id, async (tx) => {
     if (input.entrepriseId) {
       const [owner] = await tx
         .select({ id: entreprises.id })
@@ -232,9 +269,15 @@ export async function createContact(
         );
       if (!owner) throw new Error('Entreprise inconnue dans cette instance');
     }
+    const crm = await createInCrm(tx, instance, 'contact.create', input, deps);
+    if (crm && 'simulation' in crm) return crm;
     const [row] = await tx
       .insert(contacts)
-      .values({ instanceId: currentInstance, ...input })
+      .values({
+        instanceId: currentInstance,
+        ...input,
+        ...(crm ? { source: 'hubspot', sourceId: crm.sourceId } : {}),
+      })
       .returning();
     if (!row) throw new Error('Contact non créé');
     await logEvent(tx, { acteur: 'pilote', action: `Contact créé : ${row.nom}`, niveau: 'L2' });

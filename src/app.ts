@@ -13,6 +13,7 @@ export type AppDeps = {
   backupStatusFile?: string;
   lectureRole?: string;
   realWrites?: boolean;
+  secretsDir?: string;
   logger?: FastifyServerOptions['logger'];
 };
 
@@ -23,11 +24,12 @@ export function buildApp({
   backupStatusFile = './backup-status/last.json',
   lectureRole = 'simatis_app_lecture',
   realWrites = false,
+  secretsDir = './secrets/instances',
   logger = false,
 }: AppDeps): FastifyInstance {
   const app = Fastify({ logger });
   registerHealth(app, { pool, version, backupStatusFile });
-  registerApi(app, { db });
+  registerApi(app, { db, secretsDir, realWrites });
   registerMcp(app, { db, pool, lectureRole, realWrites });
   registerWeb(app);
   return app;

@@ -27,6 +27,7 @@ const app = buildApp({
   backupStatusFile: config.backupStatusFile,
   lectureRole: lectureRoleOf(config.appDbRole),
   realWrites: config.realWrites,
+  secretsDir: config.secretsDir,
   logger: { level: config.logLevel },
 });
 

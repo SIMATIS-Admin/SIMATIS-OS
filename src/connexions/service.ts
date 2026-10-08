@@ -8,7 +8,7 @@ import { logEvent } from '../journal/service.js';
 import { canWriteReal } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { connexions, type Connexion, type Frequence, type Kind, type Reglages } from './schema.js';
-import type { Connector, SyncReport } from './types.js';
+import type { Connector, SyncReport, WriteOp, WriteResult } from './types.js';
 
 export type ConnexionDeps = { secretsDir: string; realWrites: boolean };
 
@@ -95,6 +95,8 @@ export async function syncConnexion(
         tx,
         secrets: await loadInstanceSecrets(deps.secretsDir, instance.slug),
         reglages: found.connexion.reglages,
+        connexionId: found.connexion.id,
+        derniereSynchro: found.connexion.derniereSynchro,
         reel: canWriteReal(instance, deps.realWrites),
       });
       await tx
@@ -136,6 +138,33 @@ export async function syncConnexion(
     });
     throw error;
   }
+}
+
+// Writes to the instance's own tool (HubSpot…) inside the given transaction. The connector applies
+// the rules: refused in read-only mode, simulated unless both real-write locks are on.
+export async function writeVia(
+  tx: Tx,
+  instance: Instance,
+  kind: Kind,
+  op: WriteOp,
+  deps: ConnexionDeps,
+): Promise<WriteResult> {
+  const found = await getConnector(tx, kind);
+  if (!found?.connector.write) {
+    throw new Error(`Connexion ${kind} absente ou sans écriture pour ${instance.nom}`);
+  }
+  return found.connector.write(
+    {
+      instance,
+      tx,
+      secrets: await loadInstanceSecrets(deps.secretsDir, instance.slug),
+      reglages: found.connexion.reglages,
+      connexionId: found.connexion.id,
+      derniereSynchro: found.connexion.derniereSynchro,
+      reel: canWriteReal(instance, deps.realWrites),
+    },
+    op,
+  );
 }
 
 export async function syncNow(

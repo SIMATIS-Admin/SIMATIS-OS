@@ -58,7 +58,10 @@ const favorisSchema = z.object({
   favoris: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,40}$/)).max(30),
 });
 
-export function registerApi(app: FastifyInstance, { db }: { db: Database }): void {
+export type ApiDeps = { db: Database; secretsDir: string; realWrites: boolean };
+
+export function registerApi(app: FastifyInstance, { db, secretsDir, realWrites }: ApiDeps): void {
+  const connexionDeps = { secretsDir, realWrites };
   app.get('/api/instances', async () => (await listInstances(db)).map(summary));
 
   // Every /api/i/:slug/… route: unknown or archived instance → 404, never another instance's data.
@@ -106,13 +109,16 @@ export function registerApi(app: FastifyInstance, { db }: { db: Database }): voi
   type Create = SlugParams & { Body: unknown };
   const creation = <S extends z.ZodType>(
     schema: S,
-    create: (instanceId: string, input: z.infer<S>) => Promise<unknown>,
+    create: (instance: Instance, input: z.infer<S>) => Promise<unknown>,
   ) =>
     onInstance<Create>(async (i, request, reply) => {
       const parsed = schema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Champs invalides' });
       try {
-        return reply.code(201).send(await create(i.id, parsed.data));
+        const created = await create(i, parsed.data);
+        const simulated =
+          typeof created === 'object' && created !== null && 'simulation' in created;
+        return reply.code(simulated ? 202 : 201).send(created);
       } catch (error) {
         if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
         throw error;
@@ -120,11 +126,11 @@ export function registerApi(app: FastifyInstance, { db }: { db: Database }): voi
     });
   app.post<Create>(
     '/api/i/:slug/entreprises',
-    creation(entrepriseSchema, (i, input) => createEntreprise(db, i, input)),
+    creation(entrepriseSchema, (i, input) => createEntreprise(db, i, input, connexionDeps)),
   );
   app.post<Create>(
     '/api/i/:slug/contacts',
-    creation(contactSchema, (i, input) => createContact(db, i, input)),
+    creation(contactSchema, (i, input) => createContact(db, i, input, connexionDeps)),
   );
 
   app.get<SlugParams>(
