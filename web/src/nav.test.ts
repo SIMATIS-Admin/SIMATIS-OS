@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { allItems, allowed, groupInstances, isBuilt, type InstanceSummary } from './nav.js';
+import {
+  allItems,
+  allowed,
+  groupInstances,
+  isBuilt,
+  reorderFavoris,
+  toggleFavori,
+  type InstanceSummary,
+} from './nav.js';
 
 const inst = (slug: string, type: InstanceSummary['type']): InstanceSummary => ({
   slug,
@@ -36,5 +44,27 @@ describe('nav', () => {
     expect(isBuilt('entreprises')).toBe(true);
     expect(isBuilt('contacts')).toBe(true);
     expect(isBuilt('pipeline')).toBe(false);
+  });
+
+  it('reorders favourites before or after a target', () => {
+    const f = ['pipeline', 'brief', 'prospection'];
+    expect(reorderFavoris(f, 'prospection', 'pipeline', false)).toEqual([
+      'prospection',
+      'pipeline',
+      'brief',
+    ]);
+    expect(reorderFavoris(f, 'pipeline', 'brief', true)).toEqual([
+      'brief',
+      'pipeline',
+      'prospection',
+    ]);
+    expect(reorderFavoris(f, 'brief', 'brief', true)).toBe(f);
+    expect(reorderFavoris(f, 'absent', 'brief', true)).toBe(f);
+    expect(reorderFavoris(f, 'brief', 'absent', false)).toBe(f);
+  });
+
+  it('adds or removes a favourite', () => {
+    expect(toggleFavori(['brief'], 'pipeline')).toEqual(['brief', 'pipeline']);
+    expect(toggleFavori(['brief', 'pipeline'], 'brief')).toEqual(['pipeline']);
   });
 });

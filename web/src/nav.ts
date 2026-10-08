@@ -51,7 +51,7 @@ export const NAV: NavGroup[] = [
 ];
 
 // Screens already built in the real app; every other menu entry shows « Bientôt ».
-export const BUILT = new Set(['entreprises', 'contacts']);
+export const BUILT = new Set(['entreprises', 'contacts', 'journal', 'parametres']);
 
 // Where each screen comes from in docs/plans/2026-10-08-implementation-maquette.md.
 export const LOTS: Record<string, string> = {
@@ -62,8 +62,6 @@ export const LOTS: Record<string, string> = {
   pipeline: 'Lot 9, Pipeline',
   agenda: 'Lot 15, Rendez-vous et Devis',
   devis: 'Lot 15, Rendez-vous et Devis',
-  parametres: 'Lot 6, Coquille web',
-  journal: 'Lot 6, Coquille web',
   prospection: 'M4, spécification à finir',
   bases: 'M4, spécification à finir',
 };
@@ -97,4 +95,20 @@ export function groupInstances(list: InstanceSummary[]) {
     label,
     instances: list.filter((i) => i.type === type),
   })).filter((g) => g.instances.length > 0);
+}
+
+export const toggleFavori = (favoris: string[], id: string): string[] =>
+  favoris.includes(id) ? favoris.filter((f) => f !== id) : [...favoris, id];
+
+// Drag-and-drop in the Favourites group: moves `id` just before or after `cibleId`.
+export function reorderFavoris(
+  favoris: string[],
+  id: string,
+  cibleId: string,
+  apres: boolean,
+): string[] {
+  if (id === cibleId || !favoris.includes(id) || !favoris.includes(cibleId)) return favoris;
+  const rest = favoris.filter((f) => f !== id);
+  const at = rest.indexOf(cibleId) + (apres ? 1 : 0);
+  return [...rest.slice(0, at), id, ...rest.slice(at)];
 }
