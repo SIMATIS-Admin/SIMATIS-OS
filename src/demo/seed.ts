@@ -1,6 +1,7 @@
 import { contacts, entreprises } from '../crm/schema.js';
 import type { Database } from '../db.js';
 import { instances, type InstanceType } from '../instances/schema.js';
+import { createInstance } from '../instances/service.js';
 import fixtures from './fixtures.json' with { type: 'json' };
 
 // Loads the mockup's fictive instances, only into an empty database: real instances are never touched.
@@ -10,11 +11,12 @@ export async function seedDemoIfEmpty(db: Database): Promise<boolean> {
     if (existing) return false;
 
     for (const f of fixtures) {
-      const [instance] = await tx
-        .insert(instances)
-        .values({ slug: f.slug, nom: f.nom, type: f.type as InstanceType, config: f.config })
-        .returning({ id: instances.id });
-      if (!instance) throw new Error(`Instance non créée : ${f.slug}`);
+      const instance = await createInstance(tx, {
+        slug: f.slug,
+        nom: f.nom,
+        type: f.type as InstanceType,
+        config: f.config,
+      });
 
       const ids = new Map<string, string>();
       for (const e of f.entreprises) {
