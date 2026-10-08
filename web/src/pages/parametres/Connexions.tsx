@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   fetchConnexions,
+  saveReglages,
   saveReglagesCrm,
   syncConnexion,
   type ConnexionInfo,
@@ -179,6 +180,110 @@ function CrmHubspot({
   );
 }
 
+function useSave(slug: string, kind: 'messagerie' | 'agenda', onChange: () => void) {
+  const [error, setError] = useState<string | null>(null);
+  const save = (patch: Record<string, unknown>) =>
+    saveReglages(slug, kind, patch).then(onChange, (e: unknown) =>
+      setError(e instanceof Error ? e.message : String(e)),
+    );
+  return { save, error };
+}
+
+function Messagerie({
+  slug,
+  c,
+  onChange,
+}: {
+  slug: string;
+  c: ConnexionInfo;
+  onChange: () => void;
+}) {
+  const { save, error } = useSave(slug, 'messagerie', onChange);
+  const r = c.reglages as { historiqueMois?: number; contenu?: string };
+  return (
+    <div className="panel-b">
+      <div className="grid g2">
+        <label className="field">
+          <span>Historique lu</span>
+          <select
+            className="input"
+            value={r.historiqueMois ?? 12}
+            onChange={(e) => void save({ historiqueMois: Number(e.target.value) })}
+          >
+            <option value={3}>3 mois</option>
+            <option value={12}>12 mois</option>
+            <option value={24}>24 mois</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Contenu lu</span>
+          <select
+            className="input"
+            value={r.contenu ?? 'extraits'}
+            onChange={(e) => void save({ contenu: e.target.value })}
+          >
+            <option value="extraits">Extraits seulement</option>
+            <option value="complet">Corps complet</option>
+          </select>
+        </label>
+      </div>
+      <Verrou>Brouillons créés sans signature : Gmail ajoute la vôtre.</Verrou>
+      <Verrou>Aucun envoi direct : vous envoyez depuis Gmail.</Verrou>
+      {c.derniereErreur && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          Dernière erreur : {c.derniereErreur}
+        </p>
+      )}
+      {error && <p className="small muted">{error}</p>}
+    </div>
+  );
+}
+
+function Agenda({ slug, c, onChange }: { slug: string; c: ConnexionInfo; onChange: () => void }) {
+  const { save, error } = useSave(slug, 'agenda', onChange);
+  const r = c.reglages as { calendriers?: string[]; tamponMin?: number };
+  const [calendriers, setCalendriers] = useState((r.calendriers ?? ['primary']).join(', '));
+  return (
+    <div className="panel-b">
+      <div className="grid g2">
+        <label className="field">
+          <span>
+            Calendriers lus{' '}
+            <Tip text="« primary » désigne l'agenda principal du compte. Séparez plusieurs agendas par des virgules." />
+          </span>
+          <input
+            className="input"
+            value={calendriers}
+            onChange={(e) => setCalendriers(e.target.value)}
+            onBlur={() =>
+              void save({
+                calendriers: calendriers
+                  .split(',')
+                  .map((x) => x.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </label>
+        <label className="field">
+          <span>Marge autour des rendez-vous</span>
+          <select
+            className="input"
+            value={r.tamponMin ?? 15}
+            onChange={(e) => void save({ tamponMin: Number(e.target.value) })}
+          >
+            <option value={0}>Aucune</option>
+            <option value={15}>15 minutes</option>
+            <option value={30}>30 minutes</option>
+          </select>
+        </label>
+      </div>
+      <Verrou>L'OS ne lit que les plages occupées, pour proposer des créneaux libres.</Verrou>
+      {error && <p className="small muted">{error}</p>}
+    </div>
+  );
+}
+
 export function Connexions({ slug }: { slug: string }) {
   const [data, setData] = useState<ConnexionsReponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -213,14 +318,30 @@ export function Connexions({ slug }: { slug: string }) {
             </div>
             {kind === 'crm' && c?.fournisseur === 'hubspot' ? (
               <CrmHubspot slug={slug} c={c} options={data.options} onChange={load} />
+            ) : kind === 'messagerie' && c?.fournisseur === 'gmail' ? (
+              <Messagerie slug={slug} c={c} onChange={load} />
+            ) : kind === 'agenda' && c?.fournisseur === 'google-agenda' ? (
+              <Agenda slug={slug} c={c} onChange={load} />
             ) : (
               <div className="panel-b">
                 <p style={{ margin: 0 }}>
-                  {kind === 'crm'
-                    ? c
-                      ? 'Données fictives de démonstration.'
-                      : "Pas de CRM branché : pipeline, entreprises et contacts sont tenus par l'OS. Pour brancher le HubSpot du client, l'agent lance connexion:set avec le jeton dans les secrets de l'instance."
-                    : 'Messagerie et agenda arrivent avec le lot 10. Sans cette connexion, rien ne part depuis la boîte d’une autre instance.'}
+                  {kind === 'crm' ? (
+                    c ? (
+                      'Données fictives de démonstration.'
+                    ) : (
+                      "Pas de CRM branché : pipeline, entreprises et contacts sont tenus par l'OS. Pour brancher le HubSpot du client, l'agent lance connexion:set avec le jeton dans les secrets de l'instance."
+                    )
+                  ) : c ? (
+                    'Données fictives de démonstration.'
+                  ) : (
+                    <>
+                      Non branchée : sans cette connexion, les routines s'arrêtent à l'étape qui en
+                      a besoin, et rien ne part depuis la boîte d'une autre instance. Pour la
+                      brancher, l'agent lance{' '}
+                      <code>npm run admin -- google:connect --slug {slug}</code> sur l'ordinateur de
+                      l'OS.
+                    </>
+                  )}
                 </p>
               </div>
             )}
