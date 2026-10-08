@@ -29,6 +29,13 @@
       "when": 1791473774803,
       "tag": "0003_journal_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791475039488,
+      "tag": "0004_propositions",
+      "breakpoints": true
     }
   ]
 }
