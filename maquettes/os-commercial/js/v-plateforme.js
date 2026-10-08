@@ -27,10 +27,10 @@ Object.assign(ACTIONS, {
   'rt-toggle': (ds, el) => { const x = byId(D().routines, ds.id); x.actif = el.checked; logAction(`Routine ${el.checked ? 'activée' : 'mise en pause'} : ${x.nom}`, 'L2'); render(); },
   'rt-run': ds => {
     const x = byId(D().routines, ds.id);
-    S.run = { id: x.id, k: 0, err: null, fin: false };
+    const run = S.run = { id: x.id, k: 0, err: null, fin: false };
     openModal(esc(x.nom), runBody);
     const tick = setInterval(() => {
-      const R = S.run; if (!R || R.id !== x.id) return clearInterval(tick);
+      const R = S.run; if (R !== run) return clearInterval(tick);
       const etape = x.etapes[R.k], b = besoin(etape);
       if (b && !connOk(b)) { R.err = `${b} non configurée pour ${INST().nom} : la routine s'arrête ici.`; }
       else R.k++;
