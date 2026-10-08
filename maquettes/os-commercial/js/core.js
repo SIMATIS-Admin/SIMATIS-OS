@@ -1,6 +1,6 @@
 /* Noyau de la maquette : état, navigation, interface commune. */
 
-const STORE_KEY = 'simatis-os-maquette-v2';
+const STORE_KEY = 'simatis-os-maquette-v3';
 const VIEWS = {};
 const ACTIONS = {};
 let S;
@@ -87,11 +87,11 @@ const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 /* ---------- Navigation ---------- */
 /* Le groupe « later » regroupe les écrans reportés : encore accessibles, mais repliés par défaut. */
 const NAV = [
-  { g: 'Pilotage', items: [['brief', 'Brief du jour', 'sun'], ['validations', 'À valider', 'inbox'], ['tableau', 'Tableau de bord', 'chart']] },
+  { g: 'Pilotage', items: [['routines', 'Routines Claude', 'clock'], ['brief', 'Brief du jour', 'sun'], ['validations', 'À valider', 'inbox'], ['tableau', 'Tableau de bord', 'chart']] },
   { g: 'Stratégie', items: [['demarrage', 'Démarrage du mandat', 'flag', 'demarrage']] },
   { g: 'Générer la demande', items: [['prospection', 'Prospection', 'send'], ['bases', 'Bases vivantes', 'db']] },
   { g: 'Convertir', items: [['pipeline', 'Pipeline', 'kanban'], ['agenda', 'Rendez-vous', 'cal'], ['devis', 'Devis', 'file', 'devis'], ['relais', 'Relais internes', 'users', 'relais']] },
-  { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic'], ['detection', 'Détection', 'pulse'], ['routines', 'Routines Claude', 'clock'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
+  { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic'], ['detection', 'Détection', 'pulse'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
 ];
 const NAV_ITEMS = NAV.flatMap(g => g.items);
 const navItem = id => NAV_ITEMS.find(([v]) => v === id);
@@ -113,13 +113,13 @@ function fromHash() {
 /* ---------- Rendu ---------- */
 function shell(body, v) {
   const inst = INST();
-  const link = ([id, l, i]) => {
+  const link = ([id, l, i], fav) => {
     const n = id === 'validations' ? pending() : 0;
-    return `<a href="#/${inst.id}/${id}" data-act="go" data-v="${id}" class="${S.view === id ? 'on' : ''}">${ic(i)}<span class="lbl">${l}</span>${n ? `<span class="badge">${n}</span>` : ''}<span class="fav ${isFav(id) ? 'on' : ''}" data-act="fav" data-v="${id}" role="button" title="${isFav(id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${ic('star')}</span></a>`;
+    return `<a href="#/${inst.id}/${id}" data-act="go" data-v="${id}" class="${S.view === id ? 'on' : ''}"${fav === true ? ` draggable="true" data-fav="${id}" title="Glisser pour réordonner"` : ''}>${ic(i)}<span class="lbl">${l}</span>${n ? `<span class="badge">${n}</span>` : ''}<span class="fav ${isFav(id) ? 'on' : ''}" data-act="fav" data-v="${id}" role="button" title="${isFav(id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${ic('star')}</span></a>`;
   };
   const favs = (S.favs || []).map(navItem).filter(it => it && allowed(it[0], inst));
   const laterOpen = S.navLater || NAV.find(g => g.later).items.some(([id]) => id === S.view);
-  const nav = (favs.length ? `<div class="nav-group favs"><span>${ic('star')}Favoris</span>${favs.map(link).join('')}</div>` : '') + NAV.map(g => {
+  const nav = (favs.length ? `<div class="nav-group favs"><span>${ic('star')}Favoris</span>${favs.map(it => link(it, true)).join('')}</div>` : '') + NAV.map(g => {
     const items = g.items.filter(([id]) => allowed(id, inst));
     if (!items.length) return '';
     if (g.later) return `<div class="nav-group later"><button class="later-btn" data-act="nav-later" aria-expanded="${!!laterOpen}">${g.g}<span class="chev ${laterOpen ? 'open' : ''}">${ic('down')}</span></button>${laterOpen ? items.map(link).join('') : ''}</div>`;
@@ -150,7 +150,29 @@ function render() {
   const out = V();
   root.innerHTML = shell(out.body, out) + overlay();
   if (out.after) out.after();
+  bindFavDrag();
   save();
+}
+
+/* Réordonner les favoris par glisser-déposer. Type MIME propre, pour ne pas être pris pour une carte du pipeline. */
+const FAV_MIME = 'application/x-simatis-fav';
+function bindFavDrag() {
+  document.querySelectorAll('[data-fav]').forEach(a => {
+    a.addEventListener('dragstart', e => { e.dataTransfer.setData(FAV_MIME, a.dataset.fav); e.dataTransfer.effectAllowed = 'move'; a.classList.add('dragging'); });
+    a.addEventListener('dragend', () => a.classList.remove('dragging'));
+    a.addEventListener('dragover', e => {
+      if (!e.dataTransfer.types.includes(FAV_MIME)) return;
+      e.preventDefault(); const r = a.getBoundingClientRect(), apres = e.clientY > r.top + r.height / 2;
+      a.classList.toggle('drop-before', !apres); a.classList.toggle('drop-after', apres);
+    });
+    a.addEventListener('dragleave', () => a.classList.remove('drop-before', 'drop-after'));
+    a.addEventListener('drop', e => {
+      const id = e.dataTransfer.getData(FAV_MIME); if (!id) return;
+      e.preventDefault(); const apres = a.classList.contains('drop-after');
+      const list = S.favs.filter(x => x !== id), k = list.indexOf(a.dataset.fav);
+      list.splice(apres ? k + 1 : k, 0, id); S.favs = list; render();
+    });
+  });
 }
 
 /* ---------- Tiroir, fenêtre, notification ---------- */

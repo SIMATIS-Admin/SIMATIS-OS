@@ -9,6 +9,7 @@ function conversions(opps) {
   const atteint = k => opps.filter(o => rang(o) >= k).length;
   return ETAPES.map((e, k) => { const den = atteint(k); return den ? Math.round(atteint(k + 1) / den * 100) : null; });
 }
+const MIROIR_TIP = crm => `Ce pipeline est le reflet exact du pipeline ${crm} du mandat, qui fait foi. Ce que vous changez ici est écrit dans ${crm} ; ce qui change dans ${crm} remonte ici à chaque synchronisation (toutes les 15 minutes, ou à la demande).`;
 const CONV_TIP = "Taux de conversion : part des opportunités arrivées à l'étape de gauche qui ont atteint l'étape de droite. Les affaires ouvertes, gagnées et perdues sont toutes comptées ; une affaire perdue compte jusqu'à l'étape où elle s'est arrêtée.";
 
 VIEWS.pipeline = () => {
@@ -29,7 +30,7 @@ VIEWS.pipeline = () => {
   function cellH([k, l]) { const m = MATRICE[k]; const os = opps.filter(o => `${o.potentiel}-${o.faisab}` === k); return `<div class="cell ${m.k}" aria-label="${l}"><h3>${m.nom}<span class="num small muted">${os.length}</span></h3><p>${m.d}</p>${os.map(o => `<span class="pill" data-act="opp" data-id="${o.id}">${scoreBadge(o.score)}${esc(soc(o.soc).nom)}</span>`).join('')}</div>`; }
   return {
     title: 'Pipeline',
-    actions: `<div class="seg"><button class="${mode === 'board' ? 'on' : ''}" data-act="pipe-mode" data-m="board">Étapes</button><button class="${mode === 'matrice' ? 'on' : ''}" data-act="pipe-mode" data-m="matrice">Matrice</button></div><button class="btn primary" data-act="opp-new">Nouvelle opportunité</button>`,
+    actions: `${INST().crm ? `<span class="badge blue">Miroir ${INST().crm}, synchronisé ${S.sync?.[S.inst] ? 'à l\'instant' : 'il y a 5 min'}</span>${tip(MIROIR_TIP(INST().crm))}<button class="btn" data-act="crm-sync">Synchroniser</button>` : ''}<div class="seg"><button class="${mode === 'board' ? 'on' : ''}" data-act="pipe-mode" data-m="board">Étapes</button><button class="${mode === 'matrice' ? 'on' : ''}" data-act="pipe-mode" data-m="matrice">Matrice</button></div><button class="btn primary" data-act="opp-new">Nouvelle opportunité</button>`,
     body: mode === 'board' ? board : matrix,
     after: () => {
       document.querySelectorAll('[data-drag]').forEach(c => c.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', c.dataset.drag)));
@@ -45,12 +46,13 @@ VIEWS.pipeline = () => {
           if (o.etape === cible && !o.clos) return;
           const rouverte = !!o.clos; o.clos = null; o.motif = null; o.etape = cible; o.maj = dp(0);
           logAction(`${rouverte ? 'Opportunité rouverte' : 'Étape changée'} : ${soc(o.soc).nom} → ${ETAPES.find(x => x.id === o.etape).nom}`, 'L2');
-          render(); toast(rouverte ? 'Opportunité rouverte' : 'Étape mise à jour');
+          render(); toast((rouverte ? 'Opportunité rouverte' : 'Étape mise à jour') + (INST().crm ? ` dans ${INST().crm}` : ''));
         });
       });
     }
   };
 };
+ACTIONS['crm-sync'] = () => { (S.sync = S.sync || {})[S.inst] = true; logAction(`Synchronisation ${INST().crm} : pipeline à jour`, 'L3', 'os'); render(); toast(`Pipeline à jour : aucun écart avec ${INST().crm}`); };
 ACTIONS['pipe-mode'] = ds => { S.pipeMode = ds.m; render(); };
 
 /* ---------- Fiche opportunité ---------- */
