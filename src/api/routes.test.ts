@@ -1,19 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createTestDatabase, type TestDatabase } from '../../test/database.js';
+import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
-import { createDb, type Database } from '../db.js';
 import fixtures from '../demo/fixtures.json' with { type: 'json' };
 import { seedDemoIfEmpty } from '../demo/seed.js';
-import { runMigrations } from '../migrate.js';
 
 type Row = Record<string, unknown>;
 
 describe('API instances, entreprises, contacts', () => {
-  let testDb: TestDatabase;
-  let pool: pg.Pool;
-  let db: Database;
+  let t: TestApp;
   let app: FastifyInstance;
 
   const get = async (url: string) => {
@@ -22,22 +17,22 @@ describe('API instances, entreprises, contacts', () => {
   };
 
   beforeAll(async () => {
-    testDb = await createTestDatabase();
-    ({ pool, db } = createDb(testDb.url));
-    await runMigrations(db);
-    app = buildApp({ pool, db, version: 'test' });
+    t = await setupTestApp();
+    // The API runs as the restricted role, as in production.
+    app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test' });
   });
 
   afterAll(async () => {
     await app.close();
-    await pool.end();
-    await testDb.drop();
+    await t.drop();
   });
 
   it('seeds the fictive instances once, and only into an empty database', async () => {
-    expect(await seedDemoIfEmpty(db)).toBe(true);
-    expect(await seedDemoIfEmpty(db)).toBe(false);
-    const { rows } = await pool.query<{ n: number }>('select count(*)::int as n from entreprises');
+    expect(await seedDemoIfEmpty(t.owner.db)).toBe(true);
+    expect(await seedDemoIfEmpty(t.owner.db)).toBe(false);
+    const { rows } = await t.owner.pool.query<{ n: number }>(
+      'select count(*)::int as n from entreprises',
+    );
     expect(rows[0]?.n).toBe(fixtures.reduce((n, f) => n + f.entreprises.length, 0));
   });
 

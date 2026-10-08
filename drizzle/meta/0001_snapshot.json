@@ -1,0 +1,360 @@
+{
+  "id": "fdf723da-9b02-4af1-8ead-8fbf0876d0a5",
+  "prevId": "a4f97eb2-4e19-471a-a972-352372aa3ce4",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.contacts": {
+      "name": "contacts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'natif'"
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "entreprise_id": {
+          "name": "entreprise_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fonction": {
+          "name": "fonction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telephone": {
+          "name": "telephone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "contacts_instance_idx": {
+          "name": "contacts_instance_idx",
+          "columns": [
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "contacts_instance_id_instances_id_fk": {
+          "name": "contacts_instance_id_instances_id_fk",
+          "tableFrom": "contacts",
+          "tableTo": "instances",
+          "columnsFrom": [
+            "instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "contacts_entreprise_id_entreprises_id_fk": {
+          "name": "contacts_entreprise_id_entreprises_id_fk",
+          "tableFrom": "contacts",
+          "tableTo": "entreprises",
+          "columnsFrom": [
+            "entreprise_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "contacts_instance_isolation": {
+          "name": "contacts_instance_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid",
+          "withCheck": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.entreprises": {
+      "name": "entreprises",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'natif'"
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "secteur": {
+          "name": "secteur",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ville": {
+          "name": "ville",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "taille": {
+          "name": "taille",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "domaine": {
+          "name": "domaine",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "entreprises_instance_idx": {
+          "name": "entreprises_instance_idx",
+          "columns": [
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "entreprises_instance_id_instances_id_fk": {
+          "name": "entreprises_instance_id_instances_id_fk",
+          "tableFrom": "entreprises",
+          "tableTo": "instances",
+          "columnsFrom": [
+            "instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "entreprises_instance_isolation": {
+          "name": "entreprises_instance_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid",
+          "withCheck": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.instances": {
+      "name": "instances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statut": {
+          "name": "statut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'actif'"
+        },
+        "config": {
+          "name": "config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "instances_slug_unique": {
+          "name": "instances_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

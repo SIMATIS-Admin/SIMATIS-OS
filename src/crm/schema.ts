@@ -1,5 +1,5 @@
 import { index, integer, pgTable, text, uuid } from 'drizzle-orm/pg-core';
-import { metierColumns } from '../db/columns.js';
+import { instanceIsolation, metierColumns } from '../db/columns.js';
 
 export const entreprises = pgTable(
   'entreprises',
@@ -12,7 +12,7 @@ export const entreprises = pgTable(
     taille: integer('taille'),
     domaine: text('domaine'),
   },
-  (t) => [index('entreprises_instance_idx').on(t.instanceId)],
+  (t) => [index('entreprises_instance_idx').on(t.instanceId), instanceIsolation('entreprises')],
 );
 
 export const contacts = pgTable(
@@ -27,5 +27,5 @@ export const contacts = pgTable(
     telephone: text('telephone'),
     role: text('role'),
   },
-  (t) => [index('contacts_instance_idx').on(t.instanceId)],
+  (t) => [index('contacts_instance_idx').on(t.instanceId), instanceIsolation('contacts')],
 );
