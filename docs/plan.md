@@ -11,12 +11,14 @@ La maquette `maquettes/os-commercial/` sert de référence fonctionnelle.
 
 ## Comment on avance
 
-Le plan est découpé en parties. Pour chacune :
+Le plan a deux blocs, menés en parallèle :
 
-1. Marc la relit et fait ses remarques à l'agent.
-2. L'agent ajuste la partie, puis écrit son plan technique détaillé dans `docs/plans/`.
-3. Implémentation sur une branche, PR, revue, merge.
-4. L'agent explique à Marc, étape par étape, comment tester.
+| Bloc | Qui décide | Déroulé |
+| --- | --- | --- |
+| **Socle technique** | L'agent | Posé tout de suite, sur ce poste. Ne dépend d'aucun choix métier. Plan détaillé dans `docs/plans/`, puis implémentation, partie par partie. |
+| **Parties métier** | Marc | Marc les détaille avec l'agent, en partant de la maquette. Une partie validée reçoit son plan détaillé, puis elle est construite sur le socle. |
+
+Chaque partie avance par branche, PR, revue et merge. À la fin de chacune, l'agent explique à Marc comment tester.
 
 Statuts possibles : à relire, validée, en cours, livrée.
 
@@ -38,7 +40,7 @@ Chaque instance a sa configuration et ses accès. Aucune ne lit les données d'u
 
 ### Écritures vers les outils réels
 
-- Un agent ne modifie rien directement : il propose, Marc valide (sauf niveau d'autonomie qui l'autorise).
+- Un agent ne modifie rien directement : il propose, Marc valide, sauf si le niveau d'autonomie de l'action l'autorise.
 - Simulation par défaut ; le mode réel exige un double verrou (variable serveur + interrupteur admin).
 - Aucun repli d'un mandat vers un autre : si un mandat n'a pas de Gmail configuré, rien ne part, et surtout pas depuis la boîte SIMATIS.
 
@@ -63,6 +65,7 @@ Postgres ← cœur SimatisOS (services métier, règles, journal d'audit)
 - **Outils MCP en langage métier** plutôt que du SQL libre, plus un outil `requete_lecture` en lecture seule sur des vues choisies, limité à l'instance du jeton.
 - **Cloisonnement imposé deux fois** : par le cœur (contexte d'instance obligatoire) et par Postgres (Row-Level Security).
 - **Une seule base partagée** : pas d'export de fin de mandat, donc pas besoin d'une base par mandat.
+- **Les parties métier se branchent sur le socle** : chacune ajoute ses tables, ses services, ses outils MCP, ses types de propositions et ses écrans, sans toucher aux règles du socle.
 
 ### Pile
 
@@ -74,216 +77,191 @@ Postgres ← cœur SimatisOS (services métier, règles, journal d'audit)
 | HTTP | Fastify |
 | MCP | SDK officiel TypeScript, Streamable HTTP sur `/mcp` |
 | Validation | Zod (partagé entre API et MCP) |
+| Interface | React + Vite, servie par `app` |
 | Tests | Vitest, sur une base Postgres de test |
 | CI | GitHub Actions : `npm run verify` |
 
-Un seul processus Node sert l'API, le MCP et les synchronisations.
+Un seul processus Node sert l'API, le MCP, l'interface et les synchronisations.
 
 ### Déploiement
 
-Docker Compose, en local dans un premier temps. Ports exposés sur `127.0.0.1` uniquement. Le même fichier servira pour un futur serveur.
+Docker Compose, sur ce poste dans un premier temps. Ports exposés sur `127.0.0.1` uniquement. Le même fichier servira sur l'ordinateur de Marc ou sur un serveur : on y déménage en restaurant une sauvegarde.
 
 | Service | Rôle |
 | --- | --- |
 | `db` | PostgreSQL, volume Docker nommé (jamais dans un dossier synchronisé iCloud ou Drive) |
-| `app` | Cœur, API, MCP, synchronisations |
-| `backup` | Sauvegardes (partie 2) |
+| `app` | Cœur, API, MCP, interface, synchronisations |
+| `backup` | Sauvegardes |
 
-## Parties
+---
 
-### Partie 1 — Socle technique
+## Bloc 1 — Socle technique
 
-Statut : à relire
+Posé maintenant, sur ce poste. **Fin du socle** : l'OS démarre en une commande et se sauvegarde. L'instance de démonstration et deux mandats fictifs sont cloisonnés. Un agent branché sur le MCP voit son instance et le journal, et l'interface affiche le cockpit, encore vide.
 
-**Ce que Marc obtient** : l'OS démarre sur son ordinateur en une commande, encore vide.
+### S1 — Projet et conteneurs
+
+Statut : à faire
 
 - Projet TypeScript ; `npm run verify` (lint, types, tests, build).
 - Docker Compose : `db` et `app`.
 - Migrations de base versionnées, appliquées au démarrage.
-- Page de santé `/health` : base joignable, version, et date de dernière sauvegarde dès la partie 2.
+- Page de santé `/health` : base joignable, version, date de la dernière sauvegarde.
 - `.env.example` documenté ; CI qui rejoue `npm run verify` sur chaque PR.
 
 **Tester** : `docker compose up -d`, puis ouvrir `http://localhost:<port>/health`.
 
-**Questions pour Marc**
+### S2 — Sauvegarde et exploitation
 
-- Sur quel ordinateur l'OS tournera-t-il (Mac, Windows) ? Est-il allumé toute la journée ?
-- Docker Desktop est-il installé ?
-
-### Partie 2 — Sauvegarde
-
-Statut : à relire
-
-**Ce que Marc obtient** : chaque jour, une copie chiffrée de la base et des secrets, hors de son ordinateur, vérifiée chaque semaine.
+Statut : à faire
 
 - Conteneur `backup` : `pg_dump` + restic, pour la base et le dossier `secrets/`.
 - Rattrapage plutôt qu'horaire fixe : toutes les heures, une sauvegarde est lancée si la dernière réussie a plus de 24 h. Un portable en veille ne rate rien.
-- Chiffrement avant envoi ; destination compatible S3 hébergée en UE ou en Suisse (Infomaniak Swiss Backup, Scaleway, Backblaze EU…).
+- Chiffrement avant envoi ; destination compatible S3 hébergée en UE ou en Suisse.
 - Rétention : 7 quotidiennes, 4 hebdomadaires, 12 mensuelles.
 - Test de restauration automatique chaque semaine dans une base jetable ; résultat visible sur `/health`.
-- Procédure de restauration écrite dans `docs/EXPLOITATION.md`.
+- `docs/EXPLOITATION.md` : démarrer, arrêter, mettre à jour, restaurer, déménager sur une autre machine.
 
-**Tester** : lancer une sauvegarde à la main, la voir sur le stockage, restaurer dans une base jetable.
+En attendant le choix du fournisseur, le développement se fait sur un dépôt de sauvegarde local de test ; basculer vers le vrai stockage ne demande que de modifier `.env`.
 
 **Limite connue** : une donnée purgée en fin de mandat reste dans les sauvegardes jusqu'à expiration de la rétention, douze mois au plus.
 
-**Questions pour Marc**
+**Deux points pour Marc** (ils ne bloquent pas le développement) :
 
-- Quel fournisseur de stockage, avec un compte au nom de SIMATIS ?
+- Quel fournisseur de stockage (Infomaniak Swiss Backup, Scaleway, Backblaze EU…), avec un compte au nom de SIMATIS ?
 - Où ranger le mot de passe des sauvegardes (gestionnaire de mots de passe) ? Sans lui, elles sont illisibles.
 
-### Partie 3 — Instances, configuration et cloisonnement
+### S3 — Instances, cloisonnement et journal
 
-Statut : à relire
-
-**Ce que Marc obtient** : un espace SIMATIS et un espace par mandat, chacun avec ses réglages et ses accès, sans fuite de l'un à l'autre.
+Statut : à faire
 
 - Instances `propre`, `mandat`, `demo` ; statuts actif ou archivé.
-- Configuration non secrète par instance, en base : étapes du pipeline, niveaux d'autonomie, garde-fous, signature, connexions activées.
+- Configuration non secrète par instance, en base, validée par un schéma. Chaque partie métier y déclare ses propres réglages.
 - Secrets chargés depuis `secrets/instances/<instance>.env`. Le démarrage échoue avec un message clair s'il manque un secret pour une connexion activée.
-- Cloisonnement par le cœur et par Row-Level Security.
+- Conventions imposées à toute table métier : identifiant d'instance, source et identifiant d'origine pour les données copiées, Row-Level Security, dates de création et de mise à jour.
 - Journal d'audit en ajout seul, imposé par la base.
 - Commandes d'administration, lancées par l'agent : créer, archiver, purger une instance.
 - Instances fictives de la maquette pour la démonstration.
 
-**Tester** : les tests prouvent qu'une instance ne lit jamais les données d'une autre ; créer un mandat fictif et consulter sa fiche.
+**Tester** : les tests prouvent qu'une instance ne lit jamais les données d'une autre, même par une requête SQL écrite à la main.
 
-**Questions pour Marc**
+### S4 — Moteur de propositions et d'autonomie
 
-- Au-delà des accès, qu'est-ce qui change d'un mandat à l'autre (étapes du pipeline, signature, rythme des routines, objectifs…) ?
-- Quels niveaux d'autonomie par défaut pour un nouveau mandat ?
+Statut : à faire
 
-### Partie 4 — Modèle commercial
+- Une proposition a un type, un contenu, une instance, un auteur et un statut (proposée, validée, modifiée, écartée, appliquée, en échec).
+- Les types (email, tâche, mise à jour HubSpot…) sont déclarés par les parties métier ; le moteur les traite tous de la même façon.
+- Niveaux L0 à L3 par action et par instance, avec des limites verrouillées.
+- Mode simulation sur toute écriture ; double verrou pour toute écriture réelle vers un outil externe.
+- Un agent ne peut jamais valider ses propres propositions.
+- Chaque étape est tracée au journal.
 
-Statut : à relire
+**Tester** : avec un type de proposition de test, vérifier qu'un niveau L0 bloque, qu'un L1 attend la validation, et qu'une limite verrouillée ne se dépasse pas.
 
-**Ce que Marc obtient** : les objets qu'il manipule chaque jour, rangés de la même façon dans toutes les instances.
+### S5 — Serveur MCP
 
-- Entreprises, contacts, opportunités (étape, montant, échéance), activités (email, rendez-vous, appel, note), tâches.
-- Chaque objet copié garde sa source (`hubspot`, `gmail`, `agenda`, ou `os` s'il est créé dans l'OS) et son identifiant d'origine.
-- Données propres à l'OS : préparations et comptes rendus de rendez-vous, qualification, plan d'action.
-- La grille de scoring détaillée est une méthode propriétaire : elle vit dans la configuration privée de l'instance, jamais dans le dépôt.
+Statut : à faire
 
-**Tester** : les données fictives de la maquette, chargées dans l'instance de démonstration.
-
-**Questions pour Marc**
-
-- Ces objets suffisent-ils pour une première version ? Lesquels manquent ?
-- Pour l'instance SIMATIS : existe-t-il un HubSpot SIMATIS, ou l'OS est-il lui-même le CRM de SIMATIS ?
-
-### Partie 5 — MCP en lecture
-
-Statut : à relire
-
-**Ce que Marc obtient** : il ouvre son IA, choisit l'instance, et lui pose des questions sur son activité.
-
-- Serveur MCP sur `/mcp` ; pont `mcp-remote` pour les agents qui ne parlent que stdio.
+- Transport Streamable HTTP sur `/mcp` ; pont `mcp-remote` pour les agents qui ne parlent que stdio.
 - Jetons : un par agent et par instance, plus un jeton « portefeuille » limité aux compteurs. Créés par commande, stockés hachés.
-- Outils : `brief_du_jour`, `pipeline`, `fiche_entreprise`, `fiche_contact`, `activites_recentes`, `rechercher`, `requete_lecture`.
+- Registre d'outils : chaque partie métier y ajoute les siens.
+- Outils de base : `instance_courante`, `journal_recent`, `propositions_en_attente`, `requete_lecture`.
 - Chaque appel est journalisé.
 
-**Tester** : brancher Claude sur l'instance de démonstration et lui demander, par exemple, quelles opportunités sont bloquées.
+**Tester** : brancher Claude sur l'instance de démonstration, lui demander sur quelle instance il travaille et ce que dit le journal ; vérifier qu'un jeton de mandat ne voit rien d'un autre mandat.
 
-**Questions pour Marc**
+### S6 — Cadre des connexions
 
-- Quelles IA utilisez-vous (Claude Desktop, ChatGPT, autre) ?
-- Les dix questions que vous aimeriez poser à l'OS : elles définissent les outils.
+Statut : à faire
 
-### Partie 6 — Propositions et autonomie
+- Interface commune à tous les connecteurs : lecture, synchronisation, écriture en simulation ou en réel.
+- Une connexion appartient à une seule instance et n'utilise que les secrets de cette instance. Pas de repli.
+- Planificateur de synchronisation avec rattrapage, plus une synchronisation à la demande.
+- Copie de travail : l'outil d'origine fait foi, ses données écrasent la copie en cas d'écart.
+- Un connecteur factice sert aux tests ; les vrais connecteurs arrivent avec la partie métier M8.
+
+**Tester** : le connecteur factice se synchronise dans une instance, sans jamais écrire dans une autre.
+
+### S7 — Socle de l'interface web
+
+Statut : à faire
+
+- Application React servie par `app`, accessible seulement depuis ce poste.
+- Coquille de la maquette : menu par groupes, sélecteur d'instance, portefeuille, styles.
+- Deux premiers écrans, qui relèvent du socle : Journal d'audit et Fiche d'instance (sans secret).
+- Les écrans métier viennent s'y ajouter au fil des parties métier.
+
+**Tester** : ouvrir l'interface, changer d'instance, consulter le journal et la fiche d'instance.
+
+Ordre : S1 → S2 → S3, puis S4, S5, S6 et S7, qui dépendent de S3 mais pas les unes des autres.
+
+---
+
+## Bloc 2 — Parties métier (à détailler avec Marc)
+
+Point de départ : la maquette. Pour chaque partie, Marc dit ce qu'il garde, ce qu'il change, ce qui manque, et ce qui vient en premier.
+
+### M1 — Objets commerciaux
 
 Statut : à relire
 
-**Ce que Marc obtient** : l'IA prépare emails, tâches et mises à jour ; Marc valide d'un clic.
+- **Proposé** : entreprises, contacts, opportunités (étape, montant, échéance), activités (email, rendez-vous, appel, note), tâches.
+- **À trancher** : ces objets suffisent-ils ? Lesquels manquent ? Pour l'instance SIMATIS, existe-t-il un HubSpot SIMATIS, ou l'OS est-il lui-même le CRM de SIMATIS ?
+- La grille de scoring détaillée est une méthode propriétaire : elle vivra dans la configuration privée de l'instance, jamais dans le dépôt.
 
-- File « À valider » : brouillon d'email, tâche, modification d'un objet, note.
-- Outils MCP `proposer_*`. Un agent ne peut jamais valider ses propres propositions.
-- Niveaux L0 à L3 par action et par instance, avec les limites verrouillées de la maquette.
-- Mode simulation sur toute écriture.
-- Une première page web : la file « À valider », avec Valider, Modifier, Écarter.
-- Les propositions touchant un outil externe (email, HubSpot) restent en attente d'application jusqu'aux parties 7 et 8.
-
-**Tester** : demander à l'IA de préparer une tâche de relance, la retrouver dans la page, la valider, la voir au journal.
-
-**Questions pour Marc**
-
-- Quelles actions l'IA peut-elle faire seule, et lesquelles doivent toujours passer par vous ?
-
-### Partie 7 — Connexions SIMATIS (Gmail et agenda de Marc)
+### M2 — Pilotage : Brief du jour, À valider, Tableau de bord
 
 Statut : à relire
 
-**Ce que Marc obtient** : l'OS connaît ses emails et son agenda ; un email validé arrive en brouillon dans Gmail.
+- **Dans la maquette** : ce qui attend Marc le matin, la file des propositions à valider, l'entonnoir lead → prospect → devis → commande avec simulation de l'objectif annuel.
+- **À trancher** : contenu du brief, types de propositions utiles en premier, indicateurs et seuils de l'entonnoir.
 
-- Autorisation Google donnée une fois, par une commande qui écrit le jeton dans le fichier de secrets de l'instance.
-- Synchronisation en lecture, toutes les 15 minutes et à la demande : emails (expéditeur, destinataires, objet, date, extrait) et rendez-vous, rattachés aux contacts connus.
-- Un email validé devient un **brouillon Gmail** ; Marc l'envoie lui-même. L'envoi direct viendra plus tard, sous double verrou.
-- Création de rendez-vous : proposition, puis validation.
+### M3 — Stratégie : Plan d'action, Démarrage du mandat, Diagnostic
+
+Statut : à relire
+
+- **Dans la maquette** : la trame en sept blocs, les trois situations de départ d'un mandat, le profil d'entreprise sur trois dimensions.
+- **À trancher** : ce qui sert dès la première version ; ce qui relève d'une méthode propriétaire et doit rester dans la configuration privée.
+
+### M4 — Générer la demande : Détection, Prospection, Bases vivantes
+
+Statut : à relire
+
+- **Dans la maquette** : signaux faibles, règles de sélection et lots de brouillons, bases importées et enrichies.
+- **À trancher** : sources des signaux, outils de prospection à brancher, formats d'import.
+
+### M5 — Convertir : Pipeline, Rendez-vous, Devis, Relais internes
+
+Statut : à relire
+
+- **Dans la maquette** : pipeline en colonnes ou en matrice, préparation et compte rendu de rendez-vous, devis préparé par l'OS, points mensuels avec les experts du mandat.
+- **À trancher** : étapes du pipeline par défaut et par mandat, trame de préparation de rendez-vous, place du devis (dans l'OS ou dans HubSpot).
+
+### M6 — Instruments de bord : Routines, Autonomie, Second cerveau
+
+Statut : à relire
+
+- **Dans la maquette** : rythmes automatiques, réglage des niveaux L0 à L3, fiche second cerveau.
+- **À trancher** : routines utiles et leur rythme ; niveaux d'autonomie par défaut d'un nouveau mandat ; synchro vers le second cerveau (emplacement, rythme, contenu : fiches de synthèse, comptes rendus, décisions, jamais de contacts ni de pipeline).
+
+### M7 — L'IA au quotidien
+
+Statut : à relire
+
+- **Proposé** : des outils MCP métier (`brief_du_jour`, `pipeline`, `fiche_entreprise`, `fiche_contact`, `activites_recentes`, `rechercher`) et des outils `proposer_*`.
+- **À trancher** : quelles IA Marc utilise ; les dix questions qu'il veut poser à l'OS ; les actions qu'il veut déléguer.
+
+### M8 — Connexions
+
+Statut : à relire
+
+- **SIMATIS** : Gmail et agenda de Marc. Un email validé devient un brouillon Gmail, que Marc envoie lui-même.
+- **Mandats** : HubSpot (jeton d'application privée par compte client), Gmail et agenda du client (identifiant Google propre au Workspace du client). Procédures d'ouverture et de fin de mandat.
+- **À trancher** : Google Workspace ou gmail.com pour SIMATIS ; profondeur d'historique ; corps complet des emails ou extraits ; objets HubSpot utiles ; qui crée les accès chez les clients.
 - Point Google : avec Google Workspace, une application interne évite la vérification de Google ; avec un compte gmail.com, l'écran « application non vérifiée » s'affichera à l'autorisation.
-
-**Tester** : demander à l'IA « qu'ai-je demain ? » ; valider un email et le retrouver dans les brouillons Gmail.
-
-**Questions pour Marc**
-
-- Votre boîte est-elle sur Google Workspace ou gmail.com ?
-- Combien d'historique récupérer (3 mois, 12 mois) ?
-- Corps complet des emails, ou extraits seulement ?
-
-### Partie 8 — Connexions de mandat (HubSpot, Gmail et agenda du client)
-
-Statut : à relire
-
-**Ce que Marc obtient** : pour chaque mandat, l'OS travaille avec les outils du client, et seulement eux.
-
-- HubSpot : jeton d'application privée par compte client ; synchronisation des entreprises, contacts, transactions et notes. HubSpot fait foi en cas d'écart.
-- Écritures vers HubSpot uniquement par propositions validées, en simulation par défaut, mode réel sous double verrou.
-- Gmail et agenda du client : même mécanisme qu'en partie 7, avec un identifiant Google propre au Workspace du client.
-- Procédure d'ouverture de mandat : ce que l'administrateur du client doit créer, ce qui va dans le fichier de secrets.
-- Procédure de fin de mandat : archivage, purge de la copie, suppression du fichier de secrets.
-
-**Tester** : un compte HubSpot de test gratuit, rempli de données fictives.
-
-**Questions pour Marc**
-
-- Quels objets HubSpot vous servent (entreprises, contacts, transactions, tâches, notes, autres) ?
-- Chez les clients, qui peut créer les accès (administrateur HubSpot, administrateur Google) ?
-
-### Partie 9 — Interface web
-
-Statut : à relire
-
-**Ce que Marc obtient** : le cockpit de la maquette, branché sur les vraies données.
-
-- Sélecteur d'instance, Brief du jour, À valider (reprise de la partie 6), Pipeline, Fiche entreprise, Journal, Fiche d'instance sans secret.
-- Accessible seulement depuis l'ordinateur de Marc tant que l'OS est local.
-- Reprise du style de la maquette ; technologie choisie dans le plan détaillé de la partie.
-- Les autres écrans de la maquette ensuite, par ordre de priorité.
-
-**Tester** : parcours complet dans le navigateur sur l'instance de démonstration.
-
-**Questions pour Marc**
-
-- Quels écrans vous servent en premier ?
-
-### Partie 10 — Synchro vers le second cerveau
-
-Statut : à relire
-
-**Ce que Marc obtient** : son second cerveau se nourrit de l'activité, sans recopier de données brutes.
-
-- Sens unique, OS → second cerveau : fiche de synthèse hebdomadaire par instance, comptes rendus de rendez-vous, décisions et leurs raisons.
-- Fiches déposées en brouillon dans l'inbox du second cerveau (chemin dans `.env`), rattachées au bon mandat, puis traitées par la procédure Mémoriser.
-- Jamais de contacts ni de pipeline.
-
-**Tester** : après une séance sur l'instance de démonstration, une fiche brouillon apparaît dans l'inbox.
-
-**Questions pour Marc**
-
-- Où se trouve votre second cerveau sur l'ordinateur ?
-- À quel rythme voulez-vous ces fiches ?
 
 ## Plus tard
 
-- Routines de nuit et brief du jour rédigé par IA (demande une clé d'API et un budget).
-- Détection de signaux faibles, prospection, devis, diagnostic, relais internes.
+- Brief et routines rédigés par IA côté serveur (demande une clé d'API et un budget).
 - Envoi direct d'emails, sous double verrou.
 - Hébergement sur serveur, avec accès à distance pour les agents.
