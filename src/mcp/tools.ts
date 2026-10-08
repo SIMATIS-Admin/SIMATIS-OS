@@ -60,11 +60,12 @@ registerTool({
   description: "L'instance (activité ou mandat) sur laquelle ce jeton travaille.",
   input: z.object({}),
   scope: 'instance',
-  handler: async ({ instance }) => ({
-    slug: instance.slug,
-    nom: instance.nom,
-    type: instance.type,
-  }),
+  handler: ({ instance }) =>
+    Promise.resolve({
+      slug: instance.slug,
+      nom: instance.nom,
+      type: instance.type,
+    }),
 });
 
 registerTool({
