@@ -59,6 +59,8 @@ a { color: var(--navy-3); }
 .inst-menu { margin: -4px 14px 12px; background: #fff; color: var(--ink); border-radius: var(--r-m); padding: 6px; box-shadow: 0 12px 30px rgba(5, 20, 45, .35); }
 .inst-menu button { display: flex; gap: 10px; align-items: center; width: 100%; padding: 8px 10px; border: 0; background: none; border-radius: var(--r-s); cursor: pointer; text-align: left; }
 .inst-menu button:hover, .inst-menu button.on { background: var(--line-2); }
+.inst-sec { padding: 8px 10px 2px; font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+.inst-dot.plus { width: 16px; height: 16px; display: grid; place-items: center; background: var(--line-2); color: var(--navy); font: 700 13px/1 var(--f-title); }
 .inst-menu small { display: block; color: var(--ink-3); font-size: 13px; }
 .inst-menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
 

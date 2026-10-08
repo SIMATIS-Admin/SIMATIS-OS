@@ -64,13 +64,13 @@ const AUTONOMIE_DEFAUT = [
 /* ------------------------------------------------------------------ */
 
 const INSTANCES = [
-  { id: 'simatis', nom: 'Mon activité', sous: 'Développement SIMATIS', outil: 'HubSpot (simulé)', crm: 'HubSpot', c: '#41A594', modules: ['diagnostic', 'devis'],
+  { id: 'simatis', nom: 'SIMATIS', sous: 'Mon activité', type: 'propre', outil: 'HubSpot (simulé)', crm: 'HubSpot', c: '#41A594', modules: ['diagnostic', 'devis'],
     conn: [['CRM', 'HubSpot SIMATIS', 'ok'], ['Messagerie', 'Gmail SIMATIS', 'ok'], ['Agenda', 'Agenda SIMATIS', 'ok']] },
-  { id: 'helioval', nom: 'Helioval', sous: "Mandat fictif : bureau d'études", outil: 'HubSpot (simulé)', crm: 'HubSpot', situation: 'Système à structurer', c: '#4C8DD6', modules: ['relais'],
+  { id: 'helioval', nom: 'Helioval', sous: "Mandat fictif : bureau d'études", type: 'mandat', outil: 'HubSpot (simulé)', crm: 'HubSpot', situation: 'Système à structurer', c: '#4C8DD6', modules: ['relais'],
     conn: [['CRM', 'HubSpot du mandat', 'ok'], ['Messagerie', 'Gmail du mandat', 'ok'], ['Agenda', 'Agenda du mandat', 'ok']] },
-  { id: 'aquaterra', nom: 'Aquaterra', sous: "Mandat fictif : équipements", outil: 'Pipeline natif', situation: 'Système à créer', c: '#9A7BE0', modules: ['demarrage'],
+  { id: 'aquaterra', nom: 'Aquaterra', sous: "Mandat fictif : équipements", type: 'mandat', outil: 'Pipeline natif', situation: 'Système à créer', c: '#9A7BE0', modules: ['demarrage'],
     conn: [['Pipeline', 'Pipeline natif de l\'OS', 'ok'], ['Messagerie', 'Gmail du mandat', 'non'], ['Agenda', 'Agenda du mandat', 'non']] },
-  { id: 'demo', nom: 'Dupont Industrie', sous: 'Démonstration prospect', outil: 'Données fictives', c: '#E3A33B', demo: true, modules: ['diagnostic'],
+  { id: 'demo', nom: 'Dupont Industrie', sous: 'Mandat prospect fictif', type: 'prospect', outil: 'Données fictives', c: '#E3A33B', demo: true, modules: ['diagnostic'],
     conn: [['CRM', 'Données fictives', 'ok'], ['Messagerie', 'Aucun envoi possible', 'ok'], ['Agenda', 'Agenda fictif', 'ok']] }
 ];
 
@@ -428,6 +428,15 @@ const SEED = () => {
 
   return data;
 };
+
+/* Instance vierge : un prospect devenu mandat en cours repart de zéro, sans aucune donnée fictive. */
+const PLAN_BLOCS = ['Cible', 'Types d\'affaires visés', 'Information et outillage', 'Message', 'Règles de qualification', 'Plan de canaux', 'Pilotage'];
+const emptySeed = crm => seedInstance({
+  societes: [], contacts: [], opps: [], rythme: 0,
+  routines: routinesStd({ quot: { fait: [], attente: [], echec: [] }, hebdo: { fait: [], attente: [], echec: [] } }, crm || 'le pipeline'),
+  plan: PLAN_BLOCS.map(b => ({ b, txt: '', ok: false })),
+  funnel: { leads: 30, l2p: 30, p2d: 50, d2c: 35, panier: 15000, objectif: 200000 }
+});
 
 const DEMO_SCENARIO = [
   { v: 'diagnostic', t: 'Diagnostic', d: 'Le profil de l\'entreprise sur trois dimensions.' },

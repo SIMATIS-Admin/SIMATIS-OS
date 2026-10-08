@@ -200,7 +200,7 @@ ACTIONS.fun = (ds, el) => {
 
 /* ---------- Portefeuille ---------- */
 VIEWS.portefeuille = () => {
-  const rows = INSTANCES.map(i => {
+  const rows = TYPES_INST.flatMap(([t]) => S.instances.filter(i => i.type === t)).map(i => {
     const d = S.data[i.id];
     return { i, v: d.validations.filter(v => !v.statut).length, l: d.taches.filter(t => !t.fait && diffDays(t.echeance) < 0).length, r: d.rdv.filter(r => diffDays(r.date) >= 0 && diffDays(r.date) <= 7).length, t: d.temps, ro: d.routines.filter(r => r.actif).length };
   });
@@ -208,7 +208,7 @@ VIEWS.portefeuille = () => {
     title: 'Portefeuille',
     body: `<div class="alert blue" style="margin-bottom:18px">${ic('lock')}<div>Cette vue ne montre que des compteurs. Aucun contact, aucun échange et aucun montant d'un mandat n'apparaît dans un autre. Le périmètre exact de ce qui peut être croisé reste à décider.</div></div>
     <div class="panel"><table class="tbl"><thead><tr><th>Instance</th><th>Situation</th><th class="r">À valider</th><th class="r">Tâches en retard</th><th class="r">Rendez-vous 7 j</th><th class="r">Temps cette semaine</th><th class="r">Routines actives</th></tr></thead>
-    <tbody>${rows.map(x => `<tr class="click" data-act="inst" data-id="${x.i.id}"><td><span class="inst-dot" style="display:inline-block;background:${x.i.c};margin-right:8px"></span><b>${esc(x.i.nom)}</b><div class="small muted">${esc(x.i.sous)}</div></td><td>${x.i.demo ? '<span class="badge amber">Démonstration</span>' : esc(x.i.situation || 'Activité propre')}</td><td class="r num">${x.v}</td><td class="r num ${x.l ? 'late' : ''}">${x.l}</td><td class="r num">${x.r}</td><td class="r num">${x.t} h</td><td class="r num">${x.ro}/4</td></tr>`).join('')}</tbody></table></div>
+    <tbody>${rows.map(x => `<tr class="click" data-act="inst" data-id="${x.i.id}"><td><span class="inst-dot" style="display:inline-block;background:${x.i.c};margin-right:8px"></span><b>${esc(x.i.nom)}</b><div class="small muted">${esc(x.i.sous)}</div></td><td>${x.i.type === 'prospect' ? '<span class="badge amber">Mandat prospect</span>' : x.i.type === 'mandat' ? `<span class="badge blue">Mandat en cours</span>${x.i.situation ? `<div class="small muted">${esc(x.i.situation)}</div>` : ''}` : 'Activité propre'}</td><td class="r num">${x.v}</td><td class="r num ${x.l ? 'late' : ''}">${x.l}</td><td class="r num">${x.r}</td><td class="r num">${x.t} h</td><td class="r num">${x.ro}/4</td></tr>`).join('')}</tbody></table></div>
     <p class="small muted" style="margin-top:12px">Le temps par instance est lu dans les agendas. Cliquez sur une ligne pour ouvrir l'instance.</p>`
   };
 };
