@@ -1,6 +1,6 @@
-import { and, eq, gte } from 'drizzle-orm';
+import { and, desc, eq, gte } from 'drizzle-orm';
 import { zoned } from '../connecteurs/google/creneaux.js';
-import type { Database } from '../db.js';
+import type { Database, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import { listInstances } from '../instances/service.js';
@@ -46,6 +46,49 @@ export function heurePrevue(
   return null;
 }
 
+// « Après chaque envoi de relances »: once today's daily run has ended, the cleanup follows once.
+async function nettoyerApresRelance(tx: Tx, debutJour: Date): Promise<number> {
+  const nettoyage = (await listerRoutines(tx)).find((r) => r.cle === 'nettoyage');
+  if (
+    !nettoyage?.actif ||
+    paramsOf('nettoyage', nettoyage.params).declenchement !== 'Après chaque envoi de relances'
+  ) {
+    return 0;
+  }
+  const [relance] = await tx
+    .select({ fin: executions.fin })
+    .from(executions)
+    .where(
+      and(
+        eq(executions.instanceId, currentInstance),
+        eq(executions.routine, 'quotidienne'),
+        eq(executions.statut, 'terminee'),
+        gte(executions.fin, debutJour),
+      ),
+    )
+    .orderBy(desc(executions.fin))
+    .limit(1);
+  if (!relance?.fin) return 0;
+  const [suite] = await tx
+    .select({ id: executions.id })
+    .from(executions)
+    .where(
+      and(
+        eq(executions.instanceId, currentInstance),
+        eq(executions.routine, 'nettoyage'),
+        gte(executions.createdAt, relance.fin),
+      ),
+    );
+  if (suite) return 0;
+  try {
+    await demanderExecution(tx, 'nettoyage', PLANIFIE);
+    return 1;
+  } catch (error) {
+    if (error instanceof DejaEnCours) return 0;
+    throw error;
+  }
+}
+
 // Creates the requests whose time has come. A run missed while the computer was off is caught up
 // once, never more than one per routine and day.
 export async function planifier(db: Database, maintenant = new Date()): Promise<number> {
@@ -79,6 +122,7 @@ export async function planifier(db: Database, maintenant = new Date()): Promise<
           if (!(error instanceof DejaEnCours)) throw error;
         }
       }
+      n += await nettoyerApresRelance(tx, debutJour);
       return n;
     });
   }

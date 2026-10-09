@@ -35,6 +35,7 @@ import { getBrief, marquerFait } from '../pilotage/brief.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
 import { paramsOf, ROUTINES, rythme } from '../routines/params.js';
+import { santeRoutines } from '../routines/sante.js';
 import {
   cleOf,
   DejaEnCours,
@@ -463,7 +464,7 @@ export function registerApi(
           return {
             cle: r.cle,
             nom: def?.nom ?? r.cle,
-            etapes: def?.etapes ?? [],
+            etapes: def?.etapes.map((x) => x.texte) ?? [],
             skill: r.skill,
             actif: r.actif,
             params: paramsOf(r.cle, r.params),
@@ -478,6 +479,10 @@ export function registerApi(
     .object({ actif: z.boolean(), params: z.record(z.string(), z.unknown()) })
     .partial()
     .strict();
+  app.get<SlugParams>(
+    '/api/i/:slug/routines/sante',
+    surRoutine((i) => santeRoutines(db, i)),
+  );
   app.patch<CleRoute>(
     '/api/i/:slug/routines/:cle',
     surRoutine<CleRoute>((i, request) =>

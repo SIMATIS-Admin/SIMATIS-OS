@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { execFile, spawn } from 'node:child_process';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { homedir, hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -24,7 +24,25 @@ export type RunnerOptions = {
   fetch?: typeof fetch;
   // Runs the command; resolves with its exit code.
   lancer?: (commande: string, args: string[]) => Promise<number>;
+  // What this workstation offers (Claude Code version, installed skills), sent at each pass.
+  poste?: () => Promise<Poste>;
 };
+
+export type Poste = { nom: string; claude: string | null; skills: string[] };
+
+export async function decrirePoste(claude: string): Promise<Poste> {
+  const version = await new Promise<string | null>((resolve) => {
+    execFile(claude, ['--version'], { timeout: 10_000 }, (error, stdout) =>
+      resolve(error ? null : (stdout.trim().split('\n')[0] ?? null)),
+    );
+  });
+  const dossier = path.join(homedir(), '.claude', 'skills');
+  const skills = await readdir(dossier, { withFileTypes: true }).then(
+    (entries) => entries.filter((e) => e.isDirectory() || e.isSymbolicLink()).map((e) => e.name),
+    () => [],
+  );
+  return { nom: hostname(), claude: version, skills };
+}
 
 const lancerProcessus = (commande: string, args: string[]) =>
   new Promise<number>((resolve) => {
@@ -55,6 +73,7 @@ export async function tour(opts: RunnerOptions): Promise<number> {
     return (await res.json()) as T;
   };
 
+  await api('/api/runner/presence', await (opts.poste ?? (() => decrirePoste(opts.claude)))());
   const demandes = await api<Demande[]>('/api/runner/demandes');
   for (const d of demandes) {
     let demarre: { tokenId: string; token: string };

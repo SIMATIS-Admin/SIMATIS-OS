@@ -163,7 +163,7 @@ export function Parametres({ slug, onRenamed }: Props) {
       {tab === 'connexions' ? (
         <Connexions slug={slug} />
       ) : tab === 'routines' ? (
-        <RoutinesParametres slug={slug} />
+        <RoutinesParametres slug={slug} onConnexions={() => setTab('connexions')} />
       ) : (
         <div className="grid g2">
           <div className="panel">

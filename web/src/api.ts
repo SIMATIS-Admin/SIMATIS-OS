@@ -412,3 +412,21 @@ export const lancerRoutine = (slug: string, cle: string) =>
   sendJson<Execution>('POST', inst(slug, `routines/${encodeURIComponent(cle)}/executions`), {});
 export const fetchExecution = (slug: string, id: string) =>
   getJson<Execution>(inst(slug, `executions/${encodeURIComponent(id)}`));
+
+export type EtatControle = 'ok' | 'attention' | 'manque';
+export type SanteRoutine = {
+  cle: string;
+  nom: string;
+  skill: string;
+  actif: boolean;
+  resume: string;
+  feu: EtatControle;
+  controles: { id: string; libelle: string; etat: EtatControle; detail: string; action?: string }[];
+  etapes: { texte: string; besoin: 'messagerie' | 'agenda' | null; bloquee: boolean }[];
+  derniere: Execution | null;
+};
+export type Sante = {
+  executeur: { actif: boolean; poste: string | null; vuLe: string | null };
+  routines: SanteRoutine[];
+};
+export const fetchSante = (slug: string) => getJson<Sante>(inst(slug, 'routines/sante'));

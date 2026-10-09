@@ -146,6 +146,7 @@ describe('Routines Claude', () => {
       base,
       token: runnerToken,
       claude: 'faux-claude',
+      poste: () => Promise.resolve({ nom: 'poste-test', claude: '2.1 (Claude Code)', skills: [] }),
       // Stands in for Claude: reads the MCP config it was given and runs the routine with it.
       lancer: async (commande, args) => {
         expect(commande).toBe('faux-claude');
@@ -206,7 +207,13 @@ describe('Routines Claude', () => {
   it('runner: a run left without a report is marked failed', async () => {
     const launched = await api('POST', '/api/i/demo/routines/quotidienne/executions');
     const executionId = launched.json<{ id: string }>().id;
-    await tour({ base, token: runnerToken, claude: 'x', lancer: () => Promise.resolve(2) });
+    await tour({
+      base,
+      token: runnerToken,
+      claude: 'x',
+      lancer: () => Promise.resolve(2),
+      poste: () => Promise.resolve({ nom: 'poste-test', claude: null, skills: [] }),
+    });
     const demo = await instanceOf('demo');
     const execution = await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, executionId));
     expect(execution.statut).toBe('echouee');
