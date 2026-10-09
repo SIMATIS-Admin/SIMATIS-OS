@@ -179,10 +179,10 @@ export type Simulation = { simulation: true; message: string };
 
 // Where a new record goes: the OS itself (no CRM, or fictive data), or the instance's CRM first,
 // and then its copy. Returns the HubSpot id, or a Simulation when real writes are off.
-async function createInCrm(
+export async function createInCrm(
   tx: Tx,
   instance: Instance,
-  op: 'company.create' | 'contact.create',
+  op: 'company.create' | 'contact.create' | 'task.create',
   data: Record<string, unknown>,
   deps: CreationDeps,
 ): Promise<{ sourceId: string } | Simulation | null> {

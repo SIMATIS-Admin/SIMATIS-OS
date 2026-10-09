@@ -16,22 +16,23 @@ import { compterRealisees, decaler, jourDe, situation } from './realisees.js';
 
 const FUSEAU = 'Europe/Paris';
 
-async function rendezVous(
+// Meetings between two instants, from the instance's agenda (empty when it is not connected).
+export async function rendezVous(
   instance: Instance,
   agenda: { fournisseur: string; reglages: Record<string, unknown> } | undefined,
   deps: ConnexionDeps,
-  maintenant: Date,
+  debut: Date,
+  fin: Date,
 ): Promise<{ rdv: Evenement[]; etat: 'ok' | 'non_configure' | 'erreur'; erreur?: string }> {
   if (agenda?.fournisseur !== 'google-agenda') return { rdv: [], etat: 'non_configure' };
-  const jour = jourDe(maintenant, FUSEAU);
   try {
     const calendriers = Array.isArray(agenda.reglages.calendriers)
       ? (agenda.reglages.calendriers as string[])
       : ['primary'];
     const rdv = await evenements(
       { instance, secrets: await loadInstanceSecrets(deps.secretsDir, instance.slug) },
-      zoned(jour, '00:00', FUSEAU),
-      zoned(decaler(jour, 1), '00:00', FUSEAU),
+      debut,
+      fin,
       calendriers,
     );
     return { rdv, etat: 'ok' };
@@ -106,7 +107,14 @@ export async function getBrief(
 
   const crm = data.conn.find((c) => c.kind === 'crm');
   const agenda = data.conn.find((c) => c.kind === 'agenda');
-  const { rdv, etat, erreur } = await rendezVous(instance, agenda, deps, maintenant);
+  const jour = jourDe(maintenant, FUSEAU);
+  const { rdv, etat, erreur } = await rendezVous(
+    instance,
+    agenda,
+    deps,
+    zoned(jour, '00:00', FUSEAU),
+    zoned(decaler(jour, 1), '00:00', FUSEAU),
+  );
   return {
     source: crm?.fournisseur === 'hubspot' ? 'hubspot' : 'natif',
     rdv,
