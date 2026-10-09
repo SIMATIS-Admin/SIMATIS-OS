@@ -141,8 +141,8 @@ describe('Paramètres > Connexions', () => {
   it('never asks the pilot for a Google client ID when the OS has none', async () => {
     clientDisponible = false;
     render(<Connexions slug="helioval" />);
-    expect(await screen.findByText(/pas encore activée sur cet OS/)).toBeTruthy();
-    expect(screen.queryByText('Connecter le compte Google')).toBeNull();
+    expect(await screen.findByText(/Bouton inactif/)).toBeTruthy();
+    expect(screen.getByText<HTMLButtonElement>('Connecter le compte Google').disabled).toBe(true);
     expect(screen.queryByLabelText('ID client OAuth Google')).toBeNull();
   });
 });

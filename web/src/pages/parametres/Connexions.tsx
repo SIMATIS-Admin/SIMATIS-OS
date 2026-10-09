@@ -101,14 +101,6 @@ function BrancherHubspot({ slug, onDone }: { slug: string; onDone: () => void })
 function ConnecterGoogle({ slug, clientDisponible }: { slug: string; clientDisponible: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!clientDisponible) {
-    return (
-      <p className="small muted" style={{ margin: 0 }}>
-        La connexion Google n'est pas encore activée sur cet OS : c'est un réglage à faire une seule
-        fois par l'administrateur, ensuite un clic suffit.
-      </p>
-    );
-  }
   const go = () => {
     setBusy(true);
     setError(null);
@@ -123,10 +115,16 @@ function ConnecterGoogle({ slug, clientDisponible }: { slug: string; clientDispo
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div>
-        <button className="btn primary" disabled={busy} onClick={go}>
+        <button className="btn primary" disabled={busy || !clientDisponible} onClick={go}>
           Connecter le compte Google
         </button>
       </div>
+      {!clientDisponible && (
+        <p className="small muted" style={{ margin: 0 }}>
+          Bouton inactif : l'administrateur de l'OS doit d'abord activer la connexion Google (une
+          seule fois pour tous les mandats).
+        </p>
+      )}
       {error && (
         <p className="small" style={{ color: 'var(--red)' }}>
           {error}
@@ -422,18 +420,16 @@ export function Connexions({ slug }: { slug: string }) {
                   {c
                     ? 'Données fictives de démonstration.'
                     : kind === 'crm'
-                      ? "Pas de CRM branché : pipeline, entreprises et contacts sont tenus par l'OS."
-                      : "Non branchée : sans cette connexion, les routines s'arrêtent à l'étape qui en a besoin, et rien ne part depuis la boîte d'une autre instance."}
+                      ? "Le client utilise HubSpot ? Demandez à son administrateur HubSpot un jeton d'application privée (Paramètres > Intégrations > Applications privées) et collez-le ici. L'OS copie entreprises, contacts, transactions et tâches, sans rien modifier dans HubSpot tant que vous ne l'autorisez pas."
+                      : kind === 'messagerie'
+                        ? "Connectez le compte Google utilisé pour ce mandat : l'OS prépare vos emails en brouillon dans Gmail (vous les envoyez vous-même) et retrouve l'historique des échanges avec chaque contact."
+                        : "L'agenda se branche en même temps que la messagerie, avec le même compte Google : l'OS lit vos rendez-vous pour le brief du jour et propose des créneaux libres."}
                 </p>
                 {kind === 'crm' ? (
                   <BrancherHubspot slug={slug} onDone={load} />
                 ) : kind === 'messagerie' ? (
                   <ConnecterGoogle slug={slug} clientDisponible={data.googleClientDisponible} />
-                ) : (
-                  <p className="small muted" style={{ margin: 0 }}>
-                    Se branche avec la messagerie : « Connecter le compte Google » ci-dessus.
-                  </p>
-                )}
+                ) : null}
               </div>
             )}
           </div>
