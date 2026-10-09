@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { fetchInstanceFiche, renameInstance, type InstanceFiche } from '../api.js';
+import {
+  convertirProspect,
+  fetchInstanceFiche,
+  reinitialiserDemo,
+  renameInstance,
+  type InstanceFiche,
+} from '../api.js';
 import { Icon } from '../icons.js';
 import type { InstanceSummary } from '../nav.js';
 import { Connexions } from './parametres/Connexions.js';
@@ -17,6 +23,92 @@ const TYPE_BADGE: Record<InstanceSummary['type'], string> = {
 };
 
 type Props = { slug: string; onRenamed: () => void };
+
+// Two clicks for anything that deletes data: no browser dialog.
+function Demonstration({ slug, onChange }: { slug: string; onChange: () => void }) {
+  const [armed, setArmed] = useState<'reset' | 'convert' | null>(null);
+  const [crm, setCrm] = useState<'hubspot' | 'aucun'>('hubspot');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const run = (action: () => Promise<unknown>, done: string, then?: () => void) => {
+    setBusy(true);
+    setMessage(null);
+    action()
+      .then(
+        () => {
+          setMessage(done);
+          onChange();
+          then?.();
+        },
+        (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+      )
+      .finally(() => {
+        setBusy(false);
+        setArmed(null);
+      });
+  };
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <h2>Démonstration</h2>
+      </div>
+      <div className="panel-b stack">
+        <p style={{ margin: 0 }}>
+          Espace aux données fictives. Réinitialiser remet le jeu de démonstration de départ.
+        </p>
+        <div>
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={() =>
+              armed === 'reset'
+                ? run(() => reinitialiserDemo(slug), 'Démonstration réinitialisée.')
+                : setArmed('reset')
+            }
+          >
+            {armed === 'reset' ? 'Confirmer la réinitialisation' : 'Réinitialiser la démo'}
+          </button>
+        </div>
+        <hr />
+        <p style={{ margin: 0 }}>
+          Le prospect a signé ? Transformer en mandat supprime les données fictives ; il restera à
+          brancher ses outils dans Connexions.
+        </p>
+        <label className="field">
+          <span>CRM du client</span>
+          <select
+            className="input"
+            value={crm}
+            onChange={(e) => setCrm(e.target.value as 'hubspot' | 'aucun')}
+          >
+            <option value="hubspot">HubSpot</option>
+            <option value="aucun">Pas de CRM : l'OS tient le pipeline</option>
+          </select>
+        </label>
+        <div>
+          <button
+            className="btn primary"
+            disabled={busy}
+            onClick={() =>
+              armed === 'convert'
+                ? run(
+                    () => convertirProspect(slug, crm === 'hubspot' ? 'hubspot' : null),
+                    'Mandat créé : branchez ses outils dans Connexions.',
+                    () => location.reload(),
+                  )
+                : setArmed('convert')
+            }
+          >
+            {armed === 'convert'
+              ? 'Confirmer : supprimer les données fictives'
+              : 'Transformer en mandat'}
+          </button>
+        </div>
+        {message && <p className="small muted">{message}</p>}
+      </div>
+    </div>
+  );
+}
 
 export function Parametres({ slug, onRenamed }: Props) {
   const [fiche, setFiche] = useState<InstanceFiche | null>(null);
@@ -131,19 +223,7 @@ export function Parametres({ slug, onRenamed }: Props) {
               </div>
             </div>
           )}
-          {fiche.type === 'prospect' && (
-            <div className="panel">
-              <div className="panel-h">
-                <h2>Démonstration</h2>
-              </div>
-              <div className="panel-b">
-                <p style={{ margin: 0 }}>
-                  Espace de démonstration aux données fictives. La réinitialisation et la
-                  transformation en mandat arrivent avec le lot 13.
-                </p>
-              </div>
-            </div>
-          )}
+          {fiche.type === 'prospect' && <Demonstration slug={slug} onChange={onRenamed} />}
         </div>
       )}
     </>

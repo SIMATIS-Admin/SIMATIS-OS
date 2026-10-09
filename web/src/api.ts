@@ -93,6 +93,12 @@ export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug,
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>
   sendJson<InstanceSummary>('PATCH', inst(slug, 'instance'), { nom });
+export const creerProspect = (nom: string) =>
+  sendJson<InstanceSummary>('POST', '/api/prospects', { nom });
+export const reinitialiserDemo = (slug: string) =>
+  sendJson<{ ok: true }>('POST', inst(slug, 'demo/reinitialiser'), {});
+export const convertirProspect = (slug: string, crm: 'hubspot' | null) =>
+  sendJson<InstanceSummary>('POST', inst(slug, 'convertir'), { crm });
 export const fetchPortefeuille = () => getJson<PortefeuilleLigne[]>('/api/portefeuille');
 export const fetchFavoris = async () =>
   (await getJson<{ favoris: string[] }>('/api/preferences')).favoris;

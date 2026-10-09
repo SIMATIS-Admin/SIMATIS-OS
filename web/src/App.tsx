@@ -80,7 +80,7 @@ export function App() {
       case 'parametres':
         return <Parametres key={current.slug} slug={current.slug} onRenamed={loadInstances} />;
       case 'portefeuille':
-        return <Portefeuille instances={instances} />;
+        return <Portefeuille instances={instances} onCreated={loadInstances} />;
       default:
         return <Bientot view={view} />;
     }

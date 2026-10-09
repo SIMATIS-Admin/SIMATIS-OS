@@ -13,7 +13,8 @@ export type PropositionCtx = { instance: Instance; realWrites: boolean; secretsD
 
 // Double lock: REAL_WRITES=on on the server and ecrituresReelles=true for the instance.
 export function canWriteReal(instance: Instance, realWrites: boolean): boolean {
-  return realWrites && instance.config.ecrituresReelles === true;
+  // A prospect (demo) instance never writes to a real tool, whatever its config says.
+  return realWrites && instance.type !== 'prospect' && instance.config.ecrituresReelles === true;
 }
 
 async function apply(tx: Tx, ctx: PropositionCtx, p: Proposition, par: string) {
