@@ -177,9 +177,17 @@ export async function freeBusy(
   );
 }
 
-export type Evenement = { debut: Date; fin: Date; titre: string; lieu: string | null };
+export type Evenement = {
+  id: string;
+  debut: Date;
+  fin: Date;
+  titre: string;
+  lieu: string | null;
+  // Guests' emails, to link a meeting to the instance's contacts.
+  participants: string[];
+};
 
-// Today's meetings for the brief (title and place only).
+// Meetings between two dates (brief, Rendez-vous screen).
 export async function evenements(
   ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
   debut: Date,
@@ -192,8 +200,10 @@ export async function evenements(
   for (const id of calendriers) {
     const page = await api.request<{
       items?: {
+        id?: string;
         summary?: string;
         location?: string;
+        attendees?: { email?: string; self?: boolean }[];
         start?: { dateTime?: string; date?: string };
         end?: { dateTime?: string; date?: string };
       }[];
@@ -212,6 +222,10 @@ export async function evenements(
       const end = e.end?.dateTime ?? e.end?.date;
       if (!start || !end) continue;
       out.push({
+        id: e.id ?? `${id}:${start}`,
+        participants: (e.attendees ?? [])
+          .filter((a) => !a.self && a.email)
+          .map((a) => (a.email ?? '').toLowerCase()),
         debut: new Date(start),
         fin: new Date(end),
         titre: e.summary ?? '(sans titre)',

@@ -312,3 +312,70 @@ export type TableauReponse = {
 export const fetchTableau = (slug: string) => getJson<TableauReponse>(inst(slug, 'tableau'));
 export const saveFunnel = (slug: string, patch: Partial<Funnel>) =>
   sendJson<{ funnel: Funnel; simulation: Simulation }>('PATCH', inst(slug, 'funnel'), patch);
+
+export type RendezVous = {
+  id: string;
+  debut: string;
+  fin: string;
+  titre: string;
+  lieu: string | null;
+  contact: { id: string; nom: string; entreprise: string | null } | null;
+  opportunite: { id: string; titre: string } | null;
+  compteRendu: boolean;
+};
+export type RendezVousReponse = {
+  etat: 'ok' | 'non_configure' | 'erreur';
+  erreur?: string;
+  rdv: RendezVous[];
+};
+export type Preparation = {
+  titre: string;
+  entreprise: string | null;
+  secteur: string | null;
+  ville: string | null;
+  taille: number | null;
+  contact: string | null;
+  fonction: string | null;
+  role: string | null;
+  prochaineEtape: string | null;
+  score: number | null;
+  aCreuser: { critere: string; note: number | null; question: string | null }[];
+};
+export const fetchRendezVous = (slug: string) =>
+  getJson<RendezVousReponse>(inst(slug, 'rendez-vous'));
+export const fetchPreparation = (slug: string, opportuniteId: string) =>
+  getJson<Preparation>(inst(slug, `opportunites/${encodeURIComponent(opportuniteId)}/preparation`));
+export const envoyerCompteRendu = (slug: string, rdv: RendezVous, texte: string) =>
+  sendJson<{ id: string; statut: string }>(
+    'POST',
+    inst(slug, `rendez-vous/${encodeURIComponent(rdv.id)}/compte-rendu`),
+    {
+      titre: rdv.titre,
+      texte,
+      contactId: rdv.contact?.id ?? null,
+      opportuniteId: rdv.opportunite?.id ?? null,
+    },
+  );
+
+export type LigneDevis = { libelle: string; quantite: number; prixUnitaire: number | null };
+export type DevisItem = {
+  id: string;
+  numero: string;
+  statut: 'brouillon' | 'valide' | 'transmis';
+  lignes: LigneDevis[];
+  envoyeLe: string | null;
+  validite: string | null;
+  opportunite: string;
+  entreprise: string | null;
+  total: number;
+  prixManquant: boolean;
+};
+export const fetchDevis = (slug: string) => getJson<DevisItem[]>(inst(slug, 'devis'));
+export const preparerDevis = (slug: string, opportuniteId: string) =>
+  sendJson<{ id: string }>('POST', inst(slug, 'devis'), { opportuniteId });
+export const saveLignesDevis = (slug: string, id: string, lignes: LigneDevis[]) =>
+  sendJson<{ id: string }>('PATCH', inst(slug, `devis/${encodeURIComponent(id)}`), { lignes });
+export const validerDevis = (slug: string, id: string) =>
+  sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/valider`), {});
+export const transmettreDevis = (slug: string, id: string) =>
+  sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/transmettre`), {});
