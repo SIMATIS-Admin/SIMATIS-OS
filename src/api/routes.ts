@@ -22,6 +22,9 @@ import { connexions } from '../connexions/schema.js';
 import { syncNow } from '../connexions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { getFavoris, setFavoris } from '../preferences/service.js';
+import { getBrief, marquerFait } from '../pilotage/brief.js';
+import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
+import { PropositionRefusee } from '../propositions/service.js';
 import { propositions } from '../propositions/schema.js';
 
 // Single user until a second one is decided (question 4 of the implementation plan).
@@ -136,6 +139,62 @@ export function registerApi(app: FastifyInstance, { db, secretsDir, realWrites }
   app.post<Create>(
     '/api/i/:slug/contacts',
     creation(contactSchema, (i, input) => createContact(db, i, input, connexionDeps)),
+  );
+
+  app.get<SlugParams>(
+    '/api/i/:slug/brief',
+    onInstance((i) => getBrief(db, i, connexionDeps)),
+  );
+
+  type TacheRoute = ById;
+  app.post<TacheRoute>(
+    '/api/i/:slug/taches/:id/fait',
+    onInstance<TacheRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id))
+        return reply.code(404).send({ error: 'Tâche introuvable' });
+      try {
+        const done = await marquerFait(db, i, request.params.id, connexionDeps);
+        return done ?? reply.code(404).send({ error: 'Tâche introuvable dans cette instance' });
+      } catch (error) {
+        if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+
+  const FILTRES = ['tout', 'brouillon', 'tache', 'cerveau', 'traites'];
+  type ListeRoute = SlugParams & { Querystring: { filtre?: string } };
+  app.get<ListeRoute>(
+    '/api/i/:slug/propositions',
+    onInstance<ListeRoute>((i, request) => {
+      const filtre = FILTRES.includes(request.query.filtre ?? '') ? request.query.filtre : 'tout';
+      return listPropositions(db, i, filtre as Filtre);
+    }),
+  );
+
+  const decisionSchema = z
+    .object({ decision: z.enum(['valider', 'ecarter']), contenu: z.unknown().optional() })
+    .strict();
+  type DecisionRoute = ById & { Body: unknown };
+  app.post<DecisionRoute>(
+    '/api/i/:slug/propositions/:id/decision',
+    onInstance<DecisionRoute>(async (i, request, reply) => {
+      const parsed = decisionSchema.safeParse(request.body);
+      if (!parsed.success || !UUID.test(request.params.id)) {
+        return reply.code(400).send({ error: 'Décision invalide' });
+      }
+      try {
+        return await deciderProposition(db, i, request.params.id, parsed.data, connexionDeps);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof PropositionRefusee || /déjà traitée/.test(message)) {
+          return reply.code(409).send({ error: message });
+        }
+        if (/introuvable/.test(message)) return reply.code(404).send({ error: message });
+        if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Contenu invalide' });
+        throw error;
+      }
+    }),
   );
 
   app.get<SlugParams>(

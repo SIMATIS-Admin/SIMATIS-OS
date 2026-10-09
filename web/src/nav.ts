@@ -51,13 +51,19 @@ export const NAV: NavGroup[] = [
 ];
 
 // Screens already built in the real app; every other menu entry shows « Bientôt ».
-export const BUILT = new Set(['entreprises', 'contacts', 'journal', 'parametres', 'pipeline']);
+export const BUILT = new Set([
+  'brief',
+  'validations',
+  'pipeline',
+  'entreprises',
+  'contacts',
+  'journal',
+  'parametres',
+]);
 
 // Where each screen comes from in docs/plans/2026-10-08-implementation-maquette.md.
 export const LOTS: Record<string, string> = {
   routines: 'Lot 12, Routines Claude',
-  brief: 'Lot 11, Brief du jour et À valider',
-  validations: 'Lot 11, Brief du jour et À valider',
   tableau: 'Lot 14, Tableau de bord',
   agenda: 'Lot 15, Rendez-vous et Devis',
   devis: 'Lot 15, Rendez-vous et Devis',

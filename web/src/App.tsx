@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchFavoris, fetchInstances, saveFavoris } from './api.js';
 import { Icon } from './icons.js';
 import { allItems, reorderFavoris, toggleFavori, type InstanceSummary } from './nav.js';
+import { AValider } from './pages/AValider.js';
 import { Bientot } from './pages/Bientot.js';
+import { Brief } from './pages/Brief.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
 import { Journal } from './pages/Journal.js';
@@ -11,7 +13,7 @@ import { Pipeline } from './pages/Pipeline.js';
 import { Portefeuille } from './pages/Portefeuille.js';
 import { Sidebar } from './shell/Sidebar.js';
 
-const DEFAULT_VIEW = 'entreprises';
+const DEFAULT_VIEW = 'brief';
 
 // Same URL scheme as the mockup: #/<instance>/<screen>.
 function readHash(): { slug: string | null; view: string } {
@@ -67,6 +69,10 @@ export function App() {
         return <Entreprises key={current.slug} slug={current.slug} />;
       case 'contacts':
         return <Contacts key={current.slug} slug={current.slug} />;
+      case 'brief':
+        return <Brief key={current.slug} slug={current.slug} />;
+      case 'validations':
+        return <AValider key={current.slug} slug={current.slug} />;
       case 'pipeline':
         return <Pipeline key={current.slug} slug={current.slug} />;
       case 'journal':

@@ -470,6 +470,86 @@
         "prochaineEtape": "Restitution du diagnostic"
       }
     ],
+    "propositions": [
+      {
+        "type": "email.brouillon",
+        "niveau": "L1",
+        "contenu": {
+          "to": "h.morvan@ateliers-morvan.fr",
+          "objet": "Votre proposition de direction commerciale partagée",
+          "corps": "<p>Bonjour Madame Morvan,</p><p>Je reviens vers vous au sujet de la proposition transmise la semaine dernière pour Ateliers Morvan.</p><p>Je vous propose d'en parler 30 minutes pour répondre à vos questions et ajuster le calendrier de démarrage si besoin.</p><p>Seriez-vous disponible à l'un de ces créneaux ?</p><ul><li>lundi 12 octobre à 9h30</li><li>mercredi 14 octobre à 14h00</li><li>vendredi 16 octobre à 10h30</li></ul><p>Bien à vous,</p>",
+          "contact": "c1",
+          "origine": "Routine quotidienne",
+          "controles": [
+            "Historique Gmail : 4 échanges, dernier il y a 6 jours",
+            "HubSpot : proposition envoyée, pas de réponse",
+            "Créneaux vérifiés dans votre agenda"
+          ]
+        }
+      },
+      {
+        "type": "email.brouillon",
+        "niveau": "L1",
+        "contenu": {
+          "to": "t.weber@oxalis-conseil.fr",
+          "objet": "Votre organisation commerciale",
+          "corps": "<p>Bonjour Monsieur Weber,</p><p>Nous avions échangé sur LinkedIn en septembre au sujet du développement commercial d'Oxalis Conseil.</p><p>Le Diagnostic d'Endurance Commerciale permet de situer en une heure trente la solidité de votre système de vente. Je vous le propose sans engagement.</p><p>Seriez-vous disponible à l'un de ces créneaux ?</p><ul><li>lundi 12 octobre à 10h00</li><li>mercredi 14 octobre à 15h30</li><li>vendredi 16 octobre à 14h30</li></ul><p>Bien à vous,</p>",
+          "contact": "c4",
+          "origine": "Routine quotidienne",
+          "controles": [
+            "Historique Gmail : 2 messages sans réponse",
+            "Escalade : deuxième relance (la suivante sera la porte de sortie)",
+            "Créneaux vérifiés dans votre agenda"
+          ]
+        }
+      },
+      {
+        "type": "crm.tache",
+        "niveau": "L2",
+        "contenu": {
+          "titre": "Créer une tâche de suivi",
+          "detail": "Restitution du diagnostic prévue : créer une tâche « Préparer la restitution » pour la veille du rendez-vous.",
+          "canal": "tache",
+          "echeanceJours": 3,
+          "contact": "c5",
+          "origine": "Routine quotidienne"
+        }
+      },
+      {
+        "type": "note.second_cerveau",
+        "niveau": "L2",
+        "contenu": {
+          "titre": "Note proposée pour le second cerveau",
+          "texte": "Affaire perdue chez un prospect du transport : le dirigeant a préféré recruter un directeur commercial salarié. Enseignement proposé : poser dès le premier rendez-vous la question « recrutement ou temps partagé ? ».",
+          "destination": "Méthodes > Démarrer un mandat",
+          "origine": "Boucle d'apprentissage"
+        }
+      },
+      {
+        "type": "crm.tache",
+        "niveau": "L2",
+        "contenu": {
+          "titre": "Relance à planifier",
+          "detail": "Dernier échange il y a 8 jours sans suite. Le suivi des relances prévoit un appel avant la troisième relance écrite : créer la tâche « Appeler Bio Sillon ».",
+          "canal": "tache",
+          "echeanceJours": 1,
+          "contact": "c7",
+          "origine": "Second cerveau : suivi des relances"
+        }
+      },
+      {
+        "type": "crm.tache",
+        "niveau": "L2",
+        "contenu": {
+          "titre": "Relance à planifier",
+          "detail": "Signal repéré (ouverture d'un second site), contact identifié mais pas encore sollicité. Créer la tâche « Premier message à Claire Dumas » sous une semaine.",
+          "canal": "tache",
+          "echeanceJours": 5,
+          "contact": "c8",
+          "origine": "Second cerveau : suivi des relances"
+        }
+      }
+    ],
     "taches": [
       {
         "opportunite": "o1",
@@ -816,6 +896,36 @@
         "prochaineEtape": "Aucune"
       }
     ],
+    "propositions": [
+      {
+        "type": "email.brouillon",
+        "niveau": "L1",
+        "contenu": {
+          "to": "ma.ferrand@fonderies-gier.fr",
+          "objet": "Audit des utilités : votre devis",
+          "corps": "<p>Bonjour Monsieur Ferrand,</p><p>Je me permets de revenir vers vous au sujet du devis d'audit des utilités transmis il y a dix jours.</p><p>Je vous propose un court échange pour revoir ensemble le périmètre et le calendrier.</p><p>Seriez-vous disponible à l'un de ces créneaux ?</p><ul><li>mardi 13 octobre à 11h00</li><li>jeudi 15 octobre à 16h00</li><li>lundi 19 octobre à 9h30</li></ul><p>Bien à vous,</p>",
+          "contact": "hc1",
+          "origine": "Routine quotidienne",
+          "controles": [
+            "HubSpot : devis envoyé, tâche de relance échue hier",
+            "Gmail du mandat : pas de réponse au dernier message",
+            "Créneaux vérifiés dans l'agenda du mandat"
+          ]
+        }
+      },
+      {
+        "type": "crm.tache",
+        "niveau": "L2",
+        "contenu": {
+          "titre": "Recréer une tâche de suivi",
+          "detail": "Relance envoyée hier avec trois créneaux proposés : suivi sur le même canal sous 21 jours.",
+          "canal": "tache",
+          "echeanceJours": 21,
+          "contact": "hc5",
+          "origine": "Routine quotidienne"
+        }
+      }
+    ],
     "taches": [
       {
         "opportunite": "ho1",
@@ -996,6 +1106,18 @@
         "prochaineEtape": "Qualifier le besoin"
       }
     ],
+    "propositions": [
+      {
+        "type": "note.second_cerveau",
+        "niveau": "L2",
+        "contenu": {
+          "titre": "Socle commercial à valider",
+          "texte": "Proposition de socle : offre (deux gammes), cas client pilote, dispositifs d'aide à vérifier, critères de qualification adaptés aux petits exploitants.",
+          "destination": "Fiche d'instance Aquaterra",
+          "origine": "Démarrer un mandat"
+        }
+      }
+    ],
     "taches": [
       {
         "opportunite": null,
@@ -1142,6 +1264,24 @@
         "potentiel": "limite",
         "faisabilite": "forte",
         "prochaineEtape": "Proposer un point annuel"
+      }
+    ],
+    "propositions": [
+      {
+        "type": "email.brouillon",
+        "niveau": "L1",
+        "contenu": {
+          "to": "c.faure@agrodelta.fr",
+          "objet": "Votre contrat annuel",
+          "corps": "<p>Bonjour Madame Faure,</p><p>Je reviens vers vous au sujet de notre proposition de contrat annuel.</p><p>Je vous propose de faire le point sur vos volumes prévisionnels.</p><p>Seriez-vous disponible à l'un de ces créneaux ?</p><ul><li>mercredi 14 octobre à 14h00</li><li>vendredi 16 octobre à 10h30</li><li>lundi 19 octobre à 10h00</li></ul><p>Bien à vous,</p>",
+          "contact": "dc2",
+          "origine": "Routine quotidienne",
+          "controles": [
+            "CRM : devis envoyé il y a 9 jours",
+            "Messagerie : pas de réponse",
+            "Créneaux vérifiés dans l'agenda"
+          ]
+        }
       }
     ],
     "taches": []

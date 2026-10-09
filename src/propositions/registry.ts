@@ -6,6 +6,8 @@ export type ApplyCtx = {
   instance: Instance;
   // False unless real writes are enabled on the server AND for the instance (canWriteReal).
   reel: boolean;
+  // To reach the instance's tools (Gmail, HubSpot) through connexions/service writeVia.
+  deps: { secretsDir: string; realWrites: boolean };
 };
 
 export type PropositionType<T> = {

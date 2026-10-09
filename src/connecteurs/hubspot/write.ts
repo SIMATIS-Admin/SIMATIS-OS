@@ -124,6 +124,44 @@ export async function writeHubspot(
       call = () => client.request('POST', '/crm/v3/objects/companies', { properties });
       break;
     }
+    case 'task.create': {
+      const titre = str(d.titre);
+      if (!titre) throw new EcritureRefusee('Titre manquant');
+      const contact = d.contactId ? await hubspotId(ctx, contacts, d.contactId) : null;
+      const deal = d.opportuniteId ? await hubspotId(ctx, opportunites, d.opportuniteId) : null;
+      const type = d.canal === 'email' ? 'EMAIL' : d.canal === 'appel' ? 'CALL' : 'TODO';
+      const due = typeof d.echeance === 'string' ? new Date(d.echeance) : new Date();
+      call = () =>
+        client.request('POST', '/crm/v3/objects/tasks', {
+          properties: {
+            hs_task_subject: titre,
+            hs_task_body: str(d.detail) ?? '',
+            hs_task_type: type,
+            hs_task_status: 'NOT_STARTED',
+            hs_timestamp: due.toISOString(),
+          },
+          associations: [
+            // HUBSPOT_DEFINED task → contact (204) and task → deal (216).
+            ...(contact
+              ? [
+                  {
+                    to: { id: contact },
+                    types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 204 }],
+                  },
+                ]
+              : []),
+            ...(deal
+              ? [
+                  {
+                    to: { id: deal },
+                    types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 216 }],
+                  },
+                ]
+              : []),
+          ],
+        });
+      break;
+    }
     default:
       throw new EcritureRefusee(`Écriture HubSpot non prise en charge : ${op.op}`);
   }

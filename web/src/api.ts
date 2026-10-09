@@ -209,3 +209,65 @@ export const changeOpportunite = (slug: string, id: string, change: Changement) 
     inst(slug, `opportunites/${encodeURIComponent(id)}`),
     change,
   );
+
+export type Compte = { email: number; appel: number; autre: number; total: number };
+export type BriefTache = {
+  id: string;
+  titre: string;
+  canal: 'email' | 'appel' | 'tache';
+  echeance: string | null;
+  prepare: boolean;
+  source: string;
+  contact: string | null;
+  entreprise: string | null;
+  opportunite: string | null;
+  situation: 'retard' | 'jour';
+};
+export type Brief = {
+  source: 'hubspot' | 'natif';
+  rdv: { debut: string; fin: string; titre: string; lieu: string | null }[];
+  rdvEtat: 'ok' | 'non_configure' | 'erreur';
+  rdvErreur?: string;
+  taches: BriefTache[];
+  realisees: {
+    veille: Compte & { jour: string };
+    semaine: Compte;
+    mois: Compte;
+    aujourdhui: Compte;
+  };
+};
+
+export type PropositionItem = {
+  id: string;
+  // email.brouillon, crm.tache, note.second_cerveau, or a type added later.
+  type: string;
+  contenu: Record<string, unknown>;
+  auteur: string;
+  statut: 'proposee' | 'validee' | 'modifiee' | 'ecartee' | 'appliquee' | 'echec';
+  niveau: string;
+  decidePar: string | null;
+  resultat: unknown;
+  createdAt: string;
+  action: string | null;
+  contact: { id: string; nom: string; entreprise: string | null } | null;
+};
+
+export const fetchBrief = (slug: string) => getJson<Brief>(inst(slug, 'brief'));
+export const marquerFait = (slug: string, id: string) =>
+  sendJson<{ simulation: boolean }>(
+    'POST',
+    inst(slug, `taches/${encodeURIComponent(id)}/fait`),
+    {},
+  );
+export const fetchPropositions = (slug: string, filtre: string) =>
+  getJson<PropositionItem[]>(inst(slug, `propositions?filtre=${encodeURIComponent(filtre)}`));
+export const decider = (
+  slug: string,
+  id: string,
+  decision: 'valider' | 'ecarter',
+  contenu?: Record<string, unknown>,
+) =>
+  sendJson<PropositionItem>('POST', inst(slug, `propositions/${encodeURIComponent(id)}/decision`), {
+    decision,
+    ...(contenu ? { contenu } : {}),
+  });
