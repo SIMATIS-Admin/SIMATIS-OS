@@ -57,6 +57,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       }),
     );
   }
+  if (url === '/api/google/secret') return json({ ok: true });
   if (url.endsWith('/google/start')) return json({ url: 'https://accounts.example/consent' });
   if (method === 'POST') return json({ lus: 4, crees: 1, maj: 3 });
   if (method === 'PATCH') return json({ reglages: {} });
@@ -138,11 +139,18 @@ describe('Paramètres > Connexions', () => {
     expect(calls.find((c) => c.url.endsWith('/google/start'))?.body).toEqual({});
   });
 
-  it('never asks the pilot for a Google client ID when the OS has none', async () => {
+  it('asks once for the OS Google secret, then offers the Google button', async () => {
     clientDisponible = false;
     render(<Connexions slug="helioval" />);
-    expect(await screen.findByText(/Bouton inactif/)).toBeTruthy();
-    expect(screen.getByText<HTMLButtonElement>('Connecter le compte Google').disabled).toBe(true);
-    expect(screen.queryByLabelText('ID client OAuth Google')).toBeNull();
+    const input = await screen.findByPlaceholderText('GOCSPX-…');
+    expect(screen.queryByText('Connecter le compte Google')).toBeNull();
+    fireEvent.change(input, { target: { value: 'GOCSPX-fictif-0000' } });
+    clientDisponible = true;
+    fireEvent.click(screen.getByText('Enregistrer'));
+    expect(await screen.findByText('Connecter le compte Google')).toBeTruthy();
+    expect(calls.find((c) => c.url === '/api/google/secret')).toMatchObject({
+      method: 'PUT',
+      body: { secret: 'GOCSPX-fictif-0000' },
+    });
   });
 });

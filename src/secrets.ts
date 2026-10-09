@@ -1,6 +1,7 @@
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
+import { GOOGLE_CLIENT_ID_APP } from './connecteurs/google/oauth.js';
 import { SLUG } from './instances/service.js';
 
 const checkSlug = (slug: string) => {
@@ -25,8 +26,24 @@ export const googleTokenPath = (dir: string, slug: string) => {
   return path.join(dir, `${slug}.google.json`);
 };
 
+const googleAppSecretPath = (dir: string) => path.join(dir, 'google-client.json');
+
+// Secret of the OS's Google client, pasted once in Paramètres > Connexions; null until then.
+export async function readGoogleAppSecret(dir: string): Promise<string | null> {
+  const raw = await readOptional(googleAppSecretPath(dir), 'google-client');
+  return raw ? ((JSON.parse(raw) as { secret?: string }).secret ?? null) : null;
+}
+
+export async function writeGoogleAppSecret(dir: string, secret: string): Promise<void> {
+  const file = googleAppSecretPath(dir);
+  await mkdir(dir, { recursive: true });
+  await writeFile(file, `${JSON.stringify({ secret }, null, 2)}\n`, { mode: 0o600 });
+  await chmod(file, 0o600);
+}
+
 // Reads secrets/instances/<slug>.env, plus the Google refresh token written by google:connect
-// (<slug>.google.json) as GOOGLE_REFRESH_TOKEN. Error messages never contain a secret value.
+// (<slug>.google.json) as GOOGLE_REFRESH_TOKEN. Without its own Google client, the instance uses
+// the OS's one. Error messages never contain a secret value.
 export async function loadInstanceSecrets(
   dir: string,
   slug: string,
@@ -38,6 +55,11 @@ export async function loadInstanceSecrets(
   if (google) {
     const token = (JSON.parse(google) as { refresh_token?: string }).refresh_token;
     if (token) secrets.GOOGLE_REFRESH_TOKEN = token;
+  }
+  if (!secrets.GOOGLE_CLIENT_ID) {
+    secrets.GOOGLE_CLIENT_ID = GOOGLE_CLIENT_ID_APP;
+    const secret = await readGoogleAppSecret(dir);
+    if (secret) secrets.GOOGLE_CLIENT_SECRET = secret;
   }
   return secrets;
 }

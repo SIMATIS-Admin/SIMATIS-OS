@@ -11,6 +11,12 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ];
 
+// The OS's own Google OAuth client ("SIMATIS OS", desktop type, project simatis-os). Published on
+// purpose: Google treats installed-app client IDs as public, consent and PKCE protect the
+// mailboxes. Its secret is never committed: it is pasted once in Paramètres > Connexions.
+export const GOOGLE_CLIENT_ID_APP =
+  '3586478362-ecc1jprpknogmp4qc9vs7le0mp7tuoco.apps.googleusercontent.com';
+
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
@@ -57,6 +63,29 @@ export async function accessToken(
   );
   if (!body.access_token) throw new GoogleError('Google n’a pas renvoyé de jeton d’accès', 502);
   return body.access_token;
+}
+
+// Checks a client secret without any user: Google answers invalid_client to a wrong secret and
+// invalid_grant to a right one (the code is fake).
+export async function clientSecretValide(
+  clientId: string,
+  clientSecret: string,
+  fetch: FetchLike,
+): Promise<boolean> {
+  const response = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code: 'verification',
+      code_verifier: 'verification-verification-verification-verification',
+      redirect_uri: 'http://127.0.0.1',
+      grant_type: 'authorization_code',
+    }).toString(),
+  });
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  return body.error !== 'invalid_client' && response.status !== 401;
 }
 
 const base64url = (b: Buffer) => b.toString('base64url');

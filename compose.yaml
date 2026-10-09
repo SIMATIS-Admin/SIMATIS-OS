@@ -35,8 +35,6 @@ services:
       SECRETS_DIR: /app/secrets/instances
       REAL_WRITES: ${REAL_WRITES:-off}
       BACKUP_STATUS_FILE: /app/backup-status/last.json
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     volumes:
       # Writable: Paramètres > Connexions saves the instances' tokens here.
       - ./secrets:/app/secrets

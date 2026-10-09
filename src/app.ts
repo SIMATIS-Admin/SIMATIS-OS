@@ -15,7 +15,6 @@ export type AppDeps = {
   lectureRole?: string;
   realWrites?: boolean;
   secretsDir?: string;
-  googleClient?: { clientId: string; clientSecret: string };
   googleFetch?: FetchLike;
   logger?: FastifyServerOptions['logger'];
 };
@@ -28,13 +27,12 @@ export function buildApp({
   lectureRole = 'simatis_app_lecture',
   realWrites = false,
   secretsDir = './secrets/instances',
-  googleClient,
   googleFetch,
   logger = false,
 }: AppDeps): FastifyInstance {
   const app = Fastify({ logger });
   registerHealth(app, { pool, version, backupStatusFile });
-  registerApi(app, { db, secretsDir, realWrites, googleClient, googleFetch });
+  registerApi(app, { db, secretsDir, realWrites, googleFetch });
   registerMcp(app, { db, pool, lectureRole, realWrites });
   registerWeb(app);
   return app;

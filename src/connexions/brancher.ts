@@ -1,10 +1,22 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { exchangeCode, googleAuthUrl, pkce, type FetchLike } from '../connecteurs/google/oauth.js';
+import {
+  clientSecretValide,
+  exchangeCode,
+  GOOGLE_CLIENT_ID_APP,
+  googleAuthUrl,
+  pkce,
+  type FetchLike,
+} from '../connecteurs/google/oauth.js';
 import type { Database, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
-import { loadInstanceSecrets, writeGoogleToken, writeInstanceSecret } from '../secrets.js';
+import {
+  loadInstanceSecrets,
+  writeGoogleAppSecret,
+  writeGoogleToken,
+  writeInstanceSecret,
+} from '../secrets.js';
 import { connexions } from './schema.js';
 import { configureConnexion, registeredConnector } from './service.js';
 
@@ -86,11 +98,7 @@ const PENDING_MS = 10 * 60_000;
 
 // Web consent: start() returns Google's consent URL, finish() is called by the redirect back to
 // the OS. Pending consents live in memory for ten minutes, keyed by their one-time state.
-export function googleWebFlow(deps: {
-  secretsDir: string;
-  defaultClient?: GoogleClient;
-  fetch?: FetchLike;
-}) {
+export function googleWebFlow(deps: { secretsDir: string; fetch?: FetchLike }) {
   const pending = new Map<string, Pending>();
   const doFetch: FetchLike = deps.fetch ?? ((url, init) => fetch(url, init));
 
@@ -99,20 +107,39 @@ export function googleWebFlow(deps: {
     if (secrets.GOOGLE_CLIENT_ID && secrets.GOOGLE_CLIENT_SECRET) {
       return { clientId: secrets.GOOGLE_CLIENT_ID, clientSecret: secrets.GOOGLE_CLIENT_SECRET };
     }
-    return deps.defaultClient ?? null;
+    return null;
   }
 
   return {
-    // False until the OS has a Google OAuth client (set once in .env, never by the pilot).
+    // False until the OS's Google client secret has been pasted once.
     async clientDisponible(slug: string): Promise<boolean> {
       return (await clientOf(slug)) !== null;
+    },
+
+    // Saves the OS's Google client secret after checking it with Google.
+    async enregistrerSecret(secret: string): Promise<void> {
+      const valeur = secret.trim();
+      if (!/^[A-Za-z0-9_-]{10,100}$/.test(valeur)) {
+        throw new BranchementRefuse(
+          'Ce texte ne ressemble pas à un code secret Google (GOCSPX-…).',
+        );
+      }
+      let valide: boolean;
+      try {
+        valide = await clientSecretValide(GOOGLE_CLIENT_ID_APP, valeur, doFetch);
+      } catch {
+        throw new BranchementRefuse('Google injoignable : vérifiez la connexion internet.');
+      }
+      if (!valide)
+        throw new BranchementRefuse('Google refuse ce code secret : recopiez-le en entier.');
+      await writeGoogleAppSecret(deps.secretsDir, valeur);
     },
 
     async start(slug: string, redirectUri: string): Promise<string> {
       const client = await clientOf(slug);
       if (!client) {
         throw new BranchementRefuse(
-          'La connexion Google n’est pas encore activée sur cet OS (identifiant OAuth à poser une fois dans .env).',
+          'Code secret Google de l’OS manquant : enregistrez-le dans Paramètres > Connexions.',
         );
       }
       const now = Date.now();
@@ -150,8 +177,6 @@ export function googleWebFlow(deps: {
         },
         doFetch,
       );
-      await writeInstanceSecret(deps.secretsDir, p.slug, 'GOOGLE_CLIENT_ID', p.clientId);
-      await writeInstanceSecret(deps.secretsDir, p.slug, 'GOOGLE_CLIENT_SECRET', p.clientSecret);
       await writeGoogleToken(deps.secretsDir, p.slug, token);
       await withInstance(db, instance.id, brancherGoogle);
       return p.slug;
