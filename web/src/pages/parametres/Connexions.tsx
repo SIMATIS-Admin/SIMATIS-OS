@@ -519,7 +519,7 @@ export function Connexions({ slug }: { slug: string }) {
             ) : (
               <div className="panel-b stack">
                 <p style={{ margin: 0 }}>
-                  {c
+                  {c?.fournisseur === 'fake'
                     ? 'Données fictives de démonstration.'
                     : kind === 'crm'
                       ? "Le client utilise HubSpot ? Demandez à son administrateur HubSpot un jeton d'application privée (Paramètres > Intégrations > Applications privées) et collez-le ici. L'OS copie entreprises, contacts, transactions et tâches, sans rien modifier dans HubSpot tant que vous ne l'autorisez pas."
@@ -527,7 +527,7 @@ export function Connexions({ slug }: { slug: string }) {
                         ? "Connectez le compte Google utilisé pour ce mandat : l'OS prépare vos emails en brouillon dans Gmail (vous les envoyez vous-même) et retrouve l'historique des échanges avec chaque contact."
                         : "L'agenda se branche en même temps que la messagerie, avec le même compte Google : l'OS lit vos rendez-vous pour le brief du jour et propose des créneaux libres."}
                 </p>
-                {kind === 'crm' ? (
+                {c?.fournisseur === 'fake' ? null : kind === 'crm' ? (
                   <BrancherHubspot slug={slug} onDone={load} />
                 ) : kind === 'messagerie' ? (
                   <ConnecterGoogle

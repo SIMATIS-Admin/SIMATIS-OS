@@ -34,6 +34,12 @@ import { getFavoris, setFavoris } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
+import {
+  convertirProspect,
+  creerProspect,
+  ProspectRefuse,
+  reinitialiserDemo,
+} from '../demo/service.js';
 import { propositions } from '../propositions/schema.js';
 
 // Single user until a second one is decided (question 4 of the implementation plan).
@@ -289,6 +295,38 @@ export function registerApi(
         });
         return { ...summary(i), nom: parsed.data.nom };
       });
+    }),
+  );
+
+  // Prospects (demo instances): create, reset to the fictive set, convert into a mandate.
+  app.post<{ Body: unknown }>('/api/prospects', async (request, reply) => {
+    const parsed = renameSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Nom invalide (1 à 80 caractères)' });
+    return summary(await creerProspect(db, parsed.data));
+  });
+  const prospectAction = (action: (i: Instance, body: unknown) => Promise<unknown>) =>
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      try {
+        return await action(i, request.body);
+      } catch (error) {
+        if (error instanceof ProspectRefuse) return reply.code(409).send({ error: error.message });
+        if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
+        throw error;
+      }
+    });
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/demo/reinitialiser',
+    prospectAction(async (i) => {
+      await reinitialiserDemo(db, i);
+      return { ok: true };
+    }),
+  );
+  const conversionSchema = z.object({ crm: z.enum(['hubspot']).nullable() });
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/convertir',
+    prospectAction(async (i, body) => {
+      const { crm } = conversionSchema.parse(body ?? { crm: null });
+      return summary(await convertirProspect(db, i, { crm }));
     }),
   );
 
