@@ -59,6 +59,7 @@ export const BUILT = new Set([
   'contacts',
   'journal',
   'parametres',
+  'tableau',
 ]);
 
 // Where each screen comes from in docs/plans/2026-10-08-implementation-maquette.md.

@@ -6,7 +6,15 @@
     "config": {
       "sous": "Mon activité",
       "couleur": "#41A594",
-      "modules": ["diagnostic", "devis"]
+      "modules": ["diagnostic", "devis"],
+      "funnel": {
+        "leads": 60,
+        "l2p": 30,
+        "p2d": 45,
+        "d2c": 35,
+        "panier": 16000,
+        "objectif": 150000
+      }
     },
     "entreprises": [
       {
@@ -616,7 +624,15 @@
     "config": {
       "sous": "Mandat fictif : bureau d'études",
       "couleur": "#4C8DD6",
-      "modules": ["relais"]
+      "modules": ["relais"],
+      "funnel": {
+        "leads": 90,
+        "l2p": 20,
+        "p2d": 60,
+        "d2c": 40,
+        "panier": 15000,
+        "objectif": 400000
+      }
     },
     "entreprises": [
       {
@@ -984,7 +1000,15 @@
     "config": {
       "sous": "Mandat fictif : équipements",
       "couleur": "#9A7BE0",
-      "modules": ["demarrage"]
+      "modules": ["demarrage"],
+      "funnel": {
+        "leads": 25,
+        "l2p": 35,
+        "p2d": 50,
+        "d2c": 40,
+        "panier": 9000,
+        "objectif": 120000
+      }
     },
     "entreprises": [
       {
@@ -1144,7 +1168,15 @@
     "config": {
       "sous": "Mandat prospect fictif",
       "couleur": "#E3A33B",
-      "modules": ["diagnostic"]
+      "modules": ["diagnostic"],
+      "funnel": {
+        "leads": 40,
+        "l2p": 30,
+        "p2d": 50,
+        "d2c": 35,
+        "panier": 20000,
+        "objectif": 250000
+      }
     },
     "entreprises": [
       {

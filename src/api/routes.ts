@@ -34,6 +34,8 @@ import { getFavoris, setFavoris } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
+import { funnelSchema, simulerFunnel } from '../pilotage/funnel.js';
+import { funnelOf, getTableau } from '../pilotage/tableau.js';
 import {
   convertirProspect,
   creerProspect,
@@ -295,6 +297,26 @@ export function registerApi(
         });
         return { ...summary(i), nom: parsed.data.nom };
       });
+    }),
+  );
+
+  app.get<SlugParams>(
+    '/api/i/:slug/tableau',
+    onInstance((i) => getTableau(db, i)),
+  );
+  app.patch<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/funnel',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = funnelSchema.partial().strict().safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Valeurs hors bornes' });
+      const funnel = { ...funnelOf(i), ...parsed.data };
+      await withInstance(db, i.id, (tx) =>
+        tx
+          .update(instances)
+          .set({ config: { ...i.config, funnel }, updatedAt: new Date() })
+          .where(eq(instances.id, i.id)),
+      );
+      return { funnel, simulation: simulerFunnel(funnel) };
     }),
   );
 

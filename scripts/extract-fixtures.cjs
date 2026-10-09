@@ -22,7 +22,7 @@ const fixtures = INSTANCES.map((i) => {
     slug: i.id,
     nom: i.nom,
     type: i.type,
-    config: { sous: i.sous, couleur: i.c, modules: i.modules },
+    config: { sous: i.sous, couleur: i.c, modules: i.modules, funnel: d.funnel },
     entreprises: d.societes.map((s) => ({
       ref: s.id,
       nom: s.nom,
