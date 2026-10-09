@@ -58,6 +58,56 @@ export async function accessToken(
 
 const base64url = (b: Buffer) => b.toString('base64url');
 
+// PKCE pair and anti-forgery state for one consent.
+export function pkce() {
+  const verifier = base64url(randomBytes(32));
+  return {
+    verifier,
+    challenge: base64url(createHash('sha256').update(verifier).digest()),
+    state: base64url(randomBytes(16)),
+  };
+}
+
+export function googleAuthUrl(p: {
+  clientId: string;
+  redirectUri: string;
+  state: string;
+  challenge: string;
+}): string {
+  return `${AUTH_URL}?${new URLSearchParams({
+    client_id: p.clientId,
+    redirect_uri: p.redirectUri,
+    response_type: 'code',
+    scope: SCOPES.join(' '),
+    access_type: 'offline',
+    prompt: 'consent',
+    state: p.state,
+    code_challenge: p.challenge,
+    code_challenge_method: 'S256',
+  }).toString()}`;
+}
+
+export async function exchangeCode(
+  p: Client & { code: string; verifier: string; redirectUri: string },
+  fetch: FetchLike,
+): Promise<{ refresh_token: string; scope: string }> {
+  const body = await tokenRequest(
+    {
+      client_id: p.clientId,
+      client_secret: p.clientSecret,
+      code: p.code,
+      code_verifier: p.verifier,
+      redirect_uri: p.redirectUri,
+      grant_type: 'authorization_code',
+    },
+    fetch,
+  );
+  if (!body.refresh_token) {
+    throw new GoogleError('Google n’a pas renvoyé de jeton de rafraîchissement', 502);
+  }
+  return { refresh_token: body.refresh_token, scope: body.scope ?? SCOPES.join(' ') };
+}
+
 // One-time consent on the workstation (google:connect): a loopback redirect to a local server,
 // with PKCE and a state check. Returns the refresh token to store in the instance's secrets.
 export async function connectGoogle({
@@ -71,9 +121,7 @@ export async function connectGoogle({
   fetch: FetchLike;
   timeoutMs?: number;
 }): Promise<{ refresh_token: string; scope: string }> {
-  const verifier = base64url(randomBytes(32));
-  const challenge = base64url(createHash('sha256').update(verifier).digest());
-  const state = base64url(randomBytes(16));
+  const { verifier, challenge, state } = pkce();
 
   let settle: { ok: (code: string) => void; ko: (e: Error) => void } | undefined;
   const code = new Promise<string>((ok, ko) => (settle = { ok, ko }));
@@ -106,34 +154,11 @@ export async function connectGoogle({
     timeoutMs,
   );
   try {
-    open(
-      `${AUTH_URL}?${new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: 'code',
-        scope: SCOPES.join(' '),
-        access_type: 'offline',
-        prompt: 'consent',
-        state,
-        code_challenge: challenge,
-        code_challenge_method: 'S256',
-      }).toString()}`,
-    );
-    const body = await tokenRequest(
-      {
-        client_id: clientId,
-        client_secret: clientSecret,
-        code: await code,
-        code_verifier: verifier,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      },
+    open(googleAuthUrl({ clientId, redirectUri, state, challenge }));
+    return await exchangeCode(
+      { clientId, clientSecret, code: await code, verifier, redirectUri },
       fetch,
     );
-    if (!body.refresh_token) {
-      throw new GoogleError('Google n’a pas renvoyé de jeton de rafraîchissement', 502);
-    }
-    return { refresh_token: body.refresh_token, scope: body.scope ?? SCOPES.join(' ') };
   } finally {
     clearTimeout(timer);
     server.close();

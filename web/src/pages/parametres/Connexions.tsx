@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  brancherHubspot,
+  demarrerGoogle,
   fetchConnexions,
   saveReglages,
   saveReglagesCrm,
@@ -48,11 +50,95 @@ function Etat({ c }: { c: ConnexionInfo | undefined }) {
 }
 
 const Verrou = ({ children }: { children: string }) => (
-  <p className="small muted" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+  <p className="small muted verrou">
     <Icon name="lock" />
     {children}
   </p>
 );
+
+function BrancherHubspot({ slug, onDone }: { slug: string; onDone: () => void }) {
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    setBusy(true);
+    setError(null);
+    brancherHubspot(slug, token)
+      .then(onDone, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <label className="field">
+        <span>
+          Jeton HubSpot du client{' '}
+          <Tip text="Dans le HubSpot du client : Paramètres > Intégrations > Applications privées > Créer, avec la lecture et l'écriture des contacts, entreprises, transactions et tâches. Copiez le jeton (pat-…) et collez-le ici." />
+        </span>
+        <input
+          className="input"
+          type="password"
+          autoComplete="off"
+          placeholder="pat-eu1-…"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+      </label>
+      <div>
+        <button className="btn primary" disabled={busy || !token.trim()} onClick={submit}>
+          {busy ? 'Vérification…' : 'Vérifier et brancher HubSpot'}
+        </button>
+      </div>
+      {error && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </p>
+      )}
+      <Verrou>Le jeton reste sur l'ordinateur de l'OS : il n'est plus jamais affiché.</Verrou>
+    </div>
+  );
+}
+
+function ConnecterGoogle({ slug, clientDisponible }: { slug: string; clientDisponible: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!clientDisponible) {
+    return (
+      <p className="small muted" style={{ margin: 0 }}>
+        La connexion Google n'est pas encore activée sur cet OS : c'est un réglage à faire une seule
+        fois par l'administrateur, ensuite un clic suffit.
+      </p>
+    );
+  }
+  const go = () => {
+    setBusy(true);
+    setError(null);
+    demarrerGoogle(slug).then(
+      ({ url }) => location.assign(url),
+      (e: unknown) => {
+        setError(e instanceof Error ? e.message : String(e));
+        setBusy(false);
+      },
+    );
+  };
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div>
+        <button className="btn primary" disabled={busy} onClick={go}>
+          Connecter le compte Google
+        </button>
+      </div>
+      {error && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </p>
+      )}
+      <Verrou>
+        Choisissez le compte Google utilisé pour ce mandat : Gmail (brouillons seulement) et Agenda
+        sont branchés ensemble.
+      </Verrou>
+    </div>
+  );
+}
 
 function CrmHubspot({
   slug,
@@ -93,11 +179,9 @@ function CrmHubspot({
   return (
     <div className="panel-b">
       {c.secret && !c.secret.present && (
-        <div className="alert amber" style={{ marginBottom: 12 }}>
-          <div>
-            Jeton absent : ajouter <code>{c.secret.nom}</code> dans{' '}
-            <code>secrets/instances/{slug}.env</code>, sur l'ordinateur qui fait tourner l'OS.
-          </div>
+        <div className="alert amber" style={{ marginBottom: 12, display: 'block' }}>
+          <p style={{ marginTop: 0 }}>Jeton HubSpot absent : collez-le pour reprendre la copie.</p>
+          <BrancherHubspot slug={slug} onDone={onChange} />
         </div>
       )}
       <div className="grid g2">
@@ -296,6 +380,11 @@ export function Connexions({ slug }: { slug: string }) {
   if (!data) return null;
   return (
     <div className="stack">
+      {location.hash.includes('google=ok') && (
+        <div className="alert green">
+          <div>Compte Google connecté : Gmail et Agenda sont branchés.</div>
+        </div>
+      )}
       {!data.ecrituresReelles && (
         <div className="alert blue">
           <Icon name="lock" />
@@ -316,6 +405,11 @@ export function Connexions({ slug }: { slug: string }) {
               </div>
               <Etat c={c} />
             </div>
+            {kind !== 'crm' && c && (c.etat === 'erreur' || (c.secret && !c.secret.present)) && (
+              <div className="panel-b">
+                <ConnecterGoogle slug={slug} clientDisponible={data.googleClientDisponible} />
+              </div>
+            )}
             {kind === 'crm' && c?.fournisseur === 'hubspot' ? (
               <CrmHubspot slug={slug} c={c} options={data.options} onChange={load} />
             ) : kind === 'messagerie' && c?.fournisseur === 'gmail' ? (
@@ -323,26 +417,23 @@ export function Connexions({ slug }: { slug: string }) {
             ) : kind === 'agenda' && c?.fournisseur === 'google-agenda' ? (
               <Agenda slug={slug} c={c} onChange={load} />
             ) : (
-              <div className="panel-b">
+              <div className="panel-b stack">
                 <p style={{ margin: 0 }}>
-                  {kind === 'crm' ? (
-                    c ? (
-                      'Données fictives de démonstration.'
-                    ) : (
-                      "Pas de CRM branché : pipeline, entreprises et contacts sont tenus par l'OS. Pour brancher le HubSpot du client, l'agent lance connexion:set avec le jeton dans les secrets de l'instance."
-                    )
-                  ) : c ? (
-                    'Données fictives de démonstration.'
-                  ) : (
-                    <>
-                      Non branchée : sans cette connexion, les routines s'arrêtent à l'étape qui en
-                      a besoin, et rien ne part depuis la boîte d'une autre instance. Pour la
-                      brancher, l'agent lance{' '}
-                      <code>npm run admin -- google:connect --slug {slug}</code> sur l'ordinateur de
-                      l'OS.
-                    </>
-                  )}
+                  {c
+                    ? 'Données fictives de démonstration.'
+                    : kind === 'crm'
+                      ? "Pas de CRM branché : pipeline, entreprises et contacts sont tenus par l'OS."
+                      : "Non branchée : sans cette connexion, les routines s'arrêtent à l'étape qui en a besoin, et rien ne part depuis la boîte d'une autre instance."}
                 </p>
+                {kind === 'crm' ? (
+                  <BrancherHubspot slug={slug} onDone={load} />
+                ) : kind === 'messagerie' ? (
+                  <ConnecterGoogle slug={slug} clientDisponible={data.googleClientDisponible} />
+                ) : (
+                  <p className="small muted" style={{ margin: 0 }}>
+                    Se branche avec la messagerie : « Connecter le compte Google » ci-dessus.
+                  </p>
+                )}
               </div>
             )}
           </div>

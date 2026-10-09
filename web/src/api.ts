@@ -142,6 +142,7 @@ export type ConnexionInfo = {
 export type ConnexionsReponse = {
   connexions: ConnexionInfo[];
   options: { objets: string[]; champs: { cle: string; libelle: string }[] };
+  googleClientDisponible: boolean;
   ecrituresReelles: boolean;
 };
 
@@ -159,6 +160,10 @@ export const saveReglages = (
     inst(slug, `connexions/${kind}`),
     reglages,
   );
+export const brancherHubspot = (slug: string, token: string) =>
+  sendJson<{ ok: true }>('POST', inst(slug, 'connexions/hubspot'), { token });
+export const demarrerGoogle = (slug: string) =>
+  sendJson<{ url: string }>('POST', inst(slug, 'connexions/google/start'), {});
 export const syncConnexion = (slug: string, kind: string) =>
   sendJson<{ lus: number; crees: number; maj: number }>(
     'POST',

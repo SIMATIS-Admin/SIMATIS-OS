@@ -22,6 +22,9 @@ const schema = z.object({
   SECRETS_DIR: z.string().min(1).default('./secrets/instances'),
   REAL_WRITES: z.enum(['off', 'on']).default('off'),
   BACKUP_STATUS_FILE: z.string().min(1).default('./backup-status/last.json'),
+  // Default Google OAuth client, used by instances that have none of their own.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
 });
 
 export type Config = {
@@ -34,6 +37,7 @@ export type Config = {
   secretsDir: string;
   realWrites: boolean;
   backupStatusFile: string;
+  googleClient?: { clientId: string; clientSecret: string };
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -55,5 +59,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     secretsDir: e.SECRETS_DIR,
     realWrites: e.REAL_WRITES === 'on',
     backupStatusFile: e.BACKUP_STATUS_FILE,
+    ...(e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET
+      ? { googleClient: { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET } }
+      : {}),
   };
 }

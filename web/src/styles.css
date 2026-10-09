@@ -1736,6 +1736,20 @@ textarea.input {
   background: var(--blue-bg);
   color: var(--navy);
 }
+.alert.green {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.verrou {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.verrou svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
 .alert svg {
   width: 18px;
   height: 18px;

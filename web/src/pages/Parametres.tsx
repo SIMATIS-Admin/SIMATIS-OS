@@ -22,7 +22,9 @@ export function Parametres({ slug, onRenamed }: Props) {
   const [fiche, setFiche] = useState<InstanceFiche | null>(null);
   const [nom, setNom] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [tab, setTab] = useState<'instance' | 'connexions'>('instance');
+  const [tab, setTab] = useState<'instance' | 'connexions'>(
+    location.hash.includes('google=') ? 'connexions' : 'instance',
+  );
 
   useEffect(() => {
     fetchInstanceFiche(slug).then(

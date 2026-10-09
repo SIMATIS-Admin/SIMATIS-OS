@@ -28,6 +28,7 @@ const app = buildApp({
   lectureRole: lectureRoleOf(config.appDbRole),
   realWrites: config.realWrites,
   secretsDir: config.secretsDir,
+  ...(config.googleClient ? { googleClient: config.googleClient } : {}),
   logger: { level: config.logLevel },
 });
 

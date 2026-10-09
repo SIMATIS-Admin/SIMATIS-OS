@@ -7,6 +7,7 @@ type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let tokenPresent = true;
 let avecGoogle = false;
+let clientDisponible = true;
 
 const reponse = () => ({
   connexions: [
@@ -40,6 +41,7 @@ const reponse = () => ({
       { cle: 'annualrevenue', libelle: "Chiffre d'affaires annuel" },
     ],
   },
+  googleClientDisponible: clientDisponible,
   ecrituresReelles: false,
 });
 
@@ -47,6 +49,15 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+  if (url.endsWith('/connexions/hubspot')) {
+    const ok = (calls.at(-1)?.body as { token: string }).token === 'pat-eu1-bon';
+    return Promise.resolve(
+      new Response(JSON.stringify(ok ? { ok: true } : { error: 'HubSpot refuse ce jeton' }), {
+        status: ok ? 200 : 400,
+      }),
+    );
+  }
+  if (url.endsWith('/google/start')) return json({ url: 'https://accounts.example/consent' });
   if (method === 'POST') return json({ lus: 4, crees: 1, maj: 3 });
   if (method === 'PATCH') return json({ reglages: {} });
   return json(reponse());
@@ -57,6 +68,7 @@ describe('Paramètres > Connexions', () => {
     calls = [];
     tokenPresent = true;
     avecGoogle = false;
+    clientDisponible = true;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -87,10 +99,20 @@ describe('Paramètres > Connexions', () => {
     expect(await screen.findByText(/4 lus, 1 créés, 3 mis à jour/)).toBeTruthy();
   });
 
-  it('tells where to put a missing token', async () => {
+  it('connects HubSpot from the screen when the token is missing, and shows a refusal', async () => {
     tokenPresent = false;
     render(<Connexions slug="helioval" />);
-    expect(await screen.findByText('secrets/instances/helioval.env')).toBeTruthy();
+    const input = await screen.findByPlaceholderText('pat-eu1-…');
+    fireEvent.change(input, { target: { value: 'pat-eu1-faux' } });
+    fireEvent.click(screen.getByText('Vérifier et brancher HubSpot'));
+    expect(await screen.findByText(/HubSpot refuse ce jeton/)).toBeTruthy();
+
+    fireEvent.change(input, { target: { value: 'pat-eu1-bon' } });
+    fireEvent.click(screen.getByText('Vérifier et brancher HubSpot'));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url.endsWith('/connexions/hubspot')).length).toBe(2),
+    );
+    await waitFor(() => expect(calls.at(-1)?.url).toBe('/api/i/helioval/connexions'));
   });
 
   it('shows the Gmail locks and saves the history depth', async () => {
@@ -107,8 +129,20 @@ describe('Paramètres > Connexions', () => {
     });
   });
 
-  it('gives the command to connect Google when messaging is missing', async () => {
+  it('sends the pilot to Google consent from the button', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, hash: '', assign });
     render(<Connexions slug="helioval" />);
-    expect((await screen.findAllByText(/google:connect --slug helioval/)).length).toBe(2);
+    fireEvent.click((await screen.findAllByText('Connecter le compte Google'))[0] as HTMLElement);
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://accounts.example/consent'));
+    expect(calls.find((c) => c.url.endsWith('/google/start'))?.body).toEqual({});
+  });
+
+  it('never asks the pilot for a Google client ID when the OS has none', async () => {
+    clientDisponible = false;
+    render(<Connexions slug="helioval" />);
+    expect(await screen.findByText(/pas encore activée sur cet OS/)).toBeTruthy();
+    expect(screen.queryByText('Connecter le compte Google')).toBeNull();
+    expect(screen.queryByLabelText('ID client OAuth Google')).toBeNull();
   });
 });
