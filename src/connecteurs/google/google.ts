@@ -113,7 +113,7 @@ const header = (headers: { name: string; value: string }[] | undefined, name: st
 
 // Recent exchanges with a contact. Snippets only, unless the instance reads full bodies.
 export async function historique(
-  ctx: SyncCtx,
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
   email: string,
   { mois, complet = false }: { mois: number; complet?: boolean },
   options: GoogleOptions = {},
@@ -158,7 +158,7 @@ export async function historique(
 
 // Busy periods of the instance's calendars (to propose free slots, never to read the meetings).
 export async function freeBusy(
-  ctx: SyncCtx,
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
   debut: Date,
   fin: Date,
   calendriers: string[] = ['primary'],

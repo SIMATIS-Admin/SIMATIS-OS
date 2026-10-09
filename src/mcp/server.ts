@@ -6,6 +6,8 @@ import { logEvent } from '../journal/service.js';
 import { resolveToken, type ResolvedToken } from './tokens.js';
 import { toolsFor, type McpDeps } from './tools.js';
 import { readVersion } from '../version.js';
+import '../routines/outils-mcp.js';
+import { echouerExecution, RoutineArretee } from '../routines/service.js';
 
 const asText = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
@@ -36,6 +38,13 @@ function buildServer({ jeton, instance }: ResolvedToken, deps: McpDeps): McpServ
             });
             return asText(result);
           } catch (error) {
+            // The run's own transaction is rolled back: record the stop in a fresh one.
+            if (error instanceof RoutineArretee && error.executionId) {
+              const id = error.executionId;
+              await withInstance(deps.db, instance.id, (tx) =>
+                echouerExecution(tx, id, error.message, acteur),
+              ).catch(() => undefined);
+            }
             return asError(error);
           }
         },

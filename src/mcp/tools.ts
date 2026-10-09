@@ -11,7 +11,13 @@ import { recentEvents } from '../journal/service.js';
 import { propositions } from '../propositions/schema.js';
 import { MAX_LIGNES, runReadQuery, VUES } from './requete.js';
 
-export type McpDeps = { db: Database; pool: pg.Pool; lectureRole: string; realWrites: boolean };
+export type McpDeps = {
+  db: Database;
+  pool: pg.Pool;
+  lectureRole: string;
+  realWrites: boolean;
+  secretsDir: string;
+};
 
 export type ToolCtx = { instance: Instance; tx: Tx; acteur: string; deps: McpDeps };
 export type PortefeuilleCtx = { acteur: string; deps: McpDeps };

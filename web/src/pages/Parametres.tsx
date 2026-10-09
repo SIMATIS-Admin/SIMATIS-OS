@@ -9,6 +9,7 @@ import {
 import { Icon } from '../icons.js';
 import type { InstanceSummary } from '../nav.js';
 import { Connexions } from './parametres/Connexions.js';
+import { RoutinesParametres } from './parametres/Routines.js';
 import { Tip } from './widgets.js';
 
 const TYPE_NOM: Record<InstanceSummary['type'], string> = {
@@ -114,7 +115,7 @@ export function Parametres({ slug, onRenamed }: Props) {
   const [fiche, setFiche] = useState<InstanceFiche | null>(null);
   const [nom, setNom] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [tab, setTab] = useState<'instance' | 'connexions'>(
+  const [tab, setTab] = useState<'instance' | 'connexions' | 'routines'>(
     location.hash.includes('google=') ? 'connexions' : 'instance',
   );
 
@@ -148,7 +149,7 @@ export function Parametres({ slug, onRenamed }: Props) {
         <button className={tab === 'connexions' ? 'on' : ''} onClick={() => setTab('connexions')}>
           Connexions
         </button>
-        <button disabled title="Arrive avec les routines Claude (lot 12)">
+        <button className={tab === 'routines' ? 'on' : ''} onClick={() => setTab('routines')}>
           Routines Claude
         </button>
       </div>
@@ -161,6 +162,8 @@ export function Parametres({ slug, onRenamed }: Props) {
       </div>
       {tab === 'connexions' ? (
         <Connexions slug={slug} />
+      ) : tab === 'routines' ? (
+        <RoutinesParametres slug={slug} />
       ) : (
         <div className="grid g2">
           <div className="panel">
