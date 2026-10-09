@@ -18,6 +18,7 @@ export const PROPRIETES = {
   ],
   tasks: [
     'hs_task_subject',
+    'hs_task_body',
     'hs_task_type',
     'hs_timestamp',
     'hs_task_status',
@@ -119,5 +120,6 @@ export function mapTask(h: HsObject) {
     canal: typeTache(titre, h.properties.hs_task_type),
     echeance: due ? new Date(due) : null,
     faitAt: done && doneAt ? new Date(doneAt) : null,
+    ...present({ notes: text(h, 'hs_task_body') }),
   };
 }

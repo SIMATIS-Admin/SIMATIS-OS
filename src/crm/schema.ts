@@ -98,6 +98,7 @@ export const taches = pgTable(
     echeance: timestamp('echeance', { withTimezone: true }),
     faitAt: timestamp('fait_at', { withTimezone: true }),
     prepare: boolean('prepare').notNull().default(false),
+    notes: text('notes'),
   },
   (t) => [
     index('taches_instance_echeance_idx').on(t.instanceId, t.echeance),

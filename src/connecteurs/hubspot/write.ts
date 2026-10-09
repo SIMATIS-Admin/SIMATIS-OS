@@ -124,6 +124,20 @@ export async function writeHubspot(
       call = () => client.request('POST', '/crm/v3/objects/companies', { properties });
       break;
     }
+    case 'task.update': {
+      const id = await hubspotId(ctx, taches, d.tacheId);
+      const properties: Record<string, string> = {};
+      if (typeof d.titre === 'string') properties.hs_task_subject = d.titre.trim();
+      if (typeof d.fait === 'boolean')
+        properties.hs_task_status = d.fait ? 'COMPLETED' : 'NOT_STARTED';
+      if (typeof d.echeance === 'string')
+        properties.hs_timestamp = new Date(d.echeance).toISOString();
+      if (d.notes !== undefined)
+        properties.hs_task_body = typeof d.notes === 'string' ? d.notes : '';
+      if (Object.keys(properties).length === 0) throw new EcritureRefusee('Aucune modification');
+      call = () => client.request('PATCH', `/crm/v3/objects/tasks/${id}`, { properties });
+      break;
+    }
     case 'task.create': {
       const titre = str(d.titre);
       if (!titre) throw new EcritureRefusee('Titre manquant');
@@ -135,7 +149,7 @@ export async function writeHubspot(
         client.request('POST', '/crm/v3/objects/tasks', {
           properties: {
             hs_task_subject: titre,
-            hs_task_body: str(d.detail) ?? '',
+            hs_task_body: str(d.notes) ?? str(d.detail) ?? '',
             hs_task_type: type,
             hs_task_status: 'NOT_STARTED',
             hs_timestamp: due.toISOString(),
