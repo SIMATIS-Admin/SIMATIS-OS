@@ -46,7 +46,8 @@ describe('nav', () => {
     expect(isBuilt('pipeline')).toBe(true);
     expect(isBuilt('brief')).toBe(true);
     expect(isBuilt('tableau')).toBe(true);
-    expect(isBuilt('devis')).toBe(false);
+    expect(isBuilt('devis')).toBe(true);
+    expect(isBuilt('prospection')).toBe(false);
   });
 
   it('reorders favourites before or after a target', () => {

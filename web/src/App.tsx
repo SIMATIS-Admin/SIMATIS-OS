@@ -12,6 +12,8 @@ import { Parametres } from './pages/Parametres.js';
 import { Pipeline } from './pages/Pipeline.js';
 import { Portefeuille } from './pages/Portefeuille.js';
 import { Tableau } from './pages/Tableau.js';
+import { Devis } from './pages/Devis.js';
+import { RendezVous } from './pages/RendezVous.js';
 import { Sidebar } from './shell/Sidebar.js';
 
 const DEFAULT_VIEW = 'brief';
@@ -76,6 +78,10 @@ export function App() {
         return <AValider key={current.slug} slug={current.slug} />;
       case 'pipeline':
         return <Pipeline key={current.slug} slug={current.slug} />;
+      case 'agenda':
+        return <RendezVous key={current.slug} slug={current.slug} />;
+      case 'devis':
+        return <Devis key={current.slug} slug={current.slug} />;
       case 'tableau':
         return <Tableau key={current.slug} slug={current.slug} />;
       case 'journal':

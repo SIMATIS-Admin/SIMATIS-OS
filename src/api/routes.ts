@@ -34,6 +34,23 @@ import { getFavoris, setFavoris } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
+import {
+  DevisRefuse,
+  demanderTransmission,
+  devisActif,
+  lignesSchema,
+  listerDevis,
+  modifierLignes,
+  preparerDevis,
+  validerDevis,
+} from '../conversion/devis.js';
+import {
+  compteRenduSchema,
+  enregistrerCompteRendu,
+  listerRendezVous,
+  preparer,
+  RdvIndisponible,
+} from '../conversion/rdv.js';
 import { funnelSchema, simulerFunnel } from '../pilotage/funnel.js';
 import { funnelOf, getTableau } from '../pilotage/tableau.js';
 import {
@@ -318,6 +335,94 @@ export function registerApi(
       );
       return { funnel, simulation: simulerFunnel(funnel) };
     }),
+  );
+
+  // Rendez-vous: the instance's agenda linked to its contacts and deals.
+  app.get<SlugParams>(
+    '/api/i/:slug/rendez-vous',
+    onInstance((i) => listerRendezVous(db, i, connexionDeps)),
+  );
+  app.get<ById>(
+    '/api/i/:slug/opportunites/:id/preparation',
+    onInstance<ById>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(404).send({ error: 'Introuvable' });
+      try {
+        return await preparer(db, i, request.params.id);
+      } catch (error) {
+        if (error instanceof RdvIndisponible) return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+  type CrRoute = { Params: { slug: string; id: string }; Body: unknown };
+  app.post<CrRoute>(
+    '/api/i/:slug/rendez-vous/:id/compte-rendu',
+    onInstance<CrRoute>(async (i, request, reply) => {
+      const parsed = compteRenduSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Compte rendu incomplet' });
+      try {
+        return await enregistrerCompteRendu(
+          db,
+          i,
+          request.params.id.slice(0, 300),
+          parsed.data,
+          connexionDeps,
+        );
+      } catch (error) {
+        if (error instanceof PropositionRefusee) {
+          return reply.code(403).send({ error: error.message });
+        }
+        throw error;
+      }
+    }),
+  );
+
+  // Devis: SIMATIS's own instance only (module devis); anywhere else the screen does not exist.
+  const surDevis = <R extends SlugParams>(
+    handler: (i: Instance, request: FastifyRequest<R>) => Promise<unknown>,
+  ) =>
+    onInstance<R>(async (i, request, reply) => {
+      if (!devisActif(i))
+        return reply.code(404).send({ error: 'Pas de devis dans cette instance' });
+      try {
+        return await handler(i, request);
+      } catch (error) {
+        if (error instanceof DevisRefuse) return reply.code(400).send({ error: error.message });
+        if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
+        if (error instanceof PropositionRefusee) {
+          return reply.code(403).send({ error: error.message });
+        }
+        throw error;
+      }
+    });
+  type DevisRoute = { Params: { slug: string; id: string }; Body: unknown };
+  app.get<SlugParams>(
+    '/api/i/:slug/devis',
+    surDevis((i) => listerDevis(db, i)),
+  );
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/devis',
+    surDevis<SlugParams & { Body: unknown }>((i, request) =>
+      preparerDevis(db, i, z.object({ opportuniteId: z.uuid() }).parse(request.body).opportuniteId),
+    ),
+  );
+  app.patch<DevisRoute>(
+    '/api/i/:slug/devis/:id',
+    surDevis<DevisRoute>((i, request) => {
+      const parsed = z.object({ lignes: lignesSchema }).safeParse(request.body);
+      if (!parsed.success) throw new DevisRefuse('Lignes invalides');
+      return modifierLignes(db, i, request.params.id, parsed.data.lignes);
+    }),
+  );
+  app.post<DevisRoute>(
+    '/api/i/:slug/devis/:id/valider',
+    surDevis<DevisRoute>((i, request) => validerDevis(db, i, request.params.id)),
+  );
+  app.post<DevisRoute>(
+    '/api/i/:slug/devis/:id/transmettre',
+    surDevis<DevisRoute>((i, request) =>
+      demanderTransmission(db, { instance: i, ...connexionDeps }, request.params.id),
+    ),
   );
 
   // Prospects (demo instances): create, reset to the fictive set, convert into a mandate.

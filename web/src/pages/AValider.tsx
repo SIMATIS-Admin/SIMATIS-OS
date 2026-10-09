@@ -17,13 +17,18 @@ const TYPE_LIBELLE: Record<string, string> = {
   'email.brouillon': 'Brouillon',
   'crm.tache': 'Tâche CRM',
   'note.second_cerveau': 'Second cerveau',
+  'devis.transmettre': 'Transmission de devis',
 };
 const NIVEAU_TIP = (n: string) =>
   `Niveau d'autonomie de l'OS pour cette action (${n}). Il va de L0, l'OS suggère seulement, à L3, l'OS agit seul. Plus il y a de barres colorées, plus l'OS peut agir sans vous.`;
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const titre = (p: PropositionItem) =>
-  p.type === 'email.brouillon' ? str(p.contenu.objet) : str(p.contenu.titre) || p.type;
+  p.type === 'email.brouillon'
+    ? str(p.contenu.objet)
+    : p.type === 'devis.transmettre'
+      ? `Transmettre le devis ${str(p.contenu.numero)}`
+      : str(p.contenu.titre) || p.type;
 
 function Statut({ p }: { p: PropositionItem }) {
   if (p.statut === 'proposee')
@@ -175,6 +180,15 @@ function Detail({
           </>
         )}
 
+        {p.type === 'devis.transmettre' && (
+          <p>
+            Devis <b>{str(p.contenu.numero)}</b>
+            {typeof p.contenu.montant === 'number' &&
+              ` de ${Math.round(p.contenu.montant).toLocaleString('fr-FR')} € HT`}
+            . C'est un engagement auprès du client : il ne part qu'avec votre accord.
+          </p>
+        )}
+
         {ouverte && (
           <div className="decision">
             <button className="btn go" onClick={() => onDecide('valider', contenuModifie)}>
@@ -183,7 +197,9 @@ function Detail({
                 ? 'Créer le brouillon dans Gmail'
                 : p.type === 'crm.tache'
                   ? 'Créer la tâche'
-                  : 'Enregistrer en brouillon'}
+                  : p.type === 'devis.transmettre'
+                    ? 'Transmettre le devis'
+                    : 'Enregistrer en brouillon'}
             </button>
             {p.type === 'email.brouillon' && (
               <button className="btn" onClick={() => setEdition(!edition)}>
