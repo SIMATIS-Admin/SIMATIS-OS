@@ -5,14 +5,14 @@ import { Tip } from './widgets.js';
 
 const CANAUX = {
   email: ['send', 'Email'],
-  appel: ['phone', 'Appel'],
-  tache: ['check', 'Tâche'],
+  appel: ['phone', 'Téléphone'],
+  tache: ['check', 'Action'],
 } as const;
 const FILTRES = [
   ['tout', 'Toutes'],
   ['email', 'Emails'],
-  ['appel', 'Appels'],
-  ['tache', 'Autres'],
+  ['appel', 'Téléphone'],
+  ['tache', 'Action'],
 ] as const;
 type Filtre = (typeof FILTRES)[number][0];
 
@@ -47,10 +47,10 @@ function Periode({ titre, sous, c }: { titre: string; sous: string; c: Compte })
         </span>
         <span>
           <Icon name="phone" />
-          <b className="num">{c.appel}</b> appel{c.appel > 1 ? 's' : ''}
+          <b className="num">{c.appel}</b> téléphone{c.appel > 1 ? 's' : ''}
         </span>
         <span className="muted">
-          <b className="num">{c.autre}</b> autre{c.autre > 1 ? 's' : ''}
+          <b className="num">{c.autre}</b> action{c.autre > 1 ? 's' : ''}
         </span>
       </div>
     </div>
@@ -185,7 +185,7 @@ export function Brief({ slug }: { slug: string }) {
           <div className="panel-h">
             <h2>
               Tâches réalisées{' '}
-              <Tip text="Tâches marquées faites, par canal. Les autres tâches regroupent tout ce qui n'est ni un email ni un appel. Jours comptés à l'heure de Paris." />
+              <Tip text="Tâches marquées faites, par canal. Les actions regroupent tout ce qui n'est ni un email ni un appel. Jours comptés à l'heure de Paris." />
             </h2>
             {data.realisees.aujourdhui.total > 0 && (
               <span className="small muted">

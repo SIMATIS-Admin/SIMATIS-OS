@@ -376,6 +376,14 @@ export function Pipeline({ slug }: { slug: string }) {
           </button>
         </div>
       </div>
+      {data.source === 'hubspot' && !data.ecrit && (
+        <div className="alert amber" style={{ marginBottom: 12 }}>
+          <span>
+            Synchronisation HubSpot en lecture seule : les cartes ne se déplacent pas. Passez le
+            sens sur « Dans les deux sens » dans <a href={`#/${slug}/parametres`}>Paramètres</a>.
+          </span>
+        </div>
+      )}
       {message && (
         <div className="alert amber" style={{ marginBottom: 12 }}>
           <div>{message}</div>

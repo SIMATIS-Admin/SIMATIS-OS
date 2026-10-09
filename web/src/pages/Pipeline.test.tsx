@@ -87,6 +87,7 @@ describe('Pipeline screen', () => {
       url: '/api/i/simatis/opportunites/o1',
       body: { etape: 'proposition' },
     });
+    expect(screen.queryByText(/les cartes ne se déplacent pas/)).toBeNull();
   });
 
   it('asks for the reason before closing a deal as lost', async () => {
@@ -112,5 +113,9 @@ describe('Pipeline screen', () => {
     const { container } = render(<Pipeline slug="helioval" />);
     expect(await screen.findByText(/Miroir HubSpot/)).toBeTruthy();
     expect(container.querySelector('.card')?.getAttribute('draggable')).toBe('false');
+    expect(screen.getByText(/lecture seule : les cartes ne se déplacent pas/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Paramètres/ }).getAttribute('href')).toBe(
+      '#/helioval/parametres',
+    );
   });
 });
