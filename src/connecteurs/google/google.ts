@@ -22,13 +22,13 @@ function credentials(ctx: Pick<SyncCtx, 'secrets' | 'instance'>) {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN } = ctx.secrets;
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     throw new GoogleError(
-      `Messagerie non configurée pour ${ctx.instance.nom} : GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET manquent dans secrets/instances/${ctx.instance.slug}.env`,
+      `Messagerie non configurée pour ${ctx.instance.nom} : code secret Google de l'OS à enregistrer dans Paramètres > Connexions`,
       412,
     );
   }
   if (!GOOGLE_REFRESH_TOKEN) {
     throw new GoogleError(
-      `Messagerie non configurée pour ${ctx.instance.nom} : lancer google:connect --slug ${ctx.instance.slug}`,
+      `Messagerie non configurée pour ${ctx.instance.nom} : cliquer sur « Connecter le compte Google » dans Paramètres > Connexions`,
       412,
     );
   }

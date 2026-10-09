@@ -152,7 +152,7 @@ describe('Gmail and Calendar', () => {
   it('explains that google:connect is missing, and offers no messaging connection', async () => {
     await expect(
       ctx(true, (c) => createDraft(c, { to: 'x@y.example', subject: 's', html: 'h' }, google)),
-    ).rejects.toThrow(/google:connect --slug mandat-google/);
+    ).rejects.toThrow(/Connecter le compte Google/);
     expect(await withInstance(t.app.db, a.id, (tx) => getConnector(tx, 'messagerie'))).toBeNull();
   });
 

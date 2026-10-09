@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   brancherHubspot,
   demarrerGoogle,
+  enregistrerSecretGoogle,
   fetchConnexions,
   saveReglages,
   saveReglagesCrm,
@@ -98,9 +99,59 @@ function BrancherHubspot({ slug, onDone }: { slug: string; onDone: () => void })
   );
 }
 
-function ConnecterGoogle({ slug, clientDisponible }: { slug: string; clientDisponible: boolean }) {
+function SecretGoogle({ onDone }: { onDone: () => void }) {
+  const [secret, setSecret] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    setBusy(true);
+    setError(null);
+    enregistrerSecretGoogle(secret)
+      .then(onDone, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <label className="field">
+        <span>
+          Code secret Google de l'OS{' '}
+          <Tip text="Transmis par l'administrateur de l'OS. À coller une seule fois : il sert ensuite à tous les mandats." />
+        </span>
+        <input
+          className="input"
+          type="password"
+          autoComplete="off"
+          placeholder="GOCSPX-…"
+          value={secret}
+          onChange={(e) => setSecret(e.target.value)}
+        />
+      </label>
+      <div>
+        <button className="btn primary" disabled={busy || !secret.trim()} onClick={submit}>
+          {busy ? 'Vérification…' : 'Enregistrer'}
+        </button>
+      </div>
+      {error && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ConnecterGoogle({
+  slug,
+  clientDisponible,
+  onChange,
+}: {
+  slug: string;
+  clientDisponible: boolean;
+  onChange: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!clientDisponible) return <SecretGoogle onDone={onChange} />;
   const go = () => {
     setBusy(true);
     setError(null);
@@ -115,16 +166,10 @@ function ConnecterGoogle({ slug, clientDisponible }: { slug: string; clientDispo
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div>
-        <button className="btn primary" disabled={busy || !clientDisponible} onClick={go}>
+        <button className="btn primary" disabled={busy} onClick={go}>
           Connecter le compte Google
         </button>
       </div>
-      {!clientDisponible && (
-        <p className="small muted" style={{ margin: 0 }}>
-          Bouton inactif : l'administrateur de l'OS doit d'abord activer la connexion Google (une
-          seule fois pour tous les mandats).
-        </p>
-      )}
       {error && (
         <p className="small" style={{ color: 'var(--red)' }}>
           {error}
@@ -405,7 +450,11 @@ export function Connexions({ slug }: { slug: string }) {
             </div>
             {kind !== 'crm' && c && (c.etat === 'erreur' || (c.secret && !c.secret.present)) && (
               <div className="panel-b">
-                <ConnecterGoogle slug={slug} clientDisponible={data.googleClientDisponible} />
+                <ConnecterGoogle
+                  slug={slug}
+                  clientDisponible={data.googleClientDisponible}
+                  onChange={load}
+                />
               </div>
             )}
             {kind === 'crm' && c?.fournisseur === 'hubspot' ? (
@@ -428,7 +477,11 @@ export function Connexions({ slug }: { slug: string }) {
                 {kind === 'crm' ? (
                   <BrancherHubspot slug={slug} onDone={load} />
                 ) : kind === 'messagerie' ? (
-                  <ConnecterGoogle slug={slug} clientDisponible={data.googleClientDisponible} />
+                  <ConnecterGoogle
+                    slug={slug}
+                    clientDisponible={data.googleClientDisponible}
+                    onChange={load}
+                  />
                 ) : null}
               </div>
             )}

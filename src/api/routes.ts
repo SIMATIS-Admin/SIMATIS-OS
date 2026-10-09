@@ -72,18 +72,16 @@ export type ApiDeps = {
   db: Database;
   secretsDir: string;
   realWrites: boolean;
-  googleClient?: { clientId: string; clientSecret: string } | undefined;
   googleFetch?: FetchLike | undefined;
 };
 
 export function registerApi(
   app: FastifyInstance,
-  { db, secretsDir, realWrites, googleClient, googleFetch }: ApiDeps,
+  { db, secretsDir, realWrites, googleFetch }: ApiDeps,
 ): void {
   const connexionDeps = { secretsDir, realWrites };
   const google = googleWebFlow({
     secretsDir,
-    ...(googleClient ? { defaultClient: googleClient } : {}),
     ...(googleFetch ? { fetch: googleFetch } : {}),
   });
   app.get('/api/instances', async () => (await listInstances(db)).map(summary));
@@ -392,6 +390,21 @@ export function registerApi(
       }
     }),
   );
+
+  // The OS's Google client secret, pasted once for every instance; never sent back.
+  app.put<{ Body: unknown }>('/api/google/secret', async (request, reply) => {
+    const parsed = z.object({ secret: z.string().min(1).max(200) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Code secret manquant' });
+    try {
+      await google.enregistrerSecret(parsed.data.secret);
+    } catch (error) {
+      if (error instanceof BranchementRefuse) {
+        return reply.code(400).send({ error: error.message });
+      }
+      throw error;
+    }
+    return { ok: true };
+  });
 
   // Google sends the browser back here after consent; the pilot lands on Paramètres.
   app.get<{ Querystring: { state?: string; code?: string; error?: string } }>(

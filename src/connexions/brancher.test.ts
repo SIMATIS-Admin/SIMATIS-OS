@@ -6,17 +6,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { demoPortal, fakePortal } from '../../test/hubspot-portal.js';
 import { buildApp } from '../app.js';
+import { GOOGLE_CLIENT_ID_APP } from '../connecteurs/google/oauth.js';
 import { hubspotConnector } from '../connecteurs/hubspot/index.js';
 import { createInstance } from '../instances/service.js';
 import { registerConnector } from './service.js';
 
 const GOOD = 'pat-eu1-fictif-0000-1111-2222';
-const CLIENT = { clientId: 'fictif-123.apps.example', clientSecret: 'secret-fictif' };
+const SECRET = 'GOCSPX-fictif-0000-1111';
 
 describe('connecting tools from Paramètres > Connexions', () => {
   let t: TestApp;
   let app: FastifyInstance;
-  let bare: FastifyInstance;
   let secretsDir: string;
   const tokenCalls: URLSearchParams[] = [];
 
@@ -35,8 +35,16 @@ describe('connecting tools from Paramètres > Connexions', () => {
             : Promise.resolve(new Response('{"message":"Authentication failed"}', { status: 401 })),
       }),
     );
+    // Fake Google token endpoint: wrong secret → invalid_client, fake code → invalid_grant.
     const googleFetch = (_url: string, init: RequestInit) => {
-      tokenCalls.push(new URLSearchParams(init.body as string));
+      const params = new URLSearchParams(init.body as string);
+      tokenCalls.push(params);
+      if (params.get('client_secret') !== SECRET) {
+        return Promise.resolve(new Response('{"error":"invalid_client"}', { status: 401 }));
+      }
+      if (params.get('code') === 'verification') {
+        return Promise.resolve(new Response('{"error":"invalid_grant"}', { status: 400 }));
+      }
       return Promise.resolve(
         new Response(JSON.stringify({ refresh_token: 'refresh-fictif', scope: 'gmail' })),
       );
@@ -46,15 +54,12 @@ describe('connecting tools from Paramètres > Connexions', () => {
       db: t.app.db,
       version: 'test',
       secretsDir,
-      googleClient: CLIENT,
       googleFetch,
     });
-    bare = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
   });
 
   afterAll(async () => {
     await app.close();
-    await bare.close();
     await t.drop();
     await rm(secretsDir, { recursive: true, force: true });
   });
@@ -106,6 +111,38 @@ describe('connecting tools from Paramètres > Connexions', () => {
     expect((await connexionsOf('mandat-b')).json.connexions).toEqual([]);
   });
 
+  it('saves the OS Google secret once, only after Google accepts it', async () => {
+    const before = await app.inject({ method: 'GET', url: '/api/i/mandat-b/connexions' });
+    expect(before.json()).toMatchObject({ googleClientDisponible: false });
+    const start = await app.inject({
+      method: 'POST',
+      url: '/api/i/mandat-b/connexions/google/start',
+      payload: {},
+    });
+    expect(start.statusCode).toBe(400);
+
+    const wrong = await app.inject({
+      method: 'PUT',
+      url: '/api/google/secret',
+      payload: { secret: 'GOCSPX-faux-0000-0000' },
+    });
+    expect(wrong.statusCode).toBe(400);
+    expect(wrong.json<{ error: string }>().error).toMatch(/refuse ce code secret/);
+    await expect(stat(path.join(secretsDir, 'google-client.json'))).rejects.toThrow();
+
+    const right = await app.inject({
+      method: 'PUT',
+      url: '/api/google/secret',
+      payload: { secret: ` ${SECRET} ` },
+    });
+    expect(right.statusCode).toBe(200);
+    const file = path.join(secretsDir, 'google-client.json');
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    const after = await app.inject({ method: 'GET', url: '/api/i/mandat-b/connexions' });
+    expect(after.json()).toMatchObject({ googleClientDisponible: true });
+    expect(after.body).not.toContain(SECRET);
+  });
+
   it('connects Google through the consent redirect, once per state', async () => {
     const start = await app.inject({
       method: 'POST',
@@ -115,7 +152,7 @@ describe('connecting tools from Paramètres > Connexions', () => {
     });
     expect(start.statusCode).toBe(200);
     const consent = new URL(start.json<{ url: string }>().url);
-    expect(consent.searchParams.get('client_id')).toBe(CLIENT.clientId);
+    expect(consent.searchParams.get('client_id')).toBe(GOOGLE_CLIENT_ID_APP);
     expect(consent.searchParams.get('redirect_uri')).toBe(
       'http://127.0.0.1:4300/oauth/google/callback',
     );
@@ -138,8 +175,7 @@ describe('connecting tools from Paramètres > Connexions', () => {
       'http://127.0.0.1:4300/oauth/google/callback',
     );
 
-    const env = await readFile(path.join(secretsDir, 'mandat-b.env'), 'utf8');
-    expect(env).toContain(`GOOGLE_CLIENT_ID=${CLIENT.clientId}`);
+    await expect(stat(path.join(secretsDir, 'mandat-b.env'))).rejects.toThrow();
     const google = JSON.parse(
       await readFile(path.join(secretsDir, 'mandat-b.google.json'), 'utf8'),
     ) as { refresh_token: string };
@@ -147,7 +183,7 @@ describe('connecting tools from Paramètres > Connexions', () => {
 
     const { body, json } = await connexionsOf('mandat-b');
     expect(body).not.toContain('refresh-fictif');
-    expect(body).not.toContain(CLIENT.clientSecret);
+    expect(body).not.toContain(SECRET);
     expect(json.connexions.map((c) => [c.kind, c.fournisseur]).sort()).toEqual([
       ['agenda', 'google-agenda'],
       ['messagerie', 'gmail'],
@@ -158,16 +194,5 @@ describe('connecting tools from Paramètres > Connexions', () => {
       url: `/oauth/google/callback?state=${state}&code=code-fictif`,
     });
     expect(replay.body).toMatch(/expirée/);
-  });
-
-  it('refuses to start Google consent until the OS has a client', async () => {
-    const before = await bare.inject({ method: 'GET', url: '/api/i/mandat-a/connexions' });
-    expect(before.json()).toMatchObject({ googleClientDisponible: false });
-    const res = await bare.inject({
-      method: 'POST',
-      url: '/api/i/mandat-a/connexions/google/start',
-      payload: {},
-    });
-    expect(res.statusCode).toBe(400);
   });
 });

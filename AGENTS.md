@@ -57,6 +57,8 @@ Ce dépôt est **public** sur GitHub. Ne jamais y écrire, committer ni pousser 
 - méthodes ou contenus propriétaires (questionnaires, grilles de scoring détaillées, trames de rapport) ;
 - contenu du second cerveau, en tout ou partie.
 
+Seule exception, décidée par Christophe : l'**ID client** de l'application Google « SIMATIS OS » (type application de bureau) est dans le code (`src/connecteurs/google/oauth.ts`), pour que l'OS marche à l'identique sur tous les postes. Son **secret** n'est jamais commité : il se colle une fois dans Paramètres > Connexions.
+
 Les exemples, tests et démonstrations utilisent **uniquement des données fictives**.
 Un secret poussé une fois reste récupérable dans l'historique : en cas de doute, ne pas committer, demander.
 
