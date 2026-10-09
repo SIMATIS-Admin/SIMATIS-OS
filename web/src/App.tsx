@@ -5,6 +5,7 @@ import { allItems, reorderFavoris, toggleFavori, type InstanceSummary } from './
 import { AValider } from './pages/AValider.js';
 import { Bientot } from './pages/Bientot.js';
 import { Brief } from './pages/Brief.js';
+import { Taches } from './pages/Taches.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
 import { Journal } from './pages/Journal.js';
@@ -73,6 +74,8 @@ export function App() {
         return <Entreprises key={current.slug} slug={current.slug} />;
       case 'contacts':
         return <Contacts key={current.slug} slug={current.slug} />;
+      case 'taches':
+        return <Taches key={current.slug} slug={current.slug} />;
       case 'brief':
         return <Brief key={current.slug} slug={current.slug} />;
       case 'validations':

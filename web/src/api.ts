@@ -273,6 +273,43 @@ export const marquerFait = (slug: string, id: string) =>
     inst(slug, `taches/${encodeURIComponent(id)}/fait`),
     {},
   );
+export type TacheVue = {
+  id: string;
+  titre: string;
+  notes: string | null;
+  canal: 'email' | 'appel' | 'tache';
+  echeance: string | null;
+  fait: boolean;
+  origine: 'hubspot' | 'os';
+  contact: { id: string; nom: string } | null;
+  opportunite: { id: string; titre: string } | null;
+};
+export type SemaineTaches = {
+  taches: TacheVue[];
+  enRetard: TacheVue[];
+  sansEcheance: TacheVue[];
+  rdv: { debut: string; fin: string; titre: string; lieu: string | null }[];
+  rdvEtat: 'ok' | 'non_configure' | 'erreur';
+  hubspot: boolean;
+  ecrit: boolean;
+};
+export type SimulationTache = { simulation: true; message: string };
+export type TacheSaisie = {
+  titre?: string;
+  notes?: string | null;
+  echeance?: string | null;
+  fait?: boolean;
+};
+export const fetchTaches = (slug: string, du: string, au: string) =>
+  getJson<SemaineTaches>(inst(slug, `taches?du=${du}&au=${au}`));
+export const createTache = (slug: string, input: TacheSaisie & { hubspot: boolean }) =>
+  sendJson<TacheVue | SimulationTache>('POST', inst(slug, 'taches'), input);
+export const updateTache = (slug: string, id: string, patch: TacheSaisie) =>
+  sendJson<TacheVue | SimulationTache>(
+    'PATCH',
+    inst(slug, `taches/${encodeURIComponent(id)}`),
+    patch,
+  );
 export const fetchPropositions = (slug: string, filtre: string) =>
   getJson<PropositionItem[]>(inst(slug, `propositions?filtre=${encodeURIComponent(filtre)}`));
 export const decider = (
