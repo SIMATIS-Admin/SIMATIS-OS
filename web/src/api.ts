@@ -127,6 +127,7 @@ export type ReglagesCrm = {
   sens?: 'deux_sens' | 'lecture';
   objets?: string[];
   champsExclus?: string[];
+  domainesExclus?: string[];
 };
 
 export type ConnexionInfo = {

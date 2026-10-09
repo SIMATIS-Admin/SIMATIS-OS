@@ -1,10 +1,11 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { connexions } from '../../connexions/schema.js';
 import type { SyncCtx, SyncReport } from '../../connexions/types.js';
-import { contacts, entreprises, opportunites, taches } from '../../crm/schema.js';
+import { activites, contacts, entreprises, opportunites, taches } from '../../crm/schema.js';
 import type { Tx } from '../../db.js';
 import { currentInstance } from '../../db/columns.js';
 import type { HsObject, HubspotClient } from './client.js';
+import { domaineExclu } from './domaines.js';
 import { mapCompany, mapContact, mapDeal, mapStages, mapTask, proprietes } from './mapping.js';
 import { parseReglages } from './reglages.js';
 
@@ -61,6 +62,7 @@ async function upsert(
 export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<SyncReport> {
   const reglages = parseReglages(ctx.reglages);
   const exclus = reglages.champsExclus;
+  const domaines = reglages.domainesExclus;
   const since = ctx.derniereSynchro ? new Date(ctx.derniereSynchro.getTime() - MARGE_MS) : null;
   const read = (type: 'companies' | 'contacts' | 'deals' | 'tasks') =>
     since
@@ -71,7 +73,13 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
 
   const companyIds = new Map<string, string>();
   if (suit('entreprises')) {
-    const companies = await read('companies');
+    const lues = await read('companies');
+    const companies = lues.filter((c) => !domaineExclu(c.properties.domain, domaines));
+    await retirerSources(
+      ctx.tx,
+      entreprises,
+      lues.filter((c) => !companies.includes(c)),
+    );
     report.lus += companies.length;
     const existing = await localIds(
       ctx.tx,
@@ -96,7 +104,13 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
 
   const contactIds = new Map<string, string>();
   if (suit('contacts')) {
-    const list = await read('contacts');
+    const lus = await read('contacts');
+    const list = lus.filter((c) => !domaineExclu(c.properties.email, domaines));
+    await retirerSources(
+      ctx.tx,
+      contacts,
+      lus.filter((c) => !list.includes(c)),
+    );
     report.lus += list.length;
     const existing = await localIds(
       ctx.tx,
@@ -179,4 +193,75 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
     }
   }
   return report;
+}
+
+// Removes copies (HubSpot is untouched). Deals, tasks and activities linked to them are kept,
+// without the link.
+async function retirer(tx: Tx, contactIds: string[], entrepriseIds: string[]) {
+  if (contactIds.length > 0) {
+    for (const table of [opportunites, taches, activites]) {
+      await tx
+        .update(table)
+        .set({ contactId: null })
+        .where(and(eq(table.instanceId, currentInstance), inArray(table.contactId, contactIds)));
+    }
+    await tx
+      .delete(contacts)
+      .where(and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, contactIds)));
+  }
+  if (entrepriseIds.length > 0) {
+    for (const table of [opportunites, contacts]) {
+      await tx
+        .update(table)
+        .set({ entrepriseId: null })
+        .where(
+          and(eq(table.instanceId, currentInstance), inArray(table.entrepriseId, entrepriseIds)),
+        );
+    }
+    await tx
+      .delete(entreprises)
+      .where(
+        and(eq(entreprises.instanceId, currentInstance), inArray(entreprises.id, entrepriseIds)),
+      );
+  }
+}
+
+// Records read from HubSpot but excluded: a copy made before (email changed since) goes away.
+async function retirerSources(
+  tx: Tx,
+  table: typeof contacts | typeof entreprises,
+  exclues: HsObject[],
+) {
+  const ids = [
+    ...(
+      await localIds(
+        tx,
+        table,
+        exclues.map((o) => o.id),
+      )
+    ).values(),
+  ];
+  await (table === contacts ? retirer(tx, ids, []) : retirer(tx, [], ids));
+}
+
+// Removes the mirrored contacts and companies of excluded domains. Returns the number removed.
+export async function retirerDomainesExclus(tx: Tx, domaines: string[]): Promise<number> {
+  if (domaines.length === 0) return 0;
+  const mine = (table: typeof contacts | typeof entreprises) =>
+    and(eq(table.instanceId, currentInstance), eq(table.source, SOURCE));
+  const contactIds = (
+    await tx.select({ id: contacts.id, email: contacts.email }).from(contacts).where(mine(contacts))
+  )
+    .filter((c) => domaineExclu(c.email, domaines))
+    .map((c) => c.id);
+  const entrepriseIds = (
+    await tx
+      .select({ id: entreprises.id, domaine: entreprises.domaine })
+      .from(entreprises)
+      .where(mine(entreprises))
+  )
+    .filter((e) => domaineExclu(e.domaine, domaines))
+    .map((e) => e.id);
+  await retirer(tx, contactIds, entrepriseIds);
+  return contactIds.length + entrepriseIds.length;
 }

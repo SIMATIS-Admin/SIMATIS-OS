@@ -183,6 +183,55 @@ function ConnecterGoogle({
   );
 }
 
+function DomainesExclus({
+  domaines,
+  onSave,
+}: {
+  domaines: string[];
+  onSave: (domaines: string[]) => Promise<void>;
+}) {
+  const [texte, setTexte] = useState(domaines.join('\n'));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    setBusy(true);
+    setError(null);
+    const lignes = texte
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    onSave(lignes)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="field">
+      <label htmlFor="domaines-exclus">
+        Domaines à écarter{' '}
+        <Tip text="Un domaine par ligne (ex. ma-banque.fr). Les contacts dont l'email est sur ce domaine, et les entreprises de ce domaine, ne sont pas copiés dans l'OS. HubSpot n'est pas modifié." />
+      </label>
+      <textarea
+        id="domaines-exclus"
+        className="input"
+        rows={4}
+        placeholder={'ma-banque.fr\nmon-fournisseur.com'}
+        value={texte}
+        onChange={(e) => setTexte(e.target.value)}
+      />
+      <div>
+        <button className="btn" disabled={busy} onClick={submit}>
+          Enregistrer les domaines
+        </button>
+      </div>
+      {error && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CrmHubspot({
   slug,
   c,
@@ -290,6 +339,10 @@ function CrmHubspot({
           ))}
         </div>
       </div>
+      <DomainesExclus
+        domaines={r.domainesExclus ?? []}
+        onSave={(domainesExclus) => saveReglagesCrm(slug, { domainesExclus }).then(onChange)}
+      />
       <Verrou>HubSpot fait foi en cas d'écart. Aucune suppression n'est jamais écrite.</Verrou>
       <div className="decision">
         <button className="btn" disabled={busy} onClick={sync}>
