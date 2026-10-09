@@ -9,7 +9,7 @@ import { propositions, type Proposition } from './schema.js';
 
 export class PropositionRefusee extends Error {}
 
-export type PropositionCtx = { instance: Instance; realWrites: boolean };
+export type PropositionCtx = { instance: Instance; realWrites: boolean; secretsDir?: string };
 
 // Double lock: REAL_WRITES=on on the server and ecrituresReelles=true for the instance.
 export function canWriteReal(instance: Instance, realWrites: boolean): boolean {
@@ -22,7 +22,11 @@ async function apply(tx: Tx, ctx: PropositionCtx, p: Proposition, par: string) {
   try {
     // Savepoint: a failing apply leaves none of its own writes behind.
     const resultat = await tx.transaction((sp) =>
-      definition.apply(sp, definition.schema.parse(p.contenu), { instance: ctx.instance, reel }),
+      definition.apply(sp, definition.schema.parse(p.contenu), {
+        instance: ctx.instance,
+        reel,
+        deps: { secretsDir: ctx.secretsDir ?? './secrets/instances', realWrites: ctx.realWrites },
+      }),
     );
     const [row] = await tx
       .update(propositions)

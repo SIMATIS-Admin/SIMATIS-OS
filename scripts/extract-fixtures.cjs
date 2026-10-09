@@ -55,6 +55,50 @@ const fixtures = INSTANCES.map((i) => {
       faisabilite: o.faisab ?? null,
       prochaineEtape: o.prochaine ?? null,
     })),
+    // Pending proposals of the "À valider" screen (email drafts, CRM tasks, second-brain notes).
+    propositions: d.validations
+      .filter((v) => ['email', 'tache', 'note'].includes(v.type))
+      .map((v) => {
+        const contact = d.contacts.find((c) => c.id === v.contact);
+        if (v.type === 'email') {
+          return {
+            type: 'email.brouillon',
+            niveau: v.niv,
+            contenu: {
+              to: contact?.email ?? '',
+              objet: v.objet,
+              corps: v.corps,
+              contact: v.contact ?? null,
+              origine: v.origine,
+              controles: v.controles ?? [],
+            },
+          };
+        }
+        if (v.type === 'tache') {
+          return {
+            type: 'crm.tache',
+            niveau: v.niv,
+            contenu: {
+              titre: v.titre,
+              detail: v.detail,
+              canal: 'tache',
+              echeanceJours: offset(v.echeance),
+              contact: v.contact ?? null,
+              origine: v.origine,
+            },
+          };
+        }
+        return {
+          type: 'note.second_cerveau',
+          niveau: v.niv,
+          contenu: {
+            titre: v.titre,
+            texte: v.detail,
+            destination: v.destination ?? null,
+            origine: v.origine,
+          },
+        };
+      }),
     taches: d.taches.map((t) => ({
       opportunite: t.opp ?? null,
       contact: t.contact ?? contactOf(t.opp),

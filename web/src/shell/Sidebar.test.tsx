@@ -58,9 +58,9 @@ describe('Sidebar', () => {
 
   it('marks screens not built yet with « Bientôt »', () => {
     renderSidebar(simatis, []);
-    const brief = screen.getByText('Brief du jour').closest('a');
+    const tableau = screen.getByText('Tableau de bord').closest('a');
     const contacts = screen.getByText('Contacts').closest('a');
-    expect(brief && within(brief).queryByText('Bientôt')).toBeTruthy();
+    expect(tableau && within(tableau).queryByText('Bientôt')).toBeTruthy();
     expect(contacts && within(contacts).queryByText('Bientôt')).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { contacts, entreprises, opportunites, taches, type Qualification } from 
 import type { Database, Tx } from '../db.js';
 import { instances, type InstanceType } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
+import { propositions } from '../propositions/schema.js';
 import fixtures from './fixtures.json' with { type: 'json' };
 
 type Fixture = (typeof fixtures)[number];
@@ -67,6 +68,39 @@ export async function loadDemoData(tx: Tx, instanceId: string, f: Fixture, now =
       })
       .returning({ id: opportunites.id });
     if (row) ref.set(o.ref, row.id);
+  }
+  for (const p of f.propositions) {
+    const c = p.contenu as Record<string, unknown>;
+    const contenu =
+      p.type === 'email.brouillon'
+        ? {
+            to: c.to,
+            objet: c.objet,
+            corps: c.corps,
+            contactId: id(c.contact as string | null),
+            origine: c.origine,
+            controles: c.controles,
+          }
+        : p.type === 'crm.tache'
+          ? {
+              titre: c.titre,
+              detail: c.detail,
+              canal: c.canal,
+              echeance:
+                typeof c.echeanceJours === 'number'
+                  ? new Date(`${parisDay(c.echeanceJours, now)}T10:00:00Z`).toISOString()
+                  : null,
+              contactId: id(c.contact as string | null),
+              origine: c.origine,
+            }
+          : { titre: c.titre, texte: c.texte, destination: c.destination, origine: c.origine };
+    await tx.insert(propositions).values({
+      instanceId,
+      type: p.type,
+      contenu,
+      auteur: 'os',
+      niveau: p.niveau as 'L0' | 'L1' | 'L2' | 'L3',
+    });
   }
   for (const t of f.taches) {
     const echeance =

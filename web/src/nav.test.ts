@@ -44,7 +44,8 @@ describe('nav', () => {
     expect(isBuilt('entreprises')).toBe(true);
     expect(isBuilt('contacts')).toBe(true);
     expect(isBuilt('pipeline')).toBe(true);
-    expect(isBuilt('brief')).toBe(false);
+    expect(isBuilt('brief')).toBe(true);
+    expect(isBuilt('tableau')).toBe(false);
   });
 
   it('reorders favourites before or after a target', () => {
