@@ -345,6 +345,73 @@ describe('HubSpot mirror', () => {
     }
   });
 
+  it('leaves out excluded email domains: removes their copies, skips them, brings them back', async () => {
+    const app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
+    const mirrored = async (table: string, sourceId: string) =>
+      (
+        await t.owner.pool.query(
+          `select 1 from ${table} where instance_id = $1 and source = 'hubspot' and source_id = $2`,
+          [a.id, sourceId],
+        )
+      ).rowCount;
+    const patch = (domainesExclus: string[]) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/api/i/mandat-hubspot/connexions/crm',
+        payload: { domainesExclus },
+      });
+    try {
+      expect(await mirrored('contacts', '202')).toBe(1);
+      const refused = await patch(['pas un domaine']);
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json()).toEqual({
+        error: 'Un domaine de la liste est invalide (exemple attendu : ma-banque.fr).',
+      });
+
+      const saved = await patch(['https://www.Menuiserie-Arpin.example/contact']);
+      expect(saved.json()).toMatchObject({
+        reglages: { domainesExclus: ['menuiserie-arpin.example'] },
+      });
+      expect(await mirrored('contacts', '202')).toBe(0);
+      expect(await mirrored('entreprises', '102')).toBe(0);
+      const deal = await t.owner.pool.query<{ entreprise_id: string | null }>(
+        "select entreprise_id, contact_id from opportunites where instance_id = $1 and source_id = '302'",
+        [a.id],
+      );
+      expect(deal.rows[0]).toEqual({ entreprise_id: null, contact_id: null });
+      const journal = await t.owner.pool.query<{ action: string }>(
+        'select action from journal where instance_id = $1 order by id desc limit 1',
+        [a.id],
+      );
+      expect(journal.rows[0]?.action).toMatch(/2 fiches retirées de la copie/);
+
+      await t.owner.pool.query(
+        "update connexions set derniere_synchro = null where instance_id = $1 and kind = 'crm'",
+        [a.id],
+      );
+      await syncConnexion(t.app.db, a, 'crm', deps());
+      expect(await mirrored('contacts', '202')).toBe(0);
+      expect(await mirrored('entreprises', '102')).toBe(0);
+      expect(await mirrored('contacts', '201')).toBe(1);
+
+      // A mirrored contact whose email moves to an excluded domain leaves the copy too.
+      const agathe = data.contacts[0];
+      if (agathe) {
+        agathe.properties.email = 'agathe@menuiserie-arpin.example';
+        agathe.properties.hs_lastmodifieddate = new Date(Date.now() + 180_000).toISOString();
+      }
+      await syncConnexion(t.app.db, a, 'crm', deps());
+      expect(await mirrored('contacts', '201')).toBe(0);
+
+      await patch([]);
+      await syncConnexion(t.app.db, a, 'crm', deps());
+      expect(await mirrored('contacts', '202')).toBe(1);
+      expect(await mirrored('entreprises', '102')).toBe(1);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('explains a missing token without leaking any secret', async () => {
     const other = await createInstance(t.owner.db, {
       slug: 'sans-jeton',

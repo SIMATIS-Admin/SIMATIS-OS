@@ -26,6 +26,8 @@ export const reglagesSchema = z.object({
   champsExclus: z
     .array(z.enum(CHAMPS_EXCLUABLES.map((c) => c.cle) as [string, ...string[]]))
     .default(['annualrevenue']),
+  // Email domains whose contacts and companies are never mirrored (normalized, see domaines.ts).
+  domainesExclus: z.array(z.string()).default([]),
   // Deal stages read from the HubSpot pipelines at each sync (pipeline screen columns).
   etapes: z
     .array(

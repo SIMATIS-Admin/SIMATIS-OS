@@ -16,7 +16,14 @@ import { withInstance } from '../db/context.js';
 import { instances, type Instance } from '../instances/schema.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
-import { CHAMPS_EXCLUABLES, OBJETS, reglagesSchema } from '../connecteurs/hubspot/reglages.js';
+import { normaliserDomaine } from '../connecteurs/hubspot/domaines.js';
+import {
+  CHAMPS_EXCLUABLES,
+  OBJETS,
+  parseReglages,
+  reglagesSchema,
+} from '../connecteurs/hubspot/reglages.js';
+import { retirerDomainesExclus } from '../connecteurs/hubspot/sync.js';
 import { changeOpportunite, ChangementInvalide, getPipeline } from '../crm/pipeline.js';
 import { connexions } from '../connexions/schema.js';
 import { syncNow } from '../connexions/service.js';
@@ -428,13 +435,33 @@ export function registerApi(
 
   const reglagesCrmSchema = reglagesSchema
     .pick({ frequence: true, sens: true, objets: true, champsExclus: true })
+    .extend({
+      domainesExclus: z
+        .array(z.string().max(300))
+        .max(500)
+        .transform((list, ctx) => {
+          const domaines = list.map(normaliserDomaine);
+          if (domaines.some((d) => d === null)) {
+            ctx.addIssue({ code: 'custom', message: 'Domaine invalide' });
+            return z.NEVER;
+          }
+          return [...new Set(domaines as string[])];
+        }),
+    })
     .partial()
     .strict();
   app.patch<SlugParams & { Body: unknown }>(
     '/api/i/:slug/connexions/crm',
     onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
       const parsed = reglagesCrmSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'Réglages invalides' });
+      if (!parsed.success) {
+        const domaine = parsed.error.issues.some((i) => i.message === 'Domaine invalide');
+        return reply.code(400).send({
+          error: domaine
+            ? 'Un domaine de la liste est invalide (exemple attendu : ma-banque.fr).'
+            : 'Réglages invalides',
+        });
+      }
       return withInstance(db, i.id, async (tx) => {
         const [current] = await tx
           .select()
@@ -444,14 +471,20 @@ export function registerApi(
           return reply.code(404).send({ error: 'Aucun CRM HubSpot branché sur cette instance' });
         }
         const reglages = { ...current.reglages, ...parsed.data };
+        const avant = parseReglages(current.reglages).domainesExclus;
+        const domaines = parsed.data.domainesExclus;
+        // A domain taken off the list: only a full pass brings its records back, since the
+        // incremental one reads what changed in HubSpot.
+        const rendu = domaines !== undefined && avant.some((d) => !domaines.includes(d));
         await tx
           .update(connexions)
-          .set({ reglages, updatedAt: new Date() })
+          .set({ reglages, updatedAt: new Date(), ...(rendu ? { derniereSynchro: null } : {}) })
           .where(eq(connexions.id, current.id));
+        const retirees = domaines ? await retirerDomainesExclus(tx, domaines) : 0;
         const changes = Object.keys(parsed.data).join(', ');
         await logEvent(tx, {
           acteur: 'pilote',
-          action: `Réglages du CRM modifiés (${changes})${parsed.data.sens === 'deux_sens' ? ' : écriture dans HubSpot autorisée' : ''}`,
+          action: `Réglages du CRM modifiés (${changes})${parsed.data.sens === 'deux_sens' ? ' : écriture dans HubSpot autorisée' : ''}${retirees > 0 ? ` : ${retirees} fiches retirées de la copie` : ''}`,
           niveau: 'L2',
         });
         return { reglages };

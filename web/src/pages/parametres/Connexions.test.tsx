@@ -94,6 +94,20 @@ describe('Paramètres > Connexions', () => {
     });
   });
 
+  it('saves the email domains to leave out, one per line', async () => {
+    render(<Connexions slug="helioval" />);
+    const zone = await screen.findByLabelText(/Domaines à écarter/);
+    fireEvent.change(zone, {
+      target: { value: 'banque-fictive.example\n\n  comptable-fictif.example ' },
+    });
+    fireEvent.click(screen.getByText('Enregistrer les domaines'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+      url: '/api/i/helioval/connexions/crm',
+      body: { domainesExclus: ['banque-fictive.example', 'comptable-fictif.example'] },
+    });
+  });
+
   it('synchronizes on demand and reports the result', async () => {
     render(<Connexions slug="helioval" />);
     fireEvent.click(await screen.findByText('Synchroniser maintenant'));
