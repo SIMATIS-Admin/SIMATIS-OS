@@ -1,5 +1,7 @@
 import { contacts, entreprises, opportunites, taches, type Qualification } from '../crm/schema.js';
+import { configureConnexion } from '../connexions/service.js';
 import type { Database, Tx } from '../db.js';
+import { withInstance } from '../db/context.js';
 import { instances, type InstanceType } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { propositions } from '../propositions/schema.js';
@@ -131,6 +133,18 @@ export async function seedDemoIfEmpty(db: Database): Promise<boolean> {
         config: f.config,
       });
       await loadDemoData(tx, instance.id, f);
+      // A prospect runs on fictive tools, like the ones created from the portfolio.
+      if (instance.type === 'prospect') {
+        await withInstance(tx, instance.id, async (itx) => {
+          for (const kind of ['crm', 'messagerie', 'agenda'] as const) {
+            await configureConnexion(itx, {
+              kind,
+              fournisseur: 'fake',
+              reglages: { frequence: 'manuel' },
+            });
+          }
+        });
+      }
     }
     return true;
   });

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Runs the SIMATIS OS routine runner at login. Copy to ~/Library/LaunchAgents/, replace
+     CHEMIN_DU_DEPOT, then: launchctl load ~/Library/LaunchAgents/fr.simatis.runner.plist
+     RUNNER_TOKEN is read from the repository's .env (npm run runner). -->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>fr.simatis.runner</string>
+    <key>WorkingDirectory</key>
+    <string>CHEMIN_DU_DEPOT</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/zsh</string>
+      <string>-lc</string>
+      <string>npm run runner</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/simatis-runner.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/simatis-runner.log</string>
+  </dict>
+</plist>

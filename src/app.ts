@@ -5,6 +5,7 @@ import type { FetchLike } from './connecteurs/google/oauth.js';
 import type { Database } from './db.js';
 import { registerHealth } from './health.js';
 import { registerMcp } from './mcp/server.js';
+import { registerRunnerApi } from './routines/runner-api.js';
 import { registerWeb } from './web.js';
 
 export type AppDeps = {
@@ -33,7 +34,8 @@ export function buildApp({
   const app = Fastify({ logger });
   registerHealth(app, { pool, version, backupStatusFile });
   registerApi(app, { db, secretsDir, realWrites, googleFetch });
-  registerMcp(app, { db, pool, lectureRole, realWrites });
+  registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
+  registerRunnerApi(app, { db });
   registerWeb(app);
   return app;
 }

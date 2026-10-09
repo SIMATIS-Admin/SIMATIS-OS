@@ -27,7 +27,7 @@ export const USAGE = `Commandes :
   instance:purge --slug <slug> --confirmer
   instance:ecritures --slug <slug> --on|--off   (second verrou des écritures réelles)
   demo:seed
-  token:create --nom <nom> (--instance <slug> | --portefeuille)
+  token:create --nom <nom> (--instance <slug> | --portefeuille | --runner)
   token:list
   token:revoke --id <id>
   connexion:set --slug <slug> --kind crm|messagerie|agenda --fournisseur <f> [--frequence 5min|15min|1h|1j|manuel]
@@ -69,6 +69,7 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
       confirmer: { type: 'boolean', default: false },
       instance: { type: 'string' },
       portefeuille: { type: 'boolean', default: false },
+      runner: { type: 'boolean', default: false },
       on: { type: 'boolean', default: false },
       off: { type: 'boolean', default: false },
       id: { type: 'string' },
@@ -128,7 +129,7 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
       case 'token:create': {
         const { token } = await createToken(db, {
           nom: need('nom'),
-          portee: values.portefeuille ? 'portefeuille' : 'instance',
+          portee: values.runner ? 'runner' : values.portefeuille ? 'portefeuille' : 'instance',
           instanceSlug: values.instance,
         });
         out('Jeton MCP (affiché une seule fois, à copier maintenant) :');

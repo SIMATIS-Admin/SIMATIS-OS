@@ -34,6 +34,17 @@ import { getFavoris, setFavoris } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
+import { paramsOf, ROUTINES, rythme } from '../routines/params.js';
+import {
+  cleOf,
+  DejaEnCours,
+  demanderExecution,
+  dernieresExecutions,
+  getExecution,
+  listerRoutines,
+  modifierRoutine,
+  RoutineInconnue,
+} from '../routines/service.js';
 import {
   DevisRefuse,
   demanderTransmission,
@@ -425,6 +436,70 @@ export function registerApi(
     ),
   );
 
+  // Routines Claude: settings, on/off, « Lancer maintenant » and step-by-step follow-up.
+  type CleRoute = { Params: { slug: string; cle: string }; Body: unknown };
+  const surRoutine = <R extends SlugParams>(
+    handler: (i: Instance, request: FastifyRequest<R>) => Promise<unknown>,
+  ) =>
+    onInstance<R>(async (i, request, reply) => {
+      try {
+        return await handler(i, request);
+      } catch (error) {
+        if (error instanceof RoutineInconnue) return reply.code(404).send({ error: error.message });
+        if (error instanceof DejaEnCours) return reply.code(409).send({ error: error.message });
+        if (error instanceof z.ZodError)
+          return reply.code(400).send({ error: 'Réglage hors bornes' });
+        throw error;
+      }
+    });
+  app.get<SlugParams>(
+    '/api/i/:slug/routines',
+    surRoutine((i) =>
+      withInstance(db, i.id, async (tx) => {
+        const rows = await listerRoutines(tx);
+        const dernieres = await dernieresExecutions(tx);
+        return rows.map((r) => {
+          const def = ROUTINES.find((x) => x.cle === r.cle);
+          return {
+            cle: r.cle,
+            nom: def?.nom ?? r.cle,
+            etapes: def?.etapes ?? [],
+            skill: r.skill,
+            actif: r.actif,
+            params: paramsOf(r.cle, r.params),
+            rythme: rythme(r.cle, r.params),
+            derniere: dernieres.find((d) => d.cle === r.cle)?.derniere ?? null,
+          };
+        });
+      }),
+    ),
+  );
+  const routineChange = z
+    .object({ actif: z.boolean(), params: z.record(z.string(), z.unknown()) })
+    .partial()
+    .strict();
+  app.patch<CleRoute>(
+    '/api/i/:slug/routines/:cle',
+    surRoutine<CleRoute>((i, request) =>
+      withInstance(db, i.id, (tx) =>
+        modifierRoutine(tx, cleOf(request.params.cle), routineChange.parse(request.body)),
+      ),
+    ),
+  );
+  app.post<CleRoute>(
+    '/api/i/:slug/routines/:cle/executions',
+    surRoutine<CleRoute>((i, request) =>
+      withInstance(db, i.id, (tx) => demanderExecution(tx, cleOf(request.params.cle), 'pilote')),
+    ),
+  );
+  app.get<ById>(
+    '/api/i/:slug/executions/:id',
+    surRoutine<ById>((i, request) => {
+      if (!UUID.test(request.params.id)) throw new RoutineInconnue('Exécution introuvable');
+      return withInstance(db, i.id, (tx) => getExecution(tx, request.params.id));
+    }),
+  );
+
   // Prospects (demo instances): create, reset to the fictive set, convert into a mandate.
   app.post<{ Body: unknown }>('/api/prospects', async (request, reply) => {
     const parsed = renameSchema.safeParse(request.body);
@@ -479,7 +554,7 @@ export function registerApi(
             // Filled by the lots that bring tasks (M1/M8a), meetings (M8b) and routines (M6).
             tachesEnRetard: null,
             rdv7j: null,
-            routinesActives: null,
+            routinesActives: (await listerRoutines(tx)).filter((r) => r.actif).length,
           };
         }),
       ),

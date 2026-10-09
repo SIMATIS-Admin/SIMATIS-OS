@@ -10,6 +10,8 @@ export const jetons = pgTable('jetons', {
   portee: text('portee', { enum: ['instance', 'portefeuille', 'runner'] }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  // Temporary tokens (one routine run) stop working on their own.
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
 });
 
 export type Jeton = typeof jetons.$inferSelect;
