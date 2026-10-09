@@ -285,3 +285,30 @@ export const decider = (
     decision,
     ...(contenu ? { contenu } : {}),
   });
+
+export type Funnel = {
+  leads: number;
+  l2p: number;
+  p2d: number;
+  d2c: number;
+  panier: number;
+  objectif: number;
+};
+export type Simulation = {
+  prospects: number;
+  devis: number;
+  commandes: number;
+  caAnnuel: number;
+  leadsNecessaires: number;
+  objectifTenu: boolean;
+};
+export type TableauReponse = {
+  pipeline: { montant: number; nombre: number };
+  chaudes: { montant: number; nombre: number };
+  derniereCampagne: { reponses: number; brouillons: number; rdv: number } | null;
+  funnel: Funnel;
+  simulation: Simulation;
+};
+export const fetchTableau = (slug: string) => getJson<TableauReponse>(inst(slug, 'tableau'));
+export const saveFunnel = (slug: string, patch: Partial<Funnel>) =>
+  sendJson<{ funnel: Funnel; simulation: Simulation }>('PATCH', inst(slug, 'funnel'), patch);
