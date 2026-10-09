@@ -1,4 +1,4 @@
-import { chmod, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import { SLUG } from './instances/service.js';
@@ -40,6 +40,31 @@ export async function loadInstanceSecrets(
     if (token) secrets.GOOGLE_REFRESH_TOKEN = token;
   }
   return secrets;
+}
+
+const SECRET_KEY = /^[A-Z][A-Z0-9_]{0,63}$/;
+const SECRET_VALUE = /^[\x21-\x7e]{1,4096}$/;
+
+// Sets one KEY=value line in secrets/instances/<slug>.env (created 0600 if missing), keeping the
+// other lines. Values are single printable tokens: no spaces, quotes or line breaks.
+export async function writeInstanceSecret(
+  dir: string,
+  slug: string,
+  key: string,
+  value: string,
+): Promise<void> {
+  checkSlug(slug);
+  if (!SECRET_KEY.test(key)) throw new Error(`Nom de secret invalide : ${key}`);
+  if (!SECRET_VALUE.test(value) || /["'`#\\]/.test(value)) {
+    throw new Error(`Valeur invalide pour ${key}`);
+  }
+  const file = path.join(dir, `${slug}.env`);
+  const lines = ((await readOptional(file, slug)) ?? '')
+    .split('\n')
+    .filter((line) => line.trim() !== '' && !line.startsWith(`${key}=`));
+  await mkdir(dir, { recursive: true });
+  await writeFile(file, `${[...lines, `${key}=${value}`].join('\n')}\n`, { mode: 0o600 });
+  await chmod(file, 0o600);
 }
 
 export async function writeGoogleToken(

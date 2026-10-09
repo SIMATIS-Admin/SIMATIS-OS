@@ -23,4 +23,6 @@ export interface Connector {
   fournisseur: string;
   sync(ctx: SyncCtx): Promise<SyncReport>;
   write?(ctx: SyncCtx, op: WriteOp): Promise<WriteResult>;
+  // Checks credentials before they are saved (Paramètres > Connexions); throws a readable error.
+  verify?(secrets: Record<string, string>): Promise<void>;
 }

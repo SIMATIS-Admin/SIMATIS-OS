@@ -20,6 +20,8 @@ import { CHAMPS_EXCLUABLES, OBJETS, reglagesSchema } from '../connecteurs/hubspo
 import { changeOpportunite, ChangementInvalide, getPipeline } from '../crm/pipeline.js';
 import { connexions } from '../connexions/schema.js';
 import { syncNow } from '../connexions/service.js';
+import { BranchementRefuse, brancherHubspot, googleWebFlow } from '../connexions/brancher.js';
+import type { FetchLike } from '../connecteurs/google/oauth.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { getFavoris, setFavoris } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
@@ -66,10 +68,24 @@ const favorisSchema = z.object({
   favoris: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,40}$/)).max(30),
 });
 
-export type ApiDeps = { db: Database; secretsDir: string; realWrites: boolean };
+export type ApiDeps = {
+  db: Database;
+  secretsDir: string;
+  realWrites: boolean;
+  googleClient?: { clientId: string; clientSecret: string } | undefined;
+  googleFetch?: FetchLike | undefined;
+};
 
-export function registerApi(app: FastifyInstance, { db, secretsDir, realWrites }: ApiDeps): void {
+export function registerApi(
+  app: FastifyInstance,
+  { db, secretsDir, realWrites, googleClient, googleFetch }: ApiDeps,
+): void {
   const connexionDeps = { secretsDir, realWrites };
+  const google = googleWebFlow({
+    secretsDir,
+    ...(googleClient ? { defaultClient: googleClient } : {}),
+    ...(googleFetch ? { fetch: googleFetch } : {}),
+  });
   app.get('/api/instances', async () => (await listInstances(db)).map(summary));
 
   // Every /api/i/:slug/… route: unknown or archived instance → 404, never another instance's data.
@@ -330,9 +346,71 @@ export function registerApi(app: FastifyInstance, { db, secretsDir, realWrites }
             : null,
         })),
         options: { objets: OBJETS, champs: CHAMPS_EXCLUABLES },
+        googleClientDisponible: await google.clientDisponible(i.slug),
         ecrituresReelles: realWrites && i.config.ecrituresReelles === true,
       };
     }),
+  );
+
+  // Connecting from the screen: the token is checked with HubSpot, saved in the instance's
+  // secrets, then a first read-only sync runs in the background.
+  const hubspotSchema = z.object({ token: z.string().min(1).max(500) });
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/connexions/hubspot',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = hubspotSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Jeton manquant' });
+      try {
+        await brancherHubspot(db, i, parsed.data.token, secretsDir);
+      } catch (error) {
+        if (error instanceof BranchementRefuse) {
+          return reply.code(400).send({ error: error.message });
+        }
+        throw error;
+      }
+      syncNow(db, i.slug, 'crm', connexionDeps).catch((err: unknown) =>
+        request.log.warn({ err }, 'first HubSpot sync failed'),
+      );
+      return { ok: true };
+    }),
+  );
+
+  app.post<SlugParams>(
+    '/api/i/:slug/connexions/google/start',
+    onInstance<SlugParams>(async (i, request, reply) => {
+      try {
+        const url = await google.start(
+          i.slug,
+          `${request.protocol}://${request.host}/oauth/google/callback`,
+        );
+        return { url };
+      } catch (error) {
+        if (error instanceof BranchementRefuse) {
+          return reply.code(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    }),
+  );
+
+  // Google sends the browser back here after consent; the pilot lands on Paramètres.
+  app.get<{ Querystring: { state?: string; code?: string; error?: string } }>(
+    '/oauth/google/callback',
+    async (request, reply) => {
+      try {
+        const slug = await google.finish(db, (s) => getInstanceBySlug(db, s), request.query);
+        return await reply.redirect(`/#/${slug}/parametres?google=ok`);
+      } catch (error) {
+        request.log.warn({ err: error }, 'Google consent failed');
+        const message =
+          error instanceof BranchementRefuse ? error.message : 'Échec de la connexion Google.';
+        return reply
+          .type('text/html; charset=utf-8')
+          .send(
+            `<!doctype html><meta charset="utf-8"><p>${message.replace(/[<>&]/g, '')}</p><p><a href="/">Revenir à l'OS</a></p>`,
+          );
+      }
+    },
   );
 
   const reglagesCrmSchema = reglagesSchema

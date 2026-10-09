@@ -18,6 +18,9 @@ export function registerConnector(connector: Connector): void {
   connectors.set(connector.fournisseur, connector);
 }
 
+export const registeredConnector = (fournisseur: string): Connector | undefined =>
+  connectors.get(fournisseur);
+
 export const FREQUENCES: Record<Frequence, number | null> = {
   '5min': 5 * 60_000,
   '15min': 15 * 60_000,

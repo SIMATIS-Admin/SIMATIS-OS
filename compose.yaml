@@ -35,8 +35,11 @@ services:
       SECRETS_DIR: /app/secrets/instances
       REAL_WRITES: ${REAL_WRITES:-off}
       BACKUP_STATUS_FILE: /app/backup-status/last.json
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     volumes:
-      - ./secrets:/app/secrets:ro
+      # Writable: Paramètres > Connexions saves the instances' tokens here.
+      - ./secrets:/app/secrets
       - backup-status:/app/backup-status:ro
     ports:
       - '127.0.0.1:${APP_PORT:-4300}:3000'

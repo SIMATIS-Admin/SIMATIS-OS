@@ -5,7 +5,8 @@ import { configureConnexion, FREQUENCES, syncNow } from '../connexions/service.j
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { connexions } from '../connexions/schema.js';
-import { and, eq, inArray } from 'drizzle-orm';
+import { brancherGoogle } from '../connexions/brancher.js';
+import { eq } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
 import { loadInstanceSecrets, writeGoogleToken } from '../secrets.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
@@ -195,36 +196,7 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
           },
         });
         await writeGoogleToken(dir, instance.slug, token);
-        await withInstance(db, instance.id, async (tx) => {
-          const existing = await tx
-            .select({ kind: connexions.kind })
-            .from(connexions)
-            .where(eq(connexions.instanceId, currentInstance));
-          const kinds = new Set(existing.map((c) => c.kind));
-          if (!kinds.has('messagerie')) {
-            await configureConnexion(tx, {
-              kind: 'messagerie',
-              fournisseur: 'gmail',
-              reglages: { frequence: 'manuel', historiqueMois: 12, contenu: 'extraits' },
-            });
-          }
-          if (!kinds.has('agenda')) {
-            await configureConnexion(tx, {
-              kind: 'agenda',
-              fournisseur: 'google-agenda',
-              reglages: { frequence: 'manuel', calendriers: ['primary'], tamponMin: 15 },
-            });
-          }
-          await tx
-            .update(connexions)
-            .set({ etat: 'ok', derniereErreur: null, updatedAt: new Date() })
-            .where(
-              and(
-                eq(connexions.instanceId, currentInstance),
-                inArray(connexions.kind, ['messagerie', 'agenda']),
-              ),
-            );
-        });
+        await withInstance(db, instance.id, brancherGoogle);
         out(`Google connecté pour ${instance.slug} : messagerie et agenda branchés.`);
         return 0;
       }
