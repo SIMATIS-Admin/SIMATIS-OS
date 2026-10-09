@@ -379,3 +379,36 @@ export const validerDevis = (slug: string, id: string) =>
   sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/valider`), {});
 export const transmettreDevis = (slug: string, id: string) =>
   sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/transmettre`), {});
+
+export type Rapport = { fait: string[]; attente: string[]; echec: string[] };
+export type Execution = {
+  id: string;
+  routine: string;
+  statut: 'demandee' | 'en_cours' | 'terminee' | 'echouee';
+  demandePar: string;
+  debut: string | null;
+  fin: string | null;
+  createdAt: string;
+  etapes: { etape: string; statut: 'en_cours' | 'fait' | 'echec'; at: string }[];
+  rapport: Rapport | null;
+};
+export type RoutineInfo = {
+  cle: string;
+  nom: string;
+  etapes: string[];
+  skill: string;
+  actif: boolean;
+  params: Record<string, unknown>;
+  rythme: string;
+  derniere: Execution | null;
+};
+export const fetchRoutines = (slug: string) => getJson<RoutineInfo[]>(inst(slug, 'routines'));
+export const saveRoutine = (
+  slug: string,
+  cle: string,
+  change: { actif?: boolean; params?: Record<string, unknown> },
+) => sendJson<RoutineInfo>('PATCH', inst(slug, `routines/${encodeURIComponent(cle)}`), change);
+export const lancerRoutine = (slug: string, cle: string) =>
+  sendJson<Execution>('POST', inst(slug, `routines/${encodeURIComponent(cle)}/executions`), {});
+export const fetchExecution = (slug: string, id: string) =>
+  getJson<Execution>(inst(slug, `executions/${encodeURIComponent(id)}`));

@@ -62,6 +62,7 @@ export const BUILT = new Set([
   'tableau',
   'agenda',
   'devis',
+  'routines',
 ]);
 
 // Where each screen comes from in docs/plans/2026-10-08-implementation-maquette.md.
