@@ -102,7 +102,10 @@ describe('pilot screens', () => {
     expect(screen.getByText('Brouillon prêt dans Gmail')).toBeTruthy();
     expect(screen.getByText('Emails (1)')).toBeTruthy();
 
-    fireEvent.click(screen.getByText('Appels (1)'));
+    expect(screen.getByText(/^Action \(/)).toBeTruthy();
+    expect(screen.queryByText(/^Autres/)).toBeNull();
+
+    fireEvent.click(screen.getByText('Téléphone (1)'));
     expect(screen.queryByText('Relancer Ateliers Morvan')).toBeNull();
     expect(screen.getByText('Appeler Lumibat')).toBeTruthy();
   });
