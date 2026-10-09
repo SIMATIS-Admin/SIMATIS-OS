@@ -70,6 +70,14 @@ describe('HubSpot mapping', () => {
     expect(appel?.faitAt?.toISOString()).toBe('2026-10-06T10:00:00.000Z');
   });
 
+  it('reads the task type from its title before the HubSpot type', () => {
+    const t = mapTask({
+      id: '9',
+      properties: { hs_task_subject: 'Appeler Romain Arpin', hs_task_type: 'TODO' },
+    });
+    expect(t.canal).toBe('appel');
+  });
+
   it('builds a contact name and keeps absent properties absent', () => {
     const c = mapContact({
       id: '1',

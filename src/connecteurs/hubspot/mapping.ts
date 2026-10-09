@@ -1,3 +1,4 @@
+import { typeTache } from '../../crm/type-tache.js';
 import type { HsObject, HsPipeline } from './client.js';
 import type { Etape } from './reglages.js';
 
@@ -108,15 +109,14 @@ export function mapDeal(h: HsObject, etapes: Etape[]) {
   };
 }
 
-const CANAUX: Record<string, 'email' | 'appel' | 'tache'> = { EMAIL: 'email', CALL: 'appel' };
-
 export function mapTask(h: HsObject) {
+  const titre = h.properties.hs_task_subject || `Tâche HubSpot ${h.id}`;
   const due = h.properties.hs_timestamp;
   const done = h.properties.hs_task_status === 'COMPLETED';
   const doneAt = h.properties.hs_task_completion_date ?? h.properties.hs_lastmodifieddate;
   return {
-    titre: h.properties.hs_task_subject || `Tâche HubSpot ${h.id}`,
-    canal: CANAUX[h.properties.hs_task_type ?? ''] ?? ('tache' as const),
+    titre,
+    canal: typeTache(titre, h.properties.hs_task_type),
     echeance: due ? new Date(due) : null,
     faitAt: done && doneAt ? new Date(doneAt) : null,
   };
