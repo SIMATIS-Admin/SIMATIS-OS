@@ -74,7 +74,7 @@ registerTool({
       actif: r.actif,
       rythme: rythme(cle, r.params),
       params: paramsOf(cle, r.params),
-      etapes: ROUTINES.find((x) => x.cle === cle)?.etapes ?? [],
+      etapes: ROUTINES.find((x) => x.cle === cle)?.etapes.map((x) => x.texte) ?? [],
     };
   },
 });

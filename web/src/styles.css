@@ -1740,6 +1740,15 @@ textarea.input {
   background: var(--green-bg);
   color: var(--green);
 }
+.pico {
+  flex: none;
+  display: inline-flex;
+  margin-top: 2px;
+}
+.pico svg {
+  width: 16px;
+  height: 16px;
+}
 .verrou {
   display: flex;
   gap: 6px;

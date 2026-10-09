@@ -59,3 +59,14 @@ export const executions = pgTable(
 
 export type Routine = typeof routines.$inferSelect;
 export type Execution = typeof executions.$inferSelect;
+
+// Workstations running the routine runner: last sign of life, Claude Code version, installed skills.
+// Not instance data: one runner serves every instance of the workstation.
+export const postes = pgTable('postes', {
+  nom: text('nom').primaryKey(),
+  vuLe: timestamp('vu_le', { withTimezone: true }).notNull(),
+  claude: text('claude'),
+  skills: jsonb('skills').$type<string[]>().notNull().default([]),
+});
+
+export type Poste = typeof postes.$inferSelect;

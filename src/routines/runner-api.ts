@@ -8,6 +8,7 @@ import { executions } from '../routines/schema.js';
 import { and, eq } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
 import { ROUTINES } from './params.js';
+import { signalerPoste } from './sante.js';
 import {
   DejaEnCours,
   demarrerExecution,
@@ -32,6 +33,19 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
     }
     return true;
   };
+
+  const presence = z.object({
+    nom: z.string().trim().min(1).max(200),
+    claude: z.string().max(200).nullable(),
+    skills: z.array(z.string().max(200)).max(500),
+  });
+  app.post<{ Body: unknown }>('/api/runner/presence', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const parsed = presence.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Présence invalide' });
+    await signalerPoste(db, parsed.data);
+    return { ok: true };
+  });
 
   app.get('/api/runner/demandes', async (request, reply) => {
     if (!(await auth(request, reply))) return reply;
