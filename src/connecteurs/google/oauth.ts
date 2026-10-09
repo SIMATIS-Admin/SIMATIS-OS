@@ -6,6 +6,9 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/calendar.readonly',
+  // Granted now so that creating meetings later never forces every mailbox to reconnect;
+  // unused until a write is added, and then behind the real-write locks.
+  'https://www.googleapis.com/auth/calendar.events',
 ];
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
