@@ -32,6 +32,7 @@ import type { FetchLike } from '../connecteurs/google/oauth.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { getFavoris, setFavoris } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
+import { createTache, listTaches, TacheInvalide, updateTache } from '../crm/taches.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
 import { paramsOf, ROUTINES, rythme } from '../routines/params.js';
@@ -216,6 +217,74 @@ export function registerApi(
       } catch (error) {
         if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
         throw error;
+      }
+    }),
+  );
+
+  const jour = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+  const semaineSchema = z.object({ du: jour, au: jour }).refine(({ du, au }) => {
+    const jours = (Date.parse(au) - Date.parse(du)) / 86_400_000;
+    return jours >= 0 && jours <= 42;
+  });
+  type SemaineRoute = SlugParams & { Querystring: unknown };
+  app.get<SemaineRoute>(
+    '/api/i/:slug/taches',
+    onInstance<SemaineRoute>(async (i, request, reply) => {
+      const parsed = semaineSchema.safeParse(request.query);
+      if (!parsed.success) return reply.code(400).send({ error: 'Période invalide' });
+      return listTaches(db, i, parsed.data, connexionDeps);
+    }),
+  );
+
+  const titreTache = z.string().trim().min(1).max(300);
+  const echeanceTache = z.iso.datetime({ offset: true }).nullable();
+  const tacheSchema = z
+    .object({
+      titre: titreTache,
+      notes: z.string().max(5000).nullable().optional(),
+      echeance: echeanceTache.optional(),
+      contactId: z.uuid().nullable().optional(),
+      opportuniteId: z.uuid().nullable().optional(),
+      hubspot: z.boolean().optional(),
+    })
+    .strict();
+  const tachePatchSchema = z
+    .object({
+      titre: titreTache.optional(),
+      notes: z.string().max(5000).nullable().optional(),
+      echeance: echeanceTache.optional(),
+      fait: z.boolean().optional(),
+    })
+    .strict();
+  const tacheErreur = (error: unknown, reply: FastifyReply) => {
+    if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+    if (error instanceof TacheInvalide) return reply.code(400).send({ error: error.message });
+    throw error;
+  };
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/taches',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = tacheSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Tâche invalide' });
+      try {
+        return await createTache(db, i, parsed.data, connexionDeps);
+      } catch (error) {
+        return tacheErreur(error, reply);
+      }
+    }),
+  );
+  app.patch<TacheRoute & { Body: unknown }>(
+    '/api/i/:slug/taches/:id',
+    onInstance<TacheRoute & { Body: unknown }>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id))
+        return reply.code(404).send({ error: 'Tâche introuvable' });
+      const parsed = tachePatchSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Modification invalide' });
+      try {
+        const done = await updateTache(db, i, request.params.id, parsed.data, connexionDeps);
+        return done ?? reply.code(404).send({ error: 'Tâche introuvable dans cette instance' });
+      } catch (error) {
+        return tacheErreur(error, reply);
       }
     }),
   );

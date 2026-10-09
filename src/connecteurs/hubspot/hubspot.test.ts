@@ -70,6 +70,14 @@ describe('HubSpot mapping', () => {
     expect(appel?.faitAt?.toISOString()).toBe('2026-10-06T10:00:00.000Z');
   });
 
+  it('reads the task type from its title before the HubSpot type', () => {
+    const t = mapTask({
+      id: '9',
+      properties: { hs_task_subject: 'Appeler Romain Arpin', hs_task_type: 'TODO' },
+    });
+    expect(t.canal).toBe('appel');
+  });
+
   it('builds a contact name and keeps absent properties absent', () => {
     const c = mapContact({
       id: '1',
@@ -263,6 +271,61 @@ describe('HubSpot mirror', () => {
         body: { properties: { dealstage: 'presentationscheduled' } },
       },
     ]);
+  });
+
+  it('reads task notes and updates a task in HubSpot with only the given fields', async () => {
+    const tache = data.tasks[0];
+    if (tache) {
+      tache.properties.hs_task_body = 'Rappeler avant midi';
+      tache.properties.hs_lastmodifieddate = new Date(Date.now() + 240_000).toISOString();
+    }
+    await syncConnexion(t.app.db, a, 'crm', deps());
+    const { rows } = await t.owner.pool.query<{ id: string; notes: string | null }>(
+      "select id, notes from taches where instance_id = $1 and source_id = '401'",
+      [a.id],
+    );
+    expect(rows[0]?.notes).toBe('Rappeler avant midi');
+    const tacheId = rows[0]?.id;
+
+    portal.calls.length = 0;
+    const simulee = await inA((tx) =>
+      writeVia(tx, a, 'crm', { op: 'task.update', data: { tacheId, fait: true } }, deps()),
+    );
+    expect(simulee).toMatchObject({ simulation: true });
+    expect(portal.calls).toHaveLength(0);
+
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    const reel = { secretsDir, realWrites: true };
+    const update = (d: Record<string, unknown>) =>
+      inA((tx) => writeVia(tx, armed, 'crm', { op: 'task.update', data: { tacheId, ...d } }, reel));
+    await update({ titre: 'Appeler Agathe', fait: true });
+    await update({ fait: false, echeance: '2026-10-12T08:30:00.000Z', notes: '' });
+    expect(portal.calls).toEqual([
+      {
+        method: 'PATCH',
+        path: '/crm/v3/objects/tasks/401',
+        body: { properties: { hs_task_subject: 'Appeler Agathe', hs_task_status: 'COMPLETED' } },
+      },
+      {
+        method: 'PATCH',
+        path: '/crm/v3/objects/tasks/401',
+        body: {
+          properties: {
+            hs_task_status: 'NOT_STARTED',
+            hs_timestamp: '2026-10-12T08:30:00.000Z',
+            hs_task_body: '',
+          },
+        },
+      },
+    ]);
+
+    const natif = await t.owner.pool.query<{ id: string }>(
+      "insert into taches (instance_id, titre, canal) values ($1, 'Tâche OS', 'tache') returning id",
+      [a.id],
+    );
+    await expect(update({ tacheId: natif.rows[0]?.id, fait: true })).rejects.toThrow(
+      /n'existe pas dans HubSpot/,
+    );
   });
 
   it('creates a company in HubSpot first, then its copy; in simulation, creates nothing', async () => {
