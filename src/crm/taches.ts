@@ -31,6 +31,8 @@ export type TacheVue = {
 
 export type SimulationTache = { simulation: true; message: string };
 
+export class TacheInvalide extends Error {}
+
 const SIMULATION: SimulationTache = {
   simulation: true,
   message: "Simulation : rien n'a été écrit dans HubSpot (écritures réelles désactivées).",
@@ -137,6 +139,18 @@ export async function createTache(
   const titre = input.titre.trim();
   const canal = typeTache(titre);
   return withInstance(db, instance.id, async (tx) => {
+    // Foreign keys alone would accept a contact or deal of another instance.
+    for (const [table, id, nom] of [
+      [contacts, input.contactId, 'Contact'],
+      [opportunites, input.opportuniteId, 'Opportunité'],
+    ] as const) {
+      if (!id) continue;
+      const [found] = await tx
+        .select({ id: table.id })
+        .from(table)
+        .where(and(eq(table.instanceId, currentInstance), eq(table.id, id)));
+      if (!found) throw new TacheInvalide(`${nom} introuvable dans cette instance`);
+    }
     let sourceId: string | null = null;
     if (input.hubspot) {
       if (!(await crmHubspot(tx))) {

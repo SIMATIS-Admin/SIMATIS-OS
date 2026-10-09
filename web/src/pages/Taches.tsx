@@ -9,29 +9,13 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { Modal } from './Overlay.js';
-
-export const TYPES = {
-  email: ['send', 'Email'],
-  appel: ['phone', 'Téléphone'],
-  tache: ['check', 'Action'],
-} as const;
+import { TYPES, iso, lundiDe, plusJours } from './taches/commun.js';
+import { Semaine } from './taches/Semaine.js';
 
 type Mode = 'semaine' | 'liste';
 type FiltreType = 'tout' | TacheVue['canal'];
 type FiltreStatut = 'a_faire' | 'faites';
 type FiltreOrigine = 'tout' | TacheVue['origine'];
-
-const iso = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-export const lundiDe = (d: Date) => {
-  const l = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  l.setDate(l.getDate() - ((l.getDay() + 6) % 7));
-  return iso(l);
-};
-export const plusJours = (jour: string, n: number) => {
-  const [y, m, d] = jour.split('-').map(Number) as [number, number, number];
-  return iso(new Date(y, m - 1, d + n));
-};
 
 const echeanceLisible = (e: string | null) =>
   e
@@ -302,7 +286,14 @@ export function Taches({ slug }: { slug: string }) {
             onOpen={setEdition}
             onFait={(t) => void modifier(t, { fait: !t.fait })}
           />
-        ) : null)}
+        ) : (
+          <Semaine
+            lundi={lundi}
+            data={data}
+            onOpen={setEdition}
+            onMove={(t, echeance) => void modifier(t, { echeance })}
+          />
+        ))}
       {edition && data && (
         <EditionTache
           tache={edition === 'nouvelle' ? null : edition}

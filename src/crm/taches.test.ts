@@ -176,6 +176,23 @@ describe('Tâches', () => {
     expect(vue).toMatchObject({ rdv: [], rdvEtat: 'non_configure', hubspot: false });
   });
 
+  it('refuses to link a task to a contact or a deal of another instance', async () => {
+    const { rows } = await t.owner.pool.query<{ id: string }>(
+      'select id from contacts where instance_id = $1 limit 1',
+      [a.id],
+    );
+    await expect(
+      createTache(t.app.db, sansCrm, { titre: 'Appeler', contactId: rows[0]?.id }, off()),
+    ).rejects.toThrow(/Contact introuvable dans cette instance/);
+    const opp = await t.owner.pool.query<{ id: string }>(
+      'select id from opportunites where instance_id = $1 limit 1',
+      [a.id],
+    );
+    await expect(
+      createTache(t.app.db, sansCrm, { titre: 'Appeler', opportuniteId: opp.rows[0]?.id }, off()),
+    ).rejects.toThrow(/Opportunité introuvable dans cette instance/);
+  });
+
   it('validates the API input and keeps each instance to itself', async () => {
     const app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
     try {

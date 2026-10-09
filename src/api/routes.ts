@@ -32,7 +32,7 @@ import type { FetchLike } from '../connecteurs/google/oauth.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { getFavoris, setFavoris } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
-import { createTache, listTaches, updateTache } from '../crm/taches.js';
+import { createTache, listTaches, TacheInvalide, updateTache } from '../crm/taches.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
 import { paramsOf, ROUTINES, rythme } from '../routines/params.js';
@@ -258,6 +258,7 @@ export function registerApi(
     .strict();
   const tacheErreur = (error: unknown, reply: FastifyReply) => {
     if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+    if (error instanceof TacheInvalide) return reply.code(400).send({ error: error.message });
     throw error;
   };
   app.post<SlugParams & { Body: unknown }>(

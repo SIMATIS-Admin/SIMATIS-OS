@@ -1865,3 +1865,90 @@ textarea.input {
   gap: 8px;
   margin-bottom: 12px;
 }
+
+/* Tâches : vue semaine */
+.sem {
+  overflow-x: auto;
+}
+.sem-grille {
+  display: grid;
+  grid-template-columns: 52px repeat(5, minmax(120px, 1fr)) minmax(90px, 0.6fr);
+  min-width: 760px;
+}
+.sem-entete {
+  padding: 8px 6px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+.sem-heure {
+  font-size: 11px;
+  color: var(--ink-3);
+  padding: 2px 6px;
+  text-align: right;
+}
+.sem-cell {
+  position: relative;
+  min-height: 28px;
+  border-left: 1px solid var(--line);
+  border-bottom: 1px dashed var(--line);
+  padding: 1px 2px;
+}
+.sem-cell.journee {
+  min-height: 34px;
+  border-bottom: 1px solid var(--line);
+}
+.sem-cell .rdv {
+  position: absolute;
+  inset: 1px 2px auto 2px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  border-radius: var(--r-s);
+  font-size: 11px;
+  padding: 2px 4px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.sem-tache {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ink-3);
+  border-radius: var(--r-s);
+  padding: 2px 4px;
+  margin-bottom: 2px;
+  cursor: grab;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sem-tache.hubspot {
+  border-left-color: var(--navy-3);
+}
+.sem-tache.fait b {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.sem-tache svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.sem-tache b {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sem-retard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sem-retard .sem-tache {
+  max-width: 260px;
+}
