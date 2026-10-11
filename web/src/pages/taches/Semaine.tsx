@@ -9,7 +9,7 @@ const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
 const ORDRE: TacheVue['canal'][] = ['appel', 'email', 'tache'];
 const REPLI = 5;
 
-function Carte({
+export function Carte({
   t,
   heure,
   onOpen,
@@ -64,7 +64,7 @@ function Groupe({
   );
 }
 
-function EnRetard({
+export function EnRetard({
   taches,
   aujourdhui,
   onOpen,

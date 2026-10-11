@@ -11,12 +11,13 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { ACTIVITES, ORDRE_ACTIVITES, lundiDe, plusJours } from './taches/commun.js';
-import { periode, type CleePeriode } from './taches/periodes.js';
+import { lundiDu, periode, type CleePeriode } from './taches/periodes.js';
 import { EditionTache, Ensuite, type Enregistrement } from './taches/Edition.js';
-import { jourParis, memeHeure, titreSemaine } from './taches/creneaux.js';
-import { MIME_TACHE, Semaine } from './taches/Semaine.js';
+import { jourParis, memeHeure, titreJour, titreSemaine } from './taches/creneaux.js';
+import { Grille } from './taches/Grille.js';
+import { EnRetard, MIME_TACHE, Semaine } from './taches/Semaine.js';
 
-type Mode = 'semaine' | 'liste';
+type Mode = 'jour' | 'semaine' | 'parjour' | 'liste';
 type FiltreStatut = 'a_faire' | 'faites';
 type FiltreOrigine = 'tout' | TacheVue['origine'];
 
@@ -48,6 +49,13 @@ export function Pastilles({ t }: { t: TacheVue }) {
     </>
   );
 }
+
+const MODES: [Mode, string][] = [
+  ['jour', 'Jour'],
+  ['semaine', 'Semaine'],
+  ['parjour', 'Par jour'],
+  ['liste', 'Liste'],
+];
 
 const PERIODES: [CleePeriode | 'plage', string][] = [
   ['retard', 'En retard'],
@@ -224,8 +232,17 @@ function Liste({
 }
 
 export function Taches({ slug }: { slug: string }) {
-  const [mode, setMode] = useState<Mode>('semaine');
+  const [mode, setMode] = useState<Mode>('parjour');
   const [lundi, setLundi] = useState(() => lundiDe(new Date()));
+  const [jour, setJour] = useState(() => jourParis(new Date().toISOString()));
+  // The Day view moves one day at a time, the others one week; the week follows the day.
+  const avancer = (n: number) => {
+    if (mode === 'jour') {
+      const j = plusJours(jour, n);
+      setJour(j);
+      setLundi(lundiDu(j));
+    } else setLundi((l) => plusJours(l, 7 * n));
+  };
   const [data, setData] = useState<SemaineTaches | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [edition, setEdition] = useState<TacheVue | 'nouvelle' | null>(null);
@@ -291,57 +308,68 @@ export function Taches({ slug }: { slug: string }) {
   };
 
   useEffect(() => {
-    if (mode !== 'semaine' || edition) return;
+    if (mode === 'liste' || edition) return;
     const touche = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select')) return;
-      if (e.key === 'ArrowLeft') setLundi((l) => plusJours(l, -7));
-      if (e.key === 'ArrowRight') setLundi((l) => plusJours(l, 7));
+      if (e.key === 'ArrowLeft') avancer(-1);
+      if (e.key === 'ArrowRight') avancer(1);
     };
     window.addEventListener('keydown', touche);
     return () => window.removeEventListener('keydown', touche);
-  }, [mode, edition]);
+  });
 
   return (
     <>
       <div className="page-actions">
         <div className="seg">
-          <button className={mode === 'semaine' ? 'on' : ''} onClick={() => setMode('semaine')}>
-            Semaine
-          </button>
-          <button className={mode === 'liste' ? 'on' : ''} onClick={() => setMode('liste')}>
-            Liste
-          </button>
+          {MODES.map(([m, l]) => (
+            <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
+              {l}
+            </button>
+          ))}
         </div>
         <button className="btn primary" onClick={() => setEdition('nouvelle')}>
           Nouvelle tâche
         </button>
       </div>
-      {mode === 'semaine' && (
+      {mode !== 'liste' && (
         <div className="sem-barre">
           <button
             className="btn sem-nav"
-            aria-label="Semaine précédente"
-            onClick={() => setLundi(plusJours(lundi, -7))}
+            aria-label={mode === 'jour' ? 'Jour précédent' : 'Semaine précédente'}
+            onClick={() => avancer(-1)}
             onDragOver={accepte}
             onDrop={decaler(-7)}
           >
             ‹
           </button>
-          <h2>{titreSemaine(lundi)}</h2>
+          <h2>{mode === 'jour' ? titreJour(jour) : titreSemaine(lundi)}</h2>
           <button
             className="btn sem-nav"
-            aria-label="Semaine suivante"
-            onClick={() => setLundi(plusJours(lundi, 7))}
+            aria-label={mode === 'jour' ? 'Jour suivant' : 'Semaine suivante'}
+            onClick={() => avancer(1)}
             onDragOver={accepte}
             onDrop={decaler(7)}
           >
             ›
           </button>
-          {lundi !== lundiDe(new Date()) && (
-            <button className="btn" onClick={() => setLundi(lundiDe(new Date()))}>
-              Cette semaine
-            </button>
-          )}
+          {mode === 'jour'
+            ? jour !== jourParis(new Date().toISOString()) && (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setJour(jourParis(new Date().toISOString()));
+                    setLundi(lundiDe(new Date()));
+                  }}
+                >
+                  Aujourd'hui
+                </button>
+              )
+            : lundi !== lundiDe(new Date()) && (
+                <button className="btn" onClick={() => setLundi(lundiDe(new Date()))}>
+                  Cette semaine
+                </button>
+              )}
         </div>
       )}
       {message && (
@@ -366,7 +394,7 @@ export function Taches({ slug }: { slug: string }) {
               )
             }
           />
-        ) : (
+        ) : mode === 'parjour' ? (
           <Semaine
             lundi={lundi}
             data={data}
@@ -374,6 +402,28 @@ export function Taches({ slug }: { slug: string }) {
             onMove={(t, echeance) => void modifier(t, { echeance })}
             onMoveAll={(moves) => void deplacerTout(moves)}
           />
+        ) : (
+          <div className="sem2">
+            {data.enRetard.length > 0 && (
+              <EnRetard
+                taches={[...data.enRetard].sort((a, b) =>
+                  (a.echeance ?? '').localeCompare(b.echeance ?? ''),
+                )}
+                aujourdhui={jourParis(new Date().toISOString())}
+                onOpen={setEdition}
+                onMove={(t, echeance) => void modifier(t, { echeance })}
+                onMoveAll={(moves) => void deplacerTout(moves)}
+              />
+            )}
+            <Grille
+              jours={
+                mode === 'jour' ? [jour] : Array.from({ length: 7 }, (_, k) => plusJours(lundi, k))
+              }
+              data={data}
+              onOpen={setEdition}
+              onPatch={(t, patch) => void modifier(t, patch)}
+            />
+          </div>
         ))}
       {edition && data && (
         <EditionTache

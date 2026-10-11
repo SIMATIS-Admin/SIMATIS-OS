@@ -52,6 +52,12 @@ const semaine = () => ({
         )
       : []),
     tache('t3', 'Préparer le devis', { echeance: '2026-10-12T09:00:00.000Z', fait: true }),
+    tache('t6', 'Point mensuel', {
+      type: 'reunion',
+      echeance: '2026-10-15T13:00:00.000Z',
+      avecHeure: true,
+      dureeMinutes: 60,
+    }),
   ],
   enRetard: [tache('t4', 'Relancer Fonderie', { echeance: '2026-10-08T08:00:00.000Z' })],
   sansEcheance: [tache('t5', 'Trier les cartes de visite')],
@@ -110,6 +116,7 @@ describe('Tâches screen', () => {
       'Relancer Fonderie',
       'Appeler Romain Arpin',
       'Envoyer la plaquette',
+      'Point mensuel',
       'Trier les cartes de visite',
     ]);
     const ligne = screen.getByText('Appeler Romain Arpin').closest('li') as HTMLElement;
@@ -422,6 +429,63 @@ describe('Tâches screen', () => {
       await semaineAffichee();
       fireEvent.drop(jour('2026-10-16'), { dataTransfer: dt('t1') });
       expect(await screen.findByText(/Simulation : rien n’a été écrit/)).toBeTruthy();
+    });
+  });
+
+  describe('hour grid', () => {
+    const dt = (id: string) => ({
+      types: ['application/x-simatis-tache'],
+      getData: () => id,
+      setData: () => undefined,
+    });
+    const creneau = (jour: string, ligne: number) =>
+      document.querySelector(`[data-jour="${jour}"][data-ligne="${ligne}"]`) as HTMLElement;
+    const bande = (jour: string) =>
+      document.querySelector(`[data-journee="${jour}"]`) as HTMLElement;
+    const patch = () => calls.find((c) => c.method === 'PATCH');
+    const grille = async (mode: 'Jour' | 'Semaine') => {
+      render(<Taches slug="simatis" />);
+      fireEvent.click(await screen.findByRole('button', { name: mode }));
+      await screen.findByText('Point mensuel');
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-14T10:00:00Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('places timed activities on the grid and counts the others in the day band', async () => {
+      await grille('Semaine');
+      expect(within(creneau('2026-10-15', 16)).getByText('Point mensuel')).toBeTruthy();
+      expect(within(bande('2026-10-14')).getByText('1 activité')).toBeTruthy();
+      expect(screen.queryByText('Envoyer la plaquette')).toBeNull();
+      fireEvent.click(within(bande('2026-10-14')).getByText('1 activité'));
+      expect(within(bande('2026-10-14')).getByText('Envoyer la plaquette')).toBeTruthy();
+    });
+
+    it('gives a precise time when dropped on a slot, and removes it on the day band', async () => {
+      await grille('Semaine');
+      fireEvent.drop(creneau('2026-10-16', 14), { dataTransfer: dt('t2') });
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()?.body).toEqual({ echeance: '2026-10-16T12:00:00.000Z', avecHeure: true });
+
+      calls = [];
+      fireEvent.drop(bande('2026-10-15'), { dataTransfer: dt('t6') });
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()?.body).toEqual({ avecHeure: false });
+    });
+
+    it('shows one day at a time in the Day view, moving with the arrows', async () => {
+      render(<Taches slug="simatis" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Jour' }));
+      expect(await screen.findByText('Mercredi 14 octobre 2026 · Semaine 42')).toBeTruthy();
+      expect(screen.queryByText('Point mensuel')).toBeNull();
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+      expect(await screen.findByText('Jeudi 15 octobre 2026 · Semaine 42')).toBeTruthy();
+      expect(within(creneau('2026-10-15', 16)).getByText('Point mensuel')).toBeTruthy();
     });
   });
 });

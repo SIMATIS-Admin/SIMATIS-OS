@@ -88,3 +88,12 @@ export function heuresParDefaut(echeances: (string | null)[]): Set<string> {
   for (const e of echeances) if (e) n.set(heureParis(e), (n.get(heureParis(e)) ?? 0) + 1);
   return new Set([...n].filter(([, k]) => k >= 3).map(([h]) => h));
 }
+
+const JOURS_LONGS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+
+export function titreJour(jour: string): string {
+  const d = utc(jour);
+  const lundi = new Date(d);
+  lundi.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return `${JOURS_LONGS[d.getUTCDay()]} ${d.getUTCDate()} ${MOIS[d.getUTCMonth()]} ${d.getUTCFullYear()} · Semaine ${numeroSemaine(lundi.toISOString().slice(0, 10))}`;
+}
