@@ -196,7 +196,7 @@ type SaisieAffaire = {
 };
 
 // Pipedrive « + » of a stage: title, value, close date, organisation and person.
-function NouvelleAffaire({
+export function NouvelleAffaire({
   slug,
   etape,
   onClose,

@@ -217,4 +217,26 @@ describe('Fiches détaillées', () => {
       await app.close();
     }
   });
+
+  it('searches deals, people and organisations at once, for the global search', async () => {
+    const app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
+    try {
+      const r = await app.inject({ method: 'GET', url: '/api/i/mandat-fiches/recherche?q=vall' });
+      expect(r.json()).toMatchObject({
+        organisations: [{ nom: 'Fonderie Vallière' }],
+        personnes: [{ nom: 'Agathe Vallière', entreprise: 'Fonderie Vallière' }],
+      });
+      const affaires = await app.inject({
+        method: 'GET',
+        url: '/api/i/mandat-fiches/recherche?q=export',
+      });
+      expect(affaires.json()).toMatchObject({
+        affaires: [{ titre: 'Accompagnement export' }],
+      });
+      const court = await app.inject({ method: 'GET', url: '/api/i/mandat-fiches/recherche?q=v' });
+      expect(court.json()).toEqual({ affaires: [], personnes: [], organisations: [] });
+    } finally {
+      await app.close();
+    }
+  });
 });

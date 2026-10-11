@@ -11,7 +11,7 @@ import { Modal } from './Overlay.js';
 import { jour, Tableau } from './listes/Tableau.js';
 import { SearchBox } from './SearchBox.js';
 
-function NouveauContact({
+export function NouveauContact({
   slug,
   onClose,
   onCreated,

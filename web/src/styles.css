@@ -2412,3 +2412,67 @@ tr.sel {
   margin: 10px auto;
   display: block;
 }
+
+/* Barre du haut : recherche globale et ajout rapide (à la Pipedrive) */
+.barre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+}
+.barre-recherche {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(420px, 100%);
+}
+.barre-recherche > svg {
+  width: 15px;
+  height: 15px;
+  color: var(--ink-3);
+}
+.barre-resultats {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.1);
+  padding: 6px 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.barre-resultats h4 {
+  margin: 6px 0 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.barre-resultat {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 5px 4px;
+  border-radius: var(--r-s);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.barre-resultat:hover {
+  background: var(--line-2);
+}
+.barre-ajout {
+  position: relative;
+}
+.barre-ajout > .btn {
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 12px;
+}
