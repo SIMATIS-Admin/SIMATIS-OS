@@ -74,6 +74,21 @@ Mise en œuvre, au plus simple :
 - Une démo reste une démo. Si son prospect se qualifie, on crée à côté un mandat en Closing
   propre, sans données fictives.
 
+**Créer un mandat depuis une affaire** : sur la fiche d'une affaire de « Mon activité », un
+bouton « Créer le mandat » crée une instance `mandat` en phase Closing, nommée d'après
+l'entreprise de l'affaire, avec les connexions à brancher (comme la conversion d'une démo).
+
+- À la création, l'OS **recopie** dans le mandat la fiche de l'entreprise et ses contacts
+  (`source = 'simatis'`, `sourceId` = identifiant d'origine, pour la traçabilité). Ensuite les
+  deux vivent séparément et peuvent diverger : aucune synchronisation.
+- Les devis ne sont pas recopiés : la brique Devis reste propre à SIMATIS.
+- Le lien est gardé dans la configuration du mandat (`config.origine` : affaire et entreprise
+  d'origine). La fiche de l'affaire affiche « Mandat : <nom> » avec un lien pour l'ouvrir ;
+  les Paramètres du mandat affichent l'affaire d'origine.
+- Un bouton « Lier à un mandat existant » pose le même lien sans rien recopier, pour les
+  mandats déjà créés.
+- Une affaire n'est liée qu'à un mandat au plus.
+
 Hors périmètre : adapter les données fictives d'une démo à un prospect particulier (chantier
 à part ; les données de démonstration du dépôt restent fictives et génériques).
 
@@ -208,7 +223,8 @@ dans le second cerveau reste au niveau L2 (l'export ne porte que sur des notes v
 ## Livraisons
 
 0. Trois sortes de mandats : phase Closing / en cours, libellé « Démo », menu, Paramètres,
-   ligne de commande.
+   ligne de commande, création d'un mandat depuis une affaire (copie de l'entreprise et des
+   contacts) et lien affaire ↔ mandat.
 1. Table `sujets`, service, API, écran Inbox à la place de « À valider », lien avec les
    propositions, migration, démo.
 2. Outils MCP et routine « Inbox » dans Routines Claude.
