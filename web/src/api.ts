@@ -542,3 +542,10 @@ export const fetchOpportunitesRecherche = (slug: string, q: string) =>
   getJson<{ id: string; titre: string; entreprise: string | null; clos: string | null }[]>(
     inst(slug, `opportunites/recherche?q=${encodeURIComponent(q)}`),
   );
+export type Recherche = {
+  affaires: { id: string; titre: string; entreprise: string | null; clos: string | null }[];
+  personnes: { id: string; nom: string; entreprise: string | null }[];
+  organisations: { id: string; nom: string; ville: string | null }[];
+};
+export const fetchRecherche = (slug: string, q: string) =>
+  getJson<Recherche>(inst(slug, `recherche?q=${encodeURIComponent(q)}`));

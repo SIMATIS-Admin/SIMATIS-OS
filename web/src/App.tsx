@@ -6,6 +6,7 @@ import { AValider } from './pages/AValider.js';
 import { Bientot } from './pages/Bientot.js';
 import { Brief } from './pages/Brief.js';
 import { Fiche } from './pages/Fiche.js';
+import { Barre } from './shell/Barre.js';
 import type { KindFiche } from './api.js';
 import { Taches } from './pages/Taches.js';
 import { Contacts } from './pages/Contacts.js';
@@ -162,6 +163,7 @@ export function App() {
             </button>
             <h1>{title}</h1>
           </div>
+          {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
         </div>
         <div className="content">{page()}</div>
       </main>

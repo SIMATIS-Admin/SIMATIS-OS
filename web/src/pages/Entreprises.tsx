@@ -5,7 +5,7 @@ import { Modal } from './Overlay.js';
 import { jour, Tableau } from './listes/Tableau.js';
 import { SearchBox } from './SearchBox.js';
 
-function NouvelleEntreprise({
+export function NouvelleEntreprise({
   slug,
   onClose,
   onCreated,
