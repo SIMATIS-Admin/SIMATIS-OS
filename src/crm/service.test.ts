@@ -5,7 +5,8 @@ import { withInstance } from '../db/context.js';
 import fixtures from '../demo/fixtures.json' with { type: 'json' };
 import { parisDay, seedDemoIfEmpty } from '../demo/seed.js';
 import type { Instance } from '../instances/schema.js';
-import { listInstances } from '../instances/service.js';
+import { createInstance, listInstances } from '../instances/service.js';
+import { opportunites, taches } from './schema.js';
 import {
   createContact,
   createEntreprise,
@@ -57,6 +58,60 @@ describe('CRM objects', () => {
     expect(rows.map((r) => r.nom)).toEqual(['Plasturgie Mornand']);
     expect(rows[0]).toMatchObject({ nbContacts: 1 });
     expect(rows[0]?.oppsOuvertes).toBeGreaterThanOrEqual(0);
+  });
+
+  it('lists contacts and companies with phone, open deals and next activity, for the list views', async () => {
+    const vide = await createInstance(t.owner.db, { slug: 'listes', nom: 'L', type: 'mandat' });
+    const e = (await createEntreprise(t.app.db, vide, { nom: 'Fonderie Vallière' }, deps)) as {
+      id: string;
+    };
+    const c = (await createContact(
+      t.app.db,
+      vide,
+      { nom: 'Agathe Vallière', telephone: '04 50 00 00 01', entrepriseId: e.id },
+      deps,
+    )) as { id: string };
+    await withInstance(t.owner.db, vide.id, async (tx) => {
+      await tx.insert(opportunites).values({
+        instanceId: vide.id,
+        titre: 'Structuration',
+        etape: 'qualification',
+        entrepriseId: e.id,
+        contactId: c.id,
+      });
+      await tx.insert(taches).values([
+        {
+          instanceId: vide.id,
+          titre: 'Rappeler',
+          canal: 'appel',
+          contactId: c.id,
+          echeance: new Date('2026-10-20T08:00:00Z'),
+        },
+        {
+          instanceId: vide.id,
+          titre: 'Relancer',
+          canal: 'email',
+          contactId: c.id,
+          echeance: new Date('2026-10-16T08:00:00Z'),
+        },
+        {
+          instanceId: vide.id,
+          titre: 'Faite',
+          canal: 'email',
+          contactId: c.id,
+          echeance: new Date('2026-10-10T08:00:00Z'),
+          faitAt: new Date(),
+        },
+      ]);
+    });
+    const [contact] = await searchContacts(t.app.db, vide.id);
+    expect(contact).toMatchObject({
+      telephone: '04 50 00 00 01',
+      oppsOuvertes: 1,
+      prochaineActivite: '2026-10-16T08:00:00.000Z',
+    });
+    const [entreprise] = await searchEntreprises(t.app.db, vide.id);
+    expect(entreprise).toMatchObject({ prochaineActivite: '2026-10-16T08:00:00.000Z' });
   });
 
   it('shows a company sheet with its contacts and deals', async () => {

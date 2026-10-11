@@ -16,6 +16,8 @@ export class CrmIndisponible extends Error {}
 // Drizzle writes a bare "id" in single-table queries, which a subquery would resolve to its own
 // table: the outer column is named explicitly.
 const outerId = sql.raw('"entreprises"."id"');
+const contactId = sql.raw('"contacts"."id"');
+const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
 
 // Row-Level Security does the isolation; the explicit instance filters are a second safety net.
 export async function searchEntreprises(db: Executor, instanceId: string, q = '') {
@@ -37,6 +39,11 @@ export async function searchEntreprises(db: Executor, instanceId: string, q = ''
         montantOuvert: sql<number>`(select coalesce(sum(o.montant), 0) from ${opportunites} o
           where o.entreprise_id = ${outerId} and o.instance_id = ${currentInstance}
           and o.clos is null)::int`,
+        // Earliest open activity of the company's contacts and deals (Pipedrive list column).
+        prochaineActivite: sql<string | null>`(select min(t.echeance) from ${taches} t
+          where t.instance_id = ${currentInstance} and t.fait_at is null and (
+            t.contact_id in (select c.id from ${contacts} c where c.entreprise_id = ${outerId})
+            or t.opportunite_id in (select o.id from ${opportunites} o where o.entreprise_id = ${outerId})))`,
       })
       .from(entreprises)
       .where(
@@ -51,7 +58,8 @@ export async function searchEntreprises(db: Executor, instanceId: string, q = ''
             : undefined,
         ),
       )
-      .orderBy(asc(entreprises.nom)),
+      .orderBy(asc(entreprises.nom))
+      .then((rows) => rows.map((r) => ({ ...r, prochaineActivite: iso(r.prochaineActivite) }))),
   );
 }
 
@@ -64,9 +72,16 @@ export async function searchContacts(db: Executor, instanceId: string, q = '') {
         nom: contacts.nom,
         fonction: contacts.fonction,
         email: contacts.email,
+        telephone: contacts.telephone,
         role: contacts.role,
         entreprise: entreprises.nom,
         entrepriseId: entreprises.id,
+        oppsOuvertes: sql<number>`(select count(*) from ${opportunites} o
+          where o.contact_id = ${contactId} and o.instance_id = ${currentInstance}
+          and o.clos is null)::int`,
+        prochaineActivite: sql<string | null>`(select min(t.echeance) from ${taches} t
+          where t.contact_id = ${contactId} and t.instance_id = ${currentInstance}
+          and t.fait_at is null)`,
       })
       .from(contacts)
       .leftJoin(
@@ -86,7 +101,8 @@ export async function searchContacts(db: Executor, instanceId: string, q = '') {
             : undefined,
         ),
       )
-      .orderBy(asc(contacts.nom)),
+      .orderBy(asc(contacts.nom))
+      .then((rows) => rows.map((r) => ({ ...r, prochaineActivite: iso(r.prochaineActivite) }))),
   );
 }
 

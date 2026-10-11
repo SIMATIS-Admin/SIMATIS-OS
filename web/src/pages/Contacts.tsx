@@ -5,8 +5,10 @@ import {
   fetchEntreprises,
   type Contact,
   type Entreprise,
+  patchFiche,
 } from '../api.js';
 import { Modal } from './Overlay.js';
+import { jour, Tableau } from './listes/Tableau.js';
 import { SearchBox } from './SearchBox.js';
 
 function NouveauContact({
@@ -97,6 +99,16 @@ export function Contacts({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [version, setVersion] = useState(0);
+  const [message, setMessage] = useState<string | null>(null);
+  // In-place and bulk edits: written like the detail page (HubSpot first when it is the source).
+  const modifier = (id: string, champ: string, v: string | number | null) =>
+    patchFiche(slug, 'contact', id, { [champ]: v }).then(
+      (r) => {
+        setMessage('simulation' in r ? r.message : null);
+        setVersion((n) => n + 1);
+      },
+      (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+    );
 
   useEffect(() => {
     let alive = true;
@@ -128,41 +140,56 @@ export function Contacts({ slug }: { slug: string }) {
           </span>
         </div>
         {error && <p className="empty">{error}</p>}
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Contact</th>
-              <th>Fonction</th>
-              <th>Entreprise</th>
-              <th>Email</th>
-              <th>Rôle</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list?.map((c) => (
-              <tr
-                key={c.id}
-                className="click"
-                onClick={() => (location.hash = `#/${slug}/fiche/contact/${c.id}`)}
-              >
-                <td>
-                  <b>{c.nom}</b>
-                </td>
-                <td>{c.fonction}</td>
-                <td>{c.entreprise}</td>
-                <td className="small">{c.email}</td>
-                <td>{c.role && <span className="badge">{c.role}</span>}</td>
-              </tr>
-            ))}
-            {list?.length === 0 && (
-              <tr>
-                <td colSpan={5} className="empty">
-                  Aucun contact ne correspond.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {message && (
+          <div className="alert amber" style={{ margin: 8 }}>
+            <div>{message}</div>
+          </div>
+        )}
+        {list && (
+          <Tableau
+            cle="contacts"
+            lignes={list}
+            titre={(c) => c.nom}
+            onOuvrir={(c) => (location.hash = `#/${slug}/fiche/contact/${c.id}`)}
+            onModifier={(c, champ, v) => modifier(c.id, champ, v)}
+            colonnes={[
+              {
+                cle: 'nom',
+                label: 'Personne',
+                valeur: (c) => c.nom,
+                affiche: (c) => <b>{c.nom}</b>,
+              },
+              { cle: 'entreprise', label: 'Organisation', valeur: (c) => c.entreprise },
+              {
+                cle: 'fonction',
+                label: 'Fonction',
+                valeur: (c) => c.fonction,
+                edition: { champ: 'fonction' },
+              },
+              {
+                cle: 'email',
+                label: 'Email',
+                valeur: (c) => c.email,
+                edition: { champ: 'email', type: 'email' },
+              },
+              {
+                cle: 'telephone',
+                label: 'Téléphone',
+                valeur: (c) => c.telephone,
+                edition: { champ: 'telephone' },
+              },
+              { cle: 'opps', label: 'Affaires ouvertes', valeur: (c) => c.oppsOuvertes },
+              {
+                cle: 'prochaine',
+                label: 'Prochaine activité',
+                valeur: (c) => c.prochaineActivite,
+                affiche: (c) => jour(c.prochaineActivite),
+              },
+              { cle: 'role', label: 'Rôle', valeur: (c) => c.role, masquee: true },
+            ]}
+          />
+        )}
+        {list?.length === 0 && <p className="empty">Aucun contact ne correspond.</p>}
       </div>
       {creating && (
         <NouveauContact

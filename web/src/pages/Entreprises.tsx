@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { createEntreprise, fetchEntreprises, type Entreprise } from '../api.js';
+import { createEntreprise, fetchEntreprises, patchFiche, type Entreprise } from '../api.js';
 import { eur } from '../crm.js';
 import { Modal } from './Overlay.js';
+import { jour, Tableau } from './listes/Tableau.js';
 import { SearchBox } from './SearchBox.js';
 
 function NouvelleEntreprise({
@@ -63,6 +64,16 @@ export function Entreprises({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [version, setVersion] = useState(0);
+  const [message, setMessage] = useState<string | null>(null);
+  // In-place and bulk edits: written like the detail page (HubSpot first when it is the source).
+  const modifier = (id: string, champ: string, v: string | number | null) =>
+    patchFiche(slug, 'entreprise', id, { [champ]: v }).then(
+      (r) => {
+        setMessage('simulation' in r ? r.message : null);
+        setVersion((n) => n + 1);
+      },
+      (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+    );
 
   useEffect(() => {
     let alive = true;
@@ -94,50 +105,57 @@ export function Entreprises({ slug }: { slug: string }) {
           </span>
         </div>
         {error && <p className="empty">{error}</p>}
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Entreprise</th>
-              <th>Secteur</th>
-              <th>Ville</th>
-              <th className="r">Salariés</th>
-              <th className="r">Contacts</th>
-              <th>Opportunités</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list?.map((e) => (
-              <tr
-                key={e.id}
-                className="click"
-                onClick={() => (location.hash = `#/${slug}/fiche/entreprise/${e.id}`)}
-              >
-                <td>
-                  <b>{e.nom}</b>
-                  {e.domaine && <div className="small muted">{e.domaine}</div>}
-                </td>
-                <td>{e.secteur}</td>
-                <td>{e.ville}</td>
-                <td className="r num">{e.taille ?? ''}</td>
-                <td className="r num">{e.nbContacts}</td>
-                <td className="small">
-                  {e.oppsOuvertes ? (
-                    `${e.oppsOuvertes} ouverte${e.oppsOuvertes > 1 ? 's' : ''}, ${eur(e.montantOuvert)}`
-                  ) : (
-                    <span className="muted">Aucune ouverte</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {list?.length === 0 && (
-              <tr>
-                <td colSpan={6} className="empty">
-                  Aucune entreprise ne correspond.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {message && (
+          <div className="alert amber" style={{ margin: 8 }}>
+            <div>{message}</div>
+          </div>
+        )}
+        {list && (
+          <Tableau
+            cle="entreprises"
+            lignes={list}
+            titre={(e) => e.nom}
+            onOuvrir={(e) => (location.hash = `#/${slug}/fiche/entreprise/${e.id}`)}
+            onModifier={(e, champ, v) => modifier(e.id, champ, v)}
+            colonnes={[
+              {
+                cle: 'nom',
+                label: 'Organisation',
+                valeur: (e) => e.nom,
+                affiche: (e) => <b>{e.nom}</b>,
+              },
+              { cle: 'secteur', label: 'Secteur', valeur: (e) => e.secteur },
+              { cle: 'ville', label: 'Ville', valeur: (e) => e.ville, edition: { champ: 'ville' } },
+              {
+                cle: 'domaine',
+                label: 'Domaine',
+                valeur: (e) => e.domaine,
+                edition: { champ: 'domaine' },
+              },
+              {
+                cle: 'taille',
+                label: 'Salariés',
+                valeur: (e) => e.taille,
+                edition: { champ: 'taille', type: 'number' },
+              },
+              { cle: 'contacts', label: 'Personnes', valeur: (e) => e.nbContacts },
+              { cle: 'opps', label: 'Affaires ouvertes', valeur: (e) => e.oppsOuvertes },
+              {
+                cle: 'valeur',
+                label: 'Valeur ouverte',
+                valeur: (e) => e.montantOuvert,
+                affiche: (e) => (e.montantOuvert ? eur(e.montantOuvert) : ''),
+              },
+              {
+                cle: 'prochaine',
+                label: 'Prochaine activité',
+                valeur: (e) => e.prochaineActivite,
+                affiche: (e) => jour(e.prochaineActivite),
+              },
+            ]}
+          />
+        )}
+        {list?.length === 0 && <p className="empty">Aucune entreprise ne correspond.</p>}
       </div>
       {creating && (
         <NouvelleEntreprise
