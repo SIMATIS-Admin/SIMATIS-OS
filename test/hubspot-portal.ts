@@ -252,6 +252,12 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
       return json({ id: u.pathname.split('/').at(-1) });
     }
     if (list && method === 'POST') return json({ id: `9${(cree += 1)}` }, 201);
+    if (
+      /^\/crm\/v4\/objects\/\w+\/\w+\/associations\/default\/\w+\/\w+$/.test(u.pathname) &&
+      method === 'PUT'
+    ) {
+      return json({ status: 'COMPLETE' });
+    }
     return json({ message: `Route inconnue ${method} ${u.pathname}` }, 404);
   };
 

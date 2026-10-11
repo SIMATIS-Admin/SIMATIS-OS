@@ -452,6 +452,113 @@ describe('HubSpot mirror', () => {
     ]);
   });
 
+  it('writes deal fields, links, company and contact changes, and notes with their links', async () => {
+    const id = async (table: string, sourceId: string) =>
+      (
+        await t.owner.pool.query<{ id: string }>(
+          `select id from ${table} where instance_id = $1 and source_id = $2`,
+          [a.id, sourceId],
+        )
+      ).rows[0]?.id;
+    const opp = await id('opportunites', '301');
+    const agathe = await id('contacts', '201');
+    const fonderie = await id('entreprises', '101');
+    const dalmas = await id('entreprises', '103');
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    const ecrire = (op: string, data: Record<string, unknown>) =>
+      inA((tx) => writeVia(tx, armed, 'crm', { op, data }, { secretsDir, realWrites: true }));
+    portal.calls.length = 0;
+
+    await ecrire('deal.update', {
+      opportuniteId: opp,
+      titre: 'Structuration 2027',
+      montant: 15000,
+      echeance: '2026-12-01',
+    });
+    await ecrire('deal.associer', { opportuniteId: opp, contactId: agathe, entrepriseId: dalmas });
+    await ecrire('company.update', { entrepriseId: fonderie, ville: 'Annecy', taille: 50 });
+    await ecrire('contact.update', {
+      contactId: agathe,
+      nom: 'Agathe Vallière-Roux',
+      entrepriseId: dalmas,
+    });
+    await ecrire('note.create', {
+      corps: 'Budget validé',
+      contactId: agathe,
+      entrepriseId: fonderie,
+      opportuniteId: opp,
+    });
+    const assoc = (type: number) => ({
+      types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: type }],
+    });
+    expect(portal.calls.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      'PATCH /crm/v3/objects/deals/301',
+      'PUT /crm/v4/objects/deals/301/associations/default/contacts/201',
+      'PUT /crm/v4/objects/deals/301/associations/default/companies/103',
+      'PATCH /crm/v3/objects/companies/101',
+      'PATCH /crm/v3/objects/contacts/201',
+      'PUT /crm/v4/objects/contacts/201/associations/default/companies/103',
+      'POST /crm/v3/objects/notes',
+    ]);
+    expect(portal.calls[0]?.body).toEqual({
+      properties: { dealname: 'Structuration 2027', amount: '15000', closedate: '2026-12-01' },
+    });
+    expect(portal.calls[3]?.body).toEqual({
+      properties: { city: 'Annecy', numberofemployees: '50' },
+    });
+    expect(portal.calls[4]?.body).toEqual({
+      properties: { firstname: 'Agathe', lastname: 'Vallière-Roux' },
+    });
+    const note = portal.calls[6]?.body as {
+      properties: Record<string, string>;
+      associations: { to: { id: string } }[];
+    };
+    expect(note.properties.hs_note_body).toBe('Budget validé');
+    expect(note.associations).toEqual([
+      { to: { id: '201' }, ...assoc(202) },
+      { to: { id: '101' }, ...assoc(190) },
+      { to: { id: '301' }, ...assoc(214) },
+    ]);
+  });
+
+  it('refuses a deal update made only of fields excluded from the sync', async () => {
+    const opp = (
+      await t.owner.pool.query<{ id: string }>(
+        "select id from opportunites where instance_id = $1 and source_id = '301'",
+        [a.id],
+      )
+    ).rows[0]?.id;
+    await inA((tx) =>
+      configureConnexion(tx, {
+        kind: 'crm',
+        fournisseur: 'hubspot',
+        reglages: { sens: 'deux_sens', champsExclus: ['phone', 'amount'] },
+      }),
+    );
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    try {
+      await expect(
+        inA((tx) =>
+          writeVia(
+            tx,
+            armed,
+            'crm',
+            { op: 'deal.update', data: { opportuniteId: opp, montant: 1 } },
+            { secretsDir, realWrites: true },
+          ),
+        ),
+      ).rejects.toThrow(/exclu/);
+    } finally {
+      await inA((tx) =>
+        configureConnexion(tx, {
+          kind: 'crm',
+          fournisseur: 'hubspot',
+          reglages: { sens: 'deux_sens', champsExclus: ['phone'] },
+        }),
+      );
+    }
+  });
+
   it('creates a company in HubSpot first, then its copy; in simulation, creates nothing', async () => {
     const before = (await count('entreprises')) ?? 0;
     const simulated = await createEntreprise(t.app.db, a, { nom: 'Scierie Bonnet' }, deps());

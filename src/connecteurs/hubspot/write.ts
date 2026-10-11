@@ -40,6 +40,10 @@ function splitName(nom: string): { firstname: string; lastname: string } {
 
 // Contact → company association, "HUBSPOT_DEFINED" type 279 (contact to company, primary).
 const CONTACT_TO_COMPANY = 279;
+// HUBSPOT_DEFINED note → contact (202), → company (190), → deal (214).
+const NOTE_TO_CONTACT = 202;
+const NOTE_TO_COMPANY = 190;
+const NOTE_TO_DEAL = 214;
 
 export async function writeHubspot(
   ctx: SyncCtx,
@@ -59,6 +63,9 @@ export async function writeHubspot(
     );
 
   let call: () => Promise<{ id?: string }>;
+  // Default (primary) association between two HubSpot records.
+  const associer = (from: string, fromId: string, to: string, toId: string) =>
+    client.request('PUT', `/crm/v4/objects/${from}/${fromId}/associations/default/${to}/${toId}`);
   const d = op.data;
   switch (op.op) {
     case 'deal.stage': {
@@ -83,12 +90,89 @@ export async function writeHubspot(
     }
     case 'contact.update': {
       const id = await hubspotId(ctx, contacts, d.contactId);
+      const nom = str(d.nom);
       const properties = sans({
+        ...(nom ? splitName(nom) : {}),
         email: str(d.email),
         phone: str(d.telephone),
         jobtitle: str(d.fonction),
       });
-      call = () => client.request('PATCH', `/crm/v3/objects/contacts/${id}`, { properties });
+      const company = d.entrepriseId ? await hubspotId(ctx, entreprises, d.entrepriseId) : null;
+      call = async () => {
+        if (Object.keys(properties).length > 0 || !company)
+          await client.request('PATCH', `/crm/v3/objects/contacts/${id}`, { properties });
+        if (company) await associer('contacts', id, 'companies', company);
+        return { id };
+      };
+      break;
+    }
+    case 'deal.update': {
+      const id = await hubspotId(ctx, opportunites, d.opportuniteId);
+      const demandes = {
+        dealname: str(d.titre),
+        amount: typeof d.montant === 'number' ? String(d.montant) : undefined,
+        closedate: str(d.echeance),
+      };
+      const properties = sans(demandes);
+      if (Object.keys(properties).length === 0) {
+        throw new EcritureRefusee(
+          Object.values(demandes).some((v) => v !== undefined)
+            ? 'Ces champs sont exclus de la synchronisation HubSpot (Paramètres > Connexions).'
+            : 'Aucune modification',
+        );
+      }
+      call = () => client.request('PATCH', `/crm/v3/objects/deals/${id}`, { properties });
+      break;
+    }
+    case 'deal.associer': {
+      const id = await hubspotId(ctx, opportunites, d.opportuniteId);
+      const contact = d.contactId ? await hubspotId(ctx, contacts, d.contactId) : null;
+      const company = d.entrepriseId ? await hubspotId(ctx, entreprises, d.entrepriseId) : null;
+      if (!contact && !company) throw new EcritureRefusee('Aucun lien à écrire');
+      call = async () => {
+        if (contact) await associer('deals', id, 'contacts', contact);
+        if (company) await associer('deals', id, 'companies', company);
+        return { id };
+      };
+      break;
+    }
+    case 'company.update': {
+      const id = await hubspotId(ctx, entreprises, d.entrepriseId);
+      const properties = sans({
+        name: str(d.nom),
+        city: str(d.ville),
+        domain: str(d.domaine),
+        numberofemployees: typeof d.taille === 'number' ? String(d.taille) : undefined,
+      });
+      if (Object.keys(properties).length === 0)
+        throw new EcritureRefusee('Aucune modification envoyable à HubSpot');
+      call = () => client.request('PATCH', `/crm/v3/objects/companies/${id}`, { properties });
+      break;
+    }
+    case 'note.create': {
+      const corps = str(d.corps);
+      if (!corps) throw new EcritureRefusee('Note vide');
+      const liens = [
+        [contacts, d.contactId, NOTE_TO_CONTACT],
+        [entreprises, d.entrepriseId, NOTE_TO_COMPANY],
+        [opportunites, d.opportuniteId, NOTE_TO_DEAL],
+      ] as const;
+      const associations: {
+        to: { id: string };
+        types: { associationCategory: string; associationTypeId: number }[];
+      }[] = [];
+      for (const [table, localId, type] of liens) {
+        if (!localId) continue;
+        associations.push({
+          to: { id: await hubspotId(ctx, table, localId) },
+          types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: type }],
+        });
+      }
+      call = () =>
+        client.request('POST', '/crm/v3/objects/notes', {
+          properties: { hs_note_body: corps, hs_timestamp: new Date().toISOString() },
+          associations,
+        });
       break;
     }
     case 'contact.create': {
