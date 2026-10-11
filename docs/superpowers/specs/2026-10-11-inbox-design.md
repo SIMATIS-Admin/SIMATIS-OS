@@ -1,0 +1,150 @@
+# Inbox : le lien entre le second cerveau et l'OS
+
+Date : 2026-10-11. Statut : conception validée par Marc, à relire avant le plan.
+
+## Objectif
+
+L'écran « À valider » disparaît et devient l'**Inbox** : une liste unique, par mandat, des
+sujets importants à traiter (mails qui attendent une réponse, devis à produire, rapports de
+diagnostic, comptes rendus de rendez-vous, brouillons non envoyés, propositions des
+routines). Pour chaque sujet, le pilote le transforme en tâche, ou non, et le coche pour
+qu'il disparaisse du suivi.
+
+L'Inbox est alimentée par une **routine Claude** qui tourne sur le poste : elle lit le second
+cerveau, la messagerie et l'agenda, dépose les sujets dans l'OS et, au passage suivant,
+reporte dans le second cerveau ce qui a été traité.
+
+Critères de réussite :
+
+- un seul écran à regarder le matin, par mandat ;
+- aucun sujet en double, même après qu'il a été coché ;
+- rien d'irréversible : cocher ne supprime rien, nulle part ;
+- l'OS (dépôt public) ne contient ni la méthode de repérage ni aucune donnée réelle.
+
+## Décisions prises
+
+| Question | Décision |
+| --- | --- |
+| Qui alimente l'Inbox ? | Une routine Claude sur le poste (pas de montage du Drive dans Docker). |
+| Retour vers le second cerveau ? | Oui : la routine y note ce qui a été traité et y exporte les notes validées. |
+| Et « À valider » ? | Supprimé. Les propositions deviennent des sujets « à valider » de l'Inbox. |
+| Architecture | Approche A : un objet « sujet » nouveau ; le moteur de propositions reste dessous. |
+
+Approches écartées : élargir la table des propositions (mélange « action à exécuter » et
+« chose à traiter ») ; laisser les routines agir sans validation (perte du garde-fou).
+
+## 1. Le sujet
+
+Nouvelle table `sujets` (colonnes communes `metierColumns`, cloisonnement par instance
+`instanceIsolation`, comme les autres tables métier).
+
+| Champ | Contenu |
+| --- | --- |
+| `type` | `mail_a_repondre`, `devis`, `diagnostic`, `compte_rendu`, `brouillon_non_envoye`, `a_valider`, `autre` |
+| `titre` | court, rédigé par la routine |
+| `resume` | quelques lignes, rédigé par la routine (texte brut) |
+| `origine` | `messagerie`, `agenda`, `cerveau`, `os` (proposition interne) |
+| `lien` | URL pour ouvrir la source (fil Gmail, événement, fiche du second cerveau), facultatif |
+| `echeance` | date facultative |
+| `contactId`, `entrepriseId` | facultatifs, si la routine les reconnaît dans le CRM |
+| `propositionId` | pour un sujet `a_valider`, la proposition liée |
+| `statut` | `a_traiter`, `tache`, `traite` |
+| `tacheId` | la tâche créée quand le sujet a été transformé |
+| `traiteAt`, `traitePar` | quand et par qui il a été traité |
+| `reporteAt` | quand la routine a reporté le traitement dans le second cerveau |
+
+**Pas de doublon** : la colonne commune `sourceId` porte une clé stable fournie par la
+routine (par exemple l'identifiant du fil de messagerie, ou le chemin d'une fiche suivi
+d'un repère). Index unique sur `(instance, source, sourceId)`, comme pour les tâches. Un
+dépôt dont la clé existe déjà ne crée rien, quel que soit le statut du sujet existant.
+
+**Cycle de vie** :
+
+- `a_traiter` → `tache` : « Transformer en tâche » crée la tâche avec la règle existante
+  (dans HubSpot si le mandat y est connecté, sinon dans l'OS) et garde son `tacheId`.
+- `a_traiter` → `traite` : la case à cocher ou « Marquer comme traité ».
+- `tache` ou `traite` → `a_traiter` : « Remettre à traiter » (la tâche créée reste).
+
+Cocher ne supprime rien, ni dans l'OS, ni dans la messagerie, ni dans le second cerveau.
+
+**Propositions** : quand une proposition est créée avec le statut `proposee`, un sujet
+`a_valider` lié est créé dans la même transaction. Valider ou écarter la proposition fait
+passer ce sujet à `traite`. Une proposition appliquée directement (niveau d'autonomie
+suffisant) ne crée pas de sujet.
+
+## 2. L'écran Inbox
+
+- Menu : « À valider » devient **Inbox** (même place, groupe Pilotage, icône inbox), avec un
+  compteur des sujets à traiter. L'ancienne route `validations` redirige vers `inbox`.
+- Disposition de l'écran actuel : liste à gauche, détail à droite.
+- Filtres : Tout · Mails · Devis · Diagnostics · Comptes rendus · À valider · Traités.
+  « Mails » regroupe `mail_a_repondre` et `brouillon_non_envoye` ; `autre` n'apparaît que
+  sous « Tout ». Une note proposée pour le second cerveau est une proposition, donc un sujet
+  `a_valider`.
+- Ligne : case à cocher, icône du type, titre, contact ou entreprise, échéance (rouge si
+  dépassée), date d'arrivée.
+- Ordre : échéances dépassées, puis échéances à venir (la plus proche d'abord), puis sans
+  échéance (le plus récent d'abord).
+- Détail : résumé, bouton « Ouvrir la source » (si `lien`), « Transformer en tâche »
+  (fenêtre de création de tâche existante, préremplie avec titre, échéance, contact),
+  « Marquer comme traité ». Pour un sujet `a_valider` : le détail actuel de la proposition
+  avec Valider / Modifier / Écarter.
+- « Traités » : sujets `tache` (avec lien vers la tâche) et `traite`, bouton « Remettre à
+  traiter ».
+
+Hors périmètre : reporter à plus tard, tri manuel, ajout manuel d'un sujet.
+
+## 3. La routine « Inbox »
+
+Nouvelle entrée dans `ROUTINES` (`src/routines/params.ts`) : clé `inbox`, skill
+`alimenter-inbox`. Par défaut chaque jour ouvré, avant la routine quotidienne de relance, ou à
+la demande ; rythme réglable comme les autres. Elle tourne par instance avec le jeton
+d'exécution existant : elle ne voit que l'Inbox du mandat.
+
+Étapes affichées :
+
+1. Lire les sujets traités depuis le dernier passage.
+2. Reporter le traitement et exporter les notes validées dans le second cerveau.
+3. Chercher les nouveaux sujets (messagerie, agenda, second cerveau).
+4. Déposer les nouveaux sujets dans l'Inbox.
+
+Nouveaux outils MCP (`src/routines/outils-mcp.ts`) :
+
+- `deposer_sujet` : type, titre, résumé, origine, clé de source, lien, échéance, contact ou
+  entreprise. Renvoie `cree` ou `existant`. Ignoré sans erreur si la clé existe déjà.
+- `sujets_traites` : sujets passés à `tache` ou `traite` dont `reporteAt` est vide. Pour un
+  sujet `a_valider` lié à une note pour le second cerveau validée (proposition
+  `appliquee`), il renvoie aussi le contenu de la note, à exporter dans l'inbox du second
+  cerveau. Une note écartée est seulement signalée comme traitée.
+- `marquer_reporte` : pose `reporteAt` sur les sujets que la routine a reportés (ou dont elle
+  a exporté la note). Un même mécanisme sert donc aux traces et aux exports.
+
+La **skill** `alimenter-inbox` (méthode de repérage, emplacement des fichiers dans le second
+cerveau) est **privée** : elle vit dans les skills du poste, jamais dans ce dépôt.
+
+Sécurité : la routine n'envoie rien et ne modifie rien dans la messagerie. Dans le second
+cerveau, elle ajoute seulement (traces, notes dans l'inbox), sans jamais supprimer. Écrire
+dans le second cerveau reste au niveau L2 (l'export ne porte que sur des notes validées).
+
+## 4. Transition, démo, tests
+
+- **Migration** : création de la table `sujets`, puis un sujet `a_valider` pour chaque
+  proposition encore `proposee`.
+- **Démo** : le mandat de démonstration reçoit des sujets fictifs, un par type
+  (`src/demo/fixtures.json`).
+- **Tests** (écrits avec le code) :
+  - service : dépôt, pas de doublon (y compris après coche), cocher, remettre à traiter,
+    transformer en tâche (HubSpot simulé et OS) ;
+  - cloisonnement : un mandat ne voit pas les sujets d'un autre ;
+  - outils MCP : déposer, lire les traités, marquer reporté ;
+  - propositions : créer crée le sujet, valider ou écarter le passe à `traite` ;
+  - migration : reprise des propositions en attente ;
+  - écran : filtres, ordre, case à cocher, fenêtre « Transformer en tâche », redirection.
+- `npm run verify` au complet et contrôle dans le navigateur avant chaque merge.
+
+## Livraisons
+
+1. Table `sujets`, service, API, écran Inbox à la place de « À valider », lien avec les
+   propositions, migration, démo.
+2. Outils MCP et routine « Inbox » dans Routines Claude.
+3. Skill privée `alimenter-inbox`, écrite avec Marc sur le poste (hors dépôt).
