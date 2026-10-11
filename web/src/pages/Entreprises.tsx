@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createEntreprise, fetchEntreprises, type Entreprise } from '../api.js';
 import { eur } from '../crm.js';
-import { Fiches, type Open } from './Fiches.js';
 import { Modal } from './Overlay.js';
 import { SearchBox } from './SearchBox.js';
 
@@ -62,7 +61,6 @@ export function Entreprises({ slug }: { slug: string }) {
   const [q, setQ] = useState('');
   const [list, setList] = useState<Entreprise[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<Open | null>(null);
   const [creating, setCreating] = useState(false);
   const [version, setVersion] = useState(0);
 
@@ -112,7 +110,7 @@ export function Entreprises({ slug }: { slug: string }) {
               <tr
                 key={e.id}
                 className="click"
-                onClick={() => setOpen({ kind: 'entreprise', id: e.id })}
+                onClick={() => (location.hash = `#/${slug}/fiche/entreprise/${e.id}`)}
               >
                 <td>
                   <b>{e.nom}</b>
@@ -141,7 +139,6 @@ export function Entreprises({ slug }: { slug: string }) {
           </tbody>
         </table>
       </div>
-      <Fiches slug={slug} open={open} setOpen={setOpen} />
       {creating && (
         <NouvelleEntreprise
           slug={slug}
@@ -149,7 +146,7 @@ export function Entreprises({ slug }: { slug: string }) {
           onCreated={(id) => {
             setCreating(false);
             setVersion((v) => v + 1);
-            setOpen({ kind: 'entreprise', id });
+            location.hash = `#/${slug}/fiche/entreprise/${id}`;
           }}
         />
       )}

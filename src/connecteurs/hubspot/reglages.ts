@@ -16,7 +16,14 @@ export const CHAMPS_EXCLUABLES = [
   { cle: 'annualrevenue', libelle: "Chiffre d'affaires annuel" },
 ] as const;
 
-export type Etape = { id: string; label: string; ordre: number; clos: boolean; gagne: boolean };
+export type Etape = {
+  id: string;
+  label: string;
+  ordre: number;
+  clos: boolean;
+  gagne: boolean;
+  probabilite?: number | null;
+};
 
 export const reglagesSchema = z.object({
   frequence: z.enum(['5min', '15min', '1h', '1j', 'manuel']).default('15min'),
@@ -37,6 +44,7 @@ export const reglagesSchema = z.object({
         ordre: z.number(),
         clos: z.boolean(),
         gagne: z.boolean(),
+        probabilite: z.number().nullable().optional(),
       }),
     )
     .default([]),

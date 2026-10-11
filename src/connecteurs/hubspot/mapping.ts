@@ -17,6 +17,11 @@ export const PROPRIETES = {
     'closed_lost_reason',
     'notes_last_updated',
   ],
+  notes: ['hs_note_body', 'hs_timestamp'],
+  calls: ['hs_call_title', 'hs_call_body', 'hs_timestamp'],
+  // Email bodies are never copied: the subject is enough for the history.
+  emails: ['hs_email_subject', 'hs_timestamp'],
+  meetings: ['hs_meeting_title', 'hs_meeting_start_time', 'hs_timestamp'],
   tasks: [
     'hs_task_subject',
     'hs_task_body',
@@ -87,15 +92,73 @@ export function mapStages(pipelines: HsPipeline[]): Etape[] {
           s.metadata?.isClosed === 'true' || s.id === 'closedwon' || s.id === 'closedlost';
         const gagne =
           s.id === 'closedwon' || (clos && Number.parseFloat(s.metadata?.probability ?? '0') >= 1);
+        const p100 = Number.parseFloat(s.metadata?.probability ?? '');
         return {
           id: s.id,
           label: multiple ? `${p.label} : ${s.label}` : s.label,
           ordre: pi * 1000 + s.displayOrder,
           clos,
           gagne,
+          // Stage probability (weighted pipeline value), absent when HubSpot gives none.
+          probabilite: Number.isFinite(p100) ? Math.round(p100 * 100) : null,
         };
       }),
   );
+}
+
+const ENTITES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  '#39': "'",
+  apos: "'",
+  nbsp: ' ',
+};
+
+// HubSpot bodies are HTML: plain text for the history, cut to `max` characters.
+export function texteBrut(html: string | null | undefined, max = 2000): string | null {
+  if (!html) return null;
+  const texte = html
+    .replace(/<br\s*\/?>|<\/p>|<\/div>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(#39|[a-z]+);/gi, (m, e: string) => ENTITES[e.toLowerCase()] ?? m)
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!texte) return null;
+  return texte.length > max ? `${texte.slice(0, max - 1)}…` : texte;
+}
+
+export const ENGAGEMENTS = {
+  notes: 'note',
+  calls: 'appel',
+  emails: 'email',
+  meetings: 'reunion',
+} as const;
+
+export function mapEngagement(objet: keyof typeof ENGAGEMENTS, h: HsObject) {
+  const p = h.properties;
+  const at = p.hs_meeting_start_time ?? p.hs_timestamp ?? p.hs_lastmodifieddate;
+  return {
+    type: ENGAGEMENTS[objet],
+    titre: p.hs_call_title ?? p.hs_email_subject ?? p.hs_meeting_title ?? null,
+    resume: texteBrut(p.hs_note_body ?? p.hs_call_body),
+    at: at ? new Date(at) : new Date(0),
+  };
+}
+
+// Stage entry dates, for the deal progress bar: hs_v2_date_entered_<stage> on current portals,
+// hs_date_entered_<stage> on older ones.
+export const proprietesDatesEtapes = (etapes: Etape[]) =>
+  etapes.flatMap((e) => [`hs_v2_date_entered_${e.id}`, `hs_date_entered_${e.id}`]);
+
+function datesEtapes(h: HsObject, etapes: Etape[]) {
+  const dates: Record<string, string> = {};
+  for (const e of etapes) {
+    const v = h.properties[`hs_v2_date_entered_${e.id}`] ?? h.properties[`hs_date_entered_${e.id}`];
+    if (v) dates[e.id] = v;
+  }
+  return dates;
 }
 
 export function mapDeal(h: HsObject, etapes: Etape[]) {
@@ -107,6 +170,7 @@ export function mapDeal(h: HsObject, etapes: Etape[]) {
     titre: h.properties.dealname || `Transaction HubSpot ${h.id}`,
     etape: stage,
     clos: clos,
+    etapesDates: datesEtapes(h, etapes),
     ...present({
       montant: int(h, 'amount'),
       echeance: closedate === undefined ? undefined : (closedate?.slice(0, 10) ?? null),

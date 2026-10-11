@@ -97,6 +97,10 @@ async function vues(tx: Tx, where: SQL | undefined): Promise<TacheVue[]> {
   }));
 }
 
+// Open activities matching `where` (detail pages: « À venir »).
+export const listTachesOuvertes = (tx: Tx, where: SQL) =>
+  vues(tx, and(isNull(taches.faitAt), where));
+
 const vue = async (tx: Tx, id: string) => (await vues(tx, eq(taches.id, id)))[0] ?? null;
 
 async function crmHubspot(tx: Tx) {

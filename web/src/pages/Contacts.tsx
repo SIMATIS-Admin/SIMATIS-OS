@@ -6,7 +6,6 @@ import {
   type Contact,
   type Entreprise,
 } from '../api.js';
-import { Fiches, type Open } from './Fiches.js';
 import { Modal } from './Overlay.js';
 import { SearchBox } from './SearchBox.js';
 
@@ -96,7 +95,6 @@ export function Contacts({ slug }: { slug: string }) {
   const [q, setQ] = useState('');
   const [list, setList] = useState<Contact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<Open | null>(null);
   const [creating, setCreating] = useState(false);
   const [version, setVersion] = useState(0);
 
@@ -145,7 +143,7 @@ export function Contacts({ slug }: { slug: string }) {
               <tr
                 key={c.id}
                 className="click"
-                onClick={() => setOpen({ kind: 'contact', id: c.id })}
+                onClick={() => (location.hash = `#/${slug}/fiche/contact/${c.id}`)}
               >
                 <td>
                   <b>{c.nom}</b>
@@ -166,7 +164,6 @@ export function Contacts({ slug }: { slug: string }) {
           </tbody>
         </table>
       </div>
-      <Fiches slug={slug} open={open} setOpen={setOpen} />
       {creating && (
         <NouveauContact
           slug={slug}
@@ -174,7 +171,7 @@ export function Contacts({ slug }: { slug: string }) {
           onCreated={(id) => {
             setCreating(false);
             setVersion((v) => v + 1);
-            setOpen({ kind: 'contact', id });
+            location.hash = `#/${slug}/fiche/contact/${id}`;
           }}
         />
       )}

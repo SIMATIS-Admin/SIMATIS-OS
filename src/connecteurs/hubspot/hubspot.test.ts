@@ -16,7 +16,7 @@ import { withInstance } from '../../db/context.js';
 import type { Instance } from '../../instances/schema.js';
 import { createInstance } from '../../instances/service.js';
 import { hubspotConnector } from './index.js';
-import { mapContact, mapDeal, mapStages, mapTask } from './mapping.js';
+import { mapContact, mapDeal, mapStages, mapTask, texteBrut } from './mapping.js';
 import { EcritureRefusee } from './write.js';
 
 const TOKEN = 'pat-eu1-fictif-0000';
@@ -61,6 +61,8 @@ describe('HubSpot mapping', () => {
       ['9001', true, true],
       ['9002', true, false],
     ]);
+    expect(custom.map((e) => e.probabilite)).toEqual([100, 0]);
+    expect(mapStages(demoPortal().pipelines)[0]?.probabilite).toBeNull();
   });
 
   it('maps task types to channels and completion', () => {
@@ -157,7 +159,7 @@ describe('HubSpot mirror', () => {
 
   it('mirrors companies, contacts, deals and tasks on the first full pass, with their links', async () => {
     const report = await syncConnexion(t.app.db, a, 'crm', deps());
-    expect(report).toMatchObject({ lus: 10, crees: 10, maj: 0 });
+    expect(report).toMatchObject({ lus: 14, crees: 14, maj: 0 });
     expect(await count('entreprises')).toBe(3);
     expect(await count('opportunites')).toBe(3);
 
@@ -179,6 +181,70 @@ describe('HubSpot mirror', () => {
     ]);
     expect((await connexion())?.reglages.etapes).toHaveLength(5);
     expect(portal.calls.every((c) => !c.path.includes('/search'))).toBe(true);
+  });
+
+  it('copies the history (note, call, email, meeting) with its links, as plain text', async () => {
+    const { rows } = await t.owner.pool.query<{
+      source_id: string;
+      type: string;
+      titre: string | null;
+      resume: string | null;
+      contact: string | null;
+      entreprise: string | null;
+      opp: string | null;
+    }>(
+      `select a.source_id, a.type, a.titre, a.resume, c.nom as contact, e.nom as entreprise, o.titre as opp
+       from activites a left join contacts c on c.id = a.contact_id
+       left join entreprises e on e.id = a.entreprise_id left join opportunites o on o.id = a.opportunite_id
+       where a.instance_id = $1 order by a.source_id`,
+      [a.id],
+    );
+    expect(rows).toEqual([
+      {
+        source_id: '501',
+        type: 'note',
+        titre: null,
+        resume: 'Point & suivi : budget validé !',
+        contact: 'Agathe Vallière',
+        entreprise: 'Fonderie Vallière',
+        opp: 'Structuration commerciale',
+      },
+      {
+        source_id: '601',
+        type: 'appel',
+        titre: 'Appel découverte',
+        resume: 'Besoin de structurer la prospection.',
+        contact: 'Romain Arpin',
+        entreprise: null,
+        opp: null,
+      },
+      {
+        source_id: '701',
+        type: 'email',
+        titre: 'Proposition commerciale',
+        resume: null,
+        contact: 'Agathe Vallière',
+        entreprise: null,
+        opp: null,
+      },
+      {
+        source_id: '801',
+        type: 'reunion',
+        titre: 'RDV Fonderie',
+        resume: null,
+        contact: null,
+        entreprise: 'Fonderie Vallière',
+        opp: null,
+      },
+    ]);
+    const dates = await t.owner.pool.query<{ etapes_dates: Record<string, string> }>(
+      "select etapes_dates from opportunites where instance_id = $1 and source_id = '301'",
+      [a.id],
+    );
+    expect(dates.rows[0]?.etapes_dates).toEqual({
+      appointmentscheduled: '2026-09-20T08:00:00Z',
+      qualifiedtobuy: '2026-10-01T08:00:00Z',
+    });
   });
 
   it('only reads what changed on the next passes, and updates instead of duplicating', async () => {
@@ -211,6 +277,22 @@ describe('HubSpot mirror', () => {
     portal.failWith(null);
     await syncConnexion(t.app.db, a, 'crm', deps());
     expect(await connexion()).toMatchObject({ etat: 'ok', derniere_erreur: null });
+  });
+
+  it('skips a history type the key may not read, and syncs everything else', async () => {
+    portal.refuser('emails');
+    try {
+      const contact = data.contacts[0];
+      if (contact)
+        contact.properties.hs_lastmodifieddate = new Date(Date.now() + 90_000).toISOString();
+      const report = await syncConnexion(t.app.db, a, 'crm', deps());
+      expect(report.erreurs).toEqual([
+        'Emails non lus : la clé HubSpot n’a pas le droit nécessaire (sales-email-read).',
+      ]);
+      expect(await connexion()).toMatchObject({ etat: 'ok' });
+    } finally {
+      portal.refuser('emails', false);
+    }
   });
 
   it('vigilance 3: an excluded field is neither read nor overwritten nor written', async () => {
@@ -386,6 +468,113 @@ describe('HubSpot mirror', () => {
     ]);
   });
 
+  it('writes deal fields, links, company and contact changes, and notes with their links', async () => {
+    const id = async (table: string, sourceId: string) =>
+      (
+        await t.owner.pool.query<{ id: string }>(
+          `select id from ${table} where instance_id = $1 and source_id = $2`,
+          [a.id, sourceId],
+        )
+      ).rows[0]?.id;
+    const opp = await id('opportunites', '301');
+    const agathe = await id('contacts', '201');
+    const fonderie = await id('entreprises', '101');
+    const dalmas = await id('entreprises', '103');
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    const ecrire = (op: string, data: Record<string, unknown>) =>
+      inA((tx) => writeVia(tx, armed, 'crm', { op, data }, { secretsDir, realWrites: true }));
+    portal.calls.length = 0;
+
+    await ecrire('deal.update', {
+      opportuniteId: opp,
+      titre: 'Structuration 2027',
+      montant: 15000,
+      echeance: '2026-12-01',
+    });
+    await ecrire('deal.associer', { opportuniteId: opp, contactId: agathe, entrepriseId: dalmas });
+    await ecrire('company.update', { entrepriseId: fonderie, ville: 'Annecy', taille: 50 });
+    await ecrire('contact.update', {
+      contactId: agathe,
+      nom: 'Agathe Vallière-Roux',
+      entrepriseId: dalmas,
+    });
+    await ecrire('note.create', {
+      corps: 'Budget validé',
+      contactId: agathe,
+      entrepriseId: fonderie,
+      opportuniteId: opp,
+    });
+    const assoc = (type: number) => ({
+      types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: type }],
+    });
+    expect(portal.calls.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      'PATCH /crm/v3/objects/deals/301',
+      'PUT /crm/v4/objects/deals/301/associations/default/contacts/201',
+      'PUT /crm/v4/objects/deals/301/associations/default/companies/103',
+      'PATCH /crm/v3/objects/companies/101',
+      'PATCH /crm/v3/objects/contacts/201',
+      'PUT /crm/v4/objects/contacts/201/associations/default/companies/103',
+      'POST /crm/v3/objects/notes',
+    ]);
+    expect(portal.calls[0]?.body).toEqual({
+      properties: { dealname: 'Structuration 2027', amount: '15000', closedate: '2026-12-01' },
+    });
+    expect(portal.calls[3]?.body).toEqual({
+      properties: { city: 'Annecy', numberofemployees: '50' },
+    });
+    expect(portal.calls[4]?.body).toEqual({
+      properties: { firstname: 'Agathe', lastname: 'Vallière-Roux' },
+    });
+    const note = portal.calls[6]?.body as {
+      properties: Record<string, string>;
+      associations: { to: { id: string } }[];
+    };
+    expect(note.properties.hs_note_body).toBe('Budget validé');
+    expect(note.associations).toEqual([
+      { to: { id: '201' }, ...assoc(202) },
+      { to: { id: '101' }, ...assoc(190) },
+      { to: { id: '301' }, ...assoc(214) },
+    ]);
+  });
+
+  it('refuses a deal update made only of fields excluded from the sync', async () => {
+    const opp = (
+      await t.owner.pool.query<{ id: string }>(
+        "select id from opportunites where instance_id = $1 and source_id = '301'",
+        [a.id],
+      )
+    ).rows[0]?.id;
+    await inA((tx) =>
+      configureConnexion(tx, {
+        kind: 'crm',
+        fournisseur: 'hubspot',
+        reglages: { sens: 'deux_sens', champsExclus: ['phone', 'amount'] },
+      }),
+    );
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    try {
+      await expect(
+        inA((tx) =>
+          writeVia(
+            tx,
+            armed,
+            'crm',
+            { op: 'deal.update', data: { opportuniteId: opp, montant: 1 } },
+            { secretsDir, realWrites: true },
+          ),
+        ),
+      ).rejects.toThrow(/exclu/);
+    } finally {
+      await inA((tx) =>
+        configureConnexion(tx, {
+          kind: 'crm',
+          fournisseur: 'hubspot',
+          reglages: { sens: 'deux_sens', champsExclus: ['phone'] },
+        }),
+      );
+    }
+  });
+
   it('creates a company in HubSpot first, then its copy; in simulation, creates nothing', async () => {
     const before = (await count('entreprises')) ?? 0;
     const simulated = await createEntreprise(t.app.db, a, { nom: 'Scierie Bonnet' }, deps());
@@ -546,5 +735,13 @@ describe('HubSpot mirror', () => {
       /HUBSPOT_TOKEN dans secrets\/instances\/sans-jeton\.env/,
     );
     await expect(syncConnexion(t.app.db, other, 'crm', deps())).rejects.not.toThrow(TOKEN);
+  });
+});
+
+describe('texteBrut', () => {
+  it('removes tags, decodes entities and truncates', () => {
+    expect(texteBrut('<p>A &lt;b&gt; &quot;c&quot;</p><br/>d', 2000)).toBe('A <b> "c" d');
+    expect(texteBrut('x'.repeat(10), 5)).toBe('xxxx…');
+    expect(texteBrut(null)).toBeNull();
   });
 });

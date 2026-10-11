@@ -11,11 +11,11 @@ import {
 } from '../api.js';
 import { eur } from '../crm.js';
 import { Icon } from '../icons.js';
-import { Drawer, Modal } from './Overlay.js';
+import { Modal } from './Overlay.js';
 import { Tip } from './widgets.js';
 
 // From the mockup (v-conversion.js MOTIFS, CONV_TIP; core.js cat and MATRICE).
-const MOTIFS = [
+export const MOTIFS = [
   'Budget reporté',
   "Choix d'un concurrent",
   'Projet abandonné',
@@ -137,13 +137,13 @@ function Card({
   );
 }
 
-function Cloture({
+export function Cloture({
   o,
   resultat,
   onClose,
   onDone,
 }: {
-  o: PipelineOpp;
+  o: { entreprise: string | null; titre: string };
   resultat: 'gagne' | 'perdu';
   onClose: () => void;
   onDone: (c: Changement) => void;
@@ -181,113 +181,9 @@ function Cloture({
   );
 }
 
-function Fiche({
-  o,
-  data,
-  onClose,
-  onChange,
-}: {
-  o: PipelineOpp;
-  data: PipelineData;
-  onClose: () => void;
-  onChange: (c: Changement) => void;
-}) {
-  const t = total(o.qualification);
-  const m = MATRICE[`${o.potentiel}-${o.faisabilite}` as keyof typeof MATRICE];
-  return (
-    <Drawer
-      label={o.titre}
-      onClose={onClose}
-      head={
-        <>
-          <h2>{o.entreprise ?? o.titre}</h2>
-          <div className="small muted">{o.titre}</div>
-        </>
-      }
-    >
-      <div className="meta-row" style={{ marginBottom: 14 }}>
-        {o.contact && (
-          <span>
-            Contact : <b>{o.contact}</b>
-          </span>
-        )}
-        {o.montant ? <span className="num">{eur(o.montant)}</span> : null}
-        {o.echeance && (
-          <span>Échéance : {new Date(`${o.echeance}T12:00:00`).toLocaleDateString('fr-FR')}</span>
-        )}
-      </div>
-      {o.clos ? (
-        <p>
-          <b>{o.clos === 'gagne' ? 'Gagnée' : 'Perdue'}</b>
-          {o.motif ? ` : ${o.motif}` : ''}
-        </p>
-      ) : (
-        <label className="field">
-          <span>Étape</span>
-          <select
-            className="input"
-            value={o.etape}
-            disabled={!data.ecrit}
-            onChange={(e) => onChange({ etape: e.target.value })}
-          >
-            {data.etapes.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {t !== null && (
-        <>
-          <h3>Qualification</h3>
-          <div className="verdict">
-            <div className="big">
-              {t}
-              <small>/15</small>
-            </div>
-            <div>
-              <span className={`score ${categorie(t).k}`}>{categorie(t).nom}</span>
-              {m && (
-                <div className="small" style={{ marginTop: 4 }}>
-                  {m.nom} : {m.d}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-      {o.prochaineEtape && (
-        <p className="small">
-          Prochaine étape : <b>{o.prochaineEtape}</b>
-        </p>
-      )}
-      {data.ecrit && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          {o.clos ? (
-            <button className="btn" onClick={() => onChange({ rouvrir: true })}>
-              Rouvrir
-            </button>
-          ) : (
-            <>
-              <button className="btn go" onClick={() => onChange({ clos: 'gagne' })}>
-                Gagnée
-              </button>
-              <button className="btn" onClick={() => onChange({ clos: 'perdu', motif: 'Autre' })}>
-                Perdue
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </Drawer>
-  );
-}
-
 export function Pipeline({ slug }: { slug: string }) {
   const [data, setData] = useState<PipelineData | null>(null);
   const [mode, setMode] = useState<'board' | 'matrice'>('board');
-  const [open, setOpen] = useState<string | null>(null);
   const [cloture, setCloture] = useState<{ id: string; r: 'gagne' | 'perdu' } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -354,7 +250,7 @@ export function Pipeline({ slug }: { slug: string }) {
           draggable={data.ecrit}
           label={label}
           seuil={data.inactiviteJours}
-          onOpen={() => setOpen(o.id)}
+          onOpen={() => ouvrir(o.id)}
         />
       ))}
       {os.length === 0 && (
@@ -382,8 +278,9 @@ export function Pipeline({ slug }: { slug: string }) {
     );
   };
 
-  const opened = open ? find(open) : undefined;
   const closing = cloture ? find(cloture.id) : undefined;
+  // Pipedrive: a card opens the deal page.
+  const ouvrir = (id: string) => (location.hash = `#/${slug}/fiche/affaire/${id}`);
   return (
     <>
       <div className="page-actions">
@@ -487,7 +384,7 @@ export function Pipeline({ slug }: { slug: string }) {
                   </h3>
                   <p>{cell.d}</p>
                   {os.map((o) => (
-                    <span key={o.id} className="pill" onClick={() => setOpen(o.id)}>
+                    <span key={o.id} className="pill" onClick={() => ouvrir(o.id)}>
                       <Score q={o.qualification} />
                       {o.entreprise ?? o.titre}
                     </span>
@@ -500,19 +397,6 @@ export function Pipeline({ slug }: { slug: string }) {
           <div className="ax">Faisabilité forte</div>
           <div className="ax">Faisabilité faible</div>
         </div>
-      )}
-      {opened && (
-        <Fiche
-          o={opened}
-          data={data}
-          onClose={() => setOpen(null)}
-          onChange={(c) => {
-            if ('clos' in c) {
-              setCloture({ id: opened.id, r: c.clos });
-              setOpen(null);
-            } else void change(opened.id, c);
-          }}
-        />
       )}
       {cloture && closing && (
         <Cloture

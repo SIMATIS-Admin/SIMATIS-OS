@@ -160,4 +160,10 @@ describe('Pipeline screen', () => {
       }),
     );
   });
+
+  it('opens the deal page when a card is clicked, like Pipedrive', async () => {
+    render(<Pipeline slug="simatis" />);
+    fireEvent.click(await screen.findByText('Entreprise o1'));
+    expect(location.hash).toBe('#/simatis/fiche/affaire/o1');
+  });
 });

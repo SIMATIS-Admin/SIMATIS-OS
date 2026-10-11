@@ -1,0 +1,180 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Fiche } from './Fiche.js';
+
+type Call = { url: string; method: string; body: unknown };
+let calls: Call[] = [];
+
+const affaire = () => ({
+  kind: 'affaire',
+  fiche: {
+    id: 'o1',
+    titre: 'Structuration commerciale',
+    montant: 14000,
+    echeance: '2026-11-15',
+    etape: 'qualifiedtobuy',
+    clos: null,
+    origine: 'hubspot',
+    qualification: null,
+  },
+  liens: {
+    entreprise: { id: 'e1', nom: 'Fonderie Vallière' },
+    contact: { id: 'c1', nom: 'Agathe Vallière' },
+  },
+  aVenir: [
+    {
+      id: 't1',
+      titre: 'Relancer Agathe',
+      type: 'appel',
+      canal: 'appel',
+      echeance: '2026-10-16T08:00:00.000Z',
+      fait: false,
+      origine: 'hubspot',
+      avecHeure: false,
+      dureeMinutes: null,
+      occupe: false,
+      notes: null,
+      contact: null,
+      opportunite: null,
+    },
+  ],
+  historique: [
+    {
+      id: 'n1',
+      type: 'note',
+      titre: null,
+      texte: 'Budget validé',
+      at: '2026-10-03T14:00:00.000Z',
+      origine: 'hubspot',
+    },
+    {
+      id: 'a1',
+      type: 'appel',
+      titre: 'Appel découverte',
+      texte: null,
+      at: '2026-09-28T09:00:00.000Z',
+      origine: 'hubspot',
+    },
+    {
+      id: 'etape-q',
+      type: 'etape',
+      titre: 'Qualifié',
+      texte: null,
+      at: '2026-10-01T08:00:00.000Z',
+      origine: 'hubspot',
+    },
+  ],
+  etapes: [
+    { id: 'appointmentscheduled', label: 'Rendez-vous planifié', probabilite: 20, jours: 11 },
+    { id: 'qualifiedtobuy', label: 'Qualifié', probabilite: 40, jours: 13 },
+    { id: 'presentationscheduled', label: 'Proposition', probabilite: 60, jours: null },
+  ],
+  ecrit: true,
+});
+
+const contact = () => ({
+  kind: 'contact',
+  fiche: { id: 'c1', nom: 'Agathe Vallière', email: 'a@fonderie.example', origine: 'os' },
+  liens: {
+    entreprise: { id: 'e1', nom: 'Fonderie Vallière' },
+    affaires: [{ id: 'o1', titre: 'Structuration', etape: 'q', clos: null, montant: 14000 }],
+  },
+  aVenir: [],
+  historique: [],
+  ecrit: true,
+});
+
+function fakeFetch(url: string, init?: { method?: string; body?: string }) {
+  const method = init?.method ?? 'GET';
+  calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
+  const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+  if (url.includes('/fiches/contact/')) return json(contact());
+  if (url.includes('/opportunites/')) return json({ opportunite: {}, simulation: false });
+  if (url.includes('/preferences')) return json({ favoris: [], options: { ensuite: true } });
+  return json(affaire());
+}
+
+const patch = (fin: string) => calls.find((c) => c.method === 'PATCH' && c.url.endsWith(fin));
+
+describe('Fiche page', () => {
+  beforeEach(() => {
+    calls = [];
+    vi.stubGlobal('fetch', vi.fn(fakeFetch));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('shows a deal with its stage bar, days per stage, links and history', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    expect(await screen.findByRole('heading', { name: 'Structuration commerciale' })).toBeTruthy();
+    expect(calls[0]?.url).toBe('/api/i/simatis/fiches/affaire/o1');
+    expect(screen.getByText('11 j')).toBeTruthy();
+    expect(screen.getByText('13 j')).toBeTruthy();
+    for (const a of screen.getAllByRole('link', { name: 'Fonderie Vallière' })) {
+      expect(a.getAttribute('href')).toBe('#/simatis/fiche/entreprise/e1');
+    }
+    expect(screen.getByText('Relancer Agathe')).toBeTruthy();
+    expect(screen.getByText('Budget validé')).toBeTruthy();
+  });
+
+  it('moves the deal to a stage from the bar', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    fireEvent.click(await screen.findByRole('button', { name: "Passer à l'étape Proposition" }));
+    await waitFor(() => expect(patch('/opportunites/o1')).toBeTruthy());
+    expect(patch('/opportunites/o1')?.body).toEqual({ etape: 'presentationscheduled' });
+  });
+
+  it('edits a field in place with the pencil, Enter saves', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier Valeur' }));
+    const champ = screen.getByLabelText('Valeur');
+    fireEvent.change(champ, { target: { value: '18000' } });
+    fireEvent.keyDown(champ, { key: 'Enter' });
+    await waitFor(() => expect(patch('/fiches/affaire/o1')).toBeTruthy());
+    expect(patch('/fiches/affaire/o1')?.body).toEqual({ montant: 18000 });
+  });
+
+  it('adds a note, also in HubSpot by default for a HubSpot record', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    fireEvent.change(await screen.findByLabelText('Note'), { target: { value: 'Devis envoyé' } });
+    expect(screen.getByLabelText<HTMLInputElement>('Aussi dans HubSpot').checked).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la note' }));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/notes'))).toBe(true));
+    expect(calls.find((c) => c.url.endsWith('/notes'))?.body).toEqual({
+      corps: 'Devis envoyé',
+      hubspot: true,
+    });
+  });
+
+  it('asks the reason before marking the deal lost', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Perdue' }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.change(within(modal).getByLabelText('Motif'), {
+      target: { value: 'Projet abandonné' },
+    });
+    fireEvent.click(within(modal).getByText('Clôturer'));
+    await waitFor(() => expect(patch('/opportunites/o1')).toBeTruthy());
+    expect(patch('/opportunites/o1')?.body).toEqual({ clos: 'perdu', motif: 'Projet abandonné' });
+  });
+
+  it('filters the history by kind', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    await screen.findByText('Budget validé');
+    fireEvent.click(screen.getByRole('button', { name: 'Appels' }));
+    expect(screen.queryByText('Budget validé')).toBeNull();
+    expect(screen.getByText('Appel découverte')).toBeTruthy();
+  });
+
+  it('shows a contact with its company and deals as links', async () => {
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    expect(await screen.findByRole('heading', { name: 'Agathe Vallière' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Structuration' }).getAttribute('href')).toBe(
+      '#/simatis/fiche/affaire/o1',
+    );
+    expect(screen.queryByLabelText('Aussi dans HubSpot')).toBeNull();
+  });
+});
