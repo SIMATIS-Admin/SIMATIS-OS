@@ -2337,3 +2337,78 @@ textarea.input {
 .card .pers {
   margin-top: 2px;
 }
+
+/* Listes à la Pipedrive (personnes, organisations) */
+.tb-outils {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-2);
+}
+.tb-outils .input {
+  width: auto;
+  min-width: 120px;
+}
+.tb-espace {
+  flex: 1;
+}
+.tb-colonnes {
+  position: relative;
+}
+.tb-menu {
+  position: absolute;
+  right: 0;
+  top: 110%;
+  z-index: 5;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 8px 12px;
+  min-width: 200px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.08);
+}
+.tb-lot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--blue-bg);
+}
+.tb-lot .input {
+  width: auto;
+}
+.tb-tri {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: inherit;
+}
+.tb-case {
+  width: 28px;
+}
+.tb-nom {
+  cursor: pointer;
+}
+.tb-cellule {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tb-crayon {
+  opacity: 0;
+}
+tr:hover .tb-crayon {
+  opacity: 0.6;
+}
+tr.sel {
+  background: var(--blue-bg);
+}
+.tb-plus {
+  margin: 10px auto;
+  display: block;
+}

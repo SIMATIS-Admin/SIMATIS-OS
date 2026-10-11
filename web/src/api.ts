@@ -10,6 +10,7 @@ export type Entreprise = {
   nbContacts: number;
   oppsOuvertes: number;
   montantOuvert: number;
+  prochaineActivite: string | null;
 };
 
 export type OppLigne = {
@@ -44,9 +45,12 @@ export type Contact = {
   nom: string;
   fonction: string | null;
   email: string | null;
+  telephone: string | null;
   role: string | null;
   entreprise: string | null;
   entrepriseId: string | null;
+  oppsOuvertes: number;
+  prochaineActivite: string | null;
 };
 
 export type JournalEntry = {

@@ -62,7 +62,9 @@ describe('CRM screens', () => {
   it('lists companies with their open deals and searches on the server', async () => {
     render(<Entreprises slug="simatis" />);
     expect(await screen.findByText('Plasturgie Mornand')).toBeTruthy();
-    expect(screen.getByText(/1 ouverte, 18\s000 €/)).toBeTruthy();
+    // Pipedrive list: open deals and their value in their own columns.
+    expect(screen.getByText(/18\s000 €/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Trier par Affaires ouvertes' })).toBeTruthy();
 
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'plast' } });
     await waitFor(() =>
