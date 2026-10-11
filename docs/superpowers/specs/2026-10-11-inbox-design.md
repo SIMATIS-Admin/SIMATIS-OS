@@ -16,7 +16,7 @@ reporte dans le second cerveau ce qui a été traité.
 
 Critères de réussite :
 
-- un seul écran à regarder le matin, par mandat ;
+- un seul écran à regarder le matin : l'Inbox de SIMATIS regroupe tout ;
 - aucun sujet en double, même après qu'il a été coché ;
 - rien d'irréversible : cocher ne supprime rien, nulle part ;
 - l'OS (dépôt public) ne contient ni la méthode de repérage ni aucune donnée réelle.
@@ -28,6 +28,7 @@ Critères de réussite :
 | Qui alimente l'Inbox ? | Une routine Claude sur le poste (pas de montage du Drive dans Docker). |
 | Retour vers le second cerveau ? | Oui : la routine y note ce qui a été traité et y exporte les notes validées. |
 | Et « À valider » ? | Supprimé. Les propositions deviennent des sujets « à valider » de l'Inbox. |
+| Périmètre | Mandat : son seul périmètre. « Mon activité » (SIMATIS) : vue d'ensemble, son activité plus tous les mandats en cours. |
 | Architecture | Approche A : un objet « sujet » nouveau ; le moteur de propositions reste dessous. |
 
 Approches écartées : élargir la table des propositions (mélange « action à exécuter » et
@@ -73,6 +74,22 @@ passer ce sujet à `traite`. Une proposition appliquée directement (niveau d'au
 suffisant) ne crée pas de sujet.
 
 ## 2. L'écran Inbox
+
+**Périmètre selon l'instance** :
+
+- Instance `mandat` : uniquement les sujets du mandat.
+- Instance `propre` (« Mon activité », SIMATIS) : vue d'ensemble, ses propres sujets plus
+  ceux de tous les mandats **actifs** de type `mandat`. Les mandats prospects (démos aux
+  données fictives) et les instances archivées n'y figurent pas.
+- La vue d'ensemble est une lecture : chaque sujet reste rangé dans son instance. Le service
+  lit chaque instance dans sa propre transaction cloisonnée (`withInstance`) et assemble le
+  résultat ; aucune requête ne contourne le cloisonnement.
+- Toute action (cocher, transformer en tâche, valider) s'exécute dans l'instance du sujet :
+  une tâche créée depuis la vue d'ensemble pour un sujet d'un mandat va dans le CRM de ce
+  mandat. Le contrôle des écritures réelles reste celui de l'instance du sujet.
+- Dans la vue d'ensemble, chaque ligne porte une pastille du mandat (nom et couleur de
+  l'instance) et un filtre « Mandat » s'ajoute aux filtres de type. Le compteur du menu
+  compte tous les sujets à traiter du périmètre.
 
 - Menu : « À valider » devient **Inbox** (même place, groupe Pilotage, icône inbox), avec un
   compteur des sujets à traiter. L'ancienne route `validations` redirige vers `inbox`.
@@ -136,6 +153,9 @@ dans le second cerveau reste au niveau L2 (l'export ne porte que sur des notes v
   - service : dépôt, pas de doublon (y compris après coche), cocher, remettre à traiter,
     transformer en tâche (HubSpot simulé et OS) ;
   - cloisonnement : un mandat ne voit pas les sujets d'un autre ;
+  - vue d'ensemble : « Mon activité » voit ses sujets et ceux des mandats actifs, pas ceux
+    des prospects ni des archivés ; une action sur un sujet de mandat s'applique dans le
+    mandat ;
   - outils MCP : déposer, lire les traités, marquer reporté ;
   - propositions : créer crée le sujet, valider ou écarter le passe à `traite` ;
   - migration : reprise des propositions en attente ;
