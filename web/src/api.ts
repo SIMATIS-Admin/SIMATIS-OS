@@ -211,11 +211,22 @@ export type Pipeline = {
   source: 'natif' | 'hubspot';
   ecrit: boolean;
   derniereSynchro: string | null;
-  etapes: { id: string; label: string }[];
+  etapes: { id: string; label: string; probabilite?: number | null }[];
   conversions: (number | null)[];
   inactiviteJours: number;
   opportunites: PipelineOpp[];
 };
+export const createOpportunite = (
+  slug: string,
+  input: {
+    titre: string;
+    etape: string;
+    montant: number | null;
+    echeance: string | null;
+    entrepriseId: string | null;
+    contactId: string | null;
+  },
+) => sendJson<PipelineOpp | SimulationTache>('POST', inst(slug, 'opportunites'), input);
 export const saveReglagesPipeline = (slug: string, inactiviteJours: number) =>
   sendJson<{ inactiviteJours: number }>('PATCH', inst(slug, 'pipeline/reglages'), {
     inactiviteJours,

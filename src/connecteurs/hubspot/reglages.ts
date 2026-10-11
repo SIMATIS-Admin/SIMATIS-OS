@@ -23,6 +23,8 @@ export type Etape = {
   clos: boolean;
   gagne: boolean;
   probabilite?: number | null;
+  // HubSpot pipeline of the stage (a new deal is created in it).
+  pipeline?: string;
 };
 
 export const reglagesSchema = z.object({
@@ -45,6 +47,7 @@ export const reglagesSchema = z.object({
         clos: z.boolean(),
         gagne: z.boolean(),
         probabilite: z.number().nullable().optional(),
+        pipeline: z.string().optional(),
       }),
     )
     .default([]),

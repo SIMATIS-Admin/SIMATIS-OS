@@ -32,13 +32,14 @@ const pipeline = () => ({
   ecrit: !lectureSeule,
   derniereSynchro: lectureSeule ? new Date().toISOString() : null,
   etapes: [
-    { id: 'qualification', label: 'Qualification' },
-    { id: 'proposition', label: 'Proposition' },
+    { id: 'qualification', label: 'Qualification', probabilite: 20 },
+    { id: 'proposition', label: 'Proposition', probabilite: 50 },
   ],
   conversions: [83, null],
   inactiviteJours: 14,
   opportunites: [
     opp('o1', 'qualification', {
+      contact: 'Agathe Vallière',
       prochaine: { echeance: '2026-10-16T08:00:00.000Z', enRetard: false },
       joursInactif: 2,
     }),
@@ -56,6 +57,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
   if (method === 'PATCH') return json({ opportunite: opp('o1', 'proposition'), simulation: false });
+  if (method === 'POST') return json(opp('o9', 'qualification'));
   return json(pipeline());
 }
 
@@ -165,5 +167,40 @@ describe('Pipeline screen', () => {
     render(<Pipeline slug="simatis" />);
     fireEvent.click(await screen.findByText('Entreprise o1'));
     expect(location.hash).toBe('#/simatis/fiche/affaire/o1');
+  });
+
+  it('shows the total and weighted value of the pipeline and of each stage', async () => {
+    const { container } = render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    const entete = container.querySelector('.pipe-totaux')?.textContent?.replace(/\s/g, ' ');
+    expect(entete).toMatch(/Total 30 000 €/);
+    expect(entete).toMatch(/Pondéré 12 000 €/);
+    const proposition = [...container.querySelectorAll('.col')].find((c) =>
+      c.textContent?.startsWith('Proposition'),
+    );
+    expect(proposition?.querySelector('.col-h')?.textContent?.replace(/\s/g, ' ')).toMatch(
+      /pondéré 10 000 €/,
+    );
+  });
+
+  it('shows the person of each deal on its card', async () => {
+    render(<Pipeline slug="simatis" />);
+    const carte = (await screen.findByText('Entreprise o1')).closest('.card') as HTMLElement;
+    expect(within(carte).getByText(/Agathe Vallière/)).toBeTruthy();
+  });
+
+  it('creates a deal from the « + » of a stage', async () => {
+    render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une affaire dans Qualification' }));
+    const modal = await screen.findByRole('dialog', { name: 'Nouvelle affaire' });
+    fireEvent.change(within(modal).getByLabelText('Titre'), { target: { value: 'Audit flotte' } });
+    fireEvent.change(within(modal).getByLabelText('Valeur (€)'), { target: { value: '7000' } });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Créer' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST')).toMatchObject({
+      url: '/api/i/simatis/opportunites',
+      body: { titre: 'Audit flotte', montant: 7000, etape: 'qualification' },
+    });
   });
 });

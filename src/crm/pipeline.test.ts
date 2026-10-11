@@ -42,7 +42,7 @@ describe('pipeline API', () => {
   const portal = fakePortal(demoPortal());
   let app: ReturnType<typeof buildApp>;
 
-  const req = async (method: 'GET' | 'PATCH', url: string, payload?: unknown) => {
+  const req = async (method: 'GET' | 'PATCH' | 'POST', url: string, payload?: unknown) => {
     const r = await app.inject({ method, url, payload: payload as object });
     return { status: r.statusCode, body: r.json<Record<string, unknown>>() };
   };
@@ -269,5 +269,49 @@ describe('pipeline API', () => {
       "select config from instances where slug = 'mandat-hs'",
     );
     expect(rows[0]?.config).toEqual({ ecrituresReelles: true, inactiviteJours: 21 });
+  });
+
+  it('creates a native deal in an open stage, and refuses an unknown stage', async () => {
+    const avant = ((await req('GET', '/api/i/simatis/pipeline')).body.opportunites as unknown[])
+      .length;
+    const cree = await req('POST', '/api/i/simatis/opportunites', {
+      titre: 'Audit flotte',
+      montant: 7000,
+      etape: 'qualification',
+      echeance: '2026-12-01',
+    });
+    expect(cree.status).toBe(200);
+    expect(cree.body).toMatchObject({
+      titre: 'Audit flotte',
+      etape: 'qualification',
+      source: 'natif',
+    });
+    const apres = (await req('GET', '/api/i/simatis/pipeline')).body.opportunites as unknown[];
+    expect(apres.length).toBe(avant + 1);
+    const refus = await req('POST', '/api/i/simatis/opportunites', {
+      titre: 'X',
+      etape: 'inconnue',
+    });
+    expect(refus.status).toBe(400);
+  });
+
+  it('creates a HubSpot deal in HubSpot first, then its copy, and exposes stage probabilities', async () => {
+    // An earlier test leaves the mirror read-only.
+    await t.owner.pool.query(
+      `update connexions set reglages = jsonb_set(reglages, '{sens}', '"deux_sens"')
+       where kind = 'crm' and instance_id = (select id from instances where slug = 'mandat-hs')`,
+    );
+    portal.calls.length = 0;
+    const cree = await req('POST', '/api/i/mandat-hs/opportunites', {
+      titre: 'Accompagnement 2027',
+      etape: 'qualifiedtobuy',
+    });
+    expect(cree.status).toBe(200);
+    expect(portal.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      'POST /crm/v3/objects/deals',
+    ]);
+    expect(cree.body).toMatchObject({ source: 'hubspot', etape: 'qualifiedtobuy' });
+    const { body } = await req('GET', '/api/i/mandat-hs/pipeline');
+    expect((body.etapes as { probabilite?: unknown }[])[0]).toHaveProperty('probabilite');
   });
 });
