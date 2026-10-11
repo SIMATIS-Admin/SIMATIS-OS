@@ -77,7 +77,7 @@ export function demoPortal(): PortalData {
         closedate: '2026-11-15T00:00:00Z',
         hubspot_owner_id: '9001',
         hs_date_entered_appointmentscheduled: '2026-09-20T08:00:00Z',
-        hs_date_entered_qualifiedtobuy: '2026-10-01T08:00:00Z',
+        hs_v2_date_entered_qualifiedtobuy: '2026-10-01T08:00:00Z',
         ...at('2026-10-04T08:00:00Z'),
       }),
       obj('302', {
@@ -190,6 +190,8 @@ const json = (body: unknown, status = 200) =>
 export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
   const calls: Recorded[] = [];
   let failWith: number | null = null;
+  // Object types the token may not read (missing scope): 403 on their routes only.
+  const refuses = new Set<string>();
   // Ids of created records never repeat, even when a test clears `calls`.
   let cree = 0;
 
@@ -219,6 +221,9 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
     calls.push({ method, path: `${u.pathname}${u.search}`, body });
     if (failWith !== null)
       return json({ message: 'You have reached your secondly limit.' }, failWith);
+    const objet = /^\/crm\/v3\/objects\/(\w+)/.exec(u.pathname)?.[1];
+    if (objet && refuses.has(objet))
+      return json({ message: "This app hasn't been granted all required scopes" }, 403);
 
     const list = /^\/crm\/v3\/objects\/(\w+)$/.exec(u.pathname);
     if (list && method === 'GET') {
@@ -266,6 +271,10 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
     calls,
     failWith: (status: number | null) => {
       failWith = status;
+    },
+    refuser: (objet: string, oui = true) => {
+      if (oui) refuses.add(objet);
+      else refuses.delete(objet);
     },
   };
 }

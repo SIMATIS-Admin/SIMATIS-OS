@@ -279,6 +279,22 @@ describe('HubSpot mirror', () => {
     expect(await connexion()).toMatchObject({ etat: 'ok', derniere_erreur: null });
   });
 
+  it('skips a history type the key may not read, and syncs everything else', async () => {
+    portal.refuser('emails');
+    try {
+      const contact = data.contacts[0];
+      if (contact)
+        contact.properties.hs_lastmodifieddate = new Date(Date.now() + 90_000).toISOString();
+      const report = await syncConnexion(t.app.db, a, 'crm', deps());
+      expect(report.erreurs).toEqual([
+        'Emails non lus : la clé HubSpot n’a pas le droit nécessaire (sales-email-read).',
+      ]);
+      expect(await connexion()).toMatchObject({ etat: 'ok' });
+    } finally {
+      portal.refuser('emails', false);
+    }
+  });
+
   it('vigilance 3: an excluded field is neither read nor overwritten nor written', async () => {
     await t.owner.pool.query(
       "update contacts set telephone = '06 00 00 00 00' where instance_id = $1 and source_id = '201'",

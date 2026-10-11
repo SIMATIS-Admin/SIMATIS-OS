@@ -70,12 +70,10 @@ describe('CRM screens', () => {
     );
   });
 
-  it('opens the company sheet with its contacts and deals', async () => {
+  it('opens the company page, Pipedrive-like', async () => {
     render(<Entreprises slug="simatis" />);
     fireEvent.click(await screen.findByText('Plasturgie Mornand'));
-    expect(await screen.findByText('Karim Haddad')).toBeTruthy();
-    expect(screen.getByText('Qualification')).toBeTruthy();
-    expect(calls.some((c) => c.url === '/api/i/simatis/entreprises/e1')).toBe(true);
+    expect(location.hash).toBe('#/simatis/fiche/entreprise/e1');
   });
 
   it('creates a contact attached to a company', async () => {

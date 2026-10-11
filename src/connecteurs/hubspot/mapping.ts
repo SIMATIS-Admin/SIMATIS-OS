@@ -147,14 +147,15 @@ export function mapEngagement(objet: keyof typeof ENGAGEMENTS, h: HsObject) {
   };
 }
 
-// Stage entry dates read from hs_date_entered_<stage>, for the deal progress bar.
+// Stage entry dates, for the deal progress bar: hs_v2_date_entered_<stage> on current portals,
+// hs_date_entered_<stage> on older ones.
 export const proprietesDatesEtapes = (etapes: Etape[]) =>
-  etapes.map((e) => `hs_date_entered_${e.id}`);
+  etapes.flatMap((e) => [`hs_v2_date_entered_${e.id}`, `hs_date_entered_${e.id}`]);
 
 function datesEtapes(h: HsObject, etapes: Etape[]) {
   const dates: Record<string, string> = {};
   for (const e of etapes) {
-    const v = h.properties[`hs_date_entered_${e.id}`];
+    const v = h.properties[`hs_v2_date_entered_${e.id}`] ?? h.properties[`hs_date_entered_${e.id}`];
     if (v) dates[e.id] = v;
   }
   return dates;

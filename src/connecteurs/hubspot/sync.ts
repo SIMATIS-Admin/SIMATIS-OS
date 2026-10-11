@@ -4,7 +4,7 @@ import type { SyncCtx, SyncReport } from '../../connexions/types.js';
 import { activites, contacts, entreprises, opportunites, taches } from '../../crm/schema.js';
 import type { Tx } from '../../db.js';
 import { currentInstance } from '../../db/columns.js';
-import type { HsObject, HubspotClient } from './client.js';
+import { HubspotError, type HsObject, type HubspotClient } from './client.js';
 import { domaineExclu } from './domaines.js';
 import {
   ENGAGEMENTS,
@@ -21,6 +21,8 @@ import {
 import { parseReglages } from './reglages.js';
 
 const SOURCE = 'hubspot';
+const LIBELLES = { notes: 'Notes', calls: 'Appels', emails: 'Emails', meetings: 'Réunions' };
+const DROITS: Partial<Record<keyof typeof LIBELLES, string>> = { emails: 'sales-email-read' };
 // Overlap with the previous pass: a record modified during it is read again rather than missed.
 const MARGE_MS = 5 * 60_000;
 
@@ -226,7 +228,19 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
   // History of the records (Pipedrive timeline), read with the contacts.
   if (suit('contacts')) {
     for (const objet of Object.keys(ENGAGEMENTS) as (keyof typeof ENGAGEMENTS)[]) {
-      const items = await read(objet);
+      let items: HsObject[];
+      try {
+        items = await read(objet);
+      } catch (error) {
+        // A missing scope (emails need sales-email-read) skips that history type only.
+        if (error instanceof HubspotError && error.status === 403) {
+          report.erreurs.push(
+            `${LIBELLES[objet]} non lus : la clé HubSpot n’a pas le droit nécessaire${DROITS[objet] ? ` (${DROITS[objet]})` : ''}.`,
+          );
+          continue;
+        }
+        throw error;
+      }
       report.lus += items.length;
       const ids = items.map((i) => i.id);
       const toContact = await client.firstAssociations(objet, 'contacts', ids);

@@ -476,3 +476,49 @@ export type Sante = {
   routines: SanteRoutine[];
 };
 export const fetchSante = (slug: string) => getJson<Sante>(inst(slug, 'routines/sante'));
+
+export type KindFiche = 'affaire' | 'contact' | 'entreprise';
+export type Evenement = {
+  id: string;
+  type: 'note' | 'appel' | 'email' | 'reunion' | 'activite' | 'etape';
+  titre: string | null;
+  texte: string | null;
+  at: string;
+  origine: 'hubspot' | 'os';
+};
+export type FicheDetail = {
+  kind: KindFiche;
+  fiche: Record<string, unknown> & { id: string; origine: 'hubspot' | 'os' };
+  liens: {
+    entreprise?: { id: string; nom: string } | null;
+    contact?: { id: string; nom: string } | null;
+    affaires?: {
+      id: string;
+      titre: string;
+      etape: string;
+      clos: string | null;
+      montant: number | null;
+    }[];
+    contacts?: { id: string; nom: string }[];
+  };
+  aVenir: TacheVue[];
+  historique: Evenement[];
+  etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
+  ecrit: boolean;
+};
+const fiche = (slug: string, kind: KindFiche, id: string) =>
+  inst(slug, `fiches/${kind}/${encodeURIComponent(id)}`);
+export const fetchFiche = (slug: string, kind: KindFiche, id: string) =>
+  getJson<FicheDetail>(fiche(slug, kind, id));
+export const patchFiche = (
+  slug: string,
+  kind: KindFiche,
+  id: string,
+  patch: Record<string, unknown>,
+) => sendJson<FicheDetail | SimulationTache>('PATCH', fiche(slug, kind, id), patch);
+export const noteFiche = (
+  slug: string,
+  kind: KindFiche,
+  id: string,
+  note: { corps: string; hubspot: boolean },
+) => sendJson<FicheDetail | SimulationTache>('POST', `${fiche(slug, kind, id)}/notes`, note);

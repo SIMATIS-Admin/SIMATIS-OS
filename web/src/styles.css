@@ -2150,3 +2150,167 @@ textarea.input {
 .seuil .input {
   width: 64px;
 }
+
+/* Fiche détaillée (affaire, personne, organisation) à la Pipedrive */
+.fi-entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.fi-entete h1 {
+  margin: 4px 0;
+  font-size: 22px;
+}
+.fi-sous {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.fi-gagne {
+  background: var(--green);
+  color: #fff;
+  border-color: var(--green);
+}
+.fi-perdu {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+}
+.fi-etapes {
+  display: flex;
+  margin-bottom: 14px;
+  border-radius: var(--r-s);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.fi-etape {
+  flex: 1;
+  border: 0;
+  border-right: 1px solid var(--panel);
+  background: var(--line-2);
+  color: var(--ink-2);
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+.fi-etape span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.fi-etape.passee {
+  background: var(--teal-mid);
+  color: var(--ink);
+}
+.fi-etape.on {
+  background: var(--teal);
+  color: #fff;
+  font-weight: 600;
+}
+.fi-etape:disabled {
+  cursor: default;
+}
+.fi-corps {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+  align-items: start;
+}
+.fi-gauche,
+.fi-droite {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.fi-champ {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.fi-valeur {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.fi-valeur .btn {
+  opacity: 0.4;
+}
+.fi-champ:hover .fi-valeur .btn {
+  opacity: 1;
+}
+.fi-resultat {
+  display: block;
+  padding: 4px 0;
+}
+.fi-liste {
+  list-style: none;
+  margin: 0;
+}
+.fi-liste li {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.fi-avenir {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fi-avenir svg {
+  width: 13px;
+  height: 13px;
+}
+.fi-onglets {
+  margin: 10px 12px 0;
+}
+.fi-histo {
+  list-style: none;
+  margin: 0;
+}
+.fi-evt {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.fi-evt p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+.fi-ico {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--line-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fi-ico svg {
+  width: 13px;
+  height: 13px;
+}
+.fi-evt.note .fi-ico {
+  background: var(--amber-bg);
+}
+.fi-evt.etape .fi-ico {
+  background: var(--blue-bg);
+}
+@media (max-width: 900px) {
+  .fi-corps {
+    grid-template-columns: 1fr;
+  }
+}

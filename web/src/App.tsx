@@ -5,6 +5,8 @@ import { allItems, reorderFavoris, toggleFavori, type InstanceSummary } from './
 import { AValider } from './pages/AValider.js';
 import { Bientot } from './pages/Bientot.js';
 import { Brief } from './pages/Brief.js';
+import { Fiche } from './pages/Fiche.js';
+import type { KindFiche } from './api.js';
 import { Taches } from './pages/Taches.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
@@ -21,12 +23,14 @@ import { Sidebar } from './shell/Sidebar.js';
 const DEFAULT_VIEW = 'brief';
 
 // Same URL scheme as the mockup: #/<instance>/<screen>.
-function readHash(): { slug: string | null; view: string } {
-  const m = /^#\/([\w-]+)\/([\w-]+)/.exec(location.hash);
+// `#/<slug>/<view>`, or `#/<slug>/fiche/<kind>/<id>` for a detail page.
+function readHash(): { slug: string | null; view: string; kind?: string; id?: string } {
+  const m = /^#\/([\w-]+)\/([\w-]+)(?:\/([\w-]+)\/([\w-]+))?/.exec(location.hash);
   return m
-    ? { slug: m[1] ?? null, view: m[2] ?? DEFAULT_VIEW }
+    ? { slug: m[1] ?? null, view: m[2] ?? DEFAULT_VIEW, kind: m[3], id: m[4] }
     : { slug: null, view: DEFAULT_VIEW };
 }
+const KINDS_FICHE = ['affaire', 'contact', 'entreprise'];
 
 export function App() {
   const [instances, setInstances] = useState<InstanceSummary[] | null>(null);
@@ -82,7 +86,11 @@ export function App() {
   const title =
     view === 'portefeuille'
       ? 'Portefeuille'
-      : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+      : view === 'fiche'
+        ? ({ affaire: 'Affaire', contact: 'Personne', entreprise: 'Organisation' }[
+            route.kind ?? ''
+          ] ?? 'Fiche')
+        : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
@@ -110,6 +118,17 @@ export function App() {
         return <Journal key={current.slug} slug={current.slug} />;
       case 'parametres':
         return <Parametres key={current.slug} slug={current.slug} onRenamed={loadInstances} />;
+      case 'fiche':
+        return route.kind && KINDS_FICHE.includes(route.kind) && route.id ? (
+          <Fiche
+            key={`${current.slug}-${route.kind}-${route.id}`}
+            slug={current.slug}
+            kind={route.kind as KindFiche}
+            id={route.id}
+          />
+        ) : (
+          <Bientot view={view} />
+        );
       case 'portefeuille':
         return <Portefeuille instances={instances} onCreated={loadInstances} />;
       default:
