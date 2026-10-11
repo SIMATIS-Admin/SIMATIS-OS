@@ -12,7 +12,14 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { zoned } from '../connecteurs/google/creneaux.js';
-import { compterRdvTenus, compterRealisees, decaler, jourDe, situation } from './realisees.js';
+import {
+  compterRdvTenus,
+  compterRealisees,
+  decaler,
+  jourDe,
+  rdvDuJour,
+  situation,
+} from './realisees.js';
 
 const FUSEAU = 'Europe/Paris';
 
@@ -95,7 +102,6 @@ export async function getBrief(
   const crm = data.conn.find((c) => c.kind === 'crm');
   const agenda = data.conn.find((c) => c.kind === 'agenda');
   const auj = jourDe(maintenant, FUSEAU);
-  const debutJour = zoned(auj, '00:00', FUSEAU);
   // One read covers both today's meetings and the 30 days of meetings held.
   const { rdv, etat, erreur } = await rendezVous(
     instance,
@@ -107,7 +113,7 @@ export async function getBrief(
   return {
     source: crm?.fournisseur === 'hubspot' ? 'hubspot' : 'natif',
     aFaire: { retard, jour },
-    rdv: rdv.filter((r) => r.fin > debutJour),
+    rdv: rdvDuJour(rdv, maintenant, FUSEAU),
     rdvEtat: etat,
     ...(erreur ? { rdvErreur: erreur } : {}),
     realisees: compterRealisees(data.faites, maintenant, FUSEAU),

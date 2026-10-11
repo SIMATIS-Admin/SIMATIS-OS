@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { compterRdvTenus, compterRealisees, dernierJourOuvre, situation } from './realisees.js';
+import {
+  compterRdvTenus,
+  compterRealisees,
+  dernierJourOuvre,
+  rdvDuJour,
+  situation,
+} from './realisees.js';
 
 describe('tasks of the day and tasks done', () => {
   it('vigilance 4: a task due on 7 October at 23:30 in Paris is "yesterday" on the 8th and "today" on the 7th', () => {
@@ -64,5 +70,27 @@ describe('tasks of the day and tasks done', () => {
       now,
     );
     expect(counts).toEqual({ veille: 1, semaine: 3, mois: 4 });
+  });
+
+  it("keeps today's meetings only, yesterday's all-day event excluded", () => {
+    const now = new Date('2026-10-12T10:00:00Z');
+    const r = (id: string, debut: string, fin: string, journee = false) => ({
+      id,
+      debut: new Date(debut),
+      fin: new Date(fin),
+      journee,
+    });
+    const liste = [
+      r('hier-journee', '2026-10-11', '2026-10-12', true),
+      r('auj-journee', '2026-10-12', '2026-10-13', true),
+      r('hier-soir', '2026-10-11T17:00:00Z', '2026-10-11T18:00:00Z'),
+      r('ce-matin', '2026-10-12T07:00:00Z', '2026-10-12T08:00:00Z'),
+      r('cet-apres-midi', '2026-10-12T13:00:00Z', '2026-10-12T14:00:00Z'),
+    ];
+    expect(rdvDuJour(liste, now).map((x) => x.id)).toEqual([
+      'auj-journee',
+      'ce-matin',
+      'cet-apres-midi',
+    ]);
   });
 });

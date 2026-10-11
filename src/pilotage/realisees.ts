@@ -78,6 +78,20 @@ export function compterRdvTenus(
   };
 }
 
+// Meetings still to come or under way today. An all-day event carries plain dates (end
+// exclusive) read as UTC midnight: compare those dates, not instants, or yesterday's all-day
+// event would end at 02:00 today in Paris and show up.
+export function rdvDuJour<T extends { fin: Date; journee: boolean }>(
+  rdv: T[],
+  maintenant: Date,
+  fuseau = 'Europe/Paris',
+): T[] {
+  const auj = jourDe(maintenant, fuseau);
+  return rdv.filter((r) =>
+    r.journee ? r.fin.toISOString().slice(0, 10) > auj : jourDe(r.fin, fuseau) >= auj,
+  );
+}
+
 // Where an open task stands today: overdue, due today, or later (Paris calendar days).
 export function situation(echeance: Date | null, maintenant: Date, fuseau = 'Europe/Paris') {
   if (!echeance) return 'plus_tard' as const;
