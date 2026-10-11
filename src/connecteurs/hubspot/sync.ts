@@ -177,14 +177,33 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
     const existing = await localIds(ctx.tx, taches, ids);
     const contact = await resolve(contacts, contactIds, [...toContact.values()]);
     const deal = await resolve(opportunites, dealIds, [...toDeal.values()]);
+    // A type chosen in the OS wins over the one read from the title or HubSpot.
+    const choisis = new Set(
+      existing.size === 0
+        ? []
+        : (
+            await ctx.tx
+              .select({ sourceId: taches.sourceId })
+              .from(taches)
+              .where(
+                and(
+                  eq(taches.instanceId, currentInstance),
+                  inArray(taches.id, [...existing.values()]),
+                  eq(taches.typeChoisi, true),
+                ),
+              )
+          ).map((r) => r.sourceId),
+    );
     for (const t of tasks) {
+      const { type, canal, ...valeurs } = mapTask(t);
       await upsert(
         ctx.tx,
         taches,
         existing,
         t.id,
         {
-          ...mapTask(t),
+          ...valeurs,
+          ...(choisis.has(t.id) ? {} : { type, canal }),
           contactId: contact(toContact.get(t.id) ?? null),
           opportuniteId: deal(toDeal.get(t.id) ?? null),
         },

@@ -78,6 +78,14 @@ describe('HubSpot mapping', () => {
     expect(t.canal).toBe('appel');
   });
 
+  it('maps a lunch task to its activity type and the Action channel', () => {
+    const t = mapTask({
+      id: '9',
+      properties: { hs_task_subject: 'Déjeuner avec Romain', hs_task_type: 'TODO' },
+    });
+    expect(t).toMatchObject({ type: 'dejeuner', canal: 'tache' });
+  });
+
   it('builds a contact name and keeps absent properties absent', () => {
     const c = mapContact({
       id: '1',
@@ -326,6 +334,56 @@ describe('HubSpot mirror', () => {
     await expect(update({ tacheId: natif.rows[0]?.id, fait: true })).rejects.toThrow(
       /n'existe pas dans HubSpot/,
     );
+  });
+
+  it('keeps a type chosen and a time set in the OS, and reads the deals last activity date', async () => {
+    await t.owner.pool.query(
+      "update taches set type = 'reunion', canal = 'tache', type_choisi = true, avec_heure = true where instance_id = $1 and source_id = '401'",
+      [a.id],
+    );
+    const tache = data.tasks[0];
+    if (tache) tache.properties.hs_lastmodifieddate = new Date(Date.now() + 300_000).toISOString();
+    const deal = data.deals[0];
+    if (deal) {
+      deal.properties.notes_last_updated = '2026-10-01T09:00:00Z';
+      deal.properties.hs_lastmodifieddate = new Date(Date.now() + 300_000).toISOString();
+    }
+    await syncConnexion(t.app.db, a, 'crm', deps());
+    const { rows } = await t.owner.pool.query<{ type: string; avec_heure: boolean }>(
+      "select type, avec_heure from taches where instance_id = $1 and source_id = '401'",
+      [a.id],
+    );
+    expect(rows[0]).toEqual({ type: 'reunion', avec_heure: true });
+    const opp = await t.owner.pool.query<{ derniere_activite: Date }>(
+      "select derniere_activite from opportunites where instance_id = $1 and source_id = '301'",
+      [a.id],
+    );
+    expect(opp.rows[0]?.derniere_activite.toISOString()).toBe('2026-10-01T09:00:00.000Z');
+
+    portal.calls.length = 0;
+    const tacheId = (
+      await t.owner.pool.query<{ id: string }>(
+        "select id from taches where instance_id = $1 and source_id = '401'",
+        [a.id],
+      )
+    ).rows[0]?.id;
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    const ecrire = (d: Record<string, unknown>) =>
+      inA((tx) =>
+        writeVia(
+          tx,
+          armed,
+          'crm',
+          { op: 'task.update', data: { tacheId, ...d } },
+          { secretsDir, realWrites: true },
+        ),
+      );
+    await ecrire({ type: 'appel', dureeMinutes: 45, occupe: true });
+    await ecrire({ type: 'dejeuner' });
+    expect(portal.calls.map((c) => c.body)).toEqual([
+      { properties: { hs_task_type: 'CALL' } },
+      { properties: { hs_task_type: 'TODO' } },
+    ]);
   });
 
   it('creates a company in HubSpot first, then its copy; in simulation, creates nothing', async () => {

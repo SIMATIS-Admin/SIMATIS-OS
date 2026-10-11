@@ -1,4 +1,4 @@
-import { typeTache } from '../../crm/type-tache.js';
+import { canalDe, typeActivite } from '../../crm/type-tache.js';
 import type { HsObject, HsPipeline } from './client.js';
 import type { Etape } from './reglages.js';
 
@@ -15,6 +15,7 @@ export const PROPRIETES = {
     'closedate',
     'hubspot_owner_id',
     'closed_lost_reason',
+    'notes_last_updated',
   ],
   tasks: [
     'hs_task_subject',
@@ -39,6 +40,11 @@ function present<T extends Record<string, unknown>>(values: T): Partial<T> {
 
 const has = (h: HsObject, key: string) => Object.hasOwn(h.properties, key);
 const text = (h: HsObject, key: string) => (has(h, key) ? (h.properties[key] ?? null) : undefined);
+const date = (h: HsObject, key: string) => {
+  if (!has(h, key)) return undefined;
+  const v = h.properties[key];
+  return v ? new Date(v) : null;
+};
 const int = (h: HsObject, key: string) => {
   if (!has(h, key)) return undefined;
   const n = Number.parseFloat(h.properties[key] ?? '');
@@ -106,6 +112,7 @@ export function mapDeal(h: HsObject, etapes: Etape[]) {
       echeance: closedate === undefined ? undefined : (closedate?.slice(0, 10) ?? null),
       proprietaire: text(h, 'hubspot_owner_id'),
       motif: text(h, 'closed_lost_reason'),
+      derniereActivite: date(h, 'notes_last_updated'),
     }),
   };
 }
@@ -115,9 +122,11 @@ export function mapTask(h: HsObject) {
   const due = h.properties.hs_timestamp;
   const done = h.properties.hs_task_status === 'COMPLETED';
   const doneAt = h.properties.hs_task_completion_date ?? h.properties.hs_lastmodifieddate;
+  const type = typeActivite(titre, h.properties.hs_task_type);
   return {
     titre,
-    canal: typeTache(titre, h.properties.hs_task_type),
+    type,
+    canal: canalDe(type),
     echeance: due ? new Date(due) : null,
     faitAt: done && doneAt ? new Date(doneAt) : null,
     ...present({ notes: text(h, 'hs_task_body') }),

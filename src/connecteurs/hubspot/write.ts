@@ -24,6 +24,10 @@ async function hubspotId(ctx: SyncCtx, table: Table, localId: unknown): Promise<
   return row.sourceId;
 }
 
+// HubSpot only knows calls, emails and to-dos; meetings, deadlines and lunches are to-dos there.
+const typeHubspot = (type: unknown) =>
+  type === 'email' ? 'EMAIL' : type === 'appel' ? 'CALL' : 'TODO';
+
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 
 function splitName(nom: string): { firstname: string; lastname: string } {
@@ -128,6 +132,7 @@ export async function writeHubspot(
       const id = await hubspotId(ctx, taches, d.tacheId);
       const properties: Record<string, string> = {};
       if (typeof d.titre === 'string') properties.hs_task_subject = d.titre.trim();
+      if (typeof d.type === 'string') properties.hs_task_type = typeHubspot(d.type);
       if (typeof d.fait === 'boolean')
         properties.hs_task_status = d.fait ? 'COMPLETED' : 'NOT_STARTED';
       if (typeof d.echeance === 'string')
@@ -143,7 +148,7 @@ export async function writeHubspot(
       if (!titre) throw new EcritureRefusee('Titre manquant');
       const contact = d.contactId ? await hubspotId(ctx, contacts, d.contactId) : null;
       const deal = d.opportuniteId ? await hubspotId(ctx, opportunites, d.opportuniteId) : null;
-      const type = d.canal === 'email' ? 'EMAIL' : d.canal === 'appel' ? 'CALL' : 'TODO';
+      const type = typeHubspot(typeof d.type === 'string' ? d.type : d.canal);
       const due = typeof d.echeance === 'string' ? new Date(d.echeance) : new Date();
       call = () =>
         client.request('POST', '/crm/v3/objects/tasks', {
