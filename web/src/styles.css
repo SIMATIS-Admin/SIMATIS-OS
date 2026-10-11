@@ -2023,3 +2023,94 @@ textarea.input {
   width: 14px;
   height: 14px;
 }
+
+/* Activités : grille horaire */
+.gr {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+.gr-grille {
+  display: grid;
+  grid-template-columns: 44px repeat(var(--gr-jours), minmax(110px, 1fr));
+}
+.gr-entete {
+  padding: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.gr-journee {
+  min-height: 30px;
+  padding: 4px;
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--line-2);
+}
+.gr-heures .gr-heure,
+.gr-grille > .gr-heure {
+  font-size: 11px;
+  color: var(--ink-3);
+  text-align: right;
+  padding-right: 6px;
+}
+.gr-colonne {
+  border-left: 1px solid var(--line);
+}
+.gr-creneau {
+  position: relative;
+  height: 24px;
+  border-bottom: 1px dashed var(--line-2);
+}
+.gr-creneau.heure {
+  border-top: 1px solid var(--line);
+}
+.gr-rdv,
+.gr-activite {
+  position: absolute;
+  top: 1px;
+  border-radius: var(--r-s);
+  font-size: 11px;
+  padding: 2px 4px;
+  overflow: hidden;
+}
+.gr-rdv {
+  left: 0;
+  right: 0;
+  background: var(--line-2);
+  color: var(--ink-2);
+  pointer-events: none;
+  z-index: 0;
+}
+.gr-activite {
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ink-3);
+  cursor: grab;
+  box-sizing: border-box;
+}
+.gr-activite.hubspot {
+  border-left-color: var(--navy-3);
+}
+.gr-activite.occupe {
+  background: var(--blue-bg);
+}
+.gr-activite svg {
+  width: 11px;
+  height: 11px;
+  flex: none;
+}
+.gr-activite b {
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gr-activite small {
+  color: var(--ink-3);
+}

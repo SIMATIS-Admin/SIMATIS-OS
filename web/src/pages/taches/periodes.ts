@@ -4,7 +4,7 @@ import { jourParis } from './creneaux.js';
 export type CleePeriode = 'retard' | 'aujourdhui' | 'demain' | 'semaine' | 'prochaine';
 
 // Monday of a Paris day (YYYY-MM-DD), computed on the calendar date, not the browser clock.
-const lundiDu = (jour: string) => {
+export const lundiDu = (jour: string) => {
   const [y, m, d] = jour.split('-').map(Number) as [number, number, number];
   const k = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
   return plusJours(jour, -k);
