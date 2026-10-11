@@ -1,5 +1,10 @@
-import { useState } from 'react';
-import type { TacheSaisie, TacheVue } from '../../api.js';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  fetchContacts,
+  fetchOpportunitesRecherche,
+  type TacheSaisie,
+  type TacheVue,
+} from '../../api.js';
 import { Icon } from '../../icons.js';
 import { typeActivite } from '../../../../src/crm/type-tache.js';
 import { Modal } from '../Overlay.js';
@@ -41,15 +46,80 @@ function useType(titre: string, initial: Type | null) {
 
 export type Enregistrement = TacheSaisie & { hubspot: boolean };
 
+type Choix = { id: string; nom: string } | null;
+
+// Person or deal of a new activity, found by search (Pipedrive activity window).
+function Lien({
+  label,
+  chercher,
+  choix,
+  onChoix,
+}: {
+  label: string;
+  chercher: (q: string) => Promise<{ id: string; nom: string }[]>;
+  choix: Choix;
+  onChoix: (c: Choix) => void;
+}) {
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState<{ id: string; nom: string }[]>([]);
+  useEffect(() => {
+    if (q.trim().length < 2) return setRes([]);
+    let vivant = true;
+    void chercher(q).then(
+      (r) => vivant && setRes(r.slice(0, 6)),
+      () => vivant && setRes([]),
+    );
+    return () => {
+      vivant = false;
+    };
+  }, [q, chercher]);
+  return (
+    <div className="field">
+      <span>{label}</span>
+      {choix ? (
+        <span>
+          {choix.nom}{' '}
+          <button type="button" className="lien" onClick={() => onChoix(null)}>
+            changer
+          </button>
+        </span>
+      ) : (
+        <>
+          <input
+            className="input"
+            aria-label={label}
+            placeholder="Rechercher…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {res.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              className="lien fi-resultat"
+              onClick={() => onChoix(r)}
+            >
+              {r.nom}
+            </button>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 // Create (no task) or edit an activity; `hubspot` shows the "Créer aussi dans HubSpot" box.
 export function EditionTache({
   tache,
   hubspot,
+  slug,
   onSave,
   onClose,
 }: {
   tache: TacheVue | null;
   hubspot: boolean;
+  // Given for a new activity whose person and deal are chosen here (not from a detail page).
+  slug?: string;
   onSave: (saisie: Enregistrement) => Promise<void>;
   onClose: () => void;
 }) {
@@ -67,6 +137,27 @@ export function EditionTache({
   const [versHubspot, setVersHubspot] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [personne, setPersonne] = useState<Choix>(null);
+  const [affaire, setAffaire] = useState<Choix>(null);
+  const chercherPersonne = useCallback(
+    (q: string) =>
+      slug
+        ? fetchContacts(slug, q).then((r) => r.map((c) => ({ id: c.id, nom: c.nom })))
+        : Promise.resolve([]),
+    [slug],
+  );
+  const chercherAffaire = useCallback(
+    (q: string) =>
+      slug
+        ? fetchOpportunitesRecherche(slug, q).then((r) =>
+            r.map((o) => ({
+              id: o.id,
+              nom: o.entreprise ? `${o.titre} · ${o.entreprise}` : o.titre,
+            })),
+          )
+        : Promise.resolve([]),
+    [slug],
+  );
   const typeAffiche = choisi ?? (tache && !titreModifie(tache, titre) ? tache.type : type);
 
   // Without a precise time, a HubSpot task keeps its own time on the new day.
@@ -87,6 +178,8 @@ export function EditionTache({
       ...(avecHeure ? { dureeMinutes: minutes, occupe } : {}),
       ...(choisi ? { type: choisi } : {}),
       ...(tache ? { fait } : {}),
+      ...(personne ? { contactId: personne.id } : {}),
+      ...(affaire ? { opportuniteId: affaire.id } : {}),
       hubspot: versHubspot,
     })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -174,6 +267,17 @@ export function EditionTache({
           <p className="small muted">
             {[tache.contact?.nom, tache.opportunite?.titre].filter(Boolean).join(' · ')}
           </p>
+        )}
+        {!tache && slug && (
+          <div className="grid g2">
+            <Lien
+              label="Personne"
+              chercher={chercherPersonne}
+              choix={personne}
+              onChoix={setPersonne}
+            />
+            <Lien label="Affaire" chercher={chercherAffaire} choix={affaire} onChoix={setAffaire} />
+          </div>
         )}
         {!tache && hubspot && (
           <label className="check">

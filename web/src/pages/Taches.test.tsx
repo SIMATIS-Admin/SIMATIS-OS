@@ -79,14 +79,16 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
   if (url === '/api/preferences') return json({ favoris: [], options: { ensuite } });
+  if (url.includes('/contacts?q=')) return json([{ id: 'c1', nom: 'Romain Arpin' }]);
+  if (url.includes('/opportunites/recherche?q='))
+    return json([{ id: 'o1', titre: 'Structuration', entreprise: 'Fonderie', clos: null }]);
   if (url === '/api/preferences/options') return json({ options: { ensuite: false } });
   if (method === 'PATCH') return json(patchReponse ?? tache('t1', 'Appeler Romain Arpin'));
   if (method === 'POST') return json(tache('t9', 'Nouvelle'));
   return json(semaine());
 }
 
-const titres = () =>
-  [...document.querySelectorAll('.tache-ligne b')].map((b) => b.textContent ?? '');
+const titres = () => [...document.querySelectorAll('td.tb-nom b')].map((b) => b.textContent ?? '');
 
 async function liste() {
   render(<Taches slug="simatis" />);
@@ -119,10 +121,13 @@ describe('Tâches screen', () => {
       'Point mensuel',
       'Trier les cartes de visite',
     ]);
-    const ligne = screen.getByText('Appeler Romain Arpin').closest('li') as HTMLElement;
+    const ligne = screen.getByText('Appeler Romain Arpin').closest('tr') as HTMLElement;
     expect(within(ligne).getByText('Appel')).toBeTruthy();
     expect(within(ligne).getByText('HubSpot')).toBeTruthy();
-    expect(within(ligne).getByText(/Romain Arpin ·/)).toBeTruthy();
+    expect(within(ligne).getByText('Romain Arpin')).toBeTruthy();
+    for (const col of ['Affaire', 'Personne', 'Organisation', 'Échéance']) {
+      expect(screen.getByRole('button', { name: `Trier par ${col}` })).toBeTruthy();
+    }
   });
 
   it('filters by type and shows done tasks on demand', async () => {
@@ -315,6 +320,24 @@ describe('Tâches screen', () => {
       fireEvent.click(screen.getByLabelText('Marquer faite : Appeler Romain Arpin'));
       await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
       expect(screen.queryByRole('dialog', { name: 'Et ensuite ?' })).toBeNull();
+    });
+  });
+
+  it('links a new activity to a person and a deal found by search', async () => {
+    await liste();
+    fireEvent.click(screen.getByRole('button', { name: 'Nouvelle tâche' }));
+    const fenetre = within(screen.getByRole('dialog'));
+    fireEvent.change(fenetre.getByLabelText('Intitulé'), { target: { value: 'Rappeler' } });
+    fireEvent.change(fenetre.getByLabelText('Personne'), { target: { value: 'Rom' } });
+    fireEvent.click(await fenetre.findByRole('button', { name: 'Romain Arpin' }));
+    fireEvent.change(fenetre.getByLabelText('Affaire'), { target: { value: 'Str' } });
+    fireEvent.click(await fenetre.findByRole('button', { name: /Structuration/ }));
+    fireEvent.click(fenetre.getByRole('button', { name: 'Créer' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({
+      titre: 'Rappeler',
+      contactId: 'c1',
+      opportuniteId: 'o1',
     });
   });
 
