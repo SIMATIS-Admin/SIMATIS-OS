@@ -1986,3 +1986,19 @@ textarea.input {
   writing-mode: vertical-rl;
   padding: 10px 6px;
 }
+
+/* Brief: counters that open the matching screen. */
+.kpi-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.kpi-link:hover {
+  border-color: var(--navy);
+}
+.kpi-link.alerte .v {
+  color: var(--red);
+}
+.kpi-link .activ-d {
+  margin-top: 4px;
+}

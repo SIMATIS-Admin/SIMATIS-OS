@@ -15,7 +15,7 @@ import { withInstance } from '../../db/context.js';
 import type { Instance } from '../../instances/schema.js';
 import { createInstance } from '../../instances/service.js';
 import { loadInstanceSecrets } from '../../secrets.js';
-import { createDraft, freeBusy, historique, sansSignature } from './google.js';
+import { createDraft, evenements, freeBusy, historique, sansSignature } from './google.js';
 import { gmailConnector } from './index.js';
 import { connectGoogle } from './oauth.js';
 
@@ -60,6 +60,36 @@ function fakeGoogle() {
         calendars: {
           primary: { busy: [{ start: '2026-10-12T07:30:00Z', end: '2026-10-12T08:30:00Z' }] },
         },
+      });
+    }
+    if (url.includes('/events?')) {
+      // Two pages: the second one is only reached through nextPageToken.
+      if (new URL(url).searchParams.get('pageToken') === 'p2') {
+        return json({
+          items: [
+            {
+              id: 'e2',
+              summary: 'Séminaire',
+              start: { date: '2026-10-13' },
+              end: { date: '2026-10-14' },
+            },
+          ],
+        });
+      }
+      return json({
+        nextPageToken: 'p2',
+        items: [
+          {
+            id: 'e1',
+            summary: 'Point client',
+            attendees: [
+              { email: 'Moi@exemple.test', self: true },
+              { email: 'Client@Exemple.test' },
+            ],
+            start: { dateTime: '2026-10-12T07:30:00Z' },
+            end: { dateTime: '2026-10-12T08:30:00Z' },
+          },
+        ],
       });
     }
     return json({ error: { message: `route inconnue ${url}` } }, 404);
@@ -241,6 +271,27 @@ describe('Gmail and Calendar', () => {
     expect(busy).toEqual([
       { debut: new Date('2026-10-12T07:30:00Z'), fin: new Date('2026-10-12T08:30:00Z') },
     ]);
+  });
+
+  it('reads every page of meetings, and flags all-day events', async () => {
+    const liste = await ctx(true, (c) =>
+      evenements(
+        c,
+        new Date('2026-10-12T00:00:00Z'),
+        new Date('2026-10-14T00:00:00Z'),
+        ['primary'],
+        google,
+      ),
+    );
+    expect(liste).toEqual([
+      expect.objectContaining({
+        id: 'e1',
+        journee: false,
+        participants: ['client@exemple.test'],
+      }),
+      expect.objectContaining({ id: 'e2', titre: 'Séminaire', journee: true }),
+    ]);
+    expect(google.calls.filter((c) => c.url.includes('/events?'))).toHaveLength(2);
   });
 
   it('checks the authorization on sync, and reports a revoked one on the connection', async () => {
