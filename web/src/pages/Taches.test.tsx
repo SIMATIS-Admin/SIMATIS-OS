@@ -122,9 +122,31 @@ describe('Tâches screen', () => {
     await liste();
     fireEvent.click(screen.getByRole('button', { name: 'Email' }));
     expect(titres()).toEqual(['Envoyer la plaquette']);
-    fireEvent.click(screen.getByRole('button', { name: 'Tous types' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Appel' }));
+    expect(titres()).toEqual(['Appeler Romain Arpin', 'Envoyer la plaquette']);
+    fireEvent.click(screen.getByRole('button', { name: 'Tous' }));
     fireEvent.click(screen.getByRole('button', { name: 'Faites' }));
     expect(titres()).toEqual(['Préparer le devis']);
+  });
+
+  it('loads another period for the list, independently of the week', async () => {
+    await liste();
+    fireEvent.click(screen.getByRole('button', { name: 'Demain' }));
+    await waitFor(() => {
+      const u = new URL(calls.at(-1)?.url ?? '', 'http://x');
+      expect(u.searchParams.get('du')).toBe(u.searchParams.get('au'));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'En retard' }));
+    await waitFor(() => expect(titres()).toEqual(['Relancer Fonderie']));
+    fireEvent.click(screen.getByRole('button', { name: 'Plage' }));
+    fireEvent.change(screen.getByLabelText('Du'), { target: { value: '2026-11-02' } });
+    fireEvent.change(screen.getByLabelText('Au'), { target: { value: '2026-11-20' } });
+    await waitFor(() => expect(calls.at(-1)?.url).toContain('du=2026-11-02&au=2026-11-20'));
+  });
+
+  it('hides the week bar in the list, which has its own periods', async () => {
+    await liste();
+    expect(screen.queryByRole('button', { name: 'Semaine suivante' })).toBeNull();
   });
 
   it('marks a task done from its checkbox', async () => {
@@ -188,8 +210,9 @@ describe('Tâches screen', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Nouvelle tâche' }));
     };
     const post = () => calls.find((c) => c.method === 'POST')?.body as Record<string, unknown>;
+    const fenetre = () => within(screen.getByRole('dialog'));
     const presse = (nom: string) =>
-      screen.getByRole('button', { name: nom }).getAttribute('aria-pressed');
+      fenetre().getByRole('button', { name: nom }).getAttribute('aria-pressed');
 
     it('pre-selects the type from the title until a type is clicked', async () => {
       await nouvelle();
@@ -197,7 +220,7 @@ describe('Tâches screen', () => {
         target: { value: 'Déjeuner avec Agathe' },
       });
       expect(presse('Déjeuner')).toBe('true');
-      fireEvent.click(screen.getByRole('button', { name: 'Appel' }));
+      fireEvent.click(fenetre().getByRole('button', { name: 'Appel' }));
       fireEvent.change(screen.getByLabelText('Intitulé'), {
         target: { value: 'Déjeuner encore' },
       });

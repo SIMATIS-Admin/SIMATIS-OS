@@ -21,7 +21,11 @@ const mandat: InstanceSummary = {
   modules: ['relais'],
 };
 
-const renderSidebar = (current: InstanceSummary, favoris: string[]) =>
+const renderSidebar = (
+  current: InstanceSummary,
+  favoris: string[],
+  compteurs?: Record<string, number>,
+) =>
   render(
     <Sidebar
       instances={[simatis, mandat]}
@@ -29,6 +33,7 @@ const renderSidebar = (current: InstanceSummary, favoris: string[]) =>
       view="entreprises"
       open={false}
       favoris={favoris}
+      compteurs={compteurs}
       onToggleFavori={() => undefined}
       onMoveFavori={() => undefined}
     />,
@@ -62,5 +67,15 @@ describe('Sidebar', () => {
     const contacts = screen.getByText('Contacts').closest('a');
     expect(bases && within(bases).queryByText('Bientôt')).toBeTruthy();
     expect(contacts && within(contacts).queryByText('Bientôt')).toBeNull();
+  });
+
+  it('shows a red badge with the count of activities to do, not when zero', () => {
+    renderSidebar(simatis, [], { taches: 7 });
+    const lien = screen.getAllByRole('link').find((a) => a.textContent?.startsWith('Tâches'));
+    expect(lien && within(lien).getByText('7')).toBeTruthy();
+    cleanup();
+    renderSidebar(simatis, [], { taches: 0 });
+    const vide = screen.getAllByRole('link').find((a) => a.textContent?.startsWith('Tâches'));
+    expect(vide?.querySelector('.pastille')).toBeNull();
   });
 });
