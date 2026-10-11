@@ -2114,3 +2114,39 @@ textarea.input {
 .gr-activite small {
   color: var(--ink-3);
 }
+
+/* Pipeline : état d'activité et inactivité (à la Pipedrive) */
+.card .act {
+  float: right;
+  display: inline-flex;
+}
+.card .act svg {
+  width: 13px;
+  height: 13px;
+}
+.card .act.ok {
+  color: var(--green);
+}
+.card .act.late {
+  color: var(--red);
+}
+.card .act.none {
+  color: var(--amber);
+}
+.card.inactive {
+  border-color: var(--red);
+  box-shadow: inset 3px 0 0 var(--red);
+}
+.card .inactif {
+  font-size: 11px;
+  color: var(--red);
+  margin-top: 4px;
+}
+.seuil {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.seuil .input {
+  width: 64px;
+}

@@ -1,4 +1,5 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, min } from 'drizzle-orm';
+import { zoned } from '../connecteurs/google/creneaux.js';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
 import { connexions } from '../connexions/schema.js';
 import { writeVia, type ConnexionDeps } from '../connexions/service.js';
@@ -7,7 +8,8 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
-import { contacts, entreprises, opportunites } from './schema.js';
+import { jourDe } from '../pilotage/realisees.js';
+import { contacts, entreprises, opportunites, taches } from './schema.js';
 import { CrmIndisponible } from './service.js';
 
 // Native pipeline (instances without CRM, demo data): the mockup's stages (data.js ETAPES).
@@ -67,7 +69,11 @@ async function pipelineSource(tx: Tx): Promise<Source> {
   };
 }
 
-export async function getPipeline(db: Executor, instance: Instance) {
+export const INACTIVITE_DEFAUT = 14;
+const JOUR_MS = 86_400_000;
+
+export async function getPipeline(db: Executor, instance: Instance, maintenant = new Date()) {
+  const aujourdhui = zoned(jourDe(maintenant, 'Europe/Paris'), '00:00', 'Europe/Paris');
   return withInstance(db, instance.id, async (tx) => {
     const src = await pipelineSource(tx);
     const opps = await tx
@@ -83,6 +89,8 @@ export async function getPipeline(db: Executor, instance: Instance) {
         potentiel: opportunites.potentiel,
         faisabilite: opportunites.faisabilite,
         prochaineEtape: opportunites.prochaineEtape,
+        derniereActivite: opportunites.derniereActivite,
+        creeLe: opportunites.createdAt,
         entreprise: entreprises.nom,
         contact: contacts.nom,
       })
@@ -100,6 +108,22 @@ export async function getPipeline(db: Executor, instance: Instance) {
       )
       .where(eq(opportunites.instanceId, currentInstance))
       .orderBy(asc(opportunites.echeance));
+    // Pipedrive signals: the earliest open activity of each deal, and days without activity.
+    const prochaines = new Map(
+      (
+        await tx
+          .select({ opp: taches.opportuniteId, echeance: min(taches.echeance) })
+          .from(taches)
+          .where(
+            and(
+              eq(taches.instanceId, currentInstance),
+              isNull(taches.faitAt),
+              isNotNull(taches.opportuniteId),
+            ),
+          )
+          .groupBy(taches.opportuniteId)
+      ).map((r) => [r.opp, r.echeance]),
+    );
     return {
       source: src.source,
       ecrit: src.ecrit,
@@ -109,7 +133,21 @@ export async function getPipeline(db: Executor, instance: Instance) {
         opps,
         src.etapes.map((e) => e.id),
       ),
-      opportunites: opps,
+      inactiviteJours: instance.config.inactiviteJours ?? INACTIVITE_DEFAUT,
+      opportunites: opps.map(({ derniereActivite, creeLe, ...o }) => {
+        const prochaine = o.clos ? null : (prochaines.get(o.id) ?? null);
+        const depuis = derniereActivite ?? creeLe;
+        return {
+          ...o,
+          derniereActivite: derniereActivite?.toISOString() ?? null,
+          prochaine: prochaine
+            ? { echeance: prochaine.toISOString(), enRetard: prochaine < aujourdhui }
+            : null,
+          joursInactif: o.clos
+            ? null
+            : Math.floor((maintenant.getTime() - depuis.getTime()) / JOUR_MS),
+        };
+      }),
     };
   });
 }

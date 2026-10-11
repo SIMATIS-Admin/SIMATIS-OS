@@ -21,6 +21,9 @@ const opp = (id: string, etape: string, extra: Record<string, unknown> = {}) => 
   prochaineEtape: 'Relancer',
   entreprise: `Entreprise ${id}`,
   contact: null,
+  derniereActivite: null,
+  prochaine: null,
+  joursInactif: null,
   ...extra,
 });
 
@@ -33,9 +36,17 @@ const pipeline = () => ({
     { id: 'proposition', label: 'Proposition' },
   ],
   conversions: [83, null],
+  inactiviteJours: 14,
   opportunites: [
-    opp('o1', 'qualification'),
-    opp('o2', 'proposition'),
+    opp('o1', 'qualification', {
+      prochaine: { echeance: '2026-10-16T08:00:00.000Z', enRetard: false },
+      joursInactif: 2,
+    }),
+    opp('o2', 'proposition', { joursInactif: 20 }),
+    opp('o4', 'proposition', {
+      prochaine: { echeance: '2026-10-10T08:00:00.000Z', enRetard: true },
+      joursInactif: 5,
+    }),
     opp('o3', 'proposition', { clos: 'perdu', motif: 'Budget reporté' }),
   ],
 });
@@ -116,6 +127,37 @@ describe('Pipeline screen', () => {
     expect(screen.getByText(/lecture seule : les cartes ne se déplacent pas/)).toBeTruthy();
     expect(screen.getByRole('link', { name: /Paramètres/ }).getAttribute('href')).toBe(
       '#/helioval/parametres',
+    );
+  });
+
+  it('shows the activity state of each open deal and flags inactive ones', async () => {
+    const { container } = render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    const carte = (id: string) =>
+      screen.getByText(`Entreprise ${id}`).closest('.card') as HTMLElement;
+    expect(within(carte('o1')).getByLabelText(/^Prochaine activité le /)).toBeTruthy();
+    expect(within(carte('o4')).getByLabelText('Activité en retard')).toBeTruthy();
+    expect(within(carte('o2')).getByLabelText('Aucune activité prévue')).toBeTruthy();
+    expect(carte('o2').classList.contains('inactive')).toBe(true);
+    expect(within(carte('o2')).getByText('20 j sans activité')).toBeTruthy();
+    expect(carte('o1').classList.contains('inactive')).toBe(false);
+    const close = [...container.querySelectorAll('.card')].find((c) =>
+      c.textContent?.includes('Entreprise o3'),
+    );
+    expect(close?.querySelector('.act')).toBeNull();
+  });
+
+  it('saves the inactivity threshold from the pipeline', async () => {
+    render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    const champ = screen.getByLabelText('Inactive après (jours)');
+    fireEvent.change(champ, { target: { value: '21' } });
+    fireEvent.blur(champ);
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith('/pipeline/reglages'))).toMatchObject({
+        method: 'PATCH',
+        body: { inactiviteJours: 21 },
+      }),
     );
   });
 });

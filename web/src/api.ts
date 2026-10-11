@@ -202,6 +202,9 @@ export type PipelineOpp = {
   prochaineEtape: string | null;
   entreprise: string | null;
   contact: string | null;
+  derniereActivite: string | null;
+  prochaine: { echeance: string; enRetard: boolean } | null;
+  joursInactif: number | null;
 };
 
 export type Pipeline = {
@@ -210,8 +213,13 @@ export type Pipeline = {
   derniereSynchro: string | null;
   etapes: { id: string; label: string }[];
   conversions: (number | null)[];
+  inactiviteJours: number;
   opportunites: PipelineOpp[];
 };
+export const saveReglagesPipeline = (slug: string, inactiviteJours: number) =>
+  sendJson<{ inactiviteJours: number }>('PATCH', inst(slug, 'pipeline/reglages'), {
+    inactiviteJours,
+  });
 
 export type Changement =
   { etape: string } | { clos: 'gagne' | 'perdu'; motif?: string | null } | { rouvrir: true };

@@ -12,8 +12,8 @@ import { withInstance } from '../db/context.js';
 import fixtures from '../demo/fixtures.json' with { type: 'json' };
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import { createInstance, listInstances } from '../instances/service.js';
-import { conversionRates, ETAPES_NATIVES } from './pipeline.js';
-import { opportunites } from './schema.js';
+import { conversionRates, ETAPES_NATIVES, getPipeline } from './pipeline.js';
+import { opportunites, taches } from './schema.js';
 
 const IDS = ETAPES_NATIVES.map((e) => e.id);
 type Opp = { etape: string; clos: 'gagne' | 'perdu' | null };
@@ -189,5 +189,85 @@ describe('pipeline API', () => {
     expect(
       (await req('PATCH', `/api/i/mandat-hs/opportunites/${id}`, { rouvrir: true })).status,
     ).toBe(409);
+  });
+
+  it('shows each open deal next activity, overdue state and inactivity against the setting', async () => {
+    const act = await createInstance(t.owner.db, { slug: 'activite', nom: 'A', type: 'mandat' });
+    const ids = await withInstance(t.owner.db, act.id, async (tx) => {
+      const [planifiee, retard, rien, close] = await tx
+        .insert(opportunites)
+        .values([
+          {
+            instanceId: act.id,
+            titre: 'Planifiée',
+            etape: 'qualification',
+            derniereActivite: new Date('2026-10-12T09:00:00Z'),
+          },
+          {
+            instanceId: act.id,
+            titre: 'En retard',
+            etape: 'qualification',
+            derniereActivite: new Date('2026-09-24T09:00:00Z'),
+          },
+          {
+            instanceId: act.id,
+            titre: 'Rien',
+            etape: 'qualification',
+            derniereActivite: new Date('2026-10-13T09:00:00Z'),
+          },
+          { instanceId: act.id, titre: 'Close', etape: 'qualification', clos: 'perdu' as const },
+        ])
+        .returning({ id: opportunites.id });
+      await tx.insert(taches).values([
+        {
+          instanceId: act.id,
+          titre: 'Relancer',
+          canal: 'appel',
+          opportuniteId: planifiee?.id,
+          echeance: new Date('2026-10-16T08:00:00Z'),
+        },
+        {
+          instanceId: act.id,
+          titre: 'Relancer',
+          canal: 'appel',
+          opportuniteId: retard?.id,
+          echeance: new Date('2026-10-10T08:00:00Z'),
+        },
+        {
+          instanceId: act.id,
+          titre: 'Faite',
+          canal: 'appel',
+          opportuniteId: rien?.id,
+          echeance: new Date('2026-10-10T08:00:00Z'),
+          faitAt: new Date('2026-10-10T09:00:00Z'),
+        },
+      ]);
+      return { planifiee: planifiee?.id, retard: retard?.id, rien: rien?.id, close: close?.id };
+    });
+    const vue = await getPipeline(t.app.db, act, new Date('2026-10-14T10:00:00Z'));
+    const opp = (id: string | undefined) => vue.opportunites.find((o) => o.id === id);
+    expect(vue.inactiviteJours).toBe(14);
+    expect(opp(ids.planifiee)).toMatchObject({
+      prochaine: { echeance: '2026-10-16T08:00:00.000Z', enRetard: false },
+      joursInactif: 2,
+    });
+    expect(opp(ids.retard)).toMatchObject({ prochaine: { enRetard: true }, joursInactif: 20 });
+    expect(opp(ids.rien)).toMatchObject({ prochaine: null, joursInactif: 1 });
+    expect(opp(ids.close)).toMatchObject({ prochaine: null, joursInactif: null });
+  });
+
+  it('saves the inactivity threshold without touching the real-writes lock', async () => {
+    expect(
+      (await req('PATCH', '/api/i/mandat-hs/pipeline/reglages', { inactiviteJours: 0 })).status,
+    ).toBe(400);
+    const ok = await req('PATCH', '/api/i/mandat-hs/pipeline/reglages', { inactiviteJours: 21 });
+    expect(ok.body).toEqual({ inactiviteJours: 21 });
+    expect((await req('GET', '/api/i/mandat-hs/pipeline')).body).toMatchObject({
+      inactiviteJours: 21,
+    });
+    const { rows } = await t.owner.pool.query<{ config: Record<string, unknown> }>(
+      "select config from instances where slug = 'mandat-hs'",
+    );
+    expect(rows[0]?.config).toEqual({ ecrituresReelles: true, inactiviteJours: 21 });
   });
 });

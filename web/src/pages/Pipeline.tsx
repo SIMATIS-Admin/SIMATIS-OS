@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type DragEvent } from 'react';
 import {
   changeOpportunite,
   fetchPipeline,
+  saveReglagesPipeline,
   syncConnexion,
   type Changement,
   type Pipeline as PipelineData,
@@ -9,6 +10,7 @@ import {
   type Qualification,
 } from '../api.js';
 import { eur } from '../crm.js';
+import { Icon } from '../icons.js';
 import { Drawer, Modal } from './Overlay.js';
 import { Tip } from './widgets.js';
 
@@ -65,26 +67,54 @@ const enRetard = (o: PipelineOpp) =>
   !!o.echeance &&
   o.echeance < new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
 
+const jourCourt = (iso: string) =>
+  new Date(iso).toLocaleDateString('fr-FR', {
+    timeZone: 'Europe/Paris',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+
+// Pipedrive-like state: next activity planned, overdue, or none at all.
+function EtatActivite({ o }: { o: PipelineOpp }) {
+  const [classe, texte] = !o.prochaine
+    ? ['none', 'Aucune activité prévue']
+    : o.prochaine.enRetard
+      ? ['late', 'Activité en retard']
+      : ['ok', `Prochaine activité le ${jourCourt(o.prochaine.echeance)}`];
+  return (
+    <span className={`act ${classe}`} aria-label={texte} title={texte}>
+      <Icon name={classe === 'none' ? 'info' : 'clock'} />
+    </span>
+  );
+}
+
 function Card({
   o,
   draggable,
   label,
+  seuil,
   onOpen,
 }: {
   o: PipelineOpp;
   draggable: boolean;
   label: (id: string) => string;
+  seuil: number;
   onOpen: () => void;
 }) {
+  const inactive = !o.clos && (o.joursInactif ?? 0) > seuil;
   return (
     <div
-      className="card"
+      className={`card ${inactive ? 'inactive' : ''}`}
       draggable={draggable}
       tabIndex={0}
       onClick={onOpen}
       onDragStart={(e) => e.dataTransfer.setData(OPP_MIME, o.id)}
     >
-      <div className="soc">{o.entreprise ?? '—'}</div>
+      <div className="soc">
+        {o.entreprise ?? '—'}
+        {!o.clos && <EtatActivite o={o} />}
+      </div>
       <div className="ttl">{o.titre}</div>
       {o.clos === 'perdu' ? (
         <div className="motif">
@@ -96,6 +126,7 @@ function Card({
           <div className={`next ${enRetard(o) ? 'late' : ''}`}>{o.prochaineEtape}</div>
         )
       )}
+      {inactive && <div className="inactif">{o.joursInactif} j sans activité</div>}
       <div className="ft">
         <Score q={o.qualification} />
         <span className="small">
@@ -317,7 +348,14 @@ export function Pipeline({ slug }: { slug: string }) {
         <span>{eur(os.reduce((a, o) => a + (o.montant ?? 0), 0))}</span>
       </div>
       {os.map((o) => (
-        <Card key={o.id} o={o} draggable={data.ecrit} label={label} onOpen={() => setOpen(o.id)} />
+        <Card
+          key={o.id}
+          o={o}
+          draggable={data.ecrit}
+          label={label}
+          seuil={data.inactiviteJours}
+          onOpen={() => setOpen(o.id)}
+        />
       ))}
       {os.length === 0 && (
         <div className="small muted" style={{ padding: 8 }}>
@@ -367,6 +405,25 @@ export function Pipeline({ slug }: { slug: string }) {
             </button>
           </>
         )}
+        <label className="small seuil">
+          Inactive après (jours)
+          <input
+            className="input"
+            type="number"
+            min={1}
+            max={90}
+            aria-label="Inactive après (jours)"
+            defaultValue={data.inactiviteJours}
+            onBlur={(e) => {
+              const n = Number(e.target.value);
+              if (n >= 1 && n <= 90 && n !== data.inactiviteJours)
+                void saveReglagesPipeline(slug, n).then(load, (err: unknown) =>
+                  setMessage(err instanceof Error ? err.message : String(err)),
+                );
+            }}
+          />
+          <Tip text="Une opportunité ouverte sans activité faite depuis ce nombre de jours est bordée de rouge. Icône verte : prochaine activité planifiée ; rouge : activité en retard ; alerte : aucune activité prévue." />
+        </label>
         <div className="seg">
           <button className={mode === 'board' ? 'on' : ''} onClick={() => setMode('board')}>
             Étapes

@@ -348,6 +348,30 @@ export function registerApi(
     onInstance((i) => getPipeline(db, i)),
   );
 
+  const reglagesPipelineSchema = z
+    .object({ inactiviteJours: z.number().int().min(1).max(90) })
+    .strict();
+  app.patch<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/pipeline/reglages',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = reglagesPipelineSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.code(400).send({ error: 'Nombre de jours invalide (1 à 90)' });
+      return withInstance(db, i.id, async (tx) => {
+        // Merged into the config: the real-writes lock next to it is never touched here.
+        await tx
+          .update(instances)
+          .set({ config: { ...i.config, ...parsed.data }, updatedAt: new Date() })
+          .where(eq(instances.id, i.id));
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: `Pipeline : opportunité inactive après ${parsed.data.inactiviteJours} jours`,
+        });
+        return parsed.data;
+      });
+    }),
+  );
+
   const changementSchema = z.union([
     z.object({ etape: z.string().min(1).max(100) }).strict(),
     z

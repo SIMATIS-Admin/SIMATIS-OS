@@ -8,6 +8,8 @@ export type InstanceConfig = {
   modules?: string[];
   // Second lock for real writes to third-party tools (the first is REAL_WRITES on the server).
   ecrituresReelles?: boolean;
+  // Pipeline: an open deal without any activity for this many days shows as inactive (14).
+  inactiviteJours?: number;
   // Dashboard funnel settings (pilotage/funnel.ts); defaults apply when missing.
   funnel?: Record<string, number>;
 };
