@@ -4,6 +4,10 @@ import type { HsObject, HsPipeline } from '../src/connecteurs/hubspot/client.js'
 
 export type PortalData = {
   companies: HsObject[];
+  notes: HsObject[];
+  calls: HsObject[];
+  emails: HsObject[];
+  meetings: HsObject[];
   contacts: HsObject[];
   deals: HsObject[];
   tasks: HsObject[];
@@ -72,6 +76,8 @@ export function demoPortal(): PortalData {
         amount: '14000',
         closedate: '2026-11-15T00:00:00Z',
         hubspot_owner_id: '9001',
+        hs_date_entered_appointmentscheduled: '2026-09-20T08:00:00Z',
+        hs_date_entered_qualifiedtobuy: '2026-10-01T08:00:00Z',
         ...at('2026-10-04T08:00:00Z'),
       }),
       obj('302', {
@@ -108,6 +114,36 @@ export function demoPortal(): PortalData {
         ...at('2026-10-06T10:00:00Z'),
       }),
     ],
+    notes: [
+      obj('501', {
+        hs_note_body: '<p>Point &amp; suivi : <b>budget</b> validé&nbsp;!</p>',
+        hs_timestamp: '2026-10-03T14:00:00Z',
+        ...at('2026-10-03T14:00:00Z'),
+      }),
+    ],
+    calls: [
+      obj('601', {
+        hs_call_title: 'Appel découverte',
+        hs_call_body: 'Besoin de structurer la prospection.',
+        hs_timestamp: '2026-09-28T09:00:00Z',
+        ...at('2026-09-28T09:30:00Z'),
+      }),
+    ],
+    emails: [
+      obj('701', {
+        hs_email_subject: 'Proposition commerciale',
+        hs_timestamp: '2026-10-02T10:00:00Z',
+        ...at('2026-10-02T10:00:00Z'),
+      }),
+    ],
+    meetings: [
+      obj('801', {
+        hs_meeting_title: 'RDV Fonderie',
+        hs_meeting_start_time: '2026-10-06T08:00:00Z',
+        hs_timestamp: '2026-10-06T08:00:00Z',
+        ...at('2026-10-06T09:00:00Z'),
+      }),
+    ],
     pipelines: [
       {
         id: 'default',
@@ -136,6 +172,12 @@ export function demoPortal(): PortalData {
       'deals->contacts': { '301': '201', '302': '202' },
       'tasks->contacts': { '401': '201', '402': '202' },
       'tasks->deals': { '401': '301' },
+      'notes->contacts': { '501': '201' },
+      'notes->companies': { '501': '101' },
+      'notes->deals': { '501': '301' },
+      'calls->contacts': { '601': '202' },
+      'emails->contacts': { '701': '201' },
+      'meetings->companies': { '801': '101' },
     },
   };
 }

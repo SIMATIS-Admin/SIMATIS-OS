@@ -6,14 +6,26 @@ import type { Tx } from '../../db.js';
 import { currentInstance } from '../../db/columns.js';
 import type { HsObject, HubspotClient } from './client.js';
 import { domaineExclu } from './domaines.js';
-import { mapCompany, mapContact, mapDeal, mapStages, mapTask, proprietes } from './mapping.js';
+import {
+  ENGAGEMENTS,
+  mapCompany,
+  mapContact,
+  mapDeal,
+  mapEngagement,
+  mapStages,
+  mapTask,
+  PROPRIETES,
+  proprietes,
+  proprietesDatesEtapes,
+} from './mapping.js';
 import { parseReglages } from './reglages.js';
 
 const SOURCE = 'hubspot';
 // Overlap with the previous pass: a record modified during it is read again rather than missed.
 const MARGE_MS = 5 * 60_000;
 
-type MirrorTable = typeof entreprises | typeof contacts | typeof opportunites | typeof taches;
+type MirrorTable =
+  typeof entreprises | typeof contacts | typeof opportunites | typeof taches | typeof activites;
 
 // Local id of each record already mirrored from HubSpot, by HubSpot id.
 async function localIds(tx: Tx, table: MirrorTable, sourceIds: string[]) {
@@ -64,10 +76,10 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
   const exclus = reglages.champsExclus;
   const domaines = reglages.domainesExclus;
   const since = ctx.derniereSynchro ? new Date(ctx.derniereSynchro.getTime() - MARGE_MS) : null;
-  const read = (type: 'companies' | 'contacts' | 'deals' | 'tasks') =>
-    since
-      ? client.modifiedSince(type, since, proprietes(type, exclus))
-      : client.listAll(type, proprietes(type, exclus));
+  const read = (type: keyof typeof PROPRIETES, extra: string[] = []) => {
+    const props = [...proprietes(type, exclus), ...extra];
+    return since ? client.modifiedSince(type, since, props) : client.listAll(type, props);
+  };
   const report: SyncReport = { lus: 0, crees: 0, maj: 0, erreurs: [] };
   const suit = (o: (typeof reglages.objets)[number]) => reglages.objets.includes(o);
 
@@ -143,7 +155,7 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
       .update(connexions)
       .set({ reglages: { ...ctx.reglages, etapes } })
       .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.id, ctx.connexionId)));
-    const deals = await read('deals');
+    const deals = await read('deals', proprietesDatesEtapes(etapes));
     report.lus += deals.length;
     const ids = deals.map((d) => d.id);
     const toCompany = await client.firstAssociations('deals', 'companies', ids);
@@ -211,6 +223,36 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
       );
     }
   }
+  // History of the records (Pipedrive timeline), read with the contacts.
+  if (suit('contacts')) {
+    for (const objet of Object.keys(ENGAGEMENTS) as (keyof typeof ENGAGEMENTS)[]) {
+      const items = await read(objet);
+      report.lus += items.length;
+      const ids = items.map((i) => i.id);
+      const toContact = await client.firstAssociations(objet, 'contacts', ids);
+      const toCompany = await client.firstAssociations(objet, 'companies', ids);
+      const toDeal = await client.firstAssociations(objet, 'deals', ids);
+      const existing = await localIds(ctx.tx, activites, ids);
+      const contact = await resolve(contacts, contactIds, [...toContact.values()]);
+      const company = await resolve(entreprises, companyIds, [...toCompany.values()]);
+      const deal = await resolve(opportunites, dealIds, [...toDeal.values()]);
+      for (const i of items) {
+        await upsert(
+          ctx.tx,
+          activites,
+          existing,
+          i.id,
+          {
+            ...mapEngagement(objet, i),
+            contactId: contact(toContact.get(i.id) ?? null),
+            entrepriseId: company(toCompany.get(i.id) ?? null),
+            opportuniteId: deal(toDeal.get(i.id) ?? null),
+          },
+          report,
+        );
+      }
+    }
+  }
   return report;
 }
 
@@ -229,7 +271,7 @@ async function retirer(tx: Tx, contactIds: string[], entrepriseIds: string[]) {
       .where(and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, contactIds)));
   }
   if (entrepriseIds.length > 0) {
-    for (const table of [opportunites, contacts]) {
+    for (const table of [opportunites, contacts, activites]) {
       await tx
         .update(table)
         .set({ entrepriseId: null })
