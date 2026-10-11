@@ -35,7 +35,7 @@ function decalage(instant: number): number {
   return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
 }
 
-const parisVersIso = (jour: string, hhmm: string) => {
+export const parisVersIso = (jour: string, hhmm: string) => {
   const [y, mo, d] = jour.split('-').map(Number) as [number, number, number];
   const [h, mi] = hhmm.split(':').map(Number) as [number, number];
   const naif = Date.UTC(y, mo - 1, d, h, mi);

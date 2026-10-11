@@ -78,6 +78,8 @@ export const opportunites = pgTable(
     potentiel: text('potentiel'),
     faisabilite: text('faisabilite'),
     prochaineEtape: text('prochaine_etape'),
+    // HubSpot « last activity date », then each activity marked done in the OS.
+    derniereActivite: timestamp('derniere_activite', { withTimezone: true }),
   },
   (t) => [
     index('opportunites_instance_idx').on(t.instanceId),
@@ -99,6 +101,18 @@ export const taches = pgTable(
     faitAt: timestamp('fait_at', { withTimezone: true }),
     prepare: boolean('prepare').notNull().default(false),
     notes: text('notes'),
+    // Pipedrive-like activity: exact type (canal is derived from it), optional time of day,
+    // duration and busy flag. HubSpot knows none of these but the CALL / EMAIL / TODO type.
+    type: text('type', {
+      enum: ['appel', 'email', 'tache', 'reunion', 'echeance', 'dejeuner'],
+    })
+      .notNull()
+      .default('tache'),
+    // Chosen in the OS: the HubSpot sync no longer overwrites it.
+    typeChoisi: boolean('type_choisi').notNull().default(false),
+    avecHeure: boolean('avec_heure').notNull().default(false),
+    dureeMinutes: integer('duree_minutes'),
+    occupe: boolean('occupe').notNull().default(false),
   },
   (t) => [
     index('taches_instance_echeance_idx').on(t.instanceId, t.echeance),

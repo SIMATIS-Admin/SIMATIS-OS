@@ -2002,3 +2002,24 @@ textarea.input {
 .kpi-link .activ-d {
   margin-top: 4px;
 }
+
+.pastille {
+  background: var(--red);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 6px;
+  margin-left: auto;
+}
+.types-activite {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.types-activite .chip svg,
+.vq-filter .chip svg {
+  width: 14px;
+  height: 14px;
+}

@@ -28,3 +28,30 @@ export async function setFavoris(
     });
   return unique;
 }
+
+export type Options = { ensuite: boolean };
+const OPTIONS_DEFAUT: Options = { ensuite: true };
+
+export async function getOptions(db: Executor, utilisateur: string): Promise<Options> {
+  const [row] = await db
+    .select({ options: preferences.options })
+    .from(preferences)
+    .where(eq(preferences.utilisateur, utilisateur));
+  return { ...OPTIONS_DEFAUT, ...row?.options };
+}
+
+export async function setOptions(
+  db: Executor,
+  utilisateur: string,
+  patch: Partial<Options>,
+): Promise<Options> {
+  const options = { ...(await getOptions(db, utilisateur)), ...patch };
+  await db
+    .insert(preferences)
+    .values({ utilisateur, favoris: FAVORIS_DEFAUT, options })
+    .onConflictDoUpdate({
+      target: preferences.utilisateur,
+      set: { options, updatedAt: new Date() },
+    });
+  return options;
+}

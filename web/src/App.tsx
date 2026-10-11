@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchFavoris, fetchInstances, saveFavoris } from './api.js';
+import { fetchCompteurTaches, fetchFavoris, fetchInstances, saveFavoris } from './api.js';
 import { Icon } from './icons.js';
 import { allItems, reorderFavoris, toggleFavori, type InstanceSummary } from './nav.js';
 import { AValider } from './pages/AValider.js';
@@ -49,6 +49,22 @@ export function App() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, [loadInstances]);
+
+  const slugCourant = instances
+    ? (instances.find((i) => i.slug === route.slug) ?? instances[0])?.slug
+    : undefined;
+  const [compteurs, setCompteurs] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!slugCourant || route.view === 'portefeuille') return setCompteurs({});
+    const charger = () =>
+      fetchCompteurTaches(slugCourant).then(
+        (n) => setCompteurs({ taches: n }),
+        () => setCompteurs({}),
+      );
+    void charger();
+    const minuteur = window.setInterval(() => void charger(), 5 * 60_000);
+    return () => window.clearInterval(minuteur);
+  }, [slugCourant, route.view]);
 
   // Optimistic: the menu changes at once, then follows what the server kept.
   const updateFavoris = (next: string[]) => {
@@ -109,6 +125,7 @@ export function App() {
         view={view}
         open={menuOpen}
         favoris={favoris}
+        compteurs={compteurs}
         onToggleFavori={(id) => updateFavoris(toggleFavori(favoris, id))}
         onMoveFavori={(id, cible, apres) =>
           updateFavoris(reorderFavoris(favoris, id, cible, apres))

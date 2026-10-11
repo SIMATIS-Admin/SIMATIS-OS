@@ -11,7 +11,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { CrmIndisponible } from './service.js';
-import { createTache, listTaches, updateTache, type TacheVue } from './taches.js';
+import { compterAFaire, createTache, listTaches, updateTache, type TacheVue } from './taches.js';
 
 const TOKEN = 'pat-eu1-fictif-0000';
 
@@ -211,6 +211,96 @@ describe('Tâches', () => {
     ).rejects.toThrow(/Opportunité introuvable dans cette instance/);
   });
 
+  it('creates a Pipedrive-like activity, sending HubSpot only what it knows', async () => {
+    const tache = (await createTache(
+      t.app.db,
+      armed,
+      {
+        titre: 'Point mensuel',
+        type: 'reunion',
+        avecHeure: true,
+        dureeMinutes: 60,
+        occupe: true,
+        echeance: '2026-10-15T12:00:00.000Z',
+        hubspot: true,
+      },
+      on(),
+    )) as TacheVue;
+    expect(tache).toMatchObject({
+      type: 'reunion',
+      canal: 'tache',
+      avecHeure: true,
+      dureeMinutes: 60,
+      occupe: true,
+    });
+    const props = (
+      portal.calls.find((c) => c.method === 'POST')?.body as {
+        properties: Record<string, string>;
+      }
+    ).properties;
+    expect(props.hs_task_type).toBe('TODO');
+    expect(JSON.stringify(props)).not.toMatch(/60|occup|duree/i);
+    const choisi = await t.owner.pool.query<{ type_choisi: boolean }>(
+      'select type_choisi from taches where id = $1',
+      [tache.id],
+    );
+    expect(choisi.rows[0]?.type_choisi).toBe(true);
+
+    const devine = (await createTache(t.app.db, a, { titre: 'Appeler Agathe' }, off())) as TacheVue;
+    expect(devine.type).toBe('appel');
+    const libre = await t.owner.pool.query<{ type_choisi: boolean }>(
+      'select type_choisi from taches where id = $1',
+      [devine.id],
+    );
+    expect(libre.rows[0]?.type_choisi).toBe(false);
+  });
+
+  it('stamps the deal last activity when a linked activity is done', async () => {
+    const opp = (
+      await t.owner.pool.query<{ id: string }>(
+        "select id from opportunites where instance_id = $1 and source_id = '301'",
+        [a.id],
+      )
+    ).rows[0]?.id;
+    await t.owner.pool.query('update opportunites set derniere_activite = null where id = $1', [
+      opp,
+    ]);
+    const tache = (await createTache(
+      t.app.db,
+      a,
+      { titre: 'Préparer la proposition', opportuniteId: opp },
+      off(),
+    )) as TacheVue;
+    expect(tache.opportunite).toMatchObject({ id: opp, clos: null });
+    await updateTache(t.app.db, a, tache.id, { fait: true }, off());
+    const { rows } = await t.owner.pool.query<{ derniere_activite: Date | null }>(
+      'select derniere_activite from opportunites where id = $1',
+      [opp],
+    );
+    expect(rows[0]?.derniere_activite).not.toBeNull();
+  });
+
+  it('counts open activities overdue or due today, for the menu badge', async () => {
+    const vide = await createInstance(t.owner.db, { slug: 'compteur', nom: 'C', type: 'mandat' });
+    const mercredi = new Date('2026-10-14T10:00:00Z');
+    expect(await compterAFaire(t.app.db, vide, mercredi)).toBe(0);
+    for (const [titre, echeance] of [
+      ['Hier', '2026-10-13T08:00:00.000Z'],
+      ['Ce soir', '2026-10-14T19:00:00.000Z'],
+      ['Demain', '2026-10-15T08:00:00.000Z'],
+    ] as const) {
+      await createTache(t.app.db, vide, { titre, echeance }, off());
+    }
+    const faite = (await createTache(
+      t.app.db,
+      vide,
+      { titre: 'Faite', echeance: '2026-10-13T08:00:00.000Z' },
+      off(),
+    )) as TacheVue;
+    await updateTache(t.app.db, vide, faite.id, { fait: true }, off());
+    expect(await compterAFaire(t.app.db, vide, mercredi)).toBe(2);
+  });
+
   it('validates the API input and keeps each instance to itself', async () => {
     const app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
     try {
@@ -218,6 +308,20 @@ describe('Tâches', () => {
         app.inject({ method: 'POST', url: `/api/i/${slug}/taches`, payload });
       expect((await post('sans-crm', { titre: '  ' })).statusCode).toBe(400);
       expect((await post('sans-crm', { titre: 'X', echeance: 'demain' })).statusCode).toBe(400);
+      expect((await post('sans-crm', { titre: 'X', dureeMinutes: 5 })).statusCode).toBe(400);
+      expect((await post('sans-crm', { titre: 'X', type: 'apero' })).statusCode).toBe(400);
+      const compteur = await app.inject({ method: 'GET', url: '/api/i/sans-crm/taches/compteur' });
+      expect(compteur.json()).toHaveProperty('n');
+
+      const prefs = await app.inject({ method: 'GET', url: '/api/preferences' });
+      expect(prefs.json()).toMatchObject({ options: { ensuite: true } });
+      await app.inject({
+        method: 'PUT',
+        url: '/api/preferences/options',
+        payload: { ensuite: false },
+      });
+      const relues = await app.inject({ method: 'GET', url: '/api/preferences' });
+      expect(relues.json()).toMatchObject({ options: { ensuite: false } });
       const bad = await app.inject({
         method: 'GET',
         url: '/api/i/sans-crm/taches?du=2026-10-18&au=2026-10-12',

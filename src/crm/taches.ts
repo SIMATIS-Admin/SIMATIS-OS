@@ -12,21 +12,32 @@ import { rendezVous } from '../pilotage/brief.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
 import { contacts, opportunites, taches } from './schema.js';
 import { createInCrm, CrmIndisponible } from './service.js';
-import { typeTache, type Canal } from './type-tache.js';
+import { canalDe, typeActivite, type Canal, type TypeActivite } from './type-tache.js';
 
 const FUSEAU = 'Europe/Paris';
 const HUBSPOT_TYPE: Record<Canal, string | null> = { email: 'EMAIL', appel: 'CALL', tache: null };
+
+export type ChampsActivite = {
+  type?: TypeActivite;
+  avecHeure?: boolean;
+  dureeMinutes?: number | null;
+  occupe?: boolean;
+};
 
 export type TacheVue = {
   id: string;
   titre: string;
   notes: string | null;
   canal: Canal;
+  type: TypeActivite;
+  avecHeure: boolean;
+  dureeMinutes: number | null;
+  occupe: boolean;
   echeance: string | null;
   fait: boolean;
   origine: 'hubspot' | 'os';
   contact: { id: string; nom: string } | null;
-  opportunite: { id: string; titre: string } | null;
+  opportunite: { id: string; titre: string; clos: 'gagne' | 'perdu' | null } | null;
 };
 
 export type SimulationTache = { simulation: true; message: string };
@@ -45,6 +56,10 @@ async function vues(tx: Tx, where: SQL | undefined): Promise<TacheVue[]> {
       titre: taches.titre,
       notes: taches.notes,
       canal: taches.canal,
+      type: taches.type,
+      avecHeure: taches.avecHeure,
+      dureeMinutes: taches.dureeMinutes,
+      occupe: taches.occupe,
       echeance: taches.echeance,
       faitAt: taches.faitAt,
       source: taches.source,
@@ -52,6 +67,7 @@ async function vues(tx: Tx, where: SQL | undefined): Promise<TacheVue[]> {
       contactNom: contacts.nom,
       oppId: opportunites.id,
       oppTitre: opportunites.titre,
+      oppClos: opportunites.clos,
     })
     .from(taches)
     .leftJoin(
@@ -69,11 +85,15 @@ async function vues(tx: Tx, where: SQL | undefined): Promise<TacheVue[]> {
     titre: r.titre,
     notes: r.notes,
     canal: r.canal,
+    type: r.type,
+    avecHeure: r.avecHeure,
+    dureeMinutes: r.dureeMinutes,
+    occupe: r.occupe,
     echeance: r.echeance?.toISOString() ?? null,
     fait: r.faitAt !== null,
     origine: r.source === 'hubspot' ? 'hubspot' : 'os',
     contact: r.contactId && r.contactNom ? { id: r.contactId, nom: r.contactNom } : null,
-    opportunite: r.oppId && r.oppTitre ? { id: r.oppId, titre: r.oppTitre } : null,
+    opportunite: r.oppId && r.oppTitre ? { id: r.oppId, titre: r.oppTitre, clos: r.oppClos } : null,
   }));
 }
 
@@ -140,11 +160,12 @@ export async function createTache(
     contactId?: string | null;
     opportuniteId?: string | null;
     hubspot?: boolean;
-  },
+  } & ChampsActivite,
   deps: ConnexionDeps,
 ): Promise<TacheVue | SimulationTache> {
   const titre = input.titre.trim();
-  const canal = typeTache(titre);
+  const type = input.type ?? typeActivite(titre);
+  const canal = canalDe(type);
   return withInstance(db, instance.id, async (tx) => {
     // Foreign keys alone would accept a contact or deal of another instance.
     for (const [table, id, nom] of [
@@ -163,7 +184,20 @@ export async function createTache(
       if (!(await crmHubspot(tx))) {
         throw new CrmIndisponible('Aucun CRM HubSpot branché sur cette instance.');
       }
-      const crm = await createInCrm(tx, instance, 'task.create', { ...input, titre, canal }, deps);
+      const crm = await createInCrm(
+        tx,
+        instance,
+        'task.create',
+        {
+          titre,
+          type,
+          notes: input.notes,
+          echeance: input.echeance,
+          contactId: input.contactId,
+          opportuniteId: input.opportuniteId,
+        },
+        deps,
+      );
       if (crm && 'simulation' in crm) return SIMULATION;
       sourceId = crm?.sourceId ?? null;
     }
@@ -173,6 +207,11 @@ export async function createTache(
         instanceId: currentInstance,
         titre,
         canal,
+        type,
+        typeChoisi: input.type !== undefined,
+        avecHeure: input.avecHeure ?? false,
+        dureeMinutes: input.dureeMinutes ?? null,
+        occupe: input.occupe ?? false,
         notes: input.notes ?? null,
         echeance: input.echeance ? new Date(input.echeance) : null,
         contactId: input.contactId ?? null,
@@ -188,13 +227,49 @@ export async function createTache(
   });
 }
 
+// Type after an edit: a type picked by the pilot wins and sticks; otherwise a new title is read
+// again, a HubSpot task keeping its HubSpot type as fallback.
+function typeApres(
+  tache: { type: TypeActivite; canal: Canal; typeChoisi: boolean; source: string },
+  titre: string | undefined,
+  choisi: TypeActivite | undefined,
+) {
+  if (choisi) return { type: choisi, canal: canalDe(choisi), typeChoisi: true };
+  if (!titre || tache.typeChoisi) return {};
+  const type = typeActivite(titre, tache.source === 'hubspot' ? HUBSPOT_TYPE[tache.canal] : null);
+  return { type, canal: canalDe(type) };
+}
+
+// Menu badge: open activities overdue or due today (Paris day).
+export async function compterAFaire(db: Executor, instance: Instance, maintenant = new Date()) {
+  const demain = zoned(decaler(jourDe(maintenant, FUSEAU), 1), '00:00', FUSEAU);
+  return withInstance(db, instance.id, async (tx) => {
+    const [row] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(taches)
+      .where(
+        and(
+          eq(taches.instanceId, currentInstance),
+          isNull(taches.faitAt),
+          lt(taches.echeance, demain),
+        ),
+      );
+    return row?.n ?? 0;
+  });
+}
+
 // An OS task changes right away; a HubSpot task is written to HubSpot first (HubSpot is the
 // reference), and its copy changes only when the write really happened.
 export async function updateTache(
   db: Executor,
   instance: Instance,
   id: string,
-  patch: { titre?: string; notes?: string | null; echeance?: string | null; fait?: boolean },
+  patch: {
+    titre?: string;
+    notes?: string | null;
+    echeance?: string | null;
+    fait?: boolean;
+  } & ChampsActivite,
   deps: ConnexionDeps,
 ): Promise<TacheVue | SimulationTache | null> {
   return withInstance(db, instance.id, async (tx) => {
@@ -217,7 +292,18 @@ export async function updateTache(
           tx,
           instance,
           'crm',
-          { op: 'task.update', data: { tacheId: id, ...patch, ...(titre ? { titre } : {}) } },
+          {
+            op: 'task.update',
+            // Duration and busy flag stay in the OS: HubSpot tasks have no such fields.
+            data: {
+              tacheId: id,
+              ...(titre ? { titre } : {}),
+              ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+              ...(patch.echeance !== undefined ? { echeance: patch.echeance } : {}),
+              ...(patch.fait !== undefined ? { fait: patch.fait } : {}),
+              ...(patch.type ? { type: patch.type } : {}),
+            },
+          },
           deps,
         );
       } catch (error) {
@@ -231,16 +317,11 @@ export async function updateTache(
     await tx
       .update(taches)
       .set({
-        // A HubSpot task keeps its HubSpot type as fallback when the new title names no channel.
-        ...(titre
-          ? {
-              titre,
-              canal: typeTache(
-                titre,
-                tache.source === 'hubspot' ? HUBSPOT_TYPE[tache.canal] : null,
-              ),
-            }
-          : {}),
+        ...(titre ? { titre } : {}),
+        ...typeApres(tache, titre, patch.type),
+        ...(patch.avecHeure !== undefined ? { avecHeure: patch.avecHeure } : {}),
+        ...(patch.dureeMinutes !== undefined ? { dureeMinutes: patch.dureeMinutes } : {}),
+        ...(patch.occupe !== undefined ? { occupe: patch.occupe } : {}),
         ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
         ...(patch.echeance !== undefined
           ? { echeance: patch.echeance ? new Date(patch.echeance) : null }
@@ -249,6 +330,17 @@ export async function updateTache(
         updatedAt: new Date(),
       })
       .where(eq(taches.id, id));
+    if (patch.fait && tache.opportuniteId) {
+      await tx
+        .update(opportunites)
+        .set({ derniereActivite: new Date() })
+        .where(
+          and(
+            eq(opportunites.instanceId, currentInstance),
+            eq(opportunites.id, tache.opportuniteId),
+          ),
+        );
+    }
     await logEvent(tx, {
       acteur: 'pilote',
       action: `Tâche modifiée : ${titre ?? tache.titre}`,

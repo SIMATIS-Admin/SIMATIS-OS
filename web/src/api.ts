@@ -262,11 +262,15 @@ export type TacheVue = {
   titre: string;
   notes: string | null;
   canal: 'email' | 'appel' | 'tache';
+  type: 'appel' | 'email' | 'tache' | 'reunion' | 'echeance' | 'dejeuner';
+  avecHeure: boolean;
+  dureeMinutes: number | null;
+  occupe: boolean;
   echeance: string | null;
   fait: boolean;
   origine: 'hubspot' | 'os';
   contact: { id: string; nom: string } | null;
-  opportunite: { id: string; titre: string } | null;
+  opportunite: { id: string; titre: string; clos: 'gagne' | 'perdu' | null } | null;
 };
 export type SemaineTaches = {
   taches: TacheVue[];
@@ -283,9 +287,22 @@ export type TacheSaisie = {
   notes?: string | null;
   echeance?: string | null;
   fait?: boolean;
+  type?: TacheVue['type'];
+  avecHeure?: boolean;
+  dureeMinutes?: number | null;
+  occupe?: boolean;
+  contactId?: string | null;
+  opportuniteId?: string | null;
 };
+export type Options = { ensuite: boolean };
+export const fetchOptions = () =>
+  getJson<{ options: Options }>('/api/preferences').then((r) => r.options);
+export const saveOptions = (options: Partial<Options>) =>
+  sendJson<{ options: Options }>('PUT', '/api/preferences/options', options);
 export const fetchTaches = (slug: string, du: string, au: string) =>
   getJson<SemaineTaches>(inst(slug, `taches?du=${du}&au=${au}`));
+export const fetchCompteurTaches = (slug: string) =>
+  getJson<{ n: number }>(inst(slug, 'taches/compteur')).then((r) => r.n);
 export const createTache = (slug: string, input: TacheSaisie & { hubspot: boolean }) =>
   sendJson<TacheVue | SimulationTache>('POST', inst(slug, 'taches'), input);
 export const updateTache = (slug: string, id: string, patch: TacheSaisie) =>

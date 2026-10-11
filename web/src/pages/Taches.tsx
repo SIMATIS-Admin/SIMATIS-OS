@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useState, type DragEvent } from 'react';
 import {
   createTache,
+  fetchOptions,
   fetchTaches,
+  saveOptions,
   updateTache,
   type SemaineTaches,
   type TacheSaisie,
   type TacheVue,
 } from '../api.js';
 import { Icon } from '../icons.js';
-import { Modal } from './Overlay.js';
-import { TYPES, iso, lundiDe, plusJours } from './taches/commun.js';
+import { ACTIVITES, ORDRE_ACTIVITES, lundiDe, plusJours } from './taches/commun.js';
+import { periode, type CleePeriode } from './taches/periodes.js';
+import { EditionTache, Ensuite, type Enregistrement } from './taches/Edition.js';
 import { jourParis, memeHeure, titreSemaine } from './taches/creneaux.js';
 import { MIME_TACHE, Semaine } from './taches/Semaine.js';
 
 type Mode = 'semaine' | 'liste';
-type FiltreType = 'tout' | TacheVue['canal'];
 type FiltreStatut = 'a_faire' | 'faites';
 type FiltreOrigine = 'tout' | TacheVue['origine'];
 
@@ -29,19 +31,12 @@ const echeanceLisible = (e: string | null) =>
         minute: '2-digit',
       })
     : 'Sans échéance';
-// <input type="datetime-local"> works in the browser's time (Paris for the pilot).
-const versSaisie = (e: string | null) => {
-  if (!e) return '';
-  const d = new Date(e);
-  return `${iso(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-const depuisSaisie = (v: string) => (v ? new Date(v).toISOString() : null);
 
 export const estSimulation = (r: unknown): r is { simulation: true; message: string } =>
   typeof r === 'object' && r !== null && 'simulation' in r;
 
 export function Pastilles({ t }: { t: TacheVue }) {
-  const [ico, lbl] = TYPES[t.canal];
+  const [ico, lbl] = ACTIVITES[t.type];
   return (
     <>
       <span className="badge">
@@ -54,118 +49,68 @@ export function Pastilles({ t }: { t: TacheVue }) {
   );
 }
 
-// Create (no task) or edit a task; `hubspot` shows the "Créer aussi dans HubSpot" box.
-export function EditionTache({
-  tache,
-  hubspot,
-  onSave,
-  onClose,
-}: {
-  tache: TacheVue | null;
-  hubspot: boolean;
-  onSave: (saisie: TacheSaisie & { hubspot: boolean }) => Promise<void>;
-  onClose: () => void;
-}) {
-  const [titre, setTitre] = useState(tache?.titre ?? '');
-  const [notes, setNotes] = useState(tache?.notes ?? '');
-  const [echeance, setEcheance] = useState(versSaisie(tache?.echeance ?? null));
-  const [fait, setFait] = useState(tache?.fait ?? false);
-  const [versHubspot, setVersHubspot] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+const PERIODES: [CleePeriode | 'plage', string][] = [
+  ['retard', 'En retard'],
+  ['aujourdhui', "Aujourd'hui"],
+  ['demain', 'Demain'],
+  ['semaine', 'Cette semaine'],
+  ['prochaine', 'Semaine prochaine'],
+  ['plage', 'Plage'],
+];
 
-  const submit = () => {
-    setBusy(true);
-    setError(null);
-    const saisie = {
-      titre: titre.trim(),
-      notes: notes.trim() ? notes : null,
-      echeance: depuisSaisie(echeance),
-      ...(tache ? { fait } : {}),
-      hubspot: versHubspot,
-    };
-    onSave(saisie)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setBusy(false));
-  };
-
-  return (
-    <Modal title={tache ? 'Modifier la tâche' : 'Nouvelle tâche'} onClose={onClose}>
-      <div className="stack" style={{ gap: 10 }}>
-        <label className="field">
-          <span>Intitulé</span>
-          <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Notes</span>
-          <textarea
-            className="input"
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Échéance</span>
-          <input
-            className="input"
-            type="datetime-local"
-            value={echeance}
-            onChange={(e) => setEcheance(e.target.value)}
-          />
-        </label>
-        {tache && (
-          <label className="check">
-            <input type="checkbox" checked={fait} onChange={(e) => setFait(e.target.checked)} />
-            <span>Faite</span>
-          </label>
-        )}
-        {tache && (tache.contact || tache.opportunite) && (
-          <p className="small muted">
-            {[tache.contact?.nom, tache.opportunite?.titre].filter(Boolean).join(' · ')}
-          </p>
-        )}
-        {!tache && hubspot && (
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={versHubspot}
-              onChange={(e) => setVersHubspot(e.target.checked)}
-            />
-            <span>Créer aussi dans HubSpot</span>
-          </label>
-        )}
-        {error && (
-          <p className="small" style={{ color: 'var(--red)' }}>
-            {error}
-          </p>
-        )}
-        <div>
-          <button className="btn primary" disabled={busy || !titre.trim()} onClick={submit}>
-            {tache ? 'Enregistrer' : 'Créer'}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
+// Pipedrive list: type toggles and a period of its own, independent of the week shown.
 function Liste({
-  data,
+  slug,
+  version,
+  hubspot,
   onOpen,
   onFait,
 }: {
-  data: SemaineTaches;
+  slug: string;
+  version: number;
+  hubspot: boolean;
   onOpen: (t: TacheVue) => void;
   onFait: (t: TacheVue) => void;
 }) {
-  const [type, setType] = useState<FiltreType>('tout');
+  const [types, setTypes] = useState<Set<TacheVue['type']>>(new Set(ORDRE_ACTIVITES));
+  const [cle, setCle] = useState<CleePeriode | 'plage'>('semaine');
+  const [plage, setPlage] = useState({ du: '', au: '' });
   const [statut, setStatut] = useState<FiltreStatut>('a_faire');
   const [origine, setOrigine] = useState<FiltreOrigine>('tout');
-  const toutes = [...data.enRetard, ...data.taches, ...data.sansEcheance];
+  const [vue, setVue] = useState<{ taches: TacheVue[]; enRetard: TacheVue[] } | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    const p = cle === 'plage' ? plage : periode(cle);
+    // Overdue: what is late before today, read with today as the period.
+    const bornes = p === 'retard' ? (periode('aujourdhui') as { du: string; au: string }) : p;
+    if (!bornes.du || !bornes.au) return;
+    fetchTaches(slug, bornes.du, bornes.au).then(
+      (d) =>
+        setVue(
+          p === 'retard'
+            ? { taches: [], enRetard: d.enRetard }
+            : cle === 'semaine'
+              ? { taches: [...d.taches, ...d.sansEcheance], enRetard: d.enRetard }
+              : { taches: d.taches, enRetard: [] },
+        ),
+      (e: unknown) => setErreur(e instanceof Error ? e.message : String(e)),
+    );
+  }, [slug, cle, plage, version]);
+
+  const basculer = (t: TacheVue['type']) =>
+    setTypes((cur) => {
+      // All on: a click isolates that type (Pipedrive); otherwise it toggles it.
+      if (cur.size === ORDRE_ACTIVITES.length) return new Set([t]);
+      const next = new Set(cur);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next.size ? next : new Set(ORDRE_ACTIVITES);
+    });
+  const toutes = vue ? [...vue.enRetard, ...vue.taches] : [];
   const shown = toutes
     .filter((t) => (statut === 'faites' ? t.fait : !t.fait))
-    .filter((t) => type === 'tout' || t.canal === type)
+    .filter((t) => types.has(t.type))
     .filter((t) => origine === 'tout' || t.origine === origine)
     .sort(
       (a, b) =>
@@ -180,14 +125,32 @@ function Liste({
   return (
     <div className="panel">
       <div className="vq-filter">
-        {chip<FiltreType>('tout', type, setType, 'Tous types')}
-        {chip<FiltreType>('email', type, setType, 'Email')}
-        {chip<FiltreType>('appel', type, setType, 'Téléphone')}
-        {chip<FiltreType>('tache', type, setType, 'Action')}
+        <button
+          className={`chip ${types.size === ORDRE_ACTIVITES.length ? 'on' : ''}`}
+          onClick={() => setTypes(new Set(ORDRE_ACTIVITES))}
+        >
+          Tous
+        </button>
+        {ORDRE_ACTIVITES.map((t) => {
+          const [ico, lbl] = ACTIVITES[t];
+          const actif = types.has(t) && types.size < ORDRE_ACTIVITES.length;
+          return (
+            <button
+              key={t}
+              className={`chip ${actif ? 'on' : ''}`}
+              aria-label={lbl}
+              aria-pressed={actif}
+              title={lbl}
+              onClick={() => basculer(t)}
+            >
+              <Icon name={ico} />
+            </button>
+          );
+        })}
         <span className="muted">·</span>
         {chip<FiltreStatut>('a_faire', statut, setStatut, 'À faire')}
         {chip<FiltreStatut>('faites', statut, setStatut, 'Faites')}
-        {data.hubspot && (
+        {hubspot && (
           <>
             <span className="muted">·</span>
             {chip<FiltreOrigine>('tout', origine, setOrigine, 'Toutes origines')}
@@ -196,7 +159,39 @@ function Liste({
           </>
         )}
       </div>
+      <div className="vq-filter">
+        {PERIODES.map(([v, l]) => chip(v, cle, setCle, l))}
+        {cle === 'plage' && (
+          <>
+            <label className="small">
+              Du{' '}
+              <input
+                className="input"
+                type="date"
+                aria-label="Du"
+                value={plage.du}
+                onChange={(e) => setPlage({ ...plage, du: e.target.value })}
+              />
+            </label>
+            <label className="small">
+              Au{' '}
+              <input
+                className="input"
+                type="date"
+                aria-label="Au"
+                value={plage.au}
+                onChange={(e) => setPlage({ ...plage, au: e.target.value })}
+              />
+            </label>
+          </>
+        )}
+      </div>
       <div className="panel-b">
+        {erreur && (
+          <p className="small" style={{ color: 'var(--red)' }}>
+            {erreur}
+          </p>
+        )}
         {shown.length ? (
           <ul className="tasks">
             {shown.map((t) => (
@@ -211,7 +206,7 @@ function Liste({
                   <b>{t.titre}</b>
                   <div className="small muted">
                     {t.contact ? `${t.contact.nom} · ` : ''}
-                    <span className={data.enRetard.includes(t) ? 'late' : ''}>
+                    <span className={vue?.enRetard.includes(t) ? 'late' : ''}>
                       {echeanceLisible(t.echeance)}
                     </span>{' '}
                     <Pastilles t={t} />
@@ -221,7 +216,7 @@ function Liste({
             ))}
           </ul>
         ) : (
-          <div className="empty">Aucune tâche pour ces filtres.</div>
+          <div className="empty">Aucune activité pour ces filtres.</div>
         )}
       </div>
     </div>
@@ -234,13 +229,31 @@ export function Taches({ slug }: { slug: string }) {
   const [data, setData] = useState<SemaineTaches | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [edition, setEdition] = useState<TacheVue | 'nouvelle' | null>(null);
+  const [ensuite, setEnsuite] = useState<TacheVue | null>(null);
+  const [proposer, setProposer] = useState(true);
 
+  const [version, setVersion] = useState(0);
   const load = useCallback(() => {
+    setVersion((v) => v + 1);
     fetchTaches(slug, lundi, plusJours(lundi, 6)).then(setData, (e: unknown) =>
       setMessage(e instanceof Error ? e.message : String(e)),
     );
   }, [slug, lundi]);
   useEffect(load, [load]);
+  useEffect(() => {
+    fetchOptions().then(
+      (o) => setProposer(o.ensuite),
+      () => undefined,
+    );
+  }, []);
+
+  // Pipedrive: once an activity is really done, offer the next one (not on a closed deal).
+  const proposerSuite = (t: TacheVue, r: unknown) => {
+    if (proposer && !estSimulation(r) && !t.opportunite?.clos) setEnsuite(t);
+  };
+  const creer = async ({ hubspot, ...saisie }: Enregistrement) => {
+    apres(await createTache(slug, { ...saisie, hubspot }));
+  };
 
   const apres = (r: unknown) => {
     setMessage(estSimulation(r) ? r.message : null);
@@ -303,32 +316,34 @@ export function Taches({ slug }: { slug: string }) {
           Nouvelle tâche
         </button>
       </div>
-      <div className="sem-barre">
-        <button
-          className="btn sem-nav"
-          aria-label="Semaine précédente"
-          onClick={() => setLundi(plusJours(lundi, -7))}
-          onDragOver={accepte}
-          onDrop={decaler(-7)}
-        >
-          ‹
-        </button>
-        <h2>{titreSemaine(lundi)}</h2>
-        <button
-          className="btn sem-nav"
-          aria-label="Semaine suivante"
-          onClick={() => setLundi(plusJours(lundi, 7))}
-          onDragOver={accepte}
-          onDrop={decaler(7)}
-        >
-          ›
-        </button>
-        {lundi !== lundiDe(new Date()) && (
-          <button className="btn" onClick={() => setLundi(lundiDe(new Date()))}>
-            Cette semaine
+      {mode === 'semaine' && (
+        <div className="sem-barre">
+          <button
+            className="btn sem-nav"
+            aria-label="Semaine précédente"
+            onClick={() => setLundi(plusJours(lundi, -7))}
+            onDragOver={accepte}
+            onDrop={decaler(-7)}
+          >
+            ‹
           </button>
-        )}
-      </div>
+          <h2>{titreSemaine(lundi)}</h2>
+          <button
+            className="btn sem-nav"
+            aria-label="Semaine suivante"
+            onClick={() => setLundi(plusJours(lundi, 7))}
+            onDragOver={accepte}
+            onDrop={decaler(7)}
+          >
+            ›
+          </button>
+          {lundi !== lundiDe(new Date()) && (
+            <button className="btn" onClick={() => setLundi(lundiDe(new Date()))}>
+              Cette semaine
+            </button>
+          )}
+        </div>
+      )}
       {message && (
         <div className="alert amber" style={{ marginBottom: 12 }}>
           <div>{message}</div>
@@ -337,9 +352,19 @@ export function Taches({ slug }: { slug: string }) {
       {data &&
         (mode === 'liste' ? (
           <Liste
-            data={data}
+            slug={slug}
+            version={version}
+            hubspot={data.hubspot}
             onOpen={setEdition}
-            onFait={(t) => void modifier(t, { fait: !t.fait })}
+            onFait={(t) =>
+              void updateTache(slug, t.id, { fait: !t.fait }).then(
+                (r) => {
+                  apres(r);
+                  if (!t.fait) proposerSuite(t, r);
+                },
+                (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+              )
+            }
           />
         ) : (
           <Semaine
@@ -356,12 +381,29 @@ export function Taches({ slug }: { slug: string }) {
           hubspot={data.hubspot}
           onClose={() => setEdition(null)}
           onSave={async ({ hubspot, ...saisie }) => {
-            const r =
-              edition === 'nouvelle'
-                ? await createTache(slug, { ...saisie, hubspot })
-                : await updateTache(slug, edition.id, saisie);
+            if (edition === 'nouvelle') {
+              await creer({ ...saisie, hubspot });
+              setEdition(null);
+              return;
+            }
+            const r = await updateTache(slug, edition.id, saisie);
             setEdition(null);
             apres(r);
+            if (saisie.fait && !edition.fait) proposerSuite(edition, r);
+          }}
+        />
+      )}
+      {ensuite && data && (
+        <Ensuite
+          apres={ensuite}
+          hubspot={data.hubspot}
+          onPlanifier={creer}
+          onFermer={(plusJamais) => {
+            setEnsuite(null);
+            if (plusJamais) {
+              setProposer(false);
+              void saveOptions({ ensuite: false });
+            }
           }}
         />
       )}

@@ -148,6 +148,8 @@ const json = (body: unknown, status = 200) =>
 export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
   const calls: Recorded[] = [];
   let failWith: number | null = null;
+  // Ids of created records never repeat, even when a test clears `calls`.
+  let cree = 0;
 
   const only = (o: HsObject, properties: string[]): HsObject => ({
     id: o.id,
@@ -207,7 +209,7 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
     if (/^\/crm\/v3\/objects\/\w+\/\w+$/.test(u.pathname) && method === 'PATCH') {
       return json({ id: u.pathname.split('/').at(-1) });
     }
-    if (list && method === 'POST') return json({ id: `9${calls.length}` }, 201);
+    if (list && method === 'POST') return json({ id: `9${(cree += 1)}` }, 201);
     return json({ message: `Route inconnue ${method} ${u.pathname}` }, 404);
   };
 

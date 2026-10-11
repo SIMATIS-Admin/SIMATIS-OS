@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { typeTache } from './type-tache.js';
+import { canalDe, typeActivite, typeTache } from './type-tache.js';
 
 describe('typeTache', () => {
   it('recognises a phone task from its title', () => {
@@ -45,5 +45,30 @@ describe('typeTache', () => {
 
   it('lets the title win over the HubSpot type', () => {
     expect(typeTache('Envoyer la plaquette', 'CALL')).toBe('email');
+  });
+});
+
+describe('typeActivite', () => {
+  it('recognises meetings, lunches and deadlines', () => {
+    expect(typeActivite('Déjeuner avec Agathe')).toBe('dejeuner');
+    expect(typeActivite('RDV Fonderie')).toBe('reunion');
+    expect(typeActivite('Réunion de lancement')).toBe('reunion');
+    expect(typeActivite('Échéance devis')).toBe('echeance');
+    expect(typeActivite('Date limite dossier')).toBe('echeance');
+  });
+
+  it('keeps phone, then email, before the other types', () => {
+    expect(typeActivite('Appeler pour caler la réunion')).toBe('appel');
+    expect(typeActivite('Envoyer le compte rendu de réunion')).toBe('email');
+    expect(typeActivite('Préparer le devis')).toBe('tache');
+    expect(typeActivite('Préparer le devis', 'CALL')).toBe('appel');
+  });
+
+  it('derives the channel from the type', () => {
+    expect(canalDe('reunion')).toBe('tache');
+    expect(canalDe('dejeuner')).toBe('tache');
+    expect(canalDe('echeance')).toBe('tache');
+    expect(canalDe('email')).toBe('email');
+    expect(canalDe('appel')).toBe('appel');
   });
 });

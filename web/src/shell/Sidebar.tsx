@@ -16,6 +16,8 @@ type Props = {
   view: string;
   open: boolean;
   favoris: string[];
+  // Red badge per menu entry (Pipedrive: activities overdue or due today).
+  compteurs?: Record<string, number>;
   onToggleFavori: (id: string) => void;
   onMoveFavori: (id: string, cibleId: string, apres: boolean) => void;
 };
@@ -29,6 +31,7 @@ export function Sidebar({
   view,
   open,
   favoris,
+  compteurs = {},
   onToggleFavori,
   onMoveFavori,
 }: Props) {
@@ -63,6 +66,7 @@ export function Sidebar({
       >
         <Icon name={it.icon} />
         <span className="lbl">{it.label}</span>
+        {(compteurs[it.id] ?? 0) > 0 && <span className="pastille">{compteurs[it.id]}</span>}
         {!isBuilt(it.id) && <span className="soon-tag">Bientôt</span>}
         <span
           className={`fav ${fav ? 'on' : ''}`}
