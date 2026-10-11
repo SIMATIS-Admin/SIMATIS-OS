@@ -30,9 +30,16 @@ import { syncNow } from '../connexions/service.js';
 import { BranchementRefuse, brancherHubspot, googleWebFlow } from '../connexions/brancher.js';
 import type { FetchLike } from '../connecteurs/google/oauth.js';
 import { loadInstanceSecrets } from '../secrets.js';
-import { getFavoris, setFavoris } from '../preferences/service.js';
+import { getFavoris, getOptions, setFavoris, setOptions } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
-import { createTache, listTaches, TacheInvalide, updateTache } from '../crm/taches.js';
+import {
+  compterAFaire,
+  createTache,
+  listTaches,
+  TacheInvalide,
+  updateTache,
+} from '../crm/taches.js';
+import { TYPES_ACTIVITE } from '../crm/type-tache.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
 import { paramsOf, ROUTINES, rythme } from '../routines/params.js';
@@ -238,8 +245,15 @@ export function registerApi(
 
   const titreTache = z.string().trim().min(1).max(300);
   const echeanceTache = z.iso.datetime({ offset: true }).nullable();
+  const champsActivite = {
+    type: z.enum(TYPES_ACTIVITE).optional(),
+    avecHeure: z.boolean().optional(),
+    dureeMinutes: z.number().int().min(15).max(480).nullable().optional(),
+    occupe: z.boolean().optional(),
+  };
   const tacheSchema = z
     .object({
+      ...champsActivite,
       titre: titreTache,
       notes: z.string().max(5000).nullable().optional(),
       echeance: echeanceTache.optional(),
@@ -250,6 +264,7 @@ export function registerApi(
     .strict();
   const tachePatchSchema = z
     .object({
+      ...champsActivite,
       titre: titreTache.optional(),
       notes: z.string().max(5000).nullable().optional(),
       echeance: echeanceTache.optional(),
@@ -261,6 +276,10 @@ export function registerApi(
     if (error instanceof TacheInvalide) return reply.code(400).send({ error: error.message });
     throw error;
   };
+  app.get<SlugParams>(
+    '/api/i/:slug/taches/compteur',
+    onInstance(async (i) => ({ n: await compterAFaire(db, i) })),
+  );
   app.post<SlugParams & { Body: unknown }>(
     '/api/i/:slug/taches',
     onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
@@ -874,7 +893,16 @@ export function registerApi(
     }),
   );
 
-  app.get('/api/preferences', async () => ({ favoris: await getFavoris(db, UTILISATEUR) }));
+  app.get('/api/preferences', async () => ({
+    favoris: await getFavoris(db, UTILISATEUR),
+    options: await getOptions(db, UTILISATEUR),
+  }));
+  const optionsSchema = z.object({ ensuite: z.boolean() }).partial().strict();
+  app.put<{ Body: unknown }>('/api/preferences/options', async (request, reply) => {
+    const parsed = optionsSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Options invalides' });
+    return { options: await setOptions(db, UTILISATEUR, parsed.data) };
+  });
   app.put<{ Body: unknown }>('/api/preferences', async (request, reply) => {
     const parsed = favorisSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Favoris invalides' });

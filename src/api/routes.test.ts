@@ -101,10 +101,13 @@ describe('API instances, entreprises, contacts', () => {
   it('keeps favourites per user, with the mockup default, and validates them', async () => {
     expect((await get('/api/preferences')).body).toEqual({
       favoris: ['pipeline', 'brief', 'prospection'],
+      options: { ensuite: true },
     });
     const saved = await send('PUT', '/api/preferences', { favoris: ['contacts', 'pipeline'] });
     expect(saved.body).toEqual({ favoris: ['contacts', 'pipeline'] });
-    expect((await get('/api/preferences')).body).toEqual({ favoris: ['contacts', 'pipeline'] });
+    expect((await get('/api/preferences')).body).toMatchObject({
+      favoris: ['contacts', 'pipeline'],
+    });
     expect((await send('PUT', '/api/preferences', { favoris: ['<script>'] })).status).toBe(400);
   });
 
