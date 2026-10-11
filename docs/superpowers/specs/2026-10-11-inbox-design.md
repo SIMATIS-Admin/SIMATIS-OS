@@ -52,6 +52,13 @@ distingue donc :
 **Définition d'une Démo** : un mandat qui ne contient que des données fictives et ne touche
 aucun outil réel. Il sert à montrer l'OS et peut être partagé en copie isolée.
 
+**Où vit le suivi d'un prospect** : le suivi commercial réel des prospects de SIMATIS
+(diagnostic à préparer, rapport de diagnostic à remettre, devis à produire) se fait dans
+« Mon activité », avec leurs fiches entreprise et contact, leur affaire et leurs devis. Les
+sujets correspondants arrivent donc dans l'Inbox de « Mon activité ». Une démo ne sert qu'à
+montrer l'OS au prospect. Un mandat (en Closing, puis en cours) n'est créé que lorsque la
+signature approche et que le travail pour le client, avec ses propres outils, commence.
+
 Mise en œuvre, au plus simple :
 
 - Un mandat en Closing est une instance de type `mandat` avec `config.phase = 'closing'`. Il
