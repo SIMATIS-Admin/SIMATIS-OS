@@ -5,6 +5,8 @@ import { Fiche } from './Fiche.js';
 
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
+// Present (null or a mandate) only for a deal of the own activity.
+let mandat: { slug: string; nom: string } | null | undefined;
 
 const affaire = () => ({
   kind: 'affaire',
@@ -90,6 +92,16 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
   if (url.includes('/fiches/contact/')) return json(contact());
+  if (url.endsWith('/mandat') || url.endsWith('/mandat/lier'))
+    return json({ slug: 'beta', nom: 'Beta', type: 'mandat', phase: 'closing' });
+  if (url === '/api/instances')
+    return json([
+      { slug: 'simatis', nom: 'SIMATIS', type: 'propre', phase: null },
+      { slug: 'beta', nom: 'Beta', type: 'mandat', phase: 'en_cours' },
+      { slug: 'demo', nom: 'Démo', type: 'prospect', phase: null },
+    ]);
+  if (url.includes('/fiches/affaire/') && mandat !== undefined)
+    return json({ ...affaire(), mandat });
   if (url.includes('/opportunites/')) return json({ opportunite: {}, simulation: false });
   if (url.includes('/preferences')) return json({ favoris: [], options: { ensuite: true } });
   return json(affaire());
@@ -100,6 +112,7 @@ const patch = (fin: string) => calls.find((c) => c.method === 'PATCH' && c.url.e
 describe('Fiche page', () => {
   beforeEach(() => {
     calls = [];
+    mandat = undefined;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -118,6 +131,56 @@ describe('Fiche page', () => {
     }
     expect(screen.getByText('Relancer Agathe')).toBeTruthy();
     expect(screen.getByText('Budget validé')).toBeTruthy();
+  });
+
+  it('creates the mandate of a deal of the own activity in two clicks', async () => {
+    mandat = null;
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Créer le mandat' }));
+    expect(calls.some((c) => c.url.endsWith('/mandat'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer la création' }));
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        url: '/api/i/simatis/opportunites/o1/mandat',
+        method: 'POST',
+        body: { crm: 'hubspot' },
+      }),
+    );
+  });
+
+  it('links the deal to an existing mandate, demos excluded', async () => {
+    mandat = null;
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    const choix = await screen.findByLabelText('Mandat existant');
+    expect(within(choix).queryByText('Démo')).toBeNull();
+    fireEvent.change(choix, { target: { value: 'beta' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lier à un mandat existant' }));
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        url: '/api/i/simatis/opportunites/o1/mandat/lier',
+        method: 'POST',
+        body: { slug: 'beta' },
+      }),
+    );
+  });
+
+  it('shows the linked mandate instead of the buttons', async () => {
+    mandat = { slug: 'beta', nom: 'Beta' };
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    const lienMandat = await screen.findByRole('link', { name: 'Beta' });
+    expect(lienMandat.getAttribute('href')).toBe('#/beta/brief');
+    expect(screen.queryByRole('button', { name: 'Créer le mandat' })).toBeNull();
+  });
+
+  it('offers no mandate panel outside the own activity or on a contact', async () => {
+    render(<Fiche slug="helioval" kind="affaire" id="o1" />);
+    await screen.findByRole('heading', { name: 'Structuration commerciale' });
+    expect(screen.queryByRole('button', { name: 'Créer le mandat' })).toBeNull();
+    cleanup();
+    mandat = null;
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    await screen.findByRole('heading', { name: 'Agathe Vallière' });
+    expect(screen.queryByRole('button', { name: 'Créer le mandat' })).toBeNull();
   });
 
   it('moves the deal to a stage from the bar', async () => {
