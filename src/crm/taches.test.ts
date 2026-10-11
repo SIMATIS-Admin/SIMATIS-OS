@@ -169,11 +169,29 @@ describe('Tâches', () => {
     await mk('Retard faite', '2026-10-09T09:00:00.000Z', true);
     await mk('Sans date', null);
     await mk('Après', '2026-10-19T08:00:00.000Z');
-    const vue = await listTaches(t.app.db, sansCrm, { du: '2026-10-12', au: '2026-10-18' }, off());
+    const mercredi = new Date('2026-10-14T10:00:00Z');
+    const vue = await listTaches(
+      t.app.db,
+      sansCrm,
+      { du: '2026-10-12', au: '2026-10-18' },
+      off(),
+      mercredi,
+    );
     expect(vue.taches.map((x) => x.titre)).toEqual(['Semaine']);
     expect(vue.enRetard.map((x) => x.titre)).toEqual(['Retard']);
     expect(vue.sansEcheance.map((x) => x.titre)).toEqual(['Sans date']);
     expect(vue).toMatchObject({ rdv: [], rdvEtat: 'non_configure', hubspot: false });
+
+    // Overdue means before today, not before the week shown: viewing a later week, the task
+    // of the 19th (future) is not overdue, the one of the 13th (past) is.
+    const plusTard = await listTaches(
+      t.app.db,
+      sansCrm,
+      { du: '2026-10-26', au: '2026-11-01' },
+      off(),
+      mercredi,
+    );
+    expect(plusTard.enRetard.map((x) => x.titre)).toEqual(['Retard', 'Semaine']);
   });
 
   it('refuses to link a task to a contact or a deal of another instance', async () => {

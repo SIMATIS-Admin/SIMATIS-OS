@@ -1867,88 +1867,122 @@ textarea.input {
 }
 
 /* Tâches : vue semaine */
-.sem {
-  overflow-x: auto;
+.sem-barre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
-.sem-grille {
+.sem-barre h2 {
+  margin: 0;
+  font-size: 18px;
+  min-width: 300px;
+  text-align: center;
+}
+.sem-nav {
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px 14px;
+}
+.sem2 {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.sem-jours {
+  flex: 1;
   display: grid;
-  grid-template-columns: 52px repeat(5, minmax(120px, 1fr)) minmax(90px, 0.6fr);
-  min-width: 760px;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 8px;
+  min-width: 0;
 }
-.sem-entete {
-  padding: 8px 6px;
-  font-weight: 600;
-  border-bottom: 1px solid var(--line);
+.sem-jour {
+  padding: 8px;
+  min-height: 160px;
 }
-.sem-heure {
-  font-size: 11px;
-  color: var(--ink-3);
-  padding: 2px 6px;
-  text-align: right;
+.sem-jour h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
 }
-.sem-cell {
-  position: relative;
-  min-height: 28px;
-  border-left: 1px solid var(--line);
-  border-bottom: 1px dashed var(--line);
-  padding: 1px 2px;
-}
-.sem-cell.journee {
-  min-height: 34px;
-  border-bottom: 1px solid var(--line);
-}
-.sem-cell .rdv {
-  position: absolute;
-  inset: 1px 2px auto 2px;
+.sem-jour .rdv {
   background: var(--line-2);
   color: var(--ink-2);
   border-radius: var(--r-s);
-  font-size: 11px;
-  padding: 2px 4px;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 0;
+  font-size: 12px;
+  padding: 3px 6px;
+  margin-bottom: 4px;
+}
+.sem-groupe {
+  margin-top: 8px;
+}
+.sem-groupe h4 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.sem-groupe h4 svg {
+  width: 12px;
+  height: 12px;
 }
 .sem-tache {
-  position: relative;
-  z-index: 1;
   display: flex;
+  justify-content: space-between;
   gap: 4px;
-  align-items: center;
   font-size: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-left: 3px solid var(--ink-3);
   border-radius: var(--r-s);
-  padding: 2px 4px;
-  margin-bottom: 2px;
+  padding: 3px 6px;
+  margin-bottom: 3px;
   cursor: grab;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .sem-tache.hubspot {
   border-left-color: var(--navy-3);
-}
-.sem-tache.fait b {
-  text-decoration: line-through;
-  opacity: 0.6;
-}
-.sem-tache svg {
-  width: 12px;
-  height: 12px;
-  flex: none;
 }
 .sem-tache b {
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sem-tache small {
+  color: var(--ink-3);
+  flex: none;
+}
+.lien {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--navy-3);
+  cursor: pointer;
 }
 .sem-retard {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  width: 230px;
+  flex: none;
 }
-.sem-retard .sem-tache {
-  max-width: 260px;
+.sem-retard ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.sem-retard li {
+  margin-bottom: 8px;
+}
+.sem-retard-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sem-retard-replie {
+  writing-mode: vertical-rl;
+  padding: 10px 6px;
 }

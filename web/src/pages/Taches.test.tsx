@@ -2,12 +2,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Taches } from './Taches.js';
-import { vers } from './taches/creneaux.js';
 
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let hubspot = true;
 let patchReponse: unknown = null;
+let beaucoup = false;
 
 const tache = (id: string, titre: string, extra: Record<string, unknown> = {}) => ({
   id,
@@ -31,6 +31,14 @@ const semaine = () => ({
       contact: { id: 'c1', nom: 'Romain Arpin' },
     }),
     tache('t2', 'Envoyer la plaquette', { canal: 'email', echeance: '2026-10-14T09:00:00.000Z' }),
+    ...(beaucoup
+      ? Array.from({ length: 6 }, (_, k) =>
+          tache(`m${k}`, `Relance mail ${k}`, {
+            canal: 'email',
+            echeance: '2026-10-14T09:00:00.000Z',
+          }),
+        )
+      : []),
     tache('t3', 'Préparer le devis', { echeance: '2026-10-12T09:00:00.000Z', fait: true }),
   ],
   enRetard: [tache('t4', 'Relancer Fonderie', { echeance: '2026-10-08T08:00:00.000Z' })],
@@ -71,6 +79,7 @@ describe('Tâches screen', () => {
     calls = [];
     hubspot = true;
     patchReponse = null;
+    beaucoup = false;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -163,8 +172,12 @@ describe('Tâches screen', () => {
       getData: () => id,
       setData: () => undefined,
     });
-    const cellule = (jour: number, ligne: number) =>
-      document.querySelector(`[data-jour="${jour}"][data-ligne="${ligne}"]`) as HTMLElement;
+    const jour = (d: string) => document.querySelector(`[data-jour="${d}"]`) as HTMLElement;
+    const patch = () => calls.find((c) => c.method === 'PATCH');
+    const semaineAffichee = async () => {
+      render(<Taches slug="simatis" />);
+      await screen.findByText('Appeler Romain Arpin');
+    };
 
     beforeEach(() => {
       vi.useFakeTimers({ toFake: ['Date'] });
@@ -174,38 +187,96 @@ describe('Tâches screen', () => {
       vi.useRealTimers();
     });
 
-    it('shows the week, overdue tasks, and meetings in the background', async () => {
-      render(<Taches slug="simatis" />);
-      await screen.findByText('Appeler Romain Arpin');
+    it('shows the week number, one column per day, tasks grouped by type and meetings', async () => {
+      await semaineAffichee();
       expect(calls[0]?.url).toBe('/api/i/simatis/taches?du=2026-10-12&au=2026-10-18');
-      for (const jour of ['Lun 12', 'Mar 13', 'Mer 14', 'Jeu 15', 'Ven 16', 'Week-end']) {
-        expect(screen.getByText(jour)).toBeTruthy();
+      expect(screen.getByText('Semaine 42 · 12 – 18 octobre 2026')).toBeTruthy();
+      for (const j of ['Lun 12', 'Mar 13', 'Mer 14', 'Jeu 15', 'Ven 16', 'Week-end']) {
+        expect(screen.getByText(j)).toBeTruthy();
       }
-      expect(within(cellule(1, 4)).getByText('Appeler Romain Arpin')).toBeTruthy();
-      const enRetard = screen.getByText('En retard').closest('section') as HTMLElement;
-      expect(within(enRetard).getByText('Relancer Fonderie')).toBeTruthy();
-      expect(screen.getByText('Déjeuner Fonderie').closest('.rdv')).toBeTruthy();
+      const mardi = jour('2026-10-13');
+      expect(within(mardi).getByText('Téléphone (1)')).toBeTruthy();
+      expect(within(mardi).getByText('Appeler Romain Arpin')).toBeTruthy();
+      expect(within(mardi).getByText('10:00')).toBeTruthy();
+      const jeudi = jour('2026-10-15');
+      expect(within(jeudi).getByText('Déjeuner Fonderie').closest('.rdv')).toBeTruthy();
+      expect(within(jeudi).getByText('14:00')).toBeTruthy();
     });
 
-    it('moves a task to another slot by drag and drop', async () => {
-      render(<Taches slug="simatis" />);
-      await screen.findByText('Appeler Romain Arpin');
-      fireEvent.dragOver(cellule(3, 4), { dataTransfer: dt('t2') });
-      fireEvent.drop(cellule(3, 4), { dataTransfer: dt('t2') });
-      await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
-      expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+    it('changes week with the buttons and the keyboard arrows', async () => {
+      await semaineAffichee();
+      fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }));
+      await waitFor(() => expect(calls.at(-1)?.url).toContain('du=2026-10-19&au=2026-10-25'));
+      fireEvent.keyDown(window, { key: 'ArrowLeft' });
+      await waitFor(() => expect(calls.at(-1)?.url).toContain('du=2026-10-12'));
+      fireEvent.keyDown(window, { key: 'ArrowLeft' });
+      await waitFor(() => expect(calls.at(-1)?.url).toContain('du=2026-10-05'));
+      fireEvent.click(screen.getByRole('button', { name: 'Cette semaine' }));
+      await waitFor(() => expect(calls.at(-1)?.url).toContain('du=2026-10-12'));
+    });
+
+    it('moves a task to another day, keeping its time', async () => {
+      await semaineAffichee();
+      fireEvent.dragOver(jour('2026-10-16'), { dataTransfer: dt('t2') });
+      fireEvent.drop(jour('2026-10-16'), { dataTransfer: dt('t2') });
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()).toMatchObject({
         url: '/api/i/simatis/taches/t2',
-        body: { echeance: vers('2026-10-12', 3, 4) },
+        body: { echeance: '2026-10-16T09:00:00.000Z' },
       });
     });
 
-    it('keeps a HubSpot task in place and explains when the move was only simulated', async () => {
+    it('pushes a task back one week when dropped on the next-week button', async () => {
+      await semaineAffichee();
+      fireEvent.drop(screen.getByRole('button', { name: 'Semaine suivante' }), {
+        dataTransfer: dt('t1'),
+      });
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()?.body).toEqual({ echeance: '2026-10-20T08:00:00.000Z' });
+    });
+
+    it('lists overdue tasks aside, oldest first, and reschedules them to today', async () => {
+      await semaineAffichee();
+      const colonne = screen.getByRole('complementary', { name: 'En retard' });
+      expect(within(colonne).getByText('En retard (1)')).toBeTruthy();
+      const ligne = within(colonne).getByText('Relancer Fonderie').closest('li') as HTMLElement;
+      expect(within(ligne).getByText('il y a 6 j')).toBeTruthy();
+      fireEvent.click(within(ligne).getByRole('button', { name: 'Aujourd’hui' }));
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()).toMatchObject({
+        url: '/api/i/simatis/taches/t4',
+        body: { echeance: '2026-10-14T08:00:00.000Z' },
+      });
+    });
+
+    it('reschedules all overdue tasks after confirmation, and folds the column', async () => {
+      const confirm = vi.fn(() => true);
+      vi.stubGlobal('confirm', confirm);
+      await semaineAffichee();
+      fireEvent.click(screen.getByRole('button', { name: 'Tout reporter à aujourd’hui' }));
+      expect(confirm).toHaveBeenCalled();
+      await waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(1));
+      fireEvent.click(screen.getByRole('button', { name: 'Replier la colonne En retard' }));
+      expect(screen.queryByText('Relancer Fonderie')).toBeNull();
+      expect(screen.getByRole('button', { name: 'En retard (1)' })).toBeTruthy();
+    });
+
+    it('folds a group of more than five tasks and hides a shared default time', async () => {
+      beaucoup = true;
+      await semaineAffichee();
+      const mercredi = jour('2026-10-14');
+      expect(within(mercredi).getByText('Email (7)')).toBeTruthy();
+      expect(within(mercredi).getAllByText(/Relance mail|Envoyer la plaquette/)).toHaveLength(5);
+      expect(within(mercredi).queryByText('11:00')).toBeNull();
+      fireEvent.click(within(mercredi).getByRole('button', { name: '+ 2 autres' }));
+      expect(within(mercredi).getAllByText(/Relance mail|Envoyer la plaquette/)).toHaveLength(7);
+    });
+
+    it('explains when a move was only simulated in HubSpot', async () => {
       patchReponse = { simulation: true, message: 'Simulation : rien n’a été écrit dans HubSpot.' };
-      render(<Taches slug="simatis" />);
-      await screen.findByText('Appeler Romain Arpin');
-      fireEvent.drop(cellule(4, 6), { dataTransfer: dt('t1') });
+      await semaineAffichee();
+      fireEvent.drop(jour('2026-10-16'), { dataTransfer: dt('t1') });
       expect(await screen.findByText(/Simulation : rien n’a été écrit/)).toBeTruthy();
-      expect(within(cellule(1, 4)).getByText('Appeler Romain Arpin')).toBeTruthy();
     });
   });
 });

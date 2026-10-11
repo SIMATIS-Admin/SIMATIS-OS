@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lt, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lt, not, sql, type SQL } from 'drizzle-orm';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
 import { connexions } from '../connexions/schema.js';
@@ -9,7 +9,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { rendezVous } from '../pilotage/brief.js';
-import { decaler } from '../pilotage/realisees.js';
+import { decaler, jourDe } from '../pilotage/realisees.js';
 import { contacts, opportunites, taches } from './schema.js';
 import { createInCrm, CrmIndisponible } from './service.js';
 import { typeTache, type Canal } from './type-tache.js';
@@ -93,14 +93,21 @@ export async function listTaches(
   instance: Instance,
   periode: { du: string; au: string },
   deps: ConnexionDeps,
+  maintenant = new Date(),
 ) {
   const debut = zoned(periode.du, '00:00', FUSEAU);
   const fin = zoned(decaler(periode.au, 1), '00:00', FUSEAU);
+  const aujourdhui = zoned(jourDe(maintenant, FUSEAU), '00:00', FUSEAU);
+  const dansLaSemaine = and(gte(taches.echeance, debut), lt(taches.echeance, fin));
   const data = await withInstance(db, instance.id, async (tx) => {
     const ouverte = isNull(taches.faitAt);
     return {
-      taches: await vues(tx, and(gte(taches.echeance, debut), lt(taches.echeance, fin))),
-      enRetard: await vues(tx, and(ouverte, lt(taches.echeance, debut))),
+      taches: await vues(tx, dansLaSemaine),
+      // Overdue is relative to today; a task of the week shown stays in its day.
+      enRetard: await vues(
+        tx,
+        and(ouverte, lt(taches.echeance, aujourdhui), not(dansLaSemaine ?? sql`false`)),
+      ),
       sansEcheance: await vues(tx, and(ouverte, isNull(taches.echeance))),
       crm: await crmHubspot(tx),
       agenda: (
