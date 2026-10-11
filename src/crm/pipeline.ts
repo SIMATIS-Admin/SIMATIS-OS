@@ -10,7 +10,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
-import { CrmIndisponible } from './service.js';
+import { createInCrm, CrmIndisponible } from './service.js';
 
 // Native pipeline (instances without CRM, demo data): the mockup's stages (data.js ETAPES).
 export const ETAPES_NATIVES = [
@@ -38,7 +38,7 @@ export function conversionRates(
 
 type Source = {
   source: 'natif' | 'hubspot';
-  etapes: { id: string; label: string }[];
+  etapes: { id: string; label: string; probabilite?: number | null }[];
   // HubSpot stages, closed ones included (to close or reopen a deal there).
   hubspot: ReturnType<typeof parseReglages> | null;
   ecrit: boolean;
@@ -62,7 +62,9 @@ export async function pipelineSource(tx: Tx): Promise<Source> {
   const reglages = parseReglages(crm.reglages);
   return {
     source: 'hubspot',
-    etapes: reglages.etapes.filter((e) => !e.clos).map((e) => ({ id: e.id, label: e.label })),
+    etapes: reglages.etapes
+      .filter((e) => !e.clos)
+      .map((e) => ({ id: e.id, label: e.label, probabilite: e.probabilite ?? null })),
     hubspot: reglages,
     ecrit: reglages.sens === 'deux_sens',
     derniereSynchro: crm.derniereSynchro,
@@ -247,5 +249,60 @@ export async function changeOpportunite(
       niveau: 'L2',
     });
     return { opportunite: row ?? opp, simulation };
+  });
+}
+
+// New deal from a pipeline column (Pipedrive « + »): in HubSpot first under a CRM, else in the OS.
+export async function createOpportunite(
+  db: Executor,
+  instance: Instance,
+  input: {
+    titre: string;
+    etape: string;
+    montant?: number | null;
+    echeance?: string | null;
+    contactId?: string | null;
+    entrepriseId?: string | null;
+  },
+  deps: ConnexionDeps,
+) {
+  return withInstance(db, instance.id, async (tx) => {
+    const src = await pipelineSource(tx);
+    if (!src.etapes.some((e) => e.id === input.etape))
+      throw new ChangementInvalide('Étape inconnue ou close');
+    for (const [table, id, nom] of [
+      [contacts, input.contactId, 'Contact'],
+      [entreprises, input.entrepriseId, 'Entreprise'],
+    ] as const) {
+      if (!id) continue;
+      const [found] = await tx
+        .select({ id: table.id })
+        .from(table)
+        .where(and(eq(table.instanceId, currentInstance), eq(table.id, id)));
+      if (!found) throw new ChangementInvalide(`${nom} introuvable dans cette instance`);
+    }
+    const crm = await createInCrm(tx, instance, 'deal.create', input, deps);
+    if (crm && 'simulation' in crm) return crm;
+    const [row] = await tx
+      .insert(opportunites)
+      .values({
+        instanceId: currentInstance,
+        titre: input.titre.trim(),
+        etape: input.etape,
+        montant: input.montant ?? null,
+        echeance: input.echeance ?? null,
+        contactId: input.contactId ?? null,
+        entrepriseId: input.entrepriseId ?? null,
+        etapesDates: { [input.etape]: new Date().toISOString() },
+        ...(crm ? { source: 'hubspot', sourceId: crm.sourceId } : {}),
+      })
+      .returning();
+    if (!row) throw new Error('Opportunité non créée');
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: `Opportunité créée : ${row.titre}`,
+      niveau: 'L2',
+    });
+    return row;
   });
 }

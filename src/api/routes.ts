@@ -24,7 +24,12 @@ import {
   reglagesSchema,
 } from '../connecteurs/hubspot/reglages.js';
 import { retirerDomainesExclus } from '../connecteurs/hubspot/sync.js';
-import { changeOpportunite, ChangementInvalide, getPipeline } from '../crm/pipeline.js';
+import {
+  changeOpportunite,
+  ChangementInvalide,
+  createOpportunite,
+  getPipeline,
+} from '../crm/pipeline.js';
 import { connexions } from '../connexions/schema.js';
 import { syncNow } from '../connexions/service.js';
 import { BranchementRefuse, brancherHubspot, googleWebFlow } from '../connexions/brancher.js';
@@ -446,6 +451,32 @@ export function registerApi(
         });
         return parsed.data;
       });
+    }),
+  );
+
+  const nouvelleOppSchema = z
+    .object({
+      titre: z.string().trim().min(1).max(300),
+      etape: z.string().min(1).max(100),
+      montant: z.number().int().min(0).nullable().optional(),
+      echeance: z.iso.date().nullable().optional(),
+      contactId: z.uuid().nullable().optional(),
+      entrepriseId: z.uuid().nullable().optional(),
+    })
+    .strict();
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/opportunites',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = nouvelleOppSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Opportunité invalide' });
+      try {
+        return await createOpportunite(db, i, parsed.data, connexionDeps);
+      } catch (error) {
+        if (error instanceof ChangementInvalide)
+          return reply.code(400).send({ error: error.message });
+        if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+        throw error;
+      }
     }),
   );
 

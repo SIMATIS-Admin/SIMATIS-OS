@@ -99,6 +99,7 @@ export function mapStages(pipelines: HsPipeline[]): Etape[] {
           ordre: pi * 1000 + s.displayOrder,
           clos,
           gagne,
+          pipeline: p.id,
           // Stage probability (weighted pipeline value), absent when HubSpot gives none.
           probabilite: Number.isFinite(p100) ? Math.round(p100 * 100) : null,
         };

@@ -62,6 +62,7 @@ describe('HubSpot mapping', () => {
       ['9002', true, false],
     ]);
     expect(custom.map((e) => e.probabilite)).toEqual([100, 0]);
+    expect(custom.map((e) => e.pipeline)).toEqual(['p2', 'p2']);
     expect(mapStages(demoPortal().pipelines)[0]?.probabilite).toBeNull();
   });
 
@@ -534,6 +535,65 @@ describe('HubSpot mirror', () => {
       { to: { id: '201' }, ...assoc(202) },
       { to: { id: '101' }, ...assoc(190) },
       { to: { id: '301' }, ...assoc(214) },
+    ]);
+  });
+
+  it('creates a deal in its stage and pipeline, linked to its contact and company', async () => {
+    const id = async (table: string, sourceId: string) =>
+      (
+        await t.owner.pool.query<{ id: string }>(
+          `select id from ${table} where instance_id = $1 and source_id = $2`,
+          [a.id, sourceId],
+        )
+      ).rows[0]?.id;
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    const contactId = await id('contacts', '201');
+    const entrepriseId = await id('entreprises', '101');
+    portal.calls.length = 0;
+    const r = await inA((tx) =>
+      writeVia(
+        tx,
+        armed,
+        'crm',
+        {
+          op: 'deal.create',
+          data: {
+            titre: 'Audit commercial',
+            montant: 9000,
+            echeance: '2026-12-15',
+            etape: 'qualifiedtobuy',
+            contactId,
+            entrepriseId,
+          },
+        },
+        { secretsDir, realWrites: true },
+      ),
+    );
+    expect(r).toMatchObject({ simulation: false });
+    expect(portal.calls).toEqual([
+      {
+        method: 'POST',
+        path: '/crm/v3/objects/deals',
+        body: {
+          properties: {
+            dealname: 'Audit commercial',
+            amount: '9000',
+            closedate: '2026-12-15',
+            dealstage: 'qualifiedtobuy',
+            pipeline: 'default',
+          },
+          associations: [
+            {
+              to: { id: '201' },
+              types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 3 }],
+            },
+            {
+              to: { id: '101' },
+              types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 5 }],
+            },
+          ],
+        },
+      },
     ]);
   });
 

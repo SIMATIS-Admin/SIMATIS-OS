@@ -44,6 +44,13 @@ const CONTACT_TO_COMPANY = 279;
 const NOTE_TO_CONTACT = 202;
 const NOTE_TO_COMPANY = 190;
 const NOTE_TO_DEAL = 214;
+// HUBSPOT_DEFINED deal → contact (3), → company (5).
+const DEAL_TO_CONTACT = 3;
+const DEAL_TO_COMPANY = 5;
+const defini = (associationTypeId: number) => ({
+  associationCategory: 'HUBSPOT_DEFINED',
+  associationTypeId,
+});
 
 export async function writeHubspot(
   ctx: SyncCtx,
@@ -122,6 +129,32 @@ export async function writeHubspot(
         );
       }
       call = () => client.request('PATCH', `/crm/v3/objects/deals/${id}`, { properties });
+      break;
+    }
+    case 'deal.create': {
+      const titre = str(d.titre);
+      const etape = str(d.etape);
+      if (!titre || !etape) throw new EcritureRefusee('Titre ou étape manquant');
+      const pipeline = reglages.etapes.find((e) => e.id === etape)?.pipeline ?? 'default';
+      const contact = d.contactId ? await hubspotId(ctx, contacts, d.contactId) : null;
+      const company = d.entrepriseId ? await hubspotId(ctx, entreprises, d.entrepriseId) : null;
+      const properties = {
+        ...sans({
+          dealname: titre,
+          amount: typeof d.montant === 'number' ? String(d.montant) : undefined,
+          closedate: str(d.echeance),
+        }),
+        dealstage: etape,
+        pipeline,
+      };
+      call = () =>
+        client.request('POST', '/crm/v3/objects/deals', {
+          properties,
+          associations: [
+            ...(contact ? [{ to: { id: contact }, types: [defini(DEAL_TO_CONTACT)] }] : []),
+            ...(company ? [{ to: { id: company }, types: [defini(DEAL_TO_COMPANY)] }] : []),
+          ],
+        });
       break;
     }
     case 'deal.associer': {

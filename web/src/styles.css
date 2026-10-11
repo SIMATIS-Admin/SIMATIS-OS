@@ -2314,3 +2314,26 @@ textarea.input {
     grid-template-columns: 1fr;
   }
 }
+
+/* Pipeline à la Pipedrive : totaux, personne, ajout */
+.pipe-totaux {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.col-h {
+  position: relative;
+}
+.col-plus {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 8px;
+}
+.card .pers {
+  margin-top: 2px;
+}

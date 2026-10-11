@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState, type DragEvent } from 'react';
 import {
   changeOpportunite,
+  createOpportunite,
+  fetchContacts,
+  fetchEntreprises,
   fetchPipeline,
   saveReglagesPipeline,
   syncConnexion,
@@ -116,6 +119,7 @@ function Card({
         {!o.clos && <EtatActivite o={o} />}
       </div>
       <div className="ttl">{o.titre}</div>
+      {o.contact && <div className="pers small muted">{o.contact}</div>}
       {o.clos === 'perdu' ? (
         <div className="motif">
           Perdue{label(o.etape) !== o.etape ? ` en ${label(o.etape).toLowerCase()}` : ''}
@@ -181,12 +185,152 @@ export function Cloture({
   );
 }
 
+const somme = (os: PipelineOpp[]) => os.reduce((a, o) => a + (o.montant ?? 0), 0);
+
+type SaisieAffaire = {
+  titre: string;
+  montant: number | null;
+  echeance: string | null;
+  entrepriseId: string | null;
+  contactId: string | null;
+};
+
+// Pipedrive « + » of a stage: title, value, close date, organisation and person.
+function NouvelleAffaire({
+  slug,
+  etape,
+  onClose,
+  onSave,
+}: {
+  slug: string;
+  etape: string;
+  onClose: () => void;
+  onSave: (s: SaisieAffaire) => Promise<void>;
+}) {
+  const [titre, setTitre] = useState('');
+  const [montant, setMontant] = useState('');
+  const [echeance, setEcheance] = useState('');
+  const [org, setOrg] = useState<{ id: string; nom: string } | null>(null);
+  const [pers, setPers] = useState<{ id: string; nom: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <Modal title="Nouvelle affaire" onClose={onClose}>
+      <p className="small muted">Étape : {etape}</p>
+      <label className="field">
+        <span>Titre</span>
+        <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} />
+      </label>
+      <div className="grid g2">
+        <label className="field">
+          <span>Valeur (€)</span>
+          <input
+            className="input"
+            type="number"
+            min={0}
+            value={montant}
+            onChange={(e) => setMontant(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Date de clôture</span>
+          <input
+            className="input"
+            type="date"
+            value={echeance}
+            onChange={(e) => setEcheance(e.target.value)}
+          />
+        </label>
+      </div>
+      <Recherche slug={slug} kind="entreprise" choix={org} onChoix={setOrg} />
+      <Recherche slug={slug} kind="contact" choix={pers} onChoix={setPers} />
+      {error && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </p>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button
+          className="btn primary"
+          disabled={!titre.trim()}
+          onClick={() =>
+            void onSave({
+              titre: titre.trim(),
+              montant: montant ? Math.round(Number(montant)) : null,
+              echeance: echeance || null,
+              entrepriseId: org?.id ?? null,
+              contactId: pers?.id ?? null,
+            }).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+          }
+        >
+          Créer
+        </button>
+        <button className="btn ghost" onClick={onClose}>
+          Annuler
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function Recherche({
+  slug,
+  kind,
+  choix,
+  onChoix,
+}: {
+  slug: string;
+  kind: 'entreprise' | 'contact';
+  choix: { id: string; nom: string } | null;
+  onChoix: (c: { id: string; nom: string } | null) => void;
+}) {
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState<{ id: string; nom: string }[]>([]);
+  useEffect(() => {
+    if (q.trim().length < 2) return setRes([]);
+    const charger = kind === 'contact' ? fetchContacts : fetchEntreprises;
+    void charger(slug, q).then(
+      (r) => setRes(r.slice(0, 6)),
+      () => setRes([]),
+    );
+  }, [slug, kind, q]);
+  const label = kind === 'contact' ? 'Personne' : 'Organisation';
+  return (
+    <div className="field">
+      <span>{label}</span>
+      {choix ? (
+        <span>
+          {choix.nom}{' '}
+          <button className="lien" onClick={() => onChoix(null)}>
+            changer
+          </button>
+        </span>
+      ) : (
+        <>
+          <input
+            className="input"
+            aria-label={label}
+            placeholder="Rechercher…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {res.map((r) => (
+            <button key={r.id} className="lien fi-resultat" onClick={() => onChoix(r)}>
+              {r.nom}
+            </button>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function Pipeline({ slug }: { slug: string }) {
   const [data, setData] = useState<PipelineData | null>(null);
   const [mode, setMode] = useState<'board' | 'matrice'>('board');
   const [cloture, setCloture] = useState<{ id: string; r: 'gagne' | 'perdu' } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  const [nouvelle, setNouvelle] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetchPipeline(slug).then(setData, (e: unknown) => setMessage(String(e)));
@@ -225,7 +369,13 @@ export function Pipeline({ slug }: { slug: string }) {
     if (o.etape === cible && !o.clos) return;
     void change(id, { etape: cible });
   };
-  const col = (id: string, nom: string, os: PipelineOpp[], cls = '') => (
+  const col = (
+    id: string,
+    nom: string,
+    os: PipelineOpp[],
+    cls = '',
+    prob: number | null = null,
+  ) => (
     <div
       key={id}
       className={`col ${cls} ${over === id ? 'drop' : ''}`}
@@ -241,7 +391,22 @@ export function Pipeline({ slug }: { slug: string }) {
         <b>
           {nom} <span className="muted">{os.length}</span>
         </b>
-        <span>{eur(os.reduce((a, o) => a + (o.montant ?? 0), 0))}</span>
+        <span>
+          {eur(somme(os))}
+          {prob != null && (
+            <small className="muted"> · pondéré {eur(Math.round((somme(os) * prob) / 100))}</small>
+          )}
+        </span>
+        {!cls && data.ecrit && (
+          <button
+            className="btn ghost sm col-plus"
+            aria-label={`Ajouter une affaire dans ${nom}`}
+            title="Nouvelle affaire"
+            onClick={() => setNouvelle(id)}
+          >
+            +
+          </button>
+        )}
       </div>
       {os.map((o) => (
         <Card
@@ -279,6 +444,13 @@ export function Pipeline({ slug }: { slug: string }) {
   };
 
   const closing = cloture ? find(cloture.id) : undefined;
+  // Pipedrive header: total and weighted value of the open deals (stage probability).
+  const probas = new Map(data.etapes.map((e) => [e.id, e.probabilite ?? null]));
+  const pondere = [...probas.values()].some((p) => p !== null)
+    ? Math.round(
+        ouvertes.reduce((a, o) => a + ((o.montant ?? 0) * (probas.get(o.etape) ?? 0)) / 100, 0),
+      )
+    : null;
   // Pipedrive: a card opens the deal page.
   const ouvrir = (id: string) => (location.hash = `#/${slug}/fiche/affaire/${id}`);
   return (
@@ -344,28 +516,46 @@ export function Pipeline({ slug }: { slug: string }) {
         </div>
       )}
       {mode === 'board' ? (
-        <div className="board">
-          {data.etapes.flatMap((e, k) => [
-            col(
-              e.id,
-              e.label,
-              ouvertes.filter((o) => o.etape === e.id),
-            ),
-            arrow(k),
-          ])}
-          {col(
-            'gagne',
-            'Gagnées',
-            data.opportunites.filter((o) => o.clos === 'gagne'),
-            'won closed',
-          )}
-          {col(
-            'perdu',
-            'Perdues',
-            data.opportunites.filter((o) => o.clos === 'perdu'),
-            'lost closed',
-          )}
-        </div>
+        <>
+          <div className="pipe-totaux">
+            <span>
+              Total <b className="num">{eur(somme(ouvertes))}</b>
+            </span>
+            {pondere !== null && (
+              <span>
+                Pondéré <b className="num">{eur(pondere)}</b>
+              </span>
+            )}
+            <span className="muted">
+              {ouvertes.length} affaire{ouvertes.length > 1 ? 's' : ''} ouverte
+              {ouvertes.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="board">
+            {data.etapes.flatMap((e, k) => [
+              col(
+                e.id,
+                e.label,
+                ouvertes.filter((o) => o.etape === e.id),
+                '',
+                e.probabilite ?? null,
+              ),
+              arrow(k),
+            ])}
+            {col(
+              'gagne',
+              'Gagnées',
+              data.opportunites.filter((o) => o.clos === 'gagne'),
+              'won closed',
+            )}
+            {col(
+              'perdu',
+              'Perdues',
+              data.opportunites.filter((o) => o.clos === 'perdu'),
+              'lost closed',
+            )}
+          </div>
+        </>
       ) : (
         <div className="matrix">
           {(['eleve', 'limite'] as const).flatMap((pot) => [
@@ -397,6 +587,19 @@ export function Pipeline({ slug }: { slug: string }) {
           <div className="ax">Faisabilité forte</div>
           <div className="ax">Faisabilité faible</div>
         </div>
+      )}
+      {nouvelle && (
+        <NouvelleAffaire
+          slug={slug}
+          etape={data.etapes.find((e) => e.id === nouvelle)?.label ?? nouvelle}
+          onClose={() => setNouvelle(null)}
+          onSave={async (saisie) => {
+            const r = await createOpportunite(slug, { ...saisie, etape: nouvelle });
+            setNouvelle(null);
+            setMessage('simulation' in r ? r.message : null);
+            load();
+          }}
+        />
       )}
       {cloture && closing && (
         <Cloture

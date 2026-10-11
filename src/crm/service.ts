@@ -182,7 +182,7 @@ export type Simulation = { simulation: true; message: string };
 export async function createInCrm(
   tx: Tx,
   instance: Instance,
-  op: 'company.create' | 'contact.create' | 'task.create',
+  op: 'company.create' | 'contact.create' | 'task.create' | 'deal.create',
   data: Record<string, unknown>,
   deps: CreationDeps,
 ): Promise<{ sourceId: string } | Simulation | null> {
