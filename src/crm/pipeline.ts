@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, min } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNotNull, isNull, min, or, sql } from 'drizzle-orm';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
 import { connexions } from '../connexions/schema.js';
@@ -10,7 +10,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
-import { createInCrm, CrmIndisponible } from './service.js';
+import { createInCrm, CrmIndisponible, likePattern } from './service.js';
 
 // Native pipeline (instances without CRM, demo data): the mockup's stages (data.js ETAPES).
 export const ETAPES_NATIVES = [
@@ -305,4 +305,34 @@ export async function createOpportunite(
     });
     return row;
   });
+}
+
+// Deals to link an activity to (Pipedrive activity window), open ones first.
+export async function rechercherOpportunites(db: Executor, instance: Instance, q: string) {
+  const motif = likePattern(q);
+  return withInstance(db, instance.id, (tx) =>
+    tx
+      .select({
+        id: opportunites.id,
+        titre: opportunites.titre,
+        entreprise: entreprises.nom,
+        clos: opportunites.clos,
+      })
+      .from(opportunites)
+      .leftJoin(
+        entreprises,
+        and(
+          eq(entreprises.id, opportunites.entrepriseId),
+          eq(entreprises.instanceId, currentInstance),
+        ),
+      )
+      .where(
+        and(
+          eq(opportunites.instanceId, currentInstance),
+          or(ilike(opportunites.titre, motif), ilike(entreprises.nom, motif)),
+        ),
+      )
+      .orderBy(sql`${opportunites.clos} nulls first`, asc(opportunites.titre))
+      .limit(10),
+  );
 }

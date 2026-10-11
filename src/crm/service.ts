@@ -8,7 +8,7 @@ import { withInstance } from '../db/context.js';
 import { logEvent } from '../journal/service.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
 
-const likePattern = (q: string) => `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+export const likePattern = (q: string) => `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 // Raised when the instance's CRM must receive the new record but cannot (yet): HTTP 409.
 export class CrmIndisponible extends Error {}

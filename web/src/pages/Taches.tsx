@@ -13,6 +13,7 @@ import { Icon } from '../icons.js';
 import { ACTIVITES, ORDRE_ACTIVITES, lundiDe, plusJours } from './taches/commun.js';
 import { lundiDu, periode, type CleePeriode } from './taches/periodes.js';
 import { EditionTache, Ensuite, type Enregistrement } from './taches/Edition.js';
+import { Tableau } from './listes/Tableau.js';
 import { jourParis, memeHeure, titreJour, titreSemaine } from './taches/creneaux.js';
 import { Grille } from './taches/Grille.js';
 import { EnRetard, MIME_TACHE, Semaine } from './taches/Semaine.js';
@@ -35,20 +36,6 @@ const echeanceLisible = (e: string | null) =>
 
 export const estSimulation = (r: unknown): r is { simulation: true; message: string } =>
   typeof r === 'object' && r !== null && 'simulation' in r;
-
-export function Pastilles({ t }: { t: TacheVue }) {
-  const [ico, lbl] = ACTIVITES[t.type];
-  return (
-    <>
-      <span className="badge">
-        <Icon name={ico} /> {lbl}
-      </span>{' '}
-      <span className={`badge ${t.origine === 'hubspot' ? 'blue' : ''}`}>
-        {t.origine === 'hubspot' ? 'HubSpot' : 'OS'}
-      </span>
-    </>
-  );
-}
 
 const MODES: [Mode, string][] = [
   ['jour', 'Jour'],
@@ -73,12 +60,14 @@ function Liste({
   hubspot,
   onOpen,
   onFait,
+  onModifier,
 }: {
   slug: string;
   version: number;
   hubspot: boolean;
   onOpen: (t: TacheVue) => void;
   onFait: (t: TacheVue) => void;
+  onModifier: (t: TacheVue, patch: TacheSaisie) => Promise<void>;
 }) {
   const [types, setTypes] = useState<Set<TacheVue['type']>>(new Set(ORDRE_ACTIVITES));
   const [cle, setCle] = useState<CleePeriode | 'plage'>('semaine');
@@ -201,28 +190,82 @@ function Liste({
           </p>
         )}
         {shown.length ? (
-          <ul className="tasks">
-            {shown.map((t) => (
-              <li key={t.id} className="tache-ligne">
-                <input
-                  type="checkbox"
-                  aria-label={`Marquer faite : ${t.titre}`}
-                  checked={t.fait}
-                  onChange={() => onFait(t)}
-                />
-                <div style={{ cursor: 'pointer' }} onClick={() => onOpen(t)}>
-                  <b>{t.titre}</b>
-                  <div className="small muted">
-                    {t.contact ? `${t.contact.nom} · ` : ''}
-                    <span className={vue?.enRetard.includes(t) ? 'late' : ''}>
-                      {echeanceLisible(t.echeance)}
-                    </span>{' '}
-                    <Pastilles t={t} />
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <Tableau
+            cle="activites"
+            lignes={shown}
+            titre={(t) => t.titre}
+            onOuvrir={onOpen}
+            onModifier={(t, champ, v) => onModifier(t, { [champ]: v })}
+            colonnes={[
+              {
+                cle: 'sujet',
+                label: 'Sujet',
+                valeur: (t) => t.titre,
+                edition: { champ: 'titre' },
+                affiche: (t) => (
+                  <>
+                    <input
+                      type="checkbox"
+                      aria-label={`Marquer faite : ${t.titre}`}
+                      checked={t.fait}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => onFait(t)}
+                    />{' '}
+                    <b>{t.titre}</b>
+                  </>
+                ),
+              },
+              {
+                cle: 'type',
+                label: 'Type',
+                valeur: (t) => ACTIVITES[t.type][1],
+                affiche: (t) => (
+                  <span className="badge">
+                    <Icon name={ACTIVITES[t.type][0]} /> {ACTIVITES[t.type][1]}
+                  </span>
+                ),
+              },
+              { cle: 'affaire', label: 'Affaire', valeur: (t) => t.opportunite?.titre ?? null },
+              { cle: 'personne', label: 'Personne', valeur: (t) => t.contact?.nom ?? null },
+              {
+                cle: 'email',
+                label: 'Email',
+                valeur: (t) => t.contact?.email ?? null,
+                masquee: true,
+              },
+              {
+                cle: 'telephone',
+                label: 'Téléphone',
+                valeur: (t) => t.contact?.telephone ?? null,
+                masquee: true,
+              },
+              {
+                cle: 'organisation',
+                label: 'Organisation',
+                valeur: (t) => t.entreprise?.nom ?? null,
+              },
+              {
+                cle: 'echeance',
+                label: 'Échéance',
+                valeur: (t) => t.echeance,
+                affiche: (t) => (
+                  <span className={vue?.enRetard.includes(t) ? 'late' : ''}>
+                    {echeanceLisible(t.echeance)}
+                  </span>
+                ),
+              },
+              {
+                cle: 'origine',
+                label: 'Origine',
+                valeur: (t) => (t.origine === 'hubspot' ? 'HubSpot' : 'OS'),
+                affiche: (t) => (
+                  <span className={`badge ${t.origine === 'hubspot' ? 'blue' : ''}`}>
+                    {t.origine === 'hubspot' ? 'HubSpot' : 'OS'}
+                  </span>
+                ),
+              },
+            ]}
+          />
         ) : (
           <div className="empty">Aucune activité pour ces filtres.</div>
         )}
@@ -384,6 +427,7 @@ export function Taches({ slug }: { slug: string }) {
             version={version}
             hubspot={data.hubspot}
             onOpen={setEdition}
+            onModifier={modifier}
             onFait={(t) =>
               void updateTache(slug, t.id, { fait: !t.fait }).then(
                 (r) => {
@@ -429,6 +473,7 @@ export function Taches({ slug }: { slug: string }) {
         <EditionTache
           tache={edition === 'nouvelle' ? null : edition}
           hubspot={data.hubspot}
+          slug={slug}
           onClose={() => setEdition(null)}
           onSave={async ({ hubspot, ...saisie }) => {
             if (edition === 'nouvelle') {

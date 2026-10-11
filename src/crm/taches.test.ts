@@ -301,6 +301,36 @@ describe('Tâches', () => {
     expect(await compterAFaire(t.app.db, vide, mercredi)).toBe(2);
   });
 
+  it('gives each activity its person details and organisation, and searches deals to link', async () => {
+    const tache = await t.owner.pool.query<{ id: string }>(
+      "select id from taches where instance_id = $1 and source_id = '402'",
+      [a.id],
+    );
+    const vue = await listTaches(t.app.db, a, { du: '2026-10-01', au: '2026-10-31' }, off());
+    const appel = [...vue.taches, ...vue.enRetard].find((x) => x.id === tache.rows[0]?.id);
+    expect(appel?.contact).toMatchObject({
+      nom: 'Romain Arpin',
+      email: 'r.arpin@menuiserie-arpin.example',
+    });
+    expect(appel?.entreprise).toMatchObject({ nom: 'Menuiserie Arpin' });
+
+    const app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
+    try {
+      const r = await app.inject({
+        method: 'GET',
+        url: '/api/i/mandat-taches/opportunites/recherche?q=struct',
+      });
+      expect(r.json()).toEqual([
+        expect.objectContaining({
+          titre: 'Structuration commerciale',
+          entreprise: 'Fonderie Vallière',
+        }),
+      ]);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('validates the API input and keeps each instance to itself', async () => {
     const app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
     try {

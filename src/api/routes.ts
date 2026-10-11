@@ -29,6 +29,7 @@ import {
   ChangementInvalide,
   createOpportunite,
   getPipeline,
+  rechercherOpportunites,
 } from '../crm/pipeline.js';
 import { connexions } from '../connexions/schema.js';
 import { syncNow } from '../connexions/service.js';
@@ -454,6 +455,13 @@ export function registerApi(
     }),
   );
 
+  type RechercheRoute = SlugParams & { Querystring: { q?: string } };
+  app.get<RechercheRoute>(
+    '/api/i/:slug/opportunites/recherche',
+    onInstance<RechercheRoute>((i, request) =>
+      rechercherOpportunites(db, i, (request.query.q ?? '').slice(0, 100)),
+    ),
+  );
   const nouvelleOppSchema = z
     .object({
       titre: z.string().trim().min(1).max(300),

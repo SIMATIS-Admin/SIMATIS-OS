@@ -292,7 +292,8 @@ export type TacheVue = {
   echeance: string | null;
   fait: boolean;
   origine: 'hubspot' | 'os';
-  contact: { id: string; nom: string } | null;
+  contact: { id: string; nom: string; email?: string | null; telephone?: string | null } | null;
+  entreprise?: { id: string; nom: string } | null;
   opportunite: { id: string; titre: string; clos: 'gagne' | 'perdu' | null } | null;
 };
 export type SemaineTaches = {
@@ -537,3 +538,7 @@ export const noteFiche = (
   id: string,
   note: { corps: string; hubspot: boolean },
 ) => sendJson<FicheDetail | SimulationTache>('POST', `${fiche(slug, kind, id)}/notes`, note);
+export const fetchOpportunitesRecherche = (slug: string, q: string) =>
+  getJson<{ id: string; titre: string; entreprise: string | null; clos: string | null }[]>(
+    inst(slug, `opportunites/recherche?q=${encodeURIComponent(q)}`),
+  );

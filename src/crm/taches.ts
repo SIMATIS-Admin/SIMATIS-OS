@@ -10,7 +10,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { rendezVous } from '../pilotage/brief.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
-import { contacts, opportunites, taches } from './schema.js';
+import { contacts, entreprises, opportunites, taches } from './schema.js';
 import { createInCrm, CrmIndisponible } from './service.js';
 import { canalDe, typeActivite, type Canal, type TypeActivite } from './type-tache.js';
 
@@ -36,7 +36,8 @@ export type TacheVue = {
   echeance: string | null;
   fait: boolean;
   origine: 'hubspot' | 'os';
-  contact: { id: string; nom: string } | null;
+  contact: { id: string; nom: string; email: string | null; telephone: string | null } | null;
+  entreprise: { id: string; nom: string } | null;
   opportunite: { id: string; titre: string; clos: 'gagne' | 'perdu' | null } | null;
 };
 
@@ -65,6 +66,10 @@ async function vues(tx: Tx, where: SQL | undefined): Promise<TacheVue[]> {
       source: taches.source,
       contactId: contacts.id,
       contactNom: contacts.nom,
+      contactEmail: contacts.email,
+      contactTel: contacts.telephone,
+      entrepriseId: entreprises.id,
+      entrepriseNom: entreprises.nom,
       oppId: opportunites.id,
       oppTitre: opportunites.titre,
       oppClos: opportunites.clos,
@@ -77,6 +82,14 @@ async function vues(tx: Tx, where: SQL | undefined): Promise<TacheVue[]> {
     .leftJoin(
       opportunites,
       and(eq(opportunites.id, taches.opportuniteId), eq(opportunites.instanceId, currentInstance)),
+    )
+    // Organisation of the deal, else of the person (Pipedrive activity list column).
+    .leftJoin(
+      entreprises,
+      and(
+        eq(entreprises.id, sql`coalesce(${opportunites.entrepriseId}, ${contacts.entrepriseId})`),
+        eq(entreprises.instanceId, currentInstance),
+      ),
     )
     .where(and(eq(taches.instanceId, currentInstance), where))
     .orderBy(asc(taches.echeance));
@@ -92,7 +105,12 @@ async function vues(tx: Tx, where: SQL | undefined): Promise<TacheVue[]> {
     echeance: r.echeance?.toISOString() ?? null,
     fait: r.faitAt !== null,
     origine: r.source === 'hubspot' ? 'hubspot' : 'os',
-    contact: r.contactId && r.contactNom ? { id: r.contactId, nom: r.contactNom } : null,
+    contact:
+      r.contactId && r.contactNom
+        ? { id: r.contactId, nom: r.contactNom, email: r.contactEmail, telephone: r.contactTel }
+        : null,
+    entreprise:
+      r.entrepriseId && r.entrepriseNom ? { id: r.entrepriseId, nom: r.entrepriseNom } : null,
     opportunite: r.oppId && r.oppTitre ? { id: r.oppId, titre: r.oppTitre, clos: r.oppClos } : null,
   }));
 }
