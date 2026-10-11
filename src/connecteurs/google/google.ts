@@ -185,6 +185,8 @@ export type Evenement = {
   lieu: string | null;
   // Guests' emails, to link a meeting to the instance's contacts.
   participants: string[];
+  // All-day event (holiday, seminar): a date without a time.
+  journee: boolean;
 };
 
 // Meetings between two dates (brief, Rendez-vous screen).
@@ -198,40 +200,48 @@ export async function evenements(
   const api = googleApi(ctx, options);
   const out: Evenement[] = [];
   for (const id of calendriers) {
-    const page = await api.request<{
-      items?: {
-        id?: string;
-        summary?: string;
-        location?: string;
-        attendees?: { email?: string; self?: boolean }[];
-        start?: { dateTime?: string; date?: string };
-        end?: { dateTime?: string; date?: string };
-      }[];
-    }>(
-      'GET',
-      `${CALENDAR}/calendars/${encodeURIComponent(id)}/events?${new URLSearchParams({
-        timeMin: debut.toISOString(),
-        timeMax: fin.toISOString(),
-        singleEvents: 'true',
-        orderBy: 'startTime',
-        maxResults: '50',
-      }).toString()}`,
-    );
-    for (const e of page.items ?? []) {
-      const start = e.start?.dateTime ?? e.start?.date;
-      const end = e.end?.dateTime ?? e.end?.date;
-      if (!start || !end) continue;
-      out.push({
-        id: e.id ?? `${id}:${start}`,
-        participants: (e.attendees ?? [])
-          .filter((a) => !a.self && a.email)
-          .map((a) => (a.email ?? '').toLowerCase()),
-        debut: new Date(start),
-        fin: new Date(end),
-        titre: e.summary ?? '(sans titre)',
-        lieu: e.location ?? null,
-      });
-    }
+    // Google pages its answer: a busy month exceeds one page, so follow nextPageToken.
+    let pageToken: string | undefined;
+    do {
+      const page = await api.request<{
+        nextPageToken?: string;
+        items?: {
+          id?: string;
+          summary?: string;
+          location?: string;
+          attendees?: { email?: string; self?: boolean }[];
+          start?: { dateTime?: string; date?: string };
+          end?: { dateTime?: string; date?: string };
+        }[];
+      }>(
+        'GET',
+        `${CALENDAR}/calendars/${encodeURIComponent(id)}/events?${new URLSearchParams({
+          timeMin: debut.toISOString(),
+          timeMax: fin.toISOString(),
+          singleEvents: 'true',
+          orderBy: 'startTime',
+          maxResults: '250',
+          ...(pageToken ? { pageToken } : {}),
+        }).toString()}`,
+      );
+      for (const e of page.items ?? []) {
+        const start = e.start?.dateTime ?? e.start?.date;
+        const end = e.end?.dateTime ?? e.end?.date;
+        if (!start || !end) continue;
+        out.push({
+          id: e.id ?? `${id}:${start}`,
+          participants: (e.attendees ?? [])
+            .filter((a) => !a.self && a.email)
+            .map((a) => (a.email ?? '').toLowerCase()),
+          debut: new Date(start),
+          fin: new Date(end),
+          titre: e.summary ?? '(sans titre)',
+          lieu: e.location ?? null,
+          journee: !e.start?.dateTime,
+        });
+      }
+      pageToken = page.nextPageToken;
+    } while (pageToken);
   }
   return out.sort((a, b) => a.debut.getTime() - b.debut.getTime());
 }

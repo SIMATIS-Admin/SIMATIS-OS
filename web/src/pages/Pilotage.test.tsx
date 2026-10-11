@@ -10,47 +10,24 @@ let calls: Call[] = [];
 const compte = (total = 0) => ({ email: total, appel: 0, autre: 0, total });
 const brief = {
   source: 'natif',
+  aFaire: { retard: 4, jour: { email: 2, appel: 3, autre: 1, total: 6 } },
   rdv: [
     {
       debut: '2026-10-08T08:00:00Z',
       fin: '2026-10-08T09:00:00Z',
       titre: 'Point Fonderie',
       lieu: 'Rumilly',
+      journee: false,
     },
   ],
   rdvEtat: 'ok',
-  taches: [
-    {
-      id: 't1',
-      titre: 'Relancer Ateliers Morvan',
-      canal: 'email',
-      echeance: null,
-      prepare: true,
-      source: 'natif',
-      contact: 'Hélène Morvan',
-      entreprise: 'Ateliers Morvan',
-      opportunite: null,
-      situation: 'retard',
-    },
-    {
-      id: 't2',
-      titre: 'Appeler Lumibat',
-      canal: 'appel',
-      echeance: null,
-      prepare: false,
-      source: 'natif',
-      contact: null,
-      entreprise: null,
-      opportunite: null,
-      situation: 'jour',
-    },
-  ],
   realisees: {
     veille: { jour: '2026-10-07', ...compte(3) },
     semaine: compte(9),
     mois: compte(30),
     aujourdhui: compte(0),
   },
+  rdvTenus: { veille: 1, semaine: 5, mois: 17 },
 };
 const propositions = [
   {
@@ -78,7 +55,6 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
-  if (url.includes('/fait')) return json({ simulation: false });
   if (url.includes('/decision')) return json({ ...propositions[0], statut: 'appliquee' });
   if (url.includes('/brief')) return json(brief);
   return json(propositions);
@@ -94,26 +70,45 @@ describe('pilot screens', () => {
     vi.unstubAllGlobals();
   });
 
-  it('brief: meetings, overdue tasks, prepared draft badge and counts', async () => {
-    render(<Brief slug="simatis" />);
-    expect(await screen.findByText('Relancer Ateliers Morvan')).toBeTruthy();
+  it('brief: counters only, linking to the tasks screen, with today meetings', async () => {
+    const { container } = render(<Brief slug="simatis" />);
+    const retard = (await screen.findByText('Tâches en retard')).closest('a');
+    expect(retard?.getAttribute('href')).toBe('#/simatis/taches');
+    expect(retard?.textContent).toContain('4');
+    const jour = screen.getByText('Tâches du jour').closest('a');
+    expect(jour?.getAttribute('href')).toBe('#/simatis/taches');
+    expect(jour?.textContent).toMatch(/6.*2 emails.*3 appels.*1 action/);
     expect(screen.getByText(/Point Fonderie/)).toBeTruthy();
-    expect(screen.getByText('En retard')).toBeTruthy();
-    expect(screen.getByText('Brouillon prêt dans Gmail')).toBeTruthy();
-    expect(screen.getByText('Emails (1)')).toBeTruthy();
-
-    expect(screen.getByText(/^Action \(/)).toBeTruthy();
-    expect(screen.queryByText(/^Autres/)).toBeNull();
-
-    fireEvent.click(screen.getByText('Téléphone (1)'));
-    expect(screen.queryByText('Relancer Ateliers Morvan')).toBeNull();
-    expect(screen.getByText('Appeler Lumibat')).toBeTruthy();
+    expect(screen.getByText('Rendez-vous et réunions').closest('a')?.textContent).toContain('1');
+    // No task list nor "mark done" any more: that is the Tâches screen's job.
+    expect(screen.queryByText('Marquer fait')).toBeNull();
+    expect(container.querySelectorAll('.vq-filter')).toHaveLength(0);
   });
 
-  it('brief: marks a task done on the server', async () => {
+  it('brief: activity with tasks done and meetings held per period', async () => {
     render(<Brief slug="simatis" />);
-    fireEvent.click((await screen.findAllByText('Marquer fait'))[0] as HTMLElement);
-    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/taches/t1/fait'))).toBe(true));
+    await screen.findByText('30 derniers jours');
+    const mois = screen.getByText('30 derniers jours').closest('.activ-row');
+    expect(mois?.textContent).toMatch(/30.*tâches.*17 RDV tenus/);
+    expect(screen.getByText('Dernier jour ouvré').closest('.activ-row')?.textContent).toContain(
+      '1 RDV tenu',
+    );
+  });
+
+  it('brief: no meetings-held count when the agenda is not connected', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ ...brief, rdv: [], rdvEtat: 'non_configure', rdvTenus: null }),
+          ),
+        ),
+      ),
+    );
+    render(<Brief slug="simatis" />);
+    expect(await screen.findByText('Agenda non connecté')).toBeTruthy();
+    expect(screen.queryByText(/RDV tenu/)).toBeNull();
   });
 
   it('queue: shows the draft safely and validates it with the edited text', async () => {

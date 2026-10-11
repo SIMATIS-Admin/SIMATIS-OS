@@ -58,6 +58,40 @@ export function compterRealisees(
   };
 }
 
+// Meetings held (Brief activity): over, with a time and at least one guest, so that all-day
+// events and personal blocks ("focus", lunch) do not count. Day of the start, in Paris.
+export function compterRdvTenus(
+  rdv: { debut: Date; fin: Date; journee: boolean; participants: string[] }[],
+  maintenant: Date,
+  fuseau = 'Europe/Paris',
+) {
+  const auj = jourDe(maintenant, fuseau);
+  const veille = dernierJourOuvre(auj);
+  const jours = rdv
+    .filter((r) => !r.journee && r.participants.length > 0 && r.fin <= maintenant)
+    .map((r) => jourDe(r.debut, fuseau));
+  const entre = (debut: string, fin: string) => jours.filter((j) => j >= debut && j <= fin).length;
+  return {
+    veille: entre(veille, veille),
+    semaine: entre(decaler(auj, -6), auj),
+    mois: entre(decaler(auj, -29), auj),
+  };
+}
+
+// Meetings still to come or under way today. An all-day event carries plain dates (end
+// exclusive) read as UTC midnight: compare those dates, not instants, or yesterday's all-day
+// event would end at 02:00 today in Paris and show up.
+export function rdvDuJour<T extends { fin: Date; journee: boolean }>(
+  rdv: T[],
+  maintenant: Date,
+  fuseau = 'Europe/Paris',
+): T[] {
+  const auj = jourDe(maintenant, fuseau);
+  return rdv.filter((r) =>
+    r.journee ? r.fin.toISOString().slice(0, 10) > auj : jourDe(r.fin, fuseau) >= auj,
+  );
+}
+
 // Where an open task stands today: overdue, due today, or later (Paris calendar days).
 export function situation(echeance: Date | null, maintenant: Date, fuseau = 'Europe/Paris') {
   if (!echeance) return 'plus_tard' as const;

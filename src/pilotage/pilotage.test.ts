@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { demoPortal, fakePortal } from '../../test/hubspot-portal.js';
@@ -72,32 +73,41 @@ describe('Brief du jour and À valider', () => {
     await rm(secretsDir, { recursive: true, force: true });
   });
 
-  it('lists overdue and today tasks with their contact, and what was done', async () => {
+  type Brief = {
+    aFaire: {
+      retard: number;
+      jour: { email: number; appel: number; autre: number; total: number };
+    };
+    realisees: { aujourdhui: { total: number } };
+  };
+
+  it('counts overdue tasks and today tasks by type, and what was done', async () => {
     const { status, body } = await req('GET', '/api/i/simatis/brief');
     expect(status).toBe(200);
-    expect(body).toMatchObject({ source: 'natif', rdvEtat: 'non_configure', rdv: [] });
-    const list = body.taches as {
-      titre: string;
-      situation: string;
-      entreprise: string | null;
-    }[];
-    expect(list.length).toBeGreaterThan(0);
-    expect(list.every((x) => x.situation === 'retard' || x.situation === 'jour')).toBe(true);
-    expect(list.find((x) => x.titre === 'Relancer Ateliers Morvan')).toMatchObject({
-      situation: 'retard',
-      entreprise: 'Ateliers Morvan',
+    expect(body).toMatchObject({
+      source: 'natif',
+      rdvEtat: 'non_configure',
+      rdv: [],
+      rdvTenus: null,
     });
+    expect(body).not.toHaveProperty('taches');
+    const { aFaire } = body as unknown as Brief;
+    expect(aFaire.retard).toBeGreaterThan(0);
+    expect(aFaire.jour.total).toBe(aFaire.jour.email + aFaire.jour.appel + aFaire.jour.autre);
     expect(body.realisees).toHaveProperty('veille.jour');
   });
 
-  it('marks a native task done: out of the day, counted today, journaled', async () => {
-    const before = await req('GET', '/api/i/simatis/brief');
-    const first = (before.body.taches as { id: string }[])[0];
-    const done = await req('POST', `/api/i/simatis/taches/${first?.id}/fait`);
+  it('marks an overdue native task done: one less overdue, counted today', async () => {
+    const simatis = await instance('simatis');
+    const [tache] = await withInstance(t.owner.db, simatis.id, (tx) =>
+      tx.select().from(taches).where(eq(taches.titre, 'Relancer Ateliers Morvan')),
+    );
+    const before = (await req('GET', '/api/i/simatis/brief')).body as unknown as Brief;
+    const done = await req('POST', `/api/i/simatis/taches/${tache?.id}/fait`);
     expect(done.status).toBe(200);
-    const after = await req('GET', '/api/i/simatis/brief');
-    expect((after.body.taches as { id: string }[]).some((x) => x.id === first?.id)).toBe(false);
-    expect((after.body.realisees as { aujourdhui: { total: number } }).aujourdhui.total).toBe(1);
+    const after = (await req('GET', '/api/i/simatis/brief')).body as unknown as Brief;
+    expect(after.aFaire.retard).toBe(before.aFaire.retard - 1);
+    expect(after.realisees.aujourdhui.total).toBe(1);
   });
 
   it('shows the queue, filtered, with the contact of each draft', async () => {
