@@ -108,7 +108,16 @@ describe('API instances, entreprises, contacts', () => {
     expect(body).toHaveLength(4);
     for (const row of body) {
       expect(Object.keys(row).sort()).toEqual(
-        ['aValider', 'nom', 'rdv7j', 'routinesActives', 'slug', 'tachesEnRetard', 'type'].sort(),
+        [
+          'aValider',
+          'nom',
+          'phase',
+          'rdv7j',
+          'routinesActives',
+          'slug',
+          'tachesEnRetard',
+          'type',
+        ].sort(),
       );
     }
   });

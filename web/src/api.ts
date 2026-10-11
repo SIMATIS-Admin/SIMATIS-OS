@@ -71,6 +71,7 @@ export type PortefeuilleLigne = {
   slug: string;
   nom: string;
   type: InstanceSummary['type'];
+  phase: InstanceSummary['phase'];
   aValider: number;
   tachesEnRetard: number | null;
   rdv7j: number | null;
@@ -97,6 +98,8 @@ export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug,
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>
   sendJson<InstanceSummary>('PATCH', inst(slug, 'instance'), { nom });
+export const changerPhase = (slug: string, phase: 'closing' | 'en_cours') =>
+  sendJson<InstanceSummary>('PUT', inst(slug, 'phase'), { phase });
 export const creerProspect = (nom: string) =>
   sendJson<InstanceSummary>('POST', '/api/prospects', { nom });
 export const reinitialiserDemo = (slug: string) =>

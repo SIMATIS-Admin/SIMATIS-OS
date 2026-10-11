@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  changerPhase,
   convertirProspect,
   fetchInstanceFiche,
   reinitialiserDemo,
@@ -7,16 +8,11 @@ import {
   type InstanceFiche,
 } from '../api.js';
 import { Icon } from '../icons.js';
-import type { InstanceSummary } from '../nav.js';
+import { libelleType, type InstanceSummary } from '../nav.js';
 import { Connexions } from './parametres/Connexions.js';
 import { RoutinesParametres } from './parametres/Routines.js';
 import { Tip } from './widgets.js';
 
-const TYPE_NOM: Record<InstanceSummary['type'], string> = {
-  propre: 'Mon activité',
-  mandat: 'Mandat en cours',
-  prospect: 'Mandat prospect',
-};
 const TYPE_BADGE: Record<InstanceSummary['type'], string> = {
   propre: 'green',
   mandat: 'blue',
@@ -24,6 +20,57 @@ const TYPE_BADGE: Record<InstanceSummary['type'], string> = {
 };
 
 type Props = { slug: string; onRenamed: () => void };
+
+function Phase({
+  slug,
+  phase,
+  onChange,
+}: {
+  slug: string;
+  phase: 'closing' | 'en_cours';
+  onChange: (phase: 'closing' | 'en_cours') => void;
+}) {
+  const [message, setMessage] = useState<string | null>(null);
+  const choisir = (p: 'closing' | 'en_cours') =>
+    changerPhase(slug, p).then(
+      () => {
+        setMessage(null);
+        onChange(p);
+      },
+      (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+    );
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <h2>Phase</h2>
+      </div>
+      <div className="panel-b stack">
+        <p style={{ margin: 0 }}>
+          En Closing : prospect qualifié, données réelles. Passer en cours à la signature n'efface
+          rien.
+        </p>
+        <div className="seg">
+          {(
+            [
+              ['closing', 'Closing'],
+              ['en_cours', 'En cours'],
+            ] as const
+          ).map(([p, label]) => (
+            <button
+              key={p}
+              className={phase === p ? 'on' : ''}
+              disabled={phase === p}
+              onClick={() => void choisir(p)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {message && <p className="small muted">{message}</p>}
+      </div>
+    </div>
+  );
+}
 
 // Two clicks for anything that deletes data: no browser dialog.
 function Demonstration({ slug, onChange }: { slug: string; onChange: () => void }) {
@@ -169,7 +216,7 @@ export function Parametres({ slug, onRenamed }: Props) {
           <div className="panel">
             <div className="panel-h">
               <h2>{fiche.nom}</h2>
-              <span className={`badge ${TYPE_BADGE[fiche.type]}`}>{TYPE_NOM[fiche.type]}</span>
+              <span className={`badge ${TYPE_BADGE[fiche.type]}`}>{libelleType(fiche)}</span>
             </div>
             <div className="panel-b">
               {fiche.type !== 'propre' && (
@@ -192,7 +239,7 @@ export function Parametres({ slug, onRenamed }: Props) {
                 <tbody>
                   <tr>
                     <td className="muted">Type</td>
-                    <td>{TYPE_NOM[fiche.type]}</td>
+                    <td>{libelleType(fiche)}</td>
                   </tr>
                   <tr>
                     <td className="muted">Données</td>
@@ -213,6 +260,16 @@ export function Parametres({ slug, onRenamed }: Props) {
               </table>
             </div>
           </div>
+          {fiche.type === 'mandat' && (
+            <Phase
+              slug={slug}
+              phase={fiche.phase ?? 'en_cours'}
+              onChange={(phase) => {
+                setFiche({ ...fiche, phase });
+                onRenamed();
+              }}
+            />
+          )}
           {fiche.type === 'mandat' && (
             <div className="panel">
               <div className="panel-h">

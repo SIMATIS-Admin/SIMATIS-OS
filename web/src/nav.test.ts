@@ -4,16 +4,22 @@ import {
   allowed,
   groupInstances,
   isBuilt,
+  libelleType,
   reorderFavoris,
   toggleFavori,
   type InstanceSummary,
 } from './nav.js';
 
-const inst = (slug: string, type: InstanceSummary['type']): InstanceSummary => ({
+const inst = (
+  slug: string,
+  type: InstanceSummary['type'],
+  phase: InstanceSummary['phase'] = type === 'mandat' ? 'en_cours' : null,
+): InstanceSummary => ({
   slug,
   nom: slug,
   sous: '',
   type,
+  phase,
   couleur: '#000',
   modules: [],
 });
@@ -28,9 +34,28 @@ describe('nav', () => {
     ]);
     expect(groups.map((g) => [g.type, g.instances.map((i) => i.slug)])).toEqual([
       ['propre', ['s']],
-      ['mandat', ['b', 'a']],
+      ['en_cours', ['b', 'a']],
       ['prospect', ['d']],
     ]);
+  });
+
+  it('groups mandates by phase and labels demos', () => {
+    const groups = groupInstances([
+      inst('c', 'mandat', 'closing'),
+      inst('d', 'prospect'),
+      inst('b', 'mandat', 'en_cours'),
+      inst('s', 'propre'),
+    ]);
+    expect(groups.map((g) => [g.label, g.instances.map((i) => i.slug)])).toEqual([
+      ['Mon activité', ['s']],
+      ['Mandats en cours', ['b']],
+      ['Mandats en Closing', ['c']],
+      ['Démos', ['d']],
+    ]);
+    expect(libelleType(inst('c', 'mandat', 'closing'))).toBe('Mandat en Closing');
+    expect(libelleType(inst('b', 'mandat'))).toBe('Mandat en cours');
+    expect(libelleType(inst('d', 'prospect'))).toBe('Démo');
+    expect(libelleType(inst('s', 'propre'))).toBe('Mon activité');
   });
 
   it('hides module screens (Devis) from instances without the module', () => {

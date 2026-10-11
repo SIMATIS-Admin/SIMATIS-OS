@@ -48,7 +48,7 @@ describe('prospect (demo) instances', () => {
 
   it('never lets a prospect write to a real tool', async () => {
     await expect(setEcrituresReelles(t.owner.db, 'fonderie-ecran', true)).rejects.toThrow(
-      /prospect/,
+      /démo/,
     );
     const prospect = await getInstanceBySlug(t.owner.db, 'fonderie-ecran');
     if (!prospect) throw new Error('missing prospect');

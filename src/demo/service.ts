@@ -54,7 +54,7 @@ async function chargerDemo(tx: Tx, instanceId: string) {
 
 function requireProspect(instance: Instance) {
   if (instance.type !== 'prospect') {
-    throw new ProspectRefuse('Seul un mandat prospect (démonstration) peut faire cette action.');
+    throw new ProspectRefuse('Seule une démo peut faire cette action.');
   }
 }
 
@@ -65,7 +65,7 @@ export async function creerProspect(db: Database, { nom }: { nom: string }): Pro
       nom: nom.trim(),
       type: 'prospect',
       config: {
-        sous: 'Mandat prospect fictif',
+        sous: 'Démo aux données fictives',
         couleur: DEMO?.config.couleur ?? '#E3A33B',
         modules: DEMO?.config.modules ?? [],
         ecrituresReelles: false,

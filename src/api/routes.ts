@@ -827,6 +827,7 @@ export function registerApi(
             slug: i.slug,
             nom: i.nom,
             type: i.type,
+            phase: phaseOf(i),
             aValider: aValider?.n ?? 0,
             // Filled by the lots that bring tasks (M1/M8a), meetings (M8b) and routines (M6).
             tachesEnRetard: null,

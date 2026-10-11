@@ -134,7 +134,7 @@ export async function setEcrituresReelles(
 ): Promise<Instance> {
   const instance = await requireInstance(db, slug);
   if (on && instance.type === 'prospect') {
-    throw new Error('Un mandat prospect (démonstration) ne peut pas écrire dans un outil réel.');
+    throw new Error('Une démo ne peut pas écrire dans un outil réel.');
   }
   return withInstance(db, instance.id, async (tx) => {
     const [row] = await tx

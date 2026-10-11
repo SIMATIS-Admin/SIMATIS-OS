@@ -136,6 +136,6 @@ describe('admin CLI and instance lifecycle', () => {
       await run('instance:create', '--slug', 'demo-x', '--nom', 'Démo', '--type', 'prospect'),
     ).toBe(0);
     expect(await run('instance:ecritures', '--slug', 'demo-x', '--on')).toBe(1);
-    expect(lines.join('\n')).toMatch(/prospect/);
+    expect(lines.join('\n')).toMatch(/démo/);
   });
 });
