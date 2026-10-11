@@ -1166,7 +1166,7 @@
     "nom": "Dupont Industrie",
     "type": "prospect",
     "config": {
-      "sous": "Mandat prospect fictif",
+      "sous": "Démo aux données fictives",
       "couleur": "#E3A33B",
       "modules": ["diagnostic"],
       "funnel": {

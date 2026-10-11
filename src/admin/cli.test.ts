@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { contacts, entreprises } from '../crm/schema.js';
+import { getInstanceBySlug } from '../instances/service.js';
 import { runCommand } from './cli.js';
 
 describe('admin CLI and instance lifecycle', () => {
@@ -34,6 +35,39 @@ describe('admin CLI and instance lifecycle', () => {
     expect(
       await count(
         "select count(*)::int as n from journal j join instances i on i.id = j.instance_id where i.slug = 'alpha'",
+      ),
+    ).toBe(1);
+  });
+
+  it('creates a mandate in closing and changes its phase', async () => {
+    expect(
+      await run(
+        'instance:create',
+        '--slug',
+        'gamma',
+        '--nom',
+        'Gamma',
+        '--type',
+        'mandat',
+        '--phase',
+        'closing',
+      ),
+    ).toBe(0);
+    expect((await getInstanceBySlug(t.owner.db, 'gamma'))?.config.phase).toBe('closing');
+    expect(await run('instance:phase', '--slug', 'gamma', '--phase', 'en_cours')).toBe(0);
+    expect((await getInstanceBySlug(t.owner.db, 'gamma'))?.config.phase).toBe('en_cours');
+    expect(await run('instance:phase', '--slug', 'gamma', '--phase', 'signe')).toBe(1);
+    expect(
+      await run(
+        'instance:create',
+        '--slug',
+        'delta',
+        '--nom',
+        'D',
+        '--type',
+        'prospect',
+        '--phase',
+        'closing',
       ),
     ).toBe(1);
   });
@@ -102,6 +136,6 @@ describe('admin CLI and instance lifecycle', () => {
       await run('instance:create', '--slug', 'demo-x', '--nom', 'Démo', '--type', 'prospect'),
     ).toBe(0);
     expect(await run('instance:ecritures', '--slug', 'demo-x', '--on')).toBe(1);
-    expect(lines.join('\n')).toMatch(/prospect/);
+    expect(lines.join('\n')).toMatch(/démo/);
   });
 });

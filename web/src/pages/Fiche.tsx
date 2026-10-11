@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import {
   changeOpportunite,
   createTache,
+  creerMandatDepuisAffaire,
   fetchContacts,
   fetchEntreprises,
   fetchFiche,
+  fetchInstances,
+  lierMandat,
   noteFiche,
   patchFiche,
   updateTache,
@@ -14,6 +17,7 @@ import {
   type KindFiche,
 } from '../api.js';
 import { eur } from '../crm.js';
+import type { InstanceSummary } from '../nav.js';
 import { Icon } from '../icons.js';
 import { Cloture } from './Pipeline.js';
 import { ACTIVITES } from './taches/commun.js';
@@ -216,6 +220,124 @@ function LienEditable({
   );
 }
 
+// A deal of the own activity close to signature becomes a mandate (copy of the company and its
+// contacts), or is linked to a mandate created before. Two clicks to create, as for a demo.
+function Mandat({
+  slug,
+  id,
+  mandat,
+  onChange,
+}: {
+  slug: string;
+  id: string;
+  mandat: { slug: string; nom: string } | null;
+  onChange: () => void;
+}) {
+  const [crm, setCrm] = useState<'hubspot' | 'aucun'>('hubspot');
+  const [arme, setArme] = useState(false);
+  const [mandats, setMandats] = useState<InstanceSummary[]>([]);
+  const [cible, setCible] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    if (mandat) return;
+    fetchInstances().then(
+      (l) => setMandats(l.filter((i) => i.type === 'mandat')),
+      () => setMandats([]),
+    );
+  }, [mandat]);
+  const run = (action: () => Promise<unknown>, then: () => void) => {
+    setBusy(true);
+    setMessage(null);
+    action()
+      .then(then, (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)))
+      .finally(() => {
+        setBusy(false);
+        setArme(false);
+      });
+  };
+  return (
+    <section className="panel">
+      <div className="panel-h">
+        <h2>Mandat</h2>
+      </div>
+      <div className="panel-b stack">
+        {mandat ? (
+          <p style={{ margin: 0 }}>
+            Mandat : <a href={`#/${mandat.slug}/brief`}>{mandat.nom}</a>
+          </p>
+        ) : (
+          <>
+            <p className="small muted" style={{ margin: 0 }}>
+              Signature proche ? Le mandat est créé en Closing avec une copie de l'entreprise et de
+              ses contacts. Les devis restent ici.
+            </p>
+            <label className="field">
+              <span>CRM du client</span>
+              <select
+                className="input"
+                value={crm}
+                onChange={(e) => setCrm(e.target.value as 'hubspot' | 'aucun')}
+              >
+                <option value="hubspot">HubSpot</option>
+                <option value="aucun">Pas de CRM : l'OS tient le pipeline</option>
+              </select>
+            </label>
+            <div>
+              <button
+                className="btn primary"
+                disabled={busy}
+                onClick={() =>
+                  arme
+                    ? run(
+                        () =>
+                          creerMandatDepuisAffaire(slug, id, crm === 'hubspot' ? 'hubspot' : null),
+                        // The instance menu must list the new mandate, as after a demo conversion.
+                        () => location.reload(),
+                      )
+                    : setArme(true)
+                }
+              >
+                {arme ? 'Confirmer la création' : 'Créer le mandat'}
+              </button>
+            </div>
+            {mandats.length > 0 && (
+              <>
+                <label className="field">
+                  <span>Mandat existant</span>
+                  <select
+                    className="input"
+                    aria-label="Mandat existant"
+                    value={cible}
+                    onChange={(e) => setCible(e.target.value)}
+                  >
+                    <option value="">Choisir…</option>
+                    {mandats.map((m) => (
+                      <option key={m.slug} value={m.slug}>
+                        {m.nom}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  <button
+                    className="btn"
+                    disabled={busy || !cible}
+                    onClick={() => run(() => lierMandat(slug, id, cible), onChange)}
+                  >
+                    Lier à un mandat existant
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+        {message && <p className="small muted">{message}</p>}
+      </div>
+    </section>
+  );
+}
+
 export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: string }) {
   const [data, setData] = useState<FicheDetail | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -387,6 +509,9 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
               )}
             </div>
           </section>
+          {kind === 'affaire' && data.mandat !== undefined && (
+            <Mandat slug={slug} id={id} mandat={data.mandat} onChange={load} />
+          )}
           {data.liens.contacts && (
             <section className="panel">
               <div className="panel-h">

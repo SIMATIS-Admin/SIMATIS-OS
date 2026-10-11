@@ -14,7 +14,19 @@ import type { Database } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import { instances, type Instance } from '../instances/schema.js';
-import { getInstanceBySlug, listInstances } from '../instances/service.js';
+import {
+  creerMandatDepuisAffaire,
+  lierMandat,
+  MandatRefuse,
+  mandatLie,
+} from '../instances/depuis-affaire.js';
+import {
+  getInstanceBySlug,
+  listInstances,
+  PhaseRefusee,
+  phaseOf,
+  setPhase,
+} from '../instances/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
 import { normaliserDomaine } from '../connecteurs/hubspot/domaines.js';
 import {
@@ -105,6 +117,7 @@ const summary = (i: Instance) => ({
   nom: i.nom,
   sous: i.config.sous ?? '',
   type: i.type,
+  phase: phaseOf(i),
   couleur: i.config.couleur ?? '#41A594',
   modules: i.config.modules ?? [],
 });
@@ -357,7 +370,11 @@ export function registerApi(
     onInstance<FicheRoute>(async (i, request, reply) => {
       const kind = ficheParams(request.params);
       const fiche = kind && (await getFiche(db, i, kind, request.params.id));
-      return fiche ?? reply.code(404).send({ error: 'Fiche introuvable' });
+      if (!fiche) return reply.code(404).send({ error: 'Fiche introuvable' });
+      // A deal of the own activity may have become a mandate (created or linked from it).
+      return kind === 'affaire' && i.type === 'propre'
+        ? { ...fiche, mandat: await mandatLie(db, request.params.id) }
+        : fiche;
     }),
   );
   app.patch<FicheRoute>(
@@ -579,6 +596,21 @@ export function registerApi(
     }),
   );
 
+  const phaseSchema = z.object({ phase: z.enum(['closing', 'en_cours']) });
+  app.put<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/phase',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = phaseSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Phase invalide' });
+      try {
+        return summary(await setPhase(db, i.slug, parsed.data.phase));
+      } catch (error) {
+        if (error instanceof PhaseRefusee) return reply.code(409).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+
   app.get<SlugParams>(
     '/api/i/:slug/tableau',
     onInstance((i) => getTableau(db, i)),
@@ -787,6 +819,32 @@ export function registerApi(
     }),
   );
 
+  // Mandate created from (or linked to) a deal of the own activity.
+  type AffaireRoute = SlugParams & { Params: { id: string }; Body: unknown };
+  const surAffaire = (action: (i: Instance, id: string, body: unknown) => Promise<Instance>) =>
+    onInstance<AffaireRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id))
+        return reply.code(404).send({ error: 'Affaire introuvable' });
+      try {
+        return summary(await action(i, request.params.id, request.body));
+      } catch (error) {
+        if (error instanceof MandatRefuse) return reply.code(409).send({ error: error.message });
+        if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
+        throw error;
+      }
+    });
+  app.post<AffaireRoute>(
+    '/api/i/:slug/opportunites/:id/mandat',
+    surAffaire((i, id, body) =>
+      creerMandatDepuisAffaire(db, i, id, conversionSchema.parse(body ?? { crm: null })),
+    ),
+  );
+  const lierSchema = z.object({ slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/) });
+  app.post<AffaireRoute>(
+    '/api/i/:slug/opportunites/:id/mandat/lier',
+    surAffaire((i, id, body) => lierMandat(db, i, id, lierSchema.parse(body).slug)),
+  );
+
   // Counters only: no contact, exchange or amount from one instance shows up next to another.
   app.get('/api/portefeuille', async () =>
     Promise.all(
@@ -805,6 +863,7 @@ export function registerApi(
             slug: i.slug,
             nom: i.nom,
             type: i.type,
+            phase: phaseOf(i),
             aValider: aValider?.n ?? 0,
             // Filled by the lots that bring tasks (M1/M8a), meetings (M8b) and routines (M6).
             tachesEnRetard: null,

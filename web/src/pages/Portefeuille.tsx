@@ -1,13 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { creerProspect, fetchPortefeuille, type PortefeuilleLigne } from '../api.js';
 import { Icon } from '../icons.js';
-import type { InstanceSummary } from '../nav.js';
+import { libelleType, type InstanceSummary } from '../nav.js';
 
-const SITUATION: Record<InstanceSummary['type'], ReactNode> = {
-  propre: <>Activité propre</>,
-  mandat: <span className="badge blue">Mandat en cours</span>,
-  prospect: <span className="badge amber">Mandat prospect</span>,
-};
+const situation = (i: Pick<InstanceSummary, 'type' | 'phase'>): ReactNode =>
+  i.type === 'propre' ? (
+    <>Activité propre</>
+  ) : (
+    <span className={`badge ${i.type === 'prospect' ? 'amber' : 'blue'}`}>{libelleType(i)}</span>
+  );
 
 const compteur = (n: number | null) => (n === null ? <span className="muted">—</span> : n);
 
@@ -32,7 +33,7 @@ function NouveauProspect({ onCreated }: { onCreated: () => void }) {
   return (
     <div className="panel" style={{ marginTop: 18 }}>
       <div className="panel-h">
-        <h2>Nouveau mandat prospect</h2>
+        <h2>Nouvelle démo</h2>
       </div>
       <div className="panel-b stack">
         <p style={{ margin: 0 }}>
@@ -111,7 +112,7 @@ export function Portefeuille({
                   />
                   <b>{r.nom}</b>
                 </td>
-                <td>{SITUATION[r.type]}</td>
+                <td>{situation(r)}</td>
                 <td className="r num">{r.aValider}</td>
                 <td className="r num">{compteur(r.tachesEnRetard)}</td>
                 <td className="r num">{compteur(r.rdv7j)}</td>

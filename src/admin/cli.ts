@@ -16,13 +16,17 @@ import {
   archiveInstance,
   createInstance,
   listInstances,
+  PHASES,
   purgeInstance,
   setEcrituresReelles,
+  setPhase,
+  type Phase,
 } from '../instances/service.js';
 
 export const USAGE = `Commandes :
   instance:list
-  instance:create --slug <slug> --nom "<nom>" --type propre|mandat|prospect
+  instance:create --slug <slug> --nom "<nom>" --type propre|mandat|prospect [--phase closing|en_cours]
+  instance:phase --slug <slug> --phase closing|en_cours   (mandat en Closing ou en cours)
   instance:archive --slug <slug>
   instance:purge --slug <slug> --confirmer
   instance:ecritures --slug <slug> --on|--off   (second verrou des écritures réelles)
@@ -66,6 +70,7 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
       slug: { type: 'string' },
       nom: { type: 'string' },
       type: { type: 'string' },
+      phase: { type: 'string' },
       confirmer: { type: 'boolean', default: false },
       instance: { type: 'string' },
       portefeuille: { type: 'boolean', default: false },
@@ -78,7 +83,9 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
       frequence: { type: 'string' },
     },
   });
-  const need = (name: 'slug' | 'nom' | 'type' | 'id' | 'kind' | 'fournisseur'): string => {
+  const need = (
+    name: 'slug' | 'nom' | 'type' | 'phase' | 'id' | 'kind' | 'fournisseur',
+  ): string => {
     const value = values[name];
     if (!value) throw new Error(`Option manquante : --${name}`);
     return value;
@@ -92,10 +99,18 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
         }
         return 0;
       case 'instance:create': {
+        const type = need('type') as InstanceType;
+        if (
+          values.phase !== undefined &&
+          (type !== 'mandat' || !PHASES.includes(values.phase as Phase))
+        ) {
+          throw new Error('--phase closing|en_cours, pour un mandat seulement');
+        }
         const created = await createInstance(db, {
           slug: need('slug'),
           nom: need('nom'),
-          type: need('type') as InstanceType,
+          type,
+          ...(values.phase ? { config: { phase: values.phase as Phase } } : {}),
         });
         out(`Instance créée : ${created.slug} (${created.type})`);
         return 0;
@@ -107,6 +122,11 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
           `Écritures réelles ${i.config.ecrituresReelles ? 'autorisées' : 'désactivées'} pour ${i.slug}` +
             (i.config.ecrituresReelles ? ' (effectives seulement avec REAL_WRITES=on).' : '.'),
         );
+        return 0;
+      }
+      case 'instance:phase': {
+        const i = await setPhase(db, need('slug'), need('phase') as Phase);
+        out(`${i.slug} : mandat ${i.config.phase === 'closing' ? 'en Closing' : 'en cours'}`);
         return 0;
       }
       case 'instance:archive':

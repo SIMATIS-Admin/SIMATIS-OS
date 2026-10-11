@@ -47,6 +47,21 @@ describe('API instances, entreprises, contacts', () => {
     expect(body[0]).toMatchObject({ slug: 'simatis', nom: 'SIMATIS' });
   });
 
+  it('lists the phase of each instance and changes a mandate phase', async () => {
+    const { body } = await get('/api/instances');
+    expect(body.find((i) => i.slug === 'helioval')?.phase).toBe('en_cours');
+    expect(body.find((i) => i.slug === 'demo')?.phase).toBeNull();
+    expect(body.find((i) => i.slug === 'simatis')?.phase).toBeNull();
+
+    const closing = await send('PUT', '/api/i/aquaterra/phase', { phase: 'closing' });
+    expect(closing.body).toMatchObject({ slug: 'aquaterra', phase: 'closing' });
+    expect((await get('/api/i/aquaterra/instance')).body).toMatchObject({ phase: 'closing' });
+    expect((await send('PUT', '/api/i/demo/phase', { phase: 'closing' })).status).toBe(409);
+    expect((await send('PUT', '/api/i/simatis/phase', { phase: 'closing' })).status).toBe(409);
+    expect((await send('PUT', '/api/i/aquaterra/phase', { phase: 'x' })).status).toBe(400);
+    await send('PUT', '/api/i/aquaterra/phase', { phase: 'en_cours' });
+  });
+
   it('lists and searches companies of one instance', async () => {
     const all = await get('/api/i/simatis/entreprises');
     expect(all.body).toHaveLength(12);
@@ -93,7 +108,16 @@ describe('API instances, entreprises, contacts', () => {
     expect(body).toHaveLength(4);
     for (const row of body) {
       expect(Object.keys(row).sort()).toEqual(
-        ['aValider', 'nom', 'rdv7j', 'routinesActives', 'slug', 'tachesEnRetard', 'type'].sort(),
+        [
+          'aValider',
+          'nom',
+          'phase',
+          'rdv7j',
+          'routinesActives',
+          'slug',
+          'tachesEnRetard',
+          'type',
+        ].sort(),
       );
     }
   });

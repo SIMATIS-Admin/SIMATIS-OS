@@ -90,21 +90,37 @@ export type InstanceSummary = {
   nom: string;
   sous: string;
   type: 'propre' | 'mandat' | 'prospect';
+  // Mandate only (null otherwise): closing = qualified prospect with real data.
+  phase: 'closing' | 'en_cours' | null;
   couleur: string;
   modules: string[];
 };
 
+// The technical type `prospect` is a demo (fictive data only).
 export const INSTANCE_GROUPS = [
   ['propre', 'Mon activité'],
-  ['mandat', 'Mandats en cours'],
-  ['prospect', 'Mandats prospects'],
+  ['en_cours', 'Mandats en cours'],
+  ['closing', 'Mandats en Closing'],
+  ['prospect', 'Démos'],
 ] as const;
+
+export const groupeOf = (i: InstanceSummary) =>
+  i.type === 'mandat' ? (i.phase ?? 'en_cours') : i.type;
+
+export const libelleType = (i: Pick<InstanceSummary, 'type' | 'phase'>) =>
+  i.type === 'propre'
+    ? 'Mon activité'
+    : i.type === 'prospect'
+      ? 'Démo'
+      : i.phase === 'closing'
+        ? 'Mandat en Closing'
+        : 'Mandat en cours';
 
 export function groupInstances(list: InstanceSummary[]) {
   return INSTANCE_GROUPS.map(([type, label]) => ({
     type,
     label,
-    instances: list.filter((i) => i.type === type),
+    instances: list.filter((i) => groupeOf(i) === type),
   })).filter((g) => g.instances.length > 0);
 }
 

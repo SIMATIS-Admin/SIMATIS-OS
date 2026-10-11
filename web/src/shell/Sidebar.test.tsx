@@ -9,6 +9,7 @@ const simatis: InstanceSummary = {
   nom: 'SIMATIS',
   sous: 'Mon activité',
   type: 'propre',
+  phase: null,
   couleur: '#41A594',
   modules: ['devis'],
 };
@@ -17,6 +18,7 @@ const mandat: InstanceSummary = {
   nom: 'Helioval',
   sous: 'Mandat fictif',
   type: 'mandat',
+  phase: 'en_cours',
   couleur: '#4C8DD6',
   modules: ['relais'],
 };

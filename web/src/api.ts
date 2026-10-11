@@ -71,6 +71,7 @@ export type PortefeuilleLigne = {
   slug: string;
   nom: string;
   type: InstanceSummary['type'];
+  phase: InstanceSummary['phase'];
   aValider: number;
   tachesEnRetard: number | null;
   rdv7j: number | null;
@@ -97,12 +98,20 @@ export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug,
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>
   sendJson<InstanceSummary>('PATCH', inst(slug, 'instance'), { nom });
+export const changerPhase = (slug: string, phase: 'closing' | 'en_cours') =>
+  sendJson<InstanceSummary>('PUT', inst(slug, 'phase'), { phase });
 export const creerProspect = (nom: string) =>
   sendJson<InstanceSummary>('POST', '/api/prospects', { nom });
 export const reinitialiserDemo = (slug: string) =>
   sendJson<{ ok: true }>('POST', inst(slug, 'demo/reinitialiser'), {});
 export const convertirProspect = (slug: string, crm: 'hubspot' | null) =>
   sendJson<InstanceSummary>('POST', inst(slug, 'convertir'), { crm });
+export const creerMandatDepuisAffaire = (slug: string, id: string, crm: 'hubspot' | null) =>
+  sendJson<InstanceSummary>('POST', inst(slug, `opportunites/${id}/mandat`), { crm });
+export const lierMandat = (slug: string, id: string, mandat: string) =>
+  sendJson<InstanceSummary>('POST', inst(slug, `opportunites/${id}/mandat/lier`), {
+    slug: mandat,
+  });
 export const fetchPortefeuille = () => getJson<PortefeuilleLigne[]>('/api/portefeuille');
 export const fetchFavoris = async () =>
   (await getJson<{ favoris: string[] }>('/api/preferences')).favoris;
@@ -521,6 +530,8 @@ export type FicheDetail = {
   historique: Evenement[];
   etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
   ecrit: boolean;
+  // Deal of the own activity only: the mandate created from (or linked to) it.
+  mandat?: { slug: string; nom: string } | null;
 };
 const fiche = (slug: string, kind: KindFiche, id: string) =>
   inst(slug, `fiches/${kind}/${encodeURIComponent(id)}`);

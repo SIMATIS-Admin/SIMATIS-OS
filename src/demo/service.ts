@@ -24,7 +24,7 @@ function slugify(nom: string): string {
   return SLUG.test(base) ? base : 'prospect';
 }
 
-async function slugLibre(tx: Tx, nom: string): Promise<string> {
+export async function slugLibre(tx: Tx, nom: string): Promise<string> {
   const base = slugify(nom);
   for (let n = 1; ; n += 1) {
     const slug = n === 1 ? base : `${base}-${n}`;
@@ -54,7 +54,7 @@ async function chargerDemo(tx: Tx, instanceId: string) {
 
 function requireProspect(instance: Instance) {
   if (instance.type !== 'prospect') {
-    throw new ProspectRefuse('Seul un mandat prospect (démonstration) peut faire cette action.');
+    throw new ProspectRefuse('Seule une démo peut faire cette action.');
   }
 }
 
@@ -65,7 +65,7 @@ export async function creerProspect(db: Database, { nom }: { nom: string }): Pro
       nom: nom.trim(),
       type: 'prospect',
       config: {
-        sous: 'Mandat prospect fictif',
+        sous: 'Démo aux données fictives',
         couleur: DEMO?.config.couleur ?? '#E3A33B',
         modules: DEMO?.config.modules ?? [],
         ecrituresReelles: false,
@@ -83,6 +83,18 @@ export async function reinitialiserDemo(db: Database, instance: Instance): Promi
     await chargerDemo(tx, instance.id);
     await logEvent(tx, { acteur: 'pilote', action: 'Démonstration réinitialisée' });
   });
+}
+
+// A new mandate's real tools, still to be connected (Paramètres > Connexions).
+export async function brancherConnexions(tx: Tx, crm: 'hubspot' | null) {
+  const connexions = [
+    { kind: 'crm', fournisseur: crm ?? 'natif' },
+    { kind: 'messagerie', fournisseur: 'gmail' },
+    { kind: 'agenda', fournisseur: 'google-agenda' },
+  ] as const;
+  for (const c of connexions) {
+    await configureConnexion(tx, { ...c, etat: 'non_configuree' });
+  }
 }
 
 // The prospect signs: fictive data goes, the instance becomes a mandate whose tools are still to
@@ -104,14 +116,7 @@ export async function convertirProspect(
       })
       .where(eq(instances.id, instance.id))
       .returning();
-    const connexions = [
-      { kind: 'crm', fournisseur: crm ?? 'natif' },
-      { kind: 'messagerie', fournisseur: 'gmail' },
-      { kind: 'agenda', fournisseur: 'google-agenda' },
-    ] as const;
-    for (const c of connexions) {
-      await configureConnexion(tx, { ...c, etat: 'non_configuree' });
-    }
+    await brancherConnexions(tx, crm);
     await logEvent(tx, {
       acteur: 'pilote',
       action: `Prospect transformé en mandat (données fictives supprimées${crm ? ', CRM HubSpot à brancher' : ''})`,
