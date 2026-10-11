@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type DragEvent } from 'react';
 import {
   createTache,
   fetchTaches,
@@ -10,7 +10,8 @@ import {
 import { Icon } from '../icons.js';
 import { Modal } from './Overlay.js';
 import { TYPES, iso, lundiDe, plusJours } from './taches/commun.js';
-import { Semaine } from './taches/Semaine.js';
+import { jourParis, memeHeure, titreSemaine } from './taches/creneaux.js';
+import { MIME_TACHE, Semaine } from './taches/Semaine.js';
 
 type Mode = 'semaine' | 'liste';
 type FiltreType = 'tout' | TacheVue['canal'];
@@ -249,6 +250,43 @@ export function Taches({ slug }: { slug: string }) {
     updateTache(slug, t.id, patch).then(apres, (e: unknown) =>
       setMessage(e instanceof Error ? e.message : String(e)),
     );
+  // Several moves, then one reload: the message keeps the first simulation or error.
+  const deplacerTout = async (moves: [TacheVue, string][]) => {
+    let note: string | null = null;
+    for (const [t, echeance] of moves) {
+      try {
+        const r = await updateTache(slug, t.id, { echeance });
+        if (estSimulation(r)) note ??= r.message;
+      } catch (e) {
+        note ??= e instanceof Error ? e.message : String(e);
+      }
+    }
+    setMessage(note);
+    load();
+  };
+
+  const toutes = data ? [...data.enRetard, ...data.taches, ...data.sansEcheance] : [];
+  const accepte = (e: DragEvent) => {
+    if (e.dataTransfer.types.includes(MIME_TACHE)) e.preventDefault();
+  };
+  const decaler = (jours: number) => (e: DragEvent) => {
+    e.preventDefault();
+    const t = toutes.find((x) => x.id === e.dataTransfer.getData(MIME_TACHE));
+    if (!t) return;
+    const jour = t.echeance ? jourParis(t.echeance) : lundi;
+    void modifier(t, { echeance: memeHeure(t.echeance, plusJours(jour, jours)) });
+  };
+
+  useEffect(() => {
+    if (mode !== 'semaine' || edition) return;
+    const touche = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select')) return;
+      if (e.key === 'ArrowLeft') setLundi((l) => plusJours(l, -7));
+      if (e.key === 'ArrowRight') setLundi((l) => plusJours(l, 7));
+    };
+    window.addEventListener('keydown', touche);
+    return () => window.removeEventListener('keydown', touche);
+  }, [mode, edition]);
 
   return (
     <>
@@ -261,18 +299,35 @@ export function Taches({ slug }: { slug: string }) {
             Liste
           </button>
         </div>
-        <button className="btn" onClick={() => setLundi(plusJours(lundi, -7))}>
-          ‹
-        </button>
-        <button className="btn" onClick={() => setLundi(lundiDe(new Date()))}>
-          Aujourd'hui
-        </button>
-        <button className="btn" onClick={() => setLundi(plusJours(lundi, 7))}>
-          ›
-        </button>
         <button className="btn primary" onClick={() => setEdition('nouvelle')}>
           Nouvelle tâche
         </button>
+      </div>
+      <div className="sem-barre">
+        <button
+          className="btn sem-nav"
+          aria-label="Semaine précédente"
+          onClick={() => setLundi(plusJours(lundi, -7))}
+          onDragOver={accepte}
+          onDrop={decaler(-7)}
+        >
+          ‹
+        </button>
+        <h2>{titreSemaine(lundi)}</h2>
+        <button
+          className="btn sem-nav"
+          aria-label="Semaine suivante"
+          onClick={() => setLundi(plusJours(lundi, 7))}
+          onDragOver={accepte}
+          onDrop={decaler(7)}
+        >
+          ›
+        </button>
+        {lundi !== lundiDe(new Date()) && (
+          <button className="btn" onClick={() => setLundi(lundiDe(new Date()))}>
+            Cette semaine
+          </button>
+        )}
       </div>
       {message && (
         <div className="alert amber" style={{ marginBottom: 12 }}>
@@ -292,6 +347,7 @@ export function Taches({ slug }: { slug: string }) {
             data={data}
             onOpen={setEdition}
             onMove={(t, echeance) => void modifier(t, { echeance })}
+            onMoveAll={(moves) => void deplacerTout(moves)}
           />
         ))}
       {edition && data && (

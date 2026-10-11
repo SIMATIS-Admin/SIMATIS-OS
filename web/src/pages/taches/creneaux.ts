@@ -1,46 +1,90 @@
-// Week grid in Paris time, whatever the browser's time zone: columns Monday → Friday plus one
-// weekend column, rows of 30 minutes from 8:00 (row 0) to 19:30 (row 23).
+// Week dates in Paris time, whatever the browser's time zone.
 const FUSEAU = 'Europe/Paris';
-export const LIGNES = 24;
-export const COLONNES = 6;
+const MOIS = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre',
+];
 
-const parts = new Intl.DateTimeFormat('en-GB', {
+const jourFmt = new Intl.DateTimeFormat('en-CA', { timeZone: FUSEAU });
+const heureFmt = new Intl.DateTimeFormat('en-GB', {
   timeZone: FUSEAU,
-  weekday: 'short',
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
 });
-const JOURS: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 5 };
 
-// Row -1: a task due at midnight has no time of day (HubSpot stores dates that way).
-export function creneau(iso: string): { jour: number; ligne: number } {
-  const p = Object.fromEntries(parts.formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
-  const h = Number(p.hour);
-  const m = Number(p.minute);
-  const jour = JOURS[p.weekday ?? 'Mon'] ?? 0;
-  if (h === 0 && m === 0) return { jour, ligne: -1 };
-  const ligne = (h - 8) * 2 + Math.floor(m / 30);
-  return { jour, ligne: Math.min(LIGNES - 1, Math.max(0, ligne)) };
-}
+export const jourParis = (iso: string) => jourFmt.format(new Date(iso));
+export const heureParis = (iso: string) => heureFmt.format(new Date(iso));
 
 // Offset of Paris from UTC at a given instant, in minutes.
 function decalage(instant: number): number {
-  const f = new Intl.DateTimeFormat('en-US', {
-    timeZone: FUSEAU,
-    timeZoneName: 'longOffset',
-  }).formatToParts(new Date(instant));
-  const off = f.find((x) => x.type === 'timeZoneName')?.value ?? 'GMT';
-  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(off);
-  if (!match) return 0;
-  return (match[1] === '-' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]));
+  const nom = new Intl.DateTimeFormat('en-US', { timeZone: FUSEAU, timeZoneName: 'longOffset' })
+    .formatToParts(new Date(instant))
+    .find((x) => x.type === 'timeZoneName')?.value;
+  const m = /GMT([+-])(\d{2}):(\d{2})/.exec(nom ?? '');
+  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
 }
 
-// Slot of the week starting `lundi` (YYYY-MM-DD) → UTC ISO instant; the weekend column is Saturday.
-export function vers(lundi: string, jour: number, ligne: number): string {
-  const [y, mo, d] = lundi.split('-').map(Number) as [number, number, number];
-  const minutes = 8 * 60 + Math.max(0, ligne) * 30;
-  const naif = Date.UTC(y, mo - 1, d + jour, Math.floor(minutes / 60), minutes % 60);
+const parisVersIso = (jour: string, hhmm: string) => {
+  const [y, mo, d] = jour.split('-').map(Number) as [number, number, number];
+  const [h, mi] = hhmm.split(':').map(Number) as [number, number];
+  const naif = Date.UTC(y, mo - 1, d, h, mi);
   const premier = naif - decalage(naif) * 60_000;
   return new Date(naif - decalage(premier) * 60_000).toISOString();
+};
+
+// Same Paris time on another day (9:00 for a task without a due date).
+export const memeHeure = (iso: string | null, jour: string) =>
+  parisVersIso(jour, iso ? heureParis(iso) : '09:00');
+
+const utc = (jour: string) => {
+  const [y, m, d] = jour.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d));
+};
+
+// ISO 8601 week: the week of the year's first Thursday is week 1.
+export function numeroSemaine(lundi: string): number {
+  const jeudi = utc(lundi);
+  jeudi.setUTCDate(jeudi.getUTCDate() + 3);
+  const debut = Date.UTC(jeudi.getUTCFullYear(), 0, 1);
+  return Math.floor((jeudi.getTime() - debut) / 86_400_000 / 7) + 1;
+}
+
+export function titreSemaine(lundi: string): string {
+  const a = utc(lundi);
+  const b = new Date(a);
+  b.setUTCDate(b.getUTCDate() + 6);
+  const [ja, ma, ya] = [a.getUTCDate(), MOIS[a.getUTCMonth()], a.getUTCFullYear()];
+  const [jb, mb, yb] = [b.getUTCDate(), MOIS[b.getUTCMonth()], b.getUTCFullYear()];
+  const debut = ya !== yb ? `${ja} ${ma} ${ya}` : ma !== mb ? `${ja} ${ma}` : `${ja}`;
+  return `Semaine ${numeroSemaine(lundi)} · ${debut} – ${jb} ${mb} ${yb}`;
+}
+
+export function anciennete(iso: string, maintenant = new Date()): string {
+  const jours = Math.round(
+    (utc(jourParis(maintenant.toISOString())).getTime() - utc(jourParis(iso)).getTime()) /
+      86_400_000,
+  );
+  if (jours <= 0) return "aujourd'hui";
+  if (jours === 1) return 'hier';
+  if (jours < 14) return `il y a ${jours} j`;
+  if (jours < 60) return `il y a ${Math.floor(jours / 7)} sem.`;
+  return `il y a ${Math.floor(jours / 30)} mois`;
+}
+
+// HubSpot gives tasks a default time: a time shared by three tasks or more is not a real one.
+export function heuresParDefaut(echeances: (string | null)[]): Set<string> {
+  const n = new Map<string, number>();
+  for (const e of echeances) if (e) n.set(heureParis(e), (n.get(heureParis(e)) ?? 0) + 1);
+  return new Set([...n].filter(([, k]) => k >= 3).map(([h]) => h));
 }
