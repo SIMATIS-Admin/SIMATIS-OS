@@ -1,4 +1,17 @@
 // Shared by the Tâches screen and its week view.
+import type { TacheVue } from '../../api.js';
+
+// Activity types, Pipedrive-like; `TYPES` below groups them by channel (Brief, week columns).
+export const ACTIVITES: Record<TacheVue['type'], readonly [string, string]> = {
+  appel: ['phone', 'Appel'],
+  email: ['send', 'Email'],
+  tache: ['check', 'Tâche'],
+  reunion: ['users', 'Réunion'],
+  echeance: ['flag', 'Échéance'],
+  dejeuner: ['sun', 'Déjeuner'],
+};
+export const ORDRE_ACTIVITES = Object.keys(ACTIVITES) as TacheVue['type'][];
+
 export const TYPES = {
   email: ['send', 'Email'],
   appel: ['phone', 'Téléphone'],

@@ -8,12 +8,18 @@ let calls: Call[] = [];
 let hubspot = true;
 let patchReponse: unknown = null;
 let beaucoup = false;
+let ensuite = true;
+let oppClose: 'gagne' | 'perdu' | null = null;
 
 const tache = (id: string, titre: string, extra: Record<string, unknown> = {}) => ({
   id,
   titre,
   notes: null,
   canal: 'tache',
+  type: 'tache',
+  avecHeure: false,
+  dureeMinutes: null,
+  occupe: false,
   echeance: null,
   fait: false,
   origine: 'os',
@@ -26,11 +32,17 @@ const semaine = () => ({
   taches: [
     tache('t1', 'Appeler Romain Arpin', {
       canal: 'appel',
+      type: 'appel',
       origine: 'hubspot',
       echeance: '2026-10-13T08:00:00.000Z',
       contact: { id: 'c1', nom: 'Romain Arpin' },
+      opportunite: { id: 'o1', titre: 'Affaire Arpin', clos: oppClose },
     }),
-    tache('t2', 'Envoyer la plaquette', { canal: 'email', echeance: '2026-10-14T09:00:00.000Z' }),
+    tache('t2', 'Envoyer la plaquette', {
+      canal: 'email',
+      type: 'email',
+      echeance: '2026-10-14T09:00:00.000Z',
+    }),
     ...(beaucoup
       ? Array.from({ length: 6 }, (_, k) =>
           tache(`m${k}`, `Relance mail ${k}`, {
@@ -60,6 +72,8 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+  if (url === '/api/preferences') return json({ favoris: [], options: { ensuite } });
+  if (url === '/api/preferences/options') return json({ options: { ensuite: false } });
   if (method === 'PATCH') return json(patchReponse ?? tache('t1', 'Appeler Romain Arpin'));
   if (method === 'POST') return json(tache('t9', 'Nouvelle'));
   return json(semaine());
@@ -80,6 +94,8 @@ describe('Tâches screen', () => {
     hubspot = true;
     patchReponse = null;
     beaucoup = false;
+    ensuite = true;
+    oppClose = null;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -97,7 +113,7 @@ describe('Tâches screen', () => {
       'Trier les cartes de visite',
     ]);
     const ligne = screen.getByText('Appeler Romain Arpin').closest('li') as HTMLElement;
-    expect(within(ligne).getByText('Téléphone')).toBeTruthy();
+    expect(within(ligne).getByText('Appel')).toBeTruthy();
     expect(within(ligne).getByText('HubSpot')).toBeTruthy();
     expect(within(ligne).getByText(/Romain Arpin ·/)).toBeTruthy();
   });
@@ -163,6 +179,112 @@ describe('Tâches screen', () => {
     expect(calls.find((c) => c.method === 'PATCH')?.body).toMatchObject({
       titre: 'Appeler Romain lundi',
       notes: 'Avant 10 h',
+    });
+  });
+
+  describe('activity window', () => {
+    const nouvelle = async () => {
+      await liste();
+      fireEvent.click(screen.getByRole('button', { name: 'Nouvelle tâche' }));
+    };
+    const post = () => calls.find((c) => c.method === 'POST')?.body as Record<string, unknown>;
+    const presse = (nom: string) =>
+      screen.getByRole('button', { name: nom }).getAttribute('aria-pressed');
+
+    it('pre-selects the type from the title until a type is clicked', async () => {
+      await nouvelle();
+      fireEvent.change(screen.getByLabelText('Intitulé'), {
+        target: { value: 'Déjeuner avec Agathe' },
+      });
+      expect(presse('Déjeuner')).toBe('true');
+      fireEvent.click(screen.getByRole('button', { name: 'Appel' }));
+      fireEvent.change(screen.getByLabelText('Intitulé'), {
+        target: { value: 'Déjeuner encore' },
+      });
+      expect(presse('Appel')).toBe('true');
+      fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+      await waitFor(() => expect(post()).toBeTruthy());
+      expect(post()).toMatchObject({ titre: 'Déjeuner encore', type: 'appel' });
+    });
+
+    it('sends no type when none was clicked, and a precise time only when asked', async () => {
+      await nouvelle();
+      fireEvent.change(screen.getByLabelText('Intitulé'), { target: { value: 'Préparer' } });
+      expect(screen.queryByLabelText('Heure')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+      await waitFor(() => expect(post()).toBeTruthy());
+      expect(post()).not.toHaveProperty('type');
+      expect(post()).toMatchObject({ avecHeure: false });
+
+      calls = [];
+      fireEvent.click(await screen.findByRole('button', { name: 'Nouvelle tâche' }));
+      fireEvent.change(screen.getByLabelText('Intitulé'), { target: { value: 'Point' } });
+      fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-15' } });
+      fireEvent.click(screen.getByLabelText('Heure précise'));
+      fireEvent.change(screen.getByLabelText('Heure'), { target: { value: '14:30' } });
+      fireEvent.change(screen.getByLabelText('Durée'), { target: { value: '60' } });
+      fireEvent.click(screen.getByLabelText('Occupé'));
+      fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+      await waitFor(() => expect(post()).toBeTruthy());
+      expect(post()).toMatchObject({
+        avecHeure: true,
+        dureeMinutes: 60,
+        occupe: true,
+        echeance: '2026-10-15T12:30:00.000Z',
+      });
+    });
+
+    it('offers the next activity when one is marked done, linked to the same deal', async () => {
+      await liste();
+      fireEvent.click(screen.getByLabelText('Marquer faite : Appeler Romain Arpin'));
+      const fenetre = await screen.findByRole('dialog', { name: 'Et ensuite ?' });
+      expect(
+        within(fenetre).getByRole('button', { name: 'Appel' }).getAttribute('aria-pressed'),
+      ).toBe('true');
+      fireEvent.change(within(fenetre).getByLabelText('Intitulé'), {
+        target: { value: 'Rappeler Romain' },
+      });
+      fireEvent.click(within(fenetre).getByRole('button', { name: 'Planifier' }));
+      await waitFor(() => expect(post()).toBeTruthy());
+      expect(post()).toMatchObject({
+        titre: 'Rappeler Romain',
+        type: 'appel',
+        contactId: 'c1',
+        opportuniteId: 'o1',
+        hubspot: true,
+      });
+    });
+
+    it('can stop offering the next activity', async () => {
+      await liste();
+      fireEvent.click(screen.getByLabelText('Marquer faite : Appeler Romain Arpin'));
+      const fenetre = await screen.findByRole('dialog', { name: 'Et ensuite ?' });
+      fireEvent.click(within(fenetre).getByLabelText('Ne plus me proposer'));
+      fireEvent.click(within(fenetre).getByRole('button', { name: 'Pas maintenant' }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.url === '/api/preferences/options')).toMatchObject({
+          method: 'PUT',
+          body: { ensuite: false },
+        }),
+      );
+      expect(screen.queryByRole('dialog', { name: 'Et ensuite ?' })).toBeNull();
+    });
+
+    it('offers nothing when disabled or when the deal is closed', async () => {
+      ensuite = false;
+      await liste();
+      fireEvent.click(screen.getByLabelText('Marquer faite : Appeler Romain Arpin'));
+      await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+      expect(screen.queryByRole('dialog', { name: 'Et ensuite ?' })).toBeNull();
+      cleanup();
+
+      ensuite = true;
+      oppClose = 'perdu';
+      calls = [];
+      await liste();
+      fireEvent.click(screen.getByLabelText('Marquer faite : Appeler Romain Arpin'));
+      await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+      expect(screen.queryByRole('dialog', { name: 'Et ensuite ?' })).toBeNull();
     });
   });
 

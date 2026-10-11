@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState, type DragEvent } from 'react';
 import {
   createTache,
+  fetchOptions,
   fetchTaches,
+  saveOptions,
   updateTache,
   type SemaineTaches,
   type TacheSaisie,
   type TacheVue,
 } from '../api.js';
 import { Icon } from '../icons.js';
-import { Modal } from './Overlay.js';
-import { TYPES, iso, lundiDe, plusJours } from './taches/commun.js';
+import { ACTIVITES, lundiDe, plusJours } from './taches/commun.js';
+import { EditionTache, Ensuite, type Enregistrement } from './taches/Edition.js';
 import { jourParis, memeHeure, titreSemaine } from './taches/creneaux.js';
 import { MIME_TACHE, Semaine } from './taches/Semaine.js';
 
@@ -29,19 +31,12 @@ const echeanceLisible = (e: string | null) =>
         minute: '2-digit',
       })
     : 'Sans échéance';
-// <input type="datetime-local"> works in the browser's time (Paris for the pilot).
-const versSaisie = (e: string | null) => {
-  if (!e) return '';
-  const d = new Date(e);
-  return `${iso(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-const depuisSaisie = (v: string) => (v ? new Date(v).toISOString() : null);
 
 export const estSimulation = (r: unknown): r is { simulation: true; message: string } =>
   typeof r === 'object' && r !== null && 'simulation' in r;
 
 export function Pastilles({ t }: { t: TacheVue }) {
-  const [ico, lbl] = TYPES[t.canal];
+  const [ico, lbl] = ACTIVITES[t.type];
   return (
     <>
       <span className="badge">
@@ -51,102 +46,6 @@ export function Pastilles({ t }: { t: TacheVue }) {
         {t.origine === 'hubspot' ? 'HubSpot' : 'OS'}
       </span>
     </>
-  );
-}
-
-// Create (no task) or edit a task; `hubspot` shows the "Créer aussi dans HubSpot" box.
-export function EditionTache({
-  tache,
-  hubspot,
-  onSave,
-  onClose,
-}: {
-  tache: TacheVue | null;
-  hubspot: boolean;
-  onSave: (saisie: TacheSaisie & { hubspot: boolean }) => Promise<void>;
-  onClose: () => void;
-}) {
-  const [titre, setTitre] = useState(tache?.titre ?? '');
-  const [notes, setNotes] = useState(tache?.notes ?? '');
-  const [echeance, setEcheance] = useState(versSaisie(tache?.echeance ?? null));
-  const [fait, setFait] = useState(tache?.fait ?? false);
-  const [versHubspot, setVersHubspot] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const submit = () => {
-    setBusy(true);
-    setError(null);
-    const saisie = {
-      titre: titre.trim(),
-      notes: notes.trim() ? notes : null,
-      echeance: depuisSaisie(echeance),
-      ...(tache ? { fait } : {}),
-      hubspot: versHubspot,
-    };
-    onSave(saisie)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setBusy(false));
-  };
-
-  return (
-    <Modal title={tache ? 'Modifier la tâche' : 'Nouvelle tâche'} onClose={onClose}>
-      <div className="stack" style={{ gap: 10 }}>
-        <label className="field">
-          <span>Intitulé</span>
-          <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Notes</span>
-          <textarea
-            className="input"
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Échéance</span>
-          <input
-            className="input"
-            type="datetime-local"
-            value={echeance}
-            onChange={(e) => setEcheance(e.target.value)}
-          />
-        </label>
-        {tache && (
-          <label className="check">
-            <input type="checkbox" checked={fait} onChange={(e) => setFait(e.target.checked)} />
-            <span>Faite</span>
-          </label>
-        )}
-        {tache && (tache.contact || tache.opportunite) && (
-          <p className="small muted">
-            {[tache.contact?.nom, tache.opportunite?.titre].filter(Boolean).join(' · ')}
-          </p>
-        )}
-        {!tache && hubspot && (
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={versHubspot}
-              onChange={(e) => setVersHubspot(e.target.checked)}
-            />
-            <span>Créer aussi dans HubSpot</span>
-          </label>
-        )}
-        {error && (
-          <p className="small" style={{ color: 'var(--red)' }}>
-            {error}
-          </p>
-        )}
-        <div>
-          <button className="btn primary" disabled={busy || !titre.trim()} onClick={submit}>
-            {tache ? 'Enregistrer' : 'Créer'}
-          </button>
-        </div>
-      </div>
-    </Modal>
   );
 }
 
@@ -234,6 +133,8 @@ export function Taches({ slug }: { slug: string }) {
   const [data, setData] = useState<SemaineTaches | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [edition, setEdition] = useState<TacheVue | 'nouvelle' | null>(null);
+  const [ensuite, setEnsuite] = useState<TacheVue | null>(null);
+  const [proposer, setProposer] = useState(true);
 
   const load = useCallback(() => {
     fetchTaches(slug, lundi, plusJours(lundi, 6)).then(setData, (e: unknown) =>
@@ -241,6 +142,20 @@ export function Taches({ slug }: { slug: string }) {
     );
   }, [slug, lundi]);
   useEffect(load, [load]);
+  useEffect(() => {
+    fetchOptions().then(
+      (o) => setProposer(o.ensuite),
+      () => undefined,
+    );
+  }, []);
+
+  // Pipedrive: once an activity is really done, offer the next one (not on a closed deal).
+  const proposerSuite = (t: TacheVue, r: unknown) => {
+    if (proposer && !estSimulation(r) && !t.opportunite?.clos) setEnsuite(t);
+  };
+  const creer = async ({ hubspot, ...saisie }: Enregistrement) => {
+    apres(await createTache(slug, { ...saisie, hubspot }));
+  };
 
   const apres = (r: unknown) => {
     setMessage(estSimulation(r) ? r.message : null);
@@ -339,7 +254,15 @@ export function Taches({ slug }: { slug: string }) {
           <Liste
             data={data}
             onOpen={setEdition}
-            onFait={(t) => void modifier(t, { fait: !t.fait })}
+            onFait={(t) =>
+              void updateTache(slug, t.id, { fait: !t.fait }).then(
+                (r) => {
+                  apres(r);
+                  if (!t.fait) proposerSuite(t, r);
+                },
+                (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+              )
+            }
           />
         ) : (
           <Semaine
@@ -356,12 +279,29 @@ export function Taches({ slug }: { slug: string }) {
           hubspot={data.hubspot}
           onClose={() => setEdition(null)}
           onSave={async ({ hubspot, ...saisie }) => {
-            const r =
-              edition === 'nouvelle'
-                ? await createTache(slug, { ...saisie, hubspot })
-                : await updateTache(slug, edition.id, saisie);
+            if (edition === 'nouvelle') {
+              await creer({ ...saisie, hubspot });
+              setEdition(null);
+              return;
+            }
+            const r = await updateTache(slug, edition.id, saisie);
             setEdition(null);
             apres(r);
+            if (saisie.fait && !edition.fait) proposerSuite(edition, r);
+          }}
+        />
+      )}
+      {ensuite && data && (
+        <Ensuite
+          apres={ensuite}
+          hubspot={data.hubspot}
+          onPlanifier={creer}
+          onFermer={(plusJamais) => {
+            setEnsuite(null);
+            if (plusJamais) {
+              setProposer(false);
+              void saveOptions({ ensuite: false });
+            }
           }}
         />
       )}
