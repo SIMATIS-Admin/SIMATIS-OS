@@ -1,9 +1,9 @@
-import { and, asc, eq, isNull, lte } from 'drizzle-orm';
+import { and, eq, isNull, lte } from 'drizzle-orm';
 import { evenements, type Evenement } from '../connecteurs/google/google.js';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
 import { connexions } from '../connexions/schema.js';
 import { writeVia, type ConnexionDeps } from '../connexions/service.js';
-import { contacts, entreprises, opportunites, taches } from '../crm/schema.js';
+import { taches } from '../crm/schema.js';
 import { CrmIndisponible } from '../crm/service.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -12,7 +12,14 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { zoned } from '../connecteurs/google/creneaux.js';
-import { compterRealisees, decaler, jourDe, situation } from './realisees.js';
+import {
+  compterRdvTenus,
+  compterRealisees,
+  decaler,
+  jourDe,
+  rdvDuJour,
+  situation,
+} from './realisees.js';
 
 const FUSEAU = 'Europe/Paris';
 
@@ -45,7 +52,8 @@ export async function rendezVous(
   }
 }
 
-// "Your day": meetings, open tasks overdue or due today (Paris days), and what was done.
+// "Your day": counts of open tasks overdue and due today (Paris days), today's meetings,
+// and the recent activity (tasks done, meetings held).
 export async function getBrief(
   db: Executor,
   instance: Instance,
@@ -55,41 +63,15 @@ export async function getBrief(
   const data = await withInstance(db, instance.id, async (tx) => {
     const finJour = zoned(decaler(jourDe(maintenant, FUSEAU), 1), '00:00', FUSEAU);
     const ouvertes = await tx
-      .select({
-        id: taches.id,
-        titre: taches.titre,
-        canal: taches.canal,
-        echeance: taches.echeance,
-        prepare: taches.prepare,
-        source: taches.source,
-        contact: contacts.nom,
-        entreprise: entreprises.nom,
-        opportunite: opportunites.titre,
-      })
+      .select({ canal: taches.canal, echeance: taches.echeance })
       .from(taches)
-      .leftJoin(
-        contacts,
-        and(eq(contacts.id, taches.contactId), eq(contacts.instanceId, currentInstance)),
-      )
-      .leftJoin(
-        opportunites,
-        and(
-          eq(opportunites.id, taches.opportuniteId),
-          eq(opportunites.instanceId, currentInstance),
-        ),
-      )
-      .leftJoin(
-        entreprises,
-        and(eq(entreprises.id, contacts.entrepriseId), eq(entreprises.instanceId, currentInstance)),
-      )
       .where(
         and(
           eq(taches.instanceId, currentInstance),
           isNull(taches.faitAt),
           lte(taches.echeance, finJour),
         ),
-      )
-      .orderBy(asc(taches.echeance));
+      );
     const faites = await tx
       .select({ canal: taches.canal, faitAt: taches.faitAt })
       .from(taches)
@@ -105,25 +87,37 @@ export async function getBrief(
     return { ouvertes, faites, conn };
   });
 
+  const retard = data.ouvertes.filter(
+    (t) => situation(t.echeance, maintenant, FUSEAU) === 'retard',
+  ).length;
+  const jour = { email: 0, appel: 0, autre: 0, total: 0 };
+  for (const t of data.ouvertes) {
+    if (situation(t.echeance, maintenant, FUSEAU) !== 'jour') continue;
+    if (t.canal === 'email') jour.email += 1;
+    else if (t.canal === 'appel') jour.appel += 1;
+    else jour.autre += 1;
+    jour.total += 1;
+  }
+
   const crm = data.conn.find((c) => c.kind === 'crm');
   const agenda = data.conn.find((c) => c.kind === 'agenda');
-  const jour = jourDe(maintenant, FUSEAU);
+  const auj = jourDe(maintenant, FUSEAU);
+  // One read covers both today's meetings and the 30 days of meetings held.
   const { rdv, etat, erreur } = await rendezVous(
     instance,
     agenda,
     deps,
-    zoned(jour, '00:00', FUSEAU),
-    zoned(decaler(jour, 1), '00:00', FUSEAU),
+    zoned(decaler(auj, -29), '00:00', FUSEAU),
+    zoned(decaler(auj, 1), '00:00', FUSEAU),
   );
   return {
     source: crm?.fournisseur === 'hubspot' ? 'hubspot' : 'natif',
-    rdv,
+    aFaire: { retard, jour },
+    rdv: rdvDuJour(rdv, maintenant, FUSEAU),
     rdvEtat: etat,
     ...(erreur ? { rdvErreur: erreur } : {}),
-    taches: data.ouvertes
-      .map((t) => ({ ...t, situation: situation(t.echeance, maintenant, FUSEAU) }))
-      .filter((t) => t.situation !== 'plus_tard'),
     realisees: compterRealisees(data.faites, maintenant, FUSEAU),
+    rdvTenus: etat === 'ok' ? compterRdvTenus(rdv, maintenant, FUSEAU) : null,
   };
 }
 

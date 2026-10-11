@@ -225,30 +225,20 @@ export const changeOpportunite = (slug: string, id: string, change: Changement) 
   );
 
 export type Compte = { email: number; appel: number; autre: number; total: number };
-export type BriefTache = {
-  id: string;
-  titre: string;
-  canal: 'email' | 'appel' | 'tache';
-  echeance: string | null;
-  prepare: boolean;
-  source: string;
-  contact: string | null;
-  entreprise: string | null;
-  opportunite: string | null;
-  situation: 'retard' | 'jour';
-};
 export type Brief = {
   source: 'hubspot' | 'natif';
-  rdv: { debut: string; fin: string; titre: string; lieu: string | null }[];
+  aFaire: { retard: number; jour: Compte };
+  rdv: { debut: string; fin: string; titre: string; lieu: string | null; journee: boolean }[];
   rdvEtat: 'ok' | 'non_configure' | 'erreur';
   rdvErreur?: string;
-  taches: BriefTache[];
   realisees: {
     veille: Compte & { jour: string };
     semaine: Compte;
     mois: Compte;
     aujourdhui: Compte;
   };
+  // Meetings held over the same periods; null when the agenda could not be read.
+  rdvTenus: { veille: number; semaine: number; mois: number } | null;
 };
 
 export type PropositionItem = {
@@ -267,12 +257,6 @@ export type PropositionItem = {
 };
 
 export const fetchBrief = (slug: string) => getJson<Brief>(inst(slug, 'brief'));
-export const marquerFait = (slug: string, id: string) =>
-  sendJson<{ simulation: boolean }>(
-    'POST',
-    inst(slug, `taches/${encodeURIComponent(id)}/fait`),
-    {},
-  );
 export type TacheVue = {
   id: string;
   titre: string;
