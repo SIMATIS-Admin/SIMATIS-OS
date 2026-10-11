@@ -45,7 +45,7 @@ type Source = {
   derniereSynchro: Date | null;
 };
 
-async function pipelineSource(tx: Tx): Promise<Source> {
+export async function pipelineSource(tx: Tx): Promise<Source> {
   const [crm] = await tx
     .select()
     .from(connexions)
@@ -231,7 +231,14 @@ export async function changeOpportunite(
 
     const [row] = await tx
       .update(opportunites)
-      .set({ ...next, updatedAt: new Date() })
+      .set({
+        ...next,
+        // Stage entry dates feed the progress bar of the deal page.
+        ...(next.etape !== opp.etape && !simulation
+          ? { etapesDates: { ...opp.etapesDates, [next.etape]: new Date().toISOString() } }
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(opportunites.id, opp.id))
       .returning();
     await logEvent(tx, {

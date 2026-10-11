@@ -40,6 +40,14 @@ import {
   updateTache,
 } from '../crm/taches.js';
 import { TYPES_ACTIVITE } from '../crm/type-tache.js';
+import {
+  ajouterNote,
+  FicheInvalide,
+  getFiche,
+  KINDS,
+  updateFiche,
+  type Kind,
+} from '../crm/fiches.js';
 import { deciderProposition, listPropositions, type Filtre } from '../pilotage/validations.js';
 import { PropositionRefusee } from '../propositions/service.js';
 import { paramsOf, ROUTINES, rythme } from '../routines/params.js';
@@ -304,6 +312,75 @@ export function registerApi(
         return done ?? reply.code(404).send({ error: 'Tâche introuvable dans cette instance' });
       } catch (error) {
         return tacheErreur(error, reply);
+      }
+    }),
+  );
+
+  type FicheRoute = { Params: { slug: string; kind: string; id: string }; Body: unknown };
+  const ficheParams = (p: FicheRoute['Params']) =>
+    KINDS.includes(p.kind as Kind) && UUID.test(p.id) ? (p.kind as Kind) : null;
+  const texteCourt = z.string().trim().max(300);
+  const patchFicheSchema = z
+    .object({
+      titre: texteCourt.min(1),
+      nom: texteCourt.min(1),
+      montant: z.number().int().min(0).nullable(),
+      echeance: z.iso.date().nullable(),
+      fonction: texteCourt.nullable(),
+      email: z.email().nullable(),
+      telephone: texteCourt.nullable(),
+      ville: texteCourt.nullable(),
+      domaine: texteCourt.nullable(),
+      secteur: texteCourt.nullable(),
+      taille: z.number().int().min(0).nullable(),
+      contactId: z.uuid().nullable(),
+      entrepriseId: z.uuid().nullable(),
+    })
+    .partial()
+    .strict();
+  const noteSchema = z
+    .object({ corps: z.string().trim().min(1).max(5000), hubspot: z.boolean().optional() })
+    .strict();
+  const ficheErreur = (error: unknown, reply: FastifyReply) => {
+    if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+    if (error instanceof FicheInvalide) return reply.code(400).send({ error: error.message });
+    throw error;
+  };
+  app.get<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id',
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      const kind = ficheParams(request.params);
+      const fiche = kind && (await getFiche(db, i, kind, request.params.id));
+      return fiche ?? reply.code(404).send({ error: 'Fiche introuvable' });
+    }),
+  );
+  app.patch<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id',
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      const kind = ficheParams(request.params);
+      if (!kind) return reply.code(404).send({ error: 'Fiche introuvable' });
+      const parsed = patchFicheSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Modification invalide' });
+      try {
+        const r = await updateFiche(db, i, kind, request.params.id, parsed.data, connexionDeps);
+        return r ?? reply.code(404).send({ error: 'Fiche introuvable' });
+      } catch (error) {
+        return ficheErreur(error, reply);
+      }
+    }),
+  );
+  app.post<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/notes',
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      const kind = ficheParams(request.params);
+      if (!kind) return reply.code(404).send({ error: 'Fiche introuvable' });
+      const parsed = noteSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Note invalide' });
+      try {
+        const r = await ajouterNote(db, i, kind, request.params.id, parsed.data, connexionDeps);
+        return r ?? reply.code(404).send({ error: 'Fiche introuvable' });
+      } catch (error) {
+        return ficheErreur(error, reply);
       }
     }),
   );
