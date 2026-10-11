@@ -14,7 +14,13 @@ import type { Database } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import { instances, type Instance } from '../instances/schema.js';
-import { getInstanceBySlug, listInstances } from '../instances/service.js';
+import {
+  getInstanceBySlug,
+  listInstances,
+  PhaseRefusee,
+  phaseOf,
+  setPhase,
+} from '../instances/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
 import { normaliserDomaine } from '../connecteurs/hubspot/domaines.js';
 import {
@@ -105,6 +111,7 @@ const summary = (i: Instance) => ({
   nom: i.nom,
   sous: i.config.sous ?? '',
   type: i.type,
+  phase: phaseOf(i),
   couleur: i.config.couleur ?? '#41A594',
   modules: i.config.modules ?? [],
 });
@@ -576,6 +583,21 @@ export function registerApi(
         });
         return { ...summary(i), nom: parsed.data.nom };
       });
+    }),
+  );
+
+  const phaseSchema = z.object({ phase: z.enum(['closing', 'en_cours']) });
+  app.put<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/phase',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = phaseSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Phase invalide' });
+      try {
+        return summary(await setPhase(db, i.slug, parsed.data.phase));
+      } catch (error) {
+        if (error instanceof PhaseRefusee) return reply.code(409).send({ error: error.message });
+        throw error;
+      }
     }),
   );
 

@@ -12,6 +12,10 @@ export type InstanceConfig = {
   inactiviteJours?: number;
   // Dashboard funnel settings (pilotage/funnel.ts); defaults apply when missing.
   funnel?: Record<string, number>;
+  // Mandate only: in closing (qualified prospect, real data) or signed. Missing = signed.
+  phase?: 'closing' | 'en_cours';
+  // Mandate created from (or linked to) a deal of the own activity.
+  origine?: { opportuniteId: string; entrepriseId: string | null };
 };
 
 export const instances = pgTable('instances', {
