@@ -32,6 +32,9 @@ async function lireAffaire(tx: Tx, propre: Instance, opportuniteId: string) {
   if (propre.type !== 'propre') {
     throw new MandatRefuse('Un mandat se crée depuis une affaire de Mon activité.');
   }
+  // One mandate per deal: simultaneous requests on the same deal wait for each other, so the
+  // second one sees the link made by the first.
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`mandat:${opportuniteId}`}))`);
   const deja = await mandatLie(tx, opportuniteId);
   if (deja) throw new MandatRefuse(`Affaire déjà liée au mandat ${deja.nom}.`);
   return withInstance(tx, propre.id, async (itx) => {
@@ -143,7 +146,9 @@ export async function lierMandat(
       .from(instances)
       .where(
         and(eq(instances.slug, slug), eq(instances.type, 'mandat'), eq(instances.statut, 'actif')),
-      );
+      )
+      // Two deals linked to the same mandate at once: the second waits and sees the first link.
+      .for('update');
     if (!cible) throw new MandatRefuse('Seul un mandat actif peut être lié à une affaire.');
     if (cible.config.origine) throw new MandatRefuse(`${cible.nom} est déjà lié à une affaire.`);
     const [row] = await tx

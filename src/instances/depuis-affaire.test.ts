@@ -124,6 +124,25 @@ describe('mandate created from (or linked to) a deal of the own activity', () =>
     }
   });
 
+  it('links a deal to one mandate only, even with simultaneous requests', async () => {
+    const libre = (await nouvelleAffaire('Affaire disputée', 'Atelier Epsilon')).id;
+    for (const slug of ['m1', 'm2', 'm3', 'm4']) {
+      await createInstance(t.owner.db, { slug, nom: slug, type: 'mandat' });
+    }
+    const resultats = await Promise.allSettled(
+      ['m1', 'm2', 'm3', 'm4'].map((slug) => lierMandat(t.app.db, propre, libre, slug)),
+    );
+    expect(resultats.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    for (const r of resultats.filter((r) => r.status === 'rejected')) {
+      expect(r.reason).toBeInstanceOf(MandatRefuse);
+    }
+    const { rows } = await t.owner.pool.query<{ n: number }>(
+      "select count(*)::int as n from instances where config -> 'origine' ->> 'opportuniteId' = $1",
+      [libre],
+    );
+    expect(rows[0]?.n).toBe(1);
+  });
+
   it('refuses when called from another instance than Mon activité', async () => {
     const helioval = (await getInstanceBySlug(t.owner.db, 'helioval')) as Instance;
     await expect(
