@@ -28,11 +28,47 @@ Critères de réussite :
 | Qui alimente l'Inbox ? | Une routine Claude sur le poste (pas de montage du Drive dans Docker). |
 | Retour vers le second cerveau ? | Oui : la routine y note ce qui a été traité et y exporte les notes validées. |
 | Et « À valider » ? | Supprimé. Les propositions deviennent des sujets « à valider » de l'Inbox. |
-| Périmètre | Mandat : son seul périmètre. « Mon activité » (SIMATIS) : vue d'ensemble, son activité plus tous les mandats en cours. |
+| Périmètre | Mandat : son seul périmètre. « Mon activité » (SIMATIS) : vue d'ensemble, son activité plus tous les mandats actifs, en cours et en Closing. Les démos n'y sont pas. |
+| Utilisateurs | Le pilote est pour l'instant le seul utilisateur : pas de droits par personne. |
 | Architecture | Approche A : un objet « sujet » nouveau ; le moteur de propositions reste dessous. |
 
 Approches écartées : élargir la table des propositions (mélange « action à exécuter » et
 « chose à traiter ») ; laisser les routines agir sans validation (perte du garde-fou).
+
+## 0. Trois sortes de mandats (livraison préalable)
+
+L'Inbox d'ensemble doit inclure les prospects réels qualifiés mais pas les démos. Or le type
+d'instance `prospect` désigne aujourd'hui une démonstration (données fictives, faux
+connecteurs, routines non planifiées, écritures réelles refusées, devis `DEMO-…`). On
+distingue donc :
+
+| | Démo | Mandat en Closing | Mandat en cours |
+| --- | --- | --- | --- |
+| Ce que c'est | Vitrine pour montrer l'OS | Prospect qualifié, en négociation | Client signé |
+| Données et connexions | Fictives | Réelles | Réelles |
+| Routines, écritures réelles | Non | Oui | Oui |
+| Dans l'Inbox d'ensemble | Non | Oui | Oui |
+
+**Définition d'une Démo** : un mandat qui ne contient que des données fictives et ne touche
+aucun outil réel. Il sert à montrer l'OS et peut être partagé en copie isolée.
+
+Mise en œuvre, au plus simple :
+
+- Un mandat en Closing est une instance de type `mandat` avec `config.phase = 'closing'`. Il
+  se comporte donc exactement comme un mandat en cours partout ailleurs. Sans `phase`, un
+  mandat est en cours : les mandats existants ne changent pas.
+- Le type `prospect` garde son nom technique (il sert dans une quinzaine d'endroits) mais
+  s'affiche « Démo » partout dans l'interface.
+- Menu des instances : Mon activité · Mandats en cours · Mandats en Closing · Démos.
+- Paramètres d'un mandat : la ligne Type affiche « Mandat en Closing » ou « Mandat en
+  cours », et un choix « Phase » permet de passer de l'un à l'autre (inscrit au journal).
+  Passer en cours à la signature n'efface rien.
+- Création en ligne de commande : `instance:create --type mandat --phase closing`.
+- Une démo reste une démo. Si son prospect se qualifie, on crée à côté un mandat en Closing
+  propre, sans données fictives.
+
+Hors périmètre : adapter les données fictives d'une démo à un prospect particulier (chantier
+à part ; les données de démonstration du dépôt restent fictives et génériques).
 
 ## 1. Le sujet
 
@@ -79,8 +115,8 @@ suffisant) ne crée pas de sujet.
 
 - Instance `mandat` : uniquement les sujets du mandat.
 - Instance `propre` (« Mon activité », SIMATIS) : vue d'ensemble, ses propres sujets plus
-  ceux de tous les mandats **actifs** de type `mandat`. Les mandats prospects (démos aux
-  données fictives) et les instances archivées n'y figurent pas.
+  ceux de tous les mandats **actifs** de type `mandat`, en cours comme en Closing. Les démos
+  et les instances archivées n'y figurent pas.
 - La vue d'ensemble est une lecture : chaque sujet reste rangé dans son instance. Le service
   lit chaque instance dans sa propre transaction cloisonnée (`withInstance`) et assemble le
   résultat ; aucune requête ne contourne le cloisonnement.
@@ -154,7 +190,7 @@ dans le second cerveau reste au niveau L2 (l'export ne porte que sur des notes v
     transformer en tâche (HubSpot simulé et OS) ;
   - cloisonnement : un mandat ne voit pas les sujets d'un autre ;
   - vue d'ensemble : « Mon activité » voit ses sujets et ceux des mandats actifs, pas ceux
-    des prospects ni des archivés ; une action sur un sujet de mandat s'applique dans le
+    des démos ni des archivés ; une action sur un sujet de mandat s'applique dans le
     mandat ;
   - outils MCP : déposer, lire les traités, marquer reporté ;
   - propositions : créer crée le sujet, valider ou écarter le passe à `traite` ;
@@ -164,6 +200,8 @@ dans le second cerveau reste au niveau L2 (l'export ne porte que sur des notes v
 
 ## Livraisons
 
+0. Trois sortes de mandats : phase Closing / en cours, libellé « Démo », menu, Paramètres,
+   ligne de commande.
 1. Table `sujets`, service, API, écran Inbox à la place de « À valider », lien avec les
    propositions, migration, démo.
 2. Outils MCP et routine « Inbox » dans Routines Claude.
