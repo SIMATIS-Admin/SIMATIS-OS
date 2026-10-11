@@ -87,12 +87,15 @@ export function mapStages(pipelines: HsPipeline[]): Etape[] {
           s.metadata?.isClosed === 'true' || s.id === 'closedwon' || s.id === 'closedlost';
         const gagne =
           s.id === 'closedwon' || (clos && Number.parseFloat(s.metadata?.probability ?? '0') >= 1);
+        const p100 = Number.parseFloat(s.metadata?.probability ?? '');
         return {
           id: s.id,
           label: multiple ? `${p.label} : ${s.label}` : s.label,
           ordre: pi * 1000 + s.displayOrder,
           clos,
           gagne,
+          // Stage probability (weighted pipeline value), absent when HubSpot gives none.
+          probabilite: Number.isFinite(p100) ? Math.round(p100 * 100) : null,
         };
       }),
   );

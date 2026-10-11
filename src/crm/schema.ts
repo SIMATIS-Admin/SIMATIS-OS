@@ -80,6 +80,8 @@ export const opportunites = pgTable(
     prochaineEtape: text('prochaine_etape'),
     // HubSpot « last activity date », then each activity marked done in the OS.
     derniereActivite: timestamp('derniere_activite', { withTimezone: true }),
+    // Date each stage was entered (HubSpot hs_date_entered_<stage>, or moves made in the OS).
+    etapesDates: jsonb('etapes_dates').$type<Record<string, string>>().notNull().default({}),
   },
   (t) => [
     index('opportunites_instance_idx').on(t.instanceId),
@@ -126,8 +128,12 @@ export const activites = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     ...metierColumns(),
+    // History of a record (Pipedrive timeline): note, appel, email, reunion.
     type: text('type').notNull(),
     contactId: uuid('contact_id').references(() => contacts.id),
+    entrepriseId: uuid('entreprise_id').references(() => entreprises.id),
+    opportuniteId: uuid('opportunite_id').references(() => opportunites.id),
+    titre: text('titre'),
     at: timestamp('at', { withTimezone: true }).notNull(),
     resume: text('resume'),
   },

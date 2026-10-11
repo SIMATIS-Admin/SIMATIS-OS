@@ -61,6 +61,8 @@ describe('HubSpot mapping', () => {
       ['9001', true, true],
       ['9002', true, false],
     ]);
+    expect(custom.map((e) => e.probabilite)).toEqual([100, 0]);
+    expect(mapStages(demoPortal().pipelines)[0]?.probabilite).toBeNull();
   });
 
   it('maps task types to channels and completion', () => {
