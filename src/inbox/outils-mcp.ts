@@ -1,5 +1,23 @@
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { registerTool } from '../mcp/tools.js';
+import {
+  brouillons,
+  compteAgenda,
+  compteGmail,
+  evenements,
+  filsRecents,
+} from '../connecteurs/google/google.js';
+import { contacts, entreprises } from '../crm/schema.js';
+import { currentInstance } from '../db/columns.js';
+import { registerTool, type ToolCtx } from '../mcp/tools.js';
+import { connexion, google } from '../routines/outils-mcp.js';
+import {
+  brouillonsAnciens,
+  domaineDe,
+  mailsARepondre,
+  rendezVousExternes,
+  type Annuaire,
+} from './lecture.js';
 import { deposerSujet } from './depot.js';
 import { marquerReporte, sujetsTraites } from './report.js';
 
@@ -70,4 +88,76 @@ registerTool({
   input: z.object({ ids: z.array(z.uuid()).min(1).max(200), executionId: execution }),
   scope: 'instance',
   handler: async ({ tx }, { ids }) => ({ reportes: await marquerReporte(tx, ids) }),
+});
+
+// The instance's people, to keep only mails and meetings with someone the CRM knows.
+async function annuaire(ctx: ToolCtx): Promise<Annuaire> {
+  return {
+    contacts: await ctx.tx
+      .select({ id: contacts.id, email: contacts.email, entrepriseId: contacts.entrepriseId })
+      .from(contacts)
+      .where(eq(contacts.instanceId, currentInstance)),
+    entreprises: await ctx.tx
+      .select({ id: entreprises.id, domaine: entreprises.domaine })
+      .from(entreprises)
+      .where(eq(entreprises.instanceId, currentInstance)),
+  };
+}
+
+// Read-only tools: a missing connection fails the tool, never the whole run (no executionId).
+registerTool({
+  name: 'mails_sans_reponse',
+  description:
+    "Fils de messagerie reçus d'un contact du CRM de l'instance (ou du domaine d'une de ses entreprises), dont le dernier message n'est pas du pilote et date de plus d'un jour ouvré. Lecture seule.",
+  input: z.object({ jours: z.number().int().min(1).max(60).default(14) }),
+  scope: 'instance',
+  handler: async (ctx, { jours }) => {
+    const c = await connexion(ctx, 'messagerie');
+    if (c.fournisseur === 'fake') return [];
+    const g = await google(ctx);
+    return mailsARepondre(
+      await filsRecents(g, jours),
+      await compteGmail(g),
+      await annuaire(ctx),
+      new Date(),
+    );
+  },
+});
+
+registerTool({
+  name: 'brouillons_en_attente',
+  description:
+    'Brouillons de messagerie non envoyés, plus anciens que le nombre de jours donné. Lecture seule.',
+  input: z.object({ jours: z.number().int().min(1).max(30).default(3) }),
+  scope: 'instance',
+  handler: async (ctx, { jours }) => {
+    const c = await connexion(ctx, 'messagerie');
+    if (c.fournisseur === 'fake') return [];
+    return brouillonsAnciens(await brouillons(await google(ctx)), jours, new Date());
+  },
+});
+
+registerTool({
+  name: 'rendez_vous_passes',
+  description:
+    "Rendez-vous terminés depuis la date donnée (par défaut trois jours, 31 jours au plus) avec au moins un participant extérieur au domaine du pilote, rattachés au contact ou à l'entreprise du CRM quand c'est possible. Lecture seule.",
+  input: z.object({ depuis: z.iso.datetime({ offset: true }).optional() }),
+  scope: 'instance',
+  handler: async (ctx, { depuis }) => {
+    const c = await connexion(ctx, 'agenda');
+    if (c.fournisseur === 'fake') return [];
+    const maintenant = new Date();
+    const plancher = new Date(maintenant.getTime() - 31 * 864e5);
+    const debut = depuis ? new Date(depuis) : new Date(maintenant.getTime() - 3 * 864e5);
+    const calendriers = Array.isArray(c.reglages.calendriers)
+      ? (c.reglages.calendriers as string[])
+      : ['primary'];
+    const g = await google(ctx);
+    return rendezVousExternes(
+      await evenements(g, debut < plancher ? plancher : debut, maintenant, calendriers),
+      domaineDe(await compteAgenda(g)),
+      await annuaire(ctx),
+      maintenant,
+    );
+  },
 });

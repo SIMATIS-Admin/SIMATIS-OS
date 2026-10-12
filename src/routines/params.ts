@@ -70,16 +70,24 @@ export type Etape = { texte: string; besoin?: 'messagerie' | 'agenda' };
 const e = (texte: string, besoin?: Etape['besoin']): Etape =>
   besoin ? { texte, besoin } : { texte };
 
-export const ROUTINES: { cle: CleRoutine; nom: string; skill: string; etapes: Etape[] }[] = [
+// `cerveau`: the workstation's runner opens the second brain folder to this routine only.
+export const ROUTINES: {
+  cle: CleRoutine;
+  nom: string;
+  skill: string;
+  etapes: Etape[];
+  cerveau?: true;
+}[] = [
   {
     cle: 'inbox',
     nom: 'Routine Inbox',
     // Private skill of the workstation: it reads mail, agenda and second brain with its own tools.
     skill: 'alimenter-inbox',
+    cerveau: true,
     etapes: [
       e('Lire les sujets traités depuis le dernier passage'),
       e('Reporter le traitement et exporter les notes validées dans le second cerveau'),
-      e('Chercher les nouveaux sujets (messagerie, agenda, second cerveau)'),
+      e('Chercher les nouveaux sujets (messagerie, agenda, second cerveau)', 'messagerie'),
       e("Déposer les nouveaux sujets dans l'Inbox"),
     ],
   },

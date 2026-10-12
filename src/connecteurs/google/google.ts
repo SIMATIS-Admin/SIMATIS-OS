@@ -187,6 +187,8 @@ export type Evenement = {
   participants: string[];
   // All-day event (holiday, seminar): a date without a time.
   journee: boolean;
+  // Opens the meeting in Google Agenda.
+  lien: string | null;
 };
 
 // Meetings between two dates (brief, Rendez-vous screen).
@@ -209,6 +211,7 @@ export async function evenements(
           id?: string;
           summary?: string;
           location?: string;
+          htmlLink?: string;
           attendees?: { email?: string; self?: boolean }[];
           start?: { dateTime?: string; date?: string };
           end?: { dateTime?: string; date?: string };
@@ -238,10 +241,110 @@ export async function evenements(
           titre: e.summary ?? '(sans titre)',
           lieu: e.location ?? null,
           journee: !e.start?.dateTime,
+          lien: e.htmlLink ?? null,
         });
       }
       pageToken = page.nextPageToken;
     } while (pageToken);
   }
   return out.sort((a, b) => a.debut.getTime() - b.debut.getTime());
+}
+
+type Headers = { name: string; value: string }[] | undefined;
+
+// Address of the connected Gmail account: tells the pilot's own messages from the others.
+export async function compteGmail(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  options: GoogleOptions = {},
+): Promise<string> {
+  const p = await googleApi(ctx, options).request<{ emailAddress?: string }>(
+    'GET',
+    `${GMAIL}/profile`,
+  );
+  return (p.emailAddress ?? '').toLowerCase();
+}
+
+export type Fil = {
+  threadId: string;
+  de: string | null;
+  date: string | null;
+  objet: string | null;
+  extrait: string;
+};
+
+// Recent inbox threads, each reduced to its last message (who wrote last decides "unanswered").
+export async function filsRecents(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  jours: number,
+  options: GoogleOptions = {},
+): Promise<Fil[]> {
+  const api = googleApi(ctx, options);
+  const list = await api.request<{ threads?: { id: string }[] }>(
+    'GET',
+    `${GMAIL}/threads?${new URLSearchParams({ q: `in:inbox newer_than:${jours}d`, maxResults: '100' }).toString()}`,
+  );
+  const out: Fil[] = [];
+  for (const { id } of list.threads ?? []) {
+    const t = await api.request<{
+      messages?: { snippet?: string; payload?: { headers?: Headers } }[];
+    }>(
+      'GET',
+      `${GMAIL}/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+    );
+    const dernier = t.messages?.at(-1);
+    if (!dernier) continue;
+    out.push({
+      threadId: id,
+      de: header(dernier.payload?.headers, 'From'),
+      date: header(dernier.payload?.headers, 'Date'),
+      objet: header(dernier.payload?.headers, 'Subject'),
+      extrait: dernier.snippet ?? '',
+    });
+  }
+  return out;
+}
+
+export type Brouillon = {
+  draftId: string;
+  objet: string | null;
+  a: string | null;
+  date: string | null;
+};
+
+export async function brouillons(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  options: GoogleOptions = {},
+): Promise<Brouillon[]> {
+  const api = googleApi(ctx, options);
+  const list = await api.request<{ drafts?: { id: string }[] }>(
+    'GET',
+    `${GMAIL}/drafts?maxResults=50`,
+  );
+  const out: Brouillon[] = [];
+  for (const { id } of list.drafts ?? []) {
+    const d = await api.request<{ message?: { payload?: { headers?: Headers } } }>(
+      'GET',
+      `${GMAIL}/drafts/${id}?format=metadata`,
+    );
+    const headers = d.message?.payload?.headers;
+    out.push({
+      draftId: id,
+      objet: header(headers, 'Subject'),
+      a: header(headers, 'To'),
+      date: header(headers, 'Date'),
+    });
+  }
+  return out;
+}
+
+// Account of the agenda connection (its primary calendar id): tells outsiders from colleagues.
+export async function compteAgenda(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  options: GoogleOptions = {},
+): Promise<string> {
+  const c = await googleApi(ctx, options).request<{ id?: string }>(
+    'GET',
+    `${CALENDAR}/calendars/primary`,
+  );
+  return (c.id ?? '').toLowerCase();
 }

@@ -72,6 +72,17 @@ describe('routine health check', () => {
     expect(routine(s, 'hebdo').feu).toBe('manque');
   });
 
+  it('flags the Inbox routine when messaging is missing', async () => {
+    await createInstance(t.owner.db, { slug: 'mandat-inbox', nom: 'Mandat Inbox', type: 'mandat' });
+    const s = await sante('mandat-inbox');
+    expect(etat(s, 'inbox', 'messagerie')).toBe('attention');
+    expect(
+      routine(s, 'inbox')
+        .etapes.filter((e) => e.bloquee)
+        .map((e) => e.texte),
+    ).toEqual(['Chercher les nouveaux sujets (messagerie, agenda, second cerveau)']);
+  });
+
   it('flags the missing connections and the steps they block', async () => {
     let s = await sante('mandat-a');
     const q = routine(s, 'quotidienne');
