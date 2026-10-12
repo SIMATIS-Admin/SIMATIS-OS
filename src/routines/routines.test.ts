@@ -146,7 +146,12 @@ describe('Routines Claude', () => {
       base,
       token: runnerToken,
       claude: 'faux-claude',
-      poste: () => Promise.resolve({ nom: 'poste-test', claude: '2.1 (Claude Code)', skills: [] }),
+      poste: () =>
+        Promise.resolve({
+          nom: 'poste-test',
+          claude: '2.1 (Claude Code)',
+          skills: ['relance-quotidienne'],
+        }),
       // Stands in for Claude: reads the MCP config it was given and runs the routine with it.
       lancer: async (commande, args) => {
         expect(commande).toBe('faux-claude');
@@ -204,6 +209,29 @@ describe('Routines Claude', () => {
     expect(apres.rows[0]?.n).toBeGreaterThan(avant.rows[0]?.n ?? 0);
   });
 
+  it('runner: never launches Claude for a skill missing on the workstation', async () => {
+    const launched = await api('POST', '/api/i/demo/routines/inbox/executions');
+    const executionId = launched.json<{ id: string }>().id;
+    let lance = false;
+    await tour({
+      base,
+      token: runnerToken,
+      claude: 'x',
+      lancer: () => {
+        lance = true;
+        return Promise.resolve(0);
+      },
+      poste: () => Promise.resolve({ nom: 'poste-test', claude: '2.1', skills: [] }),
+    });
+    expect(lance).toBe(false);
+    const demo = await instanceOf('demo');
+    const execution = await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, executionId));
+    expect(execution.statut).toBe('echouee');
+    expect(execution.rapport?.echec[0]).toBe(
+      "Skill « alimenter-inbox » absente de ce poste : la routine n'a pas été lancée.",
+    );
+  });
+
   it('runner: a run left without a report is marked failed', async () => {
     const launched = await api('POST', '/api/i/demo/routines/quotidienne/executions');
     const executionId = launched.json<{ id: string }>().id;
@@ -212,7 +240,8 @@ describe('Routines Claude', () => {
       token: runnerToken,
       claude: 'x',
       lancer: () => Promise.resolve(2),
-      poste: () => Promise.resolve({ nom: 'poste-test', claude: null, skills: [] }),
+      poste: () =>
+        Promise.resolve({ nom: 'poste-test', claude: null, skills: ['relance-quotidienne'] }),
     });
     const demo = await instanceOf('demo');
     const execution = await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, executionId));
