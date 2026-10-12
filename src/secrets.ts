@@ -89,6 +89,17 @@ export async function writeInstanceSecret(
   await chmod(file, 0o600);
 }
 
+// Drops one KEY=value line from secrets/instances/<slug>.env, if the file and the line exist.
+export async function removeInstanceSecret(dir: string, slug: string, key: string): Promise<void> {
+  checkSlug(slug);
+  const file = path.join(dir, `${slug}.env`);
+  const raw = await readOptional(file, slug);
+  if (raw === null || !raw.split('\n').some((line) => line.startsWith(`${key}=`))) return;
+  const lines = raw.split('\n').filter((line) => line.trim() !== '' && !line.startsWith(`${key}=`));
+  await writeFile(file, lines.length ? `${lines.join('\n')}\n` : '', { mode: 0o600 });
+  await chmod(file, 0o600);
+}
+
 export async function writeGoogleToken(
   dir: string,
   slug: string,
