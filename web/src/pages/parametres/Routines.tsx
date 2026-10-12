@@ -19,6 +19,15 @@ type Champ =
 
 // « Quand » fields come first, then « Quoi ». Same fields and bounds as the server (routines/params.ts, from the mockup's PARAMS_DEF).
 const CHAMPS: Record<string, Champ[]> = {
+  inbox: [
+    { k: 'heure', l: 'Heure de lancement', t: 'select', o: HEURES },
+    {
+      k: 'jours',
+      l: 'Jours',
+      t: 'select',
+      o: ['Jours ouvrés', 'Du lundi au jeudi', 'Tous les jours'],
+    },
+  ],
   quotidienne: [
     { k: 'heure', l: 'Heure de lancement', t: 'select', o: HEURES },
     {

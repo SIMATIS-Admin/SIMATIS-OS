@@ -233,7 +233,8 @@ describe('Routines Claude', () => {
     expect(heurePrevue('hebdo', {}, '2026-10-08')).toBeNull();
     expect(heurePrevue('hebdo', {}, '2026-10-12')?.toISOString()).toBe('2026-10-12T06:00:00.000Z');
 
-    const avant = new Date('2026-10-08T04:30:00Z');
+    // 6:00 in Paris: before every routine (the Inbox one starts at 6:30).
+    const avant = new Date('2026-10-08T04:00:00Z');
     expect(await planifier(t.app.db, avant)).toBe(0);
     const rattrapage = new Date('2026-10-08T09:00:00Z');
     const creees = await planifier(t.app.db, rattrapage);
@@ -243,5 +244,36 @@ describe('Routines Claude', () => {
       "select i.slug from executions e join instances i on i.id = e.instance_id where e.demande_par = 'planification'",
     );
     expect(rows.map((r) => r.slug)).not.toContain('demo');
+  });
+
+  it('adds the Inbox routine with its skill, steps and default rhythm', async () => {
+    const liste = (await api('GET', '/api/i/helioval/routines')).json<
+      { cle: string; skill: string; etapes: string[]; rythme: string }[]
+    >();
+    expect(liste[0]).toMatchObject({
+      cle: 'inbox',
+      skill: 'alimenter-inbox',
+      rythme: 'Chaque jour ouvré à 6h30, ou à la demande',
+      etapes: [
+        'Lire les sujets traités depuis le dernier passage',
+        'Reporter le traitement et exporter les notes validées dans le second cerveau',
+        'Chercher les nouveaux sujets (messagerie, agenda, second cerveau)',
+        "Déposer les nouveaux sujets dans l'Inbox",
+      ],
+    });
+  });
+
+  it('plans the Inbox routine on working days before the daily one', () => {
+    const inbox = heurePrevue('inbox', {}, '2026-10-12');
+    const quotidienne = heurePrevue('quotidienne', {}, '2026-10-12');
+    expect(inbox?.toISOString()).toBe('2026-10-12T04:30:00.000Z');
+    expect(inbox && quotidienne && inbox < quotidienne).toBe(true);
+    expect(heurePrevue('inbox', {}, '2026-10-10')).toBeNull();
+  });
+
+  it('launches the Inbox routine on demand', async () => {
+    const r = await api('POST', '/api/i/demo/routines/inbox/executions');
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ routine: 'inbox', statut: 'demandee' });
   });
 });

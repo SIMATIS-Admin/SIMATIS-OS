@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { CleRoutine } from './schema.js';
 
-// The four routines of the mockup (data.js routinesStd, v-plateforme.js PARAMS_DEF): what each one
+// The four routines of the mockup, plus the Inbox one (data.js routinesStd, v-plateforme.js PARAMS_DEF): what each one
 // does, the Claude skill that runs it, and the settings the pilot changes without touching the skill.
 export const HEURES = ['6h00', '6h30', '7h00', '7h30', '8h00', '8h30', '9h00'] as const;
 const JOURS = ['Jours ouvrés', 'Du lundi au jeudi', 'Tous les jours'] as const;
@@ -17,6 +17,10 @@ const DECLENCHEMENTS = [
 ] as const;
 
 export const paramsSchemas = {
+  inbox: z.object({
+    heure: z.enum(HEURES),
+    jours: z.enum(JOURS),
+  }),
   quotidienne: z.object({
     heure: z.enum(HEURES),
     jours: z.enum(JOURS),
@@ -44,6 +48,8 @@ export const paramsSchemas = {
 export type ParamsQuotidienne = z.infer<typeof paramsSchemas.quotidienne>;
 
 export const PARAMS_DEFAUT: { [K in CleRoutine]: z.infer<(typeof paramsSchemas)[K]> } = {
+  // Before the daily follow-up routine (7h00), so the pilot finds the Inbox ready.
+  inbox: { heure: '6h30', jours: 'Jours ouvrés' },
   quotidienne: {
     heure: '7h00',
     jours: 'Jours ouvrés',
@@ -65,6 +71,18 @@ const e = (texte: string, besoin?: Etape['besoin']): Etape =>
   besoin ? { texte, besoin } : { texte };
 
 export const ROUTINES: { cle: CleRoutine; nom: string; skill: string; etapes: Etape[] }[] = [
+  {
+    cle: 'inbox',
+    nom: 'Routine Inbox',
+    // Private skill of the workstation: it reads mail, agenda and second brain with its own tools.
+    skill: 'alimenter-inbox',
+    etapes: [
+      e('Lire les sujets traités depuis le dernier passage'),
+      e('Reporter le traitement et exporter les notes validées dans le second cerveau'),
+      e('Chercher les nouveaux sujets (messagerie, agenda, second cerveau)'),
+      e("Déposer les nouveaux sujets dans l'Inbox"),
+    ],
+  },
   {
     cle: 'quotidienne',
     nom: 'Routine quotidienne de relance',
@@ -121,8 +139,8 @@ export function paramsOf<K extends CleRoutine>(cle: K, stored: unknown) {
 
 // "Chaque jour ouvré à 7h00, ou à la demande" (mockup rythme()).
 export function rythme(cle: CleRoutine, params: Record<string, unknown>): string {
-  if (cle === 'quotidienne') {
-    const p = paramsOf('quotidienne', params);
+  if (cle === 'inbox' || cle === 'quotidienne') {
+    const p = paramsOf(cle, params);
     const jours = p.jours === 'Jours ouvrés' ? 'Chaque jour ouvré' : p.jours;
     return `${jours} à ${p.heure}, ou à la demande`;
   }
@@ -138,6 +156,9 @@ const pluriel = (n: number, mot: string, pluriel = `${mot}s`) => `${n} ${n > 1 ?
 
 // One sentence that says what the routine will do with its current settings.
 export function resume(cle: CleRoutine, params: Record<string, unknown>): string {
+  if (cle === 'inbox') {
+    return `${rythme(cle, params).replace(', ou à la demande', '')} : reporte dans le second cerveau ce qui a été traité, puis dépose les nouveaux sujets dans l'Inbox.`;
+  }
   if (cle === 'quotidienne') {
     const p = paramsOf('quotidienne', params);
     const quoi = [
