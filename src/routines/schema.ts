@@ -11,7 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
-export type CleRoutine = 'quotidienne' | 'nettoyage' | 'hebdo' | 'evenement';
+export type CleRoutine = 'inbox' | 'quotidienne' | 'nettoyage' | 'hebdo' | 'evenement';
 export type StatutExecution = 'demandee' | 'en_cours' | 'terminee' | 'echouee';
 export type EtapeExecution = { etape: string; statut: 'en_cours' | 'fait' | 'echec'; at: string };
 export type Rapport = { fait: string[]; attente: string[]; echec: string[] };
@@ -22,7 +22,9 @@ export const routines = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     ...metierColumns(),
-    cle: text('cle', { enum: ['quotidienne', 'nettoyage', 'hebdo', 'evenement'] }).notNull(),
+    cle: text('cle', {
+      enum: ['inbox', 'quotidienne', 'nettoyage', 'hebdo', 'evenement'],
+    }).notNull(),
     actif: boolean('actif').notNull().default(true),
     params: jsonb('params').$type<Record<string, unknown>>().notNull().default({}),
     skill: text('skill').notNull(),
@@ -36,7 +38,7 @@ export const executions = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     ...metierColumns(),
     routine: text('routine', {
-      enum: ['quotidienne', 'nettoyage', 'hebdo', 'evenement'],
+      enum: ['inbox', 'quotidienne', 'nettoyage', 'hebdo', 'evenement'],
     }).notNull(),
     statut: text('statut', { enum: ['demandee', 'en_cours', 'terminee', 'echouee'] })
       .notNull()

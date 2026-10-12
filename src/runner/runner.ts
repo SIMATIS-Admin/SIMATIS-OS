@@ -73,7 +73,8 @@ export async function tour(opts: RunnerOptions): Promise<number> {
     return (await res.json()) as T;
   };
 
-  await api('/api/runner/presence', await (opts.poste ?? (() => decrirePoste(opts.claude)))());
+  const poste = await (opts.poste ?? (() => decrirePoste(opts.claude)))();
+  await api('/api/runner/presence', poste);
   const demandes = await api<Demande[]>('/api/runner/demandes');
   for (const d of demandes) {
     let demarre: { tokenId: string; token: string };
@@ -81,6 +82,15 @@ export async function tour(opts: RunnerOptions): Promise<number> {
       demarre = await api(`/api/runner/executions/${d.id}/demarrer`, { instance: d.instance });
     } catch {
       continue; // Started by another runner meanwhile.
+    }
+    // Without its skill, Claude would improvise with the instance's tools: the run stops here.
+    if (!poste.skills.includes(d.skill)) {
+      await api(`/api/runner/executions/${d.id}/fin`, {
+        instance: d.instance,
+        tokenId: demarre.tokenId,
+        erreur: `Skill « ${d.skill} » absente de ce poste : la routine n'a pas été lancée.`,
+      });
+      continue;
     }
     const dossier = await mkdtemp(path.join(tmpdir(), 'simatis-runner-'));
     const config = path.join(dossier, 'mcp.json');

@@ -209,7 +209,14 @@ export async function remettreATraiter(
     if (s.statut === 'a_traiter') throw new SujetRefuse('Sujet déjà à traiter.');
     await tx
       .update(sujets)
-      .set({ statut: 'a_traiter', traiteAt: null, traitePar: null, updatedAt: new Date() })
+      // Handled again later, it must be reported again into the second brain.
+      .set({
+        statut: 'a_traiter',
+        traiteAt: null,
+        traitePar: null,
+        reporteAt: null,
+        updatedAt: new Date(),
+      })
       .where(eq(sujets.id, id));
     await logEvent(tx, {
       acteur: 'pilote',

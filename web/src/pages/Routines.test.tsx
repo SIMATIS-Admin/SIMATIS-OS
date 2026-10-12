@@ -7,6 +7,7 @@ import { Routines } from './Routines.js';
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let polls = 0;
+let liste: unknown[] = [];
 
 const routine = {
   cle: 'quotidienne',
@@ -83,15 +84,26 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
           }),
     );
   }
-  if (url.endsWith('/routines/sante')) return json(sante);
+  if (url.endsWith('/routines/sante')) {
+    const [base] = sante.routines;
+    return json({
+      ...sante,
+      routines: (liste as { cle: string; nom: string }[]).map((r) => ({
+        ...base,
+        cle: r.cle,
+        nom: r.nom,
+      })),
+    });
+  }
   if (method === 'PATCH') return json(routine);
-  return json([routine]);
+  return json(liste);
 }
 
 describe('Routines Claude screens', () => {
   beforeEach(() => {
     calls = [];
     polls = 0;
+    liste = [routine];
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -134,5 +146,27 @@ describe('Routines Claude screens', () => {
       url: '/api/i/demo/routines/quotidienne',
       body: { params: { canaux: ['email'] } },
     });
+  });
+
+  it('sets the time and days of the Inbox routine', async () => {
+    liste = [
+      {
+        ...routine,
+        cle: 'inbox',
+        nom: 'Routine Inbox',
+        skill: 'alimenter-inbox',
+        params: { heure: '6h30', jours: 'Jours ouvrés' },
+      },
+    ];
+    render(<RoutinesParametres slug="demo" />);
+    fireEvent.change(await screen.findByLabelText('Heure de lancement'), {
+      target: { value: '6h00' },
+    });
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+      url: '/api/i/demo/routines/inbox',
+      body: { params: { heure: '6h00' } },
+    });
+    expect(screen.getByLabelText('Jours')).toBeTruthy();
   });
 });

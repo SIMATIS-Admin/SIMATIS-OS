@@ -146,7 +146,12 @@ describe('Routines Claude', () => {
       base,
       token: runnerToken,
       claude: 'faux-claude',
-      poste: () => Promise.resolve({ nom: 'poste-test', claude: '2.1 (Claude Code)', skills: [] }),
+      poste: () =>
+        Promise.resolve({
+          nom: 'poste-test',
+          claude: '2.1 (Claude Code)',
+          skills: ['relance-quotidienne'],
+        }),
       // Stands in for Claude: reads the MCP config it was given and runs the routine with it.
       lancer: async (commande, args) => {
         expect(commande).toBe('faux-claude');
@@ -204,6 +209,29 @@ describe('Routines Claude', () => {
     expect(apres.rows[0]?.n).toBeGreaterThan(avant.rows[0]?.n ?? 0);
   });
 
+  it('runner: never launches Claude for a skill missing on the workstation', async () => {
+    const launched = await api('POST', '/api/i/demo/routines/inbox/executions');
+    const executionId = launched.json<{ id: string }>().id;
+    let lance = false;
+    await tour({
+      base,
+      token: runnerToken,
+      claude: 'x',
+      lancer: () => {
+        lance = true;
+        return Promise.resolve(0);
+      },
+      poste: () => Promise.resolve({ nom: 'poste-test', claude: '2.1', skills: [] }),
+    });
+    expect(lance).toBe(false);
+    const demo = await instanceOf('demo');
+    const execution = await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, executionId));
+    expect(execution.statut).toBe('echouee');
+    expect(execution.rapport?.echec[0]).toBe(
+      "Skill « alimenter-inbox » absente de ce poste : la routine n'a pas été lancée.",
+    );
+  });
+
   it('runner: a run left without a report is marked failed', async () => {
     const launched = await api('POST', '/api/i/demo/routines/quotidienne/executions');
     const executionId = launched.json<{ id: string }>().id;
@@ -212,7 +240,8 @@ describe('Routines Claude', () => {
       token: runnerToken,
       claude: 'x',
       lancer: () => Promise.resolve(2),
-      poste: () => Promise.resolve({ nom: 'poste-test', claude: null, skills: [] }),
+      poste: () =>
+        Promise.resolve({ nom: 'poste-test', claude: null, skills: ['relance-quotidienne'] }),
     });
     const demo = await instanceOf('demo');
     const execution = await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, executionId));
@@ -233,7 +262,8 @@ describe('Routines Claude', () => {
     expect(heurePrevue('hebdo', {}, '2026-10-08')).toBeNull();
     expect(heurePrevue('hebdo', {}, '2026-10-12')?.toISOString()).toBe('2026-10-12T06:00:00.000Z');
 
-    const avant = new Date('2026-10-08T04:30:00Z');
+    // 6:00 in Paris: before every routine (the Inbox one starts at 6:30).
+    const avant = new Date('2026-10-08T04:00:00Z');
     expect(await planifier(t.app.db, avant)).toBe(0);
     const rattrapage = new Date('2026-10-08T09:00:00Z');
     const creees = await planifier(t.app.db, rattrapage);
@@ -243,5 +273,36 @@ describe('Routines Claude', () => {
       "select i.slug from executions e join instances i on i.id = e.instance_id where e.demande_par = 'planification'",
     );
     expect(rows.map((r) => r.slug)).not.toContain('demo');
+  });
+
+  it('adds the Inbox routine with its skill, steps and default rhythm', async () => {
+    const liste = (await api('GET', '/api/i/helioval/routines')).json<
+      { cle: string; skill: string; etapes: string[]; rythme: string }[]
+    >();
+    expect(liste[0]).toMatchObject({
+      cle: 'inbox',
+      skill: 'alimenter-inbox',
+      rythme: 'Chaque jour ouvré à 6h30, ou à la demande',
+      etapes: [
+        'Lire les sujets traités depuis le dernier passage',
+        'Reporter le traitement et exporter les notes validées dans le second cerveau',
+        'Chercher les nouveaux sujets (messagerie, agenda, second cerveau)',
+        "Déposer les nouveaux sujets dans l'Inbox",
+      ],
+    });
+  });
+
+  it('plans the Inbox routine on working days before the daily one', () => {
+    const inbox = heurePrevue('inbox', {}, '2026-10-12');
+    const quotidienne = heurePrevue('quotidienne', {}, '2026-10-12');
+    expect(inbox?.toISOString()).toBe('2026-10-12T04:30:00.000Z');
+    expect(inbox && quotidienne && inbox < quotidienne).toBe(true);
+    expect(heurePrevue('inbox', {}, '2026-10-10')).toBeNull();
+  });
+
+  it('launches the Inbox routine on demand', async () => {
+    const r = await api('POST', '/api/i/demo/routines/inbox/executions');
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ routine: 'inbox', statut: 'demandee' });
   });
 });

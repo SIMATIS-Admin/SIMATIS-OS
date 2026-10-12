@@ -29,8 +29,8 @@ export function heurePrevue(
   jour: string,
 ): Date | null {
   const j = jourSemaine(jour);
-  if (cle === 'quotidienne') {
-    const p = paramsOf('quotidienne', params);
+  if (cle === 'inbox' || cle === 'quotidienne') {
+    const p = paramsOf(cle, params);
     const ok = p.jours === 'Tous les jours' || (p.jours === 'Du lundi au jeudi' ? j <= 4 : j <= 5);
     return ok ? zoned(jour, hhmm(p.heure), FUSEAU) : null;
   }
