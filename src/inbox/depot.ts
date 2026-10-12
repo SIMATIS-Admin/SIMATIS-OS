@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { contacts, entreprises } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
+import type { Proposition } from '../propositions/schema.js';
 import { sujets, type OrigineSujet, type TypeSujet } from './schema.js';
 
 export type DepotSujet = {
@@ -69,4 +70,56 @@ export async function deposerSujet(
     );
   if (!existant) throw new Error('Sujet ni créé ni trouvé');
   return { statut: 'existant', id: existant.id };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const texte = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
+
+// Short title of a proposal: mail subject, task or note title, quote to send, else its type.
+export function titreProposition(p: Pick<Proposition, 'type' | 'contenu'>): string {
+  const c = (p.contenu ?? {}) as Record<string, unknown>;
+  const numero = texte(c.numero);
+  return (
+    texte(c.objet) ?? texte(c.titre) ?? (numero ? `Transmettre le devis ${numero}` : null) ?? p.type
+  );
+}
+
+// A pending proposal waits in the Inbox as an "à valider" subject (key: the proposal id).
+export async function sujetPourProposition(tx: Tx, p: Proposition): Promise<void> {
+  const cible = (p.contenu as { contactId?: unknown } | null)?.contactId;
+  // A contact unknown here only loses the link: the proposal itself must still be created.
+  const [contact] =
+    typeof cible === 'string' && UUID.test(cible)
+      ? await tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(and(eq(contacts.instanceId, currentInstance), eq(contacts.id, cible)))
+      : [];
+  await deposerSujet(tx, {
+    type: 'a_valider',
+    titre: titreProposition(p),
+    origine: 'os',
+    source: 'os',
+    sourceId: p.id,
+    contactId: contact?.id ?? null,
+    propositionId: p.id,
+  });
+}
+
+// Once the proposal is decided (applied, failed or rejected), its subject is handled.
+export async function cloreSujetProposition(
+  tx: Tx,
+  propositionId: string,
+  par: string,
+): Promise<void> {
+  await tx
+    .update(sujets)
+    .set({ statut: 'traite', traiteAt: new Date(), traitePar: par, updatedAt: new Date() })
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.propositionId, propositionId),
+        eq(sujets.statut, 'a_traiter'),
+      ),
+    );
 }

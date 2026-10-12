@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import type { Instance } from '../instances/schema.js';
+import { cloreSujetProposition, sujetPourProposition } from '../inbox/depot.js';
 import { logEvent } from '../journal/service.js';
 import { niveauAction } from './autonomie.js';
 import { getPropositionType } from './registry.js';
@@ -102,8 +103,10 @@ export async function propose(
     details: { proposition: created.id },
   });
 
-  // L3: the OS executes on its own. L1 and L2 wait for the pilot's decision.
-  return niveau === 'L3' ? apply(tx, ctx, created, 'os') : created;
+  // L3: the OS executes on its own. L1 and L2 wait for the pilot's decision, in the Inbox.
+  if (niveau === 'L3') return apply(tx, ctx, created, 'os');
+  await sujetPourProposition(tx, created);
+  return created;
 }
 
 export async function decide(
@@ -134,6 +137,7 @@ export async function decide(
       niveau: p.niveau,
       details: { proposition: id },
     });
+    await cloreSujetProposition(tx, id, par);
     return row ?? p;
   }
 
@@ -153,5 +157,7 @@ export async function decide(
       details: { proposition: id },
     });
   }
-  return apply(tx, ctx, current, par);
+  const decided = await apply(tx, ctx, current, par);
+  await cloreSujetProposition(tx, id, par);
+  return decided;
 }

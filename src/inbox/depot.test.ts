@@ -1,10 +1,13 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { contacts } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { deposerSujet, SujetInvalide, type DepotSujet } from './depot.js';
+import type { Proposition } from '../propositions/schema.js';
+import { propositions } from '../propositions/schema.js';
+import { deposerSujet, SujetInvalide, sujetPourProposition, type DepotSujet } from './depot.js';
 import { sujets } from './schema.js';
 
 const depot = (cle: string, extra: Partial<DepotSujet> = {}): DepotSujet => ({
@@ -77,5 +80,24 @@ describe('Inbox : dépôt de sujets', () => {
     await withInstance(t.app.db, a.id, (tx) => deposerSujet(tx, depot('fil-5')));
     const vus = await withInstance(t.app.db, b.id, (tx) => tx.select().from(sujets));
     expect(vus.some((s) => s.sourceId === 'fil-5')).toBe(false);
+  });
+
+  it('keeps a proposal subject when its contact is unknown, dropping only the link', async () => {
+    const [p]: Proposition[] = await t.owner.db
+      .insert(propositions)
+      .values({
+        instanceId: a.id,
+        type: 'crm.tache',
+        contenu: { titre: 'Rappeler', contactId: '00000000-0000-4000-8000-000000000000' },
+        auteur: 'os',
+        niveau: 'L1',
+      })
+      .returning();
+    if (!p) throw new Error('proposition');
+    await withInstance(t.app.db, a.id, (tx) => sujetPourProposition(tx, p));
+    const [sujet] = await withInstance(t.app.db, a.id, (tx) =>
+      tx.select().from(sujets).where(eq(sujets.propositionId, p.id)),
+    );
+    expect(sujet).toMatchObject({ titre: 'Rappeler', contactId: null, type: 'a_valider' });
   });
 });
