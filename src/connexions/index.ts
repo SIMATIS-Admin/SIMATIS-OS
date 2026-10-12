@@ -2,3 +2,4 @@
 import './fake.js';
 import '../connecteurs/hubspot/index.js';
 import '../connecteurs/google/index.js';
+import '../connecteurs/infomaniak/index.js';

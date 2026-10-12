@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   brancherHubspot,
+  brancherInfomaniak,
   demarrerGoogle,
   enregistrerSecretGoogle,
   fetchConnexions,
@@ -29,11 +30,15 @@ const OBJETS: Record<string, string> = {
   taches: 'Tâches',
 };
 
+const MESSAGERIES = ['gmail', 'infomaniak'];
+
 const KINDS = [
   ['crm', 'CRM'],
   ['messagerie', 'Messagerie'],
   ['agenda', 'Agenda'],
 ] as const;
+
+const NOMS: Record<string, string> = { hubspot: 'HubSpot', infomaniak: 'Infomaniak' };
 
 const depuis = (iso: string | null) => {
   if (!iso) return 'jamais';
@@ -95,6 +100,67 @@ function BrancherHubspot({ slug, onDone }: { slug: string; onDone: () => void })
         </p>
       )}
       <Verrou>Le jeton reste sur l'ordinateur de l'OS : il n'est plus jamais affiché.</Verrou>
+    </div>
+  );
+}
+
+function BrancherInfomaniak({ slug, onDone }: { slug: string; onDone: () => void }) {
+  const [email, setEmail] = useState('');
+  const [motDePasse, setMotDePasse] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    setBusy(true);
+    setError(null);
+    brancherInfomaniak(slug, email, motDePasse)
+      .then(onDone, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="grid g2">
+        <label className="field">
+          <span>Adresse de la boîte Infomaniak</span>
+          <input
+            className="input"
+            type="email"
+            autoComplete="off"
+            placeholder="prenom@exemple.fr"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>
+            Mot de passe d'appareil{' '}
+            <Tip text="Dans Mail Infomaniak : menu ⋮ de l'adresse > Paramètres > mot de passe > Ajouter un appareil > Générer un mot de passe. Copiez-le et collez-le ici : ce n'est pas le mot de passe de votre compte Infomaniak." />
+          </span>
+          <input
+            className="input"
+            type="password"
+            autoComplete="off"
+            value={motDePasse}
+            onChange={(e) => setMotDePasse(e.target.value)}
+          />
+        </label>
+      </div>
+      <div>
+        <button
+          className="btn primary"
+          disabled={busy || !email.trim() || !motDePasse.trim()}
+          onClick={submit}
+        >
+          {busy ? 'Vérification…' : 'Vérifier et brancher la boîte Infomaniak'}
+        </button>
+      </div>
+      {error && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </p>
+      )}
+      <Verrou>
+        Le mot de passe reste sur l'ordinateur de l'OS : il n'est plus jamais affiché.
+      </Verrou>
     </div>
   );
 }
@@ -407,8 +473,17 @@ function Messagerie({
           </select>
         </label>
       </div>
-      <Verrou>Brouillons créés sans signature : Gmail ajoute la vôtre.</Verrou>
-      <Verrou>Aucun envoi direct : vous envoyez depuis Gmail.</Verrou>
+      {c.fournisseur === 'gmail' ? (
+        <>
+          <Verrou>Brouillons créés sans signature : Gmail ajoute la vôtre.</Verrou>
+          <Verrou>Aucun envoi direct : vous envoyez depuis Gmail.</Verrou>
+        </>
+      ) : (
+        <>
+          <Verrou>Brouillons créés sans signature : ajoutez la vôtre avant d'envoyer.</Verrou>
+          <Verrou>Aucun envoi direct : vous envoyez depuis votre messagerie Infomaniak.</Verrou>
+        </>
+      )}
       {c.derniereErreur && (
         <p className="small" style={{ color: 'var(--red)' }}>
           Dernière erreur : {c.derniereErreur}
@@ -492,27 +567,34 @@ export function Connexions({ slug }: { slug: string }) {
       )}
       {KINDS.map(([kind, label]) => {
         const c = data.connexions.find((x) => x.kind === kind);
+        const infomaniak = data.connexions.some(
+          (x) => x.kind === 'messagerie' && x.fournisseur === 'infomaniak',
+        );
         return (
           <div key={kind} className="panel">
             <div className="panel-h">
               <div>
-                <h2>{c ? (c.fournisseur === 'hubspot' ? 'HubSpot' : c.fournisseur) : label}</h2>
+                <h2>{c ? (NOMS[c.fournisseur] ?? c.fournisseur) : label}</h2>
                 <div className="small muted">{label}</div>
               </div>
               <Etat c={c} />
             </div>
             {kind !== 'crm' && c && (c.etat === 'erreur' || (c.secret && !c.secret.present)) && (
               <div className="panel-b">
-                <ConnecterGoogle
-                  slug={slug}
-                  clientDisponible={data.googleClientDisponible}
-                  onChange={load}
-                />
+                {c.fournisseur === 'infomaniak' ? (
+                  <BrancherInfomaniak slug={slug} onDone={load} />
+                ) : (
+                  <ConnecterGoogle
+                    slug={slug}
+                    clientDisponible={data.googleClientDisponible}
+                    onChange={load}
+                  />
+                )}
               </div>
             )}
             {kind === 'crm' && c?.fournisseur === 'hubspot' ? (
               <CrmHubspot slug={slug} c={c} options={data.options} onChange={load} />
-            ) : kind === 'messagerie' && c?.fournisseur === 'gmail' ? (
+            ) : kind === 'messagerie' && c && MESSAGERIES.includes(c.fournisseur) ? (
               <Messagerie slug={slug} c={c} onChange={load} />
             ) : kind === 'agenda' && c?.fournisseur === 'google-agenda' ? (
               <Agenda slug={slug} c={c} onChange={load} />
@@ -524,12 +606,26 @@ export function Connexions({ slug }: { slug: string }) {
                     : kind === 'crm'
                       ? "Le client utilise HubSpot ? Demandez à son administrateur HubSpot un jeton d'application privée (Paramètres > Intégrations > Applications privées) et collez-le ici. L'OS copie entreprises, contacts, transactions et tâches, sans rien modifier dans HubSpot tant que vous ne l'autorisez pas."
                       : kind === 'messagerie'
-                        ? "Connectez le compte Google utilisé pour ce mandat : l'OS prépare vos emails en brouillon dans Gmail (vous les envoyez vous-même) et retrouve l'historique des échanges avec chaque contact."
-                        : "L'agenda se branche en même temps que la messagerie, avec le même compte Google : l'OS lit vos rendez-vous pour le brief du jour et propose des créneaux libres."}
+                        ? "Connectez la boîte mail utilisée pour ce mandat, chez Google ou chez Infomaniak : l'OS prépare vos emails en brouillon (vous les envoyez vous-même) et retrouve l'historique des échanges avec chaque contact."
+                        : infomaniak
+                          ? "La messagerie est chez Infomaniak : l'agenda se branche à part, avec un compte Google. L'OS lit vos rendez-vous pour le brief du jour et propose des créneaux libres."
+                          : "L'agenda se branche en même temps que la messagerie, avec le même compte Google : l'OS lit vos rendez-vous pour le brief du jour et propose des créneaux libres."}
                 </p>
                 {c?.fournisseur === 'fake' ? null : kind === 'crm' ? (
                   <BrancherHubspot slug={slug} onDone={load} />
                 ) : kind === 'messagerie' ? (
+                  <>
+                    <ConnecterGoogle
+                      slug={slug}
+                      clientDisponible={data.googleClientDisponible}
+                      onChange={load}
+                    />
+                    <p className="small muted" style={{ margin: 0 }}>
+                      Ou, pour une boîte hébergée chez Infomaniak :
+                    </p>
+                    <BrancherInfomaniak slug={slug} onDone={load} />
+                  </>
+                ) : infomaniak ? (
                   <ConnecterGoogle
                     slug={slug}
                     clientDisponible={data.googleClientDisponible}

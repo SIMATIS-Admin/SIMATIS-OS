@@ -186,7 +186,7 @@ export function PropositionDetail({
             <button className="btn go" onClick={() => onDecide('valider', contenuModifie)}>
               <Icon name="check" />
               {p.type === 'email.brouillon'
-                ? 'Créer le brouillon dans Gmail'
+                ? 'Créer le brouillon dans la boîte mail'
                 : p.type === 'crm.tache'
                   ? 'Créer la tâche'
                   : p.type === 'devis.transmettre'
@@ -204,7 +204,7 @@ export function PropositionDetail({
             </button>
             <span className="hint">
               {p.type === 'email.brouillon'
-                ? "Le brouillon est créé dans Gmail sans signature : Gmail ajoute la vôtre. C'est vous qui l'envoyez."
+                ? "Le brouillon est créé dans votre boîte mail, sans signature. C'est vous qui l'envoyez."
                 : p.type === 'crm.tache'
                   ? "La tâche sera créée dans l'outil du mandat et tracée dans le journal."
                   : "L'OS n'écrit jamais une note validée : vous la relirez dans le second cerveau."}

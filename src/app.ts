@@ -3,6 +3,7 @@ import type pg from 'pg';
 import { registerApi } from './api/routes.js';
 import type { FetchLike } from './connecteurs/google/oauth.js';
 import type { Database } from './db.js';
+import type { CompteImap } from './secrets.js';
 import { registerHealth } from './health.js';
 import { registerMcp } from './mcp/server.js';
 import { registerRunnerApi } from './routines/runner-api.js';
@@ -17,6 +18,7 @@ export type AppDeps = {
   realWrites?: boolean;
   secretsDir?: string;
   googleFetch?: FetchLike;
+  imapServeur?: Pick<CompteImap, 'host' | 'port' | 'secure'>;
   logger?: FastifyServerOptions['logger'];
 };
 
@@ -29,11 +31,12 @@ export function buildApp({
   realWrites = false,
   secretsDir = './secrets/instances',
   googleFetch,
+  imapServeur,
   logger = false,
 }: AppDeps): FastifyInstance {
   const app = Fastify({ logger });
   registerHealth(app, { pool, version, backupStatusFile });
-  registerApi(app, { db, secretsDir, realWrites, googleFetch });
+  registerApi(app, { db, secretsDir, realWrites, googleFetch, imapServeur });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db });
   registerWeb(app);

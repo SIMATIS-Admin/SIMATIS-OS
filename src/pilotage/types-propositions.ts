@@ -8,8 +8,8 @@ import { registerPropositionType } from '../propositions/registry.js';
 
 const uuid = z.uuid().nullish();
 
-// Email draft prepared by the OS or an agent: once validated, it becomes a Gmail draft of the
-// instance (never sent). Attached to a task, the task shows "Brouillon prêt dans Gmail".
+// Email draft prepared by the OS or an agent: once validated, it becomes a draft in the
+// instance's mailbox (never sent). Attached to a task, the task shows "Brouillon prêt dans Gmail".
 export const emailBrouillon = z.object({
   to: z.email(),
   objet: z.string().trim().min(1).max(300),

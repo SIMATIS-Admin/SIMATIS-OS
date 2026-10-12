@@ -1,12 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import {
-  brouillons,
-  compteAgenda,
-  compteGmail,
-  evenements,
-  filsRecents,
-} from '../connecteurs/google/google.js';
+import { compteAgenda, evenements } from '../connecteurs/google/google.js';
+import { messagerieDe } from '../connecteurs/messagerie.js';
 import { contacts, entreprises } from '../crm/schema.js';
 import { currentInstance } from '../db/columns.js';
 import { registerTool, type ToolCtx } from '../mcp/tools.js';
@@ -114,12 +109,13 @@ registerTool({
   handler: async (ctx, { jours }) => {
     const c = await connexion(ctx, 'messagerie');
     if (c.fournisseur === 'fake') return [];
-    const g = await google(ctx);
+    const m = messagerieDe(c.fournisseur, await google(ctx));
     return mailsARepondre(
-      await filsRecents(g, jours),
-      await compteGmail(g),
+      await m.filsRecents(jours),
+      await m.compte(),
       await annuaire(ctx),
       new Date(),
+      m.lienFil,
     );
   },
 });
@@ -133,7 +129,11 @@ registerTool({
   handler: async (ctx, { jours }) => {
     const c = await connexion(ctx, 'messagerie');
     if (c.fournisseur === 'fake') return [];
-    return brouillonsAnciens(await brouillons(await google(ctx)), jours, new Date());
+    return brouillonsAnciens(
+      await messagerieDe(c.fournisseur, await google(ctx)).brouillons(),
+      jours,
+      new Date(),
+    );
   },
 });
 

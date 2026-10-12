@@ -26,6 +26,29 @@ export const googleTokenPath = (dir: string, slug: string) => {
   return path.join(dir, `${slug}.google.json`);
 };
 
+const imapPath = (dir: string, slug: string) => {
+  checkSlug(slug);
+  return path.join(dir, `${slug}.imap.json`);
+};
+
+export type CompteImap = {
+  user: string;
+  password: string;
+  // Only for a mailbox hosted elsewhere than Infomaniak.
+  host?: string;
+  port?: number;
+  secure?: boolean;
+};
+
+// The instance's IMAP mailbox (Paramètres > Connexions). A file of its own, not a line of
+// <slug>.env: a device password may hold any character.
+export async function writeImapAccount(dir: string, slug: string, c: CompteImap): Promise<void> {
+  const file = imapPath(dir, slug);
+  await mkdir(dir, { recursive: true });
+  await writeFile(file, `${JSON.stringify(c, null, 2)}\n`, { mode: 0o600 });
+  await chmod(file, 0o600);
+}
+
 const googleAppSecretPath = (dir: string) => path.join(dir, 'google-client.json');
 
 // Secret of the OS's Google client, pasted once in Paramètres > Connexions; null until then.
@@ -42,7 +65,7 @@ export async function writeGoogleAppSecret(dir: string, secret: string): Promise
 }
 
 // Reads secrets/instances/<slug>.env, plus the Google refresh token written by google:connect
-// (<slug>.google.json) as GOOGLE_REFRESH_TOKEN. Without its own Google client, the instance uses
+// (<slug>.google.json) as GOOGLE_REFRESH_TOKEN and the IMAP mailbox (<slug>.imap.json) as IMAP_*. Without its own Google client, the instance uses
 // the OS's one. Error messages never contain a secret value.
 export async function loadInstanceSecrets(
   dir: string,
@@ -55,6 +78,15 @@ export async function loadInstanceSecrets(
   if (google) {
     const token = (JSON.parse(google) as { refresh_token?: string }).refresh_token;
     if (token) secrets.GOOGLE_REFRESH_TOKEN = token;
+  }
+  const imap = await readOptional(imapPath(dir, slug), slug);
+  if (imap) {
+    const c = JSON.parse(imap) as Partial<CompteImap>;
+    if (c.user) secrets.IMAP_USER = c.user;
+    if (c.password) secrets.IMAP_PASSWORD = c.password;
+    if (c.host) secrets.IMAP_HOST = c.host;
+    if (c.port) secrets.IMAP_PORT = String(c.port);
+    if (c.secure === false) secrets.IMAP_SECURE = 'non';
   }
   if (!secrets.GOOGLE_CLIENT_ID) {
     secrets.GOOGLE_CLIENT_ID = GOOGLE_CLIENT_ID_APP;

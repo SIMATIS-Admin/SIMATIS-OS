@@ -85,6 +85,7 @@ export function mailsARepondre(
   moi: string,
   a: Annuaire,
   maintenant: Date,
+  lienFil = (threadId: string) => lienGmail(moi, `all/${threadId}`),
 ): MailSansReponse[] {
   return fils.flatMap((f) => {
     const de = adresseDe(f.de);
@@ -92,7 +93,7 @@ export function mailsARepondre(
     if (!de || de === moi.toLowerCase() || !date || Number.isNaN(date.getTime())) return [];
     if (!plusDunJourOuvre(date, maintenant)) return [];
     const lien = rattacher(de, a);
-    return lien ? [{ ...f, lien: lienGmail(moi, `all/${f.threadId}`), ...lien }] : [];
+    return lien ? [{ ...f, lien: lienFil(f.threadId), ...lien }] : [];
   });
 }
 

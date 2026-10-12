@@ -103,6 +103,12 @@ describe('routine health check', () => {
     s = await sante('mandat-a');
     expect(routine(s, 'quotidienne').feu).toBe('ok');
     expect(routine(s, 'quotidienne').etapes.some((e) => e.bloquee)).toBe(false);
+
+    // An Infomaniak mailbox counts as messaging just like Gmail.
+    await withInstance(t.app.db, a.id, (tx) =>
+      configureConnexion(tx, { kind: 'messagerie', fournisseur: 'infomaniak', reglages: {} }),
+    );
+    expect(etat(await sante('mandat-a'), 'quotidienne', 'messagerie')).toBe('ok');
   });
 
   it('turns red again when the runner has been silent for more than two minutes', async () => {

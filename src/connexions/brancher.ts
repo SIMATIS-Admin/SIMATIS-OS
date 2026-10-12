@@ -7,6 +7,7 @@ import {
   pkce,
   type FetchLike,
 } from '../connecteurs/google/oauth.js';
+import { MESSAGERIES } from '../connecteurs/messagerie.js';
 import type { Database, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
@@ -15,7 +16,9 @@ import {
   loadInstanceSecrets,
   writeGoogleAppSecret,
   writeGoogleToken,
+  writeImapAccount,
   writeInstanceSecret,
+  type CompteImap,
 } from '../secrets.js';
 import { connexions } from './schema.js';
 import { configureConnexion, registeredConnector } from './service.js';
@@ -54,14 +57,61 @@ export async function brancherHubspot(
   );
 }
 
-// Gmail and Agenda of the instance, once Google has granted access (CLI or web consent).
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Checks the address and its device password with the mailbox, saves them, and makes this
+// mailbox the instance's messaging. The agenda is left as it is. `serveur` is only for a mailbox
+// hosted elsewhere than Infomaniak.
+export async function brancherInfomaniak(
+  db: Database,
+  instance: Instance,
+  compte: { email: string; motDePasse: string },
+  secretsDir: string,
+  serveur: Pick<CompteImap, 'host' | 'port' | 'secure'> = {},
+): Promise<void> {
+  const user = compte.email.trim().toLowerCase();
+  const password = compte.motDePasse.trim();
+  if (!EMAIL.test(user)) throw new BranchementRefuse("Cette adresse email n'est pas valide.");
+  if (!password) throw new BranchementRefuse("Mot de passe d'appareil manquant.");
+  const c: CompteImap = { user, password, ...serveur };
+  try {
+    await registeredConnector('infomaniak')?.verify?.({
+      IMAP_USER: user,
+      IMAP_PASSWORD: password,
+      ...(c.host ? { IMAP_HOST: c.host } : {}),
+      ...(c.port ? { IMAP_PORT: String(c.port) } : {}),
+      ...(c.secure === false ? { IMAP_SECURE: 'non' } : {}),
+    });
+  } catch (error) {
+    throw new BranchementRefuse(error instanceof Error ? error.message : String(error));
+  }
+  await writeImapAccount(secretsDir, instance.slug, c);
+  await withInstance(db, instance.id, async (tx) => {
+    const [actuelle] = await tx
+      .select({ fournisseur: connexions.fournisseur, reglages: connexions.reglages })
+      .from(connexions)
+      .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'messagerie')));
+    await configureConnexion(tx, {
+      kind: 'messagerie',
+      fournisseur: 'infomaniak',
+      reglages:
+        actuelle && MESSAGERIES.includes(actuelle.fournisseur)
+          ? actuelle.reglages
+          : { frequence: 'manuel', historiqueMois: 12, contenu: 'extraits' },
+    });
+  });
+}
+
+// Gmail and Agenda of the instance, once Google has granted access (CLI or web consent). An
+// Infomaniak mailbox stays the instance's messaging: Google then brings the agenda only.
 export async function brancherGoogle(tx: Tx): Promise<void> {
   const existing = await tx
     .select({ kind: connexions.kind, fournisseur: connexions.fournisseur })
     .from(connexions)
     .where(eq(connexions.instanceId, currentInstance));
   const fournisseur = new Map(existing.map((c) => [c.kind, c.fournisseur]));
-  if (fournisseur.get('messagerie') !== 'gmail') {
+  const infomaniak = fournisseur.get('messagerie') === 'infomaniak';
+  if (!infomaniak && fournisseur.get('messagerie') !== 'gmail') {
     await configureConnexion(tx, {
       kind: 'messagerie',
       fournisseur: 'gmail',
@@ -81,7 +131,7 @@ export async function brancherGoogle(tx: Tx): Promise<void> {
     .where(
       and(
         eq(connexions.instanceId, currentInstance),
-        inArray(connexions.kind, ['messagerie', 'agenda']),
+        inArray(connexions.kind, infomaniak ? ['agenda'] : ['messagerie', 'agenda']),
       ),
     );
 }
