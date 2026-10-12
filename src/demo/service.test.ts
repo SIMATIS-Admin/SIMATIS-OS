@@ -46,6 +46,24 @@ describe('prospect (demo) instances', () => {
     expect(again.json()).toMatchObject({ slug: 'fonderie-ecran-2' });
   });
 
+  it('seeds one subject per type in the demo, plus a_valider ones from its proposals', async () => {
+    await post('/api/prospects', { nom: 'Sujets Écran' });
+    const { rows } = await t.owner.pool.query<{ type: string; n: number }>(
+      `select type, count(*)::int as n from sujets
+       where instance_id = (select id from instances where slug = 'sujets-ecran') group by type`,
+    );
+    const parType = Object.fromEntries(rows.map((r) => [r.type, r.n]));
+    expect(parType).toEqual({
+      mail_a_repondre: 1,
+      devis: 1,
+      diagnostic: 1,
+      compte_rendu: 1,
+      brouillon_non_envoye: 1,
+      autre: 1,
+      a_valider: DEMO?.propositions.length,
+    });
+  });
+
   it('never lets a prospect write to a real tool', async () => {
     await expect(setEcrituresReelles(t.owner.db, 'fonderie-ecran', true)).rejects.toThrow(/démo/);
     const prospect = await getInstanceBySlug(t.owner.db, 'fonderie-ecran');
