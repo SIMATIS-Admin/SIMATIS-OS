@@ -27,6 +27,15 @@ import {
   phaseOf,
   setPhase,
 } from '../instances/service.js';
+import {
+  compterInbox,
+  FILTRES_INBOX,
+  listInbox,
+  marquerTraite,
+  remettreATraiter,
+  SujetRefuse,
+  transformerEnTache,
+} from '../inbox/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
 import { normaliserDomaine } from '../connecteurs/hubspot/domaines.js';
 import {
@@ -440,6 +449,64 @@ export function registerApi(
         if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Contenu invalide' });
         throw error;
       }
+    }),
+  );
+
+  type InboxRoute = SlugParams & { Querystring: { filtre?: string } };
+  app.get<InboxRoute>(
+    '/api/i/:slug/inbox',
+    onInstance<InboxRoute>((i, request) => {
+      const filtre = FILTRES_INBOX.find((f) => f === request.query.filtre) ?? 'tout';
+      return listInbox(db, i, filtre);
+    }),
+  );
+  app.get<SlugParams>(
+    '/api/i/:slug/inbox/compteur',
+    onInstance(async (i) => ({ n: await compterInbox(db, i) })),
+  );
+
+  // Always through the slug of the subject's own instance: the action runs there, never elsewhere.
+  type SujetRoute = ById & { Body: unknown };
+  const surSujet = (
+    action: (
+      i: Instance,
+      id: string,
+      request: FastifyRequest<SujetRoute>,
+      reply: FastifyReply,
+    ) => Promise<unknown>,
+  ) =>
+    onInstance<SujetRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id))
+        return reply.code(404).send({ error: 'Sujet introuvable' });
+      try {
+        const r = await action(i, request.params.id, request, reply);
+        return r ?? reply.code(404).send({ error: 'Sujet introuvable dans cette instance' });
+      } catch (error) {
+        if (error instanceof SujetRefuse) return reply.code(409).send({ error: error.message });
+        if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Tâche invalide' });
+        return tacheErreur(error, reply);
+      }
+    });
+  app.post<SujetRoute>(
+    '/api/i/:slug/sujets/:id/traite',
+    surSujet((i, id) => marquerTraite(db, i, id)),
+  );
+  app.post<SujetRoute>(
+    '/api/i/:slug/sujets/:id/a-traiter',
+    surSujet((i, id) => remettreATraiter(db, i, id)),
+  );
+  const sujetTacheSchema = tacheSchema.omit({ hubspot: true });
+  app.post<SujetRoute>(
+    '/api/i/:slug/sujets/:id/tache',
+    surSujet(async (i, id, request, reply) => {
+      const r = await transformerEnTache(
+        db,
+        i,
+        id,
+        sujetTacheSchema.parse(request.body),
+        connexionDeps,
+      );
+      return r && 'simulation' in r ? reply.code(202).send(r) : r && reply.code(201).send(r);
     }),
   );
 
