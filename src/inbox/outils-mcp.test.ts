@@ -7,8 +7,9 @@ import { buildApp } from '../app.js';
 import { withInstance } from '../db/context.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import type { Instance } from '../instances/schema.js';
-import { getInstanceBySlug } from '../instances/service.js';
+import { createInstance, getInstanceBySlug } from '../instances/service.js';
 import { createToken } from '../mcp/tokens.js';
+import { demanderExecution, getExecution } from '../routines/service.js';
 import { deposerSujet } from './depot.js';
 import type { SujetTraite } from './report.js';
 import { marquerTraite } from './service.js';
@@ -22,8 +23,25 @@ describe('Inbox : outils MCP', () => {
   let helioval: Instance;
   let aquaterra: Instance;
 
-  const call = async (name: string, args: Record<string, unknown> = {}) => {
-    const result = (await client.callTool({ name, arguments: args })) as TextResult;
+  let base: string;
+  const autres: Client[] = [];
+  const clientDe = async (slug: string) => {
+    const { token } = await createToken(t.owner.db, {
+      nom: slug,
+      portee: 'instance',
+      instanceSlug: slug,
+    });
+    const c = new Client({ name: 'test', version: '0' });
+    await c.connect(
+      new StreamableHTTPClientTransport(new URL('/mcp', base), {
+        requestInit: { headers: { Authorization: `Bearer ${token}` } },
+      }),
+    );
+    autres.push(c);
+    return c;
+  };
+  const call = async (name: string, args: Record<string, unknown> = {}, avec?: Client) => {
+    const result = (await (avec ?? client).callTool({ name, arguments: args })) as TextResult;
     const text = result.content[0]?.text ?? '';
     return { isError: result.isError === true, text, json: <T>() => JSON.parse(text) as T };
   };
@@ -39,7 +57,7 @@ describe('Inbox : outils MCP', () => {
     t = await setupTestApp();
     await seedDemoIfEmpty(t.owner.db);
     app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', lectureRole: t.lectureRole });
-    const base = await app.listen({ host: '127.0.0.1', port: 0 });
+    base = await app.listen({ host: '127.0.0.1', port: 0 });
     const { token } = await createToken(t.owner.db, {
       nom: 'inbox',
       portee: 'instance',
@@ -59,6 +77,7 @@ describe('Inbox : outils MCP', () => {
   });
 
   afterAll(async () => {
+    await Promise.all(autres.map((c) => c.close()));
     await client.close();
     await app.close();
     await t.drop();
@@ -123,5 +142,31 @@ describe('Inbox : outils MCP', () => {
     const traites = (await call('sujets_traites')).json<SujetTraite[]>();
     expect(traites.some((s) => s.id === id)).toBe(false);
     expect((await call('marquer_reporte', { ids: [id] })).json()).toEqual({ reportes: 0 });
+  });
+
+  it("returns empty lists on a demo's fictive tools", async () => {
+    const demo = await clientDe('demo');
+    for (const outil of ['mails_sans_reponse', 'brouillons_en_attente', 'rendez_vous_passes']) {
+      const r = await call(outil, {}, demo);
+      expect(r.isError).toBe(false);
+      expect(r.json()).toEqual([]);
+    }
+  });
+
+  it('answers a readable error without stopping the run when messaging is missing', async () => {
+    const i = await createInstance(t.owner.db, {
+      slug: 'sans-messagerie',
+      nom: 'Sans messagerie',
+      type: 'mandat',
+    });
+    const execution = await withInstance(t.app.db, i.id, (tx) =>
+      demanderExecution(tx, 'inbox', 'pilote'),
+    );
+    const c = await clientDe('sans-messagerie');
+    const r = await call('mails_sans_reponse', {}, c);
+    expect(r.isError).toBe(true);
+    expect(r.text).toBe('Messagerie non configurée pour Sans messagerie.');
+    const apres = await withInstance(t.app.db, i.id, (tx) => getExecution(tx, execution.id));
+    expect(apres.statut).toBe('demandee');
   });
 });

@@ -24,7 +24,8 @@ const FOURNISSEUR: Partial<Record<Kind, string>> = {
 };
 const execution = z.uuid().optional().describe("Identifiant de l'exécution de routine en cours");
 
-async function connexion(ctx: ToolCtx, kind: Kind, executionId?: string) {
+// Without an execution id, a missing connection fails this tool only: the run goes on.
+export async function connexion(ctx: ToolCtx, kind: Kind, executionId?: string) {
   const [c] = await ctx.tx
     .select()
     .from(connexions)
@@ -32,15 +33,16 @@ async function connexion(ctx: ToolCtx, kind: Kind, executionId?: string) {
   // A demo (prospect) instance runs on fictive tools: empty history, a free agenda.
   const fictif = c?.fournisseur === 'fake' && ctx.instance.type === 'prospect';
   if (!c || c.etat === 'non_configuree' || (c.fournisseur !== FOURNISSEUR[kind] && !fictif)) {
+    if (!executionId) throw new Error(`${NOMS[kind]} non configurée pour ${ctx.instance.nom}.`);
     throw new RoutineArretee(
       `${NOMS[kind]} non configurée pour ${ctx.instance.nom} : la routine s'arrête ici.`,
-      executionId ?? null,
+      executionId,
     );
   }
   return c;
 }
 
-const google = async (ctx: ToolCtx) => ({
+export const google = async (ctx: ToolCtx) => ({
   instance: ctx.instance,
   secrets: await loadInstanceSecrets(ctx.deps.secretsDir, ctx.instance.slug),
 });

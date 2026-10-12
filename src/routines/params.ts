@@ -79,7 +79,7 @@ export const ROUTINES: { cle: CleRoutine; nom: string; skill: string; etapes: Et
     etapes: [
       e('Lire les sujets traités depuis le dernier passage'),
       e('Reporter le traitement et exporter les notes validées dans le second cerveau'),
-      e('Chercher les nouveaux sujets (messagerie, agenda, second cerveau)'),
+      e('Chercher les nouveaux sujets (messagerie, agenda, second cerveau)', 'messagerie'),
       e("Déposer les nouveaux sujets dans l'Inbox"),
     ],
   },
