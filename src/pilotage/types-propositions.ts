@@ -106,6 +106,6 @@ registerPropositionType({
   type: 'note.second_cerveau',
   action: 'cerveau',
   schema: noteSecondCerveau,
-  // Export to the second brain's inbox comes with the second-brain lot; until then it stays here.
+  // Nothing written here: the Inbox routine exports validated notes into the second brain's inbox.
   apply: () => Promise.resolve({ brouillon: true }),
 });

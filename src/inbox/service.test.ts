@@ -10,6 +10,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { archiveInstance, createInstance } from '../instances/service.js';
 import { deposerSujet, type DepotSujet } from './depot.js';
+import { marquerReporte, sujetsTraites } from './report.js';
 import {
   compterInbox,
   listInbox,
@@ -183,6 +184,16 @@ describe('Inbox : service', () => {
       traiteAt: null,
     });
     expect(await marquerTraite(t.app.db, m1, id)).toBeNull();
+  });
+
+  it('reports again a subject put back then treated again', async () => {
+    const { id } = await deposer(simatis, 'propre-reporte');
+    await marquerTraite(t.app.db, simatis, id);
+    await withInstance(t.app.db, simatis.id, (tx) => marquerReporte(tx, [id]));
+    await remettreATraiter(t.app.db, simatis, id);
+    await marquerTraite(t.app.db, simatis, id);
+    const traites = await withInstance(t.app.db, simatis.id, (tx) => sujetsTraites(tx));
+    expect(traites.some((s) => s.id === id)).toBe(true);
   });
 
   it('refuses to check an a_valider subject', async () => {
