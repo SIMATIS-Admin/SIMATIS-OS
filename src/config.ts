@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// An empty value in .env means unset.
+const vide = (value: unknown) => (value === '' ? undefined : value);
+
 const schema = z.object({
   DATABASE_URL: z
     .string({ error: 'obligatoire' })
@@ -22,6 +25,14 @@ const schema = z.object({
   SECRETS_DIR: z.string().min(1).default('./secrets/instances'),
   REAL_WRITES: z.enum(['off', 'on']).default('off'),
   BACKUP_STATUS_FILE: z.string().min(1).default('./backup-status/last.json'),
+  SITE_CONTACT_URL: z.preprocess(
+    vide,
+    z
+      .string()
+      .refine((value) => /^https?:\/\//.test(value), 'doit commencer par http:// ou https://')
+      .optional(),
+  ),
+  SITE_CONTACT_TOKEN: z.preprocess(vide, z.string().min(32, '32 caractères au moins').optional()),
 });
 
 export type Config = {
@@ -34,6 +45,8 @@ export type Config = {
   secretsDir: string;
   realWrites: boolean;
   backupStatusFile: string;
+  // Public website whose contact form feeds the Inbox; null when not configured.
+  site: { url: string; token: string } | null;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -45,6 +58,13 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     throw new Error(`Configuration invalide — ${details}`);
   }
   const e = result.data;
+  const siteUrl = e.SITE_CONTACT_URL;
+  const siteToken = e.SITE_CONTACT_TOKEN;
+  if (Boolean(siteUrl) !== Boolean(siteToken)) {
+    throw new Error(
+      'Configuration invalide — SITE_CONTACT_URL et SITE_CONTACT_TOKEN vont ensemble',
+    );
+  }
   return {
     databaseUrl: e.DATABASE_URL,
     appDbRole: e.APP_DB_ROLE,
@@ -55,5 +75,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     secretsDir: e.SECRETS_DIR,
     realWrites: e.REAL_WRITES === 'on',
     backupStatusFile: e.BACKUP_STATUS_FILE,
+    site: siteUrl && siteToken ? { url: siteUrl, token: siteToken } : null,
   };
 }
