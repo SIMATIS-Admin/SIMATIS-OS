@@ -76,6 +76,18 @@ describe('Inbox : dépôt de sujets', () => {
     ).rejects.toBeInstanceOf(SujetInvalide);
   });
 
+  it('refuses a source link that is not a web address', async () => {
+    await expect(
+      withInstance(t.app.db, a.id, (tx) =>
+        deposerSujet(tx, depot('fil-lien', { lien: 'javascript:alert(1)' })),
+      ),
+    ).rejects.toBeInstanceOf(SujetInvalide);
+    const ok = await withInstance(t.app.db, a.id, (tx) =>
+      deposerSujet(tx, depot('fil-lien-ok', { lien: 'https://mail.exemple.fr/fil/1' })),
+    );
+    expect(ok.statut).toBe('cree');
+  });
+
   it('does not show a subject of another instance', async () => {
     await withInstance(t.app.db, a.id, (tx) => deposerSujet(tx, depot('fil-5')));
     const vus = await withInstance(t.app.db, b.id, (tx) => tx.select().from(sujets));

@@ -27,6 +27,10 @@ export async function deposerSujet(
   tx: Tx,
   d: DepotSujet,
 ): Promise<{ statut: 'cree' | 'existant'; id: string }> {
+  // The link is opened by a click in the OS: only a web address, never javascript: or data:.
+  if (d.lien && !/^https?:\/\//i.test(d.lien)) {
+    throw new SujetInvalide('Lien invalide : une adresse web (http ou https) est attendue');
+  }
   // Foreign keys alone would accept a contact or company of another instance.
   for (const [table, id, nom] of [
     [contacts, d.contactId, 'Contact'],

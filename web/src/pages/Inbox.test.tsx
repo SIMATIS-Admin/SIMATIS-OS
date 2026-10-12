@@ -165,6 +165,20 @@ describe('Inbox screen', () => {
     expect(lien.getAttribute('target')).toBe('_blank');
   });
 
+  it('never renders a source link that is not a web address', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify([sujet('x1', { lien: 'javascript:alert(1)' })])),
+        ),
+      ),
+    );
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Sujet x1');
+    expect(screen.queryByRole('link', { name: /Ouvrir la source/ })).toBeNull();
+  });
+
   it('opens the task window prefilled and posts to sujets/:id/tache', async () => {
     render(<Inbox slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Transformer en tâche' }));

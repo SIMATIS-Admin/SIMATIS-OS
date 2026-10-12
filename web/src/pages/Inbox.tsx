@@ -36,6 +36,8 @@ const TYPES: Record<TypeSujet, [string, string]> = {
 const date = (iso: string) =>
   new Date(iso).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
 const depassee = (s: SujetVue) => s.echeance !== null && Date.parse(s.echeance) < Date.now();
+// The server only stores web addresses; checked again here because the link is clickable.
+const lienWeb = (lien: string | null) => (lien && /^https?:\/\//i.test(lien) ? lien : null);
 const qui = (s: SujetVue) => s.contact?.nom ?? s.entreprise?.nom ?? '';
 
 function Ligne({
@@ -123,8 +125,8 @@ function Detail({
         </div>
         {s.resume && <p style={{ whiteSpace: 'pre-line' }}>{s.resume}</p>}
         <div className="decision">
-          {s.lien && (
-            <a className="btn" href={s.lien} target="_blank" rel="noreferrer">
+          {lienWeb(s.lien) && (
+            <a className="btn" href={lienWeb(s.lien) ?? undefined} target="_blank" rel="noreferrer">
               <Icon name="search" />
               Ouvrir la source
             </a>
