@@ -35,6 +35,8 @@ services:
       SECRETS_DIR: /app/secrets/instances
       REAL_WRITES: ${REAL_WRITES:-off}
       BACKUP_STATUS_FILE: /app/backup-status/last.json
+      SITE_CONTACT_URL: ${SITE_CONTACT_URL:-}
+      SITE_CONTACT_TOKEN: ${SITE_CONTACT_TOKEN:-}
     volumes:
       # Writable: Paramètres > Connexions saves the instances' tokens here.
       - ./secrets:/app/secrets

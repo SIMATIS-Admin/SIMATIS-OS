@@ -16,7 +16,29 @@ describe('loadConfig', () => {
       secretsDir: './secrets/instances',
       realWrites: false,
       backupStatusFile: './backup-status/last.json',
+      site: null,
     });
+  });
+
+  it('reads the website contact settings, empty values meaning unset', () => {
+    const token = 'x'.repeat(32);
+    expect(
+      loadConfig({ ...BASE, SITE_CONTACT_URL: 'https://simatis.fr', SITE_CONTACT_TOKEN: token })
+        .site,
+    ).toEqual({ url: 'https://simatis.fr', token });
+    expect(loadConfig({ ...BASE, SITE_CONTACT_URL: '', SITE_CONTACT_TOKEN: '' }).site).toBeNull();
+  });
+
+  it('rejects website contact settings that are incomplete or unsafe', () => {
+    expect(() => loadConfig({ ...BASE, SITE_CONTACT_URL: 'https://simatis.fr' })).toThrow(
+      /vont ensemble/,
+    );
+    expect(() =>
+      loadConfig({ ...BASE, SITE_CONTACT_URL: 'https://simatis.fr', SITE_CONTACT_TOKEN: 'court' }),
+    ).toThrow(/SITE_CONTACT_TOKEN/);
+    expect(() =>
+      loadConfig({ ...BASE, SITE_CONTACT_URL: 'ftp://x', SITE_CONTACT_TOKEN: 'x'.repeat(32) }),
+    ).toThrow(/SITE_CONTACT_URL/);
   });
 
   it('reads explicit values', () => {
