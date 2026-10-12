@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -15,6 +15,8 @@ export type Demande = {
   routine: string;
   libelle: string;
   skill: string;
+  // Routine allowed to read and add to the second brain (never for a demo).
+  cerveau?: boolean;
 };
 
 export type RunnerOptions = {
@@ -22,8 +24,10 @@ export type RunnerOptions = {
   token: string;
   claude: string;
   fetch?: typeof fetch;
-  // Runs the command; resolves with its exit code.
-  lancer?: (commande: string, args: string[]) => Promise<number>;
+  // Runs the command (in `cwd` when given); resolves with its exit code.
+  lancer?: (commande: string, args: string[], cwd?: string) => Promise<number>;
+  // Second brain folder of this workstation (SECOND_CERVEAU_DIR); never in the repository.
+  cerveau?: string;
   // What this workstation offers (Claude Code version, installed skills), sent at each pass.
   poste?: () => Promise<Poste>;
 };
@@ -44,9 +48,9 @@ export async function decrirePoste(claude: string): Promise<Poste> {
   return { nom: hostname(), claude: version, skills };
 }
 
-const lancerProcessus = (commande: string, args: string[]) =>
+const lancerProcessus = (commande: string, args: string[], cwd?: string) =>
   new Promise<number>((resolve) => {
-    const child = spawn(commande, args, { stdio: 'inherit' });
+    const child = spawn(commande, args, { stdio: 'inherit', ...(cwd ? { cwd } : {}) });
     child.on('error', () => resolve(127));
     child.on('exit', (code) => resolve(code ?? 1));
   });
@@ -58,6 +62,37 @@ export const prompt = (d: Demande) =>
     'Utilise uniquement les outils MCP simatis : ils ne voient que cette instance.',
     "Signale chaque étape avec etape_routine, et termine toujours par rapport_routine (fait, en attente, échecs). N'envoie jamais rien : tout passe par des propositions à valider.",
   ].join('\n');
+
+const dossierExiste = (dossier: string) =>
+  stat(dossier).then(
+    (s) => s.isDirectory(),
+    () => false,
+  );
+
+// Claude Code arguments of a run. Only a `cerveau` request with an existing folder gets file
+// tools, limited to that folder (a `//` rule prefix means an absolute path).
+export async function argumentsClaude(
+  d: Demande,
+  config: string,
+  cerveau: string | undefined,
+): Promise<{ args: string[]; cwd?: string }> {
+  const base = ['--mcp-config', config, '--strict-mcp-config', '--allowedTools'];
+  if (!d.cerveau) return { args: ['-p', prompt(d), ...base, 'mcp__simatis__*'] };
+  if (!cerveau || !(await dossierExiste(cerveau))) {
+    const texte = `${prompt(d)}\nSecond cerveau non accessible sur ce poste : saute ce qui en a besoin et signale-le dans le rapport.`;
+    return { args: ['-p', texte, ...base, 'mcp__simatis__*'] };
+  }
+  const outils = [
+    'mcp__simatis__*',
+    `Read(/${cerveau}/**)`,
+    `Edit(/${cerveau}/**)`,
+    `Write(/${cerveau}/**)`,
+    'Glob',
+    'Grep',
+  ].join(',');
+  const texte = `${prompt(d)}\nSecond cerveau : ${cerveau}. Ajoute seulement : ne supprime ni ne réécris jamais une note existante, et n'écris nulle part ailleurs.`;
+  return { args: ['-p', texte, ...base, outils, '--add-dir', cerveau], cwd: cerveau };
+}
 
 export async function tour(opts: RunnerOptions): Promise<number> {
   const doFetch = opts.fetch ?? fetch;
@@ -109,15 +144,8 @@ export async function tour(opts: RunnerOptions): Promise<number> {
         }),
         { mode: 0o600 },
       );
-      const code = await lancer(opts.claude, [
-        '-p',
-        prompt(d),
-        '--mcp-config',
-        config,
-        '--strict-mcp-config',
-        '--allowedTools',
-        'mcp__simatis__*',
-      ]);
+      const { args, cwd } = await argumentsClaude(d, config, opts.cerveau);
+      const code = await lancer(opts.claude, args, cwd);
       if (code !== 0) erreur = `Claude s'est arrêté avec le code ${code}.`;
     } finally {
       await rm(dossier, { recursive: true, force: true });
@@ -142,6 +170,7 @@ function main() {
     base: process.env.SIMATIS_URL ?? 'http://127.0.0.1:4300',
     token,
     claude: process.env.CLAUDE_BIN ?? 'claude',
+    ...(process.env.SECOND_CERVEAU_DIR ? { cerveau: process.env.SECOND_CERVEAU_DIR } : {}),
   };
   const every = Number(process.env.RUNNER_INTERVAL_MS ?? 30_000);
   let occupe = false;

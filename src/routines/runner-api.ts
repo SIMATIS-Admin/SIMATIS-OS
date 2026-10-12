@@ -72,6 +72,10 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
           routine: e.routine,
           libelle: ROUTINES.find((r) => r.cle === e.routine)?.nom ?? e.routine,
           skill,
+          // A demo never gets the second brain, whatever its routine.
+          cerveau:
+            ROUTINES.find((r) => r.cle === e.routine)?.cerveau === true &&
+            instance.type !== 'prospect',
         });
       }
     }

@@ -1,6 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
@@ -304,5 +306,92 @@ describe('Routines Claude', () => {
     const r = await api('POST', '/api/i/demo/routines/inbox/executions');
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ routine: 'inbox', statut: 'demandee' });
+  });
+
+  const TOUTES = [
+    'alimenter-inbox',
+    'relance-quotidienne',
+    'nettoyage-taches',
+    'revue-hebdomadaire',
+    'sur-evenement',
+  ];
+  const lancements = async (cerveau: string | undefined) => {
+    const vus: { args: string[]; cwd: string | undefined }[] = [];
+    await tour({
+      base,
+      token: runnerToken,
+      claude: 'faux-claude',
+      ...(cerveau === undefined ? {} : { cerveau }),
+      poste: () => Promise.resolve({ nom: 'poste-test', claude: '2.1', skills: TOUTES }),
+      lancer: (_commande, args, cwd) => {
+        vus.push({ args, cwd });
+        return Promise.resolve(0);
+      },
+    });
+    return vus;
+  };
+  const demander = async (slug: string, cle: string) =>
+    (await api('POST', `/api/i/${slug}/routines/${cle}/executions`)).json<{ id: string }>().id;
+  const pour = (vus: { args: string[]; cwd: string | undefined }[], id: string) => {
+    const v = vus.find((x) => x.args.join(' ').includes(id));
+    if (!v) throw new Error(`pas de lancement pour ${id}`);
+    return v;
+  };
+
+  it('runner: opens the second brain to the Inbox routine only', async () => {
+    // Runs left open by earlier tests (planning) are launched first.
+    await lancements(undefined);
+    const dossier = await mkdtemp(path.join(tmpdir(), 'cerveau-fictif-'));
+    try {
+      const inbox = await demander('helioval', 'inbox');
+      const hebdo = await demander('helioval', 'hebdo');
+      const vus = await lancements(dossier);
+      const i = pour(vus, inbox);
+      expect(i.cwd).toBe(dossier);
+      expect(i.args).toEqual(
+        expect.arrayContaining([
+          '--add-dir',
+          dossier,
+          `mcp__simatis__*,Read(/${dossier}/**),Edit(/${dossier}/**),Write(/${dossier}/**),Glob,Grep`,
+        ]),
+      );
+      expect(i.args.join(' ')).toContain(`Second cerveau : ${dossier}`);
+      const h = pour(vus, hebdo);
+      expect(h.cwd).toBeUndefined();
+      expect(h.args).not.toContain('--add-dir');
+      expect(h.args).toContain('mcp__simatis__*');
+    } finally {
+      await rm(dossier, { recursive: true, force: true });
+    }
+  });
+
+  it('runner: never opens files for a demo', async () => {
+    const inboxDemo = await demander('demo', 'inbox');
+    const inboxMandat = await demander('aquaterra', 'inbox');
+    const demandes = (await (
+      await fetch(`${base}/api/runner/demandes`, {
+        headers: { authorization: `Bearer ${runnerToken}` },
+      })
+    ).json()) as { id: string; cerveau: boolean }[];
+    expect(demandes.find((d) => d.id === inboxDemo)?.cerveau).toBe(false);
+    expect(demandes.find((d) => d.id === inboxMandat)?.cerveau).toBe(true);
+    const dossier = await mkdtemp(path.join(tmpdir(), 'cerveau-fictif-'));
+    try {
+      const vus = await lancements(dossier);
+      expect(pour(vus, inboxDemo).args).not.toContain('--add-dir');
+    } finally {
+      await rm(dossier, { recursive: true, force: true });
+    }
+  });
+
+  it('runner: launches without files and says so when the folder is missing', async () => {
+    const inbox = await demander('helioval', 'inbox');
+    const vus = await lancements(path.join(tmpdir(), 'cerveau-introuvable-0000'));
+    const i = pour(vus, inbox);
+    expect(i.args).not.toContain('--add-dir');
+    expect(i.cwd).toBeUndefined();
+    expect(i.args.join(' ')).toContain(
+      'Second cerveau non accessible sur ce poste : saute ce qui en a besoin et signale-le dans le rapport.',
+    );
   });
 });
