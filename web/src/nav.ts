@@ -15,7 +15,7 @@ export const NAV: NavGroup[] = [
     items: [
       item('routines', 'Routines Claude', 'clock'),
       item('brief', 'Brief du jour', 'sun'),
-      item('validations', 'À valider', 'inbox'),
+      item('inbox', 'Inbox', 'inbox'),
       item('tableau', 'Tableau de bord', 'chart'),
     ],
   },
@@ -54,7 +54,7 @@ export const NAV: NavGroup[] = [
 // Screens already built in the real app; every other menu entry shows « Bientôt ».
 export const BUILT = new Set([
   'brief',
-  'validations',
+  'inbox',
   'pipeline',
   'entreprises',
   'contacts',
@@ -78,6 +78,9 @@ export const LOTS: Record<string, string> = {
 };
 
 export const isBuilt = (id: string) => BUILT.has(id);
+
+// Former screen ids still found in bookmarks: « À valider » became the Inbox.
+export const vueCanonique = (view: string) => (view === 'validations' ? 'inbox' : view);
 
 export const allItems = () => NAV.flatMap((g) => g.items);
 

@@ -76,7 +76,7 @@ function CompteRendu({ slug, rdv, onDone }: { slug: string; rdv: Rdv; onDone: ()
     setBusy(true);
     envoyerCompteRendu(slug, rdv, texte).then(
       () => {
-        setMessage('Compte rendu enregistré : une tâche pour la suite attend dans À valider.');
+        setMessage('Compte rendu enregistré : une tâche pour la suite attend dans l’Inbox.');
         onDone();
       },
       (e: unknown) => {

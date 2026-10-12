@@ -88,7 +88,7 @@ describe('conversion screens', () => {
       target: { value: 'Besoin confirmé.' },
     });
     fireEvent.click(screen.getByText('Enregistrer le compte rendu'));
-    expect(await screen.findByText(/attend dans À valider/)).toBeTruthy();
+    expect(await screen.findByText(/attend dans l’Inbox/)).toBeTruthy();
     expect(calls.find((c) => c.url.endsWith('/compte-rendu'))?.body).toMatchObject({
       titre: 'Point projet',
       texte: 'Besoin confirmé.',

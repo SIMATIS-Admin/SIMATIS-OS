@@ -1040,6 +1040,57 @@ textarea.input {
   color: var(--ink-3);
   margin-top: 2px;
 }
+.inbox-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: default;
+}
+.inbox-item input[type='checkbox'],
+.inbox-case {
+  flex: none;
+  width: 16px;
+  margin-top: 3px;
+}
+.inbox-ouvrir {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.inbox-ouvrir .row1 {
+  justify-content: flex-start;
+}
+.inbox-type {
+  flex: none;
+  display: inline-flex;
+  color: var(--ink-3);
+}
+.inbox-type svg {
+  width: 15px;
+  height: 15px;
+}
+.inbox-ouvrir .vq-titre {
+  flex: 1;
+  min-width: 0;
+}
+.badge-instance {
+  border: 1px solid var(--line);
+  background: none;
+}
+.echeance.red,
+.meta-row .red {
+  color: var(--red);
+}
+.vq-filter select {
+  width: auto;
+  margin-left: auto;
+}
 .vq-filter {
   display: flex;
   gap: 6px;

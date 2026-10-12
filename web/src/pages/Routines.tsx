@@ -170,7 +170,7 @@ function Carte({ slug, r, onChange }: { slug: string; r: RoutineInfo; onChange: 
           <Icon name="play" />
           Lancer maintenant
         </button>
-        <span className="hint">Rien n'est envoyé : tout attend dans À valider.</span>
+        <span className="hint">Rien n'est envoyé : tout attend dans l'Inbox.</span>
       </div>
     </div>
   );

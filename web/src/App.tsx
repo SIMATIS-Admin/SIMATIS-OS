@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchCompteurTaches, fetchFavoris, fetchInstances, saveFavoris } from './api.js';
+import {
+  fetchCompteurInbox,
+  fetchCompteurTaches,
+  fetchFavoris,
+  fetchInstances,
+  saveFavoris,
+} from './api.js';
 import { Icon } from './icons.js';
-import { allItems, reorderFavoris, toggleFavori, type InstanceSummary } from './nav.js';
-import { AValider } from './pages/AValider.js';
+import {
+  allItems,
+  reorderFavoris,
+  toggleFavori,
+  vueCanonique,
+  type InstanceSummary,
+} from './nav.js';
+import { Inbox } from './pages/Inbox.js';
 import { Bientot } from './pages/Bientot.js';
 import { Brief } from './pages/Brief.js';
 import { Fiche } from './pages/Fiche.js';
@@ -27,9 +39,10 @@ const DEFAULT_VIEW = 'brief';
 // `#/<slug>/<view>`, or `#/<slug>/fiche/<kind>/<id>` for a detail page.
 function readHash(): { slug: string | null; view: string; kind?: string; id?: string } {
   const m = /^#\/([\w-]+)\/([\w-]+)(?:\/([\w-]+)\/([\w-]+))?/.exec(location.hash);
-  return m
-    ? { slug: m[1] ?? null, view: m[2] ?? DEFAULT_VIEW, kind: m[3], id: m[4] }
-    : { slug: null, view: DEFAULT_VIEW };
+  if (!m) return { slug: null, view: DEFAULT_VIEW };
+  const view = vueCanonique(m[2] ?? DEFAULT_VIEW);
+  if (m[1] && view !== m[2]) history.replaceState(null, '', `#/${m[1]}/${view}`);
+  return { slug: m[1] ?? null, view, kind: m[3], id: m[4] };
 }
 const KINDS_FICHE = ['affaire', 'contact', 'entreprise'];
 
@@ -59,17 +72,19 @@ export function App() {
     ? (instances.find((i) => i.slug === route.slug) ?? instances[0])?.slug
     : undefined;
   const [compteurs, setCompteurs] = useState<Record<string, number>>({});
+  // Bumped by the Inbox after an action, so the menu counter follows at once.
+  const [recharge, setRecharge] = useState(0);
   useEffect(() => {
     if (!slugCourant || route.view === 'portefeuille') return setCompteurs({});
     const charger = () =>
-      fetchCompteurTaches(slugCourant).then(
-        (n) => setCompteurs({ taches: n }),
-        () => setCompteurs({}),
-      );
+      Promise.all([
+        fetchCompteurTaches(slugCourant).catch(() => 0),
+        fetchCompteurInbox(slugCourant).catch(() => 0),
+      ]).then(([taches, inbox]) => setCompteurs({ taches, inbox }));
     void charger();
     const minuteur = window.setInterval(() => void charger(), 5 * 60_000);
     return () => window.clearInterval(minuteur);
-  }, [slugCourant, route.view]);
+  }, [slugCourant, route.view, recharge]);
 
   // Optimistic: the menu changes at once, then follows what the server kept.
   const updateFavoris = (next: string[]) => {
@@ -103,8 +118,14 @@ export function App() {
         return <Taches key={current.slug} slug={current.slug} />;
       case 'brief':
         return <Brief key={current.slug} slug={current.slug} />;
-      case 'validations':
-        return <AValider key={current.slug} slug={current.slug} />;
+      case 'inbox':
+        return (
+          <Inbox
+            key={current.slug}
+            slug={current.slug}
+            onChange={() => setRecharge((n) => n + 1)}
+          />
+        );
       case 'pipeline':
         return <Pipeline key={current.slug} slug={current.slug} />;
       case 'routines':
