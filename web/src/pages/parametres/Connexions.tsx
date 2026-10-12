@@ -59,27 +59,48 @@ const Verrou = ({ children }: { children: string }) => (
 
 function BrancherHubspot({ slug, onDone }: { slug: string; onDone: () => void }) {
   const [token, setToken] = useState('');
+  const [degrade, setDegrade] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = () => {
     setBusy(true);
     setError(null);
-    brancherHubspot(slug, token)
+    brancherHubspot(slug, token, degrade ? 'degrade' : 'standard')
       .then(onDone, (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   };
   return (
     <div className="stack" style={{ gap: 8 }}>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={degrade}
+          onChange={(e) => {
+            setDegrade(e.target.checked);
+            setError(null);
+          }}
+        />
+        <span>
+          Connexion en mode dégradé{' '}
+          <Tip text="Quand le client ne peut pas fournir de jeton d'application privée : l'OS utilise votre propre clé personnelle HubSpot. Il voit alors ce que vous voyez dans HubSpot, et ce qu'il y écrit apparaît à votre nom. Cette méthode passe par un accès non documenté de HubSpot, qui peut changer sans préavis." />
+        </span>
+      </label>
       <label className="field">
         <span>
-          Jeton HubSpot du client{' '}
-          <Tip text="Dans le HubSpot du client : Paramètres > Intégrations > Applications privées > Créer, avec la lecture et l'écriture des contacts, entreprises, transactions et tâches. Copiez le jeton (pat-…) et collez-le ici." />
+          {degrade ? 'Votre clé personnelle HubSpot' : 'Jeton HubSpot du client'}{' '}
+          <Tip
+            text={
+              degrade
+                ? "Dans le HubSpot du client, ouvrez app.hubspot.com/personal-access-key (ou Paramètres > Intégrations > Clé d'accès personnelle). Générez la clé en cochant au moins l'accès CRM (contacts, entreprises, transactions, tâches), copiez-la et collez-la ici."
+                : "Dans le HubSpot du client : Paramètres > Intégrations > Applications privées > Créer, avec la lecture et l'écriture des contacts, entreprises, transactions et tâches. Copiez le jeton (pat-…) et collez-le ici."
+            }
+          />
         </span>
         <input
           className="input"
           type="password"
           autoComplete="off"
-          placeholder="pat-eu1-…"
+          placeholder={degrade ? 'Clé personnelle…' : 'pat-eu1-…'}
           value={token}
           onChange={(e) => setToken(e.target.value)}
         />
@@ -94,7 +115,11 @@ function BrancherHubspot({ slug, onDone }: { slug: string; onDone: () => void })
           {error}
         </p>
       )}
-      <Verrou>Le jeton reste sur l'ordinateur de l'OS : il n'est plus jamais affiché.</Verrou>
+      <Verrou>
+        {degrade
+          ? "La clé reste sur l'ordinateur de l'OS : elle n'est plus jamais affichée."
+          : "Le jeton reste sur l'ordinateur de l'OS : il n'est plus jamais affiché."}
+      </Verrou>
     </div>
   );
 }
@@ -245,6 +270,7 @@ function CrmHubspot({
 }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [changerAcces, setChangerAcces] = useState(false);
   const r = c.reglages;
   const exclus = r.champsExclus ?? ['annualrevenue'];
   const objets = r.objets ?? options.objets;
@@ -274,6 +300,14 @@ function CrmHubspot({
         <div className="alert amber" style={{ marginBottom: 12, display: 'block' }}>
           <p style={{ marginTop: 0 }}>Jeton HubSpot absent : collez-le pour reprendre la copie.</p>
           <BrancherHubspot slug={slug} onDone={onChange} />
+        </div>
+      )}
+      {c.degrade && (
+        <div className="alert amber" style={{ marginBottom: 12 }}>
+          <div>
+            Connexion en mode dégradé : l'OS passe par votre clé personnelle HubSpot. Dès que le
+            client fournit un jeton d'application privée, remplacez-la ci-dessous.
+          </div>
         </div>
       )}
       <div className="grid g2">
@@ -356,6 +390,22 @@ function CrmHubspot({
         </p>
       )}
       {message && <p className="small muted">{message}</p>}
+      {c.secret?.present &&
+        (changerAcces ? (
+          <BrancherHubspot
+            slug={slug}
+            onDone={() => {
+              setChangerAcces(false);
+              onChange();
+            }}
+          />
+        ) : (
+          <div>
+            <button className="btn" onClick={() => setChangerAcces(true)}>
+              Changer le jeton ou la clé HubSpot
+            </button>
+          </div>
+        ))}
     </div>
   );
 }
@@ -522,7 +572,7 @@ export function Connexions({ slug }: { slug: string }) {
                   {c?.fournisseur === 'fake'
                     ? 'Données fictives de démonstration.'
                     : kind === 'crm'
-                      ? "Le client utilise HubSpot ? Demandez à son administrateur HubSpot un jeton d'application privée (Paramètres > Intégrations > Applications privées) et collez-le ici. L'OS copie entreprises, contacts, transactions et tâches, sans rien modifier dans HubSpot tant que vous ne l'autorisez pas."
+                      ? "Le client utilise HubSpot ? Demandez à son administrateur HubSpot un jeton d'application privée (Paramètres > Intégrations > Applications privées) et collez-le ici. L'OS copie entreprises, contacts, transactions et tâches, sans rien modifier dans HubSpot tant que vous ne l'autorisez pas. S'il ne peut pas, cochez « Connexion en mode dégradé » pour utiliser votre propre clé personnelle HubSpot."
                       : kind === 'messagerie'
                         ? "Connectez le compte Google utilisé pour ce mandat : l'OS prépare vos emails en brouillon dans Gmail (vous les envoyez vous-même) et retrouve l'historique des échanges avec chaque contact."
                         : "L'agenda se branche en même temps que la messagerie, avec le même compte Google : l'OS lit vos rendez-vous pour le brief du jour et propose des créneaux libres."}

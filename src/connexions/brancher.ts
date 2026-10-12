@@ -13,6 +13,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import {
   loadInstanceSecrets,
+  removeInstanceSecret,
   writeGoogleAppSecret,
   writeGoogleToken,
   writeInstanceSecret,
@@ -26,25 +27,42 @@ import { configureConnexion, registeredConnector } from './service.js';
 export class BranchementRefuse extends Error {}
 
 const HUBSPOT_TOKEN = /^[A-Za-z0-9_-]{20,200}$/;
+// Personal access keys are longer and base64-encoded.
+const HUBSPOT_PERSONAL_KEY = /^[A-Za-z0-9_+/=-]{20,1000}$/;
 
-// Checks the private-app token against HubSpot, saves it, and mirrors the CRM read-only.
+// « standard » : private-app (or service) token from the client's admin. « degrade » : the user's
+// own personal access key, when the client grants nothing else (see personalKeyAuth).
+export type ModeHubspot = 'standard' | 'degrade';
+
+// Checks the credential against HubSpot, saves it (replacing the other kind, if any), and mirrors
+// the CRM read-only.
 export async function brancherHubspot(
   db: Database,
   instance: Instance,
   token: string,
   secretsDir: string,
+  mode: ModeHubspot = 'standard',
 ): Promise<void> {
   const jeton = token.trim();
-  if (!HUBSPOT_TOKEN.test(jeton)) {
-    throw new BranchementRefuse('Ce texte ne ressemble pas à un jeton HubSpot (pat-…).');
+  const degrade = mode === 'degrade';
+  if (!(degrade ? HUBSPOT_PERSONAL_KEY : HUBSPOT_TOKEN).test(jeton)) {
+    throw new BranchementRefuse(
+      degrade
+        ? 'Ce texte ne ressemble pas à une clé personnelle HubSpot.'
+        : 'Ce texte ne ressemble pas à un jeton HubSpot (pat-…).',
+    );
   }
+  const [cle, autre] = degrade
+    ? ['HUBSPOT_PERSONAL_KEY', 'HUBSPOT_TOKEN']
+    : ['HUBSPOT_TOKEN', 'HUBSPOT_PERSONAL_KEY'];
   const connector = registeredConnector('hubspot');
   try {
-    await connector?.verify?.({ HUBSPOT_TOKEN: jeton });
+    await connector?.verify?.({ [cle]: jeton });
   } catch (error) {
     throw new BranchementRefuse(error instanceof Error ? error.message : String(error));
   }
-  await writeInstanceSecret(secretsDir, instance.slug, 'HUBSPOT_TOKEN', jeton);
+  await writeInstanceSecret(secretsDir, instance.slug, cle, jeton);
+  await removeInstanceSecret(secretsDir, instance.slug, autre);
   await withInstance(db, instance.id, (tx) =>
     configureConnexion(tx, {
       kind: 'crm',

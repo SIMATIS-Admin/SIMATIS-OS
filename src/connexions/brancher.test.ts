@@ -12,6 +12,8 @@ import { createInstance } from '../instances/service.js';
 import { registerConnector } from './service.js';
 
 const GOOD = 'pat-eu1-fictif-0000-1111-2222';
+const KEY = 'CiRjbGUtcGVyc29ubmVsbGUtZmljdGl2ZS0wMDAw';
+const ACCESS = 'acces-temporaire-fictif';
 const SECRET = 'GOCSPX-fictif-0000-1111';
 
 describe('connecting tools from Paramètres > Connexions', () => {
@@ -29,10 +31,28 @@ describe('connecting tools from Paramètres > Connexions', () => {
     registerConnector(
       hubspotConnector({
         sleep: () => Promise.resolve(),
-        fetch: (url, init) =>
-          (init.headers as Record<string, string>).authorization === `Bearer ${GOOD}`
+        fetch: (url, init) => {
+          // Personal access key exchange (« mode dégradé »).
+          if (url.endsWith('/localdevauth/v1/auth/refresh')) {
+            const { encodedOAuthRefreshToken } = JSON.parse(init.body as string) as {
+              encodedOAuthRefreshToken: string;
+            };
+            return Promise.resolve(
+              encodedOAuthRefreshToken === KEY
+                ? new Response(
+                    JSON.stringify({
+                      oauthAccessToken: ACCESS,
+                      expiresAtMillis: Date.now() + 30 * 60_000,
+                    }),
+                  )
+                : new Response('{"message":"invalid key"}', { status: 400 }),
+            );
+          }
+          const auth = (init.headers as Record<string, string>).authorization;
+          return auth === `Bearer ${GOOD}` || auth === `Bearer ${ACCESS}`
             ? portal.fetch(url, init)
-            : Promise.resolve(new Response('{"message":"Authentication failed"}', { status: 401 })),
+            : Promise.resolve(new Response('{"message":"Authentication failed"}', { status: 401 }));
+        },
       }),
     );
     // Fake Google token endpoint: wrong secret → invalid_client, fake code → invalid_grant.
@@ -109,6 +129,37 @@ describe('connecting tools from Paramètres > Connexions', () => {
       },
     ]);
     expect((await connexionsOf('mandat-b')).json.connexions).toEqual([]);
+  });
+
+  it('connects in degraded mode with a personal access key, replacing the token', async () => {
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/api/i/mandat-a/connexions/hubspot',
+      payload: { token: 'Q2xlRmF1c3NlLTAwMDAtMDAwMA==', mode: 'degrade' },
+    });
+    expect(wrong.statusCode).toBe(400);
+    expect(wrong.json<{ error: string }>().error).toMatch(/refuse cette clé personnelle/);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/i/mandat-a/connexions/hubspot',
+      payload: { token: KEY, mode: 'degrade' },
+    });
+    expect(res.statusCode).toBe(200);
+    const file = path.join(secretsDir, 'mandat-a.env');
+    expect(await readFile(file, 'utf8')).toBe(`HUBSPOT_PERSONAL_KEY=${KEY}\n`);
+    const { body, json } = await connexionsOf('mandat-a');
+    expect(body).not.toContain(KEY);
+    expect(json.connexions).toMatchObject([{ secret: { present: true }, degrade: true }]);
+
+    // Back to a regular token: the personal key is removed.
+    await app.inject({
+      method: 'POST',
+      url: '/api/i/mandat-a/connexions/hubspot',
+      payload: { token: GOOD },
+    });
+    expect(await readFile(file, 'utf8')).toBe(`HUBSPOT_TOKEN=${GOOD}\n`);
+    expect((await connexionsOf('mandat-a')).json.connexions).toMatchObject([{ degrade: false }]);
   });
 
   it('saves the OS Google secret once, only after Google accepts it', async () => {

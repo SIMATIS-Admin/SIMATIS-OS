@@ -157,6 +157,7 @@ export type ConnexionInfo = {
   derniereSynchro: string | null;
   derniereErreur: string | null;
   secret: { nom: string; present: boolean } | null;
+  degrade?: boolean;
 };
 
 export type ConnexionsReponse = {
@@ -180,8 +181,11 @@ export const saveReglages = (
     inst(slug, `connexions/${kind}`),
     reglages,
   );
-export const brancherHubspot = (slug: string, token: string) =>
-  sendJson<{ ok: true }>('POST', inst(slug, 'connexions/hubspot'), { token });
+export const brancherHubspot = (
+  slug: string,
+  token: string,
+  mode: 'standard' | 'degrade' = 'standard',
+) => sendJson<{ ok: true }>('POST', inst(slug, 'connexions/hubspot'), { token, mode });
 export const enregistrerSecretGoogle = (secret: string) =>
   sendJson<{ ok: true }>('PUT', '/api/google/secret', { secret });
 export const demarrerGoogle = (slug: string) =>
