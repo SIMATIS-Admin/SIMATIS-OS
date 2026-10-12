@@ -30,18 +30,66 @@ export type ClientOptions = {
 };
 
 const PAGE = 100;
+const BASE_URL = 'https://api.hubapi.com';
 
-// Private-app token client for the HubSpot CRM v3 API. Retries rate limits (429) and server errors
-// with exponential backoff, then raises HubspotError. The token never appears in an error message.
-export function hubspotClient(token: string, options: ClientOptions = {}) {
+// A fixed private-app token, or a provider that hands out short-lived access tokens.
+export type HubspotAuth = string | (() => Promise<string>);
+
+// « Connexion en mode dégradé » : when the client's HubSpot admin grants no private app or service
+// key, the user's own personal access key is exchanged for a ~30 min access token, the way the
+// HubSpot CLI does it (localdevauth endpoint, not part of the public API). The token is cached and
+// renewed a few minutes before it expires. The key never appears in an error message.
+export function personalKeyAuth(
+  key: string,
+  options: Pick<ClientOptions, 'fetch' | 'baseUrl'> & { now?: () => number } = {},
+): () => Promise<string> {
+  const doFetch = options.fetch ?? ((url, init) => fetch(url, init));
+  const now = options.now ?? Date.now;
+  let cached: { token: string; expiresAt: number } | null = null;
+  return async () => {
+    if (cached && cached.expiresAt - 5 * 60_000 > now()) return cached.token;
+    let response: Response;
+    try {
+      response = await doFetch(`${options.baseUrl ?? BASE_URL}/localdevauth/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ encodedOAuthRefreshToken: key }),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new HubspotError(`HubSpot injoignable : ${reason}`, 0);
+    }
+    if (!response.ok) {
+      throw new HubspotError(
+        `HubSpot refuse la clé personnelle (${response.status})`,
+        response.status === 400 ? 401 : response.status,
+      );
+    }
+    const body = (await response.json()) as { oauthAccessToken?: string; expiresAtMillis?: number };
+    if (!body.oauthAccessToken) {
+      throw new HubspotError('HubSpot n’a pas renvoyé de jeton pour la clé personnelle', 502);
+    }
+    cached = {
+      token: body.oauthAccessToken,
+      expiresAt: body.expiresAtMillis ?? now() + 30 * 60_000,
+    };
+    return cached.token;
+  };
+}
+
+// Client for the HubSpot CRM v3 API. Retries rate limits (429) and server errors with exponential
+// backoff, then raises HubspotError. The token never appears in an error message.
+export function hubspotClient(auth: HubspotAuth, options: ClientOptions = {}) {
   const doFetch = options.fetch ?? ((url, init) => fetch(url, init));
   const sleep = options.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
-  const baseUrl = options.baseUrl ?? 'https://api.hubapi.com';
+  const baseUrl = options.baseUrl ?? BASE_URL;
   const retries = options.retries ?? 3;
 
   async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
     for (let attempt = 0; ; attempt += 1) {
       let response: Response;
+      // Asked on every attempt: a long first sync can outlive a personal-key access token.
+      const token = typeof auth === 'string' ? auth : await auth();
       try {
         response = await doFetch(`${baseUrl}${path}`, {
           method,

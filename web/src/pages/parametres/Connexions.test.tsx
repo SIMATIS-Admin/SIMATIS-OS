@@ -9,6 +9,7 @@ let tokenPresent = true;
 let avecGoogle = false;
 let clientDisponible = true;
 let avecInfomaniak = false;
+let degrade = false;
 
 const reponse = () => ({
   connexions: [
@@ -20,6 +21,7 @@ const reponse = () => ({
       derniereSynchro: new Date().toISOString(),
       derniereErreur: null,
       secret: { nom: 'HUBSPOT_TOKEN', present: tokenPresent },
+      degrade,
     },
     ...(avecGoogle
       ? [
@@ -95,6 +97,7 @@ describe('Paramètres > Connexions', () => {
     avecGoogle = false;
     clientDisponible = true;
     avecInfomaniak = false;
+    degrade = false;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -153,6 +156,29 @@ describe('Paramètres > Connexions', () => {
       expect(calls.filter((c) => c.url.endsWith('/connexions/hubspot')).length).toBe(2),
     );
     await waitFor(() => expect(calls.at(-1)?.url).toBe('/api/i/helioval/connexions'));
+  });
+
+  it('connects HubSpot in degraded mode with a personal access key', async () => {
+    tokenPresent = false;
+    render(<Connexions slug="helioval" />);
+    fireEvent.click(await screen.findByLabelText(/Connexion en mode dégradé/));
+    const input = screen.getByPlaceholderText('Clé personnelle…');
+    fireEvent.change(input, { target: { value: 'cle-fictive-0000' } });
+    fireEvent.click(screen.getByText('Vérifier et brancher HubSpot'));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith('/connexions/hubspot'))).toMatchObject({
+        body: { token: 'cle-fictive-0000', mode: 'degrade' },
+      }),
+    );
+  });
+
+  it('flags a degraded-mode connection and lets the access be replaced', async () => {
+    degrade = true;
+    render(<Connexions slug="helioval" />);
+    expect(await screen.findByText(/passe par votre clé personnelle/)).toBeTruthy();
+    expect(screen.queryByPlaceholderText('pat-eu1-…')).toBeNull();
+    fireEvent.click(screen.getByText('Changer le jeton ou la clé HubSpot'));
+    expect(screen.getByPlaceholderText('pat-eu1-…')).toBeTruthy();
   });
 
   it('shows the Gmail locks and saves the history depth', async () => {

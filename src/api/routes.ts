@@ -975,9 +975,14 @@ export function registerApi(
           secret: SECRET_ATTENDU[c.fournisseur]
             ? {
                 nom: SECRET_ATTENDU[c.fournisseur],
-                present: !!secrets[SECRET_ATTENDU[c.fournisseur] ?? ''],
+                present:
+                  !!secrets[SECRET_ATTENDU[c.fournisseur] ?? ''] ||
+                  (c.fournisseur === 'hubspot' && !!secrets.HUBSPOT_PERSONAL_KEY),
               }
             : null,
+          // HubSpot through the user's personal access key (« Connexion en mode dégradé »).
+          degrade:
+            c.fournisseur === 'hubspot' && !secrets.HUBSPOT_TOKEN && !!secrets.HUBSPOT_PERSONAL_KEY,
         })),
         options: { objets: OBJETS, champs: CHAMPS_EXCLUABLES },
         googleClientDisponible: await google.clientDisponible(i.slug),
@@ -988,14 +993,17 @@ export function registerApi(
 
   // Connecting from the screen: the token is checked with HubSpot, saved in the instance's
   // secrets, then a first read-only sync runs in the background.
-  const hubspotSchema = z.object({ token: z.string().min(1).max(500) });
+  const hubspotSchema = z.object({
+    token: z.string().min(1).max(1500),
+    mode: z.enum(['standard', 'degrade']).optional(),
+  });
   app.post<SlugParams & { Body: unknown }>(
     '/api/i/:slug/connexions/hubspot',
     onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
       const parsed = hubspotSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Jeton manquant' });
       try {
-        await brancherHubspot(db, i, parsed.data.token, secretsDir);
+        await brancherHubspot(db, i, parsed.data.token, secretsDir, parsed.data.mode);
       } catch (error) {
         if (error instanceof BranchementRefuse) {
           return reply.code(400).send({ error: error.message });
