@@ -4,7 +4,9 @@ import type { Database, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { instances, type InstanceType } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { propositions } from '../propositions/schema.js';
+import { deposerSujet, sujetPourProposition } from '../inbox/depot.js';
+import type { OrigineSujet, TypeSujet } from '../inbox/schema.js';
+import { propositions, type Proposition } from '../propositions/schema.js';
 import fixtures from './fixtures.json' with { type: 'json' };
 
 type Fixture = (typeof fixtures)[number];
@@ -71,6 +73,7 @@ export async function loadDemoData(tx: Tx, instanceId: string, f: Fixture, now =
       .returning({ id: opportunites.id });
     if (row) ref.set(o.ref, row.id);
   }
+  const enAttente: Proposition[] = [];
   for (const p of f.propositions) {
     const c = p.contenu as Record<string, unknown>;
     const contenu =
@@ -96,13 +99,17 @@ export async function loadDemoData(tx: Tx, instanceId: string, f: Fixture, now =
               origine: c.origine,
             }
           : { titre: c.titre, texte: c.texte, destination: c.destination, origine: c.origine };
-    await tx.insert(propositions).values({
-      instanceId,
-      type: p.type,
-      contenu,
-      auteur: 'os',
-      niveau: p.niveau as 'L0' | 'L1' | 'L2' | 'L3',
-    });
+    const [row] = await tx
+      .insert(propositions)
+      .values({
+        instanceId,
+        type: p.type,
+        contenu,
+        auteur: 'os',
+        niveau: p.niveau as 'L0' | 'L1' | 'L2' | 'L3',
+      })
+      .returning();
+    if (row) enAttente.push(row);
   }
   for (const t of f.taches) {
     const echeance =
@@ -117,6 +124,27 @@ export async function loadDemoData(tx: Tx, instanceId: string, f: Fixture, now =
       faitAt: t.fait ? echeance : null,
     });
   }
+  // Inbox: pending proposals wait there, plus fictive subjects of every other type.
+  await withInstance(tx, instanceId, async (itx) => {
+    for (const p of enAttente) await sujetPourProposition(itx, p);
+    for (const su of f.sujets) {
+      await deposerSujet(itx, {
+        type: su.type as TypeSujet,
+        titre: su.titre,
+        resume: su.resume,
+        origine: su.origine as OrigineSujet,
+        source: 'demo',
+        sourceId: su.cle,
+        lien: su.lien,
+        echeance:
+          su.echeanceJours === null
+            ? null
+            : new Date(`${parisDay(su.echeanceJours, now)}T10:00:00Z`),
+        contactId: id(su.contact),
+        entrepriseId: id(su.entreprise),
+      });
+    }
+  });
 }
 
 // Loads the mockup's fictive instances, only into an empty database: real instances are never touched.

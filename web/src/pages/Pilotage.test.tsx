@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AValider } from './AValider.js';
 import { Brief } from './Brief.js';
 
 type Call = { url: string; method: string; body: unknown };
@@ -29,35 +28,11 @@ const brief = {
   },
   rdvTenus: { veille: 1, semaine: 5, mois: 17 },
 };
-const propositions = [
-  {
-    id: 'p1',
-    type: 'email.brouillon',
-    contenu: {
-      to: 'h.morvan@ateliers-morvan.fr',
-      objet: 'Votre proposition',
-      corps: '<p>Bonjour Madame Morvan,</p><script>alert(1)</script>',
-      origine: 'Routine quotidienne',
-      controles: ['Pas de réponse au dernier message'],
-    },
-    auteur: 'os',
-    statut: 'proposee',
-    niveau: 'L1',
-    decidePar: null,
-    resultat: null,
-    createdAt: '2026-10-08T06:00:00Z',
-    action: "Créer un brouillon d'email",
-    contact: { id: 'c1', nom: 'Hélène Morvan', entreprise: 'Ateliers Morvan' },
-  },
-];
-
 function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
-  if (url.includes('/decision')) return json({ ...propositions[0], statut: 'appliquee' });
-  if (url.includes('/brief')) return json(brief);
-  return json(propositions);
+  return json(brief);
 }
 
 describe('pilot screens', () => {
@@ -109,33 +84,5 @@ describe('pilot screens', () => {
     render(<Brief slug="simatis" />);
     expect(await screen.findByText('Agenda non connecté')).toBeTruthy();
     expect(screen.queryByText(/RDV tenu/)).toBeNull();
-  });
-
-  it('queue: shows the draft safely and validates it with the edited text', async () => {
-    const { container } = render(<AValider slug="simatis" />);
-    expect(await screen.findByText('Créer le brouillon dans Gmail')).toBeTruthy();
-    expect(container.querySelector('.mail-b')?.innerHTML).toBe('<p>Bonjour Madame Morvan,</p>');
-    expect(screen.getByText('Pas de réponse au dernier message')).toBeTruthy();
-
-    fireEvent.click(screen.getByText('Modifier le texte'));
-    fireEvent.change(screen.getByLabelText('Texte du brouillon'), {
-      target: { value: '<p>Nouveau texte</p>' },
-    });
-    fireEvent.click(screen.getByText('Créer le brouillon dans Gmail'));
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
-    expect(calls.find((c) => c.method === 'POST')).toMatchObject({
-      url: '/api/i/simatis/propositions/p1/decision',
-      body: {
-        decision: 'valider',
-        contenu: { corps: '<p>Nouveau texte</p>', objet: 'Votre proposition' },
-      },
-    });
-  });
-
-  it('queue: discards without content', async () => {
-    render(<AValider slug="simatis" />);
-    fireEvent.click(await screen.findByText('Écarter'));
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
-    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ decision: 'ecarter' });
   });
 });

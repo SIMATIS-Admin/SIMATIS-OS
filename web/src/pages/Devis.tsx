@@ -127,7 +127,7 @@ function Editeur({ slug, d, onChange }: { slug: string; d: DevisItem; onChange: 
                 void transmettreDevis(slug, d.id).then(
                   () =>
                     setMessage(
-                      'Transmission proposée : validez-la dans À valider, c’est un engagement auprès du client.',
+                      'Transmission proposée : validez-la dans l’Inbox, c’est un engagement auprès du client.',
                     ),
                   err,
                 )

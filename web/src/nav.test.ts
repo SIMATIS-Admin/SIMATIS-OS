@@ -5,6 +5,8 @@ import {
   groupInstances,
   isBuilt,
   libelleType,
+  NAV,
+  vueCanonique,
   reorderFavoris,
   toggleFavori,
   type InstanceSummary,
@@ -25,6 +27,21 @@ const inst = (
 });
 
 describe('nav', () => {
+  it('has Inbox in Pilotage instead of À valider', () => {
+    const pilotage = NAV.find((g) => g.title === 'Pilotage');
+    expect(pilotage?.items.find((i) => i.id === 'inbox')).toMatchObject({
+      label: 'Inbox',
+      icon: 'inbox',
+    });
+    expect(allItems().some((i) => i.id === 'validations' || i.label === 'À valider')).toBe(false);
+    expect(isBuilt('inbox')).toBe(true);
+  });
+
+  it('redirects the former validations screen to the Inbox', () => {
+    expect(vueCanonique('validations')).toBe('inbox');
+    expect(vueCanonique('taches')).toBe('taches');
+  });
+
   it('groups instances by type and keeps their order', () => {
     const groups = groupInstances([
       inst('b', 'mandat'),

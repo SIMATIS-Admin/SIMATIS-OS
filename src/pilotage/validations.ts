@@ -1,12 +1,12 @@
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { contacts, entreprises } from '../crm/schema.js';
-import type { Executor } from '../db.js';
+import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { autonomieDef } from '../propositions/autonomie.js';
 import { getPropositionType } from '../propositions/registry.js';
-import { propositions } from '../propositions/schema.js';
+import { propositions, type Proposition } from '../propositions/schema.js';
 import { decide } from '../propositions/service.js';
 import './types-propositions.js';
 
@@ -27,7 +27,7 @@ function actionLibelle(type: string): string | null {
   }
 }
 
-// The "À valider" queue: pending proposals of the instance (or decided ones with "traites"),
+// Proposals queue: pending proposals of the instance (or decided ones with "traites"),
 // with the contact they concern and the autonomy level that sent them here.
 export async function listPropositions(db: Executor, instance: Instance, filtre: Filtre) {
   return withInstance(db, instance.id, async (tx) => {
@@ -45,30 +45,35 @@ export async function listPropositions(db: Executor, instance: Instance, filtre:
       )
       .orderBy(desc(propositions.createdAt))
       .limit(100);
-    const ids = rows
-      .map((r) => (r.contenu as { contactId?: string | null }).contactId)
-      .filter((id): id is string => typeof id === 'string');
-    const liees = ids.length
-      ? await tx
-          .select({ id: contacts.id, nom: contacts.nom, entreprise: entreprises.nom })
-          .from(contacts)
-          .leftJoin(
-            entreprises,
-            and(
-              eq(entreprises.id, contacts.entrepriseId),
-              eq(entreprises.instanceId, currentInstance),
-            ),
-          )
-          .where(and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, ids)))
-      : [];
-    return rows.map((r) => {
-      const contactId = (r.contenu as { contactId?: string | null }).contactId;
-      return {
-        ...r,
-        action: actionLibelle(r.type),
-        contact: liees.find((c) => c.id === contactId) ?? null,
-      };
-    });
+    return enrichirPropositions(tx, rows);
+  });
+}
+
+// Adds what the decision screen shows: the contact concerned and the autonomy action label.
+export async function enrichirPropositions(tx: Tx, rows: Proposition[]) {
+  const ids = rows
+    .map((r) => (r.contenu as { contactId?: string | null }).contactId)
+    .filter((id): id is string => typeof id === 'string');
+  const liees = ids.length
+    ? await tx
+        .select({ id: contacts.id, nom: contacts.nom, entreprise: entreprises.nom })
+        .from(contacts)
+        .leftJoin(
+          entreprises,
+          and(
+            eq(entreprises.id, contacts.entrepriseId),
+            eq(entreprises.instanceId, currentInstance),
+          ),
+        )
+        .where(and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, ids)))
+    : [];
+  return rows.map((r) => {
+    const contactId = (r.contenu as { contactId?: string | null }).contactId;
+    return {
+      ...r,
+      action: actionLibelle(r.type),
+      contact: liees.find((c) => c.id === contactId) ?? null,
+    };
   });
 }
 

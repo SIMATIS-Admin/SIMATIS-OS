@@ -558,6 +558,7 @@
         }
       }
     ],
+    "sujets": [],
     "taches": [
       {
         "opportunite": "o1",
@@ -942,6 +943,30 @@
         }
       }
     ],
+    "sujets": [
+      {
+        "cle": "helioval-mail-1",
+        "type": "mail_a_repondre",
+        "titre": "Répondre à Isabelle Chomel sur le calendrier",
+        "resume": "Elle propose de décaler le démarrage de deux semaines.",
+        "origine": "messagerie",
+        "lien": null,
+        "echeanceJours": 1,
+        "contact": "hc2",
+        "entreprise": "h2"
+      },
+      {
+        "cle": "helioval-cr-1",
+        "type": "compte_rendu",
+        "titre": "Compte rendu de la visite Polytherm",
+        "resume": "Visite de site : besoins confirmés, prochaine étape à fixer.",
+        "origine": "agenda",
+        "lien": null,
+        "echeanceJours": null,
+        "contact": "hc3",
+        "entreprise": "h3"
+      }
+    ],
     "taches": [
       {
         "opportunite": "ho1",
@@ -1142,6 +1167,7 @@
         }
       }
     ],
+    "sujets": [],
     "taches": [
       {
         "opportunite": null,
@@ -1314,6 +1340,74 @@
             "Créneaux vérifiés dans l'agenda"
           ]
         }
+      }
+    ],
+    "sujets": [
+      {
+        "cle": "demo-mail-1",
+        "type": "mail_a_repondre",
+        "titre": "Répondre à Camille Faure sur les volumes",
+        "resume": "Elle demande une estimation des volumes annuels avant de valider le contrat.",
+        "origine": "messagerie",
+        "lien": null,
+        "echeanceJours": -1,
+        "contact": "dc2",
+        "entreprise": "d2"
+      },
+      {
+        "cle": "demo-devis-1",
+        "type": "devis",
+        "titre": "Produire le devis Métallerie Roche",
+        "resume": "Devis d'accompagnement sur six mois, à partir du compte rendu du dernier rendez-vous.",
+        "origine": "cerveau",
+        "lien": null,
+        "echeanceJours": 3,
+        "contact": "dc1",
+        "entreprise": "d1"
+      },
+      {
+        "cle": "demo-diag-1",
+        "type": "diagnostic",
+        "titre": "Remettre le rapport de diagnostic Cartonnages Rival",
+        "resume": "Le diagnostic est fait ; le rapport reste à relire puis à envoyer.",
+        "origine": "cerveau",
+        "lien": null,
+        "echeanceJours": 7,
+        "contact": "dc3",
+        "entreprise": "d3"
+      },
+      {
+        "cle": "demo-cr-1",
+        "type": "compte_rendu",
+        "titre": "Compte rendu du rendez-vous Agro Delta",
+        "resume": "Rendez-vous d'hier : décisions et suites à reporter dans le CRM.",
+        "origine": "agenda",
+        "lien": null,
+        "echeanceJours": null,
+        "contact": "dc2",
+        "entreprise": "d2"
+      },
+      {
+        "cle": "demo-brouillon-1",
+        "type": "brouillon_non_envoye",
+        "titre": "Brouillon de relance non envoyé à Laurent Roche",
+        "resume": "Un brouillon préparé il y a cinq jours attend toujours dans la messagerie.",
+        "origine": "messagerie",
+        "lien": null,
+        "echeanceJours": null,
+        "contact": "dc1",
+        "entreprise": "d1"
+      },
+      {
+        "cle": "demo-autre-1",
+        "type": "autre",
+        "titre": "Mettre à jour la plaquette commerciale",
+        "resume": "Deux références clients sont à ajouter avant le salon.",
+        "origine": "cerveau",
+        "lien": null,
+        "echeanceJours": null,
+        "contact": null,
+        "entreprise": null
       }
     ],
     "taches": []

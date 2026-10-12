@@ -113,6 +113,7 @@ export function EditionTache({
   tache,
   hubspot,
   slug,
+  initial,
   onSave,
   onClose,
 }: {
@@ -120,12 +121,15 @@ export function EditionTache({
   hubspot: boolean;
   // Given for a new activity whose person and deal are chosen here (not from a detail page).
   slug?: string;
+  // New activity prefilled from something to handle (an Inbox subject).
+  initial?: { titre: string; echeance: string | null; contact: { id: string; nom: string } | null };
   onSave: (saisie: Enregistrement) => Promise<void>;
   onClose: () => void;
 }) {
-  const [titre, setTitre] = useState(tache?.titre ?? '');
+  const [titre, setTitre] = useState(tache?.titre ?? initial?.titre ?? '');
+  const echeanceInitiale = tache?.echeance ?? initial?.echeance ?? null;
   const { type, choisi, choisir } = useType(titre, null);
-  const [jour, setJour] = useState(tache?.echeance ? jourParis(tache.echeance) : '');
+  const [jour, setJour] = useState(echeanceInitiale ? jourParis(echeanceInitiale) : '');
   const [avecHeure, setAvecHeure] = useState(tache?.avecHeure ?? false);
   const [heure, setHeure] = useState(
     tache?.echeance && tache.avecHeure ? heureParis(tache.echeance) : '09:00',
@@ -137,7 +141,7 @@ export function EditionTache({
   const [versHubspot, setVersHubspot] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [personne, setPersonne] = useState<Choix>(null);
+  const [personne, setPersonne] = useState<Choix>(initial?.contact ?? null);
   const [affaire, setAffaire] = useState<Choix>(null);
   const chercherPersonne = useCallback(
     (q: string) =>
@@ -165,7 +169,7 @@ export function EditionTache({
     ? null
     : avecHeure
       ? parisVersIso(jour, heure)
-      : memeHeure(tache?.echeance ?? null, jour);
+      : memeHeure(echeanceInitiale, jour);
 
   const submit = () => {
     setBusy(true);

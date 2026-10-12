@@ -121,7 +121,7 @@ export const listTachesOuvertes = (tx: Tx, where: SQL) =>
 
 const vue = async (tx: Tx, id: string) => (await vues(tx, eq(taches.id, id)))[0] ?? null;
 
-async function crmHubspot(tx: Tx) {
+export async function crmHubspot(tx: Tx) {
   const [crm] = await tx
     .select({ fournisseur: connexions.fournisseur, reglages: connexions.reglages })
     .from(connexions)

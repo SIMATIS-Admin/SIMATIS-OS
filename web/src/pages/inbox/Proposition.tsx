@@ -1,17 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import { decider, fetchPropositions, type PropositionItem } from '../api.js';
-import { htmlSur } from '../html.js';
-import { Icon } from '../icons.js';
-import { Gauge, Tip } from './widgets.js';
-
-const FILTRES = [
-  ['tout', 'Tout'],
-  ['brouillon', 'Brouillon'],
-  ['tache', 'Tâche CRM'],
-  ['cerveau', 'Second cerveau'],
-  ['traites', 'Traités'],
-] as const;
-type Filtre = (typeof FILTRES)[number][0];
+import { useEffect, useState } from 'react';
+import type { PropositionItem } from '../../api.js';
+import { htmlSur } from '../../html.js';
+import { Icon } from '../../icons.js';
+import { Gauge, Tip } from '../widgets.js';
 
 const TYPE_LIBELLE: Record<string, string> = {
   'email.brouillon': 'Brouillon',
@@ -38,7 +29,8 @@ function Statut({ p }: { p: PropositionItem }) {
   return <span className="badge">Écarté</span>;
 }
 
-function Detail({
+// A pending proposal of the Inbox ("à valider" subject): its content and the decision buttons.
+export function PropositionDetail({
   p,
   onDecide,
 }: {
@@ -218,88 +210,6 @@ function Detail({
                   : "L'OS n'écrit jamais une note validée : vous la relirez dans le second cerveau."}
             </span>
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function AValider({ slug }: { slug: string }) {
-  const [filtre, setFiltre] = useState<Filtre>('tout');
-  const [list, setList] = useState<PropositionItem[] | null>(null);
-  const [sel, setSel] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    fetchPropositions(slug, filtre).then(setList, (e: unknown) => setMessage(String(e)));
-  }, [slug, filtre]);
-  useEffect(load, [load]);
-
-  const choisi = list?.find((p) => p.id === sel) ?? list?.[0];
-  const decide = (id: string, d: 'valider' | 'ecarter', contenu?: Record<string, unknown>) =>
-    decider(slug, id, d, contenu).then(
-      (p) => {
-        setMessage(
-          p.statut === 'echec'
-            ? `Échec : ${(p.resultat as { erreur?: string } | null)?.erreur ?? ''}`
-            : d === 'ecarter'
-              ? 'Écarté.'
-              : 'Validé.',
-        );
-        setSel(null);
-        load();
-      },
-      (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
-    );
-
-  return (
-    <div className="vq">
-      <div className="panel">
-        <div className="vq-filter">
-          {FILTRES.map(([f, l]) => (
-            <button
-              key={f}
-              className={`chip ${filtre === f ? 'on' : ''}`}
-              onClick={() => setFiltre(f)}
-            >
-              {l}
-              {f === 'tout' && filtre === 'tout' && list ? ` (${list.length})` : ''}
-            </button>
-          ))}
-        </div>
-        <div className="vq-list">
-          {list?.length ? (
-            list.map((p) => (
-              <button
-                key={p.id}
-                className={`vq-item ${p.id === choisi?.id ? 'on' : ''}`}
-                onClick={() => setSel(p.id)}
-              >
-                <div className="row1">
-                  <b>{titre(p)}</b>
-                  <Statut p={p} />
-                </div>
-                <small>
-                  {p.contact?.entreprise ? `${p.contact.entreprise}, ` : ''}
-                  {str(p.contenu.origine) || (p.auteur === 'os' ? "Préparé par l'OS" : p.auteur)}
-                </small>
-              </button>
-            ))
-          ) : (
-            <div className="empty">
-              {filtre === 'traites'
-                ? "Aucune décision prise pour l'instant."
-                : 'Tout est traité. La prochaine routine préparera la suite.'}
-            </div>
-          )}
-        </div>
-      </div>
-      <div>
-        {message && <p className="small muted">{message}</p>}
-        {choisi ? (
-          <Detail p={choisi} onDecide={(d, c) => void decide(choisi.id, d, c)} />
-        ) : (
-          <div className="panel empty">Sélectionnez un élément à gauche.</div>
         )}
       </div>
     </div>

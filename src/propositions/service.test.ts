@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
@@ -7,6 +8,7 @@ import { createInstance } from '../instances/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
 import { niveauAction, setNiveau } from './autonomie.js';
 import { registerPropositionType, type ApplyCtx } from './registry.js';
+import { sujets } from '../inbox/schema.js';
 import { canWriteReal, decide, propose, PropositionRefusee } from './service.js';
 
 type Note = { texte: string };
@@ -50,6 +52,48 @@ describe('propositions and autonomy', () => {
     applied.length = 0;
     failNext = false;
     await inA((tx) => setNiveau(tx, 'brouillon', 'L1', 'pilote'));
+  });
+
+  const sujetDe = async (propositionId: string) =>
+    (await inA((tx) => tx.select().from(sujets).where(eq(sujets.propositionId, propositionId))))[0];
+
+  it('creates an a_valider subject with a pending proposal', async () => {
+    const p = await inA((tx) =>
+      propose(tx, ctxA(), { type: 'test.note', contenu: { texte: 'Relancer' }, auteur: 'os' }),
+    );
+    expect(await sujetDe(p.id)).toMatchObject({
+      type: 'a_valider',
+      titre: 'test.note',
+      origine: 'os',
+      statut: 'a_traiter',
+      source: 'os',
+      sourceId: p.id,
+    });
+  });
+
+  it('creates no subject for a proposal applied at once (L3)', async () => {
+    await inA((tx) => setNiveau(tx, 'brouillon', 'L3', 'pilote'));
+    const p = await inA((tx) =>
+      propose(tx, ctxA(), { type: 'test.note', contenu: { texte: 'Seul' }, auteur: 'agent:test' }),
+    );
+    expect(await sujetDe(p.id)).toBeUndefined();
+  });
+
+  it('marks the subject traite when the proposal is validated, rejected, or fails', async () => {
+    for (const [decision, echec] of [
+      ['valider', false],
+      ['ecarter', false],
+      ['valider', true],
+    ] as const) {
+      const p = await inA((tx) =>
+        propose(tx, ctxA(), { type: 'test.note', contenu: { texte: 'Cas' }, auteur: 'os' }),
+      );
+      failNext = echec;
+      await inA((tx) => decide(tx, ctxA(), p.id, { decision, par: 'pilote' }));
+      const sujet = await sujetDe(p.id);
+      expect(sujet).toMatchObject({ statut: 'traite', traitePar: 'pilote' });
+      expect(sujet?.traiteAt).toBeInstanceOf(Date);
+    }
   });
 
   it('keeps an L1 proposal waiting for the pilot, without applying it', async () => {

@@ -208,7 +208,7 @@ registerTool({
 registerTool({
   name: 'proposer_brouillon',
   description:
-    "Propose un brouillon d'email (HTML, sans signature) pour une tâche ou un contact. Il attend la validation du pilote dans À valider, puis devient un brouillon Gmail : jamais d'envoi.",
+    "Propose un brouillon d'email (HTML, sans signature) pour une tâche ou un contact. Il attend la validation du pilote dans l'Inbox, puis devient un brouillon Gmail : jamais d'envoi.",
   input: z.object({
     tacheId: z.uuid().optional(),
     contactId: z.uuid().optional(),

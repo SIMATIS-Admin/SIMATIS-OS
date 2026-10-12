@@ -288,6 +288,32 @@ export type PropositionItem = {
   contact: { id: string; nom: string; entreprise: string | null } | null;
 };
 
+export type TypeSujet =
+  | 'mail_a_repondre'
+  | 'devis'
+  | 'diagnostic'
+  | 'compte_rendu'
+  | 'brouillon_non_envoye'
+  | 'a_valider'
+  | 'autre';
+export type SujetVue = {
+  id: string;
+  type: TypeSujet;
+  titre: string;
+  resume: string | null;
+  origine: 'messagerie' | 'agenda' | 'cerveau' | 'os';
+  lien: string | null;
+  echeance: string | null;
+  statut: 'a_traiter' | 'tache' | 'traite';
+  tacheId: string | null;
+  createdAt: string;
+  traiteAt: string | null;
+  contact: { id: string; nom: string } | null;
+  entreprise: { id: string; nom: string } | null;
+  instance: { slug: string; nom: string; couleur: string | null };
+  proposition: PropositionItem | null;
+};
+
 export const fetchBrief = (slug: string) => getJson<Brief>(inst(slug, 'brief'));
 export type TacheVue = {
   id: string;
@@ -344,8 +370,18 @@ export const updateTache = (slug: string, id: string, patch: TacheSaisie) =>
     inst(slug, `taches/${encodeURIComponent(id)}`),
     patch,
   );
-export const fetchPropositions = (slug: string, filtre: string) =>
-  getJson<PropositionItem[]>(inst(slug, `propositions?filtre=${encodeURIComponent(filtre)}`));
+export const fetchInbox = (slug: string, filtre: string) =>
+  getJson<SujetVue[]>(inst(slug, `inbox?filtre=${encodeURIComponent(filtre)}`));
+export const fetchCompteurInbox = (slug: string) =>
+  getJson<{ n: number }>(inst(slug, 'inbox/compteur')).then((r) => r.n);
+const sujet = (slug: string, id: string, action: string) =>
+  inst(slug, `sujets/${encodeURIComponent(id)}/${action}`);
+export const marquerSujetTraite = (slug: string, id: string) =>
+  sendJson<SujetVue>('POST', sujet(slug, id, 'traite'), {});
+export const remettreSujet = (slug: string, id: string) =>
+  sendJson<SujetVue>('POST', sujet(slug, id, 'a-traiter'), {});
+export const sujetEnTache = (slug: string, id: string, saisie: TacheSaisie) =>
+  sendJson<SujetVue | SimulationTache>('POST', sujet(slug, id, 'tache'), saisie);
 export const decider = (
   slug: string,
   id: string,
