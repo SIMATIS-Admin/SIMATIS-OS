@@ -66,6 +66,9 @@ describe('Infomaniak mailbox over IMAP', () => {
   const brancher = (body: Record<string, unknown>) =>
     app.inject({ method: 'POST', url: '/api/i/mandat-imap/connexions/infomaniak', body });
 
+  const apercu = () =>
+    app.inject({ method: 'POST', url: '/api/i/mandat-imap/connexions/messagerie/apercu' });
+
   beforeAll(async () => {
     imap = await startImap();
     t = await setupTestApp();
@@ -254,6 +257,7 @@ describe('Infomaniak mailbox over IMAP', () => {
     expect(refuse.json<{ error: string }>().error).toMatch(/refuse cette adresse/);
     expect(await loadInstanceSecrets(secretsDir, 'mandat-imap')).not.toHaveProperty('IMAP_USER');
     expect(await withInstance(t.app.db, a.id, (tx) => getConnector(tx, 'messagerie'))).toBeNull();
+    expect((await apercu()).statusCode).toBe(400);
   });
 
   it('connects the mailbox from Paramètres: secret kept on disk, never sent back', async () => {
@@ -282,6 +286,22 @@ describe('Infomaniak mailbox over IMAP', () => {
       url: '/api/i/mandat-imap/connexions/messagerie/sync',
     });
     expect(sync.statusCode, sync.body).toBe(200);
+  });
+
+  it('shows the pilot what the OS reads in the mailbox, on demand', async () => {
+    const res = await apercu();
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({
+      compte: BOITE.user,
+      jours: 14,
+      fils: 2,
+      brouillons: 2,
+      derniers: [
+        { de: 'lea@autre.example', objet: 'Question' },
+        { de: BOITE.user, objet: 'Re: Demande de devis' },
+      ],
+    });
+    expect(res.body).not.toContain('avez-vous');
   });
 
   it('keeps the Infomaniak mailbox when a Google account brings the agenda', async () => {

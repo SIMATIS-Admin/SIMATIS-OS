@@ -61,6 +61,7 @@ import {
   googleWebFlow,
 } from '../connexions/brancher.js';
 import type { FetchLike } from '../connecteurs/google/oauth.js';
+import { MESSAGERIES, messagerieDe } from '../connecteurs/messagerie.js';
 import { loadInstanceSecrets, type CompteImap } from '../secrets.js';
 import { getFavoris, getOptions, setFavoris, setOptions } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
@@ -1019,6 +1020,7 @@ export function registerApi(
 
   // An Infomaniak mailbox: the address and its device password are checked over IMAP, then
   // saved in the instance's secrets; never sent back.
+  const APERCU_JOURS = 14;
   const infomaniakSchema = z.object({
     email: z.string().min(1).max(320),
     motDePasse: z.string().min(1).max(500),
@@ -1039,6 +1041,43 @@ export function registerApi(
         throw error;
       }
       return { ok: true };
+    }),
+  );
+
+  // « Tester la lecture » : reads the mailbox once and shows the pilot what the OS sees. Nothing
+  // is stored.
+  app.post<SlugParams>(
+    '/api/i/:slug/connexions/messagerie/apercu',
+    onInstance<SlugParams>(async (i, _request, reply) => {
+      const [c] = await withInstance(db, i.id, (tx) =>
+        tx
+          .select()
+          .from(connexions)
+          .where(
+            and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'messagerie')),
+          ),
+      );
+      if (!c || !MESSAGERIES.includes(c.fournisseur)) {
+        return reply.code(400).send({ error: "Aucune boîte mail n'est branchée." });
+      }
+      const boite = messagerieDe(c.fournisseur, {
+        instance: i,
+        secrets: await loadInstanceSecrets(secretsDir, i.slug),
+      });
+      try {
+        const fils = await boite.filsRecents(APERCU_JOURS);
+        return {
+          compte: await boite.compte(),
+          jours: APERCU_JOURS,
+          fils: fils.length,
+          brouillons: (await boite.brouillons()).length,
+          derniers: fils.slice(0, 3).map(({ de, objet, date }) => ({ de, objet, date })),
+        };
+      } catch (error) {
+        return reply
+          .code(502)
+          .send({ error: error instanceof Error ? error.message : String(error) });
+      }
     }),
   );
 

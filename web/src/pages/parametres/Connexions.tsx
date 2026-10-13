@@ -8,6 +8,8 @@ import {
   saveReglages,
   saveReglagesCrm,
   syncConnexion,
+  testerMessagerie,
+  type ApercuMessagerie,
   type ConnexionInfo,
   type ConnexionsReponse,
   type ReglagesCrm,
@@ -540,6 +542,53 @@ function Messagerie({
         </p>
       )}
       {error && <p className="small muted">{error}</p>}
+      <TesterLecture slug={slug} />
+    </div>
+  );
+}
+
+function TesterLecture({ slug }: { slug: string }) {
+  const [busy, setBusy] = useState(false);
+  const [apercu, setApercu] = useState<ApercuMessagerie | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const tester = () => {
+    setBusy(true);
+    setError(null);
+    testerMessagerie(slug)
+      .then(setApercu, (e: unknown) => {
+        setApercu(null);
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+      <div>
+        <button className="btn" disabled={busy} onClick={tester}>
+          {busy ? 'Lecture…' : 'Tester la lecture'}
+        </button>
+      </div>
+      {apercu && (
+        <>
+          <p className="small" style={{ margin: 0 }}>
+            Boîte {apercu.compte} : {apercu.fils} {apercu.fils > 1 ? 'fils reçus' : 'fil reçu'} sur{' '}
+            {apercu.jours} jours, {apercu.brouillons}{' '}
+            {apercu.brouillons > 1 ? 'brouillons' : 'brouillon'}.
+          </p>
+          {apercu.derniers.map((m, n) => (
+            <p key={n} className="small muted" style={{ margin: 0 }}>
+              {m.date ? `${new Date(m.date).toLocaleDateString('fr-FR')} · ` : ''}
+              {m.de ?? 'Expéditeur inconnu'} · {m.objet ?? '(sans objet)'}
+            </p>
+          ))}
+          <Verrou>Lecture seule : rien n'est copié ni modifié dans la boîte.</Verrou>
+        </>
+      )}
+      {error && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
