@@ -65,8 +65,9 @@ export async function writeGoogleAppSecret(dir: string, secret: string): Promise
 }
 
 // Reads secrets/instances/<slug>.env, plus the Google refresh token written by google:connect
-// (<slug>.google.json) as GOOGLE_REFRESH_TOKEN and the IMAP mailbox (<slug>.imap.json) as IMAP_*. Without its own Google client, the instance uses
-// the OS's one. Error messages never contain a secret value.
+// (<slug>.google.json) as GOOGLE_REFRESH_TOKEN and the IMAP mailbox (<slug>.imap.json) as IMAP_*.
+// Without its own Google client, the instance uses the OS's one. Error messages never contain a
+// secret value.
 export async function loadInstanceSecrets(
   dir: string,
   slug: string,

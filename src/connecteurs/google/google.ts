@@ -78,7 +78,8 @@ export function mimeBrut(
 ) {
   const lines = [
     ...entetes,
-    `To: ${to}`,
+    // One line only: a line break in an address would add a header of its own (a hidden Bcc).
+    `To: ${to.replace(/[\r\n]+/g, ' ')}`,
     `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset="UTF-8"',
