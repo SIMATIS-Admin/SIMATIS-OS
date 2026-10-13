@@ -49,16 +49,23 @@ export type TestApp = {
   drop: () => Promise<void>;
 };
 
+// A connection still closing when its database is dropped (WITH FORCE) reports the cut-off: without
+// a listener, that late error fails the whole run although every test passed.
+const quiet = (pool: pg.Pool) =>
+  pool.on('connect', (client) => client.on('error', () => undefined));
+
 // Fresh database, migrated, with an app role subject to Row-Level Security.
 export async function setupTestApp(): Promise<TestApp> {
   const testDb = await createTestDatabase();
   const owner = createDb(testDb.url);
+  quiet(owner.pool);
   await runMigrations(owner.db);
   const role = testRoleName(testDb);
   const password = randomBytes(12).toString('hex');
   await ensureAppRole(owner.pool, { role, password });
   const appUrl = appDatabaseUrl(testDb.url, role, password);
   const app = createDb(appUrl);
+  quiet(app.pool);
   return {
     owner,
     app,

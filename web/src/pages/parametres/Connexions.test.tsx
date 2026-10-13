@@ -83,6 +83,15 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       ),
     );
   }
+  if (url.endsWith('/messagerie/apercu')) {
+    return json({
+      compte: 'marc@pilote.example',
+      jours: 14,
+      fils: 2,
+      brouillons: 1,
+      derniers: [{ de: 'lea@autre.example', objet: 'Question', date: '2026-10-10T08:00:00Z' }],
+    });
+  }
   if (url === '/api/google/secret') return json({ ok: true });
   if (url.endsWith('/google/start')) return json({ url: 'https://accounts.example/consent' });
   if (method === 'POST') return json({ lus: 4, crees: 1, maj: 3 });
@@ -244,5 +253,13 @@ describe('Paramètres > Connexions', () => {
     expect(screen.getByText(/vous envoyez depuis votre messagerie Infomaniak/)).toBeTruthy();
     expect(screen.getByText(/l'agenda se branche à part/)).toBeTruthy();
     expect(screen.getByText('Connecter le compte Google')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Tester la lecture'));
+    expect(
+      await screen.findByText(
+        /Boîte marc@pilote.example : 2 fils reçus sur 14 jours, 1 brouillon\./,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(/lea@autre.example · Question/)).toBeTruthy();
   });
 });

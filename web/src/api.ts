@@ -188,6 +188,15 @@ export const brancherHubspot = (
 ) => sendJson<{ ok: true }>('POST', inst(slug, 'connexions/hubspot'), { token, mode });
 export const brancherInfomaniak = (slug: string, email: string, motDePasse: string) =>
   sendJson<{ ok: true }>('POST', inst(slug, 'connexions/infomaniak'), { email, motDePasse });
+export type ApercuMessagerie = {
+  compte: string;
+  jours: number;
+  fils: number;
+  brouillons: number;
+  derniers: { de: string | null; objet: string | null; date: string | null }[];
+};
+export const testerMessagerie = (slug: string) =>
+  sendJson<ApercuMessagerie>('POST', inst(slug, 'connexions/messagerie/apercu'), {});
 export const enregistrerSecretGoogle = (secret: string) =>
   sendJson<{ ok: true }>('PUT', '/api/google/secret', { secret });
 export const demarrerGoogle = (slug: string) =>
