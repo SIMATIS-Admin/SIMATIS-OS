@@ -589,6 +589,38 @@ function Agenda({ slug, c, onChange }: { slug: string; c: ConnexionInfo; onChang
   );
 }
 
+function ChoixMessagerie({
+  slug,
+  clientDisponible,
+  onChange,
+}: {
+  slug: string;
+  clientDisponible: boolean;
+  onChange: () => void;
+}) {
+  const [boite, setBoite] = useState<'google' | 'infomaniak'>('google');
+  return (
+    <>
+      <div className="seg" style={{ alignSelf: 'flex-start' }}>
+        <button className={boite === 'google' ? 'on' : ''} onClick={() => setBoite('google')}>
+          Boîte Google
+        </button>
+        <button
+          className={boite === 'infomaniak' ? 'on' : ''}
+          onClick={() => setBoite('infomaniak')}
+        >
+          Boîte Infomaniak
+        </button>
+      </div>
+      {boite === 'google' ? (
+        <ConnecterGoogle slug={slug} clientDisponible={clientDisponible} onChange={onChange} />
+      ) : (
+        <BrancherInfomaniak slug={slug} onDone={onChange} />
+      )}
+    </>
+  );
+}
+
 export function Connexions({ slug }: { slug: string }) {
   const [data, setData] = useState<ConnexionsReponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -664,17 +696,11 @@ export function Connexions({ slug }: { slug: string }) {
                 {c?.fournisseur === 'fake' ? null : kind === 'crm' ? (
                   <BrancherHubspot slug={slug} onDone={load} />
                 ) : kind === 'messagerie' ? (
-                  <>
-                    <ConnecterGoogle
-                      slug={slug}
-                      clientDisponible={data.googleClientDisponible}
-                      onChange={load}
-                    />
-                    <p className="small muted" style={{ margin: 0 }}>
-                      Ou, pour une boîte hébergée chez Infomaniak :
-                    </p>
-                    <BrancherInfomaniak slug={slug} onDone={load} />
-                  </>
+                  <ChoixMessagerie
+                    slug={slug}
+                    clientDisponible={data.googleClientDisponible}
+                    onChange={load}
+                  />
                 ) : infomaniak ? (
                   <ConnecterGoogle
                     slug={slug}
