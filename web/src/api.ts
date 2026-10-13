@@ -307,7 +307,7 @@ export type SujetVue = {
   type: TypeSujet;
   titre: string;
   resume: string | null;
-  origine: 'messagerie' | 'agenda' | 'cerveau' | 'os';
+  origine: 'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site';
   lien: string | null;
   echeance: string | null;
   statut: 'a_traiter' | 'tache' | 'traite';

@@ -12,7 +12,8 @@ export const TYPES_SUJET = [
   'a_valider',
   'autre',
 ] as const;
-export const ORIGINES_SUJET = ['messagerie', 'agenda', 'cerveau', 'os'] as const;
+// `site`: a request left on the public website's contact form.
+export const ORIGINES_SUJET = ['messagerie', 'agenda', 'cerveau', 'os', 'site'] as const;
 export const STATUTS_SUJET = ['a_traiter', 'tache', 'traite'] as const;
 
 export type TypeSujet = (typeof TYPES_SUJET)[number];

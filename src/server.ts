@@ -4,6 +4,7 @@ import { createDb } from './db.js';
 import './connexions/index.js';
 import { startScheduler } from './connexions/service.js';
 import { startPlanification } from './routines/planification.js';
+import { startReleveSite } from './site/releve.js';
 import { appDatabaseUrl, ensureAppRole, lectureRoleOf } from './db/roles.js';
 import { seedDemoIfEmpty } from './demo/seed.js';
 import { runMigrations } from './migrate.js';
@@ -50,6 +51,7 @@ async function prepareDatabase(): Promise<void> {
 
 let stopScheduler = () => {};
 let stopPlanification = () => {};
+let stopReleveSite = () => {};
 try {
   await prepareDatabase();
   await app.listen({ host: config.host, port: config.port });
@@ -61,6 +63,15 @@ try {
   stopPlanification = startPlanification(db, {
     onError: (err) => app.log.warn({ err }, 'routine planning pass failed'),
   });
+  if (config.site) {
+    stopReleveSite = startReleveSite(db, {
+      ...config.site,
+      onResult: (r) => {
+        if (r.recues > 0) app.log.info(r, 'website contact requests pulled');
+      },
+      onError: (err) => app.log.warn({ err }, 'website contact pass failed'),
+    });
+  }
 } catch (err) {
   app.log.fatal({ err }, 'startup failed');
   await pool.end();
@@ -72,6 +83,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     app.log.info({ signal }, 'shutting down');
     stopScheduler();
     stopPlanification();
+    stopReleveSite();
     void app
       .close()
       .then(() => pool.end())
