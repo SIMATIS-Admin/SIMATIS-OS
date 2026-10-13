@@ -221,7 +221,11 @@ describe('Paramètres > Connexions', () => {
 
   it('connects an Infomaniak mailbox, shows a refusal, then offers Google for the agenda', async () => {
     render(<Connexions slug="helioval" />);
-    const adresse = await screen.findByPlaceholderText('prenom@exemple.fr');
+    expect(await screen.findByText('Connecter le compte Google')).toBeTruthy();
+    expect(screen.queryByPlaceholderText('prenom@exemple.fr')).toBeNull();
+    fireEvent.click(screen.getByText('Boîte Infomaniak'));
+    expect(screen.queryByText('Connecter le compte Google')).toBeNull();
+    const adresse = screen.getByPlaceholderText('prenom@exemple.fr');
     const motDePasse = screen.getByLabelText(/Mot de passe d'appareil/);
     const bouton = screen.getByText<HTMLButtonElement>('Vérifier et brancher la boîte Infomaniak');
     expect(bouton.disabled).toBe(true);
