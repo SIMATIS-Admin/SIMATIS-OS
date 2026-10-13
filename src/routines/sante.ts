@@ -1,4 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
+import { MESSAGERIES } from '../connecteurs/messagerie.js';
 import { connexions } from '../connexions/schema.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -18,7 +19,7 @@ export type Etat = 'ok' | 'attention' | 'manque';
 export type Controle = { id: string; libelle: string; etat: Etat; detail: string; action?: string };
 
 const NOM_CONNEXION = { messagerie: 'Messagerie', agenda: 'Agenda' } as const;
-const FOURNISSEUR = { messagerie: 'gmail', agenda: 'google-agenda' } as const;
+const FOURNISSEURS = { messagerie: MESSAGERIES, agenda: ['google-agenda'] };
 
 const depuis = (date: Date, maintenant: Date) => {
   const min = Math.round((maintenant.getTime() - date.getTime()) / 60_000);
@@ -57,7 +58,7 @@ export async function santeRoutines(db: Executor, instance: Instance, maintenant
       const c = conn.find((x) => x.kind === kind);
       if (!c || c.etat === 'non_configuree') return false;
       if (c.fournisseur === 'fake') return instance.type === 'prospect';
-      return c.fournisseur === FOURNISSEUR[kind] && c.etat !== 'erreur';
+      return FOURNISSEURS[kind].includes(c.fournisseur) && c.etat !== 'erreur';
     };
 
     const executeur: Controle =

@@ -186,6 +186,8 @@ export const brancherHubspot = (
   token: string,
   mode: 'standard' | 'degrade' = 'standard',
 ) => sendJson<{ ok: true }>('POST', inst(slug, 'connexions/hubspot'), { token, mode });
+export const brancherInfomaniak = (slug: string, email: string, motDePasse: string) =>
+  sendJson<{ ok: true }>('POST', inst(slug, 'connexions/infomaniak'), { email, motDePasse });
 export const enregistrerSecretGoogle = (secret: string) =>
   sendJson<{ ok: true }>('PUT', '/api/google/secret', { secret });
 export const demarrerGoogle = (slug: string) =>

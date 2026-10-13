@@ -1,7 +1,8 @@
 import { and, eq, gte, isNull, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import { creneauxLibres, zoned, type CreneauxOptions } from '../connecteurs/google/creneaux.js';
-import { freeBusy, historique } from '../connecteurs/google/google.js';
+import { freeBusy } from '../connecteurs/google/google.js';
+import { MESSAGERIES, messagerieDe } from '../connecteurs/messagerie.js';
 import { connexions, type Kind } from '../connexions/schema.js';
 import { contacts, entreprises, opportunites, taches } from '../crm/schema.js';
 import { currentInstance } from '../db/columns.js';
@@ -18,9 +19,9 @@ import { cleOf, getRoutine, noterEtape, RoutineArretee, terminerExecution } from
 
 const FUSEAU = 'Europe/Paris';
 const NOMS: Record<Kind, string> = { crm: 'CRM', messagerie: 'Messagerie', agenda: 'Agenda' };
-const FOURNISSEUR: Partial<Record<Kind, string>> = {
-  messagerie: 'gmail',
-  agenda: 'google-agenda',
+const FOURNISSEURS: Partial<Record<Kind, string[]>> = {
+  messagerie: MESSAGERIES,
+  agenda: ['google-agenda'],
 };
 const execution = z.uuid().optional().describe("Identifiant de l'exécution de routine en cours");
 
@@ -32,7 +33,11 @@ export async function connexion(ctx: ToolCtx, kind: Kind, executionId?: string) 
     .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, kind)));
   // A demo (prospect) instance runs on fictive tools: empty history, a free agenda.
   const fictif = c?.fournisseur === 'fake' && ctx.instance.type === 'prospect';
-  if (!c || c.etat === 'non_configuree' || (c.fournisseur !== FOURNISSEUR[kind] && !fictif)) {
+  if (
+    !c ||
+    c.etat === 'non_configuree' ||
+    (!FOURNISSEURS[kind]?.includes(c.fournisseur) && !fictif)
+  ) {
     if (!executionId) throw new Error(`${NOMS[kind]} non configurée pour ${ctx.instance.nom}.`);
     throw new RoutineArretee(
       `${NOMS[kind]} non configurée pour ${ctx.instance.nom} : la routine s'arrête ici.`,
@@ -152,7 +157,7 @@ registerTool({
       .from(contacts)
       .where(and(eq(contacts.instanceId, currentInstance), eq(contacts.id, contactId)));
     if (!contact?.email || c.fournisseur === 'fake') return [];
-    return historique(await google(ctx), contact.email, {
+    return messagerieDe(c.fournisseur, await google(ctx)).historique(contact.email, {
       mois: typeof c.reglages.historiqueMois === 'number' ? c.reglages.historiqueMois : 12,
       complet: c.reglages.contenu === 'complet',
     });
@@ -210,7 +215,7 @@ registerTool({
 registerTool({
   name: 'proposer_brouillon',
   description:
-    "Propose un brouillon d'email (HTML, sans signature) pour une tâche ou un contact. Il attend la validation du pilote dans l'Inbox, puis devient un brouillon Gmail : jamais d'envoi.",
+    "Propose un brouillon d'email (HTML, sans signature) pour une tâche ou un contact. Il attend la validation du pilote dans l'Inbox, puis devient un brouillon dans la boîte mail de l'instance : jamais d'envoi.",
   input: z.object({
     tacheId: z.uuid().optional(),
     contactId: z.uuid().optional(),

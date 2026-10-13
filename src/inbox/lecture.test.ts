@@ -65,6 +65,17 @@ describe('Inbox : sélection des lectures', () => {
     });
   });
 
+  it('links to the mailbox that holds the thread when it is not Gmail', () => {
+    const [m] = mailsARepondre(
+      [fil('paul@client.example', 'Mon, 5 Oct 2026 09:00:00 +0200', { threadId: 't1' })],
+      MOI,
+      annuaire,
+      MERCREDI,
+      (id) => `https://webmail.example/${id}`,
+    );
+    expect(m?.lien).toBe('https://webmail.example/t1');
+  });
+
   it('drops a thread whose last message is mine', () => {
     expect(
       mailsARepondre(

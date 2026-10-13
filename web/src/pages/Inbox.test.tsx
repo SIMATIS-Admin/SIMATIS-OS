@@ -251,14 +251,14 @@ describe('Inbox screen', () => {
   it('shows the proposal safely and validates it with the edited text', async () => {
     const { container } = render(<Inbox slug="simatis" />);
     fireEvent.click((await screen.findAllByText('Votre proposition'))[0] as HTMLElement);
-    expect(await screen.findByText('Créer le brouillon dans Gmail')).toBeTruthy();
+    expect(await screen.findByText('Créer le brouillon dans la boîte mail')).toBeTruthy();
     expect(container.querySelector('.mail-b')?.innerHTML).toBe('<p>Bonjour Madame Morvan,</p>');
     expect(screen.getByText('Pas de réponse au dernier message')).toBeTruthy();
     fireEvent.click(screen.getByText('Modifier le texte'));
     fireEvent.change(screen.getByLabelText('Texte du brouillon'), {
       target: { value: '<p>Nouveau texte</p>' },
     });
-    fireEvent.click(screen.getByText('Créer le brouillon dans Gmail'));
+    fireEvent.click(screen.getByText('Créer le brouillon dans la boîte mail'));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]).toMatchObject({
       url: '/api/i/simatis/propositions/p1/decision',

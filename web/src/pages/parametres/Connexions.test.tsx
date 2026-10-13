@@ -8,6 +8,7 @@ let calls: Call[] = [];
 let tokenPresent = true;
 let avecGoogle = false;
 let clientDisponible = true;
+let avecInfomaniak = false;
 let degrade = false;
 
 const reponse = () => ({
@@ -35,6 +36,19 @@ const reponse = () => ({
           },
         ]
       : []),
+    ...(avecInfomaniak
+      ? [
+          {
+            kind: 'messagerie',
+            fournisseur: 'infomaniak',
+            etat: 'ok',
+            reglages: { historiqueMois: 12, contenu: 'extraits' },
+            derniereSynchro: null,
+            derniereErreur: null,
+            secret: { nom: 'IMAP_PASSWORD', present: true },
+          },
+        ]
+      : []),
   ],
   options: {
     objets: ['entreprises', 'contacts', 'transactions', 'taches'],
@@ -59,6 +73,16 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       }),
     );
   }
+  if (url.endsWith('/connexions/infomaniak')) {
+    const ok = (calls.at(-1)?.body as { motDePasse: string }).motDePasse === 'bon-fictif';
+    if (ok) avecInfomaniak = true;
+    return Promise.resolve(
+      new Response(
+        JSON.stringify(ok ? { ok: true } : { error: 'La boîte mail refuse ce mot de passe' }),
+        { status: ok ? 200 : 400 },
+      ),
+    );
+  }
   if (url === '/api/google/secret') return json({ ok: true });
   if (url.endsWith('/google/start')) return json({ url: 'https://accounts.example/consent' });
   if (method === 'POST') return json({ lus: 4, crees: 1, maj: 3 });
@@ -72,6 +96,7 @@ describe('Paramètres > Connexions', () => {
     tokenPresent = true;
     avecGoogle = false;
     clientDisponible = true;
+    avecInfomaniak = false;
     degrade = false;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
@@ -192,5 +217,28 @@ describe('Paramètres > Connexions', () => {
       method: 'PUT',
       body: { secret: 'GOCSPX-fictif-0000' },
     });
+  });
+
+  it('connects an Infomaniak mailbox, shows a refusal, then offers Google for the agenda', async () => {
+    render(<Connexions slug="helioval" />);
+    const adresse = await screen.findByPlaceholderText('prenom@exemple.fr');
+    const motDePasse = screen.getByLabelText(/Mot de passe d'appareil/);
+    const bouton = screen.getByText<HTMLButtonElement>('Vérifier et brancher la boîte Infomaniak');
+    expect(bouton.disabled).toBe(true);
+    fireEvent.change(adresse, { target: { value: 'marc@pilote.example' } });
+    fireEvent.change(motDePasse, { target: { value: 'faux' } });
+    fireEvent.click(bouton);
+    expect(await screen.findByText(/refuse ce mot de passe/)).toBeTruthy();
+
+    fireEvent.change(motDePasse, { target: { value: 'bon-fictif' } });
+    fireEvent.click(bouton);
+    expect(await screen.findByText('Infomaniak')).toBeTruthy();
+    expect(calls.filter((c) => c.url.endsWith('/connexions/infomaniak')).at(-1)).toMatchObject({
+      method: 'POST',
+      body: { email: 'marc@pilote.example', motDePasse: 'bon-fictif' },
+    });
+    expect(screen.getByText(/vous envoyez depuis votre messagerie Infomaniak/)).toBeTruthy();
+    expect(screen.getByText(/l'agenda se branche à part/)).toBeTruthy();
+    expect(screen.getByText('Connecter le compte Google')).toBeTruthy();
   });
 });

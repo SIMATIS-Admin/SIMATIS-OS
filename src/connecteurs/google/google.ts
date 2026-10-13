@@ -71,18 +71,29 @@ export function sansSignature(html: string): string {
 const encodeHeader = (value: string) =>
   /^[\x20-\x7e]*$/.test(value) ? value : `=?UTF-8?B?${Buffer.from(value).toString('base64')}?=`;
 
-export function mimeMessage({ to, subject, html }: { to: string; subject: string; html: string }) {
+// The raw message, with any extra header lines (From, Date…) a mailbox other than Gmail needs.
+export function mimeBrut(
+  { to, subject, html }: { to: string; subject: string; html: string },
+  entetes: string[] = [],
+) {
   const lines = [
+    ...entetes,
     `To: ${to}`,
     `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset="UTF-8"',
     'Content-Transfer-Encoding: base64',
     '',
-    Buffer.from(sansSignature(html)).toString('base64'),
+    // Mail servers cut lines beyond 998 characters: base64 goes 76 per line.
+    ...(Buffer.from(sansSignature(html))
+      .toString('base64')
+      .match(/.{1,76}/g) ?? []),
   ];
-  return Buffer.from(lines.join('\r\n')).toString('base64url');
+  return lines.join('\r\n');
 }
+
+export const mimeMessage = (draft: { to: string; subject: string; html: string }) =>
+  Buffer.from(mimeBrut(draft)).toString('base64url');
 
 // Draft in the instance's own Gmail, never sent: Marc reviews and sends it himself.
 export async function createDraft(

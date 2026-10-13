@@ -54,9 +54,14 @@ import {
 } from '../crm/pipeline.js';
 import { connexions } from '../connexions/schema.js';
 import { syncNow } from '../connexions/service.js';
-import { BranchementRefuse, brancherHubspot, googleWebFlow } from '../connexions/brancher.js';
+import {
+  BranchementRefuse,
+  brancherHubspot,
+  brancherInfomaniak,
+  googleWebFlow,
+} from '../connexions/brancher.js';
 import type { FetchLike } from '../connecteurs/google/oauth.js';
-import { loadInstanceSecrets } from '../secrets.js';
+import { loadInstanceSecrets, type CompteImap } from '../secrets.js';
 import { getFavoris, getOptions, setFavoris, setOptions } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
 import {
@@ -161,11 +166,13 @@ export type ApiDeps = {
   secretsDir: string;
   realWrites: boolean;
   googleFetch?: FetchLike | undefined;
+  // Another IMAP server than Infomaniak's (tests).
+  imapServeur?: Pick<CompteImap, 'host' | 'port' | 'secure'> | undefined;
 };
 
 export function registerApi(
   app: FastifyInstance,
-  { db, secretsDir, realWrites, googleFetch }: ApiDeps,
+  { db, secretsDir, realWrites, googleFetch, imapServeur }: ApiDeps,
 ): void {
   const connexionDeps = { secretsDir, realWrites };
   const google = googleWebFlow({
@@ -948,6 +955,7 @@ export function registerApi(
     hubspot: 'HUBSPOT_TOKEN',
     gmail: 'GOOGLE_REFRESH_TOKEN',
     'google-agenda': 'GOOGLE_REFRESH_TOKEN',
+    infomaniak: 'IMAP_PASSWORD',
   };
   app.get<SlugParams>(
     '/api/i/:slug/connexions',
@@ -1005,6 +1013,31 @@ export function registerApi(
       syncNow(db, i.slug, 'crm', connexionDeps).catch((err: unknown) =>
         request.log.warn({ err }, 'first HubSpot sync failed'),
       );
+      return { ok: true };
+    }),
+  );
+
+  // An Infomaniak mailbox: the address and its device password are checked over IMAP, then
+  // saved in the instance's secrets; never sent back.
+  const infomaniakSchema = z.object({
+    email: z.string().min(1).max(320),
+    motDePasse: z.string().min(1).max(500),
+  });
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/connexions/infomaniak',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = infomaniakSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'Adresse ou mot de passe manquant' });
+      }
+      try {
+        await brancherInfomaniak(db, i, parsed.data, secretsDir, imapServeur);
+      } catch (error) {
+        if (error instanceof BranchementRefuse) {
+          return reply.code(400).send({ error: error.message });
+        }
+        throw error;
+      }
       return { ok: true };
     }),
   );
