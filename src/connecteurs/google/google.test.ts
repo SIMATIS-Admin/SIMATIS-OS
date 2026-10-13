@@ -15,7 +15,14 @@ import { withInstance } from '../../db/context.js';
 import type { Instance } from '../../instances/schema.js';
 import { createInstance } from '../../instances/service.js';
 import { loadInstanceSecrets } from '../../secrets.js';
-import { createDraft, evenements, freeBusy, historique, sansSignature } from './google.js';
+import {
+  createDraft,
+  evenements,
+  freeBusy,
+  historique,
+  mimeBrut,
+  sansSignature,
+} from './google.js';
 import { gmailConnector } from './index.js';
 import { connectGoogle } from './oauth.js';
 
@@ -245,6 +252,17 @@ describe('Gmail and Calendar', () => {
     expect(sansSignature('Bonjour\n-- \nMarc')).toBe('Bonjour');
     expect(sansSignature('<p>Bonjour</p><br>--<br>Marc')).toBe('<p>Bonjour</p>');
     expect(sansSignature('<p>Prix : 10--20 €</p>')).toBe('<p>Prix : 10--20 €</p>');
+  });
+
+  it('keeps a line break in the address or the subject from adding a header', () => {
+    const brut = mimeBrut({
+      to: 'paul@client.example\r\nBcc: autre@ailleurs.example',
+      subject: 'Devis\r\nBcc: autre@ailleurs.example',
+      html: '<p>Bonjour</p>',
+    });
+    const entetes = brut.split('\r\n\r\n')[0]?.split('\r\n') ?? [];
+    expect(entetes.filter((l) => /^bcc:/i.test(l))).toEqual([]);
+    expect(entetes).toHaveLength(5);
   });
 
   it('reads recent exchanges as snippets, and busy periods', async () => {
