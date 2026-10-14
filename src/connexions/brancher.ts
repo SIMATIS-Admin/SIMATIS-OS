@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import {
+  ANALYTICS_SCOPES,
   clientSecretValide,
   exchangeCode,
   GOOGLE_CLIENT_ID_APP,
@@ -20,6 +21,7 @@ import {
   writeImapAccount,
   writeInstanceSecret,
   type CompteImap,
+  type UsageGoogle,
 } from '../secrets.js';
 import { connexions } from './schema.js';
 import { configureConnexion, registeredConnector } from './service.js';
@@ -157,6 +159,7 @@ export async function brancherGoogle(tx: Tx): Promise<void> {
 type GoogleClient = { clientId: string; clientSecret: string };
 type Pending = GoogleClient & {
   slug: string;
+  usage: UsageGoogle;
   verifier: string;
   redirectUri: string;
   expires: number;
@@ -203,7 +206,7 @@ export function googleWebFlow(deps: { secretsDir: string; fetch?: FetchLike }) {
       await writeGoogleAppSecret(deps.secretsDir, valeur);
     },
 
-    async start(slug: string, redirectUri: string): Promise<string> {
+    async start(slug: string, redirectUri: string, usage: UsageGoogle = 'google'): Promise<string> {
       const client = await clientOf(slug);
       if (!client) {
         throw new BranchementRefuse(
@@ -213,16 +216,29 @@ export function googleWebFlow(deps: { secretsDir: string; fetch?: FetchLike }) {
       const now = Date.now();
       for (const [key, p] of pending) if (p.expires < now) pending.delete(key);
       const { verifier, challenge, state } = pkce();
-      pending.set(state, { ...client, slug, verifier, redirectUri, expires: now + PENDING_MS });
-      return googleAuthUrl({ clientId: client.clientId, redirectUri, state, challenge });
+      pending.set(state, {
+        ...client,
+        slug,
+        usage,
+        verifier,
+        redirectUri,
+        expires: now + PENDING_MS,
+      });
+      return googleAuthUrl({
+        clientId: client.clientId,
+        redirectUri,
+        state,
+        challenge,
+        ...(usage === 'analytics' ? { scopes: ANALYTICS_SCOPES } : {}),
+      });
     },
 
-    // Returns the slug of the instance whose consent came back.
+    // Returns the instance whose consent came back, and what the consent was for.
     async finish(
       db: Database,
       instanceOf: (slug: string) => Promise<Instance | null>,
       params: { state?: string; code?: string; error?: string },
-    ): Promise<string> {
+    ): Promise<{ slug: string; usage: UsageGoogle }> {
       const p = params.state ? pending.get(params.state) : undefined;
       if (params.state) pending.delete(params.state);
       if (!p || p.expires < Date.now()) {
@@ -245,9 +261,10 @@ export function googleWebFlow(deps: { secretsDir: string; fetch?: FetchLike }) {
         },
         doFetch,
       );
-      await writeGoogleToken(deps.secretsDir, p.slug, token);
-      await withInstance(db, instance.id, brancherGoogle);
-      return p.slug;
+      await writeGoogleToken(deps.secretsDir, p.slug, token, p.usage);
+      // Analytics is read on demand by the Site web screen: no mailbox connection to set up.
+      if (p.usage === 'google') await withInstance(db, instance.id, brancherGoogle);
+      return { slug: p.slug, usage: p.usage };
     },
   };
 }

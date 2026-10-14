@@ -11,6 +11,10 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ];
 
+// Website audience (Site web screen): a consent of its own, because the account that owns the
+// Analytics property is not always the mailbox connected for the instance.
+export const ANALYTICS_SCOPES = ['https://www.googleapis.com/auth/analytics.readonly'];
+
 // The OS's own Google OAuth client ("SIMATIS OS", desktop type, project simatis-os). Published on
 // purpose: Google treats installed-app client IDs as public, consent and PKCE protect the
 // mailboxes. Its secret is never committed: it is pasted once in Paramètres > Connexions.
@@ -105,12 +109,13 @@ export function googleAuthUrl(p: {
   redirectUri: string;
   state: string;
   challenge: string;
+  scopes?: string[];
 }): string {
   return `${AUTH_URL}?${new URLSearchParams({
     client_id: p.clientId,
     redirect_uri: p.redirectUri,
     response_type: 'code',
-    scope: SCOPES.join(' '),
+    scope: (p.scopes ?? SCOPES).join(' '),
     access_type: 'offline',
     prompt: 'consent',
     state: p.state,

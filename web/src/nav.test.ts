@@ -80,6 +80,9 @@ describe('nav', () => {
     if (!devis) throw new Error('Devis missing from NAV');
     expect(allowed(devis, ['relais'])).toBe(false);
     expect(allowed(devis, ['devis'])).toBe(true);
+    const site = allItems().find((i) => i.id === 'siteweb');
+    expect(site && allowed(site, ['devis'])).toBe(false);
+    expect(site && allowed(site, ['site-web'])).toBe(true);
   });
 
   it('marks only built screens as built', () => {

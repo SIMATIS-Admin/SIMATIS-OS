@@ -138,4 +138,21 @@ describe('admin CLI and instance lifecycle', () => {
     expect(await run('instance:ecritures', '--slug', 'demo-x', '--on')).toBe(1);
     expect(lines.join('\n')).toMatch(/démo/);
   });
+
+  it('turns an instance brick on and off', async () => {
+    expect(await run('instance:module', '--slug', 'beta', '--module', 'site-web', '--on')).toBe(0);
+    expect(await run('instance:module', '--slug', 'beta', '--module', 'site-web', '--on')).toBe(0);
+    expect(lines.join('\n')).toMatch(/beta : modules site-web/);
+    const modules = async () =>
+      (
+        await t.owner.pool.query<{ m: string[] }>(
+          "select config->'modules' as m from instances where slug = 'beta'",
+        )
+      ).rows[0]?.m;
+    expect(await modules()).toEqual(['site-web']);
+    expect(await run('instance:module', '--slug', 'beta', '--module', 'site-web', '--off')).toBe(0);
+    expect(await modules()).toEqual([]);
+    expect(await run('instance:module', '--slug', 'beta', '--module', 'site-web')).toBe(1);
+    expect(await run('instance:module', '--slug', 'beta', '--module', 'Site Web', '--on')).toBe(1);
+  });
 });

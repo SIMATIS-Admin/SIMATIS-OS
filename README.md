@@ -40,6 +40,7 @@ Dans Docker : `docker compose exec app node dist/admin/main.js <commande>`. Hors
 - `instance:archive --slug <slug>`
 - `instance:purge --slug <slug> --confirmer` : supprime les données métier de l'instance (irréversible), garde son journal et l'archive.
 - `demo:seed` : charge les instances fictives, seulement dans une base vide.
+- `instance:module --slug <slug> --module <nom> --on|--off` : active ou retire une brique de l'instance (`devis`, `site-web`…).
 - `instance:ecritures --slug <slug> --on|--off` : second verrou des écritures réelles vers les outils du client (le premier est `REAL_WRITES=on` dans `.env`).
 - `connexion:set --slug <slug> --kind crm --fournisseur hubspot`, `connexion:list --slug <slug>`, `connexion:sync --slug <slug> --kind crm` : connexions de l'instance (procédure HubSpot dans `docs/EXPLOITATION.md`).
 - `token:create --instance <slug> --nom <agent>`, `token:list`, `token:revoke --id <id>` : jetons MCP des agents.

@@ -19,6 +19,7 @@ import {
   PHASES,
   purgeInstance,
   setEcrituresReelles,
+  setModule,
   setPhase,
   type Phase,
 } from '../instances/service.js';
@@ -30,6 +31,7 @@ export const USAGE = `Commandes :
   instance:archive --slug <slug>
   instance:purge --slug <slug> --confirmer
   instance:ecritures --slug <slug> --on|--off   (second verrou des écritures réelles)
+  instance:module --slug <slug> --module <devis|site-web|…> --on|--off
   demo:seed
   token:create --nom <nom> (--instance <slug> | --portefeuille | --runner)
   token:list
@@ -81,10 +83,11 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
       kind: { type: 'string' },
       fournisseur: { type: 'string' },
       frequence: { type: 'string' },
+      module: { type: 'string' },
     },
   });
   const need = (
-    name: 'slug' | 'nom' | 'type' | 'phase' | 'id' | 'kind' | 'fournisseur',
+    name: 'slug' | 'nom' | 'type' | 'phase' | 'id' | 'kind' | 'fournisseur' | 'module',
   ): string => {
     const value = values[name];
     if (!value) throw new Error(`Option manquante : --${name}`);
@@ -122,6 +125,12 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
           `Écritures réelles ${i.config.ecrituresReelles ? 'autorisées' : 'désactivées'} pour ${i.slug}` +
             (i.config.ecrituresReelles ? ' (effectives seulement avec REAL_WRITES=on).' : '.'),
         );
+        return 0;
+      }
+      case 'instance:module': {
+        if (values.on === values.off) throw new Error('Préciser --on ou --off');
+        const i = await setModule(db, need('slug'), need('module'), values.on);
+        out(`${i.slug} : modules ${(i.config.modules ?? []).join(', ') || 'aucun'}`);
         return 0;
       }
       case 'instance:phase': {
