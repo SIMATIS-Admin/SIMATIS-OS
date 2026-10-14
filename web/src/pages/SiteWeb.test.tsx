@@ -67,6 +67,25 @@ describe('Site web screen', () => {
     expect(screen.getByText('Utiliser un autre compte Google')).toBeTruthy();
   });
 
+  it('offers to reconnect when the websites cannot be read', async () => {
+    serveur({ googleClientDisponible: true, connecte: true, propriete: null });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url.endsWith('/site-web')
+            ? new Response(
+                JSON.stringify({ googleClientDisponible: true, connecte: true, propriete: null }),
+              )
+            : new Response(JSON.stringify({ error: 'Autorisation expirée' }), { status: 409 }),
+        ),
+      ),
+    );
+    render(<SiteWeb slug="simatis" />);
+    expect(await screen.findByText('Autorisation expirée')).toBeTruthy();
+    expect(screen.getByText('Reconnecter le compte Google')).toBeTruthy();
+  });
+
   it('shows the figures with their change against the previous 28 days', async () => {
     serveur({
       googleClientDisponible: true,

@@ -299,9 +299,16 @@ function Choix({
   }, [slug]);
   if (error)
     return (
-      <div className="alert amber">
-        <Icon name="info" />
-        <div>{error}</div>
+      <div className="stack">
+        <div className="alert amber">
+          <Icon name="info" />
+          <div>{error}</div>
+        </div>
+        <div>
+          <button className="btn sm" onClick={onConnecter}>
+            Reconnecter le compte Google
+          </button>
+        </div>
       </div>
     );
   if (!liste) return <div className="empty">Lecture des sites accessibles…</div>;
