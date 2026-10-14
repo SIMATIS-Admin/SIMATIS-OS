@@ -14,6 +14,8 @@ export type InstanceConfig = {
   funnel?: Record<string, number>;
   // Mandate only: in closing (qualified prospect, real data) or signed. Missing = signed.
   phase?: 'closing' | 'en_cours';
+  // Site web screen (module site-web): the website's Google Analytics 4 property.
+  siteWeb?: { proprieteId: string; proprieteNom: string };
   // Mandate created from (or linked to) a deal of the own activity.
   origine?: { opportuniteId: string; entrepriseId: string | null };
 };

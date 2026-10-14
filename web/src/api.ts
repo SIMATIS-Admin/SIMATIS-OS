@@ -611,3 +611,40 @@ export type Recherche = {
 };
 export const fetchRecherche = (slug: string, q: string) =>
   getJson<Recherche>(inst(slug, `recherche?q=${encodeURIComponent(q)}`));
+
+// Site web (module site-web): the website's Google Analytics audience.
+export type EtatSiteWeb = {
+  googleClientDisponible: boolean;
+  connecte: boolean;
+  propriete: { proprieteId: string; proprieteNom: string } | null;
+};
+export type ProprieteAnalytics = { id: string; nom: string; compte: string };
+export type IndicateursSite = {
+  visiteurs: number;
+  nouveaux: number;
+  sessions: number;
+  engagement: number;
+  dureeMoyenne: number;
+  pagesVues: number;
+};
+export type RapportSite = {
+  periode: { du: string; au: string };
+  precedente: { du: string; au: string };
+  actuel: IndicateursSite;
+  precedent: IndicateursSite;
+  demandes: { actuel: number; precedent: number };
+  mois: { mois: string; visiteurs: number; sessions: number }[];
+  canaux: { canal: string; sessions: number; engagement: number }[];
+  pages: { chemin: string; titre: string; vues: number; visiteurs: number }[];
+  sources: { source: string; sessions: number }[];
+  genereLe: string;
+};
+export const fetchSiteWeb = (slug: string) => getJson<EtatSiteWeb>(inst(slug, 'site-web'));
+export const fetchProprietes = (slug: string) =>
+  getJson<ProprieteAnalytics[]>(inst(slug, 'site-web/proprietes'));
+export const choisirPropriete = (slug: string, id: string, nom: string) =>
+  sendJson<EtatSiteWeb['propriete']>('PUT', inst(slug, 'site-web/propriete'), { id, nom });
+export const fetchRapportSite = (slug: string, frais = false) =>
+  getJson<RapportSite>(inst(slug, `site-web/rapport${frais ? '?frais=1' : ''}`));
+export const connecterAnalytics = (slug: string) =>
+  sendJson<{ url: string }>('POST', inst(slug, 'site-web/google/start'), {});

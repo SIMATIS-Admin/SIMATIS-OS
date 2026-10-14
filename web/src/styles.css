@@ -1817,6 +1817,67 @@ textarea.input {
   margin-top: 2px;
 }
 
+/* Site web */
+.sw-entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.sw-actions {
+  display: flex;
+  gap: 8px;
+}
+.kpi .sw-evol,
+.kpi .sw-aide {
+  display: block;
+  margin-top: 2px;
+}
+.sw-evol.up {
+  color: var(--green);
+}
+.sw-evol.down {
+  color: var(--red);
+}
+.sw-cols {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  height: 200px;
+  align-items: end;
+}
+.sw-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 4px;
+}
+.sw-col-bar {
+  width: 100%;
+  max-width: 36px;
+  border-radius: 4px 4px 0 0;
+  background: var(--navy-3);
+}
+.sw-col-bar.partiel {
+  background: repeating-linear-gradient(135deg, var(--navy-3) 0 4px, var(--teal-mid) 4px 7px);
+}
+.sw-col:hover .sw-col-bar {
+  background: var(--navy);
+}
+.sw-col-v {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.sw-col-l {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
 /* ---------- Responsive ---------- */
 .menu-btn {
   display: none;

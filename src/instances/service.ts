@@ -127,6 +127,31 @@ export async function setPhase(db: Executor, slug: string, phase: Phase): Promis
 
 // Second real-write lock, per instance (the first is REAL_WRITES on the server). A prospect
 // (demo) instance never writes to a real tool.
+// Turns one of the instance's bricks on or off (devis, site-web…): the screens follow at once.
+export async function setModule(
+  db: Executor,
+  slug: string,
+  module: string,
+  on: boolean,
+): Promise<Instance> {
+  if (!/^[a-z][a-z0-9-]{0,40}$/.test(module)) throw new Error(`Module invalide : ${module}`);
+  const instance = await requireInstance(db, slug);
+  const actuels = instance.config.modules ?? [];
+  const modules = on ? [...new Set([...actuels, module])] : actuels.filter((m) => m !== module);
+  return withInstance(db, instance.id, async (tx) => {
+    const [row] = await tx
+      .update(instances)
+      .set({ config: { ...instance.config, modules }, updatedAt: new Date() })
+      .where(eq(instances.id, instance.id))
+      .returning();
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: `Module ${module} ${on ? 'activé' : 'désactivé'} pour cette instance`,
+    });
+    return row ?? instance;
+  });
+}
+
 export async function setEcrituresReelles(
   db: Executor,
   slug: string,

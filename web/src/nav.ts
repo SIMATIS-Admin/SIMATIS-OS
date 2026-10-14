@@ -22,7 +22,11 @@ export const NAV: NavGroup[] = [
   { title: 'Stratégie', items: [item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage')] },
   {
     title: 'Générer la demande',
-    items: [item('prospection', 'Prospection', 'send'), item('bases', 'Bases vivantes', 'db')],
+    items: [
+      item('prospection', 'Prospection', 'send'),
+      item('bases', 'Bases vivantes', 'db'),
+      item('siteweb', 'Site web', 'globe', 'site-web'),
+    ],
   },
   {
     title: 'Convertir',
@@ -65,6 +69,7 @@ export const BUILT = new Set([
   'agenda',
   'devis',
   'routines',
+  'siteweb',
 ]);
 
 // Where each screen comes from in docs/plans/2026-10-08-implementation-maquette.md.

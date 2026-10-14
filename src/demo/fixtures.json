@@ -6,7 +6,7 @@
     "config": {
       "sous": "Mon activité",
       "couleur": "#41A594",
-      "modules": ["diagnostic", "devis"],
+      "modules": ["diagnostic", "devis", "site-web"],
       "funnel": {
         "leads": 60,
         "l2p": 30,

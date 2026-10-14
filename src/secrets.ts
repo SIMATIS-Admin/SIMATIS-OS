@@ -21,9 +21,12 @@ async function readOptional(file: string, slug: string): Promise<string | null> 
   }
 }
 
-export const googleTokenPath = (dir: string, slug: string) => {
+// `google`: mailbox and agenda; `analytics`: the website audience (its own Google account).
+export type UsageGoogle = 'google' | 'analytics';
+
+export const googleTokenPath = (dir: string, slug: string, usage: UsageGoogle = 'google') => {
   checkSlug(slug);
-  return path.join(dir, `${slug}.google.json`);
+  return path.join(dir, `${slug}.${usage}.json`);
 };
 
 const imapPath = (dir: string, slug: string) => {
@@ -79,6 +82,11 @@ export async function loadInstanceSecrets(
   if (google) {
     const token = (JSON.parse(google) as { refresh_token?: string }).refresh_token;
     if (token) secrets.GOOGLE_REFRESH_TOKEN = token;
+  }
+  const analytics = await readOptional(googleTokenPath(dir, slug, 'analytics'), slug);
+  if (analytics) {
+    const token = (JSON.parse(analytics) as { refresh_token?: string }).refresh_token;
+    if (token) secrets.GOOGLE_ANALYTICS_REFRESH_TOKEN = token;
   }
   const imap = await readOptional(imapPath(dir, slug), slug);
   if (imap) {
@@ -137,8 +145,9 @@ export async function writeGoogleToken(
   dir: string,
   slug: string,
   token: { refresh_token: string; scope: string },
+  usage: UsageGoogle = 'google',
 ): Promise<string> {
-  const file = googleTokenPath(dir, slug);
+  const file = googleTokenPath(dir, slug, usage);
   await writeFile(
     file,
     `${JSON.stringify({ ...token, obtenuLe: new Date().toISOString() }, null, 2)}\n`,

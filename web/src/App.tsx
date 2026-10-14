@@ -31,6 +31,7 @@ import { Tableau } from './pages/Tableau.js';
 import { Routines } from './pages/Routines.js';
 import { Devis } from './pages/Devis.js';
 import { RendezVous } from './pages/RendezVous.js';
+import { SiteWeb } from './pages/SiteWeb.js';
 import { Sidebar } from './shell/Sidebar.js';
 
 const DEFAULT_VIEW = 'brief';
@@ -134,6 +135,8 @@ export function App() {
         return <RendezVous key={current.slug} slug={current.slug} />;
       case 'devis':
         return <Devis key={current.slug} slug={current.slug} />;
+      case 'siteweb':
+        return <SiteWeb key={current.slug} slug={current.slug} />;
       case 'tableau':
         return <Tableau key={current.slug} slug={current.slug} />;
       case 'journal':

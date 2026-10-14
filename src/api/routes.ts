@@ -63,6 +63,7 @@ import {
 import type { FetchLike } from '../connecteurs/google/oauth.js';
 import { MESSAGERIES, messagerieDe } from '../connecteurs/messagerie.js';
 import { loadInstanceSecrets, type CompteImap } from '../secrets.js';
+import { siteWebActif, siteWebService, SiteWebIndisponible } from '../site/analytics.js';
 import { getFavoris, getOptions, setFavoris, setOptions } from '../preferences/service.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
 import {
@@ -177,6 +178,10 @@ export function registerApi(
 ): void {
   const connexionDeps = { secretsDir, realWrites };
   const google = googleWebFlow({
+    secretsDir,
+    ...(googleFetch ? { fetch: googleFetch } : {}),
+  });
+  const siteWeb = siteWebService({
     secretsDir,
     ...(googleFetch ? { fetch: googleFetch } : {}),
   });
@@ -1119,8 +1124,14 @@ export function registerApi(
     '/oauth/google/callback',
     async (request, reply) => {
       try {
-        const slug = await google.finish(db, (s) => getInstanceBySlug(db, s), request.query);
-        return await reply.redirect(`/#/${slug}/parametres?google=ok`);
+        const { slug, usage } = await google.finish(
+          db,
+          (s) => getInstanceBySlug(db, s),
+          request.query,
+        );
+        return await reply.redirect(
+          usage === 'analytics' ? `/#/${slug}/siteweb` : `/#/${slug}/parametres?google=ok`,
+        );
       } catch (error) {
         request.log.warn({ err: error }, 'Google consent failed');
         const message =
@@ -1132,6 +1143,60 @@ export function registerApi(
           );
       }
     },
+  );
+
+  // Site web: the website's Google Analytics audience, where the site-web module is on.
+  const surSiteWeb = <R extends SlugParams>(
+    handler: (i: Instance, request: FastifyRequest<R>) => Promise<unknown>,
+  ) =>
+    onInstance<R>(async (i, request, reply) => {
+      if (!siteWebActif(i))
+        return reply.code(404).send({ error: 'Pas de section Site web dans cette instance' });
+      try {
+        return await handler(i, request);
+      } catch (error) {
+        if (error instanceof SiteWebIndisponible) {
+          return reply.code(409).send({ error: error.message });
+        }
+        if (error instanceof BranchementRefuse) {
+          return reply.code(400).send({ error: error.message });
+        }
+        if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
+        throw error;
+      }
+    });
+  app.get<SlugParams>(
+    '/api/i/:slug/site-web',
+    surSiteWeb((i) => siteWeb.etat(i)),
+  );
+  app.get<SlugParams>(
+    '/api/i/:slug/site-web/proprietes',
+    surSiteWeb((i) => siteWeb.proprietes(i)),
+  );
+  const proprieteSchema = z.object({
+    id: z.string().regex(/^\d{1,20}$/),
+    nom: z.string().trim().min(1).max(200),
+  });
+  app.put<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/site-web/propriete',
+    surSiteWeb<SlugParams & { Body: unknown }>((i, request) =>
+      siteWeb.choisirPropriete(db, i, proprieteSchema.parse(request.body)),
+    ),
+  );
+  type RapportRoute = SlugParams & { Querystring: { frais?: string } };
+  app.get<RapportRoute>(
+    '/api/i/:slug/site-web/rapport',
+    surSiteWeb<RapportRoute>((i, request) => siteWeb.rapport(db, i, request.query.frais === '1')),
+  );
+  app.post<SlugParams>(
+    '/api/i/:slug/site-web/google/start',
+    surSiteWeb<SlugParams>(async (i, request) => ({
+      url: await google.start(
+        i.slug,
+        `${request.protocol}://${request.host}/oauth/google/callback`,
+        'analytics',
+      ),
+    })),
   );
 
   const reglagesCrmSchema = reglagesSchema
