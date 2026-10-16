@@ -16,6 +16,9 @@ export const TYPES_SUJET = [
 export const ORIGINES_SUJET = ['messagerie', 'agenda', 'cerveau', 'os', 'site'] as const;
 export const STATUTS_SUJET = ['a_traiter', 'tache', 'traite'] as const;
 
+// Source of the entries added by hand in the Inbox screen.
+export const SOURCE_MANUELLE = 'manuel';
+
 export type TypeSujet = (typeof TYPES_SUJET)[number];
 export type OrigineSujet = (typeof ORIGINES_SUJET)[number];
 export type StatutSujet = (typeof STATUTS_SUJET)[number];
@@ -42,6 +45,8 @@ export const sujets = pgTable(
     traitePar: text('traite_par'),
     // When the Inbox routine reported the handling back into the second brain.
     reporteAt: timestamp('reporte_at', { withTimezone: true }),
+    // Entries added by hand: when the Inbox routine noted their creation in the second brain.
+    noteCerveauAt: timestamp('note_cerveau_at', { withTimezone: true }),
   },
   (t) => [
     index('sujets_instance_statut_idx').on(t.instanceId, t.statut),

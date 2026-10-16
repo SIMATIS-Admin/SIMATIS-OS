@@ -12,7 +12,8 @@ import { createToken } from '../mcp/tokens.js';
 import { demanderExecution, getExecution } from '../routines/service.js';
 import { deposerSujet } from './depot.js';
 import type { SujetTraite } from './report.js';
-import { marquerTraite } from './service.js';
+import { ajouterSujet, marquerTraite } from './service.js';
+import type { SujetAjoute } from './report.js';
 
 type TextResult = { isError?: boolean; content: { type: string; text: string }[] };
 
@@ -151,6 +152,31 @@ describe('Inbox : outils MCP', () => {
       expect(r.isError).toBe(false);
       expect(r.json()).toEqual([]);
     }
+  });
+
+  it('lists hand-added entries until the routine marks them noted in the second brain', async () => {
+    const a = await ajouterSujet(t.app.db, helioval, {
+      titre: 'Retour au client',
+      resume: 'Supports',
+      echeance: new Date('2026-10-23T10:00:00Z'),
+    });
+    // A routine subject is never listed as a hand-added entry.
+    await withInstance(t.app.db, helioval.id, (tx) =>
+      deposerSujet(tx, {
+        type: 'autre',
+        titre: 'Routine',
+        origine: 'cerveau',
+        source: 'routine',
+        sourceId: 'r-1',
+      }),
+    );
+    expect((await call('sujets_ajoutes', {}, await clientDe('aquaterra'))).json()).toEqual([]);
+    const avant = (await call('sujets_ajoutes')).json<SujetAjoute[]>();
+    expect(avant.map((x) => x.id)).toEqual([a.id]);
+    expect(avant[0]).toMatchObject({ titre: 'Retour au client', resume: 'Supports' });
+    expect((await call('marquer_note_cerveau', { ids: [a.id] })).json()).toEqual({ notes: 1 });
+    expect((await call('marquer_note_cerveau', { ids: [a.id] })).json()).toEqual({ notes: 0 });
+    expect((await call('sujets_ajoutes')).json<SujetAjoute[]>()).toEqual([]);
   });
 
   it('answers a readable error without stopping the run when messaging is missing', async () => {

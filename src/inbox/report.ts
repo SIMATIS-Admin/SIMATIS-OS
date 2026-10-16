@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { propositions } from '../propositions/schema.js';
-import { sujets, type TypeSujet } from './schema.js';
+import { SOURCE_MANUELLE, sujets, type TypeSujet } from './schema.js';
 
 export type SujetTraite = {
   id: string;
@@ -88,6 +88,55 @@ export async function marquerReporte(tx: Tx, ids: string[]): Promise<number> {
         inArray(sujets.id, ids),
         ne(sujets.statut, 'a_traiter'),
         isNull(sujets.reporteAt),
+      ),
+    )
+    .returning({ id: sujets.id });
+  return rows.length;
+}
+
+export type SujetAjoute = {
+  id: string;
+  titre: string;
+  resume: string | null;
+  echeance: string | null;
+  createdAt: string;
+};
+
+// Entries the pilot added by hand that the Inbox routine has not noted in the second brain yet.
+export async function sujetsAjoutes(tx: Tx): Promise<SujetAjoute[]> {
+  const rows = await tx
+    .select()
+    .from(sujets)
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.source, SOURCE_MANUELLE),
+        isNull(sujets.noteCerveauAt),
+      ),
+    )
+    .orderBy(asc(sujets.createdAt))
+    .limit(LIMITE);
+  return rows.map((s) => ({
+    id: s.id,
+    titre: s.titre,
+    resume: s.resume,
+    echeance: s.echeance?.toISOString() ?? null,
+    createdAt: s.createdAt.toISOString(),
+  }));
+}
+
+// After the routine wrote the note in the second brain. Other entries are left alone.
+export async function marquerNoteCerveau(tx: Tx, ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await tx
+    .update(sujets)
+    .set({ noteCerveauAt: new Date() })
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.source, SOURCE_MANUELLE),
+        inArray(sujets.id, ids),
+        isNull(sujets.noteCerveauAt),
       ),
     )
     .returning({ id: sujets.id });

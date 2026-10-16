@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { ConnexionDeps } from '../connexions/service.js';
 import { contacts, entreprises } from '../crm/schema.js';
@@ -10,7 +11,14 @@ import { listInstances } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import { enrichirPropositions } from '../pilotage/validations.js';
 import { propositions } from '../propositions/schema.js';
-import { sujets, type OrigineSujet, type StatutSujet, type TypeSujet } from './schema.js';
+import { deposerSujet } from './depot.js';
+import {
+  SOURCE_MANUELLE,
+  sujets,
+  type OrigineSujet,
+  type StatutSujet,
+  type TypeSujet,
+} from './schema.js';
 
 export type FiltreInbox =
   'tout' | 'mails' | 'devis' | 'diagnostics' | 'comptes_rendus' | 'a_valider' | 'traites';
@@ -172,6 +180,36 @@ async function charger(tx: Tx, id: string) {
 
 const vue = async (tx: Tx, instance: Instance, id: string) =>
   (await vues(tx, instance, eq(sujets.id, id)))[0] ?? null;
+
+export type SujetSaisi = { titre: string; resume?: string | null; echeance?: Date | null };
+
+// An entry typed by the pilot. Each one has its own key; the Inbox routine notes it in the
+// second brain at its next run (see sujetsAjoutes).
+export async function ajouterSujet(
+  db: Executor,
+  instance: Instance,
+  saisie: SujetSaisi,
+): Promise<SujetVue> {
+  return withInstance(db, instance.id, async (tx) => {
+    const { id } = await deposerSujet(tx, {
+      type: 'autre',
+      titre: saisie.titre,
+      resume: saisie.resume ?? null,
+      origine: 'os',
+      source: SOURCE_MANUELLE,
+      sourceId: randomUUID(),
+      echeance: saisie.echeance ?? null,
+    });
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: `Sujet ajouté : ${saisie.titre}`,
+      details: { sujet: id },
+    });
+    const v = await vue(tx, instance, id);
+    if (!v) throw new Error('Sujet introuvable après ajout');
+    return v;
+  });
+}
 
 export async function marquerTraite(
   db: Executor,

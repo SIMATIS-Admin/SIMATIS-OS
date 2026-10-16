@@ -96,6 +96,32 @@ describe('Inbox : API', () => {
     expect(r.body).toMatchObject({ statut: 'tache' });
   });
 
+  it('adds an entry by hand to the instance of the slug, and refuses an empty title', async () => {
+    const r = await req('POST', '/api/i/helioval/sujets', {
+      titre: 'Appeler le fournisseur',
+      resume: 'Avant jeudi',
+      echeance: '2026-10-23T12:00:00+02:00',
+    });
+    expect(r.status).toBe(201);
+    expect(r.body).toMatchObject({
+      titre: 'Appeler le fournisseur',
+      type: 'autre',
+      origine: 'os',
+      statut: 'a_traiter',
+      instance: { slug: 'helioval' },
+    });
+    expect((await inbox('helioval')).some((s) => s.titre === 'Appeler le fournisseur')).toBe(true);
+    // Two identical entries stay two entries: each has its own key.
+    await req('POST', '/api/i/helioval/sujets', { titre: 'Appeler le fournisseur' });
+    expect(
+      (await inbox('helioval')).filter((s) => s.titre === 'Appeler le fournisseur'),
+    ).toHaveLength(2);
+    expect((await req('POST', '/api/i/helioval/sujets', { titre: '  ' })).status).toBe(400);
+    expect(
+      (await req('POST', '/api/i/helioval/sujets', { titre: 'x', type: 'devis' })).status,
+    ).toBe(400);
+  });
+
   it('returns 404 for a subject of an archived mandate', async () => {
     await archiveInstance(t.owner.db, 'aquaterra');
     expect((await inbox('simatis')).some((s) => s.instance.slug === 'aquaterra')).toBe(false);

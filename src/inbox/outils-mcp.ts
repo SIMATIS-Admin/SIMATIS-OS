@@ -14,7 +14,7 @@ import {
   type Annuaire,
 } from './lecture.js';
 import { deposerSujet } from './depot.js';
-import { marquerReporte, sujetsTraites } from './report.js';
+import { marquerNoteCerveau, marquerReporte, sujetsAjoutes, sujetsTraites } from './report.js';
 
 // Tools of the Inbox routine. Like every instance tool, they only see the token's instance.
 // « À valider » subjects come from proposals only, and the « os » origin is the OS itself.
@@ -83,6 +83,24 @@ registerTool({
   input: z.object({ ids: z.array(z.uuid()).min(1).max(200), executionId: execution }),
   scope: 'instance',
   handler: async ({ tx }, { ids }) => ({ reportes: await marquerReporte(tx, ids) }),
+});
+
+registerTool({
+  name: 'sujets_ajoutes',
+  description:
+    "Entrées ajoutées à la main par le pilote dans l'Inbox et pas encore notées dans le second cerveau. À noter dans l'inbox du second cerveau (titre, résumé, échéance), puis à marquer avec marquer_note_cerveau.",
+  input: z.object({ executionId: execution }),
+  scope: 'instance',
+  handler: ({ tx }) => sujetsAjoutes(tx),
+});
+
+registerTool({
+  name: 'marquer_note_cerveau',
+  description:
+    "Marque comme notées dans le second cerveau les entrées ajoutées à la main dont la routine a écrit la note. À appeler après l'écriture, jamais avant.",
+  input: z.object({ ids: z.array(z.uuid()).min(1).max(200), executionId: execution }),
+  scope: 'instance',
+  handler: async ({ tx }, { ids }) => ({ notes: await marquerNoteCerveau(tx, ids) }),
 });
 
 // The instance's people, to keep only mails and meetings with someone the CRM knows.

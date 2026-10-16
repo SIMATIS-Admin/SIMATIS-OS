@@ -391,6 +391,10 @@ export const fetchCompteurInbox = (slug: string) =>
   getJson<{ n: number }>(inst(slug, 'inbox/compteur')).then((r) => r.n);
 const sujet = (slug: string, id: string, action: string) =>
   inst(slug, `sujets/${encodeURIComponent(id)}/${action}`);
+export const ajouterSujet = (
+  slug: string,
+  saisie: { titre: string; resume?: string; echeance?: string },
+) => sendJson<SujetVue>('POST', inst(slug, 'sujets'), saisie);
 export const marquerSujetTraite = (slug: string, id: string) =>
   sendJson<SujetVue>('POST', sujet(slug, id, 'traite'), {});
 export const remettreSujet = (slug: string, id: string) =>
