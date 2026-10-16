@@ -20,6 +20,8 @@ import { EditionTache } from './taches/Edition.js';
 
 // Same rule as the Routines screen: an execution is open until the server says it ended.
 const OUVERTE = new Set(['demandee', 'en_cours']);
+// The runner polls every 30 s: a request still untouched after this long means it is not running.
+const SANS_REPONSE_MS = 2 * 60_000;
 
 const FILTRES = [
   ['tout', 'Tout'],
@@ -212,6 +214,10 @@ function MiseAJour({
     );
   };
   const enCours = idOuverte !== null;
+  const sansReponse =
+    execution?.statut === 'demandee' &&
+    Date.now() - new Date(execution.createdAt).getTime() > SANS_REPONSE_MS;
+  const abandon = execution?.statut === 'echouee' ? execution.rapport?.echec[0] : undefined;
 
   return (
     <>
@@ -220,6 +226,17 @@ function MiseAJour({
         {enCours ? 'Mise à jour en cours…' : "Mettre à jour l'Inbox"}
       </button>
       {!routine.actif && <span className="hint">Routine en pause</span>}
+      {sansReponse && (
+        <span className="small" style={{ color: 'var(--red)' }}>
+          L'exécuteur ne répond pas : la demande sera abandonnée au bout de 15 minutes. Vérifiez
+          qu'il tourne sur l'ordinateur.
+        </span>
+      )}
+      {abandon && (
+        <span className="small" style={{ color: 'var(--red)' }}>
+          {abandon}
+        </span>
+      )}
       {error && (
         <span className="small" style={{ color: 'var(--red)' }}>
           {error}

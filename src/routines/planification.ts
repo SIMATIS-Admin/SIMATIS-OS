@@ -7,7 +7,7 @@ import { listInstances } from '../instances/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { paramsOf } from './params.js';
 import { executions, type CleRoutine } from './schema.js';
-import { DejaEnCours, demanderExecution, listerRoutines } from './service.js';
+import { abandonnerNonPrises, DejaEnCours, demanderExecution, listerRoutines } from './service.js';
 
 const FUSEAU = 'Europe/Paris';
 const PLANIFIE = 'planification';
@@ -96,6 +96,7 @@ export async function planifier(db: Database, maintenant = new Date()): Promise<
   const debutJour = zoned(jour, '00:00', FUSEAU);
   let creees = 0;
   for (const instance of await listInstances(db)) {
+    await withInstance(db, instance.id, (tx) => abandonnerNonPrises(tx, maintenant));
     // Demo instances only run on demand.
     if (instance.type === 'prospect') continue;
     creees += await withInstance(db, instance.id, async (tx) => {

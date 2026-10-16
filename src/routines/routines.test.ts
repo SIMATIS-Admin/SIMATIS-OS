@@ -3,6 +3,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
@@ -12,8 +13,16 @@ import { seedDemoIfEmpty } from '../demo/seed.js';
 import { createInstance, getInstanceBySlug } from '../instances/service.js';
 import { createToken, resolveToken } from '../mcp/tokens.js';
 import { tour } from '../runner/runner.js';
+import { executions } from './schema.js';
 import { heurePrevue, planifier } from './planification.js';
-import { DejaEnCours, demanderExecution, getExecution, terminerExecution } from './service.js';
+import {
+  DejaEnCours,
+  DELAI_PRISE_MS,
+  demanderExecution,
+  echouerExecution,
+  getExecution,
+  terminerExecution,
+} from './service.js';
 
 type TextResult = { isError?: boolean; content: { type: string; text: string }[] };
 
@@ -393,5 +402,28 @@ describe('Routines Claude', () => {
     expect(i.args.join(' ')).toContain(
       'Second cerveau non accessible sur ce poste : saute ce qui en a besoin et signale-le dans le rapport.',
     );
+  });
+  it('abandons a request nobody picked up after the delay, so the routine can be asked again', async () => {
+    const demo = await instanceOf('demo');
+    const id = await withInstance(t.app.db, demo.id, async (tx) => {
+      const ouvertes = await tx
+        .select({ id: executions.id })
+        .from(executions)
+        .where(inArray(executions.statut, ['demandee', 'en_cours']));
+      for (const e of ouvertes) await echouerExecution(tx, e.id, 'nettoyage du test', 'test');
+      return (await demanderExecution(tx, 'inbox', 'planification')).id;
+    });
+    const creee = (await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, id))).createdAt;
+
+    await planifier(t.app.db, new Date(creee.getTime() + DELAI_PRISE_MS - 60_000));
+    expect((await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, id))).statut).toBe(
+      'demandee',
+    );
+
+    await planifier(t.app.db, new Date(creee.getTime() + DELAI_PRISE_MS + 60_000));
+    const abandonnee = await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, id));
+    expect(abandonnee.statut).toBe('echouee');
+    expect(abandonnee.rapport?.echec[0]).toMatch(/exécuteur/);
+    expect((await api('POST', '/api/i/demo/routines/inbox/executions')).statusCode).toBe(200);
   });
 });
