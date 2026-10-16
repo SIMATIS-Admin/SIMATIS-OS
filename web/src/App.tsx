@@ -193,12 +193,15 @@ export function App() {
             <h1>{title}</h1>
             {view === 'inbox' && (
               <button
-                className="btn primary"
+                className="btn carre"
                 aria-label="Ajouter une entrée à l'Inbox"
                 title="Ajouter une entrée"
                 onClick={() => setAjoutInbox(true)}
               >
-                +
+                <Icon name="inbox" />
+                <span className="carre-plus" aria-hidden="true">
+                  +
+                </span>
               </button>
             )}
           </div>
