@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { contacts, entreprises, taches } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import { propositions } from '../propositions/schema.js';
@@ -56,3 +56,43 @@ export const sujets = pgTable(
 );
 
 export type Sujet = typeof sujets.$inferSelect;
+
+// Entry prepared by Claude in an add conversation, shown to the pilot before it is added.
+export type BrouillonSujet = {
+  type: Exclude<TypeSujet, 'a_valider'>;
+  titre: string;
+  resume: string | null;
+  echeance: string | null;
+};
+export type MessageEchange = { de: 'pilote' | 'claude'; texte: string; at: string };
+// `attente_claude`: the runner has to pick it up; `attente_pilote`: Claude answered (or failed).
+export const STATUTS_ECHANGE = [
+  'attente_claude',
+  'en_cours',
+  'attente_pilote',
+  'ajoute',
+  'annule',
+] as const;
+export type StatutEchange = (typeof STATUTS_ECHANGE)[number];
+
+// Add conversation: the pilot says what to add, Claude (through the runner) turns it into an entry.
+export const echangesAjout = pgTable(
+  'echanges_ajout',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    statut: text('statut', { enum: STATUTS_ECHANGE }).notNull().default('attente_claude'),
+    messages: jsonb('messages').$type<MessageEchange[]>().notNull().default([]),
+    brouillon: jsonb('brouillon').$type<BrouillonSujet>(),
+    erreur: text('erreur'),
+    // Since when Claude is expected to answer: past the delay, the request is given up.
+    demandeAt: timestamp('demande_at', { withTimezone: true }).notNull().defaultNow(),
+    sujetId: uuid('sujet_id').references(() => sujets.id),
+  },
+  (t) => [
+    index('echanges_ajout_statut_idx').on(t.instanceId, t.statut),
+    instanceIsolation('echanges_ajout'),
+  ],
+);
+
+export type EchangeAjout = typeof echangesAjout.$inferSelect;

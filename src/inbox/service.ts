@@ -181,34 +181,45 @@ async function charger(tx: Tx, id: string) {
 const vue = async (tx: Tx, instance: Instance, id: string) =>
   (await vues(tx, instance, eq(sujets.id, id)))[0] ?? null;
 
-export type SujetSaisi = { titre: string; resume?: string | null; echeance?: Date | null };
+export type SujetSaisi = {
+  titre: string;
+  resume?: string | null;
+  echeance?: Date | null;
+  type?: Exclude<TypeSujet, 'a_valider'>;
+};
 
-// An entry typed by the pilot. Each one has its own key; the Inbox routine notes it in the
-// second brain at its next run (see sujetsAjoutes).
+// An entry typed by the pilot (or prepared with Claude). Each one has its own key; the Inbox routine
+// notes it in the second brain at its next run (see sujetsAjoutes).
+export async function ajouterSujetTx(
+  tx: Tx,
+  instance: Instance,
+  saisie: SujetSaisi,
+): Promise<SujetVue> {
+  const { id } = await deposerSujet(tx, {
+    type: saisie.type ?? 'autre',
+    titre: saisie.titre,
+    resume: saisie.resume ?? null,
+    origine: 'os',
+    source: SOURCE_MANUELLE,
+    sourceId: randomUUID(),
+    echeance: saisie.echeance ?? null,
+  });
+  await logEvent(tx, {
+    acteur: 'pilote',
+    action: `Sujet ajouté : ${saisie.titre}`,
+    details: { sujet: id },
+  });
+  const v = await vue(tx, instance, id);
+  if (!v) throw new Error('Sujet introuvable après ajout');
+  return v;
+}
+
 export async function ajouterSujet(
   db: Executor,
   instance: Instance,
   saisie: SujetSaisi,
 ): Promise<SujetVue> {
-  return withInstance(db, instance.id, async (tx) => {
-    const { id } = await deposerSujet(tx, {
-      type: 'autre',
-      titre: saisie.titre,
-      resume: saisie.resume ?? null,
-      origine: 'os',
-      source: SOURCE_MANUELLE,
-      sourceId: randomUUID(),
-      echeance: saisie.echeance ?? null,
-    });
-    await logEvent(tx, {
-      acteur: 'pilote',
-      action: `Sujet ajouté : ${saisie.titre}`,
-      details: { sujet: id },
-    });
-    const v = await vue(tx, instance, id);
-    if (!v) throw new Error('Sujet introuvable après ajout');
-    return v;
-  });
+  return withInstance(db, instance.id, (tx) => ajouterSujetTx(tx, instance, saisie));
 }
 
 export async function marquerTraite(

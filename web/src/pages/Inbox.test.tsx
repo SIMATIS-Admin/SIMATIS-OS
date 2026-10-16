@@ -78,6 +78,18 @@ const traites = () => [
   }),
 ];
 
+// Successive states of the add conversation returned by the server.
+let echanges: Record<string, unknown>[] = [];
+const echange = (statut: string, extra: Record<string, unknown> = {}) => ({
+  id: 'e1',
+  statut,
+  messages: [{ de: 'pilote', texte: 'Devis pour la société fictive avant jeudi', at: 'a' }],
+  brouillon: null,
+  erreur: null,
+  demandeAt: new Date().toISOString(),
+  ...extra,
+});
+
 let routineActive = true;
 let derniereRoutine: unknown = null;
 // Statuts returned by successive polls of the Inbox routine execution.
@@ -100,6 +112,13 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
   if (url.includes('/contacts?q=')) return json([]);
+  if (url.includes('/echanges')) {
+    if (url.endsWith('/ajouter')) return json({ echange: echange('ajoute'), sujet: sujet('n2') });
+    return json(
+      echanges.length > 1 ? echanges.shift() : echanges[0],
+      method === 'POST' ? 201 : 200,
+    );
+  }
   if (url.includes('/decision')) return json({ ...proposition, statut: 'appliquee' });
   if (url.endsWith('/tache'))
     return simulation
@@ -139,6 +158,7 @@ describe('Inbox screen', () => {
     routineActive = true;
     derniereRoutine = null;
     statutsExecution = [];
+    echanges = [];
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -180,6 +200,7 @@ describe('Inbox screen', () => {
     const onAjoutFerme = vi.fn();
     render(<Inbox slug="simatis" onChange={onChange} ajoutOuvert onAjoutFerme={onAjoutFerme} />);
     await screen.findAllByText('Répondre à Hélène');
+    fireEvent.click(screen.getByRole('button', { name: 'Formulaire' }));
     const envoi = screen.getByRole('button', { name: "Ajouter à l'Inbox" });
     expect(envoi.hasAttribute('disabled')).toBe(true);
     fireEvent.change(screen.getByLabelText('Sujet'), {
@@ -201,6 +222,74 @@ describe('Inbox screen', () => {
     expect((ajout?.body as { echeance: string }).echeance).toMatch(/^2026-10-23T/);
     expect(onChange).toHaveBeenCalled();
     expect(onAjoutFerme).toHaveBeenCalled();
+  });
+
+  it('prepares an entry with Claude, shows it, then adds it on click', async () => {
+    const brouillon = {
+      type: 'devis',
+      titre: 'Faire le devis de la société fictive',
+      resume: 'À envoyer au dirigeant.',
+      echeance: '2026-10-22T10:00:00Z',
+    };
+    const claude = { de: 'claude', texte: 'Pour quelle échéance exactement ?', at: 'b' };
+    echanges = [
+      echange('attente_claude'),
+      echange('en_cours'),
+      echange('attente_pilote', {
+        messages: [...echange('').messages, claude],
+        brouillon,
+      }),
+    ];
+    const onChange = vi.fn();
+    render(<Inbox slug="simatis" onChange={onChange} ajoutOuvert />);
+    await screen.findAllByText('Répondre à Hélène');
+    // Claude is the mode offered first; the form is one click away.
+    expect(screen.getByRole('button', { name: 'Avec Claude' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    const ajouter = screen.getByRole('button', { name: "Ajouter à l'Inbox" });
+    expect(ajouter.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByLabelText('Que faut-il ajouter ?'), {
+      target: { value: 'Devis pour la société fictive avant jeudi' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer à Claude' }));
+    await waitFor(() =>
+      expect(posts().find((c) => c.url === '/api/i/simatis/echanges')?.body).toEqual({
+        texte: 'Devis pour la société fictive avant jeudi',
+      }),
+    );
+    await screen.findByText('Transmis à Claude…');
+    await screen.findByText('Pour quelle échéance exactement ?', {}, { timeout: 8000 });
+    expect(screen.getByText('Faire le devis de la société fictive')).toBeTruthy();
+    expect(screen.getByText('Échéance 22/10/2026')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: "Ajouter à l'Inbox" }));
+    await screen.findByText(/Entrée ajoutée/);
+    expect(posts().map((c) => c.url)).toContain('/api/i/simatis/echanges/e1/ajouter');
+    expect(onChange).toHaveBeenCalled();
+  }, 15000);
+
+  it('answers Claude in the same conversation and shows why it failed', async () => {
+    echanges = [
+      echange('attente_pilote', { erreur: "Claude n'a pas répondu. Réécrivez votre message." }),
+    ];
+    render(<Inbox slug="simatis" ajoutOuvert />);
+    await screen.findAllByText('Répondre à Hélène');
+    fireEvent.change(screen.getByLabelText('Que faut-il ajouter ?'), {
+      target: { value: 'Devis' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer à Claude' }));
+    await screen.findByText("Claude n'a pas répondu. Réécrivez votre message.");
+    fireEvent.change(screen.getByLabelText('Votre réponse'), { target: { value: 'Jeudi 22' } });
+    fireEvent.keyDown(screen.getByLabelText('Votre réponse'), { key: 'Enter' });
+    await waitFor(() =>
+      expect(posts().find((c) => c.url === '/api/i/simatis/echanges/e1/messages')?.body).toEqual({
+        texte: 'Jeudi 22',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    await waitFor(() =>
+      expect(posts().map((c) => c.url)).toContain('/api/i/simatis/echanges/e1/annuler'),
+    );
   });
 
   it('keeps the update button off while the Inbox routine is paused', async () => {

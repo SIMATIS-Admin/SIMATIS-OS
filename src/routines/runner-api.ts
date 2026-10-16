@@ -5,6 +5,8 @@ import { withInstance } from '../db/context.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { createToken, resolveToken, revokeToken } from '../mcp/tokens.js';
 import { executions } from '../routines/schema.js';
+import { echangesAjout } from '../inbox/schema.js';
+import { demarrerEchange, EchangeInconnu, EchangeRefuse, finirEchange } from '../inbox/echanges.js';
 import { and, eq } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
 import { ROUTINES } from './params.js';
@@ -18,6 +20,7 @@ import {
 } from './service.js';
 
 const UNE_HEURE = 60 * 60_000;
+const UN_QUART_HEURE = 15 * 60_000;
 
 // API of the local runner (npm run runner): it picks the requested runs, gets a temporary MCP token
 // limited to the run's instance, launches Claude, then reports the end. Only a « runner » token
@@ -129,5 +132,72 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
       ),
     );
     return { statut: execution.statut };
+  });
+
+  // Add conversations of the Inbox waiting for Claude, with what was said so far.
+  app.get('/api/runner/echanges', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const out = [];
+    for (const instance of await listInstances(db)) {
+      const rows = await withInstance(db, instance.id, (tx) =>
+        tx
+          .select()
+          .from(echangesAjout)
+          .where(
+            and(
+              eq(echangesAjout.instanceId, currentInstance),
+              eq(echangesAjout.statut, 'attente_claude'),
+            ),
+          ),
+      );
+      for (const e of rows) {
+        out.push({
+          id: e.id,
+          instance: instance.slug,
+          nom: instance.nom,
+          messages: e.messages,
+          brouillon: e.brouillon,
+        });
+      }
+    }
+    return out;
+  });
+
+  app.post<Route>('/api/runner/echanges/:id/demarrer', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const parsed = corps.safeParse(request.body);
+    const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    try {
+      await withInstance(db, instance.id, (tx) => demarrerEchange(tx, request.params.id));
+    } catch (error) {
+      if (error instanceof EchangeRefuse || error instanceof EchangeInconnu) {
+        return reply.code(409).send({ error: error.message });
+      }
+      throw error;
+    }
+    const { id: tokenId, token } = await createToken(db, {
+      nom: 'ajout-inbox',
+      portee: 'instance',
+      instanceId: instance.id,
+      expiresAt: new Date(Date.now() + UN_QUART_HEURE),
+    });
+    return { tokenId, token };
+  });
+
+  app.post<Route>('/api/runner/echanges/:id/fin', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const parsed = corps.safeParse(request.body);
+    const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
+    if (!parsed.success || !instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    if (parsed.data.tokenId) await revokeToken(db, parsed.data.tokenId);
+    const echange = await withInstance(db, instance.id, (tx) =>
+      finirEchange(
+        tx,
+        request.params.id,
+        parsed.data.erreur ?? "Claude n'a pas répondu. Réécrivez votre message pour réessayer.",
+      ),
+    );
+    return { statut: echange.statut };
   });
 }

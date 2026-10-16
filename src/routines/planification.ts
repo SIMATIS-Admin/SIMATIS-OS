@@ -3,6 +3,7 @@ import { zoned } from '../connecteurs/google/creneaux.js';
 import type { Database, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
+import { abandonnerEchanges } from '../inbox/echanges.js';
 import { listInstances } from '../instances/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { paramsOf } from './params.js';
@@ -96,7 +97,10 @@ export async function planifier(db: Database, maintenant = new Date()): Promise<
   const debutJour = zoned(jour, '00:00', FUSEAU);
   let creees = 0;
   for (const instance of await listInstances(db)) {
-    await withInstance(db, instance.id, (tx) => abandonnerNonPrises(tx, maintenant));
+    await withInstance(db, instance.id, async (tx) => {
+      await abandonnerNonPrises(tx, maintenant);
+      await abandonnerEchanges(tx, maintenant);
+    });
     // Demo instances only run on demand.
     if (instance.type === 'prospect') continue;
     creees += await withInstance(db, instance.id, async (tx) => {
