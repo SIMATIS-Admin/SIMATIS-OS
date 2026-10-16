@@ -75,6 +75,9 @@ export function App() {
   const [compteurs, setCompteurs] = useState<Record<string, number>>({});
   // Bumped by the Inbox after an action, so the menu counter follows at once.
   const [recharge, setRecharge] = useState(0);
+  // The « + » beside the Inbox title opens the manual entry form; it never stays open across screens.
+  const [ajoutInbox, setAjoutInbox] = useState(false);
+  useEffect(() => setAjoutInbox(false), [route.view, slugCourant]);
   useEffect(() => {
     if (!slugCourant || route.view === 'portefeuille') return setCompteurs({});
     const charger = () =>
@@ -125,6 +128,8 @@ export function App() {
             key={current.slug}
             slug={current.slug}
             onChange={() => setRecharge((n) => n + 1)}
+            ajoutOuvert={ajoutInbox}
+            onAjoutFerme={() => setAjoutInbox(false)}
           />
         );
       case 'pipeline':
@@ -186,6 +191,16 @@ export function App() {
               <Icon name="menu" />
             </button>
             <h1>{title}</h1>
+            {view === 'inbox' && (
+              <button
+                className="btn primary"
+                aria-label="Ajouter une entrée à l'Inbox"
+                title="Ajouter une entrée"
+                onClick={() => setAjoutInbox(true)}
+              >
+                +
+              </button>
+            )}
           </div>
           {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
         </div>

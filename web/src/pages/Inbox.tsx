@@ -231,15 +231,24 @@ function MiseAJour({
 
 // Entry typed by hand. It lands in this instance's Inbox; the Inbox routine notes it in the
 // second brain at its next run.
-function Ajout({ slug, onAjoute }: { slug: string; onAjoute: () => void }) {
-  const [ouvert, setOuvert] = useState(false);
+function Ajout({
+  slug,
+  ouvert,
+  onFermer,
+  onAjoute,
+}: {
+  slug: string;
+  ouvert: boolean;
+  onFermer: () => void;
+  onAjoute: () => void;
+}) {
   const [titre, setTitre] = useState('');
   const [resume, setResume] = useState('');
   const [jour, setJour] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const fermer = () => {
-    setOuvert(false);
+    onFermer();
     setTitre('');
     setResume('');
     setJour('');
@@ -261,12 +270,7 @@ function Ajout({ slug, onAjoute }: { slug: string; onAjoute: () => void }) {
     );
   };
 
-  if (!ouvert)
-    return (
-      <button className="btn sm" onClick={() => setOuvert(true)}>
-        Ajouter
-      </button>
-    );
+  if (!ouvert) return null;
   return (
     <div className="panel stack" style={{ gap: 8, flexBasis: '100%' }}>
       <label className="field">
@@ -310,7 +314,17 @@ function Ajout({ slug, onAjoute }: { slug: string; onAjoute: () => void }) {
 
 // The Inbox: what to handle, per instance. In Mon activité it also gathers the active mandates;
 // every action goes to the subject's own instance.
-export function Inbox({ slug, onChange }: { slug: string; onChange?: () => void }) {
+export function Inbox({
+  slug,
+  onChange,
+  ajoutOuvert = false,
+  onAjoutFerme = () => undefined,
+}: {
+  slug: string;
+  onChange?: () => void;
+  ajoutOuvert?: boolean;
+  onAjoutFerme?: () => void;
+}) {
   const [filtre, setFiltre] = useState<Filtre>('tout');
   const [list, setList] = useState<SujetVue[] | null>(null);
   const [sel, setSel] = useState<string | null>(null);
@@ -422,6 +436,8 @@ export function Inbox({ slug, onChange }: { slug: string; onChange?: () => void 
           )}
           <Ajout
             slug={slug}
+            ouvert={ajoutOuvert}
+            onFermer={onAjoutFerme}
             onAjoute={() =>
               apres(
                 'Entrée ajoutée. Elle sera notée dans le second cerveau à la prochaine mise à jour de l’Inbox.',
