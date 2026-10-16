@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { logEvent } from '../journal/service.js';
@@ -202,4 +202,25 @@ export async function echouerExecution(tx: Tx, id: string, message: string, par:
     },
     par,
   );
+}
+
+// A request nobody picks up (runner stopped, computer off) would keep the routine locked for good:
+// past this delay it is closed as failed so that it can be asked again.
+export const DELAI_PRISE_MS = 15 * 60_000;
+export const MOTIF_NON_PRISE =
+  "Abandonnée : l'exécuteur n'a pas pris la demande en 15 minutes. Vérifiez qu'il tourne sur l'ordinateur, puis relancez.";
+
+export async function abandonnerNonPrises(tx: Tx, maintenant = new Date()): Promise<number> {
+  const perimees = await tx
+    .select({ id: executions.id })
+    .from(executions)
+    .where(
+      and(
+        eq(executions.instanceId, currentInstance),
+        eq(executions.statut, 'demandee'),
+        lt(executions.createdAt, new Date(maintenant.getTime() - DELAI_PRISE_MS)),
+      ),
+    );
+  for (const { id } of perimees) await echouerExecution(tx, id, MOTIF_NON_PRISE, 'planification');
+  return perimees.length;
 }

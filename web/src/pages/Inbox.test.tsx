@@ -79,6 +79,7 @@ const traites = () => [
 ];
 
 let routineActive = true;
+let derniereRoutine: unknown = null;
 // Statuts returned by successive polls of the Inbox routine execution.
 let statutsExecution: string[] = [];
 const execution = (statut: string) => ({
@@ -114,7 +115,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
         actif: routineActive,
         params: {},
         rythme: 'Jours ouvrés à 6h30',
-        derniere: null,
+        derniere: derniereRoutine,
       },
     ]);
   if (url.endsWith('/routines/inbox/executions') && method === 'POST')
@@ -136,6 +137,7 @@ describe('Inbox screen', () => {
     calls = [];
     simulation = false;
     routineActive = true;
+    derniereRoutine = null;
     statutsExecution = [];
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
@@ -211,6 +213,29 @@ describe('Inbox screen', () => {
       ),
     ).toBe(true);
     expect(screen.getByText('Routine en pause')).toBeTruthy();
+  });
+
+  it('says the runner does not answer when a request stays untouched', async () => {
+    derniereRoutine = execution('demandee');
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    await screen.findByText(/L'exécuteur ne répond pas/);
+    expect(
+      screen.getByRole('button', { name: 'Mise à jour en cours…' }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('shows why an abandoned request failed and lets the button run again', async () => {
+    derniereRoutine = {
+      ...execution('echouee'),
+      rapport: { fait: [], attente: [], echec: ["Abandonnée : l'exécuteur n'a pas répondu."] },
+    };
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    await screen.findByText(/Abandonnée : l'exécuteur/);
+    expect(
+      screen.getByRole('button', { name: "Mettre à jour l'Inbox" }).hasAttribute('disabled'),
+    ).toBe(false);
   });
 
   it('filters by type chips', async () => {
