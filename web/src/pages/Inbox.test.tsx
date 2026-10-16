@@ -213,6 +213,8 @@ describe('Inbox screen', () => {
       ),
     ).toBe(true);
     expect(screen.getByText('Routine en pause')).toBeTruthy();
+    // A square icon button: the name is for screen readers, nothing is written in it.
+    expect(screen.getByRole('button', { name: "Mettre à jour l'Inbox" }).textContent).toBe('');
   });
 
   it('says the runner does not answer when a request stays untouched', async () => {

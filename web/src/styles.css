@@ -632,6 +632,41 @@ a {
   padding: 5px 10px;
   font-size: 14px;
 }
+/* Icon-only square button (Inbox: update, add). */
+.btn.carre {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+}
+.btn.carre svg {
+  width: 18px;
+  height: 18px;
+}
+.btn.carre.tourne svg {
+  animation: tourne 1.2s linear infinite;
+}
+@keyframes tourne {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.carre-plus {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--navy);
+  color: #fff;
+  font-size: 13px;
+  line-height: 13px;
+  font-weight: 700;
+  text-align: center;
+}
 .btn[disabled] {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1090,6 +1125,13 @@ textarea.input {
 .vq-filter select {
   width: auto;
   margin-left: auto;
+}
+/* The update button closes the filter row, right after the mandate filter when there is one. */
+.vq-filter .btn.carre {
+  margin-left: auto;
+}
+.vq-filter select + .btn.carre {
+  margin-left: 0;
 }
 .vq-filter {
   display: flex;

@@ -221,9 +221,14 @@ function MiseAJour({
 
   return (
     <>
-      <button className="btn sm" disabled={!routine.actif || enCours} onClick={lancer}>
-        <Icon name="play" />
-        {enCours ? 'Mise à jour en cours…' : "Mettre à jour l'Inbox"}
+      <button
+        className={`btn carre ${enCours ? 'tourne' : ''}`}
+        aria-label={enCours ? 'Mise à jour en cours…' : "Mettre à jour l'Inbox"}
+        title={enCours ? 'Mise à jour en cours…' : "Mettre à jour l'Inbox"}
+        disabled={!routine.actif || enCours}
+        onClick={lancer}
+      >
+        <Icon name="refresh" />
       </button>
       {!routine.actif && <span className="hint">Routine en pause</span>}
       {sansReponse && (
