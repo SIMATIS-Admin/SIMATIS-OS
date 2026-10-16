@@ -1212,6 +1212,10 @@ export function registerApi(
     '/api/i/:slug/site-web/rapport',
     surSiteWeb<RapportRoute>((i, request) => siteWeb.rapport(db, i, request.query.frais === '1')),
   );
+  app.get<SlugParams>(
+    '/api/i/:slug/site-web/temps-reel',
+    surSiteWeb((i) => siteWeb.tempsReel(i)),
+  );
   app.post<SlugParams>(
     '/api/i/:slug/site-web/google/start',
     surSiteWeb<SlugParams>(async (i, request) => ({

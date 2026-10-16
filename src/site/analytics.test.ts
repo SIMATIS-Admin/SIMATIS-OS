@@ -10,10 +10,12 @@ import { createInstance, setModule } from '../instances/service.js';
 import { writeGoogleAppSecret } from '../secrets.js';
 import {
   assembler,
+  assemblerTempsReel,
   lignes,
   messageLisible,
   periodes,
   requetes,
+  requetesTempsReel,
   type RapportSite,
 } from './analytics.js';
 
@@ -133,6 +135,41 @@ describe('report assembly', () => {
   });
 });
 
+describe('realtime assembly', () => {
+  const now = new Date('2026-10-14T08:00:00Z');
+  it('lays the per-minute counts oldest first and ignores minutes out of the window', () => {
+    const r = assemblerTempsReel(
+      [
+        report([], ['activeUsers'], [[[], ['5']]]),
+        report(
+          ['minutesAgo'],
+          ['activeUsers'],
+          [
+            [['00'], ['3']],
+            [['29'], ['1']],
+            [['30'], ['9']],
+          ],
+        ),
+        report(['unifiedScreenName'], ['activeUsers'], [[['Accueil'], ['4']]]),
+      ],
+      now,
+    );
+    expect(r.visiteurs).toBe(5);
+    expect(r.parMinute).toHaveLength(30);
+    expect(r.parMinute[29]).toBe(3);
+    expect(r.parMinute[0]).toBe(1);
+    expect(r.parMinute.reduce((a, b) => a + b, 0)).toBe(4);
+    expect(r.pages).toEqual([{ titre: 'Accueil', visiteurs: 4 }]);
+  });
+
+  it('reads an empty answer as nobody on the site', () => {
+    const r = assemblerTempsReel([{}, {}, {}], now);
+    expect(r.visiteurs).toBe(0);
+    expect(r.pages).toEqual([]);
+    expect(requetesTempsReel()).toHaveLength(3);
+  });
+});
+
 describe('readable Google errors', () => {
   it('names the action to take', () => {
     expect(
@@ -206,6 +243,19 @@ describe('Site web screen', () => {
           );
         }
         return Promise.resolve(Response.json({ reports: REPORTS }));
+      }
+      if (url.endsWith('/properties/123456:runRealtimeReport')) {
+        const body = JSON.parse(init.body as string) as { dimensions?: { name: string }[] };
+        const dim = body.dimensions?.[0]?.name;
+        return Promise.resolve(
+          Response.json(
+            dim === 'unifiedScreenName'
+              ? report(['unifiedScreenName'], ['activeUsers'], [[['Accueil'], ['2']]])
+              : dim === 'minutesAgo'
+                ? report(['minutesAgo'], ['activeUsers'], [[['00'], ['2']]])
+                : report([], ['activeUsers'], [[[], ['2']]]),
+          ),
+        );
       }
       return Promise.resolve(new Response('{}', { status: 404 }));
     };
@@ -301,6 +351,19 @@ describe('Site web screen', () => {
     expect(lus()).toBe(1);
     await app.inject({ method: 'GET', url: '/api/i/simatis/site-web/rapport?frais=1' });
     expect(lus()).toBe(2);
+
+    // Realtime: the last 30 minutes, kept a few seconds.
+    const direct = await app.inject({ method: 'GET', url: '/api/i/simatis/site-web/temps-reel' });
+    expect(direct.statusCode).toBe(200);
+    expect(direct.json()).toMatchObject({
+      visiteurs: 2,
+      pages: [{ titre: 'Accueil', visiteurs: 2 }],
+    });
+    expect(direct.json<{ parMinute: number[] }>().parMinute[29]).toBe(2);
+    const lusDirect = () => appels.filter((u) => u.endsWith(':runRealtimeReport')).length;
+    expect(lusDirect()).toBe(3);
+    await app.inject({ method: 'GET', url: '/api/i/simatis/site-web/temps-reel' });
+    expect(lusDirect()).toBe(3);
 
     dataDesactivee = true;
     const refus = await app.inject({

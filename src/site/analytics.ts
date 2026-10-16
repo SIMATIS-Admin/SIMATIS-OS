@@ -21,6 +21,8 @@ export class SiteWebIndisponible extends Error {}
 const ADMIN = 'https://analyticsadmin.googleapis.com/v1beta';
 const DATA = 'https://analyticsdata.googleapis.com/v1beta';
 const CACHE_MS = 60 * 60_000;
+// The live block is polled by the open screen: a few seconds of cache spare Google's quota.
+const CACHE_TEMPS_REEL_MS = 15_000;
 // Four full weeks: smooths the weekly cycle of a B2B site, still recent enough to act on.
 export const JOURS_PERIODE = 28;
 
@@ -49,6 +51,17 @@ export type RapportSite = {
   sources: { source: string; sessions: number }[];
   genereLe: string;
 };
+
+export type TempsReel = {
+  // Visitors active on the site over the last 30 minutes (Google's realtime window).
+  visiteurs: number;
+  // Active visitors per minute, oldest first: index 0 is 29 minutes ago, the last one is now.
+  parMinute: number[];
+  pages: { titre: string; visiteurs: number }[];
+  genereLe: string;
+};
+
+export const FENETRE_TEMPS_REEL = 30;
 
 const jourParis = (d: Date) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(d);
@@ -215,6 +228,42 @@ export function assembler(
   };
 }
 
+// The three realtime reports: total, per minute, per page.
+export const requetesTempsReel = () => [
+  { metrics: [{ name: 'activeUsers' }] },
+  {
+    dimensions: [{ name: 'minutesAgo' }],
+    metrics: [{ name: 'activeUsers' }],
+    limit: FENETRE_TEMPS_REEL,
+  },
+  {
+    dimensions: [{ name: 'unifiedScreenName' }],
+    metrics: [{ name: 'activeUsers' }],
+    orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+    limit: 8,
+  },
+];
+
+export function assemblerTempsReel(reports: Rapport[], now: Date): TempsReel {
+  const [total, minutes, pages] = reports.map(lignes);
+  const parMinute = Array.from({ length: FENETRE_TEMPS_REEL }, () => 0);
+  for (const l of minutes ?? []) {
+    const ago = Number(l.minutesAgo);
+    if (Number.isInteger(ago) && ago >= 0 && ago < FENETRE_TEMPS_REEL) {
+      parMinute[FENETRE_TEMPS_REEL - 1 - ago] = nombre(l.activeUsers);
+    }
+  }
+  return {
+    visiteurs: nombre(total?.[0]?.activeUsers),
+    parMinute,
+    pages: (pages ?? []).map((l) => ({
+      titre: l.unifiedScreenName ?? '',
+      visiteurs: nombre(l.activeUsers),
+    })),
+    genereLe: now.toISOString(),
+  };
+}
+
 // Google's refusals, in words Marc can act on.
 export function messageLisible(error: unknown): string {
   const brut = error instanceof Error ? error.message : String(error);
@@ -236,6 +285,7 @@ export function siteWebService(deps: SiteWebDeps) {
   const doFetch: FetchLike = deps.fetch ?? ((url, init) => fetch(url, init));
   const now = deps.now ?? (() => new Date());
   const cache = new Map<string, { at: number; rapport: RapportSite }>();
+  const cacheTempsReel = new Map<string, { at: number; donnees: TempsReel }>();
 
   async function secretsOf(instance: Instance) {
     return loadInstanceSecrets(deps.secretsDir, instance.slug);
@@ -338,7 +388,33 @@ export function siteWebService(deps: SiteWebDeps) {
         });
       });
       for (const key of cache.keys()) if (key.startsWith(`${instance.slug}:`)) cache.delete(key);
+      for (const key of cacheTempsReel.keys()) {
+        if (key.startsWith(`${instance.slug}:`)) cacheTempsReel.delete(key);
+      }
       return config.siteWeb;
+    },
+
+    // Who is on the site right now (last 30 minutes), straight from Google's realtime reports.
+    async tempsReel(instance: Instance): Promise<TempsReel> {
+      const propriete = instance.config.siteWeb?.proprieteId;
+      if (!propriete) throw new SiteWebIndisponible('Aucune propriété Google Analytics choisie.');
+      const key = `${instance.slug}:${propriete}`;
+      const t = now();
+      const hit = cacheTempsReel.get(key);
+      if (hit && t.getTime() - hit.at < CACHE_TEMPS_REEL_MS) return hit.donnees;
+
+      const reports = await lisible(async () => {
+        const request = await client(instance);
+        const url = `${DATA}/properties/${encodeURIComponent(propriete)}:runRealtimeReport`;
+        return Promise.all(
+          requetesTempsReel().map(async (body) =>
+            rapportSchema.parse(await request('POST', url, body)),
+          ),
+        );
+      });
+      const donnees = assemblerTempsReel(reports, t);
+      cacheTempsReel.set(key, { at: t.getTime(), donnees });
+      return donnees;
     },
 
     // Kept an hour: the figures are daily, and Google limits the number of requests.

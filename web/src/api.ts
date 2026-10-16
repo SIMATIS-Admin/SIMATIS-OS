@@ -643,6 +643,12 @@ export type RapportSite = {
   sources: { source: string; sessions: number }[];
   genereLe: string;
 };
+export type TempsReelSite = {
+  visiteurs: number;
+  parMinute: number[];
+  pages: { titre: string; visiteurs: number }[];
+  genereLe: string;
+};
 export const fetchSiteWeb = (slug: string) => getJson<EtatSiteWeb>(inst(slug, 'site-web'));
 export const fetchProprietes = (slug: string) =>
   getJson<ProprieteAnalytics[]>(inst(slug, 'site-web/proprietes'));
@@ -650,5 +656,7 @@ export const choisirPropriete = (slug: string, id: string, nom: string) =>
   sendJson<EtatSiteWeb['propriete']>('PUT', inst(slug, 'site-web/propriete'), { id, nom });
 export const fetchRapportSite = (slug: string, frais = false) =>
   getJson<RapportSite>(inst(slug, `site-web/rapport${frais ? '?frais=1' : ''}`));
+export const fetchTempsReelSite = (slug: string) =>
+  getJson<TempsReelSite>(inst(slug, 'site-web/temps-reel'));
 export const connecterAnalytics = (slug: string) =>
   sendJson<{ url: string }>('POST', inst(slug, 'site-web/google/start'), {});

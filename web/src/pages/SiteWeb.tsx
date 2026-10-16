@@ -5,9 +5,11 @@ import {
   fetchProprietes,
   fetchRapportSite,
   fetchSiteWeb,
+  fetchTempsReelSite,
   type EtatSiteWeb,
   type ProprieteAnalytics,
   type RapportSite,
+  type TempsReelSite,
 } from '../api.js';
 import { Icon } from '../icons.js';
 
@@ -50,6 +52,108 @@ export function Evolution({ actuel, precedent }: { actuel: number; precedent: nu
   );
 }
 
+const RAFRAICHISSEMENT_MS = 30_000;
+
+// Who is on the site right now: Google's realtime window (30 minutes), refreshed while the screen
+// is open and visible.
+export function EnCeMoment({ slug }: { slug: string }) {
+  const [donnees, setDonnees] = useState<TempsReelSite | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let actif = true;
+    const lire = () => {
+      if (document.visibilityState === 'hidden') return;
+      fetchTempsReelSite(slug).then(
+        (d) => {
+          if (!actif) return;
+          setDonnees(d);
+          setError(null);
+        },
+        (e: unknown) => actif && setError(e instanceof Error ? e.message : String(e)),
+      );
+    };
+    lire();
+    const timer = setInterval(lire, RAFRAICHISSEMENT_MS);
+    document.addEventListener('visibilitychange', lire);
+    return () => {
+      actif = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', lire);
+    };
+  }, [slug]);
+
+  const max = Math.max(1, ...(donnees?.parMinute ?? []));
+  return (
+    <div className="panel sw-direct" style={{ marginBottom: 18 }}>
+      <div className="panel-h">
+        <div>
+          <h2>En ce moment</h2>
+          <div className="small muted">
+            Visiteurs actifs sur le site ces 30 dernières minutes, mis à jour toutes les 30 s.
+          </div>
+        </div>
+      </div>
+      <div className="panel-b">
+        {error && !donnees && <div className="empty">{error}</div>}
+        {donnees && (
+          <div className="grid g2">
+            <div>
+              <div className="kpi" style={{ border: 0, padding: 0 }}>
+                <span className="l">Visiteurs actifs</span>
+                <span className="v" aria-live="polite">
+                  {entier(donnees.visiteurs)}
+                </span>
+              </div>
+              <div
+                className="sw-cols"
+                role="img"
+                aria-label={`Visiteurs actifs par minute sur les 30 dernières minutes, maximum ${max}`}
+                style={{ height: 56 }}
+              >
+                {donnees.parMinute.map((n, k) => (
+                  <div key={k} className="sw-col" title={`il y a ${29 - k} min : ${n}`}>
+                    <div
+                      className="sw-col-bar"
+                      style={{ height: `${Math.max(2, (n / max) * 100)}%` }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="small muted">
+                De il y a 30 min (à gauche) à maintenant (à droite).
+              </div>
+            </div>
+            <table className="tbl small">
+              <thead>
+                <tr>
+                  <th>Page lue en ce moment</th>
+                  <th className="r">Visiteurs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {donnees.pages.length === 0 && (
+                  <tr>
+                    <td colSpan={2} className="muted">
+                      Personne sur le site pour l'instant.
+                    </td>
+                  </tr>
+                )}
+                {donnees.pages.map((p) => (
+                  <tr key={p.titre}>
+                    <td>{p.titre || '(sans titre)'}</td>
+                    <td className="r num">{entier(p.visiteurs)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!donnees && !error && <div className="empty">Lecture en direct…</div>}
+      </div>
+    </div>
+  );
+}
+
 function Kpi({
   libelle,
   valeur,
@@ -75,10 +179,12 @@ function Kpi({
 
 function Rapport({
   r,
+  slug,
   onFrais,
   onChanger,
 }: {
   r: RapportSite;
+  slug: string;
   onFrais: () => void;
   onChanger: () => void;
 }) {
@@ -89,6 +195,7 @@ function Rapport({
   const maxCanal = Math.max(1, ...r.canaux.map((c) => c.sessions));
   return (
     <>
+      <EnCeMoment slug={slug} />
       <div className="sw-entete">
         <div className="small muted">
           Du {jour(r.periode.du)} au {jour(r.periode.au)}, comparé aux 28 jours précédents (
@@ -455,5 +562,12 @@ export function SiteWeb({ slug }: { slug: string }) {
     );
   }
   if (!rapport) return <div className="empty">Lecture de Google Analytics…</div>;
-  return <Rapport r={rapport} onFrais={() => charger(true)} onChanger={() => setChanger(true)} />;
+  return (
+    <Rapport
+      r={rapport}
+      slug={slug}
+      onFrais={() => charger(true)}
+      onChanger={() => setChanger(true)}
+    />
+  );
 }
