@@ -120,6 +120,8 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.endsWith('/routines/inbox/executions') && method === 'POST')
     return json(execution('demandee'), 201);
   if (url.includes('/executions/')) return json(execution(statutsExecution.shift() ?? 'terminee'));
+  if (url.endsWith('/sujets') && method === 'POST')
+    return json(sujet('n1', { type: 'autre' }), 201);
   if (method === 'POST') return json(sujet('s1', { statut: 'traite' }));
   if (url.includes('filtre=traites')) return json(traites());
   return json(liste());
@@ -163,6 +165,34 @@ describe('Inbox screen', () => {
       screen.getByRole('button', { name: "Mettre à jour l'Inbox" }).hasAttribute('disabled'),
     ).toBe(false);
   }, 15000);
+
+  it('adds an entry by hand, then reloads the list', async () => {
+    const onChange = vi.fn();
+    render(<Inbox slug="simatis" onChange={onChange} />);
+    await screen.findAllByText('Répondre à Hélène');
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
+    const envoi = screen.getByRole('button', { name: "Ajouter à l'Inbox" });
+    expect(envoi.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByLabelText('Sujet'), {
+      target: { value: '  Retour au client fictif  ' },
+    });
+    fireEvent.change(screen.getByLabelText('Détail (facultatif)'), {
+      target: { value: 'Supports et visuels' },
+    });
+    fireEvent.change(screen.getByLabelText('Échéance (facultatif)'), {
+      target: { value: '2026-10-23' },
+    });
+    fireEvent.click(envoi);
+    await screen.findByText(/Entrée ajoutée/);
+    const ajout = posts().find((c) => c.url === '/api/i/simatis/sujets');
+    expect(ajout?.body).toMatchObject({
+      titre: 'Retour au client fictif',
+      resume: 'Supports et visuels',
+    });
+    expect((ajout?.body as { echeance: string }).echeance).toMatch(/^2026-10-23T/);
+    expect(onChange).toHaveBeenCalled();
+    expect(screen.queryByLabelText('Sujet')).toBeNull();
+  });
 
   it('keeps the update button off while the Inbox routine is paused', async () => {
     routineActive = false;

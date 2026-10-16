@@ -34,6 +34,7 @@ import {
   marquerTraite,
   remettreATraiter,
   SujetRefuse,
+  ajouterSujet,
   transformerEnTache,
 } from '../inbox/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
@@ -507,6 +508,29 @@ export function registerApi(
   app.post<SujetRoute>(
     '/api/i/:slug/sujets/:id/a-traiter',
     surSujet((i, id) => remettreATraiter(db, i, id)),
+  );
+  const sujetSaisiSchema = z
+    .object({
+      titre: z.string().trim().min(1).max(300),
+      resume: z.string().trim().max(5000).nullish(),
+      echeance: z.iso.datetime({ offset: true }).nullish(),
+    })
+    .strict();
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/sujets',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = sujetSaisiSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.code(400).send({ error: 'Titre requis (300 caractères max)' });
+      const { titre, resume, echeance } = parsed.data;
+      return reply.code(201).send(
+        await ajouterSujet(db, i, {
+          titre,
+          resume: resume || null,
+          echeance: echeance ? new Date(echeance) : null,
+        }),
+      );
+    }),
   );
   const sujetTacheSchema = tacheSchema.omit({ hubspot: true });
   app.post<SujetRoute>(

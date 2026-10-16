@@ -1,0 +1,1 @@
+ALTER TABLE "sujets" ADD COLUMN "note_cerveau_at" timestamp with time zone;

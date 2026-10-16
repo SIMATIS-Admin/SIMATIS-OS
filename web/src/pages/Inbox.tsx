@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  ajouterSujet,
   decider,
   fetchExecution,
   fetchInbox,
@@ -228,6 +229,85 @@ function MiseAJour({
   );
 }
 
+// Entry typed by hand. It lands in this instance's Inbox; the Inbox routine notes it in the
+// second brain at its next run.
+function Ajout({ slug, onAjoute }: { slug: string; onAjoute: () => void }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [titre, setTitre] = useState('');
+  const [resume, setResume] = useState('');
+  const [jour, setJour] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const fermer = () => {
+    setOuvert(false);
+    setTitre('');
+    setResume('');
+    setJour('');
+    setError(null);
+  };
+  const envoyer = () => {
+    setError(null);
+    ajouterSujet(slug, {
+      titre: titre.trim(),
+      resume: resume.trim() || undefined,
+      // Noon, local time: the day stays the same wherever the server runs.
+      echeance: jour ? new Date(`${jour}T12:00:00`).toISOString() : undefined,
+    }).then(
+      () => {
+        fermer();
+        onAjoute();
+      },
+      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
+  };
+
+  if (!ouvert)
+    return (
+      <button className="btn sm" onClick={() => setOuvert(true)}>
+        Ajouter
+      </button>
+    );
+  return (
+    <div className="panel stack" style={{ gap: 8, flexBasis: '100%' }}>
+      <label className="field">
+        <span>Sujet</span>
+        <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} />
+      </label>
+      <label className="field">
+        <span>Détail (facultatif)</span>
+        <textarea
+          className="input"
+          rows={3}
+          value={resume}
+          onChange={(e) => setResume(e.target.value)}
+        />
+      </label>
+      <label className="field">
+        <span>Échéance (facultatif)</span>
+        <input
+          className="input"
+          type="date"
+          value={jour}
+          onChange={(e) => setJour(e.target.value)}
+        />
+      </label>
+      {error && (
+        <span className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </span>
+      )}
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn sm primary" disabled={!titre.trim()} onClick={envoyer}>
+          Ajouter à l'Inbox
+        </button>
+        <button className="btn sm" onClick={fermer}>
+          Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // The Inbox: what to handle, per instance. In Mon activité it also gathers the active mandates;
 // every action goes to the subject's own instance.
 export function Inbox({ slug, onChange }: { slug: string; onChange?: () => void }) {
@@ -340,6 +420,14 @@ export function Inbox({ slug, onChange }: { slug: string; onChange?: () => void 
               ))}
             </select>
           )}
+          <Ajout
+            slug={slug}
+            onAjoute={() =>
+              apres(
+                'Entrée ajoutée. Elle sera notée dans le second cerveau à la prochaine mise à jour de l’Inbox.',
+              )
+            }
+          />
           {routine && <MiseAJour slug={slug} routine={routine} onFini={fini} />}
         </div>
         <div className="vq-list">
