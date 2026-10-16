@@ -38,6 +38,13 @@ function serveur(etat: EtatSiteWeb, proprietes: unknown[] = []) {
       if (url.endsWith('/site-web')) return json(etat);
       if (url.endsWith('/site-web/proprietes')) return json(proprietes);
       if (url.includes('/site-web/rapport')) return json(rapport);
+      if (url.endsWith('/site-web/temps-reel'))
+        return json({
+          visiteurs: 4,
+          parMinute: Array.from({ length: 30 }, (_, k) => (k === 29 ? 4 : 0)),
+          pages: [{ titre: 'Accueil en direct', visiteurs: 3 }],
+          genereLe: '2026-10-14T08:00:00Z',
+        });
       if (url.endsWith('/site-web/google/start')) return json({ url: '#consentement' });
       return json({});
     }),
@@ -103,5 +110,25 @@ describe('Site web screen', () => {
     expect(screen.getByText('Diagnostic fictif')).toBeTruthy();
     expect(screen.getByText('Accès direct')).toBeTruthy();
     expect(screen.getByLabelText(/oct\. 2026 : 110 visiteurs.*mois en cours/)).toBeTruthy();
+  });
+
+  it('shows who is on the site right now and refreshes it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const calls = serveur({
+        googleClientDisponible: true,
+        connecte: true,
+        propriete: { proprieteId: '1', proprieteNom: 'Site fictif' },
+      });
+      render(<SiteWeb slug="simatis" />);
+      expect(await screen.findByText('Accueil en direct')).toBeTruthy();
+      expect(screen.getByText('Visiteurs actifs').closest('.kpi')?.textContent).toMatch(/4$/);
+      const lectures = () => calls.filter((c) => c.url.endsWith('/site-web/temps-reel')).length;
+      const avant = lectures();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(lectures()).toBeGreaterThan(avant);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
