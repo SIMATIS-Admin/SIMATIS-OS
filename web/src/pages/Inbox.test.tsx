@@ -166,11 +166,18 @@ describe('Inbox screen', () => {
     ).toBe(false);
   }, 15000);
 
+  it('shows no entry form and no add button of its own until the + asks for it', async () => {
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    expect(screen.queryByLabelText('Sujet')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ajouter' })).toBeNull();
+  });
+
   it('adds an entry by hand, then reloads the list', async () => {
     const onChange = vi.fn();
-    render(<Inbox slug="simatis" onChange={onChange} />);
+    const onAjoutFerme = vi.fn();
+    render(<Inbox slug="simatis" onChange={onChange} ajoutOuvert onAjoutFerme={onAjoutFerme} />);
     await screen.findAllByText('Répondre à Hélène');
-    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
     const envoi = screen.getByRole('button', { name: "Ajouter à l'Inbox" });
     expect(envoi.hasAttribute('disabled')).toBe(true);
     fireEvent.change(screen.getByLabelText('Sujet'), {
@@ -191,7 +198,7 @@ describe('Inbox screen', () => {
     });
     expect((ajout?.body as { echeance: string }).echeance).toMatch(/^2026-10-23T/);
     expect(onChange).toHaveBeenCalled();
-    expect(screen.queryByLabelText('Sujet')).toBeNull();
+    expect(onAjoutFerme).toHaveBeenCalled();
   });
 
   it('keeps the update button off while the Inbox routine is paused', async () => {
