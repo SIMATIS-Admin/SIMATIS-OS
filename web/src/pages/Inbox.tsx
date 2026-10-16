@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   decider,
+  fetchExecution,
   fetchInbox,
+  fetchRoutines,
+  lancerRoutine,
   marquerSujetTraite,
   remettreSujet,
   sujetEnTache,
+  type Execution,
+  type RoutineInfo,
   type SujetVue,
   type TypeSujet,
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { PropositionDetail } from './inbox/Proposition.js';
 import { EditionTache } from './taches/Edition.js';
+
+// Same rule as the Routines screen: an execution is open until the server says it ended.
+const OUVERTE = new Set(['demandee', 'en_cours']);
 
 const FILTRES = [
   ['tout', 'Tout'],
@@ -161,6 +169,65 @@ function Detail({
   );
 }
 
+// Runs the Inbox routine on demand and follows it until it ends. Only one run at a time: the
+// button stays off while an execution is open, including one started from the Routines screen.
+function MiseAJour({
+  slug,
+  routine,
+  onFini,
+}: {
+  slug: string;
+  routine: RoutineInfo;
+  onFini: (e: Execution) => void;
+}) {
+  const [execution, setExecution] = useState<Execution | null>(routine.derniere);
+  const [error, setError] = useState<string | null>(null);
+  const idOuverte = execution && OUVERTE.has(execution.statut) ? execution.id : null;
+
+  useEffect(() => {
+    if (!idOuverte) return;
+    const timer = setInterval(() => {
+      fetchExecution(slug, idOuverte).then(
+        (e) => {
+          setExecution(e);
+          if (!OUVERTE.has(e.statut)) {
+            clearInterval(timer);
+            onFini(e);
+          }
+        },
+        (e: unknown) => {
+          clearInterval(timer);
+          setError(e instanceof Error ? e.message : String(e));
+        },
+      );
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [slug, idOuverte, onFini]);
+
+  const lancer = () => {
+    setError(null);
+    lancerRoutine(slug, routine.cle).then(setExecution, (e: unknown) =>
+      setError(e instanceof Error ? e.message : String(e)),
+    );
+  };
+  const enCours = idOuverte !== null;
+
+  return (
+    <>
+      <button className="btn sm" disabled={!routine.actif || enCours} onClick={lancer}>
+        <Icon name="play" />
+        {enCours ? 'Mise à jour en cours…' : "Mettre à jour l'Inbox"}
+      </button>
+      {!routine.actif && <span className="hint">Routine en pause</span>}
+      {error && (
+        <span className="small" style={{ color: 'var(--red)' }}>
+          {error}
+        </span>
+      )}
+    </>
+  );
+}
+
 // The Inbox: what to handle, per instance. In Mon activité it also gathers the active mandates;
 // every action goes to the subject's own instance.
 export function Inbox({ slug, onChange }: { slug: string; onChange?: () => void }) {
@@ -170,11 +237,30 @@ export function Inbox({ slug, onChange }: { slug: string; onChange?: () => void 
   const [mandat, setMandat] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [edition, setEdition] = useState<SujetVue | null>(null);
+  // No button when the instance has no Inbox routine (or the routines cannot be read).
+  const [routine, setRoutine] = useState<RoutineInfo | null>(null);
 
   const load = useCallback(() => {
     fetchInbox(slug, filtre).then(setList, (e: unknown) => setMessage(String(e)));
   }, [slug, filtre]);
   useEffect(load, [load]);
+  useEffect(() => {
+    fetchRoutines(slug).then(
+      (rs) => setRoutine(rs.find((r) => r.cle === 'inbox') ?? null),
+      () => setRoutine(null),
+    );
+  }, [slug]);
+
+  const fini = useCallback(
+    (e: Execution) => {
+      load();
+      onChange?.();
+      setMessage(
+        e.statut === 'echouee' ? 'La mise à jour de l’Inbox a échoué.' : 'Inbox mise à jour.',
+      );
+    },
+    [load, onChange],
+  );
 
   const instances = [...new Map((list ?? []).map((s) => [s.instance.slug, s.instance])).values()];
   const ensemble = instances.some((i) => i.slug !== slug);
@@ -254,6 +340,7 @@ export function Inbox({ slug, onChange }: { slug: string; onChange?: () => void 
               ))}
             </select>
           )}
+          {routine && <MiseAJour slug={slug} routine={routine} onFini={fini} />}
         </div>
         <div className="vq-list">
           {visibles.length ? (
