@@ -78,6 +78,21 @@ const traites = () => [
   }),
 ];
 
+let routineActive = true;
+// Statuts returned by successive polls of the Inbox routine execution.
+let statutsExecution: string[] = [];
+const execution = (statut: string) => ({
+  id: 'x1',
+  routine: 'inbox',
+  statut,
+  demandePar: 'marc',
+  debut: null,
+  fin: null,
+  createdAt: '2026-10-16T06:30:00Z',
+  etapes: [],
+  rapport: null,
+});
+
 function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
@@ -89,6 +104,22 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     return simulation
       ? json({ simulation: true, message: 'Simulation : rien n’a été écrit dans HubSpot.' }, 202)
       : json(sujet('s1', { statut: 'tache', tacheId: 't1' }), 201);
+  if (url.endsWith('/routines'))
+    return json([
+      {
+        cle: 'inbox',
+        nom: 'Routine Inbox',
+        etapes: [],
+        skill: 'alimenter-inbox',
+        actif: routineActive,
+        params: {},
+        rythme: 'Jours ouvrés à 6h30',
+        derniere: null,
+      },
+    ]);
+  if (url.endsWith('/routines/inbox/executions') && method === 'POST')
+    return json(execution('demandee'), 201);
+  if (url.includes('/executions/')) return json(execution(statutsExecution.shift() ?? 'terminee'));
   if (method === 'POST') return json(sujet('s1', { statut: 'traite' }));
   if (url.includes('filtre=traites')) return json(traites());
   return json(liste());
@@ -102,11 +133,47 @@ describe('Inbox screen', () => {
   beforeEach(() => {
     calls = [];
     simulation = false;
+    routineActive = true;
+    statutsExecution = [];
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('runs the Inbox routine, follows it, then reloads the list', async () => {
+    statutsExecution = ['en_cours', 'terminee'];
+    const onChange = vi.fn();
+    render(<Inbox slug="simatis" onChange={onChange} />);
+    await screen.findAllByText('Répondre à Hélène');
+    fireEvent.click(await screen.findByRole('button', { name: "Mettre à jour l'Inbox" }));
+    await waitFor(() =>
+      expect(posts().map((c) => c.url)).toContain('/api/i/simatis/routines/inbox/executions'),
+    );
+    expect(
+      (await screen.findByRole('button', { name: 'Mise à jour en cours…' })).hasAttribute(
+        'disabled',
+      ),
+    ).toBe(true);
+    await screen.findByText('Inbox mise à jour.', {}, { timeout: 8000 });
+    expect(onChange).toHaveBeenCalled();
+    expect(calls.filter((c) => c.url.includes('/inbox?')).length).toBeGreaterThan(1);
+    expect(
+      screen.getByRole('button', { name: "Mettre à jour l'Inbox" }).hasAttribute('disabled'),
+    ).toBe(false);
+  }, 15000);
+
+  it('keeps the update button off while the Inbox routine is paused', async () => {
+    routineActive = false;
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    expect(
+      (await screen.findByRole('button', { name: "Mettre à jour l'Inbox" })).hasAttribute(
+        'disabled',
+      ),
+    ).toBe(true);
+    expect(screen.getByText('Routine en pause')).toBeTruthy();
   });
 
   it('filters by type chips', async () => {
