@@ -173,7 +173,9 @@ describe('Inbox screen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
     const envoi = screen.getByRole('button', { name: "Ajouter à l'Inbox" });
     expect(envoi.hasAttribute('disabled')).toBe(true);
-    fireEvent.change(screen.getByLabelText('Sujet'), { target: { value: '  Retour à Pierre  ' } });
+    fireEvent.change(screen.getByLabelText('Sujet'), {
+      target: { value: '  Retour au client fictif  ' },
+    });
     fireEvent.change(screen.getByLabelText('Détail (facultatif)'), {
       target: { value: 'Supports et visuels' },
     });
@@ -183,7 +185,10 @@ describe('Inbox screen', () => {
     fireEvent.click(envoi);
     await screen.findByText(/Entrée ajoutée/);
     const ajout = posts().find((c) => c.url === '/api/i/simatis/sujets');
-    expect(ajout?.body).toMatchObject({ titre: 'Retour à Pierre', resume: 'Supports et visuels' });
+    expect(ajout?.body).toMatchObject({
+      titre: 'Retour au client fictif',
+      resume: 'Supports et visuels',
+    });
     expect((ajout?.body as { echeance: string }).echeance).toMatch(/^2026-10-23T/);
     expect(onChange).toHaveBeenCalled();
     expect(screen.queryByLabelText('Sujet')).toBeNull();
