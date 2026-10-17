@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ajouterDepuisEchange,
   ajouterSujet,
+  modifierSujet,
   annulerEchange,
   decider,
   fetchEchange,
@@ -25,6 +26,8 @@ import { PropositionDetail } from './inbox/Proposition.js';
 import { EditionTache } from './taches/Edition.js';
 
 type StatutSujet = SujetVue['statut'];
+// Priority of a new entry, from 1 (low) to 5 (high); mirrors the server default.
+const PRIORITE_DEFAUT = 3;
 
 // Same rule as the Routines screen: an execution is open until the server says it ended.
 const OUVERTE = new Set(['demandee', 'en_cours']);
@@ -121,6 +124,7 @@ function Ligne({
           )}
         </div>
         <small>
+          {s.priorite >= 4 && `Priorité ${s.priorite} · `}
           {qui(s) && `${qui(s)} · `}
           {s.echeance && (
             <span className={`echeance ${depassee(s) ? 'red' : ''}`}>
@@ -134,16 +138,64 @@ function Ligne({
   );
 }
 
+// Due date and priority of an entry, changed at any time (the Inbox shows them at once).
+function Reglages({
+  s,
+  onModifier,
+}: {
+  s: SujetVue;
+  onModifier: (modif: { echeance?: string | null; priorite?: number }) => void;
+}) {
+  const [jour, setJour] = useState(s.echeance ? jourParis(new Date(s.echeance)) : '');
+  return (
+    <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+      <label className="field">
+        <span>Échéance</span>
+        <input
+          className="input"
+          type="date"
+          value={jour}
+          onChange={(e) => {
+            setJour(e.target.value);
+            // Noon, local time: the day stays the same wherever the server runs.
+            onModifier({
+              echeance: e.target.value
+                ? new Date(`${e.target.value}T12:00:00`).toISOString()
+                : null,
+            });
+          }}
+        />
+      </label>
+      <label className="field">
+        <span>Priorité (5 = la plus haute)</span>
+        <select
+          className="input"
+          value={s.priorite}
+          onChange={(e) => onModifier({ priorite: Number(e.target.value) })}
+        >
+          {[1, 2, 3, 4, 5].map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 function Detail({
   s,
   onTraite,
   onRemettre,
   onTache,
+  onModifier,
 }: {
   s: SujetVue;
   onTraite: () => void;
   onRemettre: () => void;
   onTache: () => void;
+  onModifier: (modif: { echeance?: string | null; priorite?: number }) => void;
 }) {
   return (
     <div className="panel inbox-detail">
@@ -168,6 +220,9 @@ function Detail({
           </span>
         </div>
         {s.resume && <p style={{ whiteSpace: 'pre-line' }}>{s.resume}</p>}
+        {s.statut === 'a_traiter' && s.type !== 'a_valider' && (
+          <Reglages key={s.id} s={s} onModifier={onModifier} />
+        )}
         <div className="decision">
           {lienWeb(s.lien) && (
             <a className="btn" href={lienWeb(s.lien) ?? undefined} target="_blank" rel="noreferrer">
@@ -297,6 +352,7 @@ function Formulaire({
   const [titre, setTitre] = useState('');
   const [resume, setResume] = useState('');
   const [jour, setJour] = useState('');
+  const [priorite, setPriorite] = useState(PRIORITE_DEFAUT);
   const [error, setError] = useState<string | null>(null);
 
   const fermer = () => {
@@ -304,6 +360,7 @@ function Formulaire({
     setTitre('');
     setResume('');
     setJour('');
+    setPriorite(PRIORITE_DEFAUT);
     setError(null);
   };
   const envoyer = () => {
@@ -313,6 +370,7 @@ function Formulaire({
       resume: resume.trim() || undefined,
       // Noon, local time: the day stays the same wherever the server runs.
       echeance: jour ? new Date(`${jour}T12:00:00`).toISOString() : undefined,
+      priorite,
     }).then(
       () => {
         fermer();
@@ -345,6 +403,20 @@ function Formulaire({
           value={jour}
           onChange={(e) => setJour(e.target.value)}
         />
+      </label>
+      <label className="field">
+        <span>Priorité (5 = la plus haute)</span>
+        <select
+          className="input"
+          value={priorite}
+          onChange={(e) => setPriorite(Number(e.target.value))}
+        >
+          {[1, 2, 3, 4, 5].map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
       </label>
       {error && (
         <span className="small" style={{ color: 'var(--red)' }}>
@@ -660,6 +732,9 @@ export function Inbox({
         onTraite={() => void agir(marquerSujetTraite(s.instance.slug, s.id), 'Traité.')}
         onRemettre={() => void agir(remettreSujet(s.instance.slug, s.id), 'Remis à traiter.')}
         onTache={() => setEdition(s)}
+        onModifier={(modif) =>
+          void agir(modifierSujet(s.instance.slug, s.id, modif), 'Entrée modifiée.')
+        }
       />
     );
   };

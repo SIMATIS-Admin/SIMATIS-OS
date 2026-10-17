@@ -18,7 +18,7 @@ describe('Inbox : API', () => {
   let secretsDir: string;
   let app: ReturnType<typeof buildApp>;
 
-  const req = async (method: 'GET' | 'POST', url: string, payload?: unknown) => {
+  const req = async (method: 'GET' | 'POST' | 'PATCH', url: string, payload?: unknown) => {
     const r = await app.inject({ method, url, payload: payload as object });
     return { status: r.statusCode, body: r.json<unknown>() };
   };
@@ -150,6 +150,26 @@ describe('Inbox : API', () => {
     });
     expect(decision.status).toBe(200);
     expect((await inbox('helioval', 'a_valider')).some((s) => s.id === sujet?.id)).toBe(false);
+  });
+
+  it('sets the priority and due date of an entry, and refuses a priority out of 1 to 5', async () => {
+    const r = await req('POST', '/api/i/helioval/sujets', { titre: 'Relancer', priorite: 4 });
+    expect(r.status).toBe(201);
+    expect(r.body).toMatchObject({ priorite: 4 });
+    const id = (r.body as Sujet).id;
+    const modif = await req('PATCH', `/api/i/helioval/sujets/${id}`, {
+      echeance: '2026-10-23T12:00:00+02:00',
+      priorite: 5,
+    });
+    expect(modif.status).toBe(200);
+    expect(modif.body).toMatchObject({ priorite: 5, echeance: '2026-10-23T10:00:00.000Z' });
+    // A date of null removes it, and a missing key keeps the priority.
+    const efface = await req('PATCH', `/api/i/helioval/sujets/${id}`, { echeance: null });
+    expect(efface.body).toMatchObject({ priorite: 5, echeance: null });
+    expect((await req('PATCH', `/api/i/helioval/sujets/${id}`, { priorite: 6 })).status).toBe(400);
+    expect((await req('POST', '/api/i/helioval/sujets', { titre: 'x', priorite: 0 })).status).toBe(
+      400,
+    );
   });
 
   it('rejects an invalid task body with 400 and an unknown subject with 404', async () => {

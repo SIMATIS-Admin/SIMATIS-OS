@@ -50,6 +50,7 @@ export type SujetVue = {
   origine: OrigineSujet;
   lien: string | null;
   echeance: string | null;
+  priorite: number;
   statut: StatutSujet;
   tacheId: string | null;
   createdAt: string;
@@ -66,8 +67,9 @@ export class SujetRefuse extends Error {}
 
 const LIMITE = 200;
 
-// Due dates first, earliest first (so overdue ones lead), then undated ones, newest first.
+// Highest priority first, then due dates first, earliest first (so overdue ones lead), then undated ones, newest first.
 export function trierInbox(a: SujetVue, b: SujetVue): number {
+  if (a.priorite !== b.priorite) return b.priorite - a.priorite;
   if (a.echeance && b.echeance) return a.echeance.localeCompare(b.echeance);
   if (a.echeance) return -1;
   if (b.echeance) return 1;
@@ -114,6 +116,7 @@ async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise
     origine: s.origine,
     lien: s.lien,
     echeance: s.echeance?.toISOString() ?? null,
+    priorite: s.priorite,
     statut: s.statut,
     tacheId: s.tacheId,
     createdAt: s.createdAt.toISOString(),
@@ -185,6 +188,7 @@ export type SujetSaisi = {
   titre: string;
   resume?: string | null;
   echeance?: Date | null;
+  priorite?: number;
   type?: Exclude<TypeSujet, 'a_valider'>;
 };
 
@@ -203,6 +207,7 @@ export async function ajouterSujetTx(
     source: SOURCE_MANUELLE,
     sourceId: randomUUID(),
     echeance: saisie.echeance ?? null,
+    priorite: saisie.priorite,
   });
   await logEvent(tx, {
     acteur: 'pilote',
@@ -270,6 +275,32 @@ export async function remettreATraiter(
     await logEvent(tx, {
       acteur: 'pilote',
       action: `Sujet remis à traiter : ${s.titre}`,
+      details: { sujet: id },
+    });
+    return vue(tx, instance, id);
+  });
+}
+
+// Due date and priority of an entry, set when it is added or later on. A proposition is decided
+// on its own screen, so it keeps its fields.
+export type SujetModifie = { echeance?: Date | null; priorite?: number };
+export async function modifierSujet(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  modif: SujetModifie,
+): Promise<SujetVue | null> {
+  return withInstance(db, instance.id, async (tx) => {
+    const s = await charger(tx, id);
+    if (!s) return null;
+    if (s.type === 'a_valider') throw new SujetRefuse('Validez ou écartez la proposition.');
+    await tx
+      .update(sujets)
+      .set({ ...modif, updatedAt: new Date() })
+      .where(eq(sujets.id, id));
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: `Sujet modifié : ${s.titre}`,
       details: { sujet: id },
     });
     return vue(tx, instance, id);

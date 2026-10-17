@@ -12,9 +12,11 @@ import { archiveInstance, createInstance } from '../instances/service.js';
 import { deposerSujet, type DepotSujet } from './depot.js';
 import { marquerReporte, sujetsTraites } from './report.js';
 import {
+  ajouterSujet,
   compterInbox,
   listInbox,
   marquerTraite,
+  modifierSujet,
   remettreATraiter,
   SujetRefuse,
   transformerEnTache,
@@ -33,6 +35,7 @@ const vue = (id: string, echeance: string | null, createdAt: string): SujetVue =
   origine: 'os',
   lien: null,
   echeance,
+  priorite: 3,
   statut: 'a_traiter',
   tacheId: null,
   createdAt,
@@ -243,5 +246,40 @@ describe('Inbox : service', () => {
       transformerEnTache(t.app.db, m2, id, { titre: 'Deux fois' }, off()),
     ).rejects.toBeInstanceOf(SujetRefuse);
     expect(await nbTaches()).toBe(avant);
+  });
+
+  it('gives an entry the default priority 3, and sets it when it is added or changed', async () => {
+    const { id } = await deposer(simatis, 'prio-defaut');
+    const par = await listInbox(t.app.db, simatis, 'tout');
+    expect(par.find((s) => s.id === id)?.priorite).toBe(3);
+
+    const ajoute = await ajouterSujet(t.app.db, simatis, { titre: 'Priorité saisie', priorite: 5 });
+    expect(ajoute.priorite).toBe(5);
+
+    const modifie = await modifierSujet(t.app.db, simatis, id, { priorite: 1 });
+    expect(modifie?.priorite).toBe(1);
+  });
+
+  it('sets and clears the due date of an existing entry, and leaves the rest as it was', async () => {
+    const { id } = await deposer(simatis, 'echeance-modif', { priorite: 4 });
+    const jour = new Date('2026-10-30T12:00:00+01:00');
+    const pose = await modifierSujet(t.app.db, simatis, id, { echeance: jour });
+    expect(pose?.echeance).toBe(jour.toISOString());
+    expect(pose?.priorite).toBe(4);
+
+    const efface = await modifierSujet(t.app.db, simatis, id, { echeance: null });
+    expect(efface?.echeance).toBeNull();
+    expect(efface?.priorite).toBe(4);
+  });
+
+  it('returns null for an entry of another id', async () => {
+    const inconnu = '00000000-0000-4000-8000-000000000000';
+    expect(await modifierSujet(t.app.db, simatis, inconnu, { priorite: 2 })).toBeNull();
+  });
+
+  it('lists the highest priority first, then the due dates', () => {
+    const bas = { ...vue('bas', '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z'), priorite: 1 };
+    const haut = { ...vue('haut', null, '2026-10-02T00:00:00Z'), priorite: 5 };
+    expect([bas, haut].sort(trierInbox).map((s) => s.id)).toEqual(['haut', 'bas']);
   });
 });

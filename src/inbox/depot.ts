@@ -3,7 +3,7 @@ import { contacts, entreprises } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import type { Proposition } from '../propositions/schema.js';
-import { sujets, type OrigineSujet, type TypeSujet } from './schema.js';
+import { PRIORITE_DEFAUT, sujets, type OrigineSujet, type TypeSujet } from './schema.js';
 
 export type DepotSujet = {
   type: TypeSujet;
@@ -14,6 +14,7 @@ export type DepotSujet = {
   sourceId: string;
   lien?: string | null;
   echeance?: Date | null;
+  priorite?: number;
   contactId?: string | null;
   entrepriseId?: string | null;
   propositionId?: string | null;
@@ -55,6 +56,7 @@ export async function deposerSujet(
       sourceId: d.sourceId,
       lien: d.lien ?? null,
       echeance: d.echeance ?? null,
+      priorite: d.priorite ?? PRIORITE_DEFAUT,
       contactId: d.contactId ?? null,
       entrepriseId: d.entrepriseId ?? null,
       propositionId: d.propositionId ?? null,

@@ -1,4 +1,13 @@
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { contacts, entreprises, taches } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import { propositions } from '../propositions/schema.js';
@@ -15,6 +24,9 @@ export const TYPES_SUJET = [
 // `site`: a request left on the public website's contact form.
 export const ORIGINES_SUJET = ['messagerie', 'agenda', 'cerveau', 'os', 'site'] as const;
 export const STATUTS_SUJET = ['a_traiter', 'tache', 'traite'] as const;
+export const PRIORITE_MIN = 1;
+export const PRIORITE_MAX = 5;
+export const PRIORITE_DEFAUT = 3;
 
 // Source of the entries added by hand in the Inbox screen.
 export const SOURCE_MANUELLE = 'manuel';
@@ -36,6 +48,8 @@ export const sujets = pgTable(
     origine: text('origine', { enum: ORIGINES_SUJET }).notNull(),
     lien: text('lien'),
     echeance: timestamp('echeance', { withTimezone: true }),
+    // 1 (basse) à 5 (haute) ; 3 par défaut, comme une entrée sans besoin particulier.
+    priorite: integer('priorite').notNull().default(PRIORITE_DEFAUT),
     contactId: uuid('contact_id').references(() => contacts.id),
     entrepriseId: uuid('entreprise_id').references(() => entreprises.id),
     propositionId: uuid('proposition_id').references(() => propositions.id),
