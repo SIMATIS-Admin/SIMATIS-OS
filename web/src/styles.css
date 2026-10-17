@@ -1153,6 +1153,30 @@ textarea.input {
   color: #fff;
   border-color: var(--navy);
 }
+/* Inbox urgency counters: the late ones turn red when there are some. */
+.inbox-compteurs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px 0;
+}
+.chip.alerte {
+  color: var(--red);
+  border-color: var(--red);
+}
+.chip.alerte.on {
+  color: #fff;
+  background: var(--red);
+  border-color: var(--red);
+}
+.inbox-section {
+  margin: 10px 8px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 .mail {
   border: 1px solid var(--line);
