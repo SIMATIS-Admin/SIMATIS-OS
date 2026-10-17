@@ -66,18 +66,31 @@ export async function listerRendezVous(
     return { etat: 'non_configure' as const, rdv: [] };
   }
   const jour = jourDe(maintenant, FUSEAU);
-  let liste: Evenement[];
+  const calendriers = Array.isArray(agenda.reglages.calendriers)
+    ? (agenda.reglages.calendriers as string[])
+    : ['primary'];
+  const liste: Evenement[] = [];
+  const ignores: string[] = [];
+  let derniereErreur = '';
   try {
-    const calendriers = Array.isArray(agenda.reglages.calendriers)
-      ? (agenda.reglages.calendriers as string[])
-      : ['primary'];
-    liste = await evenements(
-      { instance, secrets: await loadInstanceSecrets(deps.secretsDir, instance.slug) },
-      zoned(decaler(jour, -7), '00:00', FUSEAU),
-      zoned(decaler(jour, 15), '00:00', FUSEAU),
-      calendriers,
-      options,
-    );
+    const secrets = await loadInstanceSecrets(deps.secretsDir, instance.slug);
+    for (const id of calendriers) {
+      try {
+        liste.push(
+          ...(await evenements(
+            { instance, secrets },
+            zoned(decaler(jour, -7), '00:00', FUSEAU),
+            zoned(decaler(jour, 15), '00:00', FUSEAU),
+            [id],
+            options,
+          )),
+        );
+      } catch (error) {
+        // An agenda that cannot be read (unknown id, access withdrawn) is left out: the others still show.
+        ignores.push(id);
+        derniereErreur = error instanceof Error ? error.message : String(error);
+      }
+    }
   } catch (error) {
     return {
       etat: 'erreur' as const,
@@ -85,7 +98,14 @@ export async function listerRendezVous(
       rdv: [],
     };
   }
-  return { etat: 'ok' as const, rdv: await relier(db, instance, liste) };
+  if (ignores.length === calendriers.length) {
+    return { etat: 'erreur' as const, erreur: derniereErreur, rdv: [] };
+  }
+  return {
+    etat: 'ok' as const,
+    rdv: await relier(db, instance, liste),
+    agendasIgnores: ignores,
+  };
 }
 
 // The calendars the instance's Google account can see, to choose which ones the agenda reads.

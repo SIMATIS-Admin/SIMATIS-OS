@@ -651,6 +651,23 @@ function Agenda({ slug, c, onChange }: { slug: string; c: ConnexionInfo; onChang
                   </label>
                 </li>
               ))}
+              {choisis
+                .filter((id) => !disponibles.agendas.some((a) => a.id === id))
+                .map((id) => (
+                  <li key={id}>
+                    <label className="check">
+                      <input
+                        type="checkbox"
+                        checked
+                        onChange={(e) => basculer(id, e.target.checked)}
+                      />
+                      <span>
+                        <b>{id}</b>
+                        <small className="muted"> · introuvable : à décocher</small>
+                      </span>
+                    </label>
+                  </li>
+                ))}
             </ul>
           ) : (
             <p className="small muted">

@@ -132,6 +132,12 @@ export function RendezVous({ slug }: { slug: string }) {
   const maintenant = Date.now();
   return (
     <div className="panel">
+      {data.agendasIgnores && data.agendasIgnores.length > 0 && (
+        <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
+          Agenda non lu : {data.agendasIgnores.join(', ')}. Décochez-le dans Paramètres &gt;
+          Connexions.
+        </p>
+      )}
       {data.rdv.length ? (
         <table className="tbl">
           <thead>

@@ -193,6 +193,44 @@ describe('Rendez-vous and Devis', () => {
     });
   });
 
+  it('leaves out an agenda that cannot be read, and keeps the meetings of the others', async () => {
+    const instance = await getInstanceBySlug(t.app.db, 'helioval');
+    if (!instance) throw new Error('no instance');
+    await t.owner.pool.query(
+      "update connexions set reglages = $1::jsonb where kind = 'agenda' and instance_id = $2",
+      [JSON.stringify({ calendriers: ['primary', 'ancien@absent.example'] }), instance.id],
+    );
+    const fetch = (url: string) =>
+      Promise.resolve(
+        url.includes('oauth2')
+          ? new Response(JSON.stringify({ access_token: 'a' }))
+          : url.includes('ancien%40absent.example')
+            ? new Response(JSON.stringify({ error: { message: 'Not Found' } }), { status: 404 })
+            : new Response(
+                JSON.stringify({
+                  items: [
+                    {
+                      id: 'evt-2',
+                      summary: 'Visio',
+                      start: { dateTime: '2026-10-12T10:00:00Z' },
+                      end: { dateTime: '2026-10-12T11:00:00Z' },
+                    },
+                  ],
+                }),
+              ),
+      );
+    const list = await listerRendezVous(
+      t.app.db,
+      instance,
+      { secretsDir, realWrites: false },
+      new Date('2026-10-09T08:00:00Z'),
+      { fetch },
+    );
+    expect(list.etat).toBe('ok');
+    expect(list.agendasIgnores).toEqual(['ancien@absent.example']);
+    expect(list.rdv.map((r) => r.id)).toContain('evt-2');
+  });
+
   it('reports an agenda that is not connected', async () => {
     expect((await send('GET', '/api/i/aquaterra/rendez-vous')).body).toMatchObject({
       etat: 'non_configure',
