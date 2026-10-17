@@ -1,7 +1,13 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { zoned } from '../connecteurs/google/creneaux.js';
-import { evenements, type Evenement, type GoogleOptions } from '../connecteurs/google/google.js';
+import {
+  agendasDisponibles,
+  evenements,
+  type AgendaDisponible,
+  type Evenement,
+  type GoogleOptions,
+} from '../connecteurs/google/google.js';
 import { connexions } from '../connexions/schema.js';
 import type { ConnexionDeps } from '../connexions/service.js';
 import {
@@ -80,6 +86,41 @@ export async function listerRendezVous(
     };
   }
   return { etat: 'ok' as const, rdv: await relier(db, instance, liste) };
+}
+
+// The calendars the instance's Google account can see, to choose which ones the agenda reads.
+export async function listerAgendas(
+  db: Executor,
+  instance: Instance,
+  deps: ConnexionDeps,
+  options: GoogleOptions = {},
+): Promise<
+  | { etat: 'non_configure'; agendas: [] }
+  | { etat: 'erreur'; erreur: string; agendas: [] }
+  | { etat: 'ok'; agendas: AgendaDisponible[] }
+> {
+  const [agenda] = await withInstance(db, instance.id, (tx) =>
+    tx
+      .select({ fournisseur: connexions.fournisseur, etat: connexions.etat })
+      .from(connexions)
+      .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'agenda'))),
+  );
+  if (agenda?.fournisseur !== 'google-agenda' || agenda.etat === 'non_configuree') {
+    return { etat: 'non_configure', agendas: [] };
+  }
+  try {
+    const agendas = await agendasDisponibles(
+      { instance, secrets: await loadInstanceSecrets(deps.secretsDir, instance.slug) },
+      options,
+    );
+    return { etat: 'ok', agendas };
+  } catch (error) {
+    return {
+      etat: 'erreur',
+      erreur: error instanceof Error ? error.message : String(error),
+      agendas: [],
+    };
+  }
 }
 
 async function relier(db: Executor, instance: Instance, liste: Evenement[]) {

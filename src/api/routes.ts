@@ -121,6 +121,7 @@ import {
 import {
   compteRenduSchema,
   enregistrerCompteRendu,
+  listerAgendas,
   listerRendezVous,
   preparer,
   RdvIndisponible,
@@ -816,6 +817,11 @@ export function registerApi(
   app.get<SlugParams>(
     '/api/i/:slug/rendez-vous',
     onInstance((i) => listerRendezVous(db, i, connexionDeps)),
+  );
+  // Every calendar the Google account can see, to choose the ones the agenda reads.
+  app.get<SlugParams>(
+    '/api/i/:slug/agendas',
+    onInstance((i) => listerAgendas(db, i, connexionDeps)),
   );
   app.get<ById>(
     '/api/i/:slug/opportunites/:id/preparation',

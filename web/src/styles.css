@@ -287,9 +287,8 @@ a {
 .nav .fav:hover {
   color: #fff;
 }
-.nav .favs .fav,
+/* The star stays hidden until the row is hovered: in favourites it removes, elsewhere it adds. */
 .nav .fav.on {
-  opacity: 1;
   color: var(--amber);
 }
 .nav .fav.on svg,

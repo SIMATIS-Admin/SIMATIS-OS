@@ -24,6 +24,15 @@ type Props = {
 
 // Own MIME type, so a favourite is never mistaken for a pipeline card.
 const FAV_MIME = 'application/x-simatis-fav';
+// Which sections are folded, kept on this screen between visits.
+const CLE_OUVERTS = 'simatis.nav.ouverts';
+const lireOuverts = (): Record<string, boolean> => {
+  try {
+    return JSON.parse(localStorage.getItem(CLE_OUVERTS) ?? '{}') as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+};
 
 export function Sidebar({
   instances,
@@ -36,7 +45,17 @@ export function Sidebar({
   onMoveFavori,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [laterOpen, setLaterOpen] = useState(false);
+  // Sections fold and unfold; « Plus tard » starts folded, the others open.
+  const [ouverts, setOuverts] = useState(lireOuverts);
+  const basculer = (titre: string, ouvert: boolean) => {
+    const suivant = { ...ouverts, [titre]: !ouvert };
+    setOuverts(suivant);
+    try {
+      localStorage.setItem(CLE_OUVERTS, JSON.stringify(suivant));
+    } catch {
+      // Private window: the choice lasts for this visit only.
+    }
+  };
 
   const link = (it: NavItem, inFavoris = false) => {
     const fav = favoris.includes(it.id);
@@ -160,28 +179,20 @@ export function Sidebar({
         {NAV.map((g) => {
           const items = g.items.filter((it) => allowed(it, current.modules));
           if (items.length === 0) return null;
-          if (g.later) {
-            const shown = laterOpen || items.some((it) => it.id === view);
-            return (
-              <div key={g.title} className="nav-group later">
-                <button
-                  className="later-btn"
-                  aria-expanded={shown}
-                  onClick={() => setLaterOpen(!laterOpen)}
-                >
-                  {g.title}
-                  <span className={`chev ${shown ? 'open' : ''}`}>
-                    <Icon name="down" />
-                  </span>
-                </button>
-                {shown && items.map((it) => link(it))}
-              </div>
-            );
-          }
+          const ouvert = ouverts[g.title] ?? !g.later;
           return (
-            <div key={g.title} className="nav-group">
-              <span>{g.title}</span>
-              {items.map((it) => link(it))}
+            <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
+              <button
+                className="later-btn"
+                aria-expanded={ouvert}
+                onClick={() => basculer(g.title, ouvert)}
+              >
+                {g.title}
+                <span className={`chev ${ouvert ? 'open' : ''}`}>
+                  <Icon name="down" />
+                </span>
+              </button>
+              {ouvert && items.map((it) => link(it))}
             </div>
           );
         })}
