@@ -35,8 +35,10 @@ import {
   remettreATraiter,
   SujetRefuse,
   ajouterSujet,
+  modifierSujet,
   transformerEnTache,
 } from '../inbox/service.js';
+import { PRIORITE_MAX, PRIORITE_MIN } from '../inbox/schema.js';
 import {
   ajouterDepuisEchange,
   annulerEchange,
@@ -523,6 +525,7 @@ export function registerApi(
       titre: z.string().trim().min(1).max(300),
       resume: z.string().trim().max(5000).nullish(),
       echeance: z.iso.datetime({ offset: true }).nullish(),
+      priorite: z.number().int().min(PRIORITE_MIN).max(PRIORITE_MAX).optional(),
     })
     .strict();
   app.post<SlugParams & { Body: unknown }>(
@@ -531,14 +534,35 @@ export function registerApi(
       const parsed = sujetSaisiSchema.safeParse(request.body);
       if (!parsed.success)
         return reply.code(400).send({ error: 'Titre requis (300 caractères max)' });
-      const { titre, resume, echeance } = parsed.data;
+      const { titre, resume, echeance, priorite } = parsed.data;
       return reply.code(201).send(
         await ajouterSujet(db, i, {
           titre,
           resume: resume || null,
           echeance: echeance ? new Date(echeance) : null,
+          priorite,
         }),
       );
+    }),
+  );
+  // Due date and priority of an existing entry; a missing key is left as it is, null clears a date.
+  const sujetModifSchema = z
+    .object({
+      echeance: z.iso.datetime({ offset: true }).nullish(),
+      priorite: z.number().int().min(PRIORITE_MIN).max(PRIORITE_MAX).optional(),
+    })
+    .strict();
+  app.patch<SujetRoute>(
+    '/api/i/:slug/sujets/:id',
+    surSujet(async (i, id, request, reply) => {
+      const parsed = sujetModifSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.code(400).send({ error: 'Échéance ou priorité invalide (priorité de 1 à 5)' });
+      const { echeance, priorite } = parsed.data;
+      return modifierSujet(db, i, id, {
+        ...('echeance' in parsed.data ? { echeance: echeance ? new Date(echeance) : null } : {}),
+        ...(priorite !== undefined ? { priorite } : {}),
+      });
     }),
   );
   // Add conversation with Claude (answered by the workstation's runner).

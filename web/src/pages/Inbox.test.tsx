@@ -195,6 +195,32 @@ describe('Inbox screen', () => {
     expect(screen.queryByRole('button', { name: 'Ajouter' })).toBeNull();
   });
 
+  it('sets the priority of a new entry in the form, and changes it on an existing one', async () => {
+    render(<Inbox slug="simatis" ajoutOuvert onAjoutFerme={() => undefined} />);
+    await screen.findAllByText('Répondre à Hélène');
+    fireEvent.click(screen.getByRole('button', { name: 'Formulaire' }));
+    fireEvent.change(screen.getByLabelText('Sujet'), { target: { value: 'Urgent fictif' } });
+    // The form comes first in the page, the detail of the selected entry after it.
+    const priorites = screen.getAllByLabelText('Priorité (5 = la plus haute)');
+    fireEvent.change(priorites[0]!, { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: "Ajouter à l'Inbox" }));
+    await screen.findByText(/Entrée ajoutée/);
+    expect(posts().find((c) => c.url === '/api/i/simatis/sujets')?.body).toMatchObject({
+      titre: 'Urgent fictif',
+      priorite: 5,
+    });
+
+    // The entry selected by default is the first one of the list (s1).
+    const detail = screen.getAllByLabelText('Priorité (5 = la plus haute)');
+    fireEvent.change(detail[detail.length - 1]!, { target: { value: '2' } });
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+        url: '/api/i/simatis/sujets/s1',
+        body: { priorite: 2 },
+      }),
+    );
+  });
+
   it('adds an entry by hand, then reloads the list', async () => {
     const onChange = vi.fn();
     const onAjoutFerme = vi.fn();

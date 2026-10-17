@@ -1,0 +1,1 @@
+ALTER TABLE "sujets" ADD COLUMN "priorite" integer DEFAULT 3 NOT NULL;

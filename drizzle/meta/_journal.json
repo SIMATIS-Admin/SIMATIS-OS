@@ -141,6 +141,13 @@
       "when": 1792184448245,
       "tag": "0019_echanges_ajout",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792240666782,
+      "tag": "0020_inbox_priorite",
+      "breakpoints": true
     }
   ]
 }

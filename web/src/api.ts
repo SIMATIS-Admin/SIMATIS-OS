@@ -319,6 +319,7 @@ export type SujetVue = {
   origine: 'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site';
   lien: string | null;
   echeance: string | null;
+  priorite: number;
   statut: 'a_traiter' | 'tache' | 'traite';
   tacheId: string | null;
   createdAt: string;
@@ -393,8 +394,14 @@ const sujet = (slug: string, id: string, action: string) =>
   inst(slug, `sujets/${encodeURIComponent(id)}/${action}`);
 export const ajouterSujet = (
   slug: string,
-  saisie: { titre: string; resume?: string; echeance?: string },
+  saisie: { titre: string; resume?: string; echeance?: string; priorite?: number },
 ) => sendJson<SujetVue>('POST', inst(slug, 'sujets'), saisie);
+// Only the given fields change; an echeance of null removes the due date.
+export const modifierSujet = (
+  slug: string,
+  id: string,
+  modif: { echeance?: string | null; priorite?: number },
+) => sendJson<SujetVue>('PATCH', inst(slug, `sujets/${encodeURIComponent(id)}`), modif);
 export type EchangeAjout = {
   id: string;
   statut: 'attente_claude' | 'en_cours' | 'attente_pilote' | 'ajoute' | 'annule';
