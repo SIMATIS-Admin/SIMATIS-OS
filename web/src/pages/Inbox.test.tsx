@@ -35,6 +35,7 @@ const sujet = (id: string, extra: Record<string, unknown> = {}) => ({
   origine: 'messagerie',
   lien: null,
   echeance: null,
+  priorite: 3,
   statut: 'a_traiter',
   tacheId: null,
   createdAt: '2026-10-10T08:00:00Z',
@@ -210,15 +211,26 @@ describe('Inbox screen', () => {
       priorite: 5,
     });
 
-    // The entry selected by default is the first one of the list (s1).
-    const detail = screen.getAllByLabelText('Priorité (5 = la plus haute)');
-    fireEvent.change(detail[detail.length - 1]!, { target: { value: '2' } });
+    // The entry selected by default is the first one of the list (s1). Its fields open with the pencil.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Modifier l’échéance et la priorité' }),
+    );
+    fireEvent.change(screen.getByLabelText('Priorité (5 = la plus haute)'), {
+      target: { value: '2' },
+    });
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
         url: '/api/i/simatis/sujets/s1',
         body: { priorite: 2 },
       }),
     );
+  });
+
+  it('shows the priority as a gauge from 1 to 5, in the rows and the detail', async () => {
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    // Every entry of the list has its gauge; the detail of the first one has a second one.
+    expect(screen.getAllByRole('img', { name: 'Priorité 3 sur 5' }).length).toBeGreaterThan(1);
   });
 
   it('adds an entry by hand, then reloads the list', async () => {

@@ -1087,6 +1087,19 @@ textarea.input {
   width: 16px;
   margin-top: 3px;
 }
+/* Priority gauge: five segments, green (not urgent) to red (urgent); unlit ones stay grey. */
+.inbox-jauge {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+.inbox-jauge-case {
+  display: block;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--line);
+}
 .inbox-ouvrir {
   flex: 1;
   min-width: 0;
