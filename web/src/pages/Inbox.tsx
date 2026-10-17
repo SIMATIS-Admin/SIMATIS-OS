@@ -57,6 +57,24 @@ const depassee = (s: SujetVue) => s.echeance !== null && Date.parse(s.echeance) 
 const lienWeb = (lien: string | null) => (lien && /^https?:\/\//i.test(lien) ? lien : null);
 const qui = (s: SujetVue) => s.contact?.nom ?? s.entreprise?.nom ?? '';
 
+// Urgency sections, by day in Paris: what is late, due today, due this week, later, or undated.
+type Secteur = 'retard' | 'aujourdhui' | 'semaine' | 'plus_tard' | 'sans_echeance';
+const SECTEURS: [Secteur, string][] = [
+  ['retard', 'En retard'],
+  ['aujourdhui', 'Aujourd’hui'],
+  ['semaine', 'Cette semaine'],
+  ['plus_tard', 'Plus tard'],
+  ['sans_echeance', 'Sans échéance'],
+];
+const jourParis = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+const secteurDe = (s: SujetVue, aujourdhui: string, fin: string): Secteur => {
+  if (!s.echeance) return 'sans_echeance';
+  const jour = jourParis(new Date(s.echeance));
+  if (jour < aujourdhui) return 'retard';
+  if (jour === aujourdhui) return 'aujourdhui';
+  return jour <= fin ? 'semaine' : 'plus_tard';
+};
+
 function Ligne({
   s,
   slug,
@@ -537,6 +555,7 @@ export function Inbox({
   const [list, setList] = useState<SujetVue[] | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [mandat, setMandat] = useState('');
+  const [secteur, setSecteur] = useState<Secteur | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [edition, setEdition] = useState<SujetVue | null>(null);
   // No button when the instance has no Inbox routine (or the routines cannot be read).
@@ -566,7 +585,26 @@ export function Inbox({
 
   const instances = [...new Map((list ?? []).map((s) => [s.instance.slug, s.instance])).values()];
   const ensemble = instances.some((i) => i.slug !== slug);
-  const visibles = (list ?? []).filter((s) => !mandat || s.instance.slug === mandat);
+  const maintenant = Date.now();
+  const aujourdhui = jourParis(new Date(maintenant));
+  const fin = jourParis(new Date(maintenant + 6 * 86_400_000));
+  const parMandat = (list ?? []).filter((s) => !mandat || s.instance.slug === mandat);
+  const compteurs = Object.fromEntries(
+    SECTEURS.map(([k]) => [k, parMandat.filter((s) => secteurDe(s, aujourdhui, fin) === k).length]),
+  ) as Record<Secteur, number>;
+  // Treated subjects keep their order, as a single list.
+  const visibles =
+    secteur && filtre !== 'traites'
+      ? parMandat.filter((s) => secteurDe(s, aujourdhui, fin) === secteur)
+      : parMandat;
+  const groupes =
+    filtre === 'traites'
+      ? [{ cle: null, titre: null, items: visibles }]
+      : SECTEURS.map(([cle, titre]) => ({
+          cle,
+          titre,
+          items: visibles.filter((s) => secteurDe(s, aujourdhui, fin) === cle),
+        })).filter((g) => g.items.length > 0);
   const choisi = visibles.find((s) => s.id === sel) ?? visibles[0];
 
   const apres = (texte: string | null) => {
@@ -621,6 +659,7 @@ export function Inbox({
               className={`chip ${filtre === f ? 'on' : ''}`}
               onClick={() => {
                 setFiltre(f);
+                setSecteur(null);
                 setSel(null);
               }}
             >
@@ -654,17 +693,43 @@ export function Inbox({
           />
           {routine && <MiseAJour slug={slug} routine={routine} onFini={fini} />}
         </div>
+        {filtre !== 'traites' && (
+          <div className="inbox-compteurs" role="group" aria-label="Urgences">
+            {SECTEURS.filter(([k]) => k !== 'plus_tard').map(([k, libelle]) => (
+              <button
+                key={k}
+                className={`chip ${secteur === k ? 'on' : ''} ${k === 'retard' && compteurs[k] ? 'alerte' : ''}`}
+                aria-pressed={secteur === k}
+                onClick={() => {
+                  setSecteur(secteur === k ? null : k);
+                  setSel(null);
+                }}
+              >
+                {libelle} <b>{compteurs[k]}</b>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="vq-list">
           {visibles.length ? (
-            visibles.map((s) => (
-              <Ligne
-                key={s.id}
-                s={s}
-                slug={slug}
-                on={s.id === choisi?.id}
-                onOuvrir={() => setSel(s.id)}
-                onCocher={() => void agir(marquerSujetTraite(s.instance.slug, s.id), 'Traité.')}
-              />
+            groupes.map((g) => (
+              <section key={g.cle ?? 'liste'} className="inbox-groupe">
+                {g.titre && (
+                  <h3 className="inbox-section">
+                    {g.titre} <span className="muted">{g.items.length}</span>
+                  </h3>
+                )}
+                {g.items.map((s) => (
+                  <Ligne
+                    key={s.id}
+                    s={s}
+                    slug={slug}
+                    on={s.id === choisi?.id}
+                    onOuvrir={() => setSel(s.id)}
+                    onCocher={() => void agir(marquerSujetTraite(s.instance.slug, s.id), 'Traité.')}
+                  />
+                ))}
+              </section>
             ))
           ) : (
             <div className="empty">

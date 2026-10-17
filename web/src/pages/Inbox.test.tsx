@@ -329,6 +329,23 @@ describe('Inbox screen', () => {
     ).toBe(false);
   });
 
+  it('groups the list by urgency and filters on a counter', async () => {
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    // s1 is late, s2 is due later, s3 has no due date.
+    expect(screen.getByRole('heading', { name: /En retard/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /Plus tard/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /Sans échéance/ })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: /Aujourd/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /En retard/ }).textContent).toContain('1');
+    fireEvent.click(screen.getByRole('button', { name: /En retard/ }));
+    expect(titres()).toEqual(['Répondre à Hélène']);
+    expect(screen.queryByRole('heading', { name: /Plus tard/ })).toBeNull();
+    // A second click on the same counter shows everything again.
+    fireEvent.click(screen.getByRole('button', { name: /En retard/ }));
+    expect(titres()).toHaveLength(3);
+  });
+
   it('filters by type chips', async () => {
     render(<Inbox slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
