@@ -2690,3 +2690,32 @@ tr.sel {
   align-items: center;
   gap: 8px;
 }
+
+/* Inbox views: columns by status, and step-by-step navigation. */
+.inbox-vues {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.inbox-colonnes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 6px;
+  align-items: start;
+}
+.inbox-colonne {
+  min-width: 0;
+}
+.inbox-pas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+}
+@media (max-width: 760px) {
+  .inbox-colonnes {
+    grid-template-columns: 1fr;
+  }
+}
