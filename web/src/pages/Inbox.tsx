@@ -24,6 +24,8 @@ import { Icon } from '../icons.js';
 import { PropositionDetail } from './inbox/Proposition.js';
 import { EditionTache } from './taches/Edition.js';
 
+type StatutSujet = SujetVue['statut'];
+
 // Same rule as the Routines screen: an execution is open until the server says it ended.
 const OUVERTE = new Set(['demandee', 'en_cours']);
 // The runner polls every 30 s: a request still untouched after this long means it is not running.
@@ -56,6 +58,13 @@ const depassee = (s: SujetVue) => s.echeance !== null && Date.parse(s.echeance) 
 // The server only stores web addresses; checked again here because the link is clickable.
 const lienWeb = (lien: string | null) => (lien && /^https?:\/\//i.test(lien) ? lien : null);
 const qui = (s: SujetVue) => s.contact?.nom ?? s.entreprise?.nom ?? '';
+
+// Columns of the board view, by status (a subject is in one of them).
+const COLONNES: [StatutSujet, string][] = [
+  ['a_traiter', 'À faire'],
+  ['tache', 'Transformé en tâche'],
+  ['traite', 'Traité'],
+];
 
 // Urgency sections, by day in Paris: what is late, due today, due this week, later, or undated.
 type Secteur = 'retard' | 'aujourdhui' | 'semaine' | 'plus_tard' | 'sans_echeance';
@@ -556,6 +565,8 @@ export function Inbox({
   const [sel, setSel] = useState<string | null>(null);
   const [mandat, setMandat] = useState('');
   const [secteur, setSecteur] = useState<Secteur | null>(null);
+  // How the list is shown: a list, three columns by status, or one subject at a time.
+  const [vue, setVue] = useState<'liste' | 'colonnes' | 'pas_a_pas'>('liste');
   const [message, setMessage] = useState<string | null>(null);
   const [edition, setEdition] = useState<SujetVue | null>(null);
   // No button when the instance has no Inbox routine (or the routines cannot be read).
@@ -606,6 +617,10 @@ export function Inbox({
           items: visibles.filter((s) => secteurDe(s, aujourdhui, fin) === cle),
         })).filter((g) => g.items.length > 0);
   const choisi = visibles.find((s) => s.id === sel) ?? visibles[0];
+  const position = Math.max(
+    0,
+    visibles.findIndex((s) => s.id === choisi?.id),
+  );
 
   const apres = (texte: string | null) => {
     setMessage(texte);
@@ -708,39 +723,109 @@ export function Inbox({
                 {libelle} <b>{compteurs[k]}</b>
               </button>
             ))}
+            <span className="inbox-vues" role="group" aria-label="Affichage">
+              {(
+                [
+                  ['liste', 'Liste'],
+                  ['colonnes', 'Colonnes'],
+                  ['pas_a_pas', 'Pas à pas'],
+                ] as const
+              ).map(([v, libelle]) => (
+                <button
+                  key={v}
+                  className={`chip ${vue === v ? 'on' : ''}`}
+                  aria-pressed={vue === v}
+                  onClick={() => setVue(v)}
+                >
+                  {libelle}
+                </button>
+              ))}
+            </span>
           </div>
         )}
-        <div className="vq-list">
-          {visibles.length ? (
-            groupes.map((g) => (
-              <section key={g.cle ?? 'liste'} className="inbox-groupe">
-                {g.titre && (
+        {filtre !== 'traites' && vue === 'colonnes' ? (
+          <div className="inbox-colonnes">
+            {COLONNES.map(([statut, libelle]) => {
+              const items = visibles.filter((s) => s.statut === statut);
+              return (
+                <div key={statut} className="inbox-colonne">
                   <h3 className="inbox-section">
-                    {g.titre} <span className="muted">{g.items.length}</span>
+                    {libelle} <span className="muted">{items.length}</span>
                   </h3>
-                )}
-                {g.items.map((s) => (
-                  <Ligne
-                    key={s.id}
-                    s={s}
-                    slug={slug}
-                    on={s.id === choisi?.id}
-                    onOuvrir={() => setSel(s.id)}
-                    onCocher={() => void agir(marquerSujetTraite(s.instance.slug, s.id), 'Traité.')}
-                  />
-                ))}
-              </section>
-            ))
-          ) : (
-            <div className="empty">
-              {list === null
-                ? ''
-                : filtre === 'traites'
-                  ? 'Aucun sujet traité pour l’instant.'
-                  : 'Rien à traiter. La prochaine routine déposera les nouveaux sujets.'}
-            </div>
-          )}
-        </div>
+                  {items.map((s) => (
+                    <Ligne
+                      key={s.id}
+                      s={s}
+                      slug={slug}
+                      on={s.id === choisi?.id}
+                      onOuvrir={() => setSel(s.id)}
+                      onCocher={() =>
+                        void agir(marquerSujetTraite(s.instance.slug, s.id), 'Traité.')
+                      }
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="vq-list">
+            {visibles.length && filtre !== 'traites' && vue === 'pas_a_pas' ? (
+              <div className="inbox-pas">
+                <button
+                  className="btn sm"
+                  disabled={position <= 0}
+                  onClick={() => setSel(visibles[position - 1]?.id ?? null)}
+                >
+                  ‹ Précédent
+                </button>
+                <span className="small muted">
+                  {position + 1} / {visibles.length}
+                </span>
+                <button
+                  className="btn sm"
+                  disabled={position >= visibles.length - 1}
+                  onClick={() => setSel(visibles[position + 1]?.id ?? null)}
+                >
+                  Suivant ›
+                </button>
+              </div>
+            ) : null}
+            {visibles.length ? (
+              filtre !== 'traites' && vue === 'pas_a_pas' ? null : (
+                groupes.map((g) => (
+                  <section key={g.cle ?? 'liste'} className="inbox-groupe">
+                    {g.titre && (
+                      <h3 className="inbox-section">
+                        {g.titre} <span className="muted">{g.items.length}</span>
+                      </h3>
+                    )}
+                    {g.items.map((s) => (
+                      <Ligne
+                        key={s.id}
+                        s={s}
+                        slug={slug}
+                        on={s.id === choisi?.id}
+                        onOuvrir={() => setSel(s.id)}
+                        onCocher={() =>
+                          void agir(marquerSujetTraite(s.instance.slug, s.id), 'Traité.')
+                        }
+                      />
+                    ))}
+                  </section>
+                ))
+              )
+            ) : (
+              <div className="empty">
+                {list === null
+                  ? ''
+                  : filtre === 'traites'
+                    ? 'Aucun sujet traité pour l’instant.'
+                    : 'Rien à traiter. La prochaine routine déposera les nouveaux sujets.'}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div>
         {message && <p className="small muted">{message}</p>}

@@ -346,6 +346,29 @@ describe('Inbox screen', () => {
     expect(titres()).toHaveLength(3);
   });
 
+  it('shows the subjects in three columns by status', async () => {
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    fireEvent.click(screen.getByRole('button', { name: 'Colonnes' }));
+    const colonnes = document.querySelectorAll('.inbox-colonne');
+    expect(colonnes).toHaveLength(3);
+    // All three subjects are still to do; the treated list is not shown in this view.
+    expect(colonnes[0]?.querySelectorAll('.vq-item')).toHaveLength(3);
+    expect(colonnes[2]?.querySelectorAll('.vq-item')).toHaveLength(0);
+  });
+
+  it('shows one subject at a time with previous and next', async () => {
+    render(<Inbox slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    fireEvent.click(screen.getByRole('button', { name: 'Pas à pas' }));
+    expect(document.querySelectorAll('.vq-item')).toHaveLength(0);
+    expect(screen.getByText('1 / 3')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Précédent/ }).hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+    expect(screen.getByText('2 / 3')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Devis Fonderie' })).toBeTruthy();
+  });
+
   it('filters by type chips', async () => {
     render(<Inbox slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
