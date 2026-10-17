@@ -498,6 +498,19 @@ export type Preparation = {
   score: number | null;
   aCreuser: { critere: string; note: number | null; question: string | null }[];
 };
+// Every calendar the Google account can see, with the ones the agenda reads chosen in Connexions.
+export type AgendaDisponible = {
+  id: string;
+  nom: string;
+  principal: boolean;
+  role: string;
+  couleur: string | null;
+};
+export type AgendasReponse =
+  | { etat: 'non_configure'; agendas: [] }
+  | { etat: 'erreur'; erreur: string; agendas: [] }
+  | { etat: 'ok'; agendas: AgendaDisponible[] };
+export const fetchAgendas = (slug: string) => getJson<AgendasReponse>(inst(slug, 'agendas'));
 export const fetchRendezVous = (slug: string) =>
   getJson<RendezVousReponse>(inst(slug, 'rendez-vous'));
 export const fetchPreparation = (slug: string, opportuniteId: string) =>

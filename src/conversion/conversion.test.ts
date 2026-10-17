@@ -186,6 +186,13 @@ describe('Rendez-vous and Devis', () => {
     ).toBe(400);
   });
 
+  it('lists the calendars of the connected account, and none when the agenda is not connected', async () => {
+    expect((await send('GET', '/api/i/aquaterra/agendas')).body).toEqual({
+      etat: 'non_configure',
+      agendas: [],
+    });
+  });
+
   it('reports an agenda that is not connected', async () => {
     expect((await send('GET', '/api/i/aquaterra/rendez-vous')).body).toMatchObject({
       etat: 'non_configure',

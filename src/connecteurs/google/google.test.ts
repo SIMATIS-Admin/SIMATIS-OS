@@ -16,6 +16,7 @@ import type { Instance } from '../../instances/schema.js';
 import { createInstance } from '../../instances/service.js';
 import { loadInstanceSecrets } from '../../secrets.js';
 import {
+  agendasDisponibles,
   createDraft,
   evenements,
   freeBusy,
@@ -60,6 +61,20 @@ function fakeGoogle() {
             { name: 'From', value: 'a.valliere@fonderie-valliere.example' },
           ],
         },
+      });
+    }
+    if (url.includes('/users/me/calendarList')) {
+      return json({
+        items: [
+          { id: 'marc@exemple.fr', summary: 'Marc', primary: true, accessRole: 'owner' },
+          {
+            id: 'kairos@group.calendar.google.com',
+            summary: 'Kairos fictif',
+            summaryOverride: 'KAIROS',
+            accessRole: 'reader',
+            backgroundColor: '#8e24aa',
+          },
+        ],
       });
     }
     if (url.endsWith('/freeBusy')) {
@@ -310,6 +325,16 @@ describe('Gmail and Calendar', () => {
       expect.objectContaining({ id: 'e2', titre: 'Séminaire', journee: true }),
     ]);
     expect(google.calls.filter((c) => c.url.includes('/events?'))).toHaveLength(2);
+  });
+
+  it('lists every calendar the Google account can see, shared or subscribed ones included', async () => {
+    const google = fakeGoogle();
+    const agendas = await ctx(true, (c) => agendasDisponibles(c, google));
+    expect(agendas.map((a) => [a.nom, a.principal, a.role])).toEqual([
+      ['Marc', true, 'owner'],
+      ['KAIROS', false, 'reader'],
+    ]);
+    expect(agendas[1]?.id).toBe('kairos@group.calendar.google.com');
   });
 
   it('checks the authorization on sync, and reports a revoked one on the connection', async () => {

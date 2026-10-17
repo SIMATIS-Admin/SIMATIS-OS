@@ -349,6 +349,58 @@ export async function brouillons(
   return out;
 }
 
+export type AgendaDisponible = {
+  id: string;
+  nom: string;
+  principal: boolean;
+  // reader, writer or owner: a calendar the account can only read is still shown.
+  role: string;
+  couleur: string | null;
+};
+
+// Every calendar the Google account can see: its own, the ones shared with it, the ones it
+// subscribes to (KAIROS, OID…). The id is what the reading settings keep.
+export async function agendasDisponibles(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  options: GoogleOptions = {},
+): Promise<AgendaDisponible[]> {
+  const api = googleApi(ctx, options);
+  const out: AgendaDisponible[] = [];
+  let pageToken: string | undefined;
+  do {
+    const page = await api.request<{
+      nextPageToken?: string;
+      items?: {
+        id?: string;
+        summary?: string;
+        summaryOverride?: string;
+        primary?: boolean;
+        accessRole?: string;
+        backgroundColor?: string;
+      }[];
+    }>(
+      'GET',
+      `${CALENDAR}/users/me/calendarList?${new URLSearchParams({
+        minAccessRole: 'reader',
+        maxResults: '250',
+        ...(pageToken ? { pageToken } : {}),
+      }).toString()}`,
+    );
+    for (const c of page.items ?? []) {
+      if (!c.id) continue;
+      out.push({
+        id: c.id,
+        nom: c.summaryOverride ?? c.summary ?? c.id,
+        principal: c.primary === true,
+        role: c.accessRole ?? 'reader',
+        couleur: c.backgroundColor ?? null,
+      });
+    }
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  return out;
+}
+
 // Account of the agenda connection (its primary calendar id): tells outsiders from colleagues.
 export async function compteAgenda(
   ctx: Pick<SyncCtx, 'secrets' | 'instance'>,

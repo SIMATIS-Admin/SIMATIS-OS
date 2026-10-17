@@ -4,7 +4,9 @@ import {
   brancherInfomaniak,
   demarrerGoogle,
   enregistrerSecretGoogle,
+  fetchAgendas,
   fetchConnexions,
+  type AgendasReponse,
   saveReglages,
   saveReglagesCrm,
   syncConnexion,
@@ -596,29 +598,86 @@ function TesterLecture({ slug }: { slug: string }) {
 function Agenda({ slug, c, onChange }: { slug: string; c: ConnexionInfo; onChange: () => void }) {
   const { save, error } = useSave(slug, 'agenda', onChange);
   const r = c.reglages as { calendriers?: string[]; tamponMin?: number };
-  const [calendriers, setCalendriers] = useState((r.calendriers ?? ['primary']).join(', '));
+  // The agendas read are chosen here; at least one stays chosen.
+  const [choisis, setChoisis] = useState<string[]>(r.calendriers ?? ['primary']);
+  const [disponibles, setDisponibles] = useState<AgendasReponse | null>(null);
+  const [identifiant, setIdentifiant] = useState('');
+  useEffect(() => {
+    fetchAgendas(slug).then(setDisponibles, () =>
+      setDisponibles({ etat: 'erreur', erreur: 'Liste des agendas indisponible', agendas: [] }),
+    );
+  }, [slug]);
+  const enregistrer = (suivants: string[]) => {
+    setChoisis(suivants);
+    void save({ calendriers: suivants });
+  };
+  const basculer = (id: string, coche: boolean) => {
+    const suivants = coche ? [...choisis, id] : choisis.filter((x) => x !== id);
+    if (suivants.length > 0) enregistrer(suivants);
+  };
+  const ajouter = () => {
+    const id = identifiant.trim();
+    setIdentifiant('');
+    if (id && !choisis.includes(id)) enregistrer([...choisis, id]);
+  };
   return (
     <div className="panel-b">
       <div className="grid g2">
-        <label className="field">
+        <div className="field">
           <span>
-            Calendriers lus{' '}
-            <Tip text="« primary » désigne l'agenda principal du compte. Séparez plusieurs agendas par des virgules." />
+            Agendas lus{' '}
+            <Tip text="Tous les agendas auxquels ce compte Google a accès. Cochez ceux dont les rendez-vous doivent apparaître." />
           </span>
-          <input
-            className="input"
-            value={calendriers}
-            onChange={(e) => setCalendriers(e.target.value)}
-            onBlur={() =>
-              void save({
-                calendriers: calendriers
-                  .split(',')
-                  .map((x) => x.trim())
-                  .filter(Boolean),
-              })
-            }
-          />
-        </label>
+          {disponibles === null ? (
+            <p className="small muted">Chargement des agendas…</p>
+          ) : disponibles.etat === 'ok' && disponibles.agendas.length > 0 ? (
+            <ul className="checks">
+              {disponibles.agendas.map((a) => (
+                <li key={a.id}>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={choisis.includes(a.id)}
+                      onChange={(e) => basculer(a.id, e.target.checked)}
+                    />
+                    <span>
+                      <b>{a.nom}</b>
+                      {a.principal ? ' (principal)' : ''}
+                      <small className="muted">
+                        {' '}
+                        · {a.role === 'reader' ? 'lecture' : 'accès complet'}
+                      </small>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="small muted">
+              {disponibles.etat === 'ok'
+                ? 'Aucun agenda visible pour ce compte.'
+                : disponibles.etat === 'erreur'
+                  ? disponibles.erreur
+                  : 'Agenda non branché.'}
+            </p>
+          )}
+          <div className="row" style={{ gap: 8, marginTop: 8 }}>
+            <input
+              className="input"
+              placeholder="Identifiant d'un autre agenda"
+              aria-label="Identifiant d'un autre agenda"
+              value={identifiant}
+              onChange={(e) => setIdentifiant(e.target.value)}
+            />
+            <button className="btn sm" disabled={!identifiant.trim()} onClick={ajouter}>
+              Ajouter
+            </button>
+          </div>
+          <p className="small muted">
+            Un agenda absent de la liste : ouvrez-le dans Google Agenda, puis collez son identifiant
+            ici.
+          </p>
+        </div>
         <label className="field">
           <span>Marge autour des rendez-vous</span>
           <select

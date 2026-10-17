@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { InstanceSummary } from '../nav.js';
 import { Sidebar } from './Sidebar.js';
@@ -79,5 +79,25 @@ describe('Sidebar', () => {
     renderSidebar(simatis, [], { taches: 0 });
     const vide = screen.getAllByRole('link').find((a) => a.textContent?.startsWith('Tâches'));
     expect(vide?.querySelector('.pastille')).toBeNull();
+  });
+
+  it('folds a section on click, and keeps the favourites open', () => {
+    renderSidebar(simatis, []);
+    const sections = document.querySelectorAll<HTMLButtonElement>('.nav-group > .later-btn');
+    const section = [...sections].find((b) => b.getAttribute('aria-expanded') === 'true');
+    if (!section) throw new Error('aucune section ouverte');
+    const avant = document.querySelectorAll('.nav a').length;
+    fireEvent.click(section);
+    expect(section.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelectorAll('.nav a').length).toBeLessThan(avant);
+    fireEvent.click(section);
+    expect(document.querySelectorAll('.nav a').length).toBe(avant);
+  });
+
+  it('shows no favourites group when nothing is a favourite, and folds « Plus tard » by default', () => {
+    renderSidebar(simatis, []);
+    expect(document.querySelector('.nav-group.favs')).toBeNull();
+    const plusTard = document.querySelector('.nav-group.later > .later-btn');
+    expect(plusTard?.getAttribute('aria-expanded')).toBe('false');
   });
 });
