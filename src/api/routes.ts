@@ -37,6 +37,15 @@ import {
   ajouterSujet,
   transformerEnTache,
 } from '../inbox/service.js';
+import {
+  ajouterDepuisEchange,
+  annulerEchange,
+  EchangeInconnu,
+  EchangeRefuse,
+  lireEchange,
+  ouvrirEchange,
+  repondrePilote,
+} from '../inbox/echanges.js';
 import { logEvent, recentEvents } from '../journal/service.js';
 import { normaliserDomaine } from '../connecteurs/hubspot/domaines.js';
 import {
@@ -531,6 +540,50 @@ export function registerApi(
         }),
       );
     }),
+  );
+  // Add conversation with Claude (answered by the workstation's runner).
+  const texteSchema = z.object({ texte: z.string().trim().min(1).max(2000) }).strict();
+  type EchangeRoute = ById & { Body: unknown };
+  const surEchange = (
+    action: (i: Instance, id: string, request: FastifyRequest<EchangeRoute>) => Promise<unknown>,
+  ) =>
+    onInstance<EchangeRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id))
+        return reply.code(404).send({ error: 'Échange introuvable' });
+      try {
+        return await action(i, request.params.id, request);
+      } catch (error) {
+        if (error instanceof EchangeInconnu) return reply.code(404).send({ error: error.message });
+        if (error instanceof EchangeRefuse) return reply.code(409).send({ error: error.message });
+        if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Message vide' });
+        throw error;
+      }
+    });
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/echanges',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = texteSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Message vide' });
+      return reply.code(201).send(await ouvrirEchange(db, i, parsed.data.texte));
+    }),
+  );
+  app.get<EchangeRoute>(
+    '/api/i/:slug/echanges/:id',
+    surEchange((i, id) => lireEchange(db, i, id)),
+  );
+  app.post<EchangeRoute>(
+    '/api/i/:slug/echanges/:id/messages',
+    surEchange((i, id, request) =>
+      repondrePilote(db, i, id, texteSchema.parse(request.body).texte),
+    ),
+  );
+  app.post<EchangeRoute>(
+    '/api/i/:slug/echanges/:id/ajouter',
+    surEchange((i, id) => ajouterDepuisEchange(db, i, id)),
+  );
+  app.post<EchangeRoute>(
+    '/api/i/:slug/echanges/:id/annuler',
+    surEchange((i, id) => annulerEchange(db, i, id)),
   );
   const sujetTacheSchema = tacheSchema.omit({ hubspot: true });
   app.post<SujetRoute>(

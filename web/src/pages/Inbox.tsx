@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  ajouterDepuisEchange,
   ajouterSujet,
+  annulerEchange,
   decider,
+  fetchEchange,
   fetchExecution,
   fetchInbox,
   fetchRoutines,
   lancerRoutine,
   marquerSujetTraite,
+  ouvrirEchange,
   remettreSujet,
+  repondreEchange,
   sujetEnTache,
+  type EchangeAjout,
   type Execution,
   type RoutineInfo,
   type SujetVue,
@@ -251,16 +257,13 @@ function MiseAJour({
   );
 }
 
-// Entry typed by hand. It lands in this instance's Inbox; the Inbox routine notes it in the
-// second brain at its next run.
-function Ajout({
+// Entry typed by hand.
+function Formulaire({
   slug,
-  ouvert,
   onFermer,
   onAjoute,
 }: {
   slug: string;
-  ouvert: boolean;
   onFermer: () => void;
   onAjoute: () => void;
 }) {
@@ -292,9 +295,8 @@ function Ajout({
     );
   };
 
-  if (!ouvert) return null;
   return (
-    <div className="panel stack" style={{ gap: 8, flexBasis: '100%' }}>
+    <>
       <label className="field">
         <span>Sujet</span>
         <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} />
@@ -330,6 +332,190 @@ function Ajout({
           Annuler
         </button>
       </div>
+    </>
+  );
+}
+
+const EN_ATTENTE = new Set(['attente_claude', 'en_cours']);
+
+// Entry prepared with Claude: the pilot says it in their own words, the workstation's runner has
+// Claude answer (a question and/or the prepared entry), and nothing is added before the pilot's
+// click.
+function AvecClaude({
+  slug,
+  onFermer,
+  onAjoute,
+}: {
+  slug: string;
+  onFermer: () => void;
+  onAjoute: () => void;
+}) {
+  const [echange, setEchange] = useState<EchangeAjout | null>(null);
+  const [texte, setTexte] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const erreur = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
+  const idAttente = echange && EN_ATTENTE.has(echange.statut) ? echange.id : null;
+
+  useEffect(() => {
+    if (!idAttente) return;
+    const timer = setInterval(() => {
+      fetchEchange(slug, idAttente).then(setEchange, (e: unknown) => {
+        clearInterval(timer);
+        erreur(e);
+      });
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [slug, idAttente]);
+
+  const envoyer = () => {
+    const t = texte.trim();
+    if (!t) return;
+    setError(null);
+    (echange ? repondreEchange(slug, echange.id, t) : ouvrirEchange(slug, t)).then((e) => {
+      setEchange(e);
+      setTexte('');
+    }, erreur);
+  };
+  const ajouter = () => {
+    if (!echange) return;
+    setError(null);
+    ajouterDepuisEchange(slug, echange.id).then(onAjoute, erreur);
+  };
+  const annuler = () => {
+    if (echange && (EN_ATTENTE.has(echange.statut) || echange.statut === 'attente_pilote')) {
+      void annulerEchange(slug, echange.id).catch(() => undefined);
+    }
+    onFermer();
+  };
+
+  const attente = idAttente !== null;
+  const sansReponse =
+    echange?.statut === 'attente_claude' &&
+    Date.now() - new Date(echange.demandeAt).getTime() > SANS_REPONSE_MS;
+  const b = echange?.brouillon;
+  return (
+    <>
+      {echange && (
+        <div className="chat-ajout" aria-live="polite">
+          {echange.messages.map((m) => (
+            <p key={m.at + m.de} className={`chat-msg ${m.de}`}>
+              {m.texte}
+            </p>
+          ))}
+          {attente && (
+            <p className="chat-msg claude muted">
+              {echange.statut === 'en_cours' ? 'Claude réfléchit…' : 'Transmis à Claude…'}
+            </p>
+          )}
+        </div>
+      )}
+      {b && (
+        <div className="chat-brouillon">
+          <span className="small muted">Entrée préparée</span>
+          <div className="row1">
+            <span className="inbox-type" title={TYPES[b.type][1]}>
+              <Icon name={TYPES[b.type][0]} />
+            </span>
+            <b>{b.titre}</b>
+            <span className="badge">{TYPES[b.type][1]}</span>
+          </div>
+          {b.echeance && <small>Échéance {date(b.echeance)}</small>}
+          {b.resume && <p style={{ whiteSpace: 'pre-line', margin: 0 }}>{b.resume}</p>}
+        </div>
+      )}
+      {sansReponse && (
+        <span className="small" style={{ color: 'var(--red)' }}>
+          L'exécuteur ne répond pas : vérifiez qu'il tourne sur l'ordinateur, ou passez par le
+          formulaire.
+        </span>
+      )}
+      {(error ?? echange?.erreur) && (
+        <span className="small" style={{ color: 'var(--red)' }}>
+          {error ?? echange?.erreur}
+        </span>
+      )}
+      <label className="field">
+        <span>{echange ? 'Votre réponse' : 'Que faut-il ajouter ?'}</span>
+        <textarea
+          className="input"
+          rows={2}
+          value={texte}
+          disabled={attente}
+          placeholder={echange ? '' : 'Ex. : faire le devis pour la société X avant jeudi'}
+          onChange={(e) => setTexte(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              envoyer();
+            }
+          }}
+        />
+      </label>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn sm" disabled={attente || !texte.trim()} onClick={envoyer}>
+          Envoyer à Claude
+        </button>
+        <button
+          className="btn sm primary"
+          disabled={!b || echange?.statut !== 'attente_pilote'}
+          onClick={ajouter}
+        >
+          Ajouter à l'Inbox
+        </button>
+        <button className="btn sm" onClick={annuler}>
+          Annuler
+        </button>
+      </div>
+    </>
+  );
+}
+
+// Adding an entry: each time, the pilot picks Claude (said in their own words) or the form. It lands
+// in this instance's Inbox; the Inbox routine notes it in the second brain at its next run.
+function Ajout({
+  slug,
+  ouvert,
+  onFermer,
+  onAjoute,
+}: {
+  slug: string;
+  ouvert: boolean;
+  onFermer: () => void;
+  onAjoute: () => void;
+}) {
+  const [mode, setMode] = useState<'claude' | 'formulaire'>('claude');
+  if (!ouvert) return null;
+  const fermer = () => {
+    setMode('claude');
+    onFermer();
+  };
+  const ajoute = () => {
+    fermer();
+    onAjoute();
+  };
+  return (
+    <div className="panel stack" style={{ gap: 8, flexBasis: '100%' }}>
+      <div className="row" role="group" aria-label="Mode d'ajout" style={{ gap: 6 }}>
+        <button
+          className={`chip ${mode === 'claude' ? 'on' : ''}`}
+          aria-pressed={mode === 'claude'}
+          onClick={() => setMode('claude')}
+        >
+          Avec Claude
+        </button>
+        <button
+          className={`chip ${mode === 'formulaire' ? 'on' : ''}`}
+          aria-pressed={mode === 'formulaire'}
+          onClick={() => setMode('formulaire')}
+        >
+          Formulaire
+        </button>
+      </div>
+      {mode === 'claude' ? (
+        <AvecClaude slug={slug} onFermer={fermer} onAjoute={ajoute} />
+      ) : (
+        <Formulaire slug={slug} onFermer={fermer} onAjoute={() => onAjoute()} />
+      )}
     </div>
   );
 }

@@ -2630,3 +2630,39 @@ tr.sel {
   line-height: 1;
   padding: 6px 12px;
 }
+/* Add conversation with Claude, in the Inbox. */
+.chat-ajout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.chat-msg {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--r-m);
+  max-width: 85%;
+  white-space: pre-line;
+}
+.chat-msg.pilote {
+  align-self: flex-end;
+  background: var(--blue-bg);
+}
+.chat-msg.claude {
+  align-self: flex-start;
+  background: var(--line-2);
+}
+.chat-brouillon {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--teal-mid);
+  border-radius: var(--r-m);
+}
+.chat-brouillon .row1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

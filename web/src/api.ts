@@ -395,6 +395,30 @@ export const ajouterSujet = (
   slug: string,
   saisie: { titre: string; resume?: string; echeance?: string },
 ) => sendJson<SujetVue>('POST', inst(slug, 'sujets'), saisie);
+export type EchangeAjout = {
+  id: string;
+  statut: 'attente_claude' | 'en_cours' | 'attente_pilote' | 'ajoute' | 'annule';
+  messages: { de: 'pilote' | 'claude'; texte: string; at: string }[];
+  brouillon: {
+    type: Exclude<TypeSujet, 'a_valider'>;
+    titre: string;
+    resume: string | null;
+    echeance: string | null;
+  } | null;
+  erreur: string | null;
+  demandeAt: string;
+};
+const echange = (slug: string, id: string, action = '') =>
+  inst(slug, `echanges/${encodeURIComponent(id)}${action && `/${action}`}`);
+export const ouvrirEchange = (slug: string, texte: string) =>
+  sendJson<EchangeAjout>('POST', inst(slug, 'echanges'), { texte });
+export const fetchEchange = (slug: string, id: string) => getJson<EchangeAjout>(echange(slug, id));
+export const repondreEchange = (slug: string, id: string, texte: string) =>
+  sendJson<EchangeAjout>('POST', echange(slug, id, 'messages'), { texte });
+export const ajouterDepuisEchange = (slug: string, id: string) =>
+  sendJson<{ echange: EchangeAjout; sujet: SujetVue }>('POST', echange(slug, id, 'ajouter'), {});
+export const annulerEchange = (slug: string, id: string) =>
+  sendJson<EchangeAjout>('POST', echange(slug, id, 'annuler'), {});
 export const marquerSujetTraite = (slug: string, id: string) =>
   sendJson<SujetVue>('POST', sujet(slug, id, 'traite'), {});
 export const remettreSujet = (slug: string, id: string) =>

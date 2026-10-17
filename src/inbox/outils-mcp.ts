@@ -14,6 +14,7 @@ import {
   type Annuaire,
 } from './lecture.js';
 import { deposerSujet } from './depot.js';
+import { brouillonSchema, repondreClaude } from './echanges.js';
 import { marquerNoteCerveau, marquerReporte, sujetsAjoutes, sujetsTraites } from './report.js';
 
 // Tools of the Inbox routine. Like every instance tool, they only see the token's instance.
@@ -101,6 +102,24 @@ registerTool({
   input: z.object({ ids: z.array(z.uuid()).min(1).max(200), executionId: execution }),
   scope: 'instance',
   handler: async ({ tx }, { ids }) => ({ notes: await marquerNoteCerveau(tx, ids) }),
+});
+
+registerTool({
+  name: 'repondre_ajout',
+  description:
+    "Répond au pilote dans un échange d'ajout à l'Inbox : un message court (question s'il manque une information essentielle, sinon confirmation de ce qui a été compris) et, dès que possible, l'entrée préparée. Le pilote la relit et l'ajoute lui-même. Une seule réponse par tour.",
+  input: z.object({
+    echangeId: z.uuid(),
+    message: z.string().trim().min(1).max(2000),
+    brouillon: brouillonSchema
+      .optional()
+      .describe("Entrée préparée ; l'échéance au format ISO avec fuseau, à midi heure de Paris"),
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { echangeId, message, brouillon }) => {
+    const e = await repondreClaude(tx, echangeId, { message, brouillon });
+    return { statut: e.statut };
+  },
 });
 
 // The instance's people, to keep only mails and meetings with someone the CRM knows.
