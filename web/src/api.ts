@@ -484,6 +484,8 @@ export type RendezVousReponse = {
   etat: 'ok' | 'non_configure' | 'erreur';
   erreur?: string;
   rdv: RendezVous[];
+  // Calendars chosen in Connexions that could not be read (unknown id, access withdrawn).
+  agendasIgnores?: string[];
 };
 export type Preparation = {
   titre: string;
