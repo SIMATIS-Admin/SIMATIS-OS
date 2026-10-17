@@ -384,21 +384,22 @@ describe('Inbox screen', () => {
     expect(titres()).toHaveLength(3);
   });
 
-  it('shows the subjects in three columns by status', async () => {
+  it('offers the ways to order the entries in a menu, and no board view', async () => {
     render(<Inbox slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
-    fireEvent.click(screen.getByRole('button', { name: 'Colonnes' }));
-    const colonnes = document.querySelectorAll('.inbox-colonne');
-    expect(colonnes).toHaveLength(3);
-    // All three subjects are still to do; the treated list is not shown in this view.
-    expect(colonnes[0]?.querySelectorAll('.vq-item')).toHaveLength(3);
-    expect(colonnes[2]?.querySelectorAll('.vq-item')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Colonnes' })).toBeNull();
+    const tri = screen.getByRole('combobox', { name: 'Trier les entrées' });
+    expect(within(tri).getAllByRole('option')).toHaveLength(3);
+    fireEvent.change(tri, { target: { value: 'arrivee' } });
+    expect((tri as HTMLSelectElement).value).toBe('arrivee');
+    expect(document.querySelectorAll('.vq-item').length).toBeGreaterThan(0);
   });
 
-  it('shows one subject at a time with previous and next', async () => {
-    render(<Inbox slug="simatis" />);
+  it('shows one subject at a time with previous and next when the step mode is on', async () => {
+    const { rerender } = render(<Inbox slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
-    fireEvent.click(screen.getByRole('button', { name: 'Pas à pas' }));
+    expect(screen.queryByText('1 / 3')).toBeNull();
+    rerender(<Inbox slug="simatis" pasAPas />);
     expect(document.querySelectorAll('.vq-item')).toHaveLength(0);
     expect(screen.getByText('1 / 3')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Précédent/ }).hasAttribute('disabled')).toBe(true);

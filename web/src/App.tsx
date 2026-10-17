@@ -78,6 +78,9 @@ export function App() {
   // The « + » beside the Inbox title opens the manual entry form; it never stays open across screens.
   const [ajoutInbox, setAjoutInbox] = useState(false);
   useEffect(() => setAjoutInbox(false), [route.view, slugCourant]);
+  // Subject by subject mode of the Inbox, switched by the button beside the « + ».
+  const [pasAPasInbox, setPasAPasInbox] = useState(false);
+  useEffect(() => setPasAPasInbox(false), [route.view, slugCourant]);
   useEffect(() => {
     if (!slugCourant || route.view === 'portefeuille') return setCompteurs({});
     const charger = () =>
@@ -130,6 +133,7 @@ export function App() {
             onChange={() => setRecharge((n) => n + 1)}
             ajoutOuvert={ajoutInbox}
             onAjoutFerme={() => setAjoutInbox(false)}
+            pasAPas={pasAPasInbox}
           />
         );
       case 'pipeline':
@@ -202,6 +206,15 @@ export function App() {
                 <span className="carre-plus" aria-hidden="true">
                   +
                 </span>
+              </button>
+            )}
+            {view === 'inbox' && (
+              <button
+                className={`btn sm ${pasAPasInbox ? '' : 'primary'}`}
+                aria-pressed={pasAPasInbox}
+                onClick={() => setPasAPasInbox(!pasAPasInbox)}
+              >
+                {pasAPasInbox ? 'Quitter le pas à pas' : 'Pas à pas'}
               </button>
             )}
           </div>
