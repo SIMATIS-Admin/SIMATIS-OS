@@ -1177,6 +1177,63 @@ textarea.input {
   color: var(--red);
   border-color: var(--red);
 }
+/* Inbox filters: quiet text tabs and small pills, so the list stays the focus. */
+.inbox-filtres {
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+}
+.inbox-filtres .chip {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 4px 9px;
+  font-size: 13px;
+}
+.inbox-filtres .chip.on {
+  background: var(--line-2);
+  color: var(--ink);
+  border-color: transparent;
+  font-weight: 600;
+}
+.inbox-filtres select {
+  font-size: 13px;
+  padding: 4px 8px;
+}
+.inbox-filtres .btn.carre {
+  width: 30px;
+  height: 30px;
+}
+.inbox-compteurs {
+  align-items: center;
+  gap: 2px;
+  padding: 0 12px 8px;
+}
+.inbox-compteurs .chip {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 3px 9px;
+  font-size: 13px;
+}
+.inbox-compteurs .chip.on {
+  background: var(--line-2);
+  color: var(--ink);
+  font-weight: 600;
+}
+.inbox-compteurs .chip b {
+  margin-left: 2px;
+  color: var(--ink);
+}
+.inbox-compteurs .chip.alerte b {
+  color: var(--red);
+}
+.inbox-compteurs .inbox-tri {
+  width: auto;
+  margin-left: auto;
+  font-size: 13px;
+  padding: 3px 8px;
+}
 .chip.alerte.on {
   color: #fff;
   background: var(--red);

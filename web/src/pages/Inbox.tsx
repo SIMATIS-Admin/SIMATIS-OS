@@ -796,7 +796,7 @@ export function Inbox({
   return (
     <div className="vq">
       <div className="panel">
-        <div className="vq-filter">
+        <div className="vq-filter inbox-filtres">
           {FILTRES.map(([f, l]) => (
             <button
               key={f}
