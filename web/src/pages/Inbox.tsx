@@ -114,6 +114,7 @@ function Ligne({
             <Icon name={ico} />
           </span>
           <b className="vq-titre">{s.titre}</b>
+          <Jauge niveau={s.priorite} />
           {s.instance.slug !== slug && (
             <span
               className="badge badge-instance"
@@ -124,7 +125,6 @@ function Ligne({
           )}
         </div>
         <small>
-          {s.priorite >= 4 && `Priorité ${s.priorite} · `}
           {qui(s) && `${qui(s)} · `}
           {s.echeance && (
             <span className={`echeance ${depassee(s) ? 'red' : ''}`}>
@@ -138,7 +138,28 @@ function Ligne({
   );
 }
 
-// Due date and priority of an entry, changed at any time (the Inbox shows them at once).
+// Gauge of the priority: five segments from green (1, not urgent) to red (5, urgent); the lit ones
+// are the priority, the others stay grey.
+function Jauge({ niveau }: { niveau: number }) {
+  return (
+    <span
+      className="inbox-jauge"
+      role="img"
+      aria-label={`Priorité ${niveau} sur 5`}
+      title={`Priorité ${niveau} sur 5`}
+    >
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span
+          key={n}
+          className="inbox-jauge-case"
+          style={n <= niveau ? { background: `hsl(${120 - (n - 1) * 30} 60% 42%)` } : undefined}
+        />
+      ))}
+    </span>
+  );
+}
+
+// Priority and due date of an entry: shown as they are, changed through the pencil only.
 function Reglages({
   s,
   onModifier,
@@ -146,40 +167,57 @@ function Reglages({
   s: SujetVue;
   onModifier: (modif: { echeance?: string | null; priorite?: number }) => void;
 }) {
+  const [ouvert, setOuvert] = useState(false);
   const [jour, setJour] = useState(s.echeance ? jourParis(new Date(s.echeance)) : '');
   return (
-    <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-      <label className="field">
-        <span>Échéance</span>
-        <input
-          className="input"
-          type="date"
-          value={jour}
-          onChange={(e) => {
-            setJour(e.target.value);
-            // Noon, local time: the day stays the same wherever the server runs.
-            onModifier({
-              echeance: e.target.value
-                ? new Date(`${e.target.value}T12:00:00`).toISOString()
-                : null,
-            });
-          }}
-        />
-      </label>
-      <label className="field">
-        <span>Priorité (5 = la plus haute)</span>
-        <select
-          className="input"
-          value={s.priorite}
-          onChange={(e) => onModifier({ priorite: Number(e.target.value) })}
+    <div className="inbox-reglages">
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <Jauge niveau={s.priorite} />
+        <button
+          className="btn sm"
+          aria-expanded={ouvert}
+          aria-label="Modifier l’échéance et la priorité"
+          title="Modifier l’échéance et la priorité"
+          onClick={() => setOuvert(!ouvert)}
         >
-          {[1, 2, 3, 4, 5].map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-      </label>
+          <Icon name="edit" />
+        </button>
+      </div>
+      {ouvert && (
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          <label className="field">
+            <span>Échéance</span>
+            <input
+              className="input"
+              type="date"
+              value={jour}
+              onChange={(e) => {
+                setJour(e.target.value);
+                // Noon, local time: the day stays the same wherever the server runs.
+                onModifier({
+                  echeance: e.target.value
+                    ? new Date(`${e.target.value}T12:00:00`).toISOString()
+                    : null,
+                });
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Priorité (5 = la plus haute)</span>
+            <select
+              className="input"
+              value={s.priorite}
+              onChange={(e) => onModifier({ priorite: Number(e.target.value) })}
+            >
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
     </div>
   );
 }
