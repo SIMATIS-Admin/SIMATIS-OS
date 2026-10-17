@@ -1,7 +1,21 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import { Inbox } from './Inbox.js';
+
+// The page header lives in the app: this stands in for it, with its two slots.
+function AvecEntete(props: Omit<Parameters<typeof Inbox>[0], 'entete'>) {
+  const [gauche, setGauche] = useState<HTMLElement | null>(null);
+  const [droite, setDroite] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <span ref={setGauche} />
+      <span ref={setDroite} />
+      <Inbox {...props} entete={{ gauche, droite }} />
+    </>
+  );
+}
 
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
@@ -170,7 +184,7 @@ describe('Inbox screen', () => {
   it('runs the Inbox routine, follows it, then reloads the list', async () => {
     statutsExecution = ['en_cours', 'terminee'];
     const onChange = vi.fn();
-    render(<Inbox slug="simatis" onChange={onChange} />);
+    render(<AvecEntete slug="simatis" onChange={onChange} />);
     await screen.findAllByText('Répondre à Hélène');
     fireEvent.click(await screen.findByRole('button', { name: "Mettre à jour l'Inbox" }));
     await waitFor(() =>
@@ -190,14 +204,14 @@ describe('Inbox screen', () => {
   }, 15000);
 
   it('shows no entry form and no add button of its own until the + asks for it', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     expect(screen.queryByLabelText('Sujet')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ajouter' })).toBeNull();
   });
 
   it('sets the priority of a new entry in the form, and changes it on an existing one', async () => {
-    render(<Inbox slug="simatis" ajoutOuvert onAjoutFerme={() => undefined} />);
+    render(<AvecEntete slug="simatis" ajoutOuvert onAjoutFerme={() => undefined} />);
     await screen.findAllByText('Répondre à Hélène');
     fireEvent.click(screen.getByRole('button', { name: 'Formulaire' }));
     fireEvent.change(screen.getByLabelText('Sujet'), { target: { value: 'Urgent fictif' } });
@@ -227,7 +241,7 @@ describe('Inbox screen', () => {
   });
 
   it('shows the priority as a gauge from 1 to 5, in the rows and the detail', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     // Every entry of the list has its gauge; the detail of the first one has a second one.
     expect(screen.getAllByRole('img', { name: 'Priorité 3 sur 5' }).length).toBeGreaterThan(1);
@@ -236,7 +250,9 @@ describe('Inbox screen', () => {
   it('adds an entry by hand, then reloads the list', async () => {
     const onChange = vi.fn();
     const onAjoutFerme = vi.fn();
-    render(<Inbox slug="simatis" onChange={onChange} ajoutOuvert onAjoutFerme={onAjoutFerme} />);
+    render(
+      <AvecEntete slug="simatis" onChange={onChange} ajoutOuvert onAjoutFerme={onAjoutFerme} />,
+    );
     await screen.findAllByText('Répondre à Hélène');
     fireEvent.click(screen.getByRole('button', { name: 'Formulaire' }));
     const envoi = screen.getByRole('button', { name: "Ajouter à l'Inbox" });
@@ -279,7 +295,7 @@ describe('Inbox screen', () => {
       }),
     ];
     const onChange = vi.fn();
-    render(<Inbox slug="simatis" onChange={onChange} ajoutOuvert />);
+    render(<AvecEntete slug="simatis" onChange={onChange} ajoutOuvert />);
     await screen.findAllByText('Répondre à Hélène');
     // Claude is the mode offered first; the form is one click away.
     expect(screen.getByRole('button', { name: 'Avec Claude' }).getAttribute('aria-pressed')).toBe(
@@ -310,7 +326,7 @@ describe('Inbox screen', () => {
     echanges = [
       echange('attente_pilote', { erreur: "Claude n'a pas répondu. Réécrivez votre message." }),
     ];
-    render(<Inbox slug="simatis" ajoutOuvert />);
+    render(<AvecEntete slug="simatis" ajoutOuvert />);
     await screen.findAllByText('Répondre à Hélène');
     fireEvent.change(screen.getByLabelText('Que faut-il ajouter ?'), {
       target: { value: 'Devis' },
@@ -332,7 +348,7 @@ describe('Inbox screen', () => {
 
   it('keeps the update button off while the Inbox routine is paused', async () => {
     routineActive = false;
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     expect(
       (await screen.findByRole('button', { name: "Mettre à jour l'Inbox" })).hasAttribute(
@@ -346,7 +362,7 @@ describe('Inbox screen', () => {
 
   it('says the runner does not answer when a request stays untouched', async () => {
     derniereRoutine = execution('demandee');
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     await screen.findByText(/L'exécuteur ne répond pas/);
     expect(
@@ -359,7 +375,7 @@ describe('Inbox screen', () => {
       ...execution('echouee'),
       rapport: { fait: [], attente: [], echec: ["Abandonnée : l'exécuteur n'a pas répondu."] },
     };
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     await screen.findByText(/Abandonnée : l'exécuteur/);
     expect(
@@ -368,7 +384,7 @@ describe('Inbox screen', () => {
   });
 
   it('groups the list by urgency and filters on a counter', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     // s1 is late, s2 is due later, s3 has no due date.
     expect(screen.getByRole('heading', { name: /En retard/ })).toBeTruthy();
@@ -384,22 +400,28 @@ describe('Inbox screen', () => {
     expect(titres()).toHaveLength(3);
   });
 
+  it('shows the « Plus tard » urgency chip, so its entries can be found', async () => {
+    render(<AvecEntete slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    expect(screen.getByRole('button', { name: /Plus tard/ })).toBeTruthy();
+  });
+
   it('offers the ways to order the entries in a menu, and no board view', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     expect(screen.queryByRole('button', { name: 'Colonnes' })).toBeNull();
     const tri = screen.getByRole('combobox', { name: 'Trier les entrées' });
-    expect(within(tri).getAllByRole('option')).toHaveLength(3);
+    expect(within(tri).getAllByRole('option')).toHaveLength(2);
     fireEvent.change(tri, { target: { value: 'arrivee' } });
     expect((tri as HTMLSelectElement).value).toBe('arrivee');
     expect(document.querySelectorAll('.vq-item').length).toBeGreaterThan(0);
   });
 
   it('shows one subject at a time with previous and next when the step mode is on', async () => {
-    const { rerender } = render(<Inbox slug="simatis" />);
+    const { rerender } = render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     expect(screen.queryByText('1 / 3')).toBeNull();
-    rerender(<Inbox slug="simatis" pasAPas />);
+    rerender(<AvecEntete slug="simatis" pasAPas />);
     expect(document.querySelectorAll('.vq-item')).toHaveLength(0);
     expect(screen.getByText('1 / 3')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Précédent/ }).hasAttribute('disabled')).toBe(true);
@@ -409,25 +431,25 @@ describe('Inbox screen', () => {
   });
 
   it('filters by type chips', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     expect(calls[0]?.url).toBe('/api/i/simatis/inbox?filtre=tout');
-    fireEvent.click(screen.getByRole('button', { name: 'Mails' }));
-    await waitFor(() => expect(calls.at(-1)?.url).toBe('/api/i/simatis/inbox?filtre=mails'));
-    for (const [chip, filtre] of [
-      ['Devis', 'devis'],
-      ['Diagnostics', 'diagnostics'],
-      ['Comptes rendus', 'comptes_rendus'],
-      ['À valider', 'a_valider'],
-      ['Traités', 'traites'],
+    const type = screen.getByRole('combobox', { name: "Type d'entrée" });
+    for (const filtre of [
+      'mails',
+      'devis',
+      'diagnostics',
+      'comptes_rendus',
+      'a_valider',
+      'traites',
     ]) {
-      fireEvent.click(screen.getByRole('button', { name: chip }));
+      fireEvent.change(type, { target: { value: filtre } });
       await waitFor(() => expect(calls.at(-1)?.url).toBe(`/api/i/simatis/inbox?filtre=${filtre}`));
     }
   });
 
   it('keeps the order given by the server and marks overdue due dates in red', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     expect(titres()).toEqual(['Répondre à Hélène', 'Devis Fonderie', 'Votre proposition']);
     const lignes = document.querySelectorAll('.vq-item');
@@ -438,7 +460,7 @@ describe('Inbox screen', () => {
 
   it('checks a subject and reloads', async () => {
     const onChange = vi.fn();
-    render(<Inbox slug="simatis" onChange={onChange} />);
+    render(<AvecEntete slug="simatis" onChange={onChange} />);
     await screen.findAllByText('Répondre à Hélène');
     const cases = screen.getAllByRole('checkbox', { name: 'Marquer comme traité' });
     expect(cases).toHaveLength(2);
@@ -449,7 +471,7 @@ describe('Inbox screen', () => {
   });
 
   it('sends the action to the subject instance slug in the overview', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     fireEvent.click((await screen.findAllByText('Devis Fonderie'))[0] as HTMLElement);
     const detail = document.querySelector('.inbox-detail') as HTMLElement;
     fireEvent.click(within(detail).getByRole('button', { name: 'Marquer comme traité' }));
@@ -458,7 +480,7 @@ describe('Inbox screen', () => {
   });
 
   it('opens the source link of a subject', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     const lien = await screen.findByRole('link', { name: /Ouvrir la source/ });
     expect(lien.getAttribute('href')).toBe('https://mail.exemple.fr/fil/1');
     expect(lien.getAttribute('target')).toBe('_blank');
@@ -473,13 +495,13 @@ describe('Inbox screen', () => {
         ),
       ),
     );
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Sujet x1');
     expect(screen.queryByRole('link', { name: /Ouvrir la source/ })).toBeNull();
   });
 
   it('opens the task window prefilled and posts to sujets/:id/tache', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Transformer en tâche' }));
     expect(screen.getByLabelText<HTMLInputElement>('Intitulé').value).toBe('Répondre à Hélène');
     expect(screen.getByText(/Hélène Morvan/, { selector: '.field span' })).toBeTruthy();
@@ -495,7 +517,7 @@ describe('Inbox screen', () => {
 
   it('shows the simulation message and keeps the subject', async () => {
     simulation = true;
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Transformer en tâche' }));
     fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
     expect(await screen.findByText(/Simulation : rien n’a été écrit/)).toBeTruthy();
@@ -503,7 +525,7 @@ describe('Inbox screen', () => {
   });
 
   it('filters the overview by mandate', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
     fireEvent.change(screen.getByLabelText('Mandat'), { target: { value: 'helioval' } });
     expect(titres()).toEqual(['Devis Fonderie']);
@@ -522,15 +544,17 @@ describe('Inbox screen', () => {
         ),
       ),
     );
-    render(<Inbox slug="helioval" />);
+    render(<AvecEntete slug="helioval" />);
     await screen.findAllByText('Sujet m1');
     expect(screen.queryByLabelText('Mandat')).toBeNull();
   });
 
   it('shows treated subjects with their task and puts one back', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
-    fireEvent.click(screen.getByRole('button', { name: 'Traités' }));
+    fireEvent.change(screen.getByRole('combobox', { name: "Type d'entrée" }), {
+      target: { value: 'traites' },
+    });
     expect((await screen.findByRole('link', { name: 'Voir la tâche' })).getAttribute('href')).toBe(
       '#/simatis/taches',
     );
@@ -539,16 +563,18 @@ describe('Inbox screen', () => {
   });
 
   it('shows a decided proposal with its decision, never to put back', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
-    fireEvent.click(screen.getByRole('button', { name: 'Traités' }));
+    fireEvent.change(screen.getByRole('combobox', { name: "Type d'entrée" }), {
+      target: { value: 'traites' },
+    });
     fireEvent.click((await screen.findAllByText('Proposition décidée'))[0] as HTMLElement);
     expect(await screen.findByText('Écarté par vous.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Remettre à traiter' })).toBeNull();
   });
 
   it('shows the proposal safely and validates it with the edited text', async () => {
-    const { container } = render(<Inbox slug="simatis" />);
+    const { container } = render(<AvecEntete slug="simatis" />);
     fireEvent.click((await screen.findAllByText('Votre proposition'))[0] as HTMLElement);
     expect(await screen.findByText('Créer le brouillon dans la boîte mail')).toBeTruthy();
     expect(container.querySelector('.mail-b')?.innerHTML).toBe('<p>Bonjour Madame Morvan,</p>');
@@ -569,7 +595,7 @@ describe('Inbox screen', () => {
   });
 
   it('discards a proposal without content', async () => {
-    render(<Inbox slug="simatis" />);
+    render(<AvecEntete slug="simatis" />);
     fireEvent.click((await screen.findAllByText('Votre proposition'))[0] as HTMLElement);
     fireEvent.click(await screen.findByText('Écarter'));
     await waitFor(() => expect(posts()).toHaveLength(1));

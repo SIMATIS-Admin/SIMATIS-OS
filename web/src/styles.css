@@ -2761,6 +2761,15 @@ tr.sel {
 }
 
 /* Inbox views: columns by status, and step-by-step navigation. */
+.entete-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.inbox-type,
+.inbox-mandat {
+  width: auto;
+}
 .inbox-tri {
   margin-left: auto;
   width: auto;

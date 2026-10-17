@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ajouterDepuisEchange,
   ajouterSujet,
@@ -62,10 +63,9 @@ const lienWeb = (lien: string | null) => (lien && /^https?:\/\//i.test(lien) ? l
 const qui = (s: SujetVue) => s.contact?.nom ?? s.entreprise?.nom ?? '';
 
 // Ways to order the entries of the list; the treated ones keep their own order.
-type Tri = 'priorite' | 'echeance' | 'arrivee';
+type Tri = 'priorite' | 'arrivee';
 const TRIS: [Tri, string][] = [
   ['priorite', 'Priorité puis échéance'],
-  ['echeance', 'Échéance puis priorité'],
   ['arrivee', 'Plus récentes d’abord'],
 ];
 const parEcheance = (a: SujetVue, b: SujetVue) => {
@@ -77,7 +77,6 @@ const parEcheance = (a: SujetVue, b: SujetVue) => {
 const parPriorite = (a: SujetVue, b: SujetVue) => b.priorite - a.priorite;
 const TRIS_COMPARATEURS: Record<Tri, (a: SujetVue, b: SujetVue) => number> = {
   priorite: (a, b) => parPriorite(a, b) || parEcheance(a, b),
-  echeance: (a, b) => parEcheance(a, b) || parPriorite(a, b),
   arrivee: (a, b) => b.createdAt.localeCompare(a.createdAt),
 };
 
@@ -677,6 +676,7 @@ export function Inbox({
   ajoutOuvert = false,
   onAjoutFerme = () => undefined,
   pasAPas = false,
+  entete,
 }: {
   slug: string;
   onChange?: () => void;
@@ -684,6 +684,8 @@ export function Inbox({
   onAjoutFerme?: () => void;
   // Subject by subject mode, started by the button beside the « + » of the header.
   pasAPas?: boolean;
+  // Slots of the page header, where the update button and the mandate filter are shown.
+  entete?: { gauche: HTMLElement | null; droite: HTMLElement | null };
 }) {
   const [filtre, setFiltre] = useState<Filtre>('tout');
   const [list, setList] = useState<SujetVue[] | null>(null);
@@ -797,34 +799,22 @@ export function Inbox({
     <div className="vq">
       <div className="panel">
         <div className="vq-filter inbox-filtres">
-          {FILTRES.map(([f, l]) => (
-            <button
-              key={f}
-              className={`chip ${filtre === f ? 'on' : ''}`}
-              onClick={() => {
-                setFiltre(f);
-                setSecteur(null);
-                setSel(null);
-              }}
-            >
-              {l}
-            </button>
-          ))}
-          {ensemble && (
-            <select
-              className="input"
-              aria-label="Mandat"
-              value={mandat}
-              onChange={(e) => setMandat(e.target.value)}
-            >
-              <option value="">Tous</option>
-              {instances.map((i) => (
-                <option key={i.slug} value={i.slug}>
-                  {i.nom}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            className="input inbox-type"
+            aria-label="Type d'entrée"
+            value={filtre}
+            onChange={(e) => {
+              setFiltre(e.target.value as Filtre);
+              setSecteur(null);
+              setSel(null);
+            }}
+          >
+            {FILTRES.map(([f, l]) => (
+              <option key={f} value={f}>
+                {l}
+              </option>
+            ))}
+          </select>
           <Ajout
             slug={slug}
             ouvert={ajoutOuvert}
@@ -835,11 +825,32 @@ export function Inbox({
               )
             }
           />
-          {routine && <MiseAJour slug={slug} routine={routine} onFini={fini} />}
         </div>
+        {/* The update button and the mandate filter sit in the page header, beside the title. */}
+        {entete?.gauche &&
+          routine &&
+          createPortal(<MiseAJour slug={slug} routine={routine} onFini={fini} />, entete.gauche)}
+        {entete?.droite &&
+          ensemble &&
+          createPortal(
+            <select
+              className="input inbox-mandat"
+              aria-label="Mandat"
+              value={mandat}
+              onChange={(e) => setMandat(e.target.value)}
+            >
+              <option value="">Tous</option>
+              {instances.map((i) => (
+                <option key={i.slug} value={i.slug}>
+                  {i.nom}
+                </option>
+              ))}
+            </select>,
+            entete.droite,
+          )}
         {filtre !== 'traites' && (
           <div className="inbox-compteurs" role="group" aria-label="Urgences">
-            {SECTEURS.filter(([k]) => k !== 'plus_tard').map(([k, libelle]) => (
+            {SECTEURS.map(([k, libelle]) => (
               <button
                 key={k}
                 className={`chip ${secteur === k ? 'on' : ''} ${k === 'retard' && compteurs[k] ? 'alerte' : ''}`}

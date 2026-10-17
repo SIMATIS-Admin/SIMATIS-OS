@@ -80,6 +80,9 @@ export function App() {
   useEffect(() => setAjoutInbox(false), [route.view, slugCourant]);
   // Subject by subject mode of the Inbox, switched by the button beside the « + ».
   const [pasAPasInbox, setPasAPasInbox] = useState(false);
+  // Header slots of the Inbox: the update button goes left of the title, the mandate filter right of « Pas à pas ».
+  const [enteteGauche, setEnteteGauche] = useState<HTMLSpanElement | null>(null);
+  const [enteteDroite, setEnteteDroite] = useState<HTMLSpanElement | null>(null);
   useEffect(() => setPasAPasInbox(false), [route.view, slugCourant]);
   useEffect(() => {
     if (!slugCourant || route.view === 'portefeuille') return setCompteurs({});
@@ -134,6 +137,7 @@ export function App() {
             ajoutOuvert={ajoutInbox}
             onAjoutFerme={() => setAjoutInbox(false)}
             pasAPas={pasAPasInbox}
+            entete={{ gauche: enteteGauche, droite: enteteDroite }}
           />
         );
       case 'pipeline':
@@ -194,6 +198,7 @@ export function App() {
             >
               <Icon name="menu" />
             </button>
+            {view === 'inbox' && <span className="entete-slot" ref={setEnteteGauche} />}
             <h1>{title}</h1>
             {view === 'inbox' && (
               <button
@@ -217,6 +222,7 @@ export function App() {
                 {pasAPasInbox ? 'Quitter le pas à pas' : 'Pas à pas'}
               </button>
             )}
+            {view === 'inbox' && <span className="entete-slot" ref={setEnteteDroite} />}
           </div>
           {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
         </div>
