@@ -3,6 +3,17 @@
 const STORE_KEY = 'simatis-os-maquette-v6';
 const VIEWS = {};
 const ACTIONS = {};
+
+/* Crée un mandat prospect : instance fictive, données de démonstration. Utilisé par « Nouveau mandat prospect » et par le diagnostic. */
+function creerMandatProspect(nom, sous = 'Mandat prospect', { ouvrir = true, adapt } = {}) {
+  const id = uid('p'), cols = ['#E3A33B', '#D46A8C', '#5BB0C9', '#8C9A3B'];
+  S.instances.push({ id, nom, sous, type: 'prospect', demo: true, outil: 'Données fictives', c: cols[S.instances.filter(i => i.type === 'prospect').length % cols.length], modules: ['diagnostic'],
+    conn: [['CRM', 'Données fictives', 'ok'], ['Messagerie', 'Aucun envoi possible', 'ok'], ['Agenda', 'Agenda fictif', 'ok']] });
+  S.data[id] = SEED().demo; if (adapt) adapt(S.data[id]);
+  if (ouvrir) { OVER = null; go('brief', id); }
+  toast('Mandat prospect créé, avec des données fictives');
+  return id;
+}
 let S;
 
 /* Favoris propres à l'utilisateur, pas à l'instance : ils suivent Marc d'un mandat à l'autre. */
@@ -95,11 +106,11 @@ const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 /* Le groupe « later » regroupe les écrans reportés : encore accessibles, mais repliés par défaut. */
 const NAV = [
   { g: 'Pilotage', items: [['routines', 'Routines Claude', 'clock'], ['brief', 'Brief du jour', 'sun'], ['validations', 'À valider', 'inbox'], ['tableau', 'Tableau de bord', 'chart']] },
-  { g: 'Stratégie', items: [['demarrage', 'Démarrage du mandat', 'flag', 'demarrage']] },
+  { g: 'Stratégie', items: [['demarrage', 'Démarrage du mandat', 'flag', 'demarrage'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic']] },
   { g: 'Générer la demande', items: [['prospection', 'Prospection', 'send'], ['bases', 'Bases vivantes', 'db']] },
   { g: 'Convertir', items: [['pipeline', 'Pipeline', 'kanban'], ['entreprises', 'Entreprises', 'building'], ['contacts', 'Contacts', 'users'], ['agenda', 'Rendez-vous', 'cal'], ['devis', 'Devis', 'file', 'devis'], ['relais', 'Relais internes', 'users', 'relais']] },
   { g: 'Réglages', items: [['parametres', 'Paramètres', 'gear']] },
-  { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic'], ['detection', 'Détection', 'pulse'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
+  { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['detection', 'Détection', 'pulse'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
 ];
 const NAV_ITEMS = NAV.flatMap(g => g.items);
 const navItem = id => NAV_ITEMS.find(([v]) => v === id);
@@ -225,10 +236,7 @@ Object.assign(ACTIONS, {
     <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="prospect-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`); },
   'prospect-new-ok': () => {
     const nom = document.getElementById('np-nom').value.trim(); if (!nom) { document.getElementById('np-nom').focus(); return; }
-    const id = uid('p'), cols = ['#E3A33B', '#D46A8C', '#5BB0C9', '#8C9A3B'];
-    S.instances.push({ id, nom, sous: 'Mandat prospect', type: 'prospect', demo: true, outil: 'Données fictives', c: cols[S.instances.filter(i => i.type === 'prospect').length % cols.length], modules: ['diagnostic'],
-      conn: [['CRM', 'Données fictives', 'ok'], ['Messagerie', 'Aucun envoi possible', 'ok'], ['Agenda', 'Agenda fictif', 'ok']] });
-    S.data[id] = SEED().demo; OVER = null; go('brief', id); toast('Mandat prospect créé, avec des données fictives');
+    creerMandatProspect(nom);
   },
   'reset-all': () => { if (confirm('Remettre toutes les données de la maquette à zéro ?')) { const keep = S.inst, favs = S.favs; S = freshState(); S.inst = S.data[keep] ? keep : 'simatis'; S.favs = favs; OVER = null; render(); toast('Maquette réinitialisée'); } }
 });

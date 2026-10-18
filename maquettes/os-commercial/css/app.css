@@ -370,6 +370,40 @@ textarea.input { min-height: 90px; resize: vertical; }
 /* Diagnostic */
 .profil { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
 .radar text { font: 12px var(--f-body); fill: var(--ink-2); }
+.progress { height: 8px; background: var(--line-2); border-radius: 999px; overflow: hidden; margin: 8px 0 14px; }
+.progress i { display: block; height: 100%; background: var(--teal); }
+.dz { border: 1.5px dashed var(--line); border-radius: var(--r-m); padding: 22px; text-align: center; color: var(--ink-2); }
+.dstack { display: flex; flex-direction: column; gap: 12px; }
+.proj-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.etapes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.etape { display: flex; align-items: center; gap: 8px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px 6px 6px; font: 600 14px var(--f-body); cursor: pointer; }
+.etape .num { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--line-2); color: var(--ink-2); font: 600 12px var(--f-num); }
+.etape.on { border-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+.etape.on .num { background: var(--teal); color: #fff; }
+.etape.fait .num { background: var(--green-bg); color: var(--green); }
+.diag-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+.diag-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.chat { position: sticky; top: 16px; }
+@media (max-width: 900px) { .diag-layout { grid-template-columns: 1fr; } .chat { position: static; } }
+.champs2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.champ { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); min-width: 0; }
+.champ input, .champ select, .champ textarea, .chat-cfg select, .chat textarea { font: 400 15px var(--f-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: var(--r-s); padding: 7px 9px; width: 100%; min-width: 0; }
+.champ textarea, .chat textarea { resize: vertical; }
+.cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.carte { border: 1px solid var(--line-2); border-radius: var(--r-m); padding: 12px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.carte small { color: var(--ink-3); }
+.pied { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line-2); padding-top: 12px; }
+.chat-cfg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.chat-cfg label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-3); min-width: 0; }
+.chat-log { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+.msg { border-radius: var(--r-m); padding: 8px 10px; font-size: 14px; max-width: 92%; }
+.msg p { margin: 2px 0 0; }
+.msg small { color: var(--ink-3); font-size: 12px; }
+.msg.user { background: var(--blue-bg); align-self: flex-end; }
+.msg.assistant { background: var(--line-2); align-self: flex-start; }
+.chat-form { display: flex; gap: 8px; align-items: flex-end; }
+.chat-form textarea { flex: 1; }
+.ok-note { background: var(--green-bg); border-radius: var(--r-m); padding: 10px 12px; font-size: 14px; }
 
 /* Plan d'action */
 .plan-b { display: grid; grid-template-columns: 34px 1fr auto; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line-2); align-items: start; }
