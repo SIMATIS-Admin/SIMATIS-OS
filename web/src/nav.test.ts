@@ -39,7 +39,8 @@ describe('nav', () => {
 
   it('redirects the former validations screen to the Inbox', () => {
     expect(vueCanonique('validations')).toBe('inbox');
-    expect(vueCanonique('taches')).toBe('taches');
+    expect(vueCanonique('taches')).toBe('agenda');
+    expect(vueCanonique('rendez-vous')).toBe('agenda');
   });
 
   it('groups instances by type and keeps their order', () => {
@@ -88,7 +89,7 @@ describe('nav', () => {
   it('marks only built screens as built', () => {
     expect(isBuilt('entreprises')).toBe(true);
     expect(isBuilt('contacts')).toBe(true);
-    expect(isBuilt('taches')).toBe(true);
+    expect(isBuilt('agenda')).toBe(true);
     expect(isBuilt('pipeline')).toBe(true);
     expect(isBuilt('brief')).toBe(true);
     expect(isBuilt('tableau')).toBe(true);

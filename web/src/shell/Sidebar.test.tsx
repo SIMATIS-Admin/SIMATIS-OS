@@ -72,12 +72,12 @@ describe('Sidebar', () => {
   });
 
   it('shows a red badge with the count of activities to do, not when zero', () => {
-    renderSidebar(simatis, [], { taches: 7 });
-    const lien = screen.getAllByRole('link').find((a) => a.textContent?.startsWith('Tâches'));
+    renderSidebar(simatis, [], { agenda: 7 });
+    const lien = screen.getAllByRole('link').find((a) => a.textContent?.startsWith('Agenda'));
     expect(lien && within(lien).getByText('7')).toBeTruthy();
     cleanup();
-    renderSidebar(simatis, [], { taches: 0 });
-    const vide = screen.getAllByRole('link').find((a) => a.textContent?.startsWith('Tâches'));
+    renderSidebar(simatis, [], { agenda: 0 });
+    const vide = screen.getAllByRole('link').find((a) => a.textContent?.startsWith('Agenda'));
     expect(vide?.querySelector('.pastille')).toBeNull();
   });
 

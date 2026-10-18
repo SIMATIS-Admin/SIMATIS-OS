@@ -209,7 +209,7 @@ export function Barre({ slug }: { slug: string }) {
             const r = await createTache(slug, { ...saisie, hubspot });
             setAjout(null);
             if ('simulation' in r) setMessage(r.message);
-            else location.hash = `#/${slug}/taches`;
+            else location.hash = `#/${slug}/agenda`;
           }}
         />
       )}

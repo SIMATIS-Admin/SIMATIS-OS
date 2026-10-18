@@ -20,7 +20,7 @@ import { Brief } from './pages/Brief.js';
 import { Fiche } from './pages/Fiche.js';
 import { Barre } from './shell/Barre.js';
 import type { KindFiche } from './api.js';
-import { Taches } from './pages/Taches.js';
+import { Agenda } from './pages/Agenda.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
 import { Journal } from './pages/Journal.js';
@@ -30,7 +30,6 @@ import { Portefeuille } from './pages/Portefeuille.js';
 import { Tableau } from './pages/Tableau.js';
 import { Routines } from './pages/Routines.js';
 import { Devis } from './pages/Devis.js';
-import { RendezVous } from './pages/RendezVous.js';
 import { SiteWeb } from './pages/SiteWeb.js';
 import { Sidebar } from './shell/Sidebar.js';
 
@@ -90,7 +89,7 @@ export function App() {
       Promise.all([
         fetchCompteurTaches(slugCourant).catch(() => 0),
         fetchCompteurInbox(slugCourant).catch(() => 0),
-      ]).then(([taches, inbox]) => setCompteurs({ taches, inbox }));
+      ]).then(([taches, inbox]) => setCompteurs({ agenda: taches, inbox }));
     void charger();
     const minuteur = window.setInterval(() => void charger(), 5 * 60_000);
     return () => window.clearInterval(minuteur);
@@ -124,8 +123,6 @@ export function App() {
         return <Entreprises key={current.slug} slug={current.slug} />;
       case 'contacts':
         return <Contacts key={current.slug} slug={current.slug} />;
-      case 'taches':
-        return <Taches key={current.slug} slug={current.slug} />;
       case 'brief':
         return <Brief key={current.slug} slug={current.slug} />;
       case 'inbox':
@@ -145,7 +142,7 @@ export function App() {
       case 'routines':
         return <Routines key={current.slug} slug={current.slug} />;
       case 'agenda':
-        return <RendezVous key={current.slug} slug={current.slug} />;
+        return <Agenda key={current.slug} slug={current.slug} />;
       case 'devis':
         return <Devis key={current.slug} slug={current.slug} />;
       case 'siteweb':
