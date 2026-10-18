@@ -40,7 +40,7 @@ describe('nav', () => {
   it('redirects the former validations screen to the Inbox', () => {
     expect(vueCanonique('validations')).toBe('inbox');
     expect(vueCanonique('taches')).toBe('agenda');
-    expect(vueCanonique('rendez-vous')).toBe('agenda');
+    expect(vueCanonique('rendez-vous')).toBe('rendez-vous');
   });
 
   it('groups instances by type and keeps their order', () => {

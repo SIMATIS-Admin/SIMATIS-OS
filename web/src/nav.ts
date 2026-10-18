@@ -34,7 +34,8 @@ export const NAV: NavGroup[] = [
       item('pipeline', 'Pipeline', 'kanban'),
       item('entreprises', 'Entreprises', 'building'),
       item('contacts', 'Contacts', 'users'),
-      item('agenda', 'Agenda', 'cal'),
+      item('agenda', 'Agenda', 'clock'),
+      item('rendez-vous', 'Rendez-vous', 'cal'),
       item('devis', 'Devis', 'file', 'devis'),
       item('relais', 'Relais internes', 'users', 'relais'),
     ],
@@ -65,6 +66,7 @@ export const BUILT = new Set([
   'parametres',
   'tableau',
   'agenda',
+  'rendez-vous',
   'devis',
   'routines',
   'siteweb',
@@ -84,7 +86,7 @@ export const isBuilt = (id: string) => BUILT.has(id);
 
 // Former screen ids still found in bookmarks: « À valider » became the Inbox.
 export const vueCanonique = (view: string) =>
-  view === 'validations' ? 'inbox' : view === 'taches' || view === 'rendez-vous' ? 'agenda' : view;
+  view === 'validations' ? 'inbox' : view === 'taches' ? 'agenda' : view;
 
 export const allItems = () => NAV.flatMap((g) => g.items);
 

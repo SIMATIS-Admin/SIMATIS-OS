@@ -8,7 +8,7 @@ import {
   type RendezVousReponse,
 } from '../api.js';
 
-const quand = (iso: string) =>
+export const quand = (iso: string) =>
   new Date(iso).toLocaleString('fr-FR', {
     weekday: 'short',
     day: 'numeric',
@@ -110,7 +110,7 @@ function CompteRendu({ slug, rdv, onDone }: { slug: string; rdv: Rdv; onDone: ()
   );
 }
 
-export function RendezVous({ slug }: { slug: string }) {
+export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) {
   const [data, setData] = useState<RendezVousReponse | null>(null);
   const [ouvert, setOuvert] = useState<{ id: string; vue: 'prep' | 'cr' } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +118,10 @@ export function RendezVous({ slug }: { slug: string }) {
     fetchRendezVous(slug).then(setData, (e: unknown) => setError(String(e)));
   }, [slug]);
   useEffect(load, [load]);
+  // Opened from the Agenda: the meeting's row shows its preparation straight away.
+  useEffect(() => {
+    if (ouvrir && data?.rdv.some((r) => r.id === ouvrir)) setOuvert({ id: ouvrir, vue: 'prep' });
+  }, [ouvrir, data]);
 
   if (error) return <div className="empty">{error}</div>;
   if (!data) return null;
