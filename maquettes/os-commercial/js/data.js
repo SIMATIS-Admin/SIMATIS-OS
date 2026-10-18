@@ -222,9 +222,9 @@ const SEED = () => {
       { id: 'g4', soc: 'Peintures Alpines', type: 'Cycle', txt: 'Fin d\'exercice fiscal dans 6 semaines', date: dp(-1), source: 'Registre public', force: 'faible' }
     ],
     projets: [
-      { id: 'pj1', nom: 'Mécanique Bréval', secteur: 'Usinage de précision', contexte: 'Dirigeant fondateur. Vente au bouche-à-oreille, peu de relances. Veut structurer la prospection avant de recruter.', etape: 2, diag: 'dg1', modif: dp(-4) },
-      { id: 'pj2', nom: 'Oxalis Conseil', secteur: 'Conseil', contexte: 'Rencontré en réseau. Demande un diagnostic avant toute proposition.', etape: 1, diag: null, modif: dp(-1) },
-      { id: 'pj3', nom: 'Ateliers Morvan', secteur: 'Chaudronnerie', contexte: 'Diagnostic terminé. Le rapport est à relire avec le dirigeant.', etape: 3, diag: 'dg2', modif: dp(-30) }
+      { id: 'pj1', nom: 'Mécanique Bréval', secteur: 'Usinage de précision', contexte: 'Dirigeant fondateur. Vente au bouche-à-oreille, peu de relances. Veut structurer la prospection avant de recruter.', activite: 'usinage', etape: 2, diag: 'dg1', modif: dp(-4) },
+      { id: 'pj2', nom: 'Oxalis Conseil', secteur: 'Conseil', contexte: 'Rencontré en réseau. Demande un diagnostic avant toute proposition.', activite: 'services', etape: 1, diag: null, modif: dp(-1) },
+      { id: 'pj3', nom: 'Ateliers Morvan', secteur: 'Chaudronnerie', contexte: 'Diagnostic terminé. Le rapport est à relire avec le dirigeant.', activite: 'usinage', etape: 3, diag: 'dg2', modif: dp(-30) }
     ],
     diagnostics: [
       { id: 'dg1', soc: 's5', date: dp(-4), statut: 'Rapport à rédiger', dims: { outils: 7.2, strategie: 4.8, polyvalence: 3.5 } },

@@ -27,7 +27,7 @@ Priorité actuelle : l'activité commerciale de SIMATIS. Les écrans en favoris 
 | **Devis** | Brique propre à l'activité SIMATIS, absente des mandats. L'OS prépare les lignes, vous fixez les prix. |
 | **Relais internes** | Points mensuels avec les experts du mandat (instance Helioval). |
 
-**Diagnostic** (menu Stratégie) : sur SIMATIS, la liste des projets de diagnostic et leurs trois étapes (préparer, entretien et rapport d'outil, analyser). Sur un mandat fictif, le résultat du dernier diagnostic et le plan d'action en résumé ; l'auto-diagnostic VMA reste « plus tard ».
+**Diagnostic** (menu Stratégie) : sur SIMATIS, la liste des projets de diagnostic et leurs trois étapes (préparer, entretien et rapport d'outil, analyser). Chaque étape a son assistant Claude, dont on choisit le modèle et l'effort ; la conversation reste avec le projet. La création d'un mandat prospect part de l'activité du projet (`js/secteurs.js` : entreprises, offres et plan fictifs par activité) et reprend son diagnostic. Sur un mandat, le résultat du dernier diagnostic et le plan d'action en résumé ; l'auto-diagnostic VMA reste « plus tard ».
 
 **Plus tard** (menu replié en bas) : Plan d'action, Détection, Autonomie, Journal d'audit, Second cerveau. Ces écrans restent consultables mais seront refaits.
 

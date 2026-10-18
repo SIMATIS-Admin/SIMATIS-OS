@@ -5,11 +5,13 @@ const VIEWS = {};
 const ACTIONS = {};
 
 /* Crée un mandat prospect : instance fictive, données de démonstration. Utilisé par « Nouveau mandat prospect » et par le diagnostic. */
-function creerMandatProspect(nom, sous = 'Mandat prospect') {
+function creerMandatProspect(nom, sous = 'Mandat prospect', { ouvrir = true, adapt } = {}) {
   const id = uid('p'), cols = ['#E3A33B', '#D46A8C', '#5BB0C9', '#8C9A3B'];
   S.instances.push({ id, nom, sous, type: 'prospect', demo: true, outil: 'Données fictives', c: cols[S.instances.filter(i => i.type === 'prospect').length % cols.length], modules: ['diagnostic'],
     conn: [['CRM', 'Données fictives', 'ok'], ['Messagerie', 'Aucun envoi possible', 'ok'], ['Agenda', 'Agenda fictif', 'ok']] });
-  S.data[id] = SEED().demo; OVER = null; go('brief', id); toast('Mandat prospect créé, avec des données fictives');
+  S.data[id] = SEED().demo; if (adapt) adapt(S.data[id]);
+  if (ouvrir) { OVER = null; go('brief', id); }
+  toast('Mandat prospect créé, avec des données fictives');
   return id;
 }
 let S;
