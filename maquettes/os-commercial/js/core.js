@@ -3,6 +3,15 @@
 const STORE_KEY = 'simatis-os-maquette-v6';
 const VIEWS = {};
 const ACTIONS = {};
+
+/* Crée un mandat prospect : instance fictive, données de démonstration. Utilisé par « Nouveau mandat prospect » et par le diagnostic. */
+function creerMandatProspect(nom, sous = 'Mandat prospect') {
+  const id = uid('p'), cols = ['#E3A33B', '#D46A8C', '#5BB0C9', '#8C9A3B'];
+  S.instances.push({ id, nom, sous, type: 'prospect', demo: true, outil: 'Données fictives', c: cols[S.instances.filter(i => i.type === 'prospect').length % cols.length], modules: ['diagnostic'],
+    conn: [['CRM', 'Données fictives', 'ok'], ['Messagerie', 'Aucun envoi possible', 'ok'], ['Agenda', 'Agenda fictif', 'ok']] });
+  S.data[id] = SEED().demo; OVER = null; go('brief', id); toast('Mandat prospect créé, avec des données fictives');
+  return id;
+}
 let S;
 
 /* Favoris propres à l'utilisateur, pas à l'instance : ils suivent Marc d'un mandat à l'autre. */
@@ -225,10 +234,7 @@ Object.assign(ACTIONS, {
     <div style="display:flex;gap:8px;margin-top:10px"><button class="btn primary" data-act="prospect-new-ok">Créer</button><button class="btn ghost" data-act="close">Annuler</button></div>`); },
   'prospect-new-ok': () => {
     const nom = document.getElementById('np-nom').value.trim(); if (!nom) { document.getElementById('np-nom').focus(); return; }
-    const id = uid('p'), cols = ['#E3A33B', '#D46A8C', '#5BB0C9', '#8C9A3B'];
-    S.instances.push({ id, nom, sous: 'Mandat prospect', type: 'prospect', demo: true, outil: 'Données fictives', c: cols[S.instances.filter(i => i.type === 'prospect').length % cols.length], modules: ['diagnostic'],
-      conn: [['CRM', 'Données fictives', 'ok'], ['Messagerie', 'Aucun envoi possible', 'ok'], ['Agenda', 'Agenda fictif', 'ok']] });
-    S.data[id] = SEED().demo; OVER = null; go('brief', id); toast('Mandat prospect créé, avec des données fictives');
+    creerMandatProspect(nom);
   },
   'reset-all': () => { if (confirm('Remettre toutes les données de la maquette à zéro ?')) { const keep = S.inst, favs = S.favs; S = freshState(); S.inst = S.data[keep] ? keep : 'simatis'; S.favs = favs; OVER = null; render(); toast('Maquette réinitialisée'); } }
 });

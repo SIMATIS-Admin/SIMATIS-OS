@@ -121,7 +121,7 @@ const etapeAnalyse = p => {
   const x = byId(D().diagnostics, p.diag);
   if (!x) return `<div class="panel empty">Le rapport de l'outil n'est pas encore importé : l'analyse se fait après l'étape 2.</div>`;
   return `<div class="panel"><div class="panel-h"><h2>Résultat</h2><span class="badge ${x.statut === 'Restitué' ? 'green' : 'amber'}">${esc(x.statut)}</span></div><div class="panel-b">${diagResultat(x)}</div>
-    <div class="decision"><button class="btn go" data-act="diag-rapport" data-id="${x.id}">Préparer le rapport</button><button class="btn" data-act="go" data-v="plan">Construire le plan d'action</button><span class="hint">Le rapport part de la bibliothèque de préconisations. Vous le relisez avant remise.</span></div></div>`;
+    <div class="decision"><button class="btn go" data-act="diag-rapport" data-id="${x.id}">Préparer le rapport</button><button class="btn" data-act="go" data-v="plan">Construire le plan d'action</button>${p.mandat ? `<button class="btn" data-act="proj-mandat-ouvrir" data-id="${p.id}">Ouvrir le mandat</button>` : `<button class="btn" data-act="proj-mandat" data-id="${p.id}">Créer le mandat prospect fictif</button>`}<span class="hint">Le rapport part de la bibliothèque de préconisations. Vous le relisez avant remise.</span></div></div>`;
 };
 
 /* Vue d'un mandat : résultat du dernier diagnostic, plan d'action en résumé, auto-diagnostic VMA à venir. */
@@ -142,6 +142,8 @@ Object.assign(ACTIONS, {
   },
   'proj-open': ds => { S.projSel = ds.id; render(); },
   'proj-retour': () => { S.projSel = null; render(); },
+  'proj-mandat': ds => { const p = byId(D().projets, ds.id); p.mandat = creerMandatProspect(p.nom, `Mandat prospect · ${p.secteur || 'secteur à préciser'}`); save(); },
+  'proj-mandat-ouvrir': ds => { const p = byId(D().projets, ds.id); go('diagnostic', p.mandat); },
   'proj-etape': ds => { const p = byId(D().projets, ds.id); p.etape = Number(ds.n); p.modif = dp(0); render(); },
   'diag-rapport': ds => {
     const x = byId(D().diagnostics, ds.id);
