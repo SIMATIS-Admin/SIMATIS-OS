@@ -21,6 +21,7 @@ import { Fiche } from './pages/Fiche.js';
 import { Barre } from './shell/Barre.js';
 import type { KindFiche } from './api.js';
 import { Agenda } from './pages/Agenda.js';
+import { RendezVous } from './pages/RendezVous.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
 import { Journal } from './pages/Journal.js';
@@ -143,6 +144,15 @@ export function App() {
         return <Routines key={current.slug} slug={current.slug} />;
       case 'agenda':
         return <Agenda key={current.slug} slug={current.slug} />;
+      case 'rendez-vous':
+        // « ouvrir » + identifiant : la ligne du rendez-vous s'ouvre directement.
+        return (
+          <RendezVous
+            key={current.slug}
+            slug={current.slug}
+            ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+          />
+        );
       case 'devis':
         return <Devis key={current.slug} slug={current.slug} />;
       case 'siteweb':
