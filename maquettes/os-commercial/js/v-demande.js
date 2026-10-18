@@ -77,23 +77,72 @@ function radar(dims) {
     ${DIMS.map(([id, l], k) => { const [x, y] = pt(k, 12.2); return `<text x="${x}" y="${y}" text-anchor="middle">${l.split(',')[0]}</text>`; }).join('')}
   </svg>`;
 }
+const ETAPES_DIAG = ['Préparer la présentation', 'Entretien et rapport d\'outil', 'Analyser et produire le rapport'];
+
+/* Résultat d'un diagnostic : radar, profil et barres. Repris par l'étape 3 du projet et par le mandat. */
+function diagResultat(x) {
+  const p = profil(x.dims);
+  return `<div class="profil">${radar(x.dims)}<div style="flex:1;min-width:220px"><div class="small muted">Profil</div><div style="font:800 30px var(--f-title);color:var(--navy)">${p.nom}</div><p style="color:var(--ink-2)">${p.d}</p>
+      <div class="bars">${DIMS.map(([id, l]) => `<div class="row"><span>${l}</span><div class="bar" style="width:${x.dims[id] * 10}%;background:${x.dims[id] >= SEUIL ? 'var(--teal)' : 'var(--ink-3)'}"></div><span class="v">${x.dims[id].toFixed(1)}</span></div>`).join('')}</div>
+      <p class="small muted">Lecture en cascade : une dimension ne compte que si la précédente atteint le seuil (pointillés).</p></div></div>`;
+}
+
+/* Projets de diagnostic : outil de SIMATIS seulement. Un mandat ne voit que le résultat de son diagnostic. */
 VIEWS.diagnostic = () => {
-  const list = D().diagnostics; const sel = byId(list, S.diagSel) || list[0];
-  if (!sel) return { title: 'Diagnostic', body: '<div class="panel empty">Aucun diagnostic pour cette instance.</div>' };
-  const p = profil(sel.dims);
+  if (INST().type !== 'propre') return diagMandat();
+  const projets = D().projets || [];
+  const sel = byId(projets, S.projSel);
   return {
     title: "Diagnostic d'Endurance Commerciale",
-    actions: `<button class="btn" disabled title="Le questionnaire d'entretien n'est pas inclus dans la maquette">Nouveau diagnostic</button>`,
-    body: `<div class="grid g-main"><div class="panel"><div class="panel-h"><div><h2>${esc(soc(sel.soc).nom)}</h2><div class="small muted">Entretien du ${fdate(sel.date)}</div></div><span class="badge ${sel.statut === 'Restitué' ? 'green' : 'amber'}">${esc(sel.statut)}</span></div>
-      <div class="panel-b"><div class="profil">${radar(sel.dims)}<div style="flex:1;min-width:220px"><div class="small muted">Profil</div><div style="font:800 30px var(--f-title);color:var(--navy)">${p.nom}</div><p style="color:var(--ink-2)">${p.d}</p>
-      <div class="bars">${DIMS.map(([id, l]) => `<div class="row"><span>${l}</span><div class="bar" style="width:${sel.dims[id] * 10}%;background:${sel.dims[id] >= SEUIL ? 'var(--teal)' : 'var(--ink-3)'}"></div><span class="v">${sel.dims[id].toFixed(1)}</span></div>`).join('')}</div>
-      <p class="small muted">Lecture en cascade : une dimension ne compte que si la précédente atteint le seuil (pointillés).</p></div></div></div>
-      <div class="decision"><button class="btn go" data-act="diag-rapport" data-id="${sel.id}">Préparer le rapport</button><button class="btn" data-act="go" data-v="plan">Construire le plan d'action</button><span class="hint">Le rapport part de la bibliothèque de préconisations. Vous le relisez avant remise.</span></div></div>
-      <div class="panel"><div class="panel-h"><h2>Diagnostics</h2></div><div class="panel-b">${list.map(x => `<button class="vq-item ${x === sel ? 'on' : ''}" data-act="diag-sel" data-id="${x.id}"><div class="row1"><b>${esc(soc(x.soc).nom)}</b><span class="badge">${profil(x.dims).nom}</span></div><small>${fdate(x.date)}, ${esc(x.statut)}</small></button>`).join('')}</div></div></div>`
+    actions: sel ? '' : `<button class="btn go" data-act="proj-new">Nouveau projet</button>`,
+    body: sel ? diagProjet(sel) : diagListe(projets)
   };
 };
+function diagListe(projets) {
+  if (!projets.length) return `<div class="panel empty">Aucun projet. Créez-en un pour préparer le premier entretien.</div>`;
+  return `<div class="panel"><div class="panel-h"><h2>Projets</h2><span class="muted small">Un projet par entreprise, à reprendre à tout moment</span></div><div class="panel-b">${projets.map(p => `<button class="vq-item" data-act="proj-open" data-id="${p.id}"><div class="row1"><b>${esc(p.nom)}</b><span class="badge">Étape ${p.etape} · ${ETAPES_DIAG[p.etape - 1]}</span></div><small>${esc(p.secteur || 'Secteur à préciser')}, modifié le ${fdate(p.modif)}</small></button>`).join('')}</div></div>`;
+}
+function diagProjet(p) {
+  const etapes = ETAPES_DIAG.map((l, i) => `<button class="btn ${p.etape === i + 1 ? 'go' : ''}" data-act="proj-etape" data-id="${p.id}" data-n="${i + 1}">${i + 1}. ${l}</button>`).join('');
+  const corps = [etapePreparer, etapeEntretien, etapeAnalyse][p.etape - 1](p);
+  return `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>${esc(p.nom)}</h2><div class="small muted">${esc(p.secteur || 'Secteur à préciser')}, modifié le ${fdate(p.modif)}</div></div><button class="btn" data-act="proj-retour">← Tous les projets</button></div>
+  <div class="row" style="margin-bottom:14px">${etapes}</div>${corps}`;
+}
+const etapePreparer = p => `<div class="grid g-main"><div class="panel"><div class="panel-h"><h2>Contexte</h2></div><div class="panel-b"><p style="color:var(--ink-2)">${esc(p.contexte || 'Pas encore de contexte. Ce que le dirigeant vous a dit alimente le support et le chat de préparation.')}</p><p class="small muted">Rien n'est envoyé à l'extérieur.</p></div></div>
+  <div class="panel"><div class="panel-h"><h2>Préparer l'entretien</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:12px">
+    <div><b>Support de présentation</b><div class="small muted">Version 2, adaptée à l'entreprise</div><button class="btn" style="margin-top:6px" disabled title="Support de présentation : non inclus dans la maquette">Ouvrir le support</button></div>
+    <div><b>Chat de préparation</b><div class="small muted">Assistant Claude Sonnet, effort moyen</div><button class="btn" style="margin-top:6px" disabled title="Chat de préparation : non inclus dans la maquette">Ouvrir le chat</button></div>
+  </div></div></div>`;
+const etapeEntretien = p => `<div class="grid g-main"><div class="panel"><div class="panel-h"><h2>Rapport de l'outil externe</h2></div><div class="panel-b">
+    <div class="dz">Déposer le rapport tel que fourni par l'outil de diagnostic<br><span class="small muted">PDF ou CSV</span></div>
+    <p class="small muted" style="margin:10px 0 0">Non importé dans la maquette : l'outil réel fournit ce fichier après l'entretien.</p></div></div>
+  <div class="panel"><div class="panel-h"><h2>Formulaire de revue</h2><span class="badge amber">12 sur 18</span></div><div class="panel-b"><p style="color:var(--ink-2)">Vos commentaires sur chaque rubrique. Vous pouvez y revenir sur plusieurs jours.</p><div class="progress"><i style="width:67%"></i></div><button class="btn" disabled title="Formulaire de revue : non inclus dans la maquette">Ouvrir le formulaire</button></div></div></div>`;
+const etapeAnalyse = p => {
+  const x = byId(D().diagnostics, p.diag);
+  if (!x) return `<div class="panel empty">Le rapport de l'outil n'est pas encore importé : l'analyse se fait après l'étape 2.</div>`;
+  return `<div class="panel"><div class="panel-h"><h2>Résultat</h2><span class="badge ${x.statut === 'Restitué' ? 'green' : 'amber'}">${esc(x.statut)}</span></div><div class="panel-b">${diagResultat(x)}</div>
+    <div class="decision"><button class="btn go" data-act="diag-rapport" data-id="${x.id}">Préparer le rapport</button><button class="btn" data-act="go" data-v="plan">Construire le plan d'action</button><span class="hint">Le rapport part de la bibliothèque de préconisations. Vous le relisez avant remise.</span></div></div>`;
+};
+
+/* Vue d'un mandat : résultat du dernier diagnostic, plan d'action en résumé, auto-diagnostic VMA à venir. */
+function diagMandat() {
+  const list = D().diagnostics; const x = list.find(d => d.statut === 'Restitué') || list[0];
+  if (!x) return { title: 'Diagnostic', body: '<div class="panel empty">Aucun diagnostic pour ce mandat.</div>' };
+  return {
+    title: 'Diagnostic',
+    body: `<div class="grid g-main"><div class="panel"><div class="panel-h"><div><h2>Dernier diagnostic</h2><div class="small muted">Entretien du ${fdate(x.date)}</div></div><span class="badge ${x.statut === 'Restitué' ? 'green' : 'amber'}">${esc(x.statut)}</span></div><div class="panel-b">${diagResultat(x)}</div></div>
+    <div class="panel"><div class="panel-h"><h2>Plan d'action, en résumé</h2></div><div class="panel-b">${D().plan.map(b => `<div class="plan-b ${b.ok ? 'ok' : ''}"><span class="k">${b.ok ? '✓' : ''}</span><div><b>${esc(b.b)}</b><p class="small muted" style="margin:2px 0 0">${esc(b.txt || 'Pas encore renseigné')}</p></div></div>`).join('')}</div></div></div>
+    <div class="panel" style="margin-top:14px;opacity:.75"><div class="panel-b"><b>Auto-diagnostic VMA</b> <span class="badge">Plus tard</span><p class="small muted" style="margin:6px 0 0">Le client pourra refaire le test seul depuis son espace diagnostic.</p></div></div>`
+  };
+}
 Object.assign(ACTIONS, {
-  'diag-sel': ds => { S.diagSel = ds.id; render(); },
+  'proj-new': () => {
+    const p = { id: uid('pj'), nom: 'Nouvelle entreprise', secteur: '', contexte: '', etape: 1, diag: null, modif: dp(0) };
+    D().projets = [p, ...(D().projets || [])]; S.projSel = p.id; render(); toast('Projet créé');
+  },
+  'proj-open': ds => { S.projSel = ds.id; render(); },
+  'proj-retour': () => { S.projSel = null; render(); },
+  'proj-etape': ds => { const p = byId(D().projets, ds.id); p.etape = Number(ds.n); p.modif = dp(0); render(); },
   'diag-rapport': ds => {
     const x = byId(D().diagnostics, ds.id);
     D().validations.unshift({ id: uid('v'), type: 'note', niv: 'L1', titre: 'Rapport de diagnostic à relire', soc: x.soc, origine: 'Diagnostic', detail: `Brouillon de rapport pour ${soc(x.soc).nom} : profil ${profil(x.dims).nom}, trois préconisations prioritaires tirées de la bibliothèque, plan d'action en sept blocs en annexe.`, destination: 'Document client (brouillon)', source: 'Grille de scoring + bibliothèque de préconisations', confiance: 'à relire' });

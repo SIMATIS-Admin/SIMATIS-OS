@@ -370,6 +370,9 @@ textarea.input { min-height: 90px; resize: vertical; }
 /* Diagnostic */
 .profil { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
 .radar text { font: 12px var(--f-body); fill: var(--ink-2); }
+.progress { height: 8px; background: var(--line-2); border-radius: 999px; overflow: hidden; margin: 8px 0 14px; }
+.progress i { display: block; height: 100%; background: var(--teal); }
+.dz { border: 1.5px dashed var(--line); border-radius: var(--r-m); padding: 22px; text-align: center; color: var(--ink-2); }
 
 /* Plan d'action */
 .plan-b { display: grid; grid-template-columns: 34px 1fr auto; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line-2); align-items: start; }

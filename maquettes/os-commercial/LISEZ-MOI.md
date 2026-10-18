@@ -27,7 +27,9 @@ Priorité actuelle : l'activité commerciale de SIMATIS. Les écrans en favoris 
 | **Devis** | Brique propre à l'activité SIMATIS, absente des mandats. L'OS prépare les lignes, vous fixez les prix. |
 | **Relais internes** | Points mensuels avec les experts du mandat (instance Helioval). |
 
-**Plus tard** (menu replié en bas) : Plan d'action, Diagnostic, Détection, Autonomie, Journal d'audit, Second cerveau. Ces écrans restent consultables mais seront refaits.
+**Diagnostic** (menu Stratégie) : sur SIMATIS, la liste des projets de diagnostic et leurs trois étapes (préparer, entretien et rapport d'outil, analyser). Sur un mandat fictif, le résultat du dernier diagnostic et le plan d'action en résumé ; l'auto-diagnostic VMA reste « plus tard ».
+
+**Plus tard** (menu replié en bas) : Plan d'action, Détection, Autonomie, Journal d'audit, Second cerveau. Ces écrans restent consultables mais seront refaits.
 
 Le sélecteur en haut à gauche range les instances en trois groupes : **Mon activité** (SIMATIS), **Mandats en cours** (Helioval, Aquaterra) et **Mandats prospects** (Dupont Industrie). Un mandat prospect est un espace de démonstration aux données fictives : on le montre soi-même ou on en partage une copie isolée avec le prospect. « Nouveau mandat prospect » en crée un. Dans **Paramètres**, onglet Mandat, un prospect qui signe se transforme en mandat en cours : l'espace repart vide et il reste à brancher les outils du client. Le **Portefeuille** ne croise que des compteurs.
 

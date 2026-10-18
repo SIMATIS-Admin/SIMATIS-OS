@@ -79,7 +79,7 @@ function seedInstance(cfg) {
     societes: cfg.societes, contacts: cfg.contacts, opps: cfg.opps,
     taches: cfg.taches || [], rdv: cfg.rdv || [], devis: cfg.devis || [],
     validations: cfg.validations || [], journal: cfg.journal || [], notes: cfg.notes || [],
-    bases: cfg.bases || [], signaux: cfg.signaux || [], diagnostics: cfg.diagnostics || [],
+    bases: cfg.bases || [], signaux: cfg.signaux || [], diagnostics: cfg.diagnostics || [], projets: cfg.projets || [],
     routines: cfg.routines.map(r => ({ ...r, params: { ...PARAMS_DEFAUT[r.id] } })), plan: cfg.plan, funnel: cfg.funnel, autonomie: AUTONOMIE_DEFAUT.map(a => ({ ...a })),
     relais: cfg.relais || [], campagnes: cfg.campagnes || [], temps: cfg.temps || 0,
     activites: activitesSeed(cfg.rythme ?? 1),
@@ -220,6 +220,11 @@ const SEED = () => {
       { id: 'g2', soc: 'Kéramos Industrie', type: 'Organisation', txt: 'Ouverture d\'un second site de production annoncée', date: dp(-3), source: 'Presse régionale', force: 'fort' },
       { id: 'g3', soc: 'Fromagerie des Combes', type: 'Personnes', txt: 'Nouveau directeur général nommé', date: dp(-2), source: 'LinkedIn', force: 'fort' },
       { id: 'g4', soc: 'Peintures Alpines', type: 'Cycle', txt: 'Fin d\'exercice fiscal dans 6 semaines', date: dp(-1), source: 'Registre public', force: 'faible' }
+    ],
+    projets: [
+      { id: 'pj1', nom: 'Mécanique Bréval', secteur: 'Usinage de précision', contexte: 'Dirigeant fondateur. Vente au bouche-à-oreille, peu de relances. Veut structurer la prospection avant de recruter.', etape: 2, diag: 'dg1', modif: dp(-4) },
+      { id: 'pj2', nom: 'Oxalis Conseil', secteur: 'Conseil', contexte: 'Rencontré en réseau. Demande un diagnostic avant toute proposition.', etape: 1, diag: null, modif: dp(-1) },
+      { id: 'pj3', nom: 'Ateliers Morvan', secteur: 'Chaudronnerie', contexte: 'Diagnostic terminé. Le rapport est à relire avec le dirigeant.', etape: 3, diag: 'dg2', modif: dp(-30) }
     ],
     diagnostics: [
       { id: 'dg1', soc: 's5', date: dp(-4), statut: 'Rapport à rédiger', dims: { outils: 7.2, strategie: 4.8, polyvalence: 3.5 } },

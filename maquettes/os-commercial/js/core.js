@@ -95,11 +95,11 @@ const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 /* Le groupe « later » regroupe les écrans reportés : encore accessibles, mais repliés par défaut. */
 const NAV = [
   { g: 'Pilotage', items: [['routines', 'Routines Claude', 'clock'], ['brief', 'Brief du jour', 'sun'], ['validations', 'À valider', 'inbox'], ['tableau', 'Tableau de bord', 'chart']] },
-  { g: 'Stratégie', items: [['demarrage', 'Démarrage du mandat', 'flag', 'demarrage']] },
+  { g: 'Stratégie', items: [['demarrage', 'Démarrage du mandat', 'flag', 'demarrage'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic']] },
   { g: 'Générer la demande', items: [['prospection', 'Prospection', 'send'], ['bases', 'Bases vivantes', 'db']] },
   { g: 'Convertir', items: [['pipeline', 'Pipeline', 'kanban'], ['entreprises', 'Entreprises', 'building'], ['contacts', 'Contacts', 'users'], ['agenda', 'Rendez-vous', 'cal'], ['devis', 'Devis', 'file', 'devis'], ['relais', 'Relais internes', 'users', 'relais']] },
   { g: 'Réglages', items: [['parametres', 'Paramètres', 'gear']] },
-  { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['diagnostic', 'Diagnostic', 'radar', 'diagnostic'], ['detection', 'Détection', 'pulse'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
+  { g: 'Plus tard', later: true, items: [['plan', "Plan d'action", 'map'], ['detection', 'Détection', 'pulse'], ['autonomie', 'Autonomie', 'sliders'], ['journal', "Journal d'audit", 'list'], ['cerveau', 'Second cerveau', 'brain']] }
 ];
 const NAV_ITEMS = NAV.flatMap(g => g.items);
 const navItem = id => NAV_ITEMS.find(([v]) => v === id);
