@@ -21,16 +21,17 @@ export type ProjetPatch = Partial<
     | 'statutDiagnostic'
     | 'dateDiagnostic'
     | 'chats'
+    | 'revue'
   >
 >;
 
-const verifierEspace = (instance: Instance) => {
+export const verifierEspace = (instance: Instance) => {
   if (instance.type !== 'propre')
     throw new DiagnosticIndisponible("Le diagnostic est réservé à l'espace SIMATIS.");
 };
 
 // Le rapport (base64) ne voyage pas avec la liste : il se télécharge à part.
-const vue = ({ rapport, ...projet }: Projet): ProjetVue => ({
+export const vue = ({ rapport, ...projet }: Projet): ProjetVue => ({
   ...projet,
   profil: projet.dims ? profilDe(projet.dims) : null,
   aRapport: rapport !== null,

@@ -34,6 +34,8 @@ export const projetSchema = z
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .nullable()
       .optional(),
+    // Formulaire de revue saisi dans l'OS (commentaires, choix par préconisation et par action).
+    revue: z.record(z.string(), z.unknown()).nullable().optional(),
     chats: z
       .record(
         z.string().regex(/^[123]$/),

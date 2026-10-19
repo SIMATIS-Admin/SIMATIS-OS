@@ -2894,3 +2894,65 @@ tr.sel {
   white-space: pre-wrap;
   font-size: 14px;
 }
+.diag-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  min-height: 60px;
+}
+.diag-msg {
+  border-radius: var(--r-m);
+  padding: 8px 10px;
+  font-size: 14px;
+  max-width: 92%;
+}
+.diag-msg p {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+}
+.diag-msg small {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.diag-msg.pilote {
+  background: var(--blue-bg);
+  align-self: flex-end;
+}
+.diag-msg.claude {
+  background: var(--line-2);
+  align-self: flex-start;
+}
+.diag-msg.erreur {
+  background: var(--red-bg);
+}
+.diag-saisie {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.diag-saisie textarea {
+  flex: 1;
+  font: 400 15px var(--f-body);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 7px 9px;
+}
+.diag-entree {
+  border-top: 1px solid var(--line-2);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.diag-entree .row1 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.diag-propose {
+  white-space: pre-wrap;
+}

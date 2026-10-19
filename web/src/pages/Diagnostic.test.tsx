@@ -2,12 +2,13 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjetDiag } from '../api.js';
-import { commentaires, Diagnostic } from './Diagnostic.js';
+import { Diagnostic, entreesRevue, modifierRevue } from './Diagnostic.js';
 
 const api = vi.hoisted(() => ({
   fetchProjetsDiag: vi.fn(),
   creerProjetDiag: vi.fn(),
   majProjetDiag: vi.fn(),
+  envoyerMessageDiag: vi.fn(),
 }));
 vi.mock('../api.js', () => api);
 
@@ -23,6 +24,8 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   chats: {},
   profil: null,
   revue: null,
+  conversation: [],
+  statutChat: 'repos',
   aRapport: false,
   rapportNom: null,
   updatedAt: '2026-10-19T08:00:00.000Z',
@@ -89,7 +92,7 @@ describe('Diagnostic', () => {
   it('refuse un lien qui ne pointe pas vers claude.ai et garde le lien valide', async () => {
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    const lien = await screen.findByLabelText('Lien du chat claude.ai');
+    const lien = await screen.findByLabelText(/Lien du chat claude.ai/);
     fireEvent.change(lien, { target: { value: 'https://exemple.com/chat' } });
     fireEvent.blur(lien);
     expect(await screen.findByText('Le lien doit pointer vers claude.ai.')).toBeTruthy();
@@ -103,20 +106,66 @@ describe('Diagnostic', () => {
   });
 });
 
-describe('Formulaire de revue importé', () => {
-  it('extrait les commentaires rédigés, avec leur emplacement', () => {
-    const revue = {
-      statut: 'brouillon',
-      scores: { outilsMethode: 7.5 },
-      preconisations: {
-        r1: { choix: 'garder', detail: 'Commentaire fictif.' },
-        r2: { detail: '' },
-      },
-      libre: 'Remarque fictive.',
-    };
-    expect(commentaires(revue)).toEqual([
-      { chemin: 'preconisations › r1 › detail', texte: 'Commentaire fictif.' },
-      { chemin: 'libre', texte: 'Remarque fictive.' },
-    ]);
+describe('Formulaire de revue saisi dans l OS', () => {
+  const revue = {
+    statut: 'brouillon',
+    preconisations: {
+      r1: { choix: 'garder', detail: 'Commentaire fictif.', texte: 'Proposition fictive.' },
+    },
+    planAction: {
+      court: { libre: '', blocs: { b3: { bloc: '3. Information', choix: 'garder', detail: '' } } },
+    },
+    libre: 'Remarque fictive.',
+  };
+
+  it('liste les entrées avec leur choix et leur commentaire', () => {
+    const entrees = entreesRevue(revue);
+    expect(entrees[0]).toMatchObject({
+      titre: 'Préconisation r1',
+      choix: 'garder',
+      valeur: 'Commentaire fictif.',
+      propose: 'Proposition fictive.',
+    });
+    expect(entrees.find((e) => e.titre.startsWith('Court terme · 3.'))).toMatchObject({
+      choix: 'garder',
+    });
+  });
+
+  it('modifie un seul champ, sans toucher au reste', () => {
+    const suite = modifierRevue(
+      revue,
+      { chemin: ['preconisations', 'r1'], champ: 'detail' },
+      'Nouveau fictif.',
+    );
+    expect(suite.preconisations).toEqual({
+      r1: { choix: 'garder', detail: 'Nouveau fictif.', texte: 'Proposition fictive.' },
+    });
+    expect(revue.preconisations.r1.detail).toBe('Commentaire fictif.');
+  });
+});
+
+describe('Assistant de l étape', () => {
+  it('envoie un message et montre que Claude prépare sa réponse', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 3 })]);
+    api.envoyerMessageDiag.mockResolvedValue(
+      projet({
+        etape: 3,
+        statutChat: 'attente_claude',
+        conversation: [
+          { etape: 3, de: 'pilote', texte: 'Question fictive', at: '2026-10-19T08:00:00.000Z' },
+        ],
+      }),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.change(await screen.findByPlaceholderText('Votre message'), {
+      target: { value: 'Question fictive' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }));
+    await waitFor(() =>
+      expect(api.envoyerMessageDiag).toHaveBeenCalledWith('simatis', 'p1', 'Question fictive'),
+    );
+    expect(await screen.findByText('Question fictive')).toBeTruthy();
+    expect(screen.getByText(/Claude prépare sa réponse/)).toBeTruthy();
   });
 });
