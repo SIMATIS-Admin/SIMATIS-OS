@@ -11,6 +11,7 @@ import {
 } from '../diagnostic/service.js';
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage } from '../diagnostic/chat.js';
+import { demanderSupport, logoDe, rouvrirSupport } from '../diagnostic/support.js';
 import {
   createContact,
   createEntreprise,
@@ -425,6 +426,38 @@ export function registerApi(
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Support d'ouverture : préparer ou archiver le deck (travail du runner), le rouvrir, son logo.
+  app.post<ProjetRoute & { Params: { action: string } }>(
+    '/api/i/:slug/diagnostic/projets/:id/support/:action',
+    onInstance<ProjetRoute & { Params: { action: string } }>(async (i, request, reply) => {
+      const { id, action } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        if (action === 'preparer') return await demanderSupport(db, i, id, 'preparer_support');
+        if (action === 'final') return await demanderSupport(db, i, id, 'support_final');
+        if (action === 'rouvrir') return await rouvrirSupport(db, i, id);
+        return reply.code(404).send({ error: 'Action inconnue' });
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.get<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/logo',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        const { type, contenu } = await logoDe(db, i, request.params.id);
+        reply.header('content-type', type);
+        reply.header('x-content-type-options', 'nosniff');
+        return reply.send(contenu);
+      } catch (error) {
         return diagnosticErreur(error, reply);
       }
     }),

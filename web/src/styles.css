@@ -2890,6 +2890,29 @@ tr.sel {
   flex-direction: column;
   gap: 10px;
 }
+.diag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.diag-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.diag-logo img {
+  max-height: 56px;
+  max-width: 200px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px;
+  background: #fff;
+}
+.diag-diapo summary {
+  cursor: pointer;
+  font-weight: 600;
+}
 .diag-texte {
   white-space: pre-wrap;
   font-size: 14px;

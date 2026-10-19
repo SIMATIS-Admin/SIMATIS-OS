@@ -1,4 +1,4 @@
-import { date, index, integer, jsonb, pgTable, text, uuid } from 'drizzle-orm/pg-core';
+import { date, index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Dimensions } from './profil.js';
 
@@ -14,6 +14,15 @@ export type MessageDiag = {
 };
 
 export type ChatEtape = { modele: string; effort: string; lien: string };
+
+// Support d'ouverture : un deck par projet sur claude.ai. 'preparation' tant que Claude le crée,
+// 'pret' une fois son lien enregistré, 'final' quand son texte est archivé.
+export const STATUTS_SUPPORT = ['aucun', 'preparation', 'pret', 'final'] as const;
+export type StatutSupport = (typeof STATUTS_SUPPORT)[number];
+// Travail demandé au runner avec le message du pilote (sans : une simple réponse dans le chat).
+export const DEMANDES = ['preparer_support', 'support_final'] as const;
+export type Demande = (typeof DEMANDES)[number];
+export type Diapositive = { titre: string; texte: string; notes: string };
 
 // Un projet de diagnostic, pour une entreprise prospect de SIMATIS. Étape 1 : préparation,
 // étape 2 : résultat de l'outil externe, étape 3 : analyse et rapport.
@@ -39,6 +48,17 @@ export const diagnosticProjets = pgTable(
     // 'repos', 'attente_claude' (le pilote a écrit), 'en_cours' (le runner travaille dessus).
     conversation: jsonb('conversation').$type<MessageDiag[]>().notNull().default([]),
     statutChat: text('statut_chat', { enum: STATUTS_CHAT }).notNull().default('repos'),
+    demande: text('demande', { enum: DEMANDES }),
+    // Formulaire de l'étape 1, lu par Claude pour adapter le support.
+    ditParDirigeant: text('dit_par_dirigeant').notNull().default(''),
+    hypotheses: text('hypotheses').notNull().default(''),
+    // Logo de l'entreprise (image en base64), donné à Claude pour la couverture du deck.
+    logo: text('logo'),
+    logoNom: text('logo_nom'),
+    supportStatut: text('support_statut', { enum: STATUTS_SUPPORT }).notNull().default('aucun'),
+    supportLien: text('support_lien'),
+    supportTexte: jsonb('support_texte').$type<Diapositive[]>(),
+    supportFinalLe: timestamp('support_final_le', { withTimezone: true }),
   },
   (t) => [
     index('diagnostic_projets_instance_idx').on(t.instanceId),

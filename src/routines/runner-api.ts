@@ -151,17 +151,19 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
     const parsed = corps.safeParse(request.body);
     const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
     if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    let pris;
     try {
-      await demarrerAttente(db, instance, request.params.id);
+      pris = await demarrerAttente(db, instance, request.params.id);
     } catch (error) {
       if (error instanceof ChatIndisponible) return reply.code(409).send({ error: error.message });
       throw error;
     }
+    // Préparer un deck (recherche de marché, copie du modèle) prend bien plus qu'une réponse.
     const { id: tokenId, token } = await createToken(db, {
       nom: 'diagnostic-chat',
       portee: 'instance',
       instanceId: instance.id,
-      expiresAt: new Date(Date.now() + UN_QUART_HEURE),
+      expiresAt: new Date(Date.now() + (pris.demande ? UNE_HEURE : UN_QUART_HEURE)),
     });
     return { tokenId, token };
   });

@@ -9,6 +9,8 @@ const api = vi.hoisted(() => ({
   creerProjetDiag: vi.fn(),
   majProjetDiag: vi.fn(),
   envoyerMessageDiag: vi.fn(),
+  demandeSupportDiag: vi.fn(),
+  urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
 }));
 vi.mock('../api.js', () => api);
 
@@ -26,6 +28,15 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   revue: null,
   conversation: [],
   statutChat: 'repos',
+  demande: null,
+  ditParDirigeant: '',
+  hypotheses: '',
+  aLogo: false,
+  logoNom: null,
+  supportStatut: 'aucun',
+  supportLien: null,
+  supportTexte: null,
+  supportFinalLe: null,
   aRapport: false,
   rapportNom: null,
   updatedAt: '2026-10-19T08:00:00.000Z',
@@ -167,5 +178,65 @@ describe('Assistant de l étape', () => {
     );
     expect(await screen.findByText('Question fictive')).toBeTruthy();
     expect(screen.getByText(/Claude prépare sa réponse/)).toBeTruthy();
+  });
+
+  it('prépare le support depuis l étape 1', async () => {
+    api.demandeSupportDiag.mockResolvedValue(projet({ supportStatut: 'preparation' }));
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Préparer le support' }));
+    await waitFor(() =>
+      expect(api.demandeSupportDiag).toHaveBeenCalledWith('simatis', 'p1', 'preparer'),
+    );
+    expect(await screen.findByText(/Claude prépare le support/)).toBeTruthy();
+  });
+
+  it('un deck prêt s ouvre sur claude.ai et peut être déclaré final', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ supportStatut: 'pret', supportLien: 'https://claude.ai/artifact/DeckFictif01' }),
+    ]);
+    api.demandeSupportDiag.mockResolvedValue(projet({ supportStatut: 'pret' }));
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const lien = await screen.findByRole('link', { name: /Ouvrir le deck/ });
+    expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/DeckFictif01');
+    fireEvent.click(screen.getByRole('button', { name: 'Support final' }));
+    await waitFor(() =>
+      expect(api.demandeSupportDiag).toHaveBeenCalledWith('simatis', 'p1', 'final'),
+    );
+  });
+
+  it('un support final montre son texte et peut être rouvert', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        supportStatut: 'final',
+        supportLien: 'https://claude.ai/artifact/DeckFictif01',
+        supportFinalLe: '2026-10-20T08:00:00.000Z',
+        supportTexte: [
+          { titre: 'Couverture fictive', texte: 'Texte fictif', notes: 'Note fictive' },
+        ],
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/Couverture fictive/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Préparer le support' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier le support' }));
+    await waitFor(() =>
+      expect(api.demandeSupportDiag).toHaveBeenCalledWith('simatis', 'p1', 'rouvrir'),
+    );
+  });
+
+  it('enregistre ce que le dirigeant a dit à la sortie du champ', async () => {
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const champ = await screen.findByLabelText('Ce que le dirigeant vous a dit');
+    fireEvent.change(champ, { target: { value: 'Ambition fictive' } });
+    fireEvent.blur(champ);
+    await waitFor(() =>
+      expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', {
+        ditParDirigeant: 'Ambition fictive',
+      }),
+    );
   });
 });

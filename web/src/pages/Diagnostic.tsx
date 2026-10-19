@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   creerProjetDiag,
+  demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
   majProjetDiag,
+  urlLogoDiag,
   type ChatEtape,
   type Dimensions,
   type ProjetDiag,
@@ -47,6 +49,12 @@ const DIMENSIONS: [keyof Dimensions, string][] = [
   ['polyvalence', 'Polyvalence'],
 ];
 const SEUIL = 6;
+const STATUTS_SUPPORT: Record<ProjetDiag['supportStatut'], string> = {
+  aucun: 'Pas encore préparé',
+  preparation: 'Claude prépare le deck…',
+  pret: 'Deck prêt, à corriger si besoin',
+  final: 'Support final archivé',
+};
 
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const libelle = (liste: readonly (readonly [string, string])[], v: string) =>
@@ -214,7 +222,7 @@ function ProjetVue({
 }) {
   // Pendant que Claude répond, le projet est relu toutes les cinq secondes.
   useEffect(() => {
-    if (projet.statutChat === 'repos') return;
+    if (projet.statutChat === 'repos' && projet.supportStatut !== 'preparation') return;
     const minuteur = setInterval(() => {
       fetchProjetsDiag(slug)
         .then((liste) => {
@@ -224,7 +232,7 @@ function ProjetVue({
         .catch(() => undefined);
     }, 5000);
     return () => clearInterval(minuteur);
-  }, [slug, projet.id, projet.statutChat, onChange]);
+  }, [slug, projet.id, projet.statutChat, projet.supportStatut, onChange]);
 
   const sauver = async (patch: ProjetDiagPatch) => {
     try {
@@ -266,6 +274,15 @@ function ProjetVue({
       <div className="diag-layout">
         <div className="diag-main">
           {projet.etape === 1 && <Preparation projet={projet} onSauver={sauver} />}
+          {projet.etape === 1 && (
+            <Support
+              slug={slug}
+              projet={projet}
+              onSauver={sauver}
+              onChange={onChange}
+              onErreur={onErreur}
+            />
+          )}
           {projet.etape === 2 && <Resultat projet={projet} onSauver={sauver} />}
           {projet.etape === 3 && <Analyse slug={slug} projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
@@ -312,18 +329,196 @@ function Preparation({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauve
           </select>
         </label>
         <label className="field">
-          <span>Ce que le dirigeant vous a dit</span>
+          <span>Contexte de l’entreprise</span>
           <textarea
             rows={5}
             value={contexte}
-            placeholder="Activité, clients, projet du dirigeant, ce qui bloque aujourd’hui"
+            placeholder="Activité, clients, marché, ce que vous savez de l’entreprise"
             onChange={(e) => setContexte(e.target.value)}
             onBlur={() => contexte !== projet.contexte && void onSauver({ contexte })}
           />
         </label>
-        <div className="small muted">
-          Le support de présentation n’est pas encore dans l’OS : il reste dans son artifact.
+      </div>
+    </div>
+  );
+}
+
+const lireBase64 = (fichier: File) =>
+  new Promise<string>((resolve, reject) => {
+    const lecteur = new FileReader();
+    lecteur.onload = () =>
+      resolve(typeof lecteur.result === 'string' ? (lecteur.result.split(',')[1] ?? '') : '');
+    lecteur.onerror = () => reject(new Error('Logo illisible'));
+    lecteur.readAsDataURL(fichier);
+  });
+
+// Support d'ouverture : formulaire lu par Claude, puis le deck du projet sur claude.ai.
+function Support({
+  slug,
+  projet,
+  onSauver,
+  onChange,
+  onErreur,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onSauver: Sauver;
+  onChange: (p: ProjetDiag) => void;
+  onErreur: (m: string) => void;
+}) {
+  const [date, setDate] = useState(projet.dateDiagnostic ?? '');
+  const [dit, setDit] = useState(projet.ditParDirigeant);
+  const [hypotheses, setHypotheses] = useState(projet.hypotheses);
+  useEffect(() => setDate(projet.dateDiagnostic ?? ''), [projet.dateDiagnostic]);
+  useEffect(() => setDit(projet.ditParDirigeant), [projet.ditParDirigeant]);
+  useEffect(() => setHypotheses(projet.hypotheses), [projet.hypotheses]);
+
+  const statut = projet.supportStatut;
+  const occupe = projet.statutChat !== 'repos' || statut === 'preparation';
+  const demander = async (action: 'preparer' | 'final' | 'rouvrir') => {
+    try {
+      onChange(await demandeSupportDiag(slug, projet.id, action));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const deposerLogo = async (fichier: File | undefined) => {
+    if (!fichier) return;
+    if (fichier.size > 500_000) return onErreur('Logo trop lourd (500 Ko au plus).');
+    try {
+      await onSauver({ logo: { nom: fichier.name, base64: await lireBase64(fichier) } });
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <h2>Support d’ouverture</h2>
+        <span className="small muted">{STATUTS_SUPPORT[statut]}</span>
+      </div>
+      <div className="panel-b stack">
+        <label className="field">
+          <span>Date du diagnostic</span>
+          <input
+            type="date"
+            value={date}
+            disabled={statut === 'final'}
+            onChange={(e) => setDate(e.target.value)}
+            onBlur={() =>
+              date !== (projet.dateDiagnostic ?? '') &&
+              void onSauver({ dateDiagnostic: date || null })
+            }
+          />
+        </label>
+        <label className="field">
+          <span>Ce que le dirigeant vous a dit</span>
+          <textarea
+            rows={4}
+            value={dit}
+            disabled={statut === 'final'}
+            placeholder="Ses mots : ambition, enjeu, ce qui bloque. Repris dans « Ce que vous nous avez indiqué »."
+            onChange={(e) => setDit(e.target.value)}
+            onBlur={() => dit !== projet.ditParDirigeant && void onSauver({ ditParDirigeant: dit })}
+          />
+        </label>
+        <label className="field">
+          <span>Vos hypothèses, à confirmer en entretien</span>
+          <textarea
+            rows={3}
+            value={hypotheses}
+            disabled={statut === 'final'}
+            placeholder="Votre lecture, jamais confirmée par le dirigeant"
+            onChange={(e) => setHypotheses(e.target.value)}
+            onBlur={() => hypotheses !== projet.hypotheses && void onSauver({ hypotheses })}
+          />
+        </label>
+        <div className="field">
+          <span>Logo de l’entreprise (PNG, JPEG ou WebP, 500 Ko au plus)</span>
+          {projet.aLogo && (
+            <div className="diag-logo">
+              <img
+                src={`${urlLogoDiag(slug, projet.id)}?v=${encodeURIComponent(projet.updatedAt)}`}
+                alt={`Logo de ${projet.nom}`}
+              />
+              {statut !== 'final' && (
+                <button className="btn" onClick={() => void onSauver({ logo: null })}>
+                  Retirer le logo
+                </button>
+              )}
+            </div>
+          )}
+          {statut !== 'final' && (
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              aria-label="Déposer le logo"
+              onChange={(e) => void deposerLogo(e.target.files?.[0])}
+            />
+          )}
         </div>
+
+        {statut === 'preparation' && (
+          <div className="alert">
+            Claude prépare le support : recherche du marché, copie du modèle, adaptation. Comptez
+            quelques minutes. Sa réponse arrivera dans l’assistant.
+          </div>
+        )}
+        <div className="diag-actions">
+          {projet.supportLien && (
+            <a className="btn" href={projet.supportLien} target="_blank" rel="noreferrer">
+              Ouvrir le deck ↗
+            </a>
+          )}
+          {(statut === 'aucun' || statut === 'pret') && (
+            <button className="btn go" disabled={occupe} onClick={() => void demander('preparer')}>
+              {statut === 'aucun' ? 'Préparer le support' : 'Mettre à jour le deck'}
+            </button>
+          )}
+          {statut === 'pret' && (
+            <button className="btn" disabled={occupe} onClick={() => void demander('final')}>
+              Support final
+            </button>
+          )}
+          {statut === 'final' && (
+            <button className="btn" disabled={occupe} onClick={() => void demander('rouvrir')}>
+              Modifier le support
+            </button>
+          )}
+        </div>
+        {statut === 'pret' && (
+          <div className="small muted">
+            Corrigez le deck directement sur claude.ai, ou demandez à Claude dans l’assistant.
+            Cliquez « Support final » une fois l’entretien passé : Claude relit le deck et
+            l’archive.
+          </div>
+        )}
+        {statut === 'final' && projet.supportTexte && (
+          <div className="stack">
+            <div className="small muted">
+              Archivé le{' '}
+              {projet.supportFinalLe
+                ? new Date(projet.supportFinalLe).toLocaleDateString('fr-FR')
+                : '—'}{' '}
+              : texte affiché et notes d’orateur.
+            </div>
+            {projet.supportTexte.map((d, i) => (
+              <details key={i} className="diag-diapo">
+                <summary>
+                  {i + 1}. {d.titre}
+                </summary>
+                <p className="diag-texte">{d.texte}</p>
+                {d.notes && (
+                  <>
+                    <div className="small muted">Notes d’orateur</div>
+                    <p className="diag-texte">{d.notes}</p>
+                  </>
+                )}
+              </details>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
