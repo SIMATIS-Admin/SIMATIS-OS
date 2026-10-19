@@ -25,7 +25,12 @@ export type RunnerOptions = {
   claude: string;
   fetch?: typeof fetch;
   // Runs the command (in `cwd` when given); resolves with its exit code.
-  lancer?: (commande: string, args: string[], cwd?: string) => Promise<number>;
+  lancer?: (
+    commande: string,
+    args: string[],
+    cwd?: string,
+    env?: Record<string, string>,
+  ) => Promise<number>;
   // Second brain folder of this workstation (SECOND_CERVEAU_DIR); never in the repository.
   cerveau?: string;
   // What this workstation offers (Claude Code version, installed skills), sent at each pass.
@@ -64,9 +69,18 @@ export async function skillsDe(dossier: string): Promise<string[]> {
   return [...new Set([...propres, ...synchronisees.flat()])];
 }
 
-const lancerProcessus = (commande: string, args: string[], cwd?: string) =>
+const lancerProcessus = (
+  commande: string,
+  args: string[],
+  cwd?: string,
+  env?: Record<string, string>,
+) =>
   new Promise<number>((resolve) => {
-    const child = spawn(commande, args, { stdio: 'inherit', ...(cwd ? { cwd } : {}) });
+    const child = spawn(commande, args, {
+      stdio: 'inherit',
+      ...(cwd ? { cwd } : {}),
+      ...(env ? { env: { ...process.env, ...env } } : {}),
+    });
     child.on('error', () => resolve(127));
     child.on('exit', (code) => resolve(code ?? 1));
   });
@@ -364,8 +378,10 @@ export const promptSupport = (
 const dossierOuNull = async (dossier: string | undefined) =>
   dossier && (await dossierExiste(dossier)) ? dossier : null;
 
-// Outils du support : le deck (Artifact), la recherche de marché, la skill et le second cerveau.
-export const outilsSupport = (cerveau: string | null) =>
+// Outils du support : le deck (Artifact), la recherche de marché, la skill, les fichiers de travail
+// (dossier courant et brouillon de Claude, où l'outil Artifact range les diapositives lues) et le
+// second cerveau. Claude Code n'applique aux fichiers que les règles Edit : elles couvrent l'écriture.
+export const outilsSupport = (cerveau: string | null, travail: string[]) =>
   [
     'mcp__simatis__repondre_diagnostic',
     'mcp__simatis__enregistrer_support',
@@ -373,10 +389,18 @@ export const outilsSupport = (cerveau: string | null) =>
     'Artifact',
     'WebSearch',
     'WebFetch',
-    ...(cerveau
-      ? [`Read(/${cerveau}/**)`, `Edit(/${cerveau}/**)`, `Write(/${cerveau}/**)`, 'Glob', 'Grep']
-      : []),
+    'Glob',
+    'Grep',
+    ...[...travail, ...(cerveau ? [cerveau] : [])].flatMap((d) => [
+      `Read(/${d}/**)`,
+      `Edit(/${d}/**)`,
+    ]),
   ].join(',');
+
+// Hors de l'app de bureau, Claude Code n'offre l'outil Artifact que si cette variable est posée.
+export const ENV_SUPPORT = { CLAUDE_CODE_ARTIFACT: '1' };
+// Brouillon de Claude Code : l'outil Artifact y enregistre les fichiers qu'il lit.
+const brouillonClaude = () => path.join('/private/tmp', `claude-${process.getuid?.() ?? 0}`);
 
 // Répond aux conversations du diagnostic en attente, une par une.
 export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
@@ -415,6 +439,7 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
       const mcp = ['--mcp-config', config, '--strict-mcp-config', '--allowedTools'];
       let args: string[];
       let cwd: string | undefined;
+      let env: Record<string, string> | undefined;
       poste ??= await (opts.poste ?? (() => decrirePoste(opts.claude)))();
       const support = a.etapeMessage === 1 && poste.skills.includes(SKILL_SUPPORT);
       if (a.demande && !support) {
@@ -434,14 +459,15 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
           promptSupport(a, logo, cerveau),
           ...modele,
           ...mcp,
-          outilsSupport(cerveau),
+          outilsSupport(cerveau, [dossier, brouillonClaude()]),
           ...(cerveau ? ['--add-dir', cerveau] : []),
         ];
         cwd = dossier;
+        env = ENV_SUPPORT;
       } else {
         args = ['-p', promptDiagnostic(a), ...modele, ...mcp, 'mcp__simatis__repondre_diagnostic'];
       }
-      const code = await lancer(opts.claude, args, cwd);
+      const code = await lancer(opts.claude, args, cwd, env);
       if (code !== 0) erreur = `Claude s'est arrêté avec le code ${code}. Réécrivez votre message.`;
     } finally {
       await rm(dossier, { recursive: true, force: true });

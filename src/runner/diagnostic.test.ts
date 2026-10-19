@@ -98,9 +98,14 @@ describe('Support d ouverture par le runner', () => {
     expect(texte).toContain('Second cerveau : /cerveau-fictif');
   });
 
-  it('n ouvre le second cerveau qu à son dossier', () => {
-    expect(outilsSupport(null)).not.toContain('Read');
-    expect(outilsSupport('/cerveau-fictif')).toContain('Write(//cerveau-fictif/**)');
+  it('n ouvre les fichiers qu au dossier de travail et au second cerveau, par des règles Edit', () => {
+    expect(outilsSupport(null, ['/travail'])).toContain('Edit(//travail/**)');
+    expect(outilsSupport(null, ['/travail'])).not.toContain('cerveau');
+    const avec = outilsSupport('/cerveau-fictif', ['/travail']);
+    expect(avec).toContain('Read(//cerveau-fictif/**)');
+    expect(avec).toContain('Edit(//cerveau-fictif/**)');
+    // Claude Code ignore les règles Write sur les fichiers.
+    expect(avec).not.toContain('Write(');
   });
 
   const fauxOs = (a: AttenteDiag, appels: { url: string; body: unknown }[]) =>
@@ -117,20 +122,23 @@ describe('Support d ouverture par le runner', () => {
 
   it('lance Claude avec la skill, l outil Artifact et le logo dans le dossier de travail', async () => {
     const appels: { url: string; body: unknown }[] = [];
-    let vu: { args: string[]; cwd?: string; logo?: boolean } | undefined;
+    let vu:
+      { args: string[]; cwd?: string; env?: Record<string, string>; logo?: boolean } | undefined;
     await tourDiagnostic({
       base: 'http://os.test',
       token: 'r',
       claude: 'claude',
       fetch: fauxOs(preparer, appels),
       poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT] }),
-      lancer: async (_c, args, cwd) => {
+      lancer: async (_c, args, cwd, env) => {
         const { stat } = await import('node:fs/promises');
-        vu = { args, cwd, logo: await stat(path.join(cwd!, 'logo.png')).then(() => true) };
+        vu = { args, cwd, env, logo: await stat(path.join(cwd!, 'logo.png')).then(() => true) };
         return 0;
       },
     });
     expect(vu?.logo).toBe(true);
+    // Hors de l'app de bureau, l'outil Artifact n'existe qu'avec cette variable.
+    expect(vu?.env).toEqual({ CLAUDE_CODE_ARTIFACT: '1' });
     const outils = vu!.args[vu!.args.indexOf('--allowedTools') + 1];
     expect(outils).toContain('Artifact');
     expect(outils).toContain('mcp__simatis__enregistrer_support');
