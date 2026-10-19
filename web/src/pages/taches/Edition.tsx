@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   fetchContacts,
+  fetchEntreprises,
   fetchOpportunitesRecherche,
   type TacheSaisie,
   type TacheVue,
@@ -48,8 +49,8 @@ export type Enregistrement = TacheSaisie & { hubspot: boolean };
 
 type Choix = { id: string; nom: string } | null;
 
-// Person or deal of a new activity, found by search (Pipedrive activity window).
-function Lien({
+// Person, company or deal of an activity or a meeting, found by search (Pipedrive window).
+export function Lien({
   label,
   chercher,
   choix,
@@ -141,8 +142,18 @@ export function EditionTache({
   const [versHubspot, setVersHubspot] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [personne, setPersonne] = useState<Choix>(initial?.contact ?? null);
+  const personneInitiale = tache?.contact ?? initial?.contact ?? null;
+  const entrepriseInitiale = tache?.entreprise ?? null;
+  const [personne, setPersonne] = useState<Choix>(personneInitiale);
+  const [entreprise, setEntreprise] = useState<Choix>(entrepriseInitiale);
   const [affaire, setAffaire] = useState<Choix>(null);
+  const chercherEntreprise = useCallback(
+    (q: string) =>
+      slug
+        ? fetchEntreprises(slug, q).then((r) => r.map((e) => ({ id: e.id, nom: e.nom })))
+        : Promise.resolve([]),
+    [slug],
+  );
   const chercherPersonne = useCallback(
     (q: string) =>
       slug
@@ -182,8 +193,19 @@ export function EditionTache({
       ...(avecHeure ? { dureeMinutes: minutes, occupe } : {}),
       ...(choisi ? { type: choisi } : {}),
       ...(tache ? { fait } : {}),
-      ...(personne ? { contactId: personne.id } : {}),
-      ...(affaire ? { opportuniteId: affaire.id } : {}),
+      // A new activity takes the links chosen; an edit sends only those that changed.
+      ...(tache
+        ? {
+            ...(personne?.id !== personneInitiale?.id ? { contactId: personne?.id ?? null } : {}),
+            ...(entreprise?.id !== entrepriseInitiale?.id
+              ? { entrepriseId: entreprise?.id ?? null }
+              : {}),
+          }
+        : {
+            ...(personne ? { contactId: personne.id } : {}),
+            ...(entreprise ? { entrepriseId: entreprise.id } : {}),
+            ...(affaire ? { opportuniteId: affaire.id } : {}),
+          }),
       hubspot: versHubspot,
     })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -267,12 +289,14 @@ export function EditionTache({
             <span>Faite</span>
           </label>
         )}
-        {tache && (tache.contact || tache.opportunite) && (
+        {tache && (!slug ? tache.contact || tache.opportunite : tache.opportunite) && (
           <p className="small muted">
-            {[tache.contact?.nom, tache.opportunite?.titre].filter(Boolean).join(' · ')}
+            {(slug ? [tache.opportunite?.titre] : [tache.contact?.nom, tache.opportunite?.titre])
+              .filter(Boolean)
+              .join(' · ')}
           </p>
         )}
-        {!tache && slug && (
+        {slug && (
           <div className="grid g2">
             <Lien
               label="Personne"
@@ -280,7 +304,20 @@ export function EditionTache({
               choix={personne}
               onChoix={setPersonne}
             />
-            <Lien label="Affaire" chercher={chercherAffaire} choix={affaire} onChoix={setAffaire} />
+            <Lien
+              label="Entreprise"
+              chercher={chercherEntreprise}
+              choix={entreprise}
+              onChoix={setEntreprise}
+            />
+            {!tache && (
+              <Lien
+                label="Affaire"
+                chercher={chercherAffaire}
+                choix={affaire}
+                onChoix={setAffaire}
+              />
+            )}
           </div>
         )}
         {!tache && hubspot && (

@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   envoyerCompteRendu,
+  fetchContacts,
+  fetchEntreprises,
   fetchPreparation,
   fetchRendezVous,
+  lierRendezVous,
   type Preparation,
   type RendezVous as Rdv,
   type RendezVousReponse,
 } from '../api.js';
+import { Lien } from './taches/Edition.js';
+
+type Choix = { id: string; nom: string } | null;
 
 export const quand = (iso: string) =>
   new Date(iso).toLocaleString('fr-FR', {
@@ -110,18 +116,82 @@ function CompteRendu({ slug, rdv, onDone }: { slug: string; rdv: Rdv; onDone: ()
   );
 }
 
+// Contact or company of a meeting the guests' emails do not tell (kept in the OS only).
+function LienRdv({ slug, rdv, onDone }: { slug: string; rdv: Rdv; onDone: () => void }) {
+  const [personne, setPersonne] = useState<Choix>(rdv.contact);
+  const [entreprise, setEntreprise] = useState<Choix>(rdv.entreprise);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const chercherPersonne = useCallback(
+    (q: string) => fetchContacts(slug, q).then((r) => r.map((c) => ({ id: c.id, nom: c.nom }))),
+    [slug],
+  );
+  const chercherEntreprise = useCallback(
+    (q: string) => fetchEntreprises(slug, q).then((r) => r.map((e) => ({ id: e.id, nom: e.nom }))),
+    [slug],
+  );
+  const enregistrer = (lien: { contactId: string | null; entrepriseId: string | null }) =>
+    lierRendezVous(slug, rdv.id, lien).then(onDone, (e: unknown) =>
+      setErreur(e instanceof Error ? e.message : String(e)),
+    );
+  return (
+    <div className="stack">
+      <div className="grid g2">
+        <Lien label="Personne" chercher={chercherPersonne} choix={personne} onChoix={setPersonne} />
+        <Lien
+          label="Entreprise"
+          chercher={chercherEntreprise}
+          choix={entreprise}
+          onChoix={setEntreprise}
+        />
+      </div>
+      {erreur && (
+        <p className="small" style={{ color: 'var(--red)' }}>
+          {erreur}
+        </p>
+      )}
+      <div>
+        <button
+          className="btn go sm"
+          onClick={() =>
+            void enregistrer({
+              contactId: personne?.id ?? null,
+              entrepriseId: entreprise?.id ?? null,
+            })
+          }
+        >
+          Enregistrer le lien
+        </button>{' '}
+        {rdv.lienManuel && (
+          <button
+            className="btn sm"
+            onClick={() => void enregistrer({ contactId: null, entrepriseId: null })}
+          >
+            Revenir aux invités du rendez-vous
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) {
   const [data, setData] = useState<RendezVousReponse | null>(null);
-  const [ouvert, setOuvert] = useState<{ id: string; vue: 'prep' | 'cr' } | null>(null);
+  const [ouvert, setOuvert] = useState<{ id: string; vue: 'prep' | 'cr' | 'lien' } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
     fetchRendezVous(slug).then(setData, (e: unknown) => setError(String(e)));
   }, [slug]);
   useEffect(load, [load]);
-  // Opened from the Agenda: the meeting's row shows its preparation straight away.
+  // Opened from the Agenda: the meeting's row shows its preparation straight away, scrolled into
+  // view and highlighted, since it is often far down the list.
   useEffect(() => {
     if (ouvrir && data?.rdv.some((r) => r.id === ouvrir)) setOuvert({ id: ouvrir, vue: 'prep' });
   }, [ouvrir, data]);
+  useEffect(() => {
+    if (ouvert?.id === ouvrir) {
+      document.getElementById(`rdv-${ouvrir}`)?.scrollIntoView?.({ block: 'start' });
+    }
+  }, [ouvert, ouvrir]);
 
   if (error) return <div className="empty">{error}</div>;
   if (!data) return null;
@@ -134,8 +204,15 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
   }
   if (data.etat === 'erreur') return <div className="empty">{data.erreur}</div>;
   const maintenant = Date.now();
+  const introuvable = ouvrir && !data.rdv.some((r) => r.id === ouvrir);
   return (
     <div className="panel">
+      {introuvable && (
+        <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
+          Ce rendez-vous est en dehors de la période affichée ici (semaine passée et deux
+          prochaines).
+        </p>
+      )}
       {data.agendasIgnores && data.agendasIgnores.length > 0 && (
         <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
           Agenda non lu : {data.agendasIgnores.join(', ')}. Décochez-le dans Paramètres &gt;
@@ -157,7 +234,7 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
             {data.rdv.map((r) => {
               const passe = new Date(r.debut).getTime() <= maintenant;
               return [
-                <tr key={r.id}>
+                <tr key={r.id} id={`rdv-${r.id}`} className={r.id === ouvrir ? 'cible' : ''}>
                   <td className="num">{quand(r.debut)}</td>
                   <td>
                     <b>{r.titre}</b>
@@ -169,16 +246,25 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
                     )}
                   </td>
                   <td>
-                    {r.contact ? (
+                    {r.contact || r.entreprise ? (
                       <>
-                        {r.contact.nom}
-                        {r.contact.entreprise && (
-                          <div className="small muted">{r.contact.entreprise}</div>
+                        {r.contact?.nom ?? r.entreprise?.nom}
+                        {r.contact && r.entreprise && (
+                          <div className="small muted">{r.entreprise.nom}</div>
                         )}
                       </>
                     ) : (
                       <span className="muted">Hors CRM</span>
                     )}
+                    <div>
+                      <button
+                        className="lien"
+                        onClick={() => setOuvert({ id: r.id, vue: 'lien' })}
+                        aria-label={`Lier « ${r.titre} » à un contact ou une entreprise`}
+                      >
+                        {r.contact || r.entreprise ? 'Changer le lien' : 'Lier'}
+                      </button>
+                    </div>
                   </td>
                   <td>{r.lieu ?? <span className="muted">—</span>}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
@@ -198,7 +284,16 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
                 ouvert?.id === r.id && (
                   <tr key={`${r.id}-detail`}>
                     <td colSpan={5}>
-                      {ouvert.vue === 'prep' ? (
+                      {ouvert.vue === 'lien' ? (
+                        <LienRdv
+                          slug={slug}
+                          rdv={r}
+                          onDone={() => {
+                            setOuvert(null);
+                            load();
+                          }}
+                        />
+                      ) : ouvert.vue === 'prep' ? (
                         <PreparationPanel slug={slug} rdv={r} />
                       ) : (
                         <CompteRendu slug={slug} rdv={r} onDone={load} />

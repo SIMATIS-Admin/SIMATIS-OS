@@ -770,6 +770,12 @@ a {
   border-bottom: 1px solid var(--line-2);
   vertical-align: top;
 }
+.tbl tr.cible td {
+  background: var(--blue-bg);
+}
+.tbl tr.cible {
+  scroll-margin-top: 80px;
+}
 .tbl tr.click {
   cursor: pointer;
 }
@@ -2132,77 +2138,6 @@ textarea.input {
   line-height: 1;
   padding: 6px 14px;
 }
-.sem2 {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.sem-jours {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
-  gap: 8px;
-  min-width: 0;
-}
-.sem-jour {
-  padding: 8px;
-  min-height: 160px;
-}
-.sem-jour h3 {
-  margin: 0 0 6px;
-  font-size: 14px;
-}
-.sem-jour .rdv {
-  background: var(--line-2);
-  color: var(--ink-2);
-  border-radius: var(--r-s);
-  font-size: 12px;
-  padding: 3px 6px;
-  margin-bottom: 4px;
-}
-.sem-groupe {
-  margin-top: 8px;
-}
-.sem-groupe h4 {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0 0 4px;
-  font-size: 12px;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-.sem-groupe h4 svg {
-  width: 12px;
-  height: 12px;
-}
-.sem-tache {
-  display: flex;
-  justify-content: space-between;
-  gap: 4px;
-  font-size: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--ink-3);
-  border-radius: var(--r-s);
-  padding: 3px 6px;
-  margin-bottom: 3px;
-  cursor: grab;
-}
-.sem-tache.hubspot {
-  border-left-color: var(--navy-3);
-}
-.sem-tache b {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sem-tache small {
-  color: var(--ink-3);
-  flex: none;
-}
 .lien {
   background: none;
   border: 0;
@@ -2210,29 +2145,6 @@ textarea.input {
   font-size: 12px;
   color: var(--navy-3);
   cursor: pointer;
-}
-.sem-retard {
-  width: 230px;
-  flex: none;
-}
-.sem-retard ul {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-.sem-retard li {
-  margin-bottom: 8px;
-}
-.sem-retard-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.sem-retard-replie {
-  writing-mode: vertical-rl;
-  padding: 10px 6px;
 }
 
 /* Brief: counters that open the matching screen. */
@@ -2272,7 +2184,44 @@ textarea.input {
   height: 14px;
 }
 
-/* Activités : grille horaire */
+/* Agenda : barre, légende, calendrier des rendez-vous et colonne des tâches */
+.ag-barre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ag-barre .sem-barre {
+  margin: 0;
+  gap: 6px;
+}
+.ag-barre .sem-barre h2 {
+  min-width: 0;
+  text-align: left;
+  margin-left: 8px;
+}
+.ag-barre-d {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ag {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+@media (max-width: 1100px) {
+  .ag {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ag-panneau {
+    width: auto;
+  }
+}
+
 .gr {
   flex: 1;
   min-width: 0;
@@ -2288,12 +2237,35 @@ textarea.input {
   font-size: 13px;
   border-bottom: 1px solid var(--line);
 }
+.gr-entete .lien {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.gr-entete.auj,
+.gr-entete.auj .lien {
+  color: var(--teal);
+}
 .gr-journee {
   min-height: 30px;
-  padding: 4px;
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   border-left: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   background: var(--line-2);
+}
+.gr-jentier {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--white);
+  background: var(--c);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gr-heures .gr-heure,
 .gr-grille > .gr-heure {
@@ -2303,7 +2275,11 @@ textarea.input {
   padding-right: 6px;
 }
 .gr-colonne {
+  position: relative;
   border-left: 1px solid var(--line);
+}
+.gr-colonne.auj {
+  background: color-mix(in srgb, var(--teal) 5%, transparent);
 }
 .gr-creneau {
   position: relative;
@@ -2313,54 +2289,297 @@ textarea.input {
 .gr-creneau.heure {
   border-top: 1px solid var(--line);
 }
-.gr-rdv,
-.gr-activite {
+.gr-rdv {
   position: absolute;
   top: 1px;
-  border-radius: var(--r-s);
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 0 4px;
   font-size: 11px;
-  padding: 2px 4px;
+  line-height: 1.35;
+  padding: 2px 5px;
   overflow: hidden;
+  border-radius: var(--r-s);
+  border-left: 3px solid var(--c);
+  background: color-mix(in srgb, var(--c) 16%, var(--white));
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
 }
-.gr-rdv {
-  left: 0;
-  right: 0;
-  background: var(--line-2);
+.gr-rdv:hover {
+  background: color-mix(in srgb, var(--c) 26%, var(--white));
+}
+.gr-rdv small {
   color: var(--ink-2);
-  pointer-events: none;
-  z-index: 0;
+  font-family: var(--f-num);
+}
+.gr-rdv b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gr-rdv .gr-lieu {
+  flex-basis: 100%;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gr-activite {
-  z-index: 1;
-  display: flex;
-  gap: 4px;
-  align-items: flex-start;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--ink-3);
   cursor: grab;
+}
+/* Créneau (plus de 2 h) : réservation pour s'organiser, sous les rendez-vous. */
+.gr-plage {
+  position: absolute;
+  top: 1px;
+  left: 0;
+  right: 0;
+  z-index: 0;
   box-sizing: border-box;
+  padding: 2px 5px;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--ink-3);
+  border: 1px dashed color-mix(in srgb, var(--c) 55%, var(--white));
+  border-radius: var(--r-s);
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--c) 9%, var(--white)) 0 6px,
+    var(--white) 6px 12px
+  );
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
 }
-.gr-activite.hubspot {
-  border-left-color: var(--navy-3);
-}
-.gr-activite.occupe {
-  background: var(--blue-bg);
+.gr-plage small {
+  font-family: var(--f-num);
 }
 .gr-activite svg {
   width: 11px;
   height: 11px;
   flex: none;
+  margin-top: 2px;
 }
-.gr-activite b {
-  font-weight: 500;
+.gr-maintenant {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  border-top: 2px solid var(--red);
+  pointer-events: none;
+}
+
+/* Agenda : colonne des tâches */
+.ag-panneau {
+  width: 320px;
+  flex: none;
+  padding-bottom: 6px;
+}
+.ag-groupe {
+  padding: 6px 14px 8px;
+  border-top: 1px solid var(--line-2);
+}
+.ag-groupe h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  margin: 2px 0 4px;
+}
+.ag-groupe h3 .badge {
+  margin-left: 6px;
+}
+.ag-groupe h3 .lien {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.ag-groupe.retard h3 .lien {
+  color: var(--red);
+}
+.ag-groupe.auj {
+  background: color-mix(in srgb, var(--teal) 6%, var(--white));
+}
+.ag-groupe ul,
+.ag-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ag-vide {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin: 0;
+}
+.ag-tache {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 13px;
+  cursor: grab;
+}
+.ag-tache input {
+  margin: 0;
+  flex: none;
+  accent-color: var(--teal);
+}
+.ag-ico {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 14%, var(--white));
+}
+.ag-ico svg {
+  width: 12px;
+  height: 12px;
+}
+.ag-titre {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.ag-titre span,
+.ag-titre small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.gr-activite small {
+.ag-titre small {
+  font-size: 11px;
   color: var(--ink-3);
+}
+.ag-titre:hover span {
+  text-decoration: underline;
+}
+.ag-tache.faite .ag-titre span {
+  text-decoration: line-through;
+  color: var(--ink-3);
+}
+.ag-heure {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.ag-retard {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+/* Agenda : vue Liste, jour par jour */
+.ag-programme {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ag-jour {
+  padding: 10px 16px 12px;
+}
+.ag-jour header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ag-jour header h3 {
+  font-size: 15px;
+}
+.ag-jour.auj {
+  border-left: 4px solid var(--teal);
+}
+.ag-jour.retard header h3 {
+  color: var(--red);
+}
+.ag-plage {
+  font-size: 11px;
+  color: var(--ink-2);
+  border: 1px dashed color-mix(in srgb, var(--c) 55%, var(--white));
+  border-radius: 4px;
+  padding: 0 6px;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--c) 9%, var(--white)) 0 6px,
+    var(--white) 6px 12px
+  );
+}
+.ag-jour-corps {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 24px;
+}
+@media (max-width: 900px) {
+  .ag-jour-corps {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+.ag-jour h4 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  margin: 0 0 4px;
+}
+.ag-rdv-ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  margin-bottom: 4px;
+  border-radius: var(--r-s);
+  border-left: 3px solid var(--c);
+  background: color-mix(in srgb, var(--c) 10%, var(--white));
+  font-size: 13px;
+}
+.ag-heures {
+  flex: none;
+  min-width: 96px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.ag-rdv-texte {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ag-rdv-texte b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ag-rdv-texte b svg {
+  width: 12px;
+  height: 12px;
+  color: var(--c);
+}
+.ag-rdv-texte small {
+  font-size: 11px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Pipeline : état d'activité et inactivité (à la Pipedrive) */

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import {
@@ -15,6 +15,7 @@ import {
   contacts,
   entreprises,
   opportunites,
+  rdvLiens,
   type Qualification,
 } from '../crm/schema.js';
 import type { Executor } from '../db.js';
@@ -22,7 +23,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
-import { decaler, jourDe } from '../pilotage/realisees.js';
+import { decaler, estCreneau, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
 import { propose } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
@@ -103,7 +104,13 @@ export async function listerRendezVous(
   }
   return {
     etat: 'ok' as const,
-    rdv: await relier(db, instance, liste),
+    // One read per agenda: put them back in time order.
+    rdv: await relier(
+      db,
+      instance,
+      // Slots of more than two hours are bookings, not meetings to prepare.
+      liste.filter((e) => !estCreneau(e)).sort((a, b) => a.debut.getTime() - b.debut.getTime()),
+    ),
     agendasIgnores: ignores,
   };
 }
@@ -146,41 +153,78 @@ export async function listerAgendas(
 async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
   const emails = [...new Set(liste.flatMap((e) => e.participants))];
   return withInstance(db, instance.id, async (tx) => {
-    const lies = emails.length
+    // Links chosen by the pilot win over the guests' emails.
+    const manuels = liste.length
       ? await tx
           .select({
-            id: contacts.id,
-            nom: contacts.nom,
-            email: contacts.email,
-            entrepriseId: contacts.entrepriseId,
-            entreprise: entreprises.nom,
+            eventId: rdvLiens.eventId,
+            contactId: rdvLiens.contactId,
+            entrepriseId: rdvLiens.entrepriseId,
           })
-          .from(contacts)
-          .leftJoin(
-            entreprises,
-            and(
-              eq(entreprises.id, contacts.entrepriseId),
-              eq(entreprises.instanceId, currentInstance),
-            ),
-          )
+          .from(rdvLiens)
           .where(
             and(
-              eq(contacts.instanceId, currentInstance),
-              inArray(sql`lower(${contacts.email})`, emails),
+              eq(rdvLiens.instanceId, currentInstance),
+              inArray(
+                rdvLiens.eventId,
+                liste.map((e) => e.id),
+              ),
             ),
           )
       : [];
-    const ouvertes = lies.length
+    const contactsChoisis = manuels.flatMap((m) => (m.contactId ? [m.contactId] : []));
+    const lies =
+      emails.length || contactsChoisis.length
+        ? await tx
+            .select({
+              id: contacts.id,
+              nom: contacts.nom,
+              email: contacts.email,
+              entrepriseId: contacts.entrepriseId,
+              entreprise: entreprises.nom,
+            })
+            .from(contacts)
+            .leftJoin(
+              entreprises,
+              and(
+                eq(entreprises.id, contacts.entrepriseId),
+                eq(entreprises.instanceId, currentInstance),
+              ),
+            )
+            .where(
+              and(
+                eq(contacts.instanceId, currentInstance),
+                or(
+                  emails.length ? inArray(sql`lower(${contacts.email})`, emails) : undefined,
+                  contactsChoisis.length ? inArray(contacts.id, contactsChoisis) : undefined,
+                ),
+              ),
+            )
+        : [];
+    const entreprisesChoisies = manuels.flatMap((m) => (m.entrepriseId ? [m.entrepriseId] : []));
+    const choisies = entreprisesChoisies.length
       ? await tx
-          .select({
-            id: opportunites.id,
-            titre: opportunites.titre,
-            contactId: opportunites.contactId,
-            entrepriseId: opportunites.entrepriseId,
-          })
-          .from(opportunites)
-          .where(and(eq(opportunites.instanceId, currentInstance), isNull(opportunites.clos)))
+          .select({ id: entreprises.id, nom: entreprises.nom })
+          .from(entreprises)
+          .where(
+            and(
+              eq(entreprises.instanceId, currentInstance),
+              inArray(entreprises.id, entreprisesChoisies),
+            ),
+          )
       : [];
+    const ouvertes =
+      lies.length || choisies.length
+        ? await tx
+            .select({
+              id: opportunites.id,
+              titre: opportunites.titre,
+              contactId: opportunites.contactId,
+              entrepriseId: opportunites.entrepriseId,
+            })
+            .from(opportunites)
+            .where(and(eq(opportunites.instanceId, currentInstance), isNull(opportunites.clos)))
+        : [];
     const faits = liste.length
       ? await tx
           .select({ sourceId: activites.sourceId })
@@ -197,11 +241,19 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
           )
       : [];
     return liste.map((e) => {
-      const contact = lies.find((c) => c.email && e.participants.includes(c.email.toLowerCase()));
-      const opp = contact
-        ? (ouvertes.find((o) => o.contactId === contact.id) ??
-          ouvertes.find((o) => contact.entrepriseId && o.entrepriseId === contact.entrepriseId))
-        : undefined;
+      const manuel = manuels.find((m) => m.eventId === e.id);
+      const contact = manuel
+        ? lies.find((c) => c.id === manuel.contactId)
+        : lies.find((c) => c.email && e.participants.includes(c.email.toLowerCase()));
+      const choisie = manuel ? choisies.find((x) => x.id === manuel.entrepriseId) : undefined;
+      const entreprise =
+        choisie ??
+        (contact?.entrepriseId && contact.entreprise
+          ? { id: contact.entrepriseId, nom: contact.entreprise }
+          : undefined);
+      const opp =
+        (contact && ouvertes.find((o) => o.contactId === contact.id)) ??
+        (entreprise && ouvertes.find((o) => o.entrepriseId === entreprise.id));
       return {
         id: e.id,
         debut: e.debut,
@@ -211,10 +263,52 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
         contact: contact
           ? { id: contact.id, nom: contact.nom, entreprise: contact.entreprise }
           : null,
+        entreprise: entreprise ?? null,
+        // Linked by hand in the OS rather than through the guests' emails.
+        lienManuel: manuel !== undefined,
         opportunite: opp ? { id: opp.id, titre: opp.titre } : null,
         compteRendu: faits.some((f) => f.sourceId === e.id),
       };
     });
+  });
+}
+
+export class LienRdvInvalide extends Error {}
+
+// Links a meeting to a contact and/or a company of the instance; both null removes the link
+// (the guests' emails count again).
+export async function lierRendezVous(
+  db: Executor,
+  instance: Instance,
+  eventId: string,
+  lien: { contactId: string | null; entrepriseId: string | null },
+) {
+  return withInstance(db, instance.id, async (tx) => {
+    for (const [table, id, nom] of [
+      [contacts, lien.contactId, 'Contact'],
+      [entreprises, lien.entrepriseId, 'Entreprise'],
+    ] as const) {
+      if (!id) continue;
+      const [found] = await tx
+        .select({ id: table.id })
+        .from(table)
+        .where(and(eq(table.instanceId, currentInstance), eq(table.id, id)));
+      if (!found) throw new LienRdvInvalide(`${nom} introuvable dans cette instance`);
+    }
+    const cible = and(eq(rdvLiens.instanceId, currentInstance), eq(rdvLiens.eventId, eventId));
+    if (!lien.contactId && !lien.entrepriseId) {
+      await tx.delete(rdvLiens).where(cible);
+    } else {
+      await tx
+        .insert(rdvLiens)
+        .values({ instanceId: currentInstance, eventId, ...lien })
+        .onConflictDoUpdate({
+          target: [rdvLiens.instanceId, rdvLiens.eventId],
+          set: { ...lien, updatedAt: new Date() },
+        });
+    }
+    await logEvent(tx, { acteur: 'pilote', action: 'Rendez-vous relié', niveau: 'L2' });
+    return { ok: true };
   });
 }
 

@@ -133,6 +133,8 @@ import {
   compteRenduSchema,
   enregistrerCompteRendu,
   listerAgendas,
+  LienRdvInvalide,
+  lierRendezVous,
   listerRendezVous,
   preparer,
   RdvIndisponible,
@@ -331,6 +333,7 @@ export function registerApi(
       notes: z.string().max(5000).nullable().optional(),
       echeance: echeanceTache.optional(),
       contactId: z.uuid().nullable().optional(),
+      entrepriseId: z.uuid().nullable().optional(),
       opportuniteId: z.uuid().nullable().optional(),
       hubspot: z.boolean().optional(),
     })
@@ -342,6 +345,8 @@ export function registerApi(
       notes: z.string().max(5000).nullable().optional(),
       echeance: echeanceTache.optional(),
       fait: z.boolean().optional(),
+      contactId: z.uuid().nullable().optional(),
+      entrepriseId: z.uuid().nullable().optional(),
     })
     .strict();
   const tacheErreur = (error: unknown, reply: FastifyReply) => {
@@ -960,6 +965,22 @@ export function registerApi(
     }),
   );
   type CrRoute = { Params: { slug: string; id: string }; Body: unknown };
+  const lienRdvSchema = z
+    .object({ contactId: z.uuid().nullable(), entrepriseId: z.uuid().nullable() })
+    .strict();
+  app.put<CrRoute>(
+    '/api/i/:slug/rendez-vous/:id/lien',
+    onInstance<CrRoute>(async (i, request, reply) => {
+      const parsed = lienRdvSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Lien invalide' });
+      try {
+        return await lierRendezVous(db, i, request.params.id.slice(0, 300), parsed.data);
+      } catch (error) {
+        if (error instanceof LienRdvInvalide) return reply.code(400).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
   app.post<CrRoute>(
     '/api/i/:slug/rendez-vous/:id/compte-rendu',
     onInstance<CrRoute>(async (i, request, reply) => {

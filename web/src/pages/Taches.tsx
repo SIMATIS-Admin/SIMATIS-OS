@@ -16,9 +16,11 @@ import { EditionTache, Ensuite, type Enregistrement } from './taches/Edition.js'
 import { Tableau } from './listes/Tableau.js';
 import { jourParis, memeHeure, titreJour, titreSemaine } from './taches/creneaux.js';
 import { Grille } from './taches/Grille.js';
-import { EnRetard, MIME_TACHE, Semaine } from './taches/Semaine.js';
+import { MIME_TACHE } from './taches/agenda.js';
+import { Panneau } from './taches/Panneau.js';
+import { Programme } from './taches/Programme.js';
 
-type Mode = 'jour' | 'semaine' | 'parjour' | 'liste';
+type Mode = 'jour' | 'semaine' | 'liste' | 'tableau';
 type FiltreStatut = 'a_faire' | 'faites';
 type FiltreOrigine = 'tout' | TacheVue['origine'];
 
@@ -40,8 +42,8 @@ export const estSimulation = (r: unknown): r is { simulation: true; message: str
 const MODES: [Mode, string][] = [
   ['jour', 'Jour'],
   ['semaine', 'Semaine'],
-  ['parjour', 'Par jour'],
   ['liste', 'Liste'],
+  ['tableau', 'Tableau'],
 ];
 
 const PERIODES: [CleePeriode | 'plage', string][] = [
@@ -275,7 +277,7 @@ function Liste({
 }
 
 export function Taches({ slug }: { slug: string }) {
-  const [mode, setMode] = useState<Mode>('parjour');
+  const [mode, setMode] = useState<Mode>('semaine');
   const [lundi, setLundi] = useState(() => lundiDe(new Date()));
   const [jour, setJour] = useState(() => jourParis(new Date().toISOString()));
   // The Day view moves one day at a time, the others one week; the week follows the day.
@@ -350,8 +352,23 @@ export function Taches({ slug }: { slug: string }) {
     void modifier(t, { echeance: memeHeure(t.echeance, plusJours(jour, jours)) });
   };
 
+  const cocher = (t: TacheVue) =>
+    void updateTache(slug, t.id, { fait: !t.fait }).then(
+      (r) => {
+        apres(r);
+        if (!t.fait) proposerSuite(t, r);
+      },
+      (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+    );
+  const aujourdhui = jourParis(new Date().toISOString());
+  const voirJour = (j: string) => {
+    setJour(j);
+    setLundi(lundiDu(j));
+    setMode('jour');
+  };
+
   useEffect(() => {
-    if (mode === 'liste' || edition) return;
+    if (mode === 'tableau' || edition) return;
     const touche = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select')) return;
       if (e.key === 'ArrowLeft') avancer(-1);
@@ -361,111 +378,124 @@ export function Taches({ slug }: { slug: string }) {
     return () => window.removeEventListener('keydown', touche);
   });
 
+  const nav = mode !== 'tableau' && (
+    <div className="sem-barre">
+      <button
+        className="btn sem-nav"
+        aria-label={mode === 'jour' ? 'Jour précédent' : 'Semaine précédente'}
+        onClick={() => avancer(-1)}
+        onDragOver={accepte}
+        onDrop={decaler(-7)}
+      >
+        ‹
+      </button>
+      <button
+        className="btn sem-nav"
+        aria-label={mode === 'jour' ? 'Jour suivant' : 'Semaine suivante'}
+        onClick={() => avancer(1)}
+        onDragOver={accepte}
+        onDrop={decaler(7)}
+      >
+        ›
+      </button>
+      {mode === 'jour'
+        ? jour !== aujourdhui && (
+            <button
+              className="btn"
+              onClick={() => {
+                setJour(aujourdhui);
+                setLundi(lundiDe(new Date()));
+              }}
+            >
+              Aujourd'hui
+            </button>
+          )
+        : lundi !== lundiDe(new Date()) && (
+            <button className="btn" onClick={() => setLundi(lundiDe(new Date()))}>
+              Cette semaine
+            </button>
+          )}
+      <h2>{mode === 'jour' ? titreJour(jour) : titreSemaine(lundi)}</h2>
+    </div>
+  );
+
   return (
     <>
-      <div className="page-actions">
-        <div className="seg">
-          {MODES.map(([m, l]) => (
-            <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
-              {l}
-            </button>
-          ))}
+      <div className="ag-barre">
+        {nav || <span />}
+        <div className="ag-barre-d">
+          <div className="seg" role="group" aria-label="Affichage de l'agenda">
+            {MODES.map(([m, l]) => (
+              <button
+                key={m}
+                className={mode === m ? 'on' : ''}
+                aria-pressed={mode === m}
+                onClick={() => setMode(m)}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <button className="btn primary" onClick={() => setEdition('nouvelle')}>
+            Nouvelle tâche
+          </button>
         </div>
-        <button className="btn primary" onClick={() => setEdition('nouvelle')}>
-          Nouvelle tâche
-        </button>
       </div>
-      {mode !== 'liste' && (
-        <div className="sem-barre">
-          <button
-            className="btn sem-nav"
-            aria-label={mode === 'jour' ? 'Jour précédent' : 'Semaine précédente'}
-            onClick={() => avancer(-1)}
-            onDragOver={accepte}
-            onDrop={decaler(-7)}
-          >
-            ‹
-          </button>
-          <h2>{mode === 'jour' ? titreJour(jour) : titreSemaine(lundi)}</h2>
-          <button
-            className="btn sem-nav"
-            aria-label={mode === 'jour' ? 'Jour suivant' : 'Semaine suivante'}
-            onClick={() => avancer(1)}
-            onDragOver={accepte}
-            onDrop={decaler(7)}
-          >
-            ›
-          </button>
-          {mode === 'jour'
-            ? jour !== jourParis(new Date().toISOString()) && (
-                <button
-                  className="btn"
-                  onClick={() => {
-                    setJour(jourParis(new Date().toISOString()));
-                    setLundi(lundiDe(new Date()));
-                  }}
-                >
-                  Aujourd'hui
-                </button>
-              )
-            : lundi !== lundiDe(new Date()) && (
-                <button className="btn" onClick={() => setLundi(lundiDe(new Date()))}>
-                  Cette semaine
-                </button>
-              )}
-        </div>
-      )}
       {message && (
         <div className="alert amber" style={{ marginBottom: 12 }}>
           <div>{message}</div>
         </div>
       )}
+      {data && data.rdvEtat !== 'ok' && mode !== 'tableau' && (
+        <p className="small muted">
+          {data.rdvEtat === 'non_configure'
+            ? 'Rendez-vous Google non branchés : connectez le compte dans Paramètres > Connexions.'
+            : 'Rendez-vous Google indisponibles pour le moment.'}
+        </p>
+      )}
       {data &&
-        (mode === 'liste' ? (
+        (mode === 'tableau' ? (
           <Liste
             slug={slug}
             version={version}
             hubspot={data.hubspot}
             onOpen={setEdition}
             onModifier={modifier}
-            onFait={(t) =>
-              void updateTache(slug, t.id, { fait: !t.fait }).then(
-                (r) => {
-                  apres(r);
-                  if (!t.fait) proposerSuite(t, r);
-                },
-                (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
-              )
-            }
+            onFait={cocher}
           />
-        ) : mode === 'parjour' ? (
-          <Semaine
+        ) : mode === 'liste' ? (
+          <Programme
             lundi={lundi}
             data={data}
+            slug={slug}
+            aujourdhui={aujourdhui}
             onOpen={setEdition}
-            onMove={(t, echeance) => void modifier(t, { echeance })}
-            onMoveAll={(moves) => void deplacerTout(moves)}
+            onFait={cocher}
           />
         ) : (
-          <div className="sem2">
-            {data.enRetard.length > 0 && (
-              <EnRetard
-                taches={[...data.enRetard].sort((a, b) =>
-                  (a.echeance ?? '').localeCompare(b.echeance ?? ''),
-                )}
-                aujourdhui={jourParis(new Date().toISOString())}
-                onOpen={setEdition}
-                onMove={(t, echeance) => void modifier(t, { echeance })}
-                onMoveAll={(moves) => void deplacerTout(moves)}
-              />
-            )}
+          <div className="ag">
             <Grille
               jours={
                 mode === 'jour' ? [jour] : Array.from({ length: 7 }, (_, k) => plusJours(lundi, k))
               }
               data={data}
+              slug={slug}
+              aujourdhui={aujourdhui}
+              maintenant={new Date()}
               onOpen={setEdition}
               onPatch={(t, patch) => void modifier(t, patch)}
+              onJour={mode === 'semaine' ? voirJour : undefined}
+            />
+            <Panneau
+              jours={
+                mode === 'jour' ? [jour] : Array.from({ length: 7 }, (_, k) => plusJours(lundi, k))
+              }
+              data={data}
+              aujourdhui={aujourdhui}
+              onOpen={setEdition}
+              onFait={cocher}
+              onMove={(t, echeance) => void modifier(t, { echeance })}
+              onMoveAll={(moves) => void deplacerTout(moves)}
             />
           </div>
         ))}

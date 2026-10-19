@@ -44,7 +44,7 @@ describe('tasks of the day and tasks done', () => {
     expect(compterRealisees(done, now).mois).toEqual({ email: 1, appel: 0, autre: 0, total: 1 });
   });
 
-  it('counts meetings held: ended, timed, with a guest; by Paris day of their start', () => {
+  it('counts meetings held: ended, timed, two hours at most, with a guest; by Paris day', () => {
     const now = new Date('2026-10-12T10:00:00Z'); // Monday
     const rdv = (
       debut: string,
@@ -62,6 +62,7 @@ describe('tasks of the day and tasks done', () => {
         rdv('2026-10-09T22:30:00Z', '2026-10-09T23:00:00Z'), // Saturday 00:30 in Paris
         rdv('2026-10-09T12:00:00Z', '2026-10-09T13:00:00Z', { participants: [] }), // personal block
         rdv('2026-10-09T00:00:00Z', '2026-10-10T00:00:00Z', { journee: true }), // all day
+        rdv('2026-10-09T06:00:00Z', '2026-10-09T14:00:00Z'), // slot of more than two hours
         rdv('2026-10-12T09:30:00Z', '2026-10-12T10:30:00Z'), // not over yet
         rdv('2026-10-12T07:00:00Z', '2026-10-12T08:00:00Z'), // held this morning
         rdv('2026-09-12T08:00:00Z', '2026-09-12T09:00:00Z'), // 30 days ago: out of the month
@@ -86,11 +87,15 @@ describe('tasks of the day and tasks done', () => {
       r('hier-soir', '2026-10-11T17:00:00Z', '2026-10-11T18:00:00Z'),
       r('ce-matin', '2026-10-12T07:00:00Z', '2026-10-12T08:00:00Z'),
       r('cet-apres-midi', '2026-10-12T13:00:00Z', '2026-10-12T14:00:00Z'),
+      // Two hours is still a meeting; longer is a slot booked to get organised.
+      r('deux-heures', '2026-10-12T14:00:00Z', '2026-10-12T16:00:00Z'),
+      r('creneau', '2026-10-12T07:00:00Z', '2026-10-12T15:00:00Z'),
     ];
     expect(rdvDuJour(liste, now).map((x) => x.id)).toEqual([
       'auj-journee',
       'ce-matin',
       'cet-apres-midi',
+      'deux-heures',
     ]);
   });
 });

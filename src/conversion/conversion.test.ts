@@ -19,7 +19,7 @@ describe('Rendez-vous and Devis', () => {
   let app: FastifyInstance;
   let secretsDir: string;
 
-  const send = async (method: 'GET' | 'POST' | 'PATCH', url: string, payload?: unknown) => {
+  const send = async (method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, payload?: unknown) => {
     const res = await app.inject({ method, url, payload: payload as object });
     return { status: res.statusCode, body: res.json<Row & Row[]>() };
   };
@@ -139,6 +139,12 @@ describe('Rendez-vous and Devis', () => {
                         { email: contact.email.toUpperCase() },
                       ],
                     },
+                    {
+                      id: 'evt-creneau',
+                      summary: 'Bureau réservé',
+                      start: { dateTime: '2026-10-12T07:00:00Z' },
+                      end: { dateTime: '2026-10-12T15:00:00Z' },
+                    },
                   ],
                 },
           ),
@@ -152,6 +158,8 @@ describe('Rendez-vous and Devis', () => {
       { fetch },
     );
     expect(list.etat).toBe('ok');
+    // A slot of more than two hours is a booking, not a meeting to prepare.
+    expect(list.rdv.map((r) => r.id)).toEqual(['evt-1']);
     expect(list.rdv[0]).toMatchObject({
       id: 'evt-1',
       contact: { id: contact.id },
@@ -183,6 +191,38 @@ describe('Rendez-vous and Devis', () => {
     expect(again.rdv[0]?.compteRendu).toBe(true);
     expect(
       (await send('POST', '/api/i/helioval/rendez-vous/evt-1/compte-rendu', { titre: 'x' })).status,
+    ).toBe(400);
+
+    // Linked by hand to a company: it wins over the guests' emails, until unlinked.
+    const ent = await t.owner.pool.query<{ id: string; nom: string }>(
+      "select e.id, e.nom from entreprises e join instances i on i.id = e.instance_id where i.slug = 'helioval' order by e.nom limit 1",
+    );
+    const entreprise = ent.rows[0];
+    if (!entreprise) throw new Error('no company');
+    const lien = (corps: unknown) => send('PUT', '/api/i/helioval/rendez-vous/evt-1/lien', corps);
+    expect((await lien({ contactId: null, entrepriseId: entreprise.id })).status).toBe(200);
+    const lister = () =>
+      listerRendezVous(
+        t.app.db,
+        instance,
+        { secretsDir, realWrites: false },
+        new Date('2026-10-09T08:00:00Z'),
+        { fetch },
+      );
+    expect((await lister()).rdv[0]).toMatchObject({
+      contact: null,
+      entreprise: { id: entreprise.id, nom: entreprise.nom },
+      lienManuel: true,
+    });
+    expect((await lien({ contactId: null, entrepriseId: null })).status).toBe(200);
+    expect((await lister()).rdv[0]).toMatchObject({
+      contact: { id: contact.id },
+      lienManuel: false,
+    });
+    expect((await lien({ contactId: 'pas-un-uuid', entrepriseId: null })).status).toBe(400);
+    expect(
+      (await lien({ contactId: '00000000-0000-4000-8000-000000000000', entrepriseId: null }))
+        .status,
     ).toBe(400);
   });
 

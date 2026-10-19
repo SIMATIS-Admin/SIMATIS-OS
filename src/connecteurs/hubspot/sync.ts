@@ -1,7 +1,14 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { connexions } from '../../connexions/schema.js';
 import type { SyncCtx, SyncReport } from '../../connexions/types.js';
-import { activites, contacts, entreprises, opportunites, taches } from '../../crm/schema.js';
+import {
+  activites,
+  contacts,
+  entreprises,
+  opportunites,
+  rdvLiens,
+  taches,
+} from '../../crm/schema.js';
 import type { Tx } from '../../db.js';
 import { currentInstance } from '../../db/columns.js';
 import { HubspotError, type HsObject, type HubspotClient } from './client.js';
@@ -191,23 +198,26 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
     const existing = await localIds(ctx.tx, taches, ids);
     const contact = await resolve(contacts, contactIds, [...toContact.values()]);
     const deal = await resolve(opportunites, dealIds, [...toDeal.values()]);
-    // A type chosen in the OS wins over the one read from the title or HubSpot.
-    const choisis = new Set(
+    // A type or links chosen in the OS win over those read from the title or HubSpot.
+    const choix =
       existing.size === 0
         ? []
-        : (
-            await ctx.tx
-              .select({ sourceId: taches.sourceId })
-              .from(taches)
-              .where(
-                and(
-                  eq(taches.instanceId, currentInstance),
-                  inArray(taches.id, [...existing.values()]),
-                  eq(taches.typeChoisi, true),
-                ),
-              )
-          ).map((r) => r.sourceId),
-    );
+        : await ctx.tx
+            .select({
+              sourceId: taches.sourceId,
+              typeChoisi: taches.typeChoisi,
+              lienChoisi: taches.lienChoisi,
+            })
+            .from(taches)
+            .where(
+              and(
+                eq(taches.instanceId, currentInstance),
+                inArray(taches.id, [...existing.values()]),
+                or(eq(taches.typeChoisi, true), eq(taches.lienChoisi, true)),
+              ),
+            );
+    const choisis = new Set(choix.filter((c) => c.typeChoisi).map((c) => c.sourceId));
+    const liesDansOs = new Set(choix.filter((c) => c.lienChoisi).map((c) => c.sourceId));
     for (const t of tasks) {
       const { type, canal, ...valeurs } = mapTask(t);
       await upsert(
@@ -218,8 +228,12 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
         {
           ...valeurs,
           ...(choisis.has(t.id) ? {} : { type, canal }),
-          contactId: contact(toContact.get(t.id) ?? null),
-          opportuniteId: deal(toDeal.get(t.id) ?? null),
+          ...(liesDansOs.has(t.id)
+            ? {}
+            : {
+                contactId: contact(toContact.get(t.id) ?? null),
+                opportuniteId: deal(toDeal.get(t.id) ?? null),
+              }),
         },
         report,
       );
@@ -274,7 +288,7 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
 // without the link.
 async function retirer(tx: Tx, contactIds: string[], entrepriseIds: string[]) {
   if (contactIds.length > 0) {
-    for (const table of [opportunites, taches, activites]) {
+    for (const table of [opportunites, taches, activites, rdvLiens]) {
       await tx
         .update(table)
         .set({ contactId: null })
@@ -285,7 +299,7 @@ async function retirer(tx: Tx, contactIds: string[], entrepriseIds: string[]) {
       .where(and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, contactIds)));
   }
   if (entrepriseIds.length > 0) {
-    for (const table of [opportunites, contacts, activites]) {
+    for (const table of [opportunites, contacts, activites, taches, rdvLiens]) {
       await tx
         .update(table)
         .set({ entrepriseId: null })
