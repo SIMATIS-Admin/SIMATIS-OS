@@ -115,6 +115,7 @@ describe("Diagnostic : support d'ouverture", () => {
     await expect(
       demanderSupport(t.app.db, simatis, p.id, 'preparer_support'),
     ).rejects.toBeInstanceOf(ChatIndisponible);
+    await expect(enregistrer(p.id, { lien: LIEN })).rejects.toBeInstanceOf(SupportInvalide);
     expect(await rouvrirSupport(t.app.db, simatis, p.id)).toMatchObject({ supportStatut: 'pret' });
     await expect(rouvrirSupport(t.app.db, simatis, p.id)).rejects.toBeInstanceOf(ChatIndisponible);
   });

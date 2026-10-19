@@ -80,6 +80,9 @@ export async function enregistrerSupport(
       supportFinalLe: new Date(),
     };
   } else {
+    // Un support final ne change que s'il est rouvert par le pilote.
+    if (projet.supportStatut === 'final')
+      throw new SupportInvalide('Le support est final : le pilote doit le rouvrir.');
     maj = { supportLien: lien, supportStatut: 'pret' };
   }
   await tx
