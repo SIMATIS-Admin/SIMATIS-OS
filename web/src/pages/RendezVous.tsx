@@ -118,10 +118,16 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
     fetchRendezVous(slug).then(setData, (e: unknown) => setError(String(e)));
   }, [slug]);
   useEffect(load, [load]);
-  // Opened from the Agenda: the meeting's row shows its preparation straight away.
+  // Opened from the Agenda: the meeting's row shows its preparation straight away, scrolled into
+  // view and highlighted, since it is often far down the list.
   useEffect(() => {
     if (ouvrir && data?.rdv.some((r) => r.id === ouvrir)) setOuvert({ id: ouvrir, vue: 'prep' });
   }, [ouvrir, data]);
+  useEffect(() => {
+    if (ouvert?.id === ouvrir) {
+      document.getElementById(`rdv-${ouvrir}`)?.scrollIntoView?.({ block: 'start' });
+    }
+  }, [ouvert, ouvrir]);
 
   if (error) return <div className="empty">{error}</div>;
   if (!data) return null;
@@ -134,8 +140,15 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
   }
   if (data.etat === 'erreur') return <div className="empty">{data.erreur}</div>;
   const maintenant = Date.now();
+  const introuvable = ouvrir && !data.rdv.some((r) => r.id === ouvrir);
   return (
     <div className="panel">
+      {introuvable && (
+        <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
+          Ce rendez-vous est en dehors de la période affichée ici (semaine passée et deux
+          prochaines).
+        </p>
+      )}
       {data.agendasIgnores && data.agendasIgnores.length > 0 && (
         <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
           Agenda non lu : {data.agendasIgnores.join(', ')}. Décochez-le dans Paramètres &gt;
@@ -157,7 +170,7 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
             {data.rdv.map((r) => {
               const passe = new Date(r.debut).getTime() <= maintenant;
               return [
-                <tr key={r.id}>
+                <tr key={r.id} id={`rdv-${r.id}`} className={r.id === ouvrir ? 'cible' : ''}>
                   <td className="num">{quand(r.debut)}</td>
                   <td>
                     <b>{r.titre}</b>

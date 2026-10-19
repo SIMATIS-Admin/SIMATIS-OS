@@ -770,6 +770,12 @@ a {
   border-bottom: 1px solid var(--line-2);
   vertical-align: top;
 }
+.tbl tr.cible td {
+  background: var(--blue-bg);
+}
+.tbl tr.cible {
+  scroll-margin-top: 80px;
+}
 .tbl tr.click {
   cursor: pointer;
 }

@@ -95,4 +95,18 @@ describe('conversion screens', () => {
       opportuniteId: 'o1',
     });
   });
+
+  it('rendez-vous: opened from the Agenda, scrolls to the meeting and shows its preparation', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(<RendezVous slug="helioval" ouvrir="evt-1" />);
+    expect(await screen.findByText('Budget')).toBeTruthy();
+    expect(document.getElementById('rdv-evt-1')?.className).toBe('cible');
+    await waitFor(() => expect(scroll).toHaveBeenCalled());
+  });
+
+  it('rendez-vous: says when the meeting opened from the Agenda is out of the period', async () => {
+    render(<RendezVous slug="helioval" ouvrir="evt-ancien" />);
+    expect(await screen.findByText(/en dehors de la période affichée/)).toBeTruthy();
+  });
 });
