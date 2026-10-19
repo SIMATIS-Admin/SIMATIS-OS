@@ -85,11 +85,15 @@ un deck par projet, créé à partir du deck modèle ; le lien et le texte rendu
 outils ; l'archive écrite au moment du « Support final ». Le texte de mise à jour est proposé
 à Marc, qui l'enregistre dans son compte claude.ai.
 
-## À vérifier en premier
+## Vérification préalable (faite le 19/10)
 
-Claude Code sur le poste dispose de l'outil `Artifact` (vérifié le 19/10). Reste à tester,
-avant de construire l'interface : créer un deck Slides depuis le runner (mode `-p`), y copier
-le deck modèle, le relire. Si cela échoue, revenir vers Marc avant d'aller plus loin.
+Depuis `claude -p` avec le seul outil `Artifact` autorisé : un nouveau deck Slides se crée, les
+diapositives du modèle s'y recopient (une copie serveur d'un HTML est refusée : il faut le lire
+puis le republier), et le deck se relit. Les images du modèle et le fichier de couleurs se
+copient à part (assets) : c'est écrit dans la skill.
+
+Les supports déjà archivés viennent de l'ancien deck unique, réécrit depuis : ils s'importent
+avec leur texte final, sans lien de deck.
 
 ## Tests
 

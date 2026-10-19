@@ -346,7 +346,8 @@ function Preparation({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauve
 const lireBase64 = (fichier: File) =>
   new Promise<string>((resolve, reject) => {
     const lecteur = new FileReader();
-    lecteur.onload = () => resolve(String(lecteur.result).split(',')[1] ?? '');
+    lecteur.onload = () =>
+      resolve(typeof lecteur.result === 'string' ? (lecteur.result.split(',')[1] ?? '') : '');
     lecteur.onerror = () => reject(new Error('Logo illisible'));
     lecteur.readAsDataURL(fichier);
   });

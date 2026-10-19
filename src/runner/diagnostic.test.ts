@@ -104,15 +104,15 @@ describe('Support d ouverture par le runner', () => {
   });
 
   const fauxOs = (a: AttenteDiag, appels: { url: string; body: unknown }[]) =>
-    (async (url: string, init?: RequestInit) => {
-      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    ((url: string, init?: RequestInit) => {
+      const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
       appels.push({ url, body });
       const reponse = url.endsWith('/attentes')
         ? [a]
         : url.endsWith('/demarrer')
           ? { tokenId: 't1', token: 'jeton-fictif' }
           : { ok: true };
-      return new Response(JSON.stringify(reponse), { status: 200 });
+      return Promise.resolve(new Response(JSON.stringify(reponse), { status: 200 }));
     }) as typeof fetch;
 
   it('lance Claude avec la skill, l outil Artifact et le logo dans le dossier de travail', async () => {
@@ -123,7 +123,7 @@ describe('Support d ouverture par le runner', () => {
       token: 'r',
       claude: 'claude',
       fetch: fauxOs(preparer, appels),
-      poste: async () => ({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT] }),
+      poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT] }),
       lancer: async (_c, args, cwd) => {
         const { stat } = await import('node:fs/promises');
         vu = { args, cwd, logo: await stat(path.join(cwd!, 'logo.png')).then(() => true) };
@@ -145,14 +145,15 @@ describe('Support d ouverture par le runner', () => {
       token: 'r',
       claude: 'claude',
       fetch: fauxOs(preparer, appels),
-      poste: async () => ({ nom: 'poste', claude: '1', skills: [] }),
-      lancer: async () => {
+      poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [] }),
+      lancer: () => {
         lance = true;
-        return 0;
+        return Promise.resolve(0);
       },
     });
     expect(lance).toBe(false);
-    expect(appels.at(-1)?.body).toMatchObject({ erreur: expect.stringContaining(SKILL_SUPPORT) });
+    const fin = appels.at(-1)?.body as { erreur?: string };
+    expect(fin.erreur).toContain(SKILL_SUPPORT);
   });
 
   it('un message des étapes suivantes reste une simple réponse', async () => {
@@ -162,10 +163,10 @@ describe('Support d ouverture par le runner', () => {
       token: 'r',
       claude: 'claude',
       fetch: fauxOs(attente, []),
-      poste: async () => ({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT] }),
-      lancer: async (_c, args) => {
+      poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT] }),
+      lancer: (_c, args) => {
         outils = args[args.indexOf('--allowedTools') + 1]!;
-        return 0;
+        return Promise.resolve(0);
       },
     });
     expect(outils).toBe('mcp__simatis__repondre_diagnostic');
