@@ -2,7 +2,15 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { promptDiagnostic, skillsDe, type AttenteDiag } from './runner.js';
+import {
+  outilsSupport,
+  promptDiagnostic,
+  promptSupport,
+  skillsDe,
+  SKILL_SUPPORT,
+  tourDiagnostic,
+  type AttenteDiag,
+} from './runner.js';
 
 const attente: AttenteDiag = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -19,7 +27,15 @@ const attente: AttenteDiag = {
     { etape: 1, de: 'pilote', texte: 'Ancienne question', at: '2026-10-18T08:00:00.000Z' },
     { etape: 2, de: 'pilote', texte: 'Question fictive', at: '2026-10-19T08:00:00.000Z' },
   ],
+  etapeMessage: 2,
   modele: 'sonnet',
+  demande: null,
+  dateDiagnostic: '2026-11-02',
+  ditParDirigeant: 'Ambition fictive',
+  hypotheses: 'Hypothèse fictive',
+  supportStatut: 'aucun',
+  supportLien: null,
+  logo: null,
 };
 
 describe('Prompt du chat de diagnostic', () => {
@@ -50,5 +66,108 @@ describe('Skills du poste', () => {
 
   it('rend une liste vide sans dossier de skills', async () => {
     expect(await skillsDe(path.join(tmpdir(), 'absent-' + Date.now()))).toEqual([]);
+  });
+});
+
+describe('Support d ouverture par le runner', () => {
+  const preparer: AttenteDiag = {
+    ...attente,
+    etape: 1,
+    etapeMessage: 1,
+    demande: 'preparer_support',
+    logo: { nom: 'Logo Fictif.PNG', base64: Buffer.from('png').toString('base64') },
+  };
+
+  it('demande de créer un deck à partir du modèle, sans jamais toucher au modèle', () => {
+    const texte = promptSupport(preparer, 'logo.png', null);
+    expect(texte).toContain(SKILL_SUPPORT);
+    expect(texte).toContain('Ne modifie jamais le deck modèle');
+    expect(texte).toContain('Ambition fictive');
+    expect(texte).toContain('fichier logo.png');
+    expect(texte).toContain('Second cerveau non accessible');
+  });
+
+  it('sur « Support final », demande de relire le deck publié et d en rendre le texte', () => {
+    const texte = promptSupport(
+      { ...preparer, demande: 'support_final', supportLien: 'https://claude.ai/artifact/Fictif01' },
+      null,
+      '/cerveau-fictif',
+    );
+    expect(texte).toContain('Relis le deck publié');
+    expect(texte).toContain('diapositives');
+    expect(texte).toContain('Second cerveau : /cerveau-fictif');
+  });
+
+  it('n ouvre le second cerveau qu à son dossier', () => {
+    expect(outilsSupport(null)).not.toContain('Read');
+    expect(outilsSupport('/cerveau-fictif')).toContain('Write(//cerveau-fictif/**)');
+  });
+
+  const fauxOs = (a: AttenteDiag, appels: { url: string; body: unknown }[]) =>
+    (async (url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      appels.push({ url, body });
+      const reponse = url.endsWith('/attentes')
+        ? [a]
+        : url.endsWith('/demarrer')
+          ? { tokenId: 't1', token: 'jeton-fictif' }
+          : { ok: true };
+      return new Response(JSON.stringify(reponse), { status: 200 });
+    }) as typeof fetch;
+
+  it('lance Claude avec la skill, l outil Artifact et le logo dans le dossier de travail', async () => {
+    const appels: { url: string; body: unknown }[] = [];
+    let vu: { args: string[]; cwd?: string; logo?: boolean } | undefined;
+    await tourDiagnostic({
+      base: 'http://os.test',
+      token: 'r',
+      claude: 'claude',
+      fetch: fauxOs(preparer, appels),
+      poste: async () => ({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT] }),
+      lancer: async (_c, args, cwd) => {
+        const { stat } = await import('node:fs/promises');
+        vu = { args, cwd, logo: await stat(path.join(cwd!, 'logo.png')).then(() => true) };
+        return 0;
+      },
+    });
+    expect(vu?.logo).toBe(true);
+    const outils = vu!.args[vu!.args.indexOf('--allowedTools') + 1];
+    expect(outils).toContain('Artifact');
+    expect(outils).toContain('mcp__simatis__enregistrer_support');
+    expect(appels.at(-1)?.body).not.toHaveProperty('erreur');
+  });
+
+  it('sans la skill sur le poste, ne lance rien et prévient le pilote', async () => {
+    const appels: { url: string; body: unknown }[] = [];
+    let lance = false;
+    await tourDiagnostic({
+      base: 'http://os.test',
+      token: 'r',
+      claude: 'claude',
+      fetch: fauxOs(preparer, appels),
+      poste: async () => ({ nom: 'poste', claude: '1', skills: [] }),
+      lancer: async () => {
+        lance = true;
+        return 0;
+      },
+    });
+    expect(lance).toBe(false);
+    expect(appels.at(-1)?.body).toMatchObject({ erreur: expect.stringContaining(SKILL_SUPPORT) });
+  });
+
+  it('un message des étapes suivantes reste une simple réponse', async () => {
+    let outils = '';
+    await tourDiagnostic({
+      base: 'http://os.test',
+      token: 'r',
+      claude: 'claude',
+      fetch: fauxOs(attente, []),
+      poste: async () => ({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT] }),
+      lancer: async (_c, args) => {
+        outils = args[args.indexOf('--allowedTools') + 1]!;
+        return 0;
+      },
+    });
+    expect(outils).toBe('mcp__simatis__repondre_diagnostic');
   });
 });
