@@ -19,7 +19,13 @@ export const NAV: NavGroup[] = [
       item('tableau', 'Tableau de bord', 'chart'),
     ],
   },
-  { title: 'Stratégie', items: [item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage')] },
+  {
+    title: 'Stratégie',
+    items: [
+      item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage'),
+      item('diagnostic', 'Diagnostic', 'radar', 'diagnostic'),
+    ],
+  },
   {
     title: 'Générer la demande',
     items: [
@@ -46,7 +52,6 @@ export const NAV: NavGroup[] = [
     later: true,
     items: [
       item('plan', "Plan d'action", 'map'),
-      item('diagnostic', 'Diagnostic', 'radar', 'diagnostic'),
       item('detection', 'Détection', 'pulse'),
       item('autonomie', 'Autonomie', 'sliders'),
       item('journal', "Journal d'audit", 'list'),
@@ -68,6 +73,7 @@ export const BUILT = new Set([
   'agenda',
   'rendez-vous',
   'devis',
+  'diagnostic',
   'routines',
   'siteweb',
 ]);

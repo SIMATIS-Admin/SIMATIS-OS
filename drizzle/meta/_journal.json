@@ -148,6 +148,13 @@
       "when": 1792240666782,
       "tag": "0020_inbox_priorite",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792395818136,
+      "tag": "0021_material_spirit",
+      "breakpoints": true
     }
   ]
 }

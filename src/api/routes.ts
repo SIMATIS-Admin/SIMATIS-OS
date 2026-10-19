@@ -2,6 +2,14 @@ import { and, count, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  createProjet,
+  DiagnosticIndisponible,
+  listProjets,
+  ProjetIntrouvable,
+  updateProjet,
+} from '../diagnostic/service.js';
+import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
+import {
   createContact,
   createEntreprise,
   CrmIndisponible,
@@ -338,6 +346,55 @@ export function registerApi(
     if (error instanceof TacheInvalide) return reply.code(400).send({ error: error.message });
     throw error;
   };
+  // Diagnostic d'Endurance Commerciale : réservé à l'espace SIMATIS (le service refuse les autres).
+  type ProjetRoute = { Params: { slug: string; id: string } };
+  const diagnosticErreur = (error: unknown, reply: FastifyReply) => {
+    if (error instanceof DiagnosticIndisponible)
+      return reply.code(403).send({ error: error.message });
+    if (error instanceof ProjetIntrouvable) return reply.code(404).send({ error: error.message });
+    throw error;
+  };
+  app.get<SlugParams>(
+    '/api/i/:slug/diagnostic/projets',
+    onInstance(async (i, _request, reply) => {
+      try {
+        return await listProjets(db, i);
+      } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/diagnostic/projets',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = creationSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply
+          .code(400)
+          .send({ error: parsed.error.issues[0]?.message ?? 'Projet invalide' });
+      try {
+        return await createProjet(db, i, parsed.data);
+      } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.patch<ProjetRoute & { Body: unknown }>(
+    '/api/i/:slug/diagnostic/projets/:id',
+    onInstance<ProjetRoute & { Body: unknown }>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const parsed = projetSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply
+          .code(400)
+          .send({ error: parsed.error.issues[0]?.message ?? 'Projet invalide' });
+      try {
+        return await updateProjet(db, i, request.params.id, parsed.data);
+      } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
   app.get<SlugParams>(
     '/api/i/:slug/taches/compteur',
     onInstance(async (i) => ({ n: await compterAFaire(db, i) })),
