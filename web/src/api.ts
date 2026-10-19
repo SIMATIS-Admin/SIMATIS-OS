@@ -711,6 +711,7 @@ export const connecterAnalytics = (slug: string) =>
 export type Dimensions = { outils: number; strategie: number; polyvalence: number };
 export type Profil = 'Joggeur' | 'Sprinteur' | 'Marathonien' | 'Ultra-endurant';
 export type ChatEtape = { modele: string; effort: string; lien: string };
+export type Diapositive = { titre: string; texte: string; notes: string };
 export type ProjetDiag = {
   id: string;
   nom: string;
@@ -731,6 +732,15 @@ export type ProjetDiag = {
     erreur?: boolean;
   }[];
   statutChat: 'repos' | 'attente_claude' | 'en_cours';
+  demande: 'preparer_support' | 'support_final' | null;
+  ditParDirigeant: string;
+  hypotheses: string;
+  aLogo: boolean;
+  logoNom: string | null;
+  supportStatut: 'aucun' | 'preparation' | 'pret' | 'final';
+  supportLien: string | null;
+  supportTexte: Diapositive[] | null;
+  supportFinalLe: string | null;
   aRapport: boolean;
   rapportNom: string | null;
   updatedAt: string;
@@ -747,8 +757,10 @@ export type ProjetDiagPatch = Partial<
     | 'dateDiagnostic'
     | 'chats'
     | 'revue'
+    | 'ditParDirigeant'
+    | 'hypotheses'
   >
->;
+> & { logo?: { nom: string; base64: string } | null };
 
 export const fetchProjetsDiag = (slug: string) =>
   getJson<ProjetDiag[]>(inst(slug, 'diagnostic/projets'));
@@ -762,3 +774,15 @@ export const envoyerMessageDiag = (slug: string, id: string, texte: string) =>
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/messages`),
     { texte },
   );
+export const demandeSupportDiag = (
+  slug: string,
+  id: string,
+  action: 'preparer' | 'final' | 'rouvrir',
+) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/support/${action}`),
+    {},
+  );
+export const urlLogoDiag = (slug: string, id: string) =>
+  inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/logo`);
