@@ -40,12 +40,28 @@ export async function decrirePoste(claude: string): Promise<Poste> {
       resolve(error ? null : (stdout.trim().split('\n')[0] ?? null)),
     );
   });
-  const dossier = path.join(homedir(), '.claude', 'skills');
-  const skills = await readdir(dossier, { withFileTypes: true }).then(
+  return {
+    nom: hostname(),
+    claude: version,
+    skills: await skillsDe(path.join(homedir(), '.claude', 'skills')),
+  };
+}
+
+const sousDossiers = (dossier: string) =>
+  readdir(dossier, { withFileTypes: true }).then(
     (entries) => entries.filter((e) => e.isDirectory() || e.isSymbolicLink()).map((e) => e.name),
-    () => [],
+    () => [] as string[],
   );
-  return { nom: hostname(), claude: version, skills };
+
+// Skills of the workstation: its own folders, plus those synced from the claude.ai account, which
+// Claude Code stores under `synced/<account>/<skill>`.
+export async function skillsDe(dossier: string): Promise<string[]> {
+  const propres = (await sousDossiers(dossier)).filter((nom) => nom !== 'synced');
+  const comptes = await sousDossiers(path.join(dossier, 'synced'));
+  const synchronisees = await Promise.all(
+    comptes.map((compte) => sousDossiers(path.join(dossier, 'synced', compte))),
+  );
+  return [...new Set([...propres, ...synchronisees.flat()])];
 }
 
 const lancerProcessus = (commande: string, args: string[], cwd?: string) =>

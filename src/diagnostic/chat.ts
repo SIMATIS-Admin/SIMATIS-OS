@@ -3,7 +3,7 @@ import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
-import { diagnosticProjets, type MessageDiag, type Projet } from './schema.js';
+import { diagnosticProjets, type Demande, type MessageDiag, type Projet } from './schema.js';
 import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
 
 // Conversation avec Claude dans l'OS : le pilote écrit, le runner de son poste fait répondre Claude
@@ -27,6 +27,8 @@ export async function envoyerMessage(
   instance: Instance,
   id: string,
   texte: string,
+  // Bouton du support : le message porte la demande et reste à l'étape 1, même plus tard.
+  demande?: { type: Demande; verifier: (projet: Projet) => void },
 ): Promise<ProjetVue> {
   verifierEspace(instance);
   const message = texte.trim();
@@ -36,8 +38,9 @@ export async function envoyerMessage(
     const projet = await lire(tx, instance.id, id);
     if (projet.statutChat !== 'repos')
       throw new ChatIndisponible('Claude répond déjà à ce projet : attendez sa réponse.');
+    demande?.verifier(projet);
     const nouveau: MessageDiag = {
-      etape: projet.etape,
+      etape: demande ? 1 : projet.etape,
       de: 'pilote',
       texte: message,
       at: new Date().toISOString(),
@@ -47,6 +50,8 @@ export async function envoyerMessage(
       .set({
         conversation: [...projet.conversation, nouveau],
         statutChat: 'attente_claude',
+        demande: demande?.type ?? null,
+        ...(demande?.type === 'preparer_support' ? { supportStatut: 'preparation' as const } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
@@ -108,9 +113,21 @@ export async function finirAttente(
 ): Promise<void> {
   await withInstance(db, instance.id, async (tx) => {
     const projet = await lire(tx, instance.id, id);
-    if (projet.statutChat !== 'en_cours') return;
+    // Un support resté en préparation (Claude n'a pas enregistré de deck) redevient modifiable.
+    const support =
+      projet.supportStatut === 'preparation'
+        ? { supportStatut: projet.supportLien ? ('pret' as const) : ('aucun' as const) }
+        : {};
+    if (projet.statutChat !== 'en_cours') {
+      await tx
+        .update(diagnosticProjets)
+        .set({ ...support, demande: null })
+        .where(eq(diagnosticProjets.id, id));
+      return;
+    }
+    const dernier = [...projet.conversation].reverse().find((m) => m.de === 'pilote');
     const absence: MessageDiag = {
-      etape: projet.etape,
+      etape: dernier?.etape ?? projet.etape,
       de: 'claude',
       texte: erreur ?? REPONSE_ABSENTE,
       at: new Date().toISOString(),
@@ -118,7 +135,12 @@ export async function finirAttente(
     };
     await tx
       .update(diagnosticProjets)
-      .set({ conversation: [...projet.conversation, absence], statutChat: 'repos' })
+      .set({
+        ...support,
+        conversation: [...projet.conversation, absence],
+        statutChat: 'repos',
+        demande: null,
+      })
       .where(eq(diagnosticProjets.id, id));
   });
 }
@@ -131,6 +153,7 @@ export async function attentesClaude(db: Executor) {
       tx.select().from(diagnosticProjets).where(eq(diagnosticProjets.statutChat, 'attente_claude')),
     );
     for (const p of rows) {
+      const dernier = [...p.conversation].reverse().find((m) => m.de === 'pilote');
       sorties.push({
         id: p.id,
         instance: instance.slug,
@@ -143,7 +166,19 @@ export async function attentesClaude(db: Executor) {
         statutDiagnostic: p.statutDiagnostic,
         revue: p.revue,
         conversation: p.conversation,
-        modele: p.chats[String(p.etape)]?.modele ?? null,
+        etapeMessage: dernier?.etape ?? p.etape,
+        modele: p.chats[String(dernier?.etape ?? p.etape)]?.modele ?? null,
+        demande: p.demande,
+        dateDiagnostic: p.dateDiagnostic,
+        ditParDirigeant: p.ditParDirigeant,
+        hypotheses: p.hypotheses,
+        supportStatut: p.supportStatut,
+        supportLien: p.supportLien,
+        // Le logo ne voyage que pour préparer le deck.
+        logo:
+          p.demande === 'preparer_support' && p.logo && p.logoNom
+            ? { nom: p.logoNom, base64: p.logo }
+            : null,
       });
     }
   }

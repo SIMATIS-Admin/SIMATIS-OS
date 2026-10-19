@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { activiteValide } from './activites.js';
+import { typeLogo } from './support.js';
 
 // Modèles et efforts proposés pour l'assistant de chaque étape (le chat tourne sur claude.ai).
 export const MODELES = ['haiku', 'sonnet', 'opus', 'fable'] as const;
@@ -32,6 +33,26 @@ export const projetSchema = z
     dateDiagnostic: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    // Formulaire de l'étape 1, pour adapter le support d'ouverture.
+    ditParDirigeant: z.string().max(5000).optional(),
+    hypotheses: z.string().max(5000).optional(),
+    // Logo en base64 (PNG, JPEG ou WebP), au plus 500 Ko une fois décodé.
+    logo: z
+      .object({
+        nom: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .refine((n) => typeLogo(n) !== null, 'Logo : PNG, JPEG ou WebP'),
+        base64: z
+          .string()
+          .min(1)
+          .max(700_000, 'Logo trop lourd (500 Ko au plus)')
+          .regex(/^[A-Za-z0-9+/]+=*$/, 'Logo illisible'),
+      })
       .nullable()
       .optional(),
     // Formulaire de revue saisi dans l'OS (commentaires, choix par préconisation et par action).

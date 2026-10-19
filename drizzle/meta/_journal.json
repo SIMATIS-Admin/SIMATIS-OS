@@ -169,6 +169,13 @@
       "when": 1792396668097,
       "tag": "0023_useful_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792399927139,
+      "tag": "0024_burly_jane_foster",
+      "breakpoints": true
     }
   ]
 }

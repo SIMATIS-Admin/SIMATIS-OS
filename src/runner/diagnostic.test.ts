@@ -1,5 +1,8 @@
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { promptDiagnostic, type AttenteDiag } from './runner.js';
+import { promptDiagnostic, skillsDe, type AttenteDiag } from './runner.js';
 
 const attente: AttenteDiag = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -31,5 +34,21 @@ describe('Prompt du chat de diagnostic', () => {
     const texte = promptDiagnostic(attente);
     expect(texte).toContain('Question fictive');
     expect(texte).not.toContain('Ancienne question');
+  });
+});
+
+describe('Skills du poste', () => {
+  it('compte aussi les skills synchronisées depuis claude.ai', async () => {
+    const dossier = await mkdtemp(path.join(tmpdir(), 'skills-'));
+    await mkdir(path.join(dossier, 'alimenter-inbox'));
+    await mkdir(path.join(dossier, 'synced', 'compte-fictif', 'skill-synchronisee'), {
+      recursive: true,
+    });
+    expect((await skillsDe(dossier)).sort()).toEqual(['alimenter-inbox', 'skill-synchronisee']);
+    await rm(dossier, { recursive: true, force: true });
+  });
+
+  it('rend une liste vide sans dossier de skills', async () => {
+    expect(await skillsDe(path.join(tmpdir(), 'absent-' + Date.now()))).toEqual([]);
   });
 });

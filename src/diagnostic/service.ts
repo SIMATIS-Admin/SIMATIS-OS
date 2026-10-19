@@ -9,7 +9,11 @@ import { diagnosticProjets, type Projet } from './schema.js';
 export class DiagnosticIndisponible extends Error {}
 export class ProjetIntrouvable extends Error {}
 
-export type ProjetVue = Omit<Projet, 'rapport'> & { profil: Profil | null; aRapport: boolean };
+export type ProjetVue = Omit<Projet, 'rapport' | 'logo'> & {
+  profil: Profil | null;
+  aRapport: boolean;
+  aLogo: boolean;
+};
 export type ProjetPatch = Partial<
   Pick<
     Projet,
@@ -22,19 +26,22 @@ export type ProjetPatch = Partial<
     | 'dateDiagnostic'
     | 'chats'
     | 'revue'
+    | 'ditParDirigeant'
+    | 'hypotheses'
   >
->;
+> & { logo?: { nom: string; base64: string } | null };
 
 export const verifierEspace = (instance: Instance) => {
   if (instance.type !== 'propre')
     throw new DiagnosticIndisponible("Le diagnostic est réservé à l'espace SIMATIS.");
 };
 
-// Le rapport (base64) ne voyage pas avec la liste : il se télécharge à part.
-export const vue = ({ rapport, ...projet }: Projet): ProjetVue => ({
+// Le rapport et le logo (base64) ne voyagent pas avec la liste : ils se téléchargent à part.
+export const vue = ({ rapport, logo, ...projet }: Projet): ProjetVue => ({
   ...projet,
   profil: projet.dims ? profilDe(projet.dims) : null,
   aRapport: rapport !== null,
+  aLogo: logo !== null,
 });
 
 export async function listProjets(db: Executor, instance: Instance): Promise<ProjetVue[]> {
@@ -68,13 +75,15 @@ export async function updateProjet(
   db: Executor,
   instance: Instance,
   id: string,
-  patch: ProjetPatch,
+  { logo, ...patch }: ProjetPatch,
 ): Promise<ProjetVue> {
   verifierEspace(instance);
+  const colonnesLogo =
+    logo === undefined ? {} : { logo: logo?.base64 ?? null, logoNom: logo?.nom ?? null };
   return withInstance(db, instance.id, async (tx) => {
     const [row] = await tx
       .update(diagnosticProjets)
-      .set({ ...patch, updatedAt: new Date() })
+      .set({ ...patch, ...colonnesLogo, updatedAt: new Date() })
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
       .returning();
     if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
