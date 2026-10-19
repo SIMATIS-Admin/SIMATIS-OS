@@ -6,6 +6,7 @@ import { logEvent } from '../journal/service.js';
 import { resolveToken, type ResolvedToken } from './tokens.js';
 import { toolsFor, type McpDeps } from './tools.js';
 import { readVersion } from '../version.js';
+import '../diagnostic/outils-mcp.js';
 import '../inbox/outils-mcp.js';
 import '../routines/outils-mcp.js';
 import { echouerExecution, RoutineArretee } from '../routines/service.js';

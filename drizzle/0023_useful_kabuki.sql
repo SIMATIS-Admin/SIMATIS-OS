@@ -1,0 +1,2 @@
+ALTER TABLE "diagnostic_projets" ADD COLUMN "conversation" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "diagnostic_projets" ADD COLUMN "statut_chat" text DEFAULT 'repos' NOT NULL;

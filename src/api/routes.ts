@@ -10,6 +10,7 @@ import {
   updateProjet,
 } from '../diagnostic/service.js';
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
+import { ChatIndisponible, envoyerMessage } from '../diagnostic/chat.js';
 import {
   createContact,
   createEntreprise,
@@ -409,6 +410,21 @@ export function registerApi(
         reply.header('content-disposition', `attachment; filename="${nom.replace(/"/g, '')}"`);
         return reply.send(contenu);
       } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.post<ProjetRoute & { Body: unknown }>(
+    '/api/i/:slug/diagnostic/projets/:id/messages',
+    onInstance<ProjetRoute & { Body: unknown }>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z.object({ texte: z.string() }).safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Message invalide' });
+      try {
+        return await envoyerMessage(db, i, request.params.id, corps.data.texte);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
         return diagnosticErreur(error, reply);
       }
     }),

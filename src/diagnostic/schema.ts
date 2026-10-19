@@ -4,6 +4,15 @@ import type { Dimensions } from './profil.js';
 
 // Conversation avec l'assistant Claude d'une étape : le chat vit sur claude.ai, l'OS garde son
 // lien, le modèle et l'effort choisis pour le retrouver.
+export const STATUTS_CHAT = ['repos', 'attente_claude', 'en_cours'] as const;
+export type MessageDiag = {
+  etape: number;
+  de: 'pilote' | 'claude';
+  texte: string;
+  at: string;
+  erreur?: boolean;
+};
+
 export type ChatEtape = { modele: string; effort: string; lien: string };
 
 // Un projet de diagnostic, pour une entreprise prospect de SIMATIS. Étape 1 : préparation,
@@ -26,6 +35,10 @@ export const diagnosticProjets = pgTable(
     // Rapport remis au dirigeant : fichier Word encodé en base64, avec son nom d'origine.
     rapport: text('rapport'),
     rapportNom: text('rapport_nom'),
+    // Conversation avec Claude (répondue par le runner de l'OS, comme l'Inbox) et son état :
+    // 'repos', 'attente_claude' (le pilote a écrit), 'en_cours' (le runner travaille dessus).
+    conversation: jsonb('conversation').$type<MessageDiag[]>().notNull().default([]),
+    statutChat: text('statut_chat', { enum: STATUTS_CHAT }).notNull().default('repos'),
   },
   (t) => [
     index('diagnostic_projets_instance_idx').on(t.instanceId),

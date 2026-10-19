@@ -723,6 +723,14 @@ export type ProjetDiag = {
   chats: Record<string, ChatEtape>;
   profil: Profil | null;
   revue: Record<string, unknown> | null;
+  conversation: {
+    etape: number;
+    de: 'pilote' | 'claude';
+    texte: string;
+    at: string;
+    erreur?: boolean;
+  }[];
+  statutChat: 'repos' | 'attente_claude' | 'en_cours';
   aRapport: boolean;
   rapportNom: string | null;
   updatedAt: string;
@@ -738,6 +746,7 @@ export type ProjetDiagPatch = Partial<
     | 'statutDiagnostic'
     | 'dateDiagnostic'
     | 'chats'
+    | 'revue'
   >
 >;
 
@@ -747,3 +756,9 @@ export const creerProjetDiag = (slug: string, nom: string, activite: string) =>
   sendJson<ProjetDiag>('POST', inst(slug, 'diagnostic/projets'), { nom, activite });
 export const majProjetDiag = (slug: string, id: string, patch: ProjetDiagPatch) =>
   sendJson<ProjetDiag>('PATCH', inst(slug, `diagnostic/projets/${encodeURIComponent(id)}`), patch);
+export const envoyerMessageDiag = (slug: string, id: string, texte: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/messages`),
+    { texte },
+  );

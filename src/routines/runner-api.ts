@@ -7,6 +7,12 @@ import { createToken, resolveToken, revokeToken } from '../mcp/tokens.js';
 import { executions } from '../routines/schema.js';
 import { echangesAjout } from '../inbox/schema.js';
 import { demarrerEchange, EchangeInconnu, EchangeRefuse, finirEchange } from '../inbox/echanges.js';
+import {
+  attentesClaude,
+  ChatIndisponible,
+  demarrerAttente,
+  finirAttente,
+} from '../diagnostic/chat.js';
 import { and, eq } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
 import { ROUTINES } from './params.js';
@@ -132,6 +138,42 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
       ),
     );
     return { statut: execution.statut };
+  });
+
+  // Conversations du diagnostic en attente de Claude (un projet à la fois, comme l'Inbox).
+  app.get('/api/runner/diagnostic/attentes', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    return attentesClaude(db);
+  });
+
+  app.post<Route>('/api/runner/diagnostic/attentes/:id/demarrer', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const parsed = corps.safeParse(request.body);
+    const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    try {
+      await demarrerAttente(db, instance, request.params.id);
+    } catch (error) {
+      if (error instanceof ChatIndisponible) return reply.code(409).send({ error: error.message });
+      throw error;
+    }
+    const { id: tokenId, token } = await createToken(db, {
+      nom: 'diagnostic-chat',
+      portee: 'instance',
+      instanceId: instance.id,
+      expiresAt: new Date(Date.now() + UN_QUART_HEURE),
+    });
+    return { tokenId, token };
+  });
+
+  app.post<Route>('/api/runner/diagnostic/attentes/:id/fin', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const parsed = corps.safeParse(request.body);
+    const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
+    if (!parsed.success || !instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    if (parsed.data.tokenId) await revokeToken(db, parsed.data.tokenId);
+    await finirAttente(db, instance, request.params.id, parsed.data.erreur);
+    return { ok: true };
   });
 
   // Add conversations of the Inbox waiting for Claude, with what was said so far.

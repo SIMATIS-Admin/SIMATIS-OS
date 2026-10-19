@@ -93,4 +93,14 @@ describe('Diagnostic : projets', () => {
     });
     expect(relu?.chats['3']?.modele).toBe('opus');
   });
+
+  it('garde le formulaire de revue saisi dans l OS', async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Revue Fictive', activite: 'batiment' });
+    const revue = {
+      statut: 'brouillon',
+      preconisations: { r1: { choix: 'garder', detail: 'Commentaire fictif.' } },
+    };
+    const saisi = await updateProjet(t.app.db, simatis, p.id, { revue });
+    expect(saisi.revue).toEqual(revue);
+  });
 });

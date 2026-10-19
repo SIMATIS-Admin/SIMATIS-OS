@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   creerProjetDiag,
+  envoyerMessageDiag,
   fetchProjetsDiag,
   majProjetDiag,
   type ChatEtape,
@@ -211,6 +212,20 @@ function ProjetVue({
   onRetour: () => void;
   onErreur: (m: string) => void;
 }) {
+  // Pendant que Claude répond, le projet est relu toutes les cinq secondes.
+  useEffect(() => {
+    if (projet.statutChat === 'repos') return;
+    const minuteur = setInterval(() => {
+      fetchProjetsDiag(slug)
+        .then((liste) => {
+          const maj = liste.find((p) => p.id === projet.id);
+          if (maj) onChange(maj);
+        })
+        .catch(() => undefined);
+    }, 5000);
+    return () => clearInterval(minuteur);
+  }, [slug, projet.id, projet.statutChat, onChange]);
+
   const sauver = async (patch: ProjetDiagPatch) => {
     try {
       onChange(await majProjetDiag(slug, projet.id, patch));
@@ -255,7 +270,7 @@ function ProjetVue({
           {projet.etape === 3 && <Analyse slug={slug} projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
         </div>
-        <Assistant projet={projet} onSauver={sauver} />
+        <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
       </div>
     </div>
   );
@@ -393,7 +408,15 @@ function Resultat({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }
   );
 }
 
-function Analyse({ slug, projet }: { slug: string; projet: ProjetDiag; onSauver: Sauver }) {
+function Analyse({
+  slug,
+  projet,
+  onSauver,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onSauver: Sauver;
+}) {
   if (!projet.dims) {
     return (
       <div className="panel empty">
@@ -402,38 +425,215 @@ function Analyse({ slug, projet }: { slug: string; projet: ProjetDiag; onSauver:
     );
   }
   return (
+    <div className="stack">
+      <div className="panel">
+        <div className="panel-h">
+          <h2>Profil : {projet.profil}</h2>
+          <span className="badge">{projet.statutDiagnostic ?? 'Statut à préciser'}</span>
+        </div>
+        <div className="panel-b stack">
+          {DIMENSIONS.map(([id, label]) => {
+            const note = projet.dims?.[id] ?? 0;
+            return (
+              <div key={id} className="row" style={{ gap: 12 }}>
+                <span style={{ minWidth: 220 }}>{label}</span>
+                <div
+                  className="diag-barre"
+                  style={{
+                    width: `${note * 10}%`,
+                    background: note >= SEUIL ? 'var(--teal)' : 'var(--ink-3)',
+                  }}
+                />
+                <span className="mono">{note.toFixed(1)}</span>
+              </div>
+            );
+          })}
+          {projet.aRapport && (
+            <a
+              className="btn go"
+              href={`/api/i/${encodeURIComponent(slug)}/diagnostic/projets/${projet.id}/rapport`}
+            >
+              Télécharger le rapport ({projet.rapportNom})
+            </a>
+          )}
+        </div>
+      </div>
+      {projet.revue ? (
+        <EditeurRevue revue={projet.revue} onChange={(revue) => void onSauver({ revue })} />
+      ) : (
+        <div className="panel empty">
+          Pas encore de formulaire de revue. Il se saisit ici, comme dans l’artefact.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Un élément du formulaire de revue : une préconisation, une action du plan, ou un champ libre.
+type Entree = {
+  chemin: string[];
+  champ: string;
+  titre: string;
+  valeur: string;
+  propose?: string;
+  choix?: string;
+};
+const HORIZONS: [string, string][] = [
+  ['court', 'Court terme'],
+  ['moyen', 'Moyen terme'],
+  ['long', 'Long terme'],
+];
+const CHOIX: [string, string][] = [
+  ['garder', 'Garder (avec vos ajouts)'],
+  ['remplacer', 'Remplacer par mon texte'],
+  ['retirer', 'Retirer'],
+];
+const CHAMPS_TEXTE: [string, string][] = [
+  ['indicateurs', 'Indicateurs de pilotage'],
+  ['nonFait', 'Ce que l’entreprise ne fera pas'],
+  ['preconisationAutre', 'Préconisation à ajouter'],
+];
+
+const objet = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+const texte = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+// Mise à jour immuable d'un champ du formulaire, à l'emplacement donné.
+export function modifierRevue(
+  revue: Record<string, unknown>,
+  e: Pick<Entree, 'chemin' | 'champ'>,
+  valeur: string,
+): Record<string, unknown> {
+  const copie = structuredClone(revue);
+  let cible: Record<string, unknown> = copie;
+  for (const cle of e.chemin) {
+    const suivant = objet(cible[cle]);
+    cible[cle] = suivant;
+    cible = suivant;
+  }
+  cible[e.champ] = valeur;
+  return copie;
+}
+
+export function entreesRevue(revue: Record<string, unknown>): Entree[] {
+  const sorties: Entree[] = [];
+  const avecChoix = (
+    chemin: string[],
+    titre: string,
+    o: Record<string, unknown>,
+    propose?: string,
+  ) =>
+    sorties.push({
+      chemin,
+      champ: 'detail',
+      titre,
+      valeur: texte(o.detail),
+      propose: propose ?? (texte(o.texte) || undefined),
+      choix: texte(o.choix) || undefined,
+    });
+
+  for (const [cle, v] of Object.entries(objet(revue.preconisations))) {
+    const p = objet(v);
+    avecChoix(['preconisations', cle], texte(p.titre) || `Préconisation ${cle}`, p);
+  }
+  for (const [horizon, libelle] of HORIZONS) {
+    const h = objet(objet(revue.planAction)[horizon]);
+    for (const [cle, v] of Object.entries(objet(h.blocs))) {
+      const b = objet(v);
+      avecChoix(['planAction', horizon, 'blocs', cle], `${libelle} · ${texte(b.bloc)}`, b);
+    }
+    sorties.push({
+      chemin: ['planAction', horizon],
+      champ: 'libre',
+      titre: `${libelle} · commentaire libre`,
+      valeur: texte(h.libre),
+    });
+  }
+  const conclusion = objet(revue.conclusion);
+  avecChoix(
+    ['conclusion'],
+    'Conclusion et prochaine étape',
+    conclusion,
+    texte(conclusion.proposition) || undefined,
+  );
+  for (const [champ, titre] of CHAMPS_TEXTE) {
+    sorties.push({ chemin: [], champ, titre, valeur: texte(revue[champ]) });
+  }
+  return sorties;
+}
+
+// Le formulaire de revue de l'artefact, reproduit dans l'OS : choix et commentaire par entrée.
+function EditeurRevue({
+  revue,
+  onChange,
+}: {
+  revue: Record<string, unknown>;
+  onChange: (revue: Record<string, unknown>) => void;
+}) {
+  const entrees = entreesRevue(revue);
+  return (
     <div className="panel">
       <div className="panel-h">
-        <h2>Profil : {projet.profil}</h2>
-        <span className="badge">{projet.statutDiagnostic ?? 'Statut à préciser'}</span>
+        <h2>Formulaire de revue</h2>
+        <span className="badge amber">{texte(revue.statut) || 'brouillon'}</span>
       </div>
       <div className="panel-b stack">
-        {DIMENSIONS.map(([id, label]) => {
-          const note = projet.dims?.[id] ?? 0;
-          return (
-            <div key={id} className="row" style={{ gap: 12 }}>
-              <span style={{ minWidth: 220 }}>{label}</span>
-              <div
-                className="diag-barre"
-                style={{
-                  width: `${note * 10}%`,
-                  background: note >= SEUIL ? 'var(--teal)' : 'var(--ink-3)',
-                }}
-              />
-              <span className="mono">{note.toFixed(1)}</span>
-            </div>
-          );
-        })}
-        {projet.aRapport && (
-          <a
-            className="btn go"
-            href={`/api/i/${encodeURIComponent(slug)}/diagnostic/projets/${projet.id}/rapport`}
-          >
-            Télécharger le rapport ({projet.rapportNom})
-          </a>
-        )}
-        {projet.revue && <FormulaireRevue revue={projet.revue} />}
+        <p className="small muted" style={{ margin: 0 }}>
+          Vos commentaires s’enregistrent à la sortie de chaque champ. Une proposition retirée
+          n’alimente pas la bibliothèque.
+        </p>
+        {entrees.map((e) => (
+          <EntreeRevue
+            key={`${e.chemin.join('/')}/${e.champ}`}
+            entree={e}
+            onChange={(valeur, champ) =>
+              onChange(modifierRevue(revue, { chemin: e.chemin, champ: champ ?? e.champ }, valeur))
+            }
+          />
+        ))}
       </div>
+    </div>
+  );
+}
+
+function EntreeRevue({
+  entree,
+  onChange,
+}: {
+  entree: Entree;
+  onChange: (valeur: string, champ?: string) => void;
+}) {
+  const [valeur, setValeur] = useState(entree.valeur);
+  useEffect(() => setValeur(entree.valeur), [entree.valeur]);
+  const libre = entree.champ !== 'detail';
+  return (
+    <div className="diag-entree">
+      <div className="row1">
+        <b>{entree.titre}</b>
+        {entree.choix !== undefined && (
+          <select
+            aria-label={`Choix · ${entree.titre}`}
+            value={entree.choix}
+            onChange={(e) => onChange(e.target.value, 'choix')}
+          >
+            {CHOIX.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {entree.propose && <div className="diag-propose small muted">{entree.propose}</div>}
+      <label className="field">
+        <span>{libre ? 'Commentaire' : 'Votre commentaire'}</span>
+        <textarea
+          rows={3}
+          value={valeur}
+          onChange={(e) => setValeur(e.target.value)}
+          onBlur={() => valeur !== entree.valeur && onChange(valeur, entree.champ)}
+        />
+      </label>
     </div>
   );
 }
@@ -457,16 +657,50 @@ function Pied({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
   );
 }
 
-// Le chat de l'étape vit sur claude.ai : l'OS garde le lien, le modèle et l'effort choisis.
-function Assistant({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
+// L'assistant de l'étape : conversation avec Claude (répondue par le runner de ce poste), modèle et lien.
+function Assistant({
+  slug,
+  projet,
+  onChange,
+  onErreur,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onChange: (p: ProjetDiag) => void;
+  onErreur: (m: string) => void;
+}) {
   const etape = projet.etape;
   const chat = { ...CHAT_DEFAUT[etape], ...projet.chats[String(etape)] } as ChatEtape;
   const [lien, setLien] = useState(chat.lien ?? '');
   const [erreurLien, setErreurLien] = useState<string | null>(null);
+  const [texte, setTexte] = useState('');
   useEffect(() => setLien(chat.lien ?? ''), [chat.lien, etape]);
 
-  const enregistrer = (patch: Partial<ChatEtape>) =>
-    void onSauver({ chats: { ...projet.chats, [String(etape)]: { ...chat, ...patch } } });
+  const enAttente = projet.statutChat !== 'repos';
+  const messages = projet.conversation.filter((m) => m.etape === etape);
+
+  const majChat = async (patch: Partial<ChatEtape>) => {
+    try {
+      onChange(
+        await majProjetDiag(slug, projet.id, {
+          chats: { ...projet.chats, [String(etape)]: { ...chat, ...patch } },
+        }),
+      );
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+
+  const envoyer = async () => {
+    const message = texte.trim();
+    if (!message) return;
+    try {
+      onChange(await envoyerMessageDiag(slug, projet.id, message));
+      setTexte('');
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
 
   const validerLien = () => {
     const v = lien.trim();
@@ -475,7 +709,7 @@ function Assistant({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver 
       return;
     }
     setErreurLien(null);
-    if (v !== (chat.lien ?? '')) void enregistrer({ lien: v });
+    if (v !== (chat.lien ?? '')) void majChat({ lien: v });
   };
 
   return (
@@ -483,7 +717,7 @@ function Assistant({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver 
       <div className="panel-h">
         <div>
           <h2>Assistant · {ETAPES[etape - 1]}</h2>
-          <div className="small muted">La conversation se tient sur claude.ai</div>
+          <div className="small muted">Claude répond ici, par le runner de ce poste</div>
         </div>
         <Icon name="brain" />
       </div>
@@ -491,10 +725,7 @@ function Assistant({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver 
         <div className="diag-cfg">
           <label>
             Modèle
-            <select
-              value={chat.modele}
-              onChange={(e) => void enregistrer({ modele: e.target.value })}
-            >
+            <select value={chat.modele} onChange={(e) => void majChat({ modele: e.target.value })}>
               {MODELES.map(([v, l]) => (
                 <option key={v} value={v}>
                   {l}
@@ -504,10 +735,7 @@ function Assistant({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver 
           </label>
           <label>
             Effort
-            <select
-              value={chat.effort}
-              onChange={(e) => void enregistrer({ effort: e.target.value })}
-            >
+            <select value={chat.effort} onChange={(e) => void majChat({ effort: e.target.value })}>
               {EFFORTS.map(([v, l]) => (
                 <option key={v} value={v}>
                   {l}
@@ -516,8 +744,45 @@ function Assistant({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver 
             </select>
           </label>
         </div>
+        <div className="diag-log" aria-live="polite">
+          {messages.length === 0 && (
+            <p className="small muted" style={{ margin: 0 }}>
+              Posez une question sur cette étape. Claude voit le contexte, le résultat et le
+              formulaire de revue.
+            </p>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={`diag-msg ${m.de}${m.erreur ? ' erreur' : ''}`}>
+              <small>
+                {m.de === 'pilote' ? 'Vous' : 'Claude'} · {new Date(m.at).toLocaleString('fr-FR')}
+              </small>
+              <p>{m.texte}</p>
+            </div>
+          ))}
+        </div>
+        {enAttente && (
+          <div className="small muted">
+            Claude prépare sa réponse. Elle arrive ici dès que le runner de ce poste l’a traitée.
+          </div>
+        )}
+        <div className="diag-saisie">
+          <textarea
+            rows={2}
+            value={texte}
+            disabled={enAttente}
+            placeholder="Votre message"
+            onChange={(e) => setTexte(e.target.value)}
+          />
+          <button
+            className="btn go"
+            disabled={enAttente || !texte.trim()}
+            onClick={() => void envoyer()}
+          >
+            Envoyer
+          </button>
+        </div>
         <label className="field">
-          <span>Lien du chat claude.ai</span>
+          <span>Lien du chat claude.ai (facultatif)</span>
           <input
             value={lien}
             placeholder="https://claude.ai/chat/…"
@@ -526,65 +791,7 @@ function Assistant({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver 
           />
         </label>
         {erreurLien && <div className="alert amber">{erreurLien}</div>}
-        {chat.lien ? (
-          <a className="btn go" href={chat.lien} target="_blank" rel="noopener noreferrer">
-            Ouvrir le chat
-          </a>
-        ) : (
-          <div className="small muted">
-            Ouvrez un chat sur claude.ai avec le modèle et l’effort ci-dessus, puis collez son lien
-            ici pour le retrouver.
-          </div>
-        )}
       </div>
     </aside>
-  );
-}
-
-// Champs qui contiennent un texte rédigé par Marc (les autres sont des états ou des identifiants).
-const CHAMPS_COMMENTAIRE = new Set([
-  'detail',
-  'texte',
-  'libre',
-  'proposition',
-  'indicateurs',
-  'nonFait',
-  'preconisationAutre',
-  'resultats',
-  'contexte',
-]);
-
-export function commentaires(revue: unknown, chemin = ''): { chemin: string; texte: string }[] {
-  if (!revue || typeof revue !== 'object') return [];
-  return Object.entries(revue).flatMap(([cle, valeur]) => {
-    const ici = chemin ? `${chemin} › ${cle}` : cle;
-    if (typeof valeur === 'string') {
-      return CHAMPS_COMMENTAIRE.has(cle) && valeur.trim()
-        ? [{ chemin: ici, texte: valeur.trim() }]
-        : [];
-    }
-    return commentaires(valeur, ici);
-  });
-}
-
-// Le formulaire de revue tel qu'importé : statut et commentaires de Marc, lisibles dans l'OS.
-function FormulaireRevue({ revue }: { revue: Record<string, unknown> }) {
-  const liste = commentaires(revue);
-  const statut = typeof revue.statut === 'string' ? revue.statut : 'non précisé';
-  return (
-    <details className="diag-revue">
-      <summary>
-        Formulaire de revue importé · statut : {statut} · {liste.length} commentaire
-        {liste.length > 1 ? 's' : ''}
-      </summary>
-      <ul>
-        {liste.map((c) => (
-          <li key={c.chemin}>
-            <div className="small muted">{c.chemin}</div>
-            <div className="diag-texte">{c.texte}</div>
-          </li>
-        ))}
-      </ul>
-    </details>
   );
 }
