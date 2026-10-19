@@ -378,6 +378,7 @@ export type TacheSaisie = {
   dureeMinutes?: number | null;
   occupe?: boolean;
   contactId?: string | null;
+  entrepriseId?: string | null;
   opportuniteId?: string | null;
 };
 export type Options = { ensuite: boolean };
@@ -488,6 +489,10 @@ export type RendezVous = {
   titre: string;
   lieu: string | null;
   contact: { id: string; nom: string; entreprise: string | null } | null;
+  // Company chosen by hand, else the contact's.
+  entreprise: { id: string; nom: string } | null;
+  // Linked by hand in the OS rather than through the guests' emails.
+  lienManuel: boolean;
   opportunite: { id: string; titre: string } | null;
   compteRendu: boolean;
 };
@@ -528,6 +533,11 @@ export const fetchRendezVous = (slug: string) =>
   getJson<RendezVousReponse>(inst(slug, 'rendez-vous'));
 export const fetchPreparation = (slug: string, opportuniteId: string) =>
   getJson<Preparation>(inst(slug, `opportunites/${encodeURIComponent(opportuniteId)}/preparation`));
+export const lierRendezVous = (
+  slug: string,
+  id: string,
+  lien: { contactId: string | null; entrepriseId: string | null },
+) => sendJson<{ ok: true }>('PUT', inst(slug, `rendez-vous/${encodeURIComponent(id)}/lien`), lien);
 export const envoyerCompteRendu = (slug: string, rdv: RendezVous, texte: string) =>
   sendJson<{ id: string; statut: string }>(
     'POST',

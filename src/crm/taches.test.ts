@@ -148,6 +148,84 @@ describe('Tâches', () => {
     expect(reel).toMatchObject({ titre: 'Envoyer le compte rendu', canal: 'email', fait: false });
   });
 
+  it('links a task to a person or a company chosen in the OS, and unlinks it', async () => {
+    const { rows } = await t.owner.pool.query<{ id: string }>(
+      "insert into entreprises (instance_id, nom) values ($1, 'Atelier fictif') returning id",
+      [sansCrm.id],
+    );
+    const entrepriseId = rows[0]?.id ?? '';
+    // Due long after the weeks the other tests read.
+    const tache = (await createTache(
+      t.app.db,
+      sansCrm,
+      { titre: 'Relancer', echeance: '2027-03-01T08:00:00.000Z' },
+      off(),
+    )) as TacheVue;
+    const liee = (await updateTache(
+      t.app.db,
+      sansCrm,
+      tache.id,
+      { entrepriseId },
+      off(),
+    )) as TacheVue;
+    expect(liee.entreprise).toEqual({ id: entrepriseId, nom: 'Atelier fictif' });
+    const deliee = (await updateTache(
+      t.app.db,
+      sansCrm,
+      tache.id,
+      { entrepriseId: null },
+      off(),
+    )) as TacheVue;
+    expect(deliee.entreprise).toBeNull();
+    await expect(
+      updateTache(
+        t.app.db,
+        sansCrm,
+        tache.id,
+        { contactId: '00000000-0000-4000-8000-000000000000' },
+        off(),
+      ),
+    ).rejects.toThrow(/Contact introuvable dans cette instance/);
+  });
+
+  it('sends a HubSpot task its new company, and the sync keeps the link chosen in the OS', async () => {
+    const id = await hubspotTache('402');
+    const avant = await t.owner.pool.query<{ contact_id: string | null }>(
+      'select contact_id from taches where id = $1',
+      [id],
+    );
+    const { rows } = await t.owner.pool.query<{ id: string; source_id: string }>(
+      "select id, source_id from entreprises where instance_id = $1 and source = 'hubspot' and nom <> 'Menuiserie Arpin' limit 1",
+      [a.id],
+    );
+    const entreprise = rows[0];
+    if (!entreprise) throw new Error('pas d’entreprise HubSpot de démo');
+    const reel = (await updateTache(
+      t.app.db,
+      armed,
+      id,
+      { entrepriseId: entreprise.id, contactId: null },
+      on(),
+    )) as TacheVue;
+    expect(portal.calls.map((c) => [c.method, c.path])).toEqual([
+      ['PUT', `/crm/v4/objects/tasks/402/associations/default/companies/${entreprise.source_id}`],
+    ]);
+    expect(reel.entreprise?.id).toBe(entreprise.id);
+    expect(reel.contact).toBeNull();
+
+    await syncConnexion(t.app.db, a, 'crm', off());
+    const apres = await t.owner.pool.query<{ contact_id: string | null; entreprise_id: string }>(
+      'select contact_id, entreprise_id from taches where id = $1',
+      [id],
+    );
+    expect(apres.rows[0]).toEqual({ contact_id: null, entreprise_id: entreprise.id });
+    // Back to the HubSpot links for the other tests.
+    await t.owner.pool.query(
+      'update taches set contact_id = $2, entreprise_id = null, lien_choisi = false where id = $1',
+      [id, avant.rows[0]?.contact_id],
+    );
+  });
+
   it('refuses to change a HubSpot task while the CRM is read-only', async () => {
     await sens('lecture');
     try {

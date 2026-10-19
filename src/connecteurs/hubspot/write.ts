@@ -256,8 +256,17 @@ export async function writeHubspot(
         properties.hs_timestamp = new Date(d.echeance).toISOString();
       if (d.notes !== undefined)
         properties.hs_task_body = typeof d.notes === 'string' ? d.notes : '';
-      if (Object.keys(properties).length === 0) throw new EcritureRefusee('Aucune modification');
-      call = () => client.request('PATCH', `/crm/v3/objects/tasks/${id}`, { properties });
+      const contact = d.contactId ? await hubspotId(ctx, contacts, d.contactId) : null;
+      const company = d.entrepriseId ? await hubspotId(ctx, entreprises, d.entrepriseId) : null;
+      if (Object.keys(properties).length === 0 && !contact && !company)
+        throw new EcritureRefusee('Aucune modification');
+      call = async () => {
+        if (Object.keys(properties).length > 0)
+          await client.request('PATCH', `/crm/v3/objects/tasks/${id}`, { properties });
+        if (contact) await associer('tasks', id, 'contacts', contact);
+        if (company) await associer('tasks', id, 'companies', company);
+        return { id };
+      };
       break;
     }
     case 'task.create': {
@@ -265,6 +274,7 @@ export async function writeHubspot(
       if (!titre) throw new EcritureRefusee('Titre manquant');
       const contact = d.contactId ? await hubspotId(ctx, contacts, d.contactId) : null;
       const deal = d.opportuniteId ? await hubspotId(ctx, opportunites, d.opportuniteId) : null;
+      const company = d.entrepriseId ? await hubspotId(ctx, entreprises, d.entrepriseId) : null;
       const type = typeHubspot(typeof d.type === 'string' ? d.type : d.canal);
       const due = typeof d.echeance === 'string' ? new Date(d.echeance) : new Date();
       call = () =>
@@ -277,7 +287,7 @@ export async function writeHubspot(
             hs_timestamp: due.toISOString(),
           },
           associations: [
-            // HUBSPOT_DEFINED task → contact (204) and task → deal (216).
+            // HUBSPOT_DEFINED task → contact (204), task → deal (216), task → company (192).
             ...(contact
               ? [
                   {
@@ -291,6 +301,14 @@ export async function writeHubspot(
                   {
                     to: { id: deal },
                     types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 216 }],
+                  },
+                ]
+              : []),
+            ...(company
+              ? [
+                  {
+                    to: { id: company },
+                    types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 192 }],
                   },
                 ]
               : []),

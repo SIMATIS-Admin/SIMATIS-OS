@@ -97,6 +97,9 @@ export const taches = pgTable(
     ...metierColumns(),
     opportuniteId: uuid('opportunite_id').references(() => opportunites.id),
     contactId: uuid('contact_id').references(() => contacts.id),
+    entrepriseId: uuid('entreprise_id').references(() => entreprises.id),
+    // Person or company chosen in the OS: the HubSpot sync no longer overwrites the links.
+    lienChoisi: boolean('lien_choisi').notNull().default(false),
     titre: text('titre').notNull(),
     canal: text('canal', { enum: ['email', 'appel', 'tache'] }).notNull(),
     echeance: timestamp('echeance', { withTimezone: true }),
@@ -120,6 +123,23 @@ export const taches = pgTable(
     index('taches_instance_echeance_idx').on(t.instanceId, t.echeance),
     uniqueIndex('taches_source_idx').on(t.instanceId, t.source, t.sourceId),
     instanceIsolation('taches'),
+  ],
+);
+
+// Contact or company a Google meeting is about, chosen by the pilot when the guests' emails
+// do not tell it (Google has no such notion: the link lives in the OS only).
+export const rdvLiens = pgTable(
+  'rdv_liens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    eventId: text('event_id').notNull(),
+    contactId: uuid('contact_id').references(() => contacts.id),
+    entrepriseId: uuid('entreprise_id').references(() => entreprises.id),
+  },
+  (t) => [
+    uniqueIndex('rdv_liens_event_idx').on(t.instanceId, t.eventId),
+    instanceIsolation('rdv_liens'),
   ],
 );
 

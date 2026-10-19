@@ -32,6 +32,8 @@ const rdv = {
       titre: 'Point projet',
       lieu: 'Rumilly',
       contact: { id: 'c1', nom: 'Hélène Morvan', entreprise: 'Ateliers Morvan' },
+      entreprise: { id: 'e1', nom: 'Ateliers Morvan' },
+      lienManuel: false,
       opportunite: { id: 'o1', titre: 'Audit des utilités' },
       compteRendu: false,
     },
@@ -45,6 +47,8 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.endsWith('/pipeline')) return json({ opportunites: [] });
   if (url.endsWith('/devis')) return json([devis]);
   if (url.endsWith('/rendez-vous')) return json(rdv);
+  if (url.includes('/entreprises?q=')) return json([{ id: 'e2', nom: 'Fonderie Vallière' }]);
+  if (url.endsWith('/lien')) return json({ ok: true });
   if (url.endsWith('/preparation'))
     return json({
       titre: 'Audit des utilités',
@@ -108,5 +112,25 @@ describe('conversion screens', () => {
   it('rendez-vous: says when the meeting opened from the Agenda is out of the period', async () => {
     render(<RendezVous slug="helioval" ouvrir="evt-ancien" />);
     expect(await screen.findByText(/en dehors de la période affichée/)).toBeTruthy();
+  });
+
+  it('rendez-vous: links a meeting to another company by hand', async () => {
+    render(<RendezVous slug="helioval" />);
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Lier « Point projet » à un contact ou une entreprise',
+      }),
+    );
+    // The company in place is changed for one found by search.
+    const [, changerEntreprise] = screen.getAllByRole('button', { name: 'changer' });
+    fireEvent.click(changerEntreprise as HTMLElement);
+    fireEvent.change(screen.getByLabelText('Entreprise'), { target: { value: 'fond' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Fonderie Vallière' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le lien' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(calls.find((c) => c.method === 'PUT')).toMatchObject({
+      url: '/api/i/helioval/rendez-vous/evt-1/lien',
+      body: { contactId: 'c1', entrepriseId: 'e2' },
+    });
   });
 });

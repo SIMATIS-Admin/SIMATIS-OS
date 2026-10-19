@@ -83,11 +83,14 @@ async function vues(tx: Tx, where: SQL | undefined): Promise<TacheVue[]> {
       opportunites,
       and(eq(opportunites.id, taches.opportuniteId), eq(opportunites.instanceId, currentInstance)),
     )
-    // Organisation of the deal, else of the person (Pipedrive activity list column).
+    // Organisation chosen for the task, else of the deal, else of the person (Pipedrive column).
     .leftJoin(
       entreprises,
       and(
-        eq(entreprises.id, sql`coalesce(${opportunites.entrepriseId}, ${contacts.entrepriseId})`),
+        eq(
+          entreprises.id,
+          sql`coalesce(${taches.entrepriseId}, ${opportunites.entrepriseId}, ${contacts.entrepriseId})`,
+        ),
         eq(entreprises.instanceId, currentInstance),
       ),
     )
@@ -172,6 +175,25 @@ export async function listTaches(
   };
 }
 
+// Foreign keys alone would accept a contact, company or deal of another instance.
+async function verifierLiens(
+  tx: Tx,
+  liens: { contactId?: string | null; entrepriseId?: string | null; opportuniteId?: string | null },
+) {
+  for (const [table, id, nom] of [
+    [contacts, liens.contactId, 'Contact'],
+    [entreprises, liens.entrepriseId, 'Entreprise'],
+    [opportunites, liens.opportuniteId, 'Opportunité'],
+  ] as const) {
+    if (!id) continue;
+    const [found] = await tx
+      .select({ id: table.id })
+      .from(table)
+      .where(and(eq(table.instanceId, currentInstance), eq(table.id, id)));
+    if (!found) throw new TacheInvalide(`${nom} introuvable dans cette instance`);
+  }
+}
+
 export async function createTache(
   db: Executor,
   instance: Instance,
@@ -180,6 +202,7 @@ export async function createTache(
     notes?: string | null;
     echeance?: string | null;
     contactId?: string | null;
+    entrepriseId?: string | null;
     opportuniteId?: string | null;
     hubspot?: boolean;
   } & ChampsActivite,
@@ -189,18 +212,7 @@ export async function createTache(
   const type = input.type ?? typeActivite(titre);
   const canal = canalDe(type);
   return withInstance(db, instance.id, async (tx) => {
-    // Foreign keys alone would accept a contact or deal of another instance.
-    for (const [table, id, nom] of [
-      [contacts, input.contactId, 'Contact'],
-      [opportunites, input.opportuniteId, 'Opportunité'],
-    ] as const) {
-      if (!id) continue;
-      const [found] = await tx
-        .select({ id: table.id })
-        .from(table)
-        .where(and(eq(table.instanceId, currentInstance), eq(table.id, id)));
-      if (!found) throw new TacheInvalide(`${nom} introuvable dans cette instance`);
-    }
+    await verifierLiens(tx, input);
     let sourceId: string | null = null;
     if (input.hubspot) {
       if (!(await crmHubspot(tx))) {
@@ -216,6 +228,7 @@ export async function createTache(
           notes: input.notes,
           echeance: input.echeance,
           contactId: input.contactId,
+          entrepriseId: input.entrepriseId,
           opportuniteId: input.opportuniteId,
         },
         deps,
@@ -237,6 +250,7 @@ export async function createTache(
         notes: input.notes ?? null,
         echeance: input.echeance ? new Date(input.echeance) : null,
         contactId: input.contactId ?? null,
+        entrepriseId: input.entrepriseId ?? null,
         opportuniteId: input.opportuniteId ?? null,
         ...(sourceId ? { source: 'hubspot', sourceId } : {}),
       })
@@ -291,6 +305,9 @@ export async function updateTache(
     notes?: string | null;
     echeance?: string | null;
     fait?: boolean;
+    // Person or company the task is about, chosen in the OS (null removes the link).
+    contactId?: string | null;
+    entrepriseId?: string | null;
   } & ChampsActivite,
   deps: ConnexionDeps,
 ): Promise<TacheVue | SimulationTache | null> {
@@ -301,6 +318,8 @@ export async function updateTache(
       .where(and(eq(taches.instanceId, currentInstance), eq(taches.id, id)));
     if (!tache) return null;
     const titre = patch.titre?.trim();
+    await verifierLiens(tx, patch);
+    const lien = patch.contactId !== undefined || patch.entrepriseId !== undefined;
 
     if (tache.source === 'hubspot') {
       if ((await crmHubspot(tx))?.sens !== 'deux_sens') {
@@ -324,6 +343,9 @@ export async function updateTache(
               ...(patch.echeance !== undefined ? { echeance: patch.echeance } : {}),
               ...(patch.fait !== undefined ? { fait: patch.fait } : {}),
               ...(patch.type ? { type: patch.type } : {}),
+              // HubSpot gets the new association; removing one stays a HubSpot gesture.
+              ...(patch.contactId ? { contactId: patch.contactId } : {}),
+              ...(patch.entrepriseId ? { entrepriseId: patch.entrepriseId } : {}),
             },
           },
           deps,
@@ -349,6 +371,9 @@ export async function updateTache(
           ? { echeance: patch.echeance ? new Date(patch.echeance) : null }
           : {}),
         ...(patch.fait !== undefined ? { faitAt: patch.fait ? new Date() : null } : {}),
+        ...(patch.contactId !== undefined ? { contactId: patch.contactId } : {}),
+        ...(patch.entrepriseId !== undefined ? { entrepriseId: patch.entrepriseId } : {}),
+        ...(lien ? { lienChoisi: true } : {}),
         updatedAt: new Date(),
       })
       .where(eq(taches.id, id));

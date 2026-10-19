@@ -95,6 +95,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
   if (url === '/api/preferences') return json({ favoris: [], options: { ensuite } });
   if (url.includes('/contacts?q=')) return json([{ id: 'c1', nom: 'Romain Arpin' }]);
+  if (url.includes('/entreprises?q=')) return json([{ id: 'e1', nom: 'Fonderie fictive' }]);
   if (url.includes('/opportunites/recherche?q='))
     return json([{ id: 'o1', titre: 'Structuration', entreprise: 'Fonderie', clos: null }]);
   if (url === '/api/preferences/options') return json({ options: { ensuite: false } });
@@ -228,6 +229,18 @@ describe('Tâches screen', () => {
       titre: 'Appeler Romain lundi',
       notes: 'Avant 10 h',
     });
+  });
+
+  it('links an existing task to a company, sending only the link that changed', async () => {
+    await liste();
+    fireEvent.click(screen.getByText('Envoyer la plaquette'));
+    fireEvent.change(screen.getByLabelText('Entreprise'), { target: { value: 'fond' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Fonderie fictive' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    const corps = calls.find((c) => c.method === 'PATCH')?.body as Record<string, unknown>;
+    expect(corps).toMatchObject({ entrepriseId: 'e1' });
+    expect(corps).not.toHaveProperty('contactId');
   });
 
   describe('activity window', () => {
