@@ -117,13 +117,9 @@ a {
 }
 .brand-mark {
   width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--mint), var(--teal));
-  display: grid;
-  place-items: center;
-  color: var(--navy);
-  font: 800 15px var(--f-title);
+  height: 35px;
+  flex: none;
+  object-fit: contain;
 }
 .brand-name {
   font: 800 17px var(--f-title);
@@ -2083,6 +2079,104 @@ textarea.input {
     grid-column: 2;
   }
 }
+/* Narrow icon-only sidebar, chosen with the button beside the logo. */
+.reduire-btn {
+  margin-left: auto;
+  display: inline-flex;
+  padding: 5px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: none;
+  color: #8fa7c6;
+  cursor: pointer;
+}
+.reduire-btn:hover {
+  background: var(--navy-3);
+  color: var(--white);
+}
+.reduire-btn svg {
+  width: 18px;
+  height: 18px;
+}
+@media (min-width: 821px) {
+  .app:has(> .side.reduite) {
+    grid-template-columns: 68px 1fr;
+  }
+  .side.reduite .brand {
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 0 12px;
+  }
+  .side.reduite .reduire-btn {
+    margin-left: 0;
+  }
+  .side.reduite .brand-name,
+  .side.reduite .inst-btn > span:not(.inst-dot),
+  .side.reduite .nav-group > span,
+  .side.reduite .later-btn,
+  .side.reduite .nav a .lbl,
+  .side.reduite .nav .fav,
+  .side.reduite .soon-tag,
+  .side.reduite .side-foot {
+    display: none;
+  }
+  .side.reduite .inst-btn {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    margin: 0 auto 6px;
+    padding: 0;
+    justify-content: center;
+  }
+  /* Fixed, so the menu leaves the narrow bar instead of being squeezed into it. */
+  .side.reduite .inst-menu {
+    position: fixed;
+    z-index: 60;
+    top: 104px;
+    left: 76px;
+    width: 280px;
+    margin: 0;
+  }
+  .side.reduite .nav {
+    padding: 4px 10px 20px;
+  }
+  .side.reduite .nav-group {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #1e4b82;
+  }
+  .side.reduite .nav-group.favs {
+    border-top: 0;
+    border-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .side.reduite .nav-group:not(:has(a)) {
+    display: none;
+  }
+  .side.reduite .nav a {
+    position: relative;
+    justify-content: center;
+    padding: 9px 0;
+  }
+  .side.reduite .nav svg {
+    width: 19px;
+    height: 19px;
+  }
+  .side.reduite .nav a .pastille {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    padding: 2px 4px;
+    font-size: 10px;
+  }
+}
+@media (max-width: 820px) {
+  .reduire-btn {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
