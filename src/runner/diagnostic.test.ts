@@ -82,6 +82,7 @@ describe('Support d ouverture par le runner', () => {
     const texte = promptSupport(preparer, 'logo.png', null);
     expect(texte).toContain(SKILL_SUPPORT);
     expect(texte).toContain('Ne modifie jamais le deck modèle');
+    expect(texte).toContain("n'utilise jamais la réserve d'images");
     expect(texte).toContain('Ambition fictive');
     expect(texte).toContain('fichier logo.png');
     expect(texte).toContain('Second cerveau non accessible');
@@ -139,6 +140,11 @@ describe('Support d ouverture par le runner', () => {
     expect(vu?.logo).toBe(true);
     // Hors de l'app de bureau, l'outil Artifact n'existe qu'avec cette variable.
     expect(vu?.env).toEqual({ CLAUDE_CODE_ARTIFACT: '1' });
+    // Publier sur le deck sans confirmation, sans jamais offrir le terminal.
+    expect(vu!.args.join(' ')).toContain('--permission-mode acceptEdits');
+    const integres = vu!.args[vu!.args.indexOf('--tools') + 1];
+    expect(integres).toContain('Artifact');
+    expect(integres).not.toContain('Bash');
     const outils = vu!.args[vu!.args.indexOf('--allowedTools') + 1];
     expect(outils).toContain('Artifact');
     expect(outils).toContain('mcp__simatis__enregistrer_support');

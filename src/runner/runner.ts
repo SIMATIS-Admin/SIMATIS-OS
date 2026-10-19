@@ -333,11 +333,16 @@ export const promptDiagnostic = (a: AttenteDiag, maintenant = new Date()) =>
     `Réponds en appelant une seule fois l'outil repondre_diagnostic avec projetId ${a.id} et ton message, puis arrête-toi. Vouvoie le pilote, en français, sans rien inventer.`,
   ].join('\n');
 
+// La réserve d'images d'un deck (asset) exige qu'une personne lise un avertissement : le runner ne
+// peut pas y écrire. Les images passent donc par les fichiers publiés du deck.
+const IMAGES_SUPPORT =
+  "Images (logos, ruban, visuels, logo du client) : n'utilise jamais la réserve d'images (asset: true, from_url, asset_ids), refusée sans personne pour confirmer, ni de data: URI ni d'URL. Lis les images du modèle, puis publie-les avec les diapositives comme fichiers du design system du deck, sous project/ds/simatis/img/<nom> (seul chemin de fichier que le type Slides affiche), et écris ce chemin tel quel en src, sans / initial.";
+
 const TACHES_SUPPORT = {
   preparer: (a: AttenteDiag) =>
     a.supportLien
-      ? `Tâche : adapte le deck de ce projet (${a.supportLien}) au formulaire ci-dessus, en le relisant d'abord (le pilote a pu le corriger dans l'éditeur). Puis appelle enregistrer_support avec projetId ${a.id} et ce lien.`
-      : `Tâche : crée le deck de ce projet. Lis le deck modèle indiqué par la skill, crée un nouvel artifact du même type, recopie-y tous ses fichiers et ses images, puis adapte-le à cette entreprise. Ne modifie jamais le deck modèle. Puis appelle enregistrer_support avec projetId ${a.id} et le lien du nouveau deck.`,
+      ? `Tâche : adapte le deck de ce projet (${a.supportLien}) au formulaire ci-dessus, en le relisant d'abord (le pilote a pu le corriger dans l'éditeur). Puis appelle enregistrer_support avec projetId ${a.id} et ce lien. ${IMAGES_SUPPORT}`
+      : `Tâche : crée le deck de ce projet. Lis le deck modèle indiqué par la skill, crée un nouvel artifact du même type, recopie-y tous ses fichiers et ses images, puis adapte-le à cette entreprise. Ne modifie jamais le deck modèle. Dès sa création, avant d'y publier quoi que ce soit, appelle enregistrer_support avec projetId ${a.id} et le lien du nouveau deck : seul ce deck pourra recevoir des fichiers. ${IMAGES_SUPPORT}`,
   final: (a: AttenteDiag) =>
     `Tâche : le pilote déclare le support final. Relis le deck publié de ce projet (${a.supportLien}), jamais une copie de mémoire. Appelle enregistrer_support avec projetId ${a.id} et diapositives : pour chacune, dans l'ordre du deck, son titre, le texte affiché et les notes d'orateur. Puis archive la version finale dans le second cerveau comme le dit la skill.`,
   chat: (a: AttenteDiag) =>
@@ -399,6 +404,14 @@ export const outilsSupport = (cerveau: string | null, travail: string[]) =>
 
 // Hors de l'app de bureau, Claude Code n'offre l'outil Artifact que si cette variable est posée.
 export const ENV_SUPPORT = { CLAUDE_CODE_ARTIFACT: '1' };
+// Sans personne pour confirmer, publier sur un deck n'est accepté qu'en mode acceptEdits ; la liste
+// fermée des outils intégrés écarte le terminal.
+export const OPTIONS_SUPPORT = [
+  '--permission-mode',
+  'acceptEdits',
+  '--tools',
+  'Skill,Artifact,ToolSearch,WebSearch,WebFetch,Read,Edit,Write,Glob,Grep',
+];
 // Brouillon de Claude Code : l'outil Artifact y enregistre les fichiers qu'il lit.
 const brouillonClaude = () => path.join('/private/tmp', `claude-${process.getuid?.() ?? 0}`);
 
@@ -458,6 +471,9 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
           '-p',
           promptSupport(a, logo, cerveau),
           ...modele,
+          ...OPTIONS_SUPPORT,
+          '--permission-prompt-tool',
+          'mcp__simatis__autoriser_outil',
           ...mcp,
           outilsSupport(cerveau, [dossier, brouillonClaude()]),
           ...(cerveau ? ['--add-dir', cerveau] : []),
