@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { registerTool } from '../mcp/tools.js';
 import { repondreClaude } from './chat.js';
-import { enregistrerSupport, LIEN_ARTIFACT } from './support.js';
+import { autoriserOutil, enregistrerSupport, LIEN_ARTIFACT } from './support.js';
 
 // Outil du chat de diagnostic : Claude y répond au pilote (un seul appel par message).
 registerTool({
@@ -47,4 +47,18 @@ registerTool({
     });
     return { ok: true };
   },
+});
+
+// Répond aux demandes de confirmation de Claude Code pendant le support (personne pour cliquer).
+registerTool({
+  name: 'autoriser_outil',
+  description:
+    "Réservé au runner : décide des demandes de confirmation pendant le support d'ouverture. N'appelle jamais cet outil toi-même.",
+  input: z.object({
+    tool_name: z.string(),
+    input: z.record(z.string(), z.unknown()),
+    tool_use_id: z.string().optional(),
+  }),
+  scope: 'instance',
+  handler: ({ tx }, { tool_name, input }) => autoriserOutil(tx, tool_name, input),
 });

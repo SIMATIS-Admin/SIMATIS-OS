@@ -118,3 +118,36 @@ export async function logoDe(
     return { type, contenu: Buffer.from(row.logo, 'base64') };
   });
 }
+
+// Réponse aux demandes de confirmation de Claude Code pendant une demande du support (option
+// --permission-prompt-tool du runner) : personne n'est là pour cliquer. Seul le deck enregistré
+// pour le projet en cours peut recevoir des fichiers ; le deck modèle et ceux des autres
+// entreprises restent hors d'atteinte.
+export type Decision =
+  { behavior: 'allow'; updatedInput: unknown } | { behavior: 'deny'; message: string };
+
+export async function autoriserOutil(
+  tx: Tx,
+  outil: string,
+  input: Record<string, unknown>,
+): Promise<Decision> {
+  const refus = (message: string): Decision => ({ behavior: 'deny', message });
+  if (outil !== 'Artifact') return refus(`Outil ${outil} non autorisé pour le support.`);
+  const action = typeof input.action === 'string' ? input.action : 'publish';
+  if (['read', 'list', 'quickstart'].includes(action))
+    return { behavior: 'allow', updatedInput: input };
+  if (action !== 'publish') return refus(`Action ${action} non autorisée sur un deck.`);
+  // Créer un deck depuis un type (sans url) est permis : il appartient au projet une fois enregistré.
+  if (input.url === undefined && typeof input.type_url === 'string')
+    return { behavior: 'allow', updatedInput: input };
+  const enCours = await tx
+    .select({ lien: diagnosticProjets.supportLien })
+    .from(diagnosticProjets)
+    .where(eq(diagnosticProjets.statutChat, 'en_cours'));
+  const liens = enCours.map((p) => p.lien).filter((l): l is string => l !== null);
+  if (typeof input.url === 'string' && liens.length === 1 && input.url === liens[0])
+    return { behavior: 'allow', updatedInput: input };
+  return refus(
+    'Publication refusée : seul le deck enregistré pour ce projet (enregistrer_support) peut être modifié, jamais le deck modèle.',
+  );
+}

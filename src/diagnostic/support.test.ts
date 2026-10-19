@@ -12,6 +12,7 @@ import {
 } from './chat.js';
 import { createProjet, DiagnosticIndisponible, listProjets, updateProjet } from './service.js';
 import {
+  autoriserOutil,
   demanderSupport,
   enregistrerSupport,
   logoDe,
@@ -138,5 +139,36 @@ describe("Diagnostic : support d'ouverture", () => {
     await expect(
       demanderSupport(t.app.db, mandat, p.id, 'preparer_support'),
     ).rejects.toBeInstanceOf(DiagnosticIndisponible);
+  });
+
+  it('ne laisse publier que sur le deck du projet en cours, jamais sur le modèle', async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Support Fictif F', activite: 'autre' });
+    await demanderSupport(t.app.db, simatis, p.id, 'preparer_support');
+    await demarrerAttente(t.app.db, simatis, p.id);
+    const decide = (outil: string, input: Record<string, unknown>) =>
+      withInstance(t.app.db, simatis.id, (tx) => autoriserOutil(tx, outil, input));
+
+    expect(
+      await decide('Artifact', { action: 'read', url: 'https://claude.ai/artifact/Modele01' }),
+    ).toMatchObject({ behavior: 'allow' });
+    expect(
+      await decide('Artifact', { type_url: 'https://claude.ai/artifact/TypeSlides', title: 'x' }),
+    ).toMatchObject({ behavior: 'allow' });
+    // Avant l'enregistrement du deck, aucune publication sur une url existante.
+    expect(await decide('Artifact', { url: LIEN, file_path: 'deck.json' })).toMatchObject({
+      behavior: 'deny',
+    });
+    await enregistrer(p.id, { lien: LIEN });
+    expect(await decide('Artifact', { url: LIEN, file_path: 'deck.json' })).toMatchObject({
+      behavior: 'allow',
+    });
+    expect(
+      await decide('Artifact', { url: 'https://claude.ai/artifact/Modele01', file_path: 'x' }),
+    ).toMatchObject({ behavior: 'deny' });
+    expect(await decide('Artifact', { action: 'delete', url: LIEN })).toMatchObject({
+      behavior: 'deny',
+    });
+    expect(await decide('Bash', { command: 'ls' })).toMatchObject({ behavior: 'deny' });
+    await finirAttente(t.app.db, simatis, p.id);
   });
 });
