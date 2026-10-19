@@ -706,3 +706,41 @@ export const fetchTempsReelSite = (slug: string) =>
   getJson<TempsReelSite>(inst(slug, 'site-web/temps-reel'));
 export const connecterAnalytics = (slug: string) =>
   sendJson<{ url: string }>('POST', inst(slug, 'site-web/google/start'), {});
+
+// Diagnostic d'Endurance Commerciale : projets de l'espace SIMATIS (voir src/diagnostic).
+export type Dimensions = { outils: number; strategie: number; polyvalence: number };
+export type Profil = 'Joggeur' | 'Sprinteur' | 'Marathonien' | 'Ultra-endurant';
+export type ChatEtape = { modele: string; effort: string; lien: string };
+export type ProjetDiag = {
+  id: string;
+  nom: string;
+  activite: string;
+  contexte: string;
+  etape: number;
+  dims: Dimensions | null;
+  statutDiagnostic: 'Rapport à rédiger' | 'Restitué' | null;
+  dateDiagnostic: string | null;
+  chats: Record<string, ChatEtape>;
+  profil: Profil | null;
+  updatedAt: string;
+};
+export type ProjetDiagPatch = Partial<
+  Pick<
+    ProjetDiag,
+    | 'nom'
+    | 'activite'
+    | 'contexte'
+    | 'etape'
+    | 'dims'
+    | 'statutDiagnostic'
+    | 'dateDiagnostic'
+    | 'chats'
+  >
+>;
+
+export const fetchProjetsDiag = (slug: string) =>
+  getJson<ProjetDiag[]>(inst(slug, 'diagnostic/projets'));
+export const creerProjetDiag = (slug: string, nom: string, activite: string) =>
+  sendJson<ProjetDiag>('POST', inst(slug, 'diagnostic/projets'), { nom, activite });
+export const majProjetDiag = (slug: string, id: string, patch: ProjetDiagPatch) =>
+  sendJson<ProjetDiag>('PATCH', inst(slug, `diagnostic/projets/${encodeURIComponent(id)}`), patch);

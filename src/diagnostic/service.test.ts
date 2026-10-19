@@ -1,0 +1,96 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { setupTestApp, type TestApp } from '../../test/database.js';
+import { createInstance } from '../instances/service.js';
+import type { Instance } from '../instances/schema.js';
+import {
+  createProjet,
+  DiagnosticIndisponible,
+  listProjets,
+  ProjetIntrouvable,
+  updateProjet,
+} from './service.js';
+
+describe('Diagnostic : projets', () => {
+  let t: TestApp;
+  let simatis: Instance;
+  let autre: Instance;
+  let mandat: Instance;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    simatis = await createInstance(t.owner.db, {
+      slug: 'simatis-diag',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+    autre = await createInstance(t.owner.db, {
+      slug: 'simatis-diag-2',
+      nom: 'Autre',
+      type: 'propre',
+    });
+    mandat = await createInstance(t.owner.db, {
+      slug: 'mandat-diag',
+      nom: 'Mandat',
+      type: 'mandat',
+    });
+  });
+
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  it('crée un projet à l étape 1, sans profil tant que le résultat n est pas saisi', async () => {
+    const p = await createProjet(t.app.db, simatis, {
+      nom: '  Atelier Fictif Nord ',
+      activite: 'usinage',
+    });
+    expect(p).toMatchObject({
+      nom: 'Atelier Fictif Nord',
+      activite: 'usinage',
+      etape: 1,
+      profil: null,
+    });
+    expect(await listProjets(t.app.db, simatis)).toEqual([expect.objectContaining({ id: p.id })]);
+  });
+
+  it('calcule le profil en cascade une fois le résultat saisi', async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Bureau Fictif', activite: 'services' });
+    const saisi = await updateProjet(t.app.db, simatis, p.id, {
+      etape: 2,
+      dims: { outils: 6.5, strategie: 4, polyvalence: 9 },
+      statutDiagnostic: 'Restitué',
+      dateDiagnostic: '2026-10-06',
+    });
+    expect(saisi).toMatchObject({ etape: 2, profil: 'Sprinteur', dateDiagnostic: '2026-10-06' });
+  });
+
+  it("refuse l'accès à un mandat, en lecture comme en écriture", async () => {
+    await expect(listProjets(t.app.db, mandat)).rejects.toBeInstanceOf(DiagnosticIndisponible);
+    await expect(
+      createProjet(t.app.db, mandat, { nom: 'X', activite: 'autre' }),
+    ).rejects.toBeInstanceOf(DiagnosticIndisponible);
+  });
+
+  it("ne montre pas les projets d'une autre instance", async () => {
+    const dansAutre = await createProjet(t.app.db, autre, { nom: 'Ailleurs', activite: 'autre' });
+    const visibles = await listProjets(t.app.db, simatis);
+    expect(visibles.map((p) => p.id)).not.toContain(dansAutre.id);
+    await expect(
+      updateProjet(t.app.db, simatis, dansAutre.id, { etape: 3 }),
+    ).rejects.toBeInstanceOf(ProjetIntrouvable);
+  });
+
+  it('garde les conversations de chaque étape avec le projet', async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Chat Fictif', activite: 'batiment' });
+    const avecChat = await updateProjet(t.app.db, simatis, p.id, {
+      chats: { '3': { modele: 'opus', effort: 'max', lien: 'https://claude.ai/chat/fictif' } },
+    });
+    const relu = (await listProjets(t.app.db, simatis)).find((x) => x.id === p.id);
+    expect(avecChat.chats['3']).toEqual({
+      modele: 'opus',
+      effort: 'max',
+      lien: 'https://claude.ai/chat/fictif',
+    });
+    expect(relu?.chats['3']?.modele).toBe('opus');
+  });
+});
