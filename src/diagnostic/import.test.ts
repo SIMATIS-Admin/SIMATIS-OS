@@ -46,7 +46,11 @@ describe('Import des projets de diagnostic', () => {
 
   it('crée les projets, avec leur formulaire et leur rapport', async () => {
     const r = await importerProjets(t.app.db, simatis, entrees);
-    expect(r).toEqual({ crees: ['Atelier Fictif Nord', 'Bureau Fictif Sud'], deja: [] });
+    expect(r).toEqual({
+      crees: ['Atelier Fictif Nord', 'Bureau Fictif Sud'],
+      deja: [],
+      completes: [],
+    });
 
     const projets = await listProjets(t.app.db, simatis);
     const nord = projets.find((p) => p.nom === 'Atelier Fictif Nord');
@@ -63,8 +67,36 @@ describe('Import des projets de diagnostic', () => {
 
   it('ne réécrit jamais un projet déjà présent', async () => {
     const r = await importerProjets(t.app.db, simatis, entrees);
-    expect(r).toEqual({ crees: [], deja: ['Atelier Fictif Nord', 'Bureau Fictif Sud'] });
+    expect(r).toEqual({
+      crees: [],
+      deja: ['Atelier Fictif Nord', 'Bureau Fictif Sud'],
+      completes: [],
+    });
     expect(await listProjets(t.app.db, simatis)).toHaveLength(2);
+  });
+
+  it('ajoute un support archivé à un projet existant, une seule fois', async () => {
+    const support = {
+      lien: 'https://claude.ai/artifact/DeckFictif01',
+      finalLe: '2026-10-06',
+      diapositives: [{ titre: 'Couverture fictive', texte: 'Texte', notes: 'Notes' }],
+    };
+    const avec = [{ ...entrees[0]!, support }];
+    expect(await importerProjets(t.app.db, simatis, avec)).toMatchObject({
+      completes: ['Atelier Fictif Nord'],
+    });
+    const nord = (await listProjets(t.app.db, simatis)).find(
+      (p) => p.nom === 'Atelier Fictif Nord',
+    );
+    expect(nord).toMatchObject({ supportStatut: 'final', supportLien: support.lien });
+    expect(
+      await importerProjets(t.app.db, simatis, [
+        {
+          ...entrees[0]!,
+          support: { ...support, lien: 'https://claude.ai/artifact/AutreFictif1' },
+        },
+      ]),
+    ).toMatchObject({ completes: [], deja: ['Atelier Fictif Nord'] });
   });
 
   it('rend le rapport téléchargeable tel qu il a été importé', async () => {

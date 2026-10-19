@@ -158,8 +158,9 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
         const texte = source === '-' ? await lireEntree() : await readFile(source, 'utf8');
         const parsed = importSchema.safeParse(JSON.parse(texte));
         if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Fichier invalide');
-        const { crees, deja } = await importerProjets(db, instance, parsed.data.projets);
+        const { crees, deja, completes } = await importerProjets(db, instance, parsed.data.projets);
         out(`Créés : ${crees.join(', ') || 'aucun'}`);
+        out(`Support ajouté : ${completes.join(', ') || 'aucun'}`);
         out(`Déjà présents (inchangés) : ${deja.join(', ') || 'aucun'}`);
         return 0;
       }
