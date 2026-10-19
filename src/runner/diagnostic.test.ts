@@ -83,6 +83,7 @@ describe('Support d ouverture par le runner', () => {
     expect(texte).toContain(SKILL_SUPPORT);
     expect(texte).toContain('Ne modifie jamais le deck modèle');
     expect(texte).toContain("n'utilise jamais la réserve d'images");
+    expect(texte).toContain('trois recherches web au maximum');
     expect(texte).toContain('Ambition fictive');
     expect(texte).toContain('fichier logo.png');
     expect(texte).toContain('Second cerveau non accessible');

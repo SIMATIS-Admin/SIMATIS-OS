@@ -375,6 +375,9 @@ export const promptSupport = (
       : a.demande === 'support_final'
         ? TACHES_SUPPORT.final(a)
         : TACHES_SUPPORT.chat(a),
+    // Coût : trois recherches web suffisent pour le marché ; au-delà, la consommation grimpe sans
+    // améliorer le support.
+    'Recherche de marché : trois recherches web au maximum, et une lecture par source. Ne retiens que des faits sourcés et datés.',
     "Échange à l'étape 1 :",
     ...echange(a),
     `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : ce qui a changé en quelques phrases, les sources de marché et les questions qui restent, puis arrête-toi. Vouvoie le pilote, en français, sans rien inventer. Si une information manque, demande-la au lieu de la deviner.`,
