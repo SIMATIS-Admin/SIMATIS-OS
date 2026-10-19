@@ -2877,3 +2877,20 @@ tr.sel {
   background: var(--teal);
   min-width: 4px;
 }
+
+.diag-revue summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.diag-revue ul {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.diag-texte {
+  white-space: pre-wrap;
+  font-size: 14px;
+}

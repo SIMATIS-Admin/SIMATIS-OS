@@ -9,7 +9,7 @@ import { diagnosticProjets, type Projet } from './schema.js';
 export class DiagnosticIndisponible extends Error {}
 export class ProjetIntrouvable extends Error {}
 
-export type ProjetVue = Projet & { profil: Profil | null };
+export type ProjetVue = Omit<Projet, 'rapport'> & { profil: Profil | null; aRapport: boolean };
 export type ProjetPatch = Partial<
   Pick<
     Projet,
@@ -29,9 +29,11 @@ const verifierEspace = (instance: Instance) => {
     throw new DiagnosticIndisponible("Le diagnostic est réservé à l'espace SIMATIS.");
 };
 
-const vue = (projet: Projet): ProjetVue => ({
+// Le rapport (base64) ne voyage pas avec la liste : il se télécharge à part.
+const vue = ({ rapport, ...projet }: Projet): ProjetVue => ({
   ...projet,
   profil: projet.dims ? profilDe(projet.dims) : null,
+  aRapport: rapport !== null,
 });
 
 export async function listProjets(db: Executor, instance: Instance): Promise<ProjetVue[]> {
@@ -76,5 +78,22 @@ export async function updateProjet(
       .returning();
     if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
     return vue(row);
+  });
+}
+
+export async function rapportDe(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<{ nom: string; contenu: Buffer }> {
+  verifierEspace(instance);
+  return withInstance(db, instance.id, async (tx) => {
+    const [row] = await tx
+      .select({ rapport: diagnosticProjets.rapport, nom: diagnosticProjets.rapportNom })
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
+    if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    if (!row.rapport || !row.nom) throw new ProjetIntrouvable('Aucun rapport pour ce projet');
+    return { nom: row.nom, contenu: Buffer.from(row.rapport, 'base64') };
   });
 }

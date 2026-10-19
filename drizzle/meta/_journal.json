@@ -155,6 +155,13 @@
       "when": 1792395818136,
       "tag": "0021_material_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792396124327,
+      "tag": "0022_whole_sumo",
+      "breakpoints": true
     }
   ]
 }

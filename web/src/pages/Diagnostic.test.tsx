@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjetDiag } from '../api.js';
-import { Diagnostic } from './Diagnostic.js';
+import { commentaires, Diagnostic } from './Diagnostic.js';
 
 const api = vi.hoisted(() => ({
   fetchProjetsDiag: vi.fn(),
@@ -22,6 +22,9 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   dateDiagnostic: null,
   chats: {},
   profil: null,
+  revue: null,
+  aRapport: false,
+  rapportNom: null,
   updatedAt: '2026-10-19T08:00:00.000Z',
   ...extra,
 });
@@ -97,5 +100,23 @@ describe('Diagnostic', () => {
     await waitFor(() => expect(api.majProjetDiag).toHaveBeenCalled());
     const patch = api.majProjetDiag.mock.calls[0]?.[2] as Partial<ProjetDiag>;
     expect(patch.chats?.['1']?.lien).toBe('https://claude.ai/chat/fictif');
+  });
+});
+
+describe('Formulaire de revue importé', () => {
+  it('extrait les commentaires rédigés, avec leur emplacement', () => {
+    const revue = {
+      statut: 'brouillon',
+      scores: { outilsMethode: 7.5 },
+      preconisations: {
+        r1: { choix: 'garder', detail: 'Commentaire fictif.' },
+        r2: { detail: '' },
+      },
+      libre: 'Remarque fictive.',
+    };
+    expect(commentaires(revue)).toEqual([
+      { chemin: 'preconisations › r1 › detail', texte: 'Commentaire fictif.' },
+      { chemin: 'libre', texte: 'Remarque fictive.' },
+    ]);
   });
 });

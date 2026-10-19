@@ -252,7 +252,7 @@ function ProjetVue({
         <div className="diag-main">
           {projet.etape === 1 && <Preparation projet={projet} onSauver={sauver} />}
           {projet.etape === 2 && <Resultat projet={projet} onSauver={sauver} />}
-          {projet.etape === 3 && <Analyse projet={projet} onSauver={sauver} />}
+          {projet.etape === 3 && <Analyse slug={slug} projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
         </div>
         <Assistant projet={projet} onSauver={sauver} />
@@ -393,7 +393,7 @@ function Resultat({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }
   );
 }
 
-function Analyse({ projet }: { projet: ProjetDiag; onSauver: Sauver }) {
+function Analyse({ slug, projet }: { slug: string; projet: ProjetDiag; onSauver: Sauver }) {
   if (!projet.dims) {
     return (
       <div className="panel empty">
@@ -424,10 +424,15 @@ function Analyse({ projet }: { projet: ProjetDiag; onSauver: Sauver }) {
             </div>
           );
         })}
-        <div className="small muted">
-          Le rapport sera produit à partir du formulaire de revue. Cette étape n’est pas encore dans
-          l’OS.
-        </div>
+        {projet.aRapport && (
+          <a
+            className="btn go"
+            href={`/api/i/${encodeURIComponent(slug)}/diagnostic/projets/${projet.id}/rapport`}
+          >
+            Télécharger le rapport ({projet.rapportNom})
+          </a>
+        )}
+        {projet.revue && <FormulaireRevue revue={projet.revue} />}
       </div>
     </div>
   );
@@ -533,5 +538,53 @@ function Assistant({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver 
         )}
       </div>
     </aside>
+  );
+}
+
+// Champs qui contiennent un texte rédigé par Marc (les autres sont des états ou des identifiants).
+const CHAMPS_COMMENTAIRE = new Set([
+  'detail',
+  'texte',
+  'libre',
+  'proposition',
+  'indicateurs',
+  'nonFait',
+  'preconisationAutre',
+  'resultats',
+  'contexte',
+]);
+
+export function commentaires(revue: unknown, chemin = ''): { chemin: string; texte: string }[] {
+  if (!revue || typeof revue !== 'object') return [];
+  return Object.entries(revue).flatMap(([cle, valeur]) => {
+    const ici = chemin ? `${chemin} › ${cle}` : cle;
+    if (typeof valeur === 'string') {
+      return CHAMPS_COMMENTAIRE.has(cle) && valeur.trim()
+        ? [{ chemin: ici, texte: valeur.trim() }]
+        : [];
+    }
+    return commentaires(valeur, ici);
+  });
+}
+
+// Le formulaire de revue tel qu'importé : statut et commentaires de Marc, lisibles dans l'OS.
+function FormulaireRevue({ revue }: { revue: Record<string, unknown> }) {
+  const liste = commentaires(revue);
+  const statut = typeof revue.statut === 'string' ? revue.statut : 'non précisé';
+  return (
+    <details className="diag-revue">
+      <summary>
+        Formulaire de revue importé · statut : {statut} · {liste.length} commentaire
+        {liste.length > 1 ? 's' : ''}
+      </summary>
+      <ul>
+        {liste.map((c) => (
+          <li key={c.chemin}>
+            <div className="small muted">{c.chemin}</div>
+            <div className="diag-texte">{c.texte}</div>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

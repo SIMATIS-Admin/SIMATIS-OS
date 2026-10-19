@@ -6,6 +6,7 @@ import {
   DiagnosticIndisponible,
   listProjets,
   ProjetIntrouvable,
+  rapportDe,
   updateProjet,
 } from '../diagnostic/service.js';
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
@@ -390,6 +391,23 @@ export function registerApi(
           .send({ error: parsed.error.issues[0]?.message ?? 'Projet invalide' });
       try {
         return await updateProjet(db, i, request.params.id, parsed.data);
+      } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.get<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        const { nom, contenu } = await rapportDe(db, i, request.params.id);
+        reply.header(
+          'content-type',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        );
+        reply.header('content-disposition', `attachment; filename="${nom.replace(/"/g, '')}"`);
+        return reply.send(contenu);
       } catch (error) {
         return diagnosticErreur(error, reply);
       }
