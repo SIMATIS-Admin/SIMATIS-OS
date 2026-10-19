@@ -11,7 +11,8 @@
   --line: #dce3ec;
   --line-2: #ebf0f5;
   --bg: #f3f6f9;
-  --panel: #ffffff;
+  --white: #ffffff;
+  --panel: var(--white);
   --amber: #c98a12;
   --amber-bg: #fff4dc;
   --red: #c0442e;
@@ -126,7 +127,7 @@ a {
 }
 .brand-name {
   font: 800 17px var(--f-title);
-  color: #fff;
+  color: var(--white);
   letter-spacing: 0.01em;
 }
 .brand-name span {
@@ -140,7 +141,7 @@ a {
   border-radius: var(--r-m);
   background: var(--navy-2);
   border: 1px solid #1e4b82;
-  color: #fff;
+  color: var(--white);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -172,7 +173,7 @@ a {
 }
 .inst-menu {
   margin: -4px 14px 12px;
-  background: #fff;
+  background: var(--white);
   color: var(--ink);
   border-radius: var(--r-m);
   padding: 6px;
@@ -248,7 +249,7 @@ a {
   background: var(--navy-3);
 }
 .nav a.on {
-  background: #fff;
+  background: var(--white);
   color: var(--navy);
   font-weight: 600;
 }
@@ -285,7 +286,7 @@ a {
   opacity: 1;
 }
 .nav .fav:hover {
-  color: #fff;
+  color: var(--white);
 }
 /* The star stays hidden until the row is hovered: in favourites it removes, elsewhere it adds. */
 .nav .fav.on {
@@ -521,7 +522,7 @@ a {
   padding: 8px 10px;
   border-radius: var(--r-s);
   background: var(--navy);
-  color: #fff;
+  color: var(--white);
   font: 400 13px/1.45 var(--f-body);
   letter-spacing: 0;
   text-align: left;
@@ -544,7 +545,7 @@ a {
 .help {
   border: 1px solid var(--line);
   border-radius: var(--r-m);
-  background: #fff;
+  background: var(--white);
   margin-bottom: 18px;
 }
 .help summary {
@@ -591,7 +592,7 @@ a {
   padding: 8px 14px;
   border-radius: var(--r-s);
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--white);
   cursor: pointer;
   font-weight: 600;
   font-size: 15px;
@@ -603,7 +604,7 @@ a {
 .btn.primary {
   background: var(--navy);
   border-color: var(--navy);
-  color: #fff;
+  color: var(--white);
 }
 .btn.primary:hover {
   background: var(--navy-3);
@@ -611,7 +612,7 @@ a {
 .btn.go {
   background: var(--teal);
   border-color: var(--teal);
-  color: #fff;
+  color: var(--white);
 }
 .btn.go:hover {
   background: #378f80;
@@ -658,9 +659,9 @@ a {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--white);
   background: var(--navy);
-  color: #fff;
+  color: var(--white);
   font-size: 13px;
   line-height: 13px;
   font-weight: 700;
@@ -741,11 +742,11 @@ a {
 }
 .badge.navy {
   background: var(--navy);
-  color: #fff;
+  color: var(--white);
 }
 .nav .badge {
   background: var(--teal);
-  color: #fff;
+  color: var(--white);
 }
 .nav a.on .badge {
   background: var(--navy);
@@ -802,7 +803,7 @@ textarea.input {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--r-s);
-  background: #fff;
+  background: var(--white);
 }
 textarea.input {
   min-height: 90px;
@@ -1154,7 +1155,7 @@ textarea.input {
 }
 .chip {
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--white);
   border-radius: 99px;
   padding: 3px 11px;
   font-size: 14px;
@@ -1162,7 +1163,7 @@ textarea.input {
 }
 .chip.on {
   background: var(--navy);
-  color: #fff;
+  color: var(--white);
   border-color: var(--navy);
 }
 /* Inbox urgency counters: the late ones turn red when there are some. */
@@ -1234,7 +1235,7 @@ textarea.input {
   padding: 3px 8px;
 }
 .chip.alerte.on {
-  color: #fff;
+  color: var(--white);
   background: var(--red);
   border-color: var(--red);
 }
@@ -1411,7 +1412,7 @@ textarea.input {
   color: var(--ink-2);
 }
 .card {
-  background: #fff;
+  background: var(--white);
   border: 1px solid var(--line);
   border-radius: var(--r-s);
   padding: 10px 12px;
@@ -1499,7 +1500,7 @@ textarea.input {
   padding: 14px;
   min-height: 170px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--white);
 }
 .cell h3 {
   display: flex;
@@ -1526,7 +1527,7 @@ textarea.input {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  background: #fff;
+  background: var(--white);
   border: 1px solid var(--line);
   border-radius: 99px;
   padding: 3px 10px 3px 4px;
@@ -1548,7 +1549,7 @@ textarea.input {
   right: 0;
   bottom: 0;
   width: min(620px, 100%);
-  background: #fff;
+  background: var(--white);
   z-index: 41;
   overflow-y: auto;
   box-shadow: -10px 0 40px rgba(9, 25, 50, 0.2);
@@ -1563,7 +1564,7 @@ textarea.input {
 .drawer-h {
   position: sticky;
   top: 0;
-  background: #fff;
+  background: var(--white);
   border-bottom: 1px solid var(--line);
   padding: 18px 22px;
   display: flex;
@@ -1580,7 +1581,7 @@ textarea.input {
   top: 12vh;
   transform: translateX(-50%);
   width: min(520px, calc(100% - 32px));
-  background: #fff;
+  background: var(--white);
   border-radius: var(--r-m);
   z-index: 42;
   box-shadow: 0 20px 60px rgba(9, 25, 50, 0.3);
@@ -1594,7 +1595,7 @@ textarea.input {
   left: 50%;
   transform: translateX(-50%);
   background: var(--ink);
-  color: #fff;
+  color: var(--white);
   padding: 10px 18px;
   border-radius: var(--r-m);
   z-index: 60;
@@ -1635,7 +1636,7 @@ textarea.input {
 }
 .seg button {
   border: 0;
-  background: #fff;
+  background: var(--white);
   padding: 5px 11px;
   font: 600 14px var(--f-num);
   cursor: pointer;
@@ -1646,7 +1647,7 @@ textarea.input {
 }
 .seg button.on {
   background: var(--navy);
-  color: #fff;
+  color: var(--white);
 }
 .seg button[disabled] {
   cursor: not-allowed;
@@ -1794,7 +1795,7 @@ textarea.input {
   height: 24px;
   border-radius: 50%;
   background: var(--navy);
-  color: #fff;
+  color: var(--white);
   display: grid;
   place-items: center;
   font: 600 13px var(--f-num);
@@ -1820,7 +1821,7 @@ textarea.input {
 .lvl button {
   border: 0;
   border-right: 1px solid var(--line);
-  background: #fff;
+  background: var(--white);
   padding: 5px 10px;
   font: 600 13px var(--f-num);
   cursor: pointer;
@@ -1830,7 +1831,7 @@ textarea.input {
 }
 .lvl button.on {
   background: var(--navy);
-  color: #fff;
+  color: var(--white);
 }
 .lvl button[disabled] {
   color: #b9c3d0;
@@ -1882,7 +1883,7 @@ textarea.input {
 }
 .plan-b.ok .k {
   background: var(--teal);
-  color: #fff;
+  color: var(--white);
 }
 
 /* Démo */
@@ -1902,7 +1903,7 @@ textarea.input {
 }
 .scenario a.on {
   background: #6b4a06;
-  color: #fff;
+  color: var(--white);
   border-color: #6b4a06;
 }
 
@@ -2252,7 +2253,7 @@ textarea.input {
 
 .pastille {
   background: var(--red);
-  color: #fff;
+  color: var(--white);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
@@ -2418,12 +2419,12 @@ textarea.input {
 }
 .fi-gagne {
   background: var(--green);
-  color: #fff;
+  color: var(--white);
   border-color: var(--green);
 }
 .fi-perdu {
   background: var(--red);
-  color: #fff;
+  color: var(--white);
   border-color: var(--red);
 }
 .fi-etapes {
@@ -2459,7 +2460,7 @@ textarea.input {
 }
 .fi-etape.on {
   background: var(--teal);
-  color: #fff;
+  color: var(--white);
   font-weight: 600;
 }
 .fi-etape:disabled {
@@ -2819,7 +2820,7 @@ tr.sel {
 }
 .diag-etape.on .diag-num {
   background: var(--teal);
-  color: #fff;
+  color: var(--white);
 }
 .diag-layout {
   display: grid;
@@ -2907,7 +2908,7 @@ tr.sel {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 4px;
-  background: #fff;
+  background: var(--white);
 }
 .diag-diapo summary {
   cursor: pointer;
