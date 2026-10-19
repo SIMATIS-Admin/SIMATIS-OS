@@ -1,4 +1,5 @@
 import { useState, type DragEvent } from 'react';
+import logo from '../assets/simatis-mark.png';
 import { Icon } from '../icons.js';
 import {
   NAV,
@@ -26,6 +27,22 @@ type Props = {
 const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
+// Narrow icon-only bar, also kept on this screen.
+const CLE_REDUITE = 'simatis.nav.reduite';
+const memoriser = (cle: string, valeur: string) => {
+  try {
+    localStorage.setItem(cle, valeur);
+  } catch {
+    // Private window: the choice lasts for this visit only.
+  }
+};
+const lireReduite = () => {
+  try {
+    return localStorage.getItem(CLE_REDUITE) === '1';
+  } catch {
+    return false;
+  }
+};
 const lireOuverts = (): Record<string, boolean> => {
   try {
     return JSON.parse(localStorage.getItem(CLE_OUVERTS) ?? '{}') as Record<string, boolean>;
@@ -50,11 +67,12 @@ export function Sidebar({
   const basculer = (titre: string, ouvert: boolean) => {
     const suivant = { ...ouverts, [titre]: !ouvert };
     setOuverts(suivant);
-    try {
-      localStorage.setItem(CLE_OUVERTS, JSON.stringify(suivant));
-    } catch {
-      // Private window: the choice lasts for this visit only.
-    }
+    memoriser(CLE_OUVERTS, JSON.stringify(suivant));
+  };
+  const [reduite, setReduite] = useState(lireReduite);
+  const basculerReduite = () => {
+    setReduite(!reduite);
+    memoriser(CLE_REDUITE, reduite ? '0' : '1');
   };
 
   const link = (it: NavItem, inFavoris = false) => {
@@ -62,7 +80,7 @@ export function Sidebar({
     const dragProps = inFavoris
       ? {
           draggable: true,
-          title: 'Glisser pour réordonner',
+          title: reduite ? it.label : 'Glisser pour réordonner',
           onDragStart: (e: DragEvent) => e.dataTransfer.setData(FAV_MIME, it.id),
           onDragOver: (e: DragEvent) => {
             if (e.dataTransfer.types.includes(FAV_MIME)) e.preventDefault();
@@ -81,6 +99,7 @@ export function Sidebar({
         key={`${inFavoris ? 'fav-' : ''}${it.id}`}
         href={`#/${current.slug}/${it.id}`}
         className={[view === it.id ? 'on' : '', isBuilt(it.id) ? '' : 'soon'].join(' ')}
+        title={reduite ? it.label : undefined}
         {...dragProps}
       >
         <Icon name={it.icon} />
@@ -108,14 +127,27 @@ export function Sidebar({
   const isPortefeuille = view === 'portefeuille';
 
   return (
-    <aside className={`side ${open ? 'open' : ''}`}>
+    <aside className={['side', open ? 'open' : '', reduite ? 'reduite' : ''].join(' ')}>
       <div className="brand">
-        <div className="brand-mark">S</div>
+        <img className="brand-mark" src={logo} alt="SIMATIS" />
         <div className="brand-name">
           SIMATIS <span>OS</span>
         </div>
+        <button
+          className="reduire-btn"
+          aria-label={reduite ? 'Agrandir le menu' : 'Réduire le menu'}
+          title={reduite ? 'Agrandir le menu' : 'Réduire le menu'}
+          onClick={basculerReduite}
+        >
+          <Icon name="panel" />
+        </button>
       </div>
-      <button className="inst-btn" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>
+      <button
+        className="inst-btn"
+        aria-expanded={menuOpen}
+        title={reduite ? (isPortefeuille ? 'Portefeuille' : current.nom) : undefined}
+        onClick={() => setMenuOpen(!menuOpen)}
+      >
         <span
           className="inst-dot"
           style={{ background: isPortefeuille ? 'var(--mint)' : current.couleur }}

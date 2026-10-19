@@ -100,4 +100,24 @@ describe('Sidebar', () => {
     const plusTard = document.querySelector('.nav-group.later > .later-btn');
     expect(plusTard?.getAttribute('aria-expanded')).toBe('false');
   });
+
+  it('narrows to icons on click, remembers it, and widens back', () => {
+    renderSidebar(simatis, []);
+    const bouton = screen.getByRole('button', { name: 'Réduire le menu' });
+    fireEvent.click(bouton);
+    expect(document.querySelector('.side')?.classList.contains('reduite')).toBe(true);
+    // Labels hidden by the narrow bar still show on hover.
+    const agenda = screen.getAllByRole('link').find((a) => a.textContent?.startsWith('Agenda'));
+    expect(agenda?.getAttribute('title')).toBe('Agenda');
+    cleanup();
+    renderSidebar(simatis, []);
+    expect(document.querySelector('.side')?.classList.contains('reduite')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir le menu' }));
+    expect(document.querySelector('.side')?.classList.contains('reduite')).toBe(false);
+  });
+
+  it('shows the SIMATIS logo, not a plain letter', () => {
+    renderSidebar(simatis, []);
+    expect(document.querySelector('.brand-mark')?.tagName).toBe('IMG');
+  });
 });
