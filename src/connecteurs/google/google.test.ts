@@ -104,6 +104,7 @@ function fakeGoogle() {
           {
             id: 'e1',
             summary: 'Point client',
+            colorId: '7',
             attendees: [
               { email: 'Moi@exemple.test', self: true },
               { email: 'Client@Exemple.test' },
@@ -306,7 +307,7 @@ describe('Gmail and Calendar', () => {
     ]);
   });
 
-  it('reads every page of meetings, and flags all-day events', async () => {
+  it('reads every page of meetings, flags all-day events and keeps their Google colour', async () => {
     const liste = await ctx(true, (c) =>
       evenements(
         c,
@@ -321,8 +322,10 @@ describe('Gmail and Calendar', () => {
         id: 'e1',
         journee: false,
         participants: ['client@exemple.test'],
+        agenda: 'primary',
+        couleur: '#039be5',
       }),
-      expect.objectContaining({ id: 'e2', titre: 'Séminaire', journee: true }),
+      expect.objectContaining({ id: 'e2', titre: 'Séminaire', journee: true, couleur: null }),
     ]);
     expect(google.calls.filter((c) => c.url.includes('/events?'))).toHaveLength(2);
   });

@@ -199,8 +199,26 @@ export type Evenement = {
   participants: string[];
   // All-day event (holiday, seminar): a date without a time.
   journee: boolean;
+  // The calendar it comes from, and the colour given to the event in Google Agenda (if any).
+  agenda: string;
+  couleur: string | null;
   // Opens the meeting in Google Agenda.
   lien: string | null;
+};
+
+// Google Agenda's fixed event palette (colorId 1 to 11), so a meeting keeps its Google colour.
+const COULEURS_EVENEMENT: Record<string, string> = {
+  '1': '#7986cb',
+  '2': '#33b679',
+  '3': '#8e24aa',
+  '4': '#e67c73',
+  '5': '#f6bf26',
+  '6': '#f4511e',
+  '7': '#039be5',
+  '8': '#616161',
+  '9': '#3f51b5',
+  '10': '#0b8043',
+  '11': '#d50000',
 };
 
 // Meetings between two dates (brief, Rendez-vous screen).
@@ -224,6 +242,7 @@ export async function evenements(
           summary?: string;
           location?: string;
           htmlLink?: string;
+          colorId?: string;
           attendees?: { email?: string; self?: boolean }[];
           start?: { dateTime?: string; date?: string };
           end?: { dateTime?: string; date?: string };
@@ -253,6 +272,8 @@ export async function evenements(
           titre: e.summary ?? '(sans titre)',
           lieu: e.location ?? null,
           journee: !e.start?.dateTime,
+          agenda: id,
+          couleur: COULEURS_EVENEMENT[e.colorId ?? ''] ?? null,
           lien: e.htmlLink ?? null,
         });
       }

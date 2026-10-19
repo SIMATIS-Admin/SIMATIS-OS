@@ -347,11 +347,22 @@ export type TacheVue = {
   entreprise?: { id: string; nom: string } | null;
   opportunite: { id: string; titre: string; clos: 'gagne' | 'perdu' | null } | null;
 };
+// A Google Agenda event as the Agenda shows it; `couleur` is the event's own Google colour.
+export type RdvAgenda = {
+  id: string;
+  debut: string;
+  fin: string;
+  titre: string;
+  lieu: string | null;
+  journee: boolean;
+  agenda: string;
+  couleur: string | null;
+};
 export type SemaineTaches = {
   taches: TacheVue[];
   enRetard: TacheVue[];
   sansEcheance: TacheVue[];
-  rdv: { debut: string; fin: string; titre: string; lieu: string | null }[];
+  rdv: RdvAgenda[];
   rdvEtat: 'ok' | 'non_configure' | 'erreur';
   hubspot: boolean;
   ecrit: boolean;

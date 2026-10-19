@@ -7,7 +7,6 @@ type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let hubspot = true;
 let patchReponse: unknown = null;
-let beaucoup = false;
 let ensuite = true;
 let oppClose: 'gagne' | 'perdu' | null = null;
 
@@ -43,14 +42,6 @@ const semaine = () => ({
       type: 'email',
       echeance: '2026-10-14T09:00:00.000Z',
     }),
-    ...(beaucoup
-      ? Array.from({ length: 6 }, (_, k) =>
-          tache(`m${k}`, `Relance mail ${k}`, {
-            canal: 'email',
-            echeance: '2026-10-14T09:00:00.000Z',
-          }),
-        )
-      : []),
     tache('t3', 'Préparer le devis', { echeance: '2026-10-12T09:00:00.000Z', fait: true }),
     tache('t6', 'Point mensuel', {
       type: 'reunion',
@@ -63,10 +54,24 @@ const semaine = () => ({
   sansEcheance: [tache('t5', 'Trier les cartes de visite')],
   rdv: [
     {
+      id: 'g1',
       debut: '2026-10-15T12:00:00.000Z',
       fin: '2026-10-15T13:00:00.000Z',
       titre: 'Déjeuner Fonderie',
+      lieu: 'Lyon',
+      journee: false,
+      agenda: 'primary',
+      couleur: null,
+    },
+    {
+      id: 'g2',
+      debut: '2026-10-16T00:00:00.000Z',
+      fin: '2026-10-17T00:00:00.000Z',
+      titre: 'Salon fictif',
       lieu: null,
+      journee: true,
+      agenda: 'primary',
+      couleur: '#039be5',
     },
   ],
   rdvEtat: 'ok',
@@ -92,7 +97,7 @@ const titres = () => [...document.querySelectorAll('td.tb-nom b')].map((b) => b.
 
 async function liste() {
   render(<Taches slug="simatis" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Liste' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Tableau' }));
   await screen.findByText('Appeler Romain Arpin');
 }
 
@@ -101,7 +106,6 @@ describe('Tâches screen', () => {
     calls = [];
     hubspot = true;
     patchReponse = null;
-    beaucoup = false;
     ensuite = true;
     oppClose = null;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
@@ -156,7 +160,7 @@ describe('Tâches screen', () => {
     await waitFor(() => expect(calls.at(-1)?.url).toContain('du=2026-11-02&au=2026-11-20'));
   });
 
-  it('hides the week bar in the list, which has its own periods', async () => {
+  it('hides the week bar in the table, which has its own periods', async () => {
     await liste();
     expect(screen.queryByRole('button', { name: 'Semaine suivante' })).toBeNull();
   });
@@ -341,13 +345,19 @@ describe('Tâches screen', () => {
     });
   });
 
-  describe('week view', () => {
+  describe('calendar and tasks', () => {
     const dt = (id: string) => ({
       types: ['application/x-simatis-tache'],
       getData: () => id,
       setData: () => undefined,
     });
-    const jour = (d: string) => document.querySelector(`[data-jour="${d}"]`) as HTMLElement;
+    const creneau = (jour: string, ligne: number) =>
+      document.querySelector(`[data-jour="${jour}"][data-ligne="${ligne}"]`) as HTMLElement;
+    const bande = (jour: string) =>
+      document.querySelector(`[data-journee="${jour}"]`) as HTMLElement;
+    const jourTaches = (jour: string) =>
+      document.querySelector(`[data-taches-jour="${jour}"]`) as HTMLElement;
+    const grille = () => document.querySelector('.gr') as HTMLElement;
     const patch = () => calls.find((c) => c.method === 'PATCH');
     const semaineAffichee = async () => {
       render(<Taches slug="simatis" />);
@@ -362,20 +372,23 @@ describe('Tâches screen', () => {
       vi.useRealTimers();
     });
 
-    it('shows the week number, one column per day, tasks grouped by type and meetings', async () => {
+    it('puts the meetings on the calendar and the tasks by day beside it', async () => {
       await semaineAffichee();
       expect(calls[0]?.url).toBe('/api/i/simatis/taches?du=2026-10-12&au=2026-10-18');
       expect(screen.getByText('Semaine 42 · 12 – 18 octobre 2026')).toBeTruthy();
-      for (const j of ['Lun 12', 'Mar 13', 'Mer 14', 'Jeu 15', 'Ven 16', 'Week-end']) {
-        expect(screen.getByText(j)).toBeTruthy();
-      }
-      const mardi = jour('2026-10-13');
-      expect(within(mardi).getByText('Téléphone (1)')).toBeTruthy();
-      expect(within(mardi).getByText('Appeler Romain Arpin')).toBeTruthy();
-      expect(within(mardi).getByText('10:00')).toBeTruthy();
-      const jeudi = jour('2026-10-15');
-      expect(within(jeudi).getByText('Déjeuner Fonderie').closest('.rdv')).toBeTruthy();
-      expect(within(jeudi).getByText('14:00')).toBeTruthy();
+      // Meetings: Google events (linked to Rendez-vous) and the CRM's timed meeting.
+      const dejeuner = within(creneau('2026-10-15', 14)).getByText('Déjeuner Fonderie');
+      expect(dejeuner.closest('a')?.getAttribute('href')).toBe('#/simatis/rendez-vous/ouvrir/g1');
+      expect(within(creneau('2026-10-15', 16)).getByText('Point mensuel')).toBeTruthy();
+      expect(within(bande('2026-10-16')).getByText('Salon fictif')).toBeTruthy();
+      // Tasks never sit on the hour grid: they are in their day, beside it.
+      expect(within(grille()).queryByText('Appeler Romain Arpin')).toBeNull();
+      expect(within(jourTaches('2026-10-13')).getByText('Appeler Romain Arpin')).toBeTruthy();
+      const mercredi = jourTaches('2026-10-14');
+      expect(within(mercredi).getByText('Aujourd’hui')).toBeTruthy();
+      expect(within(mercredi).getByText('Envoyer la plaquette')).toBeTruthy();
+      const panneau = screen.getByRole('complementary', { name: 'Tâches' });
+      expect(within(panneau).queryByText('Point mensuel')).toBeNull();
     });
 
     it('changes week with the buttons and the keyboard arrows', async () => {
@@ -390,10 +403,17 @@ describe('Tâches screen', () => {
       await waitFor(() => expect(calls.at(-1)?.url).toContain('du=2026-10-12'));
     });
 
+    it('ticks a task done from its line', async () => {
+      await semaineAffichee();
+      fireEvent.click(screen.getByLabelText('Marquer faite : Envoyer la plaquette'));
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()).toMatchObject({ url: '/api/i/simatis/taches/t2', body: { fait: true } });
+    });
+
     it('moves a task to another day, keeping its time', async () => {
       await semaineAffichee();
-      fireEvent.dragOver(jour('2026-10-16'), { dataTransfer: dt('t2') });
-      fireEvent.drop(jour('2026-10-16'), { dataTransfer: dt('t2') });
+      fireEvent.dragOver(jourTaches('2026-10-16'), { dataTransfer: dt('t2') });
+      fireEvent.drop(jourTaches('2026-10-16'), { dataTransfer: dt('t2') });
       await waitFor(() => expect(patch()).toBeTruthy());
       expect(patch()).toMatchObject({
         url: '/api/i/simatis/taches/t2',
@@ -410,11 +430,27 @@ describe('Tâches screen', () => {
       expect(patch()?.body).toEqual({ echeance: '2026-10-20T08:00:00.000Z' });
     });
 
-    it('lists overdue tasks aside, oldest first, and reschedules them to today', async () => {
+    it('times a meeting dropped on a slot, but only changes the day of a task', async () => {
       await semaineAffichee();
-      const colonne = screen.getByRole('complementary', { name: 'En retard' });
-      expect(within(colonne).getByText('En retard (1)')).toBeTruthy();
-      const ligne = within(colonne).getByText('Relancer Fonderie').closest('li') as HTMLElement;
+      fireEvent.drop(creneau('2026-10-16', 14), { dataTransfer: dt('t6') });
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()?.body).toEqual({ echeance: '2026-10-16T12:00:00.000Z', avecHeure: true });
+
+      calls = [];
+      fireEvent.drop(creneau('2026-10-16', 14), { dataTransfer: dt('t2') });
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()?.body).toEqual({ echeance: '2026-10-16T09:00:00.000Z' });
+
+      calls = [];
+      fireEvent.drop(bande('2026-10-15'), { dataTransfer: dt('t6') });
+      await waitFor(() => expect(patch()).toBeTruthy());
+      expect(patch()?.body).toEqual({ avecHeure: false });
+    });
+
+    it('lists overdue tasks first, oldest first, and reschedules them to today', async () => {
+      await semaineAffichee();
+      const retard = screen.getByRole('region', { name: 'En retard' });
+      const ligne = within(retard).getByText('Relancer Fonderie').closest('li') as HTMLElement;
       expect(within(ligne).getByText('il y a 6 j')).toBeTruthy();
       fireEvent.click(within(ligne).getByRole('button', { name: 'Aujourd’hui' }));
       await waitFor(() => expect(patch()).toBeTruthy());
@@ -424,91 +460,52 @@ describe('Tâches screen', () => {
       });
     });
 
-    it('reschedules all overdue tasks after confirmation, and folds the column', async () => {
+    it('reschedules all overdue tasks after confirmation, and folds them', async () => {
       const confirm = vi.fn(() => true);
       vi.stubGlobal('confirm', confirm);
       await semaineAffichee();
       fireEvent.click(screen.getByRole('button', { name: 'Tout reporter à aujourd’hui' }));
       expect(confirm).toHaveBeenCalled();
       await waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(1));
-      fireEvent.click(screen.getByRole('button', { name: 'Replier la colonne En retard' }));
+      fireEvent.click(screen.getByRole('button', { name: 'En retard (1)' }));
       expect(screen.queryByText('Relancer Fonderie')).toBeNull();
-      expect(screen.getByRole('button', { name: 'En retard (1)' })).toBeTruthy();
-    });
-
-    it('folds a group of more than five tasks and hides a shared default time', async () => {
-      beaucoup = true;
-      await semaineAffichee();
-      const mercredi = jour('2026-10-14');
-      expect(within(mercredi).getByText('Email (7)')).toBeTruthy();
-      expect(within(mercredi).getAllByText(/Relance mail|Envoyer la plaquette/)).toHaveLength(5);
-      expect(within(mercredi).queryByText('11:00')).toBeNull();
-      fireEvent.click(within(mercredi).getByRole('button', { name: '+ 2 autres' }));
-      expect(within(mercredi).getAllByText(/Relance mail|Envoyer la plaquette/)).toHaveLength(7);
     });
 
     it('explains when a move was only simulated in HubSpot', async () => {
       patchReponse = { simulation: true, message: 'Simulation : rien n’a été écrit dans HubSpot.' };
       await semaineAffichee();
-      fireEvent.drop(jour('2026-10-16'), { dataTransfer: dt('t1') });
+      fireEvent.drop(jourTaches('2026-10-16'), { dataTransfer: dt('t1') });
       expect(await screen.findByText(/Simulation : rien n’a été écrit/)).toBeTruthy();
     });
-  });
 
-  describe('hour grid', () => {
-    const dt = (id: string) => ({
-      types: ['application/x-simatis-tache'],
-      getData: () => id,
-      setData: () => undefined,
-    });
-    const creneau = (jour: string, ligne: number) =>
-      document.querySelector(`[data-jour="${jour}"][data-ligne="${ligne}"]`) as HTMLElement;
-    const bande = (jour: string) =>
-      document.querySelector(`[data-journee="${jour}"]`) as HTMLElement;
-    const patch = () => calls.find((c) => c.method === 'PATCH');
-    const grille = async (mode: 'Jour' | 'Semaine') => {
-      render(<Taches slug="simatis" />);
-      fireEvent.click(await screen.findByRole('button', { name: mode }));
-      await screen.findByText('Point mensuel');
-    };
-
-    beforeEach(() => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2026-10-14T10:00:00Z'));
-    });
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it('places timed activities on the grid and counts the others in the day band', async () => {
-      await grille('Semaine');
-      expect(within(creneau('2026-10-15', 16)).getByText('Point mensuel')).toBeTruthy();
-      expect(within(bande('2026-10-14')).getByText('1 activité')).toBeTruthy();
-      expect(screen.queryByText('Envoyer la plaquette')).toBeNull();
-      fireEvent.click(within(bande('2026-10-14')).getByText('1 activité'));
-      expect(within(bande('2026-10-14')).getByText('Envoyer la plaquette')).toBeTruthy();
-    });
-
-    it('gives a precise time when dropped on a slot, and removes it on the day band', async () => {
-      await grille('Semaine');
-      fireEvent.drop(creneau('2026-10-16', 14), { dataTransfer: dt('t2') });
-      await waitFor(() => expect(patch()).toBeTruthy());
-      expect(patch()?.body).toEqual({ echeance: '2026-10-16T12:00:00.000Z', avecHeure: true });
-
-      calls = [];
-      fireEvent.drop(bande('2026-10-15'), { dataTransfer: dt('t6') });
-      await waitFor(() => expect(patch()).toBeTruthy());
-      expect(patch()?.body).toEqual({ avecHeure: false });
-    });
-
-    it('shows one day at a time in the Day view, moving with the arrows', async () => {
-      render(<Taches slug="simatis" />);
-      fireEvent.click(await screen.findByRole('button', { name: 'Jour' }));
-      expect(await screen.findByText('Mercredi 14 octobre 2026 · Semaine 42')).toBeTruthy();
-      expect(screen.queryByText('Point mensuel')).toBeNull();
-      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    it('shows one day at a time in the Day view, opened from a day of the week', async () => {
+      await semaineAffichee();
+      fireEvent.click(screen.getByRole('button', { name: 'Jeu 15' }));
       expect(await screen.findByText('Jeudi 15 octobre 2026 · Semaine 42')).toBeTruthy();
       expect(within(creneau('2026-10-15', 16)).getByText('Point mensuel')).toBeTruthy();
+      fireEvent.keyDown(window, { key: 'ArrowLeft' });
+      expect(await screen.findByText('Mercredi 14 octobre 2026 · Semaine 42')).toBeTruthy();
+      expect(screen.queryByText('Point mensuel')).toBeNull();
+      expect(within(jourTaches('2026-10-14')).getByText('Envoyer la plaquette')).toBeTruthy();
+    });
+
+    it('lists the week day by day, meetings with their hours beside the tasks', async () => {
+      await semaineAffichee();
+      fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
+      const jeudi = await screen.findByRole('region', { name: 'Jeudi 15 octobre' });
+      expect(within(jeudi).getByText('14:00 – 15:00')).toBeTruthy();
+      expect(within(jeudi).getByText('Lyon')).toBeTruthy();
+      expect(within(jeudi).getByRole('link', { name: 'Préparer' }).getAttribute('href')).toBe(
+        '#/simatis/rendez-vous/ouvrir/g1',
+      );
+      expect(within(jeudi).getByText('Point mensuel')).toBeTruthy();
+      expect(within(jeudi).getByText('Aucune tâche')).toBeTruthy();
+      const vendredi = screen.getByRole('region', { name: 'Vendredi 16 octobre' });
+      expect(within(vendredi).getByTitle('Journée entière').textContent).toBe('Salon fictif');
+      const mardi = screen.getByRole('region', { name: 'Mardi 13 octobre' });
+      expect(within(mardi).getByText('Appeler Romain Arpin')).toBeTruthy();
+      // An empty weekend is left out.
+      expect(screen.queryByRole('region', { name: 'Samedi 17 octobre' })).toBeNull();
     });
   });
 });

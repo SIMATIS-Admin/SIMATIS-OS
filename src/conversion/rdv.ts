@@ -103,7 +103,12 @@ export async function listerRendezVous(
   }
   return {
     etat: 'ok' as const,
-    rdv: await relier(db, instance, liste),
+    // One read per agenda: put them back in time order.
+    rdv: await relier(
+      db,
+      instance,
+      liste.sort((a, b) => a.debut.getTime() - b.debut.getTime()),
+    ),
     agendasIgnores: ignores,
   };
 }

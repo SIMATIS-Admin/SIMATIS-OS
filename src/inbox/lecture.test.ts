@@ -150,6 +150,8 @@ describe('Inbox : sélection des lectures', () => {
       debut: new Date('2026-10-06T08:00:00Z'),
       fin: new Date('2026-10-06T09:00:00Z'),
       journee: false,
+      agenda: 'primary',
+      couleur: null,
       lien: `https://calendar.example/${id}`,
       ...extra,
     });
