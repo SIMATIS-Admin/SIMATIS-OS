@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RdvAgenda, TacheVue } from '../../api.js';
-import { COULEUR_RDV, couleurRdv, estRendezVous, joursCouverts } from './agenda.js';
+import { COULEUR_RDV, couleurRdv, estCreneau, estRendezVous, joursCouverts } from './agenda.js';
 
 const rdv = (extra: Partial<RdvAgenda>): RdvAgenda => ({
   id: 'e1',
@@ -21,6 +21,16 @@ describe('Agenda placement', () => {
     const autre = couleurRdv(rdv({ agenda: 'equipe@exemple.test' }));
     expect(autre).not.toBe(COULEUR_RDV);
     expect(couleurRdv(rdv({ agenda: 'equipe@exemple.test' }))).toBe(autre);
+  });
+
+  it('tells a slot of more than two hours from a meeting', () => {
+    expect(estCreneau(rdv({ fin: '2026-10-20T10:00:00.000Z' }))).toBe(false);
+    expect(estCreneau(rdv({ fin: '2026-10-20T10:01:00.000Z' }))).toBe(true);
+    expect(
+      estCreneau(
+        rdv({ journee: true, debut: '2026-10-20T00:00:00.000Z', fin: '2026-10-21T00:00:00.000Z' }),
+      ),
+    ).toBe(false);
   });
 
   it('puts only timed meetings and lunches on the hour grid', () => {

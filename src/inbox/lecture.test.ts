@@ -141,7 +141,7 @@ describe('Inbox : sélection des lectures', () => {
     ).toEqual(['vieux']);
   });
 
-  it('keeps finished meetings with an outsider, never internal, all-day, future or solo ones', () => {
+  it('keeps finished meetings with an outsider, never internal, all-day, slots, future or solo ones', () => {
     const e = (id: string, participants: string[], extra: Partial<Evenement> = {}): Evenement => ({
       id,
       titre: id,
@@ -160,6 +160,10 @@ describe('Inbox : sélection des lectures', () => {
         e('client', ['paul@client.example', 'collegue@exemple.fr']),
         e('interne', ['collegue@exemple.fr']),
         e('journee', ['paul@client.example'], { journee: true }),
+        e('creneau', ['paul@client.example'], {
+          debut: new Date('2026-10-06T06:00:00Z'),
+          fin: new Date('2026-10-06T09:00:00Z'),
+        }),
         e('futur', ['paul@client.example'], {
           debut: new Date('2026-10-08T08:00:00Z'),
           fin: new Date('2026-10-08T09:00:00Z'),

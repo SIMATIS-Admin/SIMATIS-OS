@@ -64,6 +64,16 @@ const semaine = () => ({
       couleur: null,
     },
     {
+      id: 'g3',
+      debut: '2026-10-16T07:00:00.000Z',
+      fin: '2026-10-16T15:00:00.000Z',
+      titre: 'Bureau réservé',
+      lieu: null,
+      journee: false,
+      agenda: 'primary',
+      couleur: null,
+    },
+    {
       id: 'g2',
       debut: '2026-10-16T00:00:00.000Z',
       fin: '2026-10-17T00:00:00.000Z',
@@ -381,6 +391,9 @@ describe('Tâches screen', () => {
       expect(dejeuner.closest('a')?.getAttribute('href')).toBe('#/simatis/rendez-vous/ouvrir/g1');
       expect(within(creneau('2026-10-15', 16)).getByText('Point mensuel')).toBeTruthy();
       expect(within(bande('2026-10-16')).getByText('Salon fictif')).toBeTruthy();
+      // A slot of more than two hours frames the day, without being a meeting to open.
+      const plage = within(grille()).getByTitle(/^Créneau 09:00 – 17:00/);
+      expect(plage.closest('a')).toBeNull();
       // Tasks never sit on the hour grid: they are in their day, beside it.
       expect(within(grille()).queryByText('Appeler Romain Arpin')).toBeNull();
       expect(within(jourTaches('2026-10-13')).getByText('Appeler Romain Arpin')).toBeTruthy();
@@ -505,6 +518,10 @@ describe('Tâches screen', () => {
       expect(within(jeudi).getByText('Aucune tâche')).toBeTruthy();
       const vendredi = screen.getByRole('region', { name: 'Vendredi 16 octobre' });
       expect(within(vendredi).getByTitle('Journée entière').textContent).toBe('Salon fictif');
+      expect(within(vendredi).getByTitle('Créneau réservé (plus de 2 h)').textContent).toBe(
+        '09:00–17:00 Bureau réservé',
+      );
+      expect(within(vendredi).getByText('Aucun rendez-vous')).toBeTruthy();
       const mardi = screen.getByRole('region', { name: 'Mardi 13 octobre' });
       expect(within(mardi).getByText('Appeler Romain Arpin')).toBeTruthy();
       // An empty weekend is left out.

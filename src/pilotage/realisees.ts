@@ -58,6 +58,12 @@ export function compterRealisees(
   };
 }
 
+// A timed event longer than two hours is a slot booked to get organised (a room, a block of
+// time for a mandate), not a meeting: it never counts nor shows as a rendez-vous.
+export const DUREE_MAX_RDV_MS = 2 * 60 * 60_000;
+export const estCreneau = (r: { debut: Date; fin: Date; journee: boolean }) =>
+  !r.journee && r.fin.getTime() - r.debut.getTime() > DUREE_MAX_RDV_MS;
+
 // Meetings held (Brief activity): over, with a time and at least one guest, so that all-day
 // events and personal blocks ("focus", lunch) do not count. Day of the start, in Paris.
 export function compterRdvTenus(
@@ -68,7 +74,7 @@ export function compterRdvTenus(
   const auj = jourDe(maintenant, fuseau);
   const veille = dernierJourOuvre(auj);
   const jours = rdv
-    .filter((r) => !r.journee && r.participants.length > 0 && r.fin <= maintenant)
+    .filter((r) => !r.journee && !estCreneau(r) && r.participants.length > 0 && r.fin <= maintenant)
     .map((r) => jourDe(r.debut, fuseau));
   const entre = (debut: string, fin: string) => jours.filter((j) => j >= debut && j <= fin).length;
   return {
@@ -78,17 +84,19 @@ export function compterRdvTenus(
   };
 }
 
-// Meetings still to come or under way today. An all-day event carries plain dates (end
+// Meetings still to come or under way today, slots left out. An all-day event carries plain dates (end
 // exclusive) read as UTC midnight: compare those dates, not instants, or yesterday's all-day
 // event would end at 02:00 today in Paris and show up.
-export function rdvDuJour<T extends { fin: Date; journee: boolean }>(
+export function rdvDuJour<T extends { debut: Date; fin: Date; journee: boolean }>(
   rdv: T[],
   maintenant: Date,
   fuseau = 'Europe/Paris',
 ): T[] {
   const auj = jourDe(maintenant, fuseau);
-  return rdv.filter((r) =>
-    r.journee ? r.fin.toISOString().slice(0, 10) > auj : jourDe(r.fin, fuseau) >= auj,
+  return rdv.filter(
+    (r) =>
+      !estCreneau(r) &&
+      (r.journee ? r.fin.toISOString().slice(0, 10) > auj : jourDe(r.fin, fuseau) >= auj),
   );
 }
 

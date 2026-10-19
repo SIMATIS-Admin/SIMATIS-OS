@@ -22,7 +22,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
-import { decaler, jourDe } from '../pilotage/realisees.js';
+import { decaler, estCreneau, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
 import { propose } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
@@ -107,7 +107,8 @@ export async function listerRendezVous(
     rdv: await relier(
       db,
       instance,
-      liste.sort((a, b) => a.debut.getTime() - b.debut.getTime()),
+      // Slots of more than two hours are bookings, not meetings to prepare.
+      liste.filter((e) => !estCreneau(e)).sort((a, b) => a.debut.getTime() - b.debut.getTime()),
     ),
     agendasIgnores: ignores,
   };

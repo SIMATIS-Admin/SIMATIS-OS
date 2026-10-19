@@ -1,7 +1,14 @@
 import type { CSSProperties, DragEvent } from 'react';
 import type { RdvAgenda, SemaineTaches, TacheSaisie, TacheVue } from '../../api.js';
 import { Icon } from '../../icons.js';
-import { COULEUR_TYPE, MIME_TACHE, couleurRdv, estRendezVous, joursCouverts } from './agenda.js';
+import {
+  COULEUR_TYPE,
+  MIME_TACHE,
+  couleurRdv,
+  estCreneau,
+  estRendezVous,
+  joursCouverts,
+} from './agenda.js';
 import { ACTIVITES } from './commun.js';
 import { heureParis, jourParis, memeHeure } from './creneaux.js';
 import { DEBUT, LIGNES, placer, versCreneau } from './placement.js';
@@ -63,7 +70,18 @@ export function Grille({
   };
 
   const colonne = (jour: string) => {
-    const rdv = data.rdv.filter((r) => !r.journee && jourParis(r.debut) === jour);
+    const duJour = data.rdv.filter((r) => !r.journee && jourParis(r.debut) === jour);
+    const rdv = duJour.filter((r) => !estCreneau(r));
+    // Slots (more than two hours) sit underneath, full width: they frame the day, the
+    // meetings inside them stay readable on top.
+    const creneaux = duJour.filter(estCreneau);
+    const placesCreneaux = placer(
+      creneaux.map((r, k) => ({
+        id: String(k),
+        debut: r.debut,
+        minutes: (Date.parse(r.fin) - Date.parse(r.debut)) / 60_000,
+      })),
+    );
     const activites = reunions.filter((t) => jourParis(t.echeance ?? '') === jour);
     // Meetings and CRM activities share the width when they overlap.
     const places = placer([
@@ -96,6 +114,22 @@ export function Grille({
         onDragOver={accepte}
         onDrop={versCreneauDrop(jour, ligne)}
       >
+        {creneaux.map((r, k) => {
+          const p = placesCreneaux.get(String(k));
+          return p?.ligne === ligne ? (
+            <div
+              key={`${r.agenda}:${r.id}`}
+              className="gr-plage"
+              style={{ height: p.hauteur * HAUTEUR - 2, ...couleur(couleurRdv(r)) }}
+              title={`Créneau ${heureParis(r.debut)} – ${heureParis(r.fin)} · ${r.titre}`}
+            >
+              <small>
+                {heureParis(r.debut)}–{heureParis(r.fin)}
+              </small>{' '}
+              {r.titre}
+            </div>
+          ) : null;
+        })}
         {rdv.map((r, k) => {
           const pos = position(`r${k}`, ligne);
           return pos ? (

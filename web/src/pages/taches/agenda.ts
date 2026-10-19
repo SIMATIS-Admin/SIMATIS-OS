@@ -27,6 +27,11 @@ export function couleurRdv(r: Pick<RdvAgenda, 'agenda' | 'couleur'>): string {
   return PALETTE_AGENDAS[h % PALETTE_AGENDAS.length] ?? COULEUR_RDV;
 }
 
+// Same rule as the server (pilotage/realisees.ts): a timed event of more than two hours is a
+// slot booked to get organised (a room, time for a mandate), not a rendez-vous.
+export const estCreneau = (r: Pick<RdvAgenda, 'debut' | 'fin' | 'journee'>) =>
+  !r.journee && Date.parse(r.fin) - Date.parse(r.debut) > 2 * 60 * 60_000;
+
 // A meeting or lunch with a time is a rendez-vous; everything else is a task of its day.
 export const estRendezVous = (t: TacheVue) =>
   t.avecHeure && (t.type === 'reunion' || t.type === 'dejeuner');

@@ -1,6 +1,6 @@
 import type { SemaineTaches, TacheVue } from '../../api.js';
 import { Icon } from '../../icons.js';
-import { COULEUR_TYPE, couleurRdv, estRendezVous, joursCouverts } from './agenda.js';
+import { COULEUR_TYPE, couleurRdv, estCreneau, estRendezVous, joursCouverts } from './agenda.js';
 import { ACTIVITES, plusJours } from './commun.js';
 import { anciennete, heureParis, jourParis } from './creneaux.js';
 import { LigneTache, heureReelle, nomJour, tachesDuJour } from './Panneau.js';
@@ -39,7 +39,7 @@ export function Programme({
   const rendezVous = (jour: string): Rendezvous[] =>
     [
       ...data.rdv
-        .filter((r) => !r.journee && jourParis(r.debut) === jour)
+        .filter((r) => !r.journee && !estCreneau(r) && jourParis(r.debut) === jour)
         .map((r) => ({
           cle: `${r.agenda}:${r.id}`,
           debut: r.debut,
@@ -89,6 +89,8 @@ export function Programme({
         const taches = tachesDuJour(data, jour);
         // All-day events (holidays, trade fairs) are labels of the day, not appointments.
         const journee = data.rdv.filter((r) => r.journee && joursCouverts(r).includes(jour));
+        // Slots of more than two hours are bookings: shown beside the date, not as meetings.
+        const creneaux = data.rdv.filter((r) => estCreneau(r) && jourParis(r.debut) === jour);
         // The weekend only shows when something is planned.
         if (k >= 5 && rdv.length === 0 && taches.length === 0) return null;
         return (
@@ -108,6 +110,16 @@ export function Programme({
                   title="Journée entière"
                 >
                   {r.titre}
+                </span>
+              ))}
+              {creneaux.map((r) => (
+                <span
+                  key={`${r.agenda}:${r.id}`}
+                  className="ag-plage"
+                  style={{ ['--c' as string]: couleurRdv(r) }}
+                  title="Créneau réservé (plus de 2 h)"
+                >
+                  {`${heureParis(r.debut)}–${heureParis(r.fin)} ${r.titre}`}
                 </span>
               ))}
             </header>

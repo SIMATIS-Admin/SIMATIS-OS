@@ -139,6 +139,12 @@ describe('Rendez-vous and Devis', () => {
                         { email: contact.email.toUpperCase() },
                       ],
                     },
+                    {
+                      id: 'evt-creneau',
+                      summary: 'Bureau réservé',
+                      start: { dateTime: '2026-10-12T07:00:00Z' },
+                      end: { dateTime: '2026-10-12T15:00:00Z' },
+                    },
                   ],
                 },
           ),
@@ -152,6 +158,8 @@ describe('Rendez-vous and Devis', () => {
       { fetch },
     );
     expect(list.etat).toBe('ok');
+    // A slot of more than two hours is a booking, not a meeting to prepare.
+    expect(list.rdv.map((r) => r.id)).toEqual(['evt-1']);
     expect(list.rdv[0]).toMatchObject({
       id: 'evt-1',
       contact: { id: contact.id },

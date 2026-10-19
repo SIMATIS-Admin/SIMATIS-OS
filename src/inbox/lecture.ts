@@ -1,4 +1,5 @@
 import type { Brouillon, Evenement, Fil } from '../connecteurs/google/google.js';
+import { estCreneau } from '../pilotage/realisees.js';
 
 // What the Inbox routine reads in the pilot's tools, filtered here so the rules are tested once:
 // only the instance's known people, only after a working day, only meetings with outsiders.
@@ -111,7 +112,7 @@ export function rendezVousExternes(
   maintenant: Date,
 ): RendezVousPasse[] {
   return evenements.flatMap((e) => {
-    if (e.journee || e.fin > maintenant) return [];
+    if (e.journee || estCreneau(e) || e.fin > maintenant) return [];
     const exterieurs = e.participants.filter((p) => domaineDe(p) !== domaineMoi.toLowerCase());
     if (exterieurs.length === 0) return [];
     const lien = exterieurs.map((p) => rattacher(p, a)).find((x) => x !== null) ?? null;
