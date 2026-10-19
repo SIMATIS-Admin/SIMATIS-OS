@@ -16,7 +16,7 @@ import { EditionTache, Ensuite, type Enregistrement } from './taches/Edition.js'
 import { Tableau } from './listes/Tableau.js';
 import { jourParis, memeHeure, titreJour, titreSemaine } from './taches/creneaux.js';
 import { Grille } from './taches/Grille.js';
-import { COULEUR_RDV, COULEUR_TYPE, MIME_TACHE } from './taches/agenda.js';
+import { MIME_TACHE } from './taches/agenda.js';
 import { Panneau } from './taches/Panneau.js';
 import { Programme } from './taches/Programme.js';
 
@@ -45,31 +45,6 @@ const MODES: [Mode, string][] = [
   ['liste', 'Liste'],
   ['tableau', 'Tableau'],
 ];
-
-// What each colour means: meetings are blocks on the calendar, tasks are lines to tick.
-function Legende() {
-  const point = (couleur: string, libelle: string) => (
-    <span key={libelle} style={{ ['--c' as string]: couleur }}>
-      {libelle}
-    </span>
-  );
-  return (
-    <div className="ag-legende small">
-      <b>Rendez-vous</b>
-      {/* Google meetings keep the colours set in Google Agenda. */}
-      {point(
-        `linear-gradient(135deg, ${COULEUR_RDV}, #7986cb, #e67c73, #f6bf26)`,
-        'Google Agenda (vos couleurs)',
-      )}
-      {point(COULEUR_TYPE.reunion, ACTIVITES.reunion[1])}
-      {point(COULEUR_TYPE.dejeuner, ACTIVITES.dejeuner[1])}
-      <b>Tâches</b>
-      {(['appel', 'email', 'tache', 'echeance'] as const).map((t) =>
-        point(COULEUR_TYPE[t], ACTIVITES[t][1]),
-      )}
-    </div>
-  );
-}
 
 const PERIODES: [CleePeriode | 'plage', string][] = [
   ['retard', 'En retard'],
@@ -466,7 +441,6 @@ export function Taches({ slug }: { slug: string }) {
           </button>
         </div>
       </div>
-      {mode !== 'tableau' && <Legende />}
       {message && (
         <div className="alert amber" style={{ marginBottom: 12 }}>
           <div>{message}</div>

@@ -2201,36 +2201,6 @@ textarea.input {
   align-items: center;
   gap: 8px;
 }
-.ag-legende {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
-  color: var(--ink-2);
-  margin-bottom: 12px;
-}
-.ag-legende b {
-  color: var(--ink-3);
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.ag-legende b + span {
-  margin-left: -6px;
-}
-.ag-legende span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.ag-legende span::before {
-  content: '';
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--c);
-}
 .ag {
   display: flex;
   gap: 12px;
