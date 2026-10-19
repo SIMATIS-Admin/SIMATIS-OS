@@ -722,6 +722,9 @@ export type ProjetDiag = {
   dateDiagnostic: string | null;
   chats: Record<string, ChatEtape>;
   profil: Profil | null;
+  revue: Record<string, unknown> | null;
+  aRapport: boolean;
+  rapportNom: string | null;
   updatedAt: string;
 };
 export type ProjetDiagPatch = Partial<

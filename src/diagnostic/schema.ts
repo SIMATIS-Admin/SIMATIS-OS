@@ -21,6 +21,11 @@ export const diagnosticProjets = pgTable(
     statutDiagnostic: text('statut_diagnostic'),
     dateDiagnostic: date('date_diagnostic'),
     chats: jsonb('chats').$type<Record<string, ChatEtape>>().notNull().default({}),
+    // Formulaire de revue tel qu'il était dans l'artifact (commentaires de Marc), copié à l'import.
+    revue: jsonb('revue').$type<Record<string, unknown>>(),
+    // Rapport remis au dirigeant : fichier Word encodé en base64, avec son nom d'origine.
+    rapport: text('rapport'),
+    rapportNom: text('rapport_nom'),
   },
   (t) => [
     index('diagnostic_projets_instance_idx').on(t.instanceId),

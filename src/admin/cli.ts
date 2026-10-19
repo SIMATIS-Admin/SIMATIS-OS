@@ -1,4 +1,6 @@
+import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
+import { importerProjets, importSchema } from '../diagnostic/import.js';
 import { connectGoogle } from '../connecteurs/google/oauth.js';
 import type { Frequence, Kind } from '../connexions/schema.js';
 import { configureConnexion, FREQUENCES, syncNow } from '../connexions/service.js';
@@ -33,6 +35,7 @@ export const USAGE = `Commandes :
   instance:ecritures --slug <slug> --on|--off   (second verrou des écritures réelles)
   instance:module --slug <slug> --module <devis|site-web|…> --on|--off
   demo:seed
+  diagnostic:import --slug <slug> --fichier <chemin.json|->   (projets de diagnostic, espace SIMATIS)
   token:create --nom <nom> (--instance <slug> | --portefeuille | --runner)
   token:list
   token:revoke --id <id>
@@ -84,10 +87,11 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
       fournisseur: { type: 'string' },
       frequence: { type: 'string' },
       module: { type: 'string' },
+      fichier: { type: 'string' },
     },
   });
   const need = (
-    name: 'slug' | 'nom' | 'type' | 'phase' | 'id' | 'kind' | 'fournisseur' | 'module',
+    name: 'slug' | 'nom' | 'type' | 'phase' | 'id' | 'kind' | 'fournisseur' | 'module' | 'fichier',
   ): string => {
     const value = values[name];
     if (!value) throw new Error(`Option manquante : --${name}`);
@@ -148,6 +152,17 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
         }
         out(`Instance purgée et archivée : ${(await purgeInstance(db, need('slug'))).slug}`);
         return 0;
+      case 'diagnostic:import': {
+        const instance = await requireActive(db, need('slug'));
+        const source = need('fichier');
+        const texte = source === '-' ? await lireEntree() : await readFile(source, 'utf8');
+        const parsed = importSchema.safeParse(JSON.parse(texte));
+        if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Fichier invalide');
+        const { crees, deja } = await importerProjets(db, instance, parsed.data.projets);
+        out(`Créés : ${crees.join(', ') || 'aucun'}`);
+        out(`Déjà présents (inchangés) : ${deja.join(', ') || 'aucun'}`);
+        return 0;
+      }
       case 'demo:seed':
         out(
           (await seedDemoIfEmpty(db))
@@ -246,4 +261,12 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
     out(error instanceof Error ? error.message : String(error));
     return 1;
   }
+}
+
+// Lit le fichier d'import sur l'entrée standard (--fichier -), pour ne jamais l'écrire sur disque.
+async function lireEntree(): Promise<string> {
+  process.stdin.setEncoding('utf8');
+  let texte = '';
+  for await (const morceau of process.stdin) texte += morceau;
+  return texte;
 }
