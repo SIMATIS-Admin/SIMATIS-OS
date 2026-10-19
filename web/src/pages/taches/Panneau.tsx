@@ -111,9 +111,15 @@ export function Panneau({
   const [sansDateOuvert, setSansDateOuvert] = useState(false);
   const heure = heureReelle(data);
   const toutes = [...data.enRetard, ...data.taches, ...data.sansEcheance];
-  const enRetard = [...data.enRetard].sort((a, b) =>
-    (a.echeance ?? '').localeCompare(b.echeance ?? ''),
-  );
+  // The server counts as overdue only what is before the week shown: in the Day view, the open
+  // tasks of the week's earlier days are overdue too.
+  const enRetard = [
+    ...data.enRetard,
+    ...data.taches.filter((t) => {
+      const jour = t.echeance ? jourParis(t.echeance) : '';
+      return !t.fait && !estRendezVous(t) && jour < aujourdhui && !jours.includes(jour);
+    }),
+  ].sort((a, b) => (a.echeance ?? '').localeCompare(b.echeance ?? ''));
   const versAujourdhui = (t: TacheVue): [TacheVue, string] => [
     t,
     memeHeure(t.echeance, aujourdhui),

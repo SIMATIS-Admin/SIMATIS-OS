@@ -487,6 +487,9 @@ describe('Tâches screen', () => {
       expect(await screen.findByText('Mercredi 14 octobre 2026 · Semaine 42')).toBeTruthy();
       expect(screen.queryByText('Point mensuel')).toBeNull();
       expect(within(jourTaches('2026-10-14')).getByText('Envoyer la plaquette')).toBeTruthy();
+      // Tuesday's open call is overdue on Wednesday.
+      const retard = screen.getByRole('region', { name: 'En retard' });
+      expect(within(retard).getByText('Appeler Romain Arpin')).toBeTruthy();
     });
 
     it('lists the week day by day, meetings with their hours beside the tasks', async () => {
