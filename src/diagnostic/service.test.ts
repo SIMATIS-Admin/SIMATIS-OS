@@ -111,3 +111,32 @@ describe('Diagnostic : projets', () => {
     expect(saisi.revue).toEqual(revue);
   });
 });
+
+describe('Diagnostic : colonnes de l entretien', () => {
+  let t: TestApp;
+  let simatis: Instance;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    simatis = await createInstance(t.owner.db, {
+      slug: 'simatis-entretien-colonnes',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+  });
+
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  it('un projet neuf n a ni réponses, ni historique, ni PDF', async () => {
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Entretien Fictif A',
+      activite: 'services',
+    });
+    const relu = (await listProjets(t.app.db, simatis)).find((x) => x.id === p.id)!;
+    expect(relu.reponsesEntretien).toEqual([]);
+    expect(relu.historiqueReponses).toEqual([]);
+    expect(relu.pdfEntretienNom).toBeNull();
+  });
+});

@@ -1,6 +1,7 @@
 import { date, index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Dimensions } from './profil.js';
+import type { ReponseQuestion } from './score.js';
 
 // Conversation avec l'assistant Claude d'une étape : le chat vit sur claude.ai, l'OS garde son
 // lien, le modèle et l'effort choisis pour le retrouver.
@@ -20,7 +21,7 @@ export type ChatEtape = { modele: string; effort: string; lien: string };
 export const STATUTS_SUPPORT = ['aucun', 'preparation', 'pret', 'final'] as const;
 export type StatutSupport = (typeof STATUTS_SUPPORT)[number];
 // Travail demandé au runner avec le message du pilote (sans : une simple réponse dans le chat).
-export const DEMANDES = ['preparer_support', 'support_final', 'rapport'] as const;
+export const DEMANDES = ['preparer_support', 'support_final', 'rapport', 'entretien'] as const;
 // Rapport remis au dirigeant, rédigé par Claude : 'en_cours' tant que le runner le rédige, 'pret'
 // une fois son lien enregistré.
 export const STATUTS_RAPPORT = ['aucun', 'en_cours', 'pret'] as const;
@@ -57,6 +58,15 @@ export const diagnosticProjets = pgTable(
     rapportLien: text('rapport_lien'),
     rapportLiens: jsonb('rapport_liens')
       .$type<{ lien: string; le: string }[]>()
+      .notNull()
+      .default([]),
+    // Entretien : PDF de l'outil externe (base64) et ses réponses lues par Claude, par question.
+    pdfEntretien: text('pdf_entretien'),
+    pdfEntretienNom: text('pdf_entretien_nom'),
+    reponsesEntretien: jsonb('reponses_entretien').$type<ReponseQuestion[]>().notNull().default([]),
+    // Corrections des réponses, avec l'ancienne et la nouvelle valeur (question = rubrique#numéro).
+    historiqueReponses: jsonb('historique_reponses')
+      .$type<{ question: string; ancienne: string; nouvelle: string; le: string }[]>()
       .notNull()
       .default([]),
     // Conversation avec Claude (répondue par le runner de l'OS, comme l'Inbox) et son état :
