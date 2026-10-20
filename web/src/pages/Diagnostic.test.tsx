@@ -11,6 +11,8 @@ const api = vi.hoisted(() => ({
   envoyerMessageDiag: vi.fn(),
   demandeSupportDiag: vi.fn(),
   demandeRapportDiag: vi.fn(),
+  importerEntretienDiag: vi.fn(),
+  corrigerReponseDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
 }));
 vi.mock('../api.js', () => api);
@@ -44,6 +46,10 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   rapportLienStatut: 'aucun',
   rapportLien: null,
   rapportLiens: [],
+  aPdfEntretien: false,
+  pdfEntretienNom: null,
+  reponsesEntretien: [],
+  historiqueReponses: [],
   updatedAt: '2026-10-19T08:00:00.000Z',
   ...extra,
 });
@@ -394,5 +400,85 @@ describe('Rapport à l étape 4', () => {
     const lien = await screen.findByRole('link', { name: 'Ouvrir le rapport' });
     expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/RapportFictif0004');
     expect(lien.getAttribute('target')).toBe('_blank');
+  });
+});
+
+describe('Entretien à l étape 2', () => {
+  const dims = { outils: 7.5, strategie: 5.4, polyvalence: 9.5 };
+  const reponses: ProjetDiag['reponsesEntretien'] = [
+    { section: 'R1', numero: 1, reponse: 'A' },
+    { section: 'R2', numero: 1, reponse: 'C' },
+  ];
+
+  it('importe le PDF choisi, en envoyant son nom et son contenu', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2, etapeMax: 2 })]);
+    api.importerEntretienDiag.mockResolvedValue(
+      projet({
+        etape: 2,
+        etapeMax: 2,
+        demande: 'entretien',
+        aPdfEntretien: true,
+        pdfEntretienNom: 'entretien.pdf',
+      }),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const champ = await screen.findByLabelText("Importer le PDF de l'outil");
+    const fichier = new File(['%PDF'], 'entretien.pdf', { type: 'application/pdf' });
+    fireEvent.change(champ, { target: { files: [fichier] } });
+    await waitFor(() => expect(api.importerEntretienDiag).toHaveBeenCalled());
+    expect(api.importerEntretienDiag).toHaveBeenCalledWith('simatis', 'p1', {
+      nom: 'entretien.pdf',
+      base64: 'JVBERg==',
+    });
+  });
+
+  it('montre que Claude lit le PDF pendant la demande', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 2, etapeMax: 2, demande: 'entretien', aPdfEntretien: true }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/Claude lit le PDF/)).toBeTruthy();
+  });
+
+  it('liste les réponses lues et une correction les renvoie à l OS', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 2,
+        etapeMax: 2,
+        dims,
+        profil: 'Sprinteur',
+        aPdfEntretien: true,
+        reponsesEntretien: reponses,
+      }),
+    ]);
+    api.corrigerReponseDiag.mockResolvedValue(
+      projet({
+        etape: 2,
+        etapeMax: 2,
+        dims,
+        profil: 'Sprinteur',
+        aPdfEntretien: true,
+        reponsesEntretien: reponses,
+      }),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const choix = await screen.findByLabelText('Réponse R1 n° 1');
+    fireEvent.change(choix, { target: { value: 'B' } });
+    await waitFor(() => expect(api.corrigerReponseDiag).toHaveBeenCalled());
+    expect(api.corrigerReponseDiag).toHaveBeenCalledWith('simatis', 'p1', {
+      section: 'R1',
+      numero: 1,
+      reponse: 'B',
+    });
+  });
+
+  it('garde la saisie manuelle des trois notes comme secours', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2, etapeMax: 2 })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByRole('button', { name: 'Enregistrer le résultat' })).toBeTruthy();
   });
 });

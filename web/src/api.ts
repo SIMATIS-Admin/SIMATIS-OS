@@ -733,6 +733,7 @@ export type Dimensions = { outils: number; strategie: number; polyvalence: numbe
 export type Profil = 'Joggeur' | 'Sprinteur' | 'Marathonien' | 'Ultra-endurant';
 export type ChatEtape = { modele: string; effort: string; lien: string };
 export type Diapositive = { titre: string; texte: string; notes: string };
+export type LettreReponse = 'A' | 'B' | 'C' | 'D' | 'E' | 'N/A';
 export type ProjetDiag = {
   id: string;
   nom: string;
@@ -754,7 +755,11 @@ export type ProjetDiag = {
     erreur?: boolean;
   }[];
   statutChat: 'repos' | 'attente_claude' | 'en_cours';
-  demande: 'preparer_support' | 'support_final' | 'rapport' | null;
+  demande: 'preparer_support' | 'support_final' | 'rapport' | 'entretien' | null;
+  aPdfEntretien: boolean;
+  pdfEntretienNom: string | null;
+  reponsesEntretien: { section: string; numero: number; reponse: LettreReponse }[];
+  historiqueReponses: { question: string; ancienne: string; nouvelle: string; le: string }[];
   ditParDirigeant: string;
   hypotheses: string;
   aLogo: boolean;
@@ -808,6 +813,28 @@ export const demandeSupportDiag = (
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/support/${action}`),
     {},
+  );
+// Import du PDF de l'outil externe (étape 2) : Claude en lit les réponses.
+export const importerEntretienDiag = (
+  slug: string,
+  id: string,
+  pdf: { nom: string; base64: string },
+) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/entretien`),
+    pdf,
+  );
+// Correction d'une réponse lue : le profil se recalcule côté OS.
+export const corrigerReponseDiag = (
+  slug: string,
+  id: string,
+  corps: { section: string; numero: number; reponse: LettreReponse },
+) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/entretien/reponse`),
+    corps,
   );
 // Demande la rédaction du rapport par Claude (étape 4, revue validée).
 export const demandeRapportDiag = (slug: string, id: string) =>
