@@ -277,7 +277,7 @@ describe('Assistant de l étape', () => {
       expect(api.envoyerMessageDiag).toHaveBeenCalledWith('simatis', 'p1', 'Question fictive'),
     );
     expect(await screen.findByText('Question fictive')).toBeTruthy();
-    expect(screen.getByText(/Claude prépare sa réponse/)).toBeTruthy();
+    expect(screen.getByText(/En attente du runner de ce poste/)).toBeTruthy();
   });
 
   it('prépare le support depuis l étape 1', async () => {
@@ -440,5 +440,35 @@ describe('Entretien à l étape 2', () => {
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     expect(await screen.findByRole('button', { name: 'Enregistrer le résultat' })).toBeTruthy();
+  });
+});
+
+describe('Indication pendant que Claude travaille', () => {
+  const question = {
+    etape: 1,
+    de: 'pilote' as const,
+    texte: 'Question fictive',
+    at: '2026-10-20T08:00:00.000Z',
+  };
+
+  it('dit que le message attend le runner de ce poste', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ conversation: [question], statutChat: 'attente_claude' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/En attente du runner de ce poste/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'En cours…' }).disabled).toBe(
+      true,
+    );
+  });
+
+  it('dit que Claude répond quand le runner a pris le message', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ conversation: [question], statutChat: 'en_cours' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/Claude répond à votre message/)).toBeTruthy();
   });
 });

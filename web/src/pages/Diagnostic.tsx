@@ -1176,12 +1176,18 @@ function Assistant({
               <p>{m.texte}</p>
             </div>
           ))}
+          {enAttente && (
+            <div className="diag-msg claude attente" role="status" aria-live="polite">
+              <small>Claude · en cours</small>
+              <p>
+                <span className="diag-pulse">●</span>{' '}
+                {projet.statutChat === 'en_cours'
+                  ? 'Claude répond à votre message…'
+                  : 'Message reçu. En attente du runner de ce poste, qui le traitera.'}
+              </p>
+            </div>
+          )}
         </div>
-        {enAttente && (
-          <div className="small muted">
-            Claude prépare sa réponse. Elle arrive ici dès que le runner de ce poste l’a traitée.
-          </div>
-        )}
         <div className="diag-saisie">
           <textarea
             rows={2}
@@ -1195,7 +1201,7 @@ function Assistant({
             disabled={enAttente || !texte.trim()}
             onClick={() => void envoyer()}
           >
-            Envoyer
+            {enAttente ? 'En cours…' : 'Envoyer'}
           </button>
         </div>
         <label className="field">
