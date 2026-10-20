@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { ChatIndisponible, demarrerAttente } from './chat.js';
+import { ChatIndisponible, demarrerAttente, finirAttente } from './chat.js';
 import { createProjet, listProjets, updateProjet } from './service.js';
 import { autoriserSiRapport, demanderRapport, enregistrerRapport, rapportPret } from './rapport.js';
 import { SupportInvalide } from './support.js';
@@ -170,5 +170,33 @@ describe('Enregistrement du rapport', () => {
     expect(await decider({ action: 'read', url: LIEN_2 })).toMatchObject({ behavior: 'allow' });
     expect(await decider({ action: 'publish', url: LIEN_2 })).toMatchObject({ behavior: 'deny' });
     expect(await decider({ action: 'delete', url: LIEN_1 })).toMatchObject({ behavior: 'deny' });
+  });
+
+  it('scénario complet : premier rapport, puis un second qui garde l historique', async () => {
+    const instance = await createInstance(t.owner.db, {
+      slug: 'simatis-rapport-deux',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+    const id = await enCours(instance, 'Rapport Fictif I');
+    await withInstance(t.app.db, instance.id, (tx) => enregistrerRapport(tx, id, LIEN_1));
+    await finirAttente(t.app.db, instance, id);
+    const premier = (await listProjets(t.app.db, instance)).find((p) => p.id === id)!;
+    expect(premier).toMatchObject({
+      rapportLienStatut: 'pret',
+      rapportLien: LIEN_1,
+      demande: null,
+    });
+
+    const second = await demanderRapport(t.app.db, instance, id);
+    expect(second).toMatchObject({ demande: 'rapport', rapportLienStatut: 'en_cours' });
+    await demarrerAttente(t.app.db, instance, id);
+    await withInstance(t.app.db, instance.id, (tx) => enregistrerRapport(tx, id, LIEN_2));
+    await finirAttente(t.app.db, instance, id);
+
+    const relu = (await listProjets(t.app.db, instance)).find((p) => p.id === id)!;
+    expect(relu.rapportLien).toBe(LIEN_2);
+    expect(relu.rapportLienStatut).toBe('pret');
+    expect(relu.rapportLiens.map((r) => r.lien)).toEqual([LIEN_2, LIEN_1]);
   });
 });
