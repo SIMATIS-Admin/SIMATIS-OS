@@ -21,11 +21,11 @@ describe('Saisies du diagnostic', () => {
     ).toBe(true);
   });
 
-  it('borne les notes entre 0 et 10 et l étape entre 1 et 3', () => {
+  it('borne les notes entre 0 et 10 et l étape entre 1 et 5', () => {
     expect(
       projetSchema.safeParse({ dims: { outils: 11, strategie: 1, polyvalence: 1 } }).success,
     ).toBe(false);
-    expect(projetSchema.safeParse({ etape: 4 }).success).toBe(false);
+    expect(projetSchema.safeParse({ etape: 6 }).success).toBe(false);
     expect(
       projetSchema.safeParse({ etape: 3, dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 } })
         .success,

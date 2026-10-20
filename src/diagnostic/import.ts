@@ -15,7 +15,7 @@ export const importSchema = z.object({
       nom: z.string().trim().min(1).max(200),
       activite: z.string().refine(activiteValide, 'Activité inconnue'),
       contexte: z.string().max(5000).optional(),
-      etape: z.number().int().min(1).max(3),
+      etape: z.number().int().min(1).max(5),
       dims: z
         .object({
           outils: z.number().min(0).max(10),

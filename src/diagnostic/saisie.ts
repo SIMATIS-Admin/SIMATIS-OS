@@ -27,7 +27,7 @@ export const projetSchema = z
     nom: z.string().trim().min(1).max(200).optional(),
     activite: activite.optional(),
     contexte: z.string().max(5000).optional(),
-    etape: z.number().int().min(1).max(3).optional(),
+    etape: z.number().int().min(1).max(5).optional(),
     dims: z.object({ outils: note, strategie: note, polyvalence: note }).nullable().optional(),
     statutDiagnostic: z.enum(['Rapport à rédiger', 'Restitué']).nullable().optional(),
     dateDiagnostic: z
@@ -59,7 +59,7 @@ export const projetSchema = z
     revue: z.record(z.string(), z.unknown()).nullable().optional(),
     chats: z
       .record(
-        z.string().regex(/^[123]$/),
+        z.string().regex(/^[1-5]$/),
         z.object({
           modele: z.enum(MODELES),
           effort: z.enum(EFFORTS),
