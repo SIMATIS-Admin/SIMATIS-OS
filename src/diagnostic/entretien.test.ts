@@ -192,6 +192,27 @@ describe('Entretien : import du PDF, réponses et correction', () => {
     expect(relu.dims).toEqual({ outils: 10, strategie: 10, polyvalence: 10 });
     expect(relu.historiqueReponses).toEqual([]);
   });
+
+  it('scénario complet : import, lecture, profil, correction puis historique', async () => {
+    const p = await nouveau('Entretien Fictif SC');
+    await importerEntretien(t.app.db, simatis, p.id, { nom: 'entretien.pdf', base64: PDF_FICTIF });
+    await withInstance(t.app.db, simatis.id, (tx) =>
+      enregistrerReponses(tx, p.id, toutes(['E', 'E', 'A', 'A', 'A'])),
+    );
+    expect((await relire(p.id)).profil).toBe('Joggeur');
+    const corrige = await corrigerReponse(
+      t.app.db,
+      simatis,
+      p.id,
+      { section: 'R1', numero: 1 },
+      'A',
+    );
+    expect(corrige).toMatchObject({ profil: 'Ultra-endurant', aPdfEntretien: true, demande: null });
+    expect(corrige.historiqueReponses).toHaveLength(1);
+    expect(
+      corrige.reponsesEntretien.find((r) => r.section === 'R1' && r.numero === 1)?.reponse,
+    ).toBe('A');
+  });
 });
 
 describe('Entretien : permission du runner et réponses reçues', () => {
