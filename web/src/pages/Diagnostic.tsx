@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   creerProjetDiag,
+  demandeRapportDiag,
   demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
@@ -246,7 +247,12 @@ function ProjetVue({
 }) {
   // Pendant que Claude répond, le projet est relu toutes les cinq secondes.
   useEffect(() => {
-    if (projet.statutChat === 'repos' && projet.supportStatut !== 'preparation') return;
+    if (
+      projet.statutChat === 'repos' &&
+      projet.supportStatut !== 'preparation' &&
+      projet.rapportLienStatut !== 'en_cours'
+    )
+      return;
     const minuteur = setInterval(() => {
       fetchProjetsDiag(slug)
         .then((liste) => {
@@ -256,7 +262,14 @@ function ProjetVue({
         .catch(() => undefined);
     }, 5000);
     return () => clearInterval(minuteur);
-  }, [slug, projet.id, projet.statutChat, projet.supportStatut, onChange]);
+  }, [
+    slug,
+    projet.id,
+    projet.statutChat,
+    projet.supportStatut,
+    projet.rapportLienStatut,
+    onChange,
+  ]);
 
   const sauver = async (patch: ProjetDiagPatch) => {
     try {
@@ -309,7 +322,9 @@ function ProjetVue({
           )}
           {projet.etape === 2 && <Resultat projet={projet} onSauver={sauver} />}
           {projet.etape === 3 && <Revue projet={projet} onSauver={sauver} />}
-          {projet.etape === 4 && <Rapport slug={slug} projet={projet} />}
+          {projet.etape === 4 && (
+            <Rapport slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
+          )}
           {projet.etape === 5 && <Restitution projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
         </div>
@@ -664,7 +679,18 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
         </div>
       </div>
       {projet.revue ? (
-        <EditeurRevue revue={projet.revue} onChange={(revue) => void onSauver({ revue })} />
+        <>
+          <div className="row">
+            <button
+              className="btn go"
+              disabled={projet.revue.statut === 'validée'}
+              onClick={() => void onSauver({ revue: { ...projet.revue, statut: 'validée' } })}
+            >
+              Valider la revue
+            </button>
+          </div>
+          <EditeurRevue revue={projet.revue} onChange={(revue) => void onSauver({ revue })} />
+        </>
       ) : (
         <div className="panel empty">
           Pas encore de formulaire de revue. Il se saisit ici, comme dans l’artefact.
@@ -674,7 +700,34 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
   );
 }
 
-function Rapport({ slug, projet }: { slug: string; projet: ProjetDiag }) {
+// Pré-requis du rapport, repris de l'OS (le serveur reste l'autorité et refuse sinon).
+const raisonRapport = (projet: ProjetDiag) => {
+  if (!projet.dims) return "Saisissez d'abord le résultat à l'étape 2.";
+  if (projet.revue?.statut !== 'validée') return "Validez d'abord la revue à l'étape 3.";
+  return null;
+};
+
+function Rapport({
+  slug,
+  projet,
+  onChange,
+  onErreur,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onChange: (p: ProjetDiag) => void;
+  onErreur: (m: string) => void;
+}) {
+  const enCours = projet.rapportLienStatut === 'en_cours';
+  const raison = raisonRapport(projet);
+  const demander = async () => {
+    try {
+      onChange(await demandeRapportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const precedents = projet.rapportLiens.slice(1);
   return (
     <div className="panel">
       <div className="panel-h">
@@ -682,19 +735,56 @@ function Rapport({ slug, projet }: { slug: string; projet: ProjetDiag }) {
         {projet.profil && <span className="badge green">Profil : {projet.profil}</span>}
       </div>
       <div className="panel-b stack">
-        {projet.aRapport ? (
+        {projet.aRapport && (
           <div className="row">
             <a
-              className="btn go"
+              className="btn"
               href={`/api/i/${encodeURIComponent(slug)}/diagnostic/projets/${projet.id}/rapport`}
             >
               Télécharger le rapport ({projet.rapportNom})
             </a>
           </div>
-        ) : (
+        )}
+        {enCours ? (
           <p className="small muted" style={{ margin: 0 }}>
-            Pas encore de rapport. Claude le produira ici à partir de la revue des préconisations.
+            Claude rédige le rapport… La page se mettra à jour dès qu’il sera prêt.
           </p>
+        ) : (
+          projet.rapportLien && (
+            <div className="row">
+              <a className="btn go" href={projet.rapportLien} target="_blank" rel="noreferrer">
+                Ouvrir le rapport
+              </a>
+            </div>
+          )
+        )}
+        <div className="row">
+          <button
+            className="btn"
+            disabled={enCours || raison !== null}
+            onClick={() => void demander()}
+          >
+            {projet.rapportLien ? 'Produire un nouveau rapport' : 'Produire le rapport'}
+          </button>
+        </div>
+        {!enCours && raison && (
+          <p className="small muted" style={{ margin: 0 }}>
+            {raison}
+          </p>
+        )}
+        {precedents.length > 0 && (
+          <details>
+            <summary className="small">Rapports précédents ({precedents.length})</summary>
+            <ul className="small">
+              {precedents.map((r) => (
+                <li key={r.lien}>
+                  <a href={r.lien} target="_blank" rel="noreferrer">
+                    Rapport du {new Date(r.le).toLocaleDateString('fr-FR')}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
       </div>
     </div>
@@ -781,6 +871,8 @@ export function modifierRevue(
     cible = suivant;
   }
   cible[e.champ] = valeur;
+  // Une revue modifiée après validation n'est plus validée : il faut la valider à nouveau.
+  if (copie.statut === 'validée') copie.statut = 'brouillon';
   return copie;
 }
 

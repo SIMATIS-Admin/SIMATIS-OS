@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { registerTool } from '../mcp/tools.js';
 import { repondreClaude } from './chat.js';
+import { autoriserSiRapport, enregistrerRapport } from './rapport.js';
 import { autoriserOutil, enregistrerSupport, LIEN_ARTIFACT } from './support.js';
 
 // Outil du chat de diagnostic : Claude y répond au pilote (un seul appel par message).
@@ -60,5 +61,22 @@ registerTool({
     tool_use_id: z.string().optional(),
   }),
   scope: 'instance',
-  handler: ({ tx }, { tool_name, input }) => autoriserOutil(tx, tool_name, input),
+  handler: async ({ tx }, { tool_name, input }) =>
+    (await autoriserSiRapport(tx, tool_name, input)) ?? autoriserOutil(tx, tool_name, input),
+});
+
+// Outil du rapport : Claude rend le lien du rapport rédigé, une fois l'artifact publié.
+registerTool({
+  name: 'enregistrer_rapport',
+  description:
+    "Enregistre le rapport rédigé d'un projet de diagnostic : le lien claude.ai de l'artifact, une fois publié et relu.",
+  input: z.object({
+    projetId: z.uuid(),
+    lien: z.string().regex(LIEN_ARTIFACT, 'Lien d’artifact claude.ai attendu'),
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, lien }) => {
+    await enregistrerRapport(tx, projetId, lien);
+    return { ok: true };
+  },
 });

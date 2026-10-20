@@ -12,7 +12,8 @@ import {
   REPONSE_ABSENTE,
   repondreClaude,
 } from './chat.js';
-import { createProjet, DiagnosticIndisponible, listProjets } from './service.js';
+import { demanderRapport, enregistrerRapport } from './rapport.js';
+import { createProjet, DiagnosticIndisponible, listProjets, updateProjet } from './service.js';
 
 describe('Chat du diagnostic', () => {
   let t: TestApp;
@@ -85,5 +86,69 @@ describe('Chat du diagnostic', () => {
     await expect(envoyerMessage(t.app.db, mandat, 'x', 'Bonjour')).rejects.toBeInstanceOf(
       DiagnosticIndisponible,
     );
+  });
+
+  it('range une demande de rapport à l étape 4 et pose son statut', async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Chat Fictif C', activite: 'services' });
+    const envoye = await envoyerMessage(t.app.db, simatis, p.id, 'Rédige le rapport', {
+      type: 'rapport',
+      verifier: () => {},
+      etape: 4,
+      maj: { rapportLienStatut: 'en_cours' },
+    });
+    expect(envoye.demande).toBe('rapport');
+    expect(envoye.rapportLienStatut).toBe('en_cours');
+    expect(envoye.conversation).toEqual([expect.objectContaining({ etape: 4, de: 'pilote' })]);
+  });
+});
+
+describe('Fin du travail sur un rapport', () => {
+  let t: TestApp;
+  let simatis: Instance;
+  const LIEN = 'https://claude.ai/artifact/RapportFictif0003';
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    simatis = await createInstance(t.owner.db, {
+      slug: 'simatis-rapport-fin',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+  });
+
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  const relire = async (id: string) =>
+    (await listProjets(t.app.db, simatis)).find((p) => p.id === id)!;
+
+  const demandeEnCours = async (nom: string) => {
+    const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+    await updateProjet(t.app.db, simatis, p.id, {
+      dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
+      revue: { statut: 'validée' },
+    });
+    await demanderRapport(t.app.db, simatis, p.id);
+    await demarrerAttente(t.app.db, simatis, p.id);
+    return p.id;
+  };
+
+  it('sans lien à la fin, le rapport repasse à aucun', async () => {
+    const id = await demandeEnCours('Rapport Fictif G');
+    await finirAttente(t.app.db, simatis, id, 'Claude ne répond pas.');
+    const relu = await relire(id);
+    expect(relu.rapportLienStatut).toBe('aucun');
+    expect(relu.demande).toBeNull();
+    expect(relu.statutChat).toBe('repos');
+  });
+
+  it('avec un lien enregistré, le rapport reste prêt', async () => {
+    const id = await demandeEnCours('Rapport Fictif H');
+    await withInstance(t.app.db, simatis.id, (tx) => enregistrerRapport(tx, id, LIEN));
+    await finirAttente(t.app.db, simatis, id);
+    const relu = await relire(id);
+    expect(relu.rapportLienStatut).toBe('pret');
+    expect(relu.rapportLien).toBe(LIEN);
   });
 });
