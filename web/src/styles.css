@@ -3350,3 +3350,24 @@ tr.sel {
 .diag-propose {
   white-space: pre-wrap;
 }
+
+/* Indication d'attente de Claude dans le chat du diagnostic : le point clignote. */
+.diag-msg.attente p .diag-pulse {
+  display: inline-block;
+  color: var(--teal);
+  animation: diag-pulse 1.2s ease-in-out infinite;
+}
+@keyframes diag-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .diag-msg.attente p .diag-pulse {
+    animation: none;
+  }
+}
