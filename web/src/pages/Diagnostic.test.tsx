@@ -472,3 +472,47 @@ describe('Indication pendant que Claude travaille', () => {
     expect(await screen.findByText(/Claude répond à votre message/)).toBeTruthy();
   });
 });
+
+describe('Statut des étapes', () => {
+  it('affiche que l étape 2 est OK quand le PDF est lu et le profil calculé', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 2,
+        etapeMax: 2,
+        dims: { outils: 7.5, strategie: 5.4, polyvalence: 9.5 },
+        profil: 'Sprinteur',
+        pdfEntretienNom: 'outil.pdf',
+        reponsesEntretien: Array.from({ length: 21 }, (_, i) => ({
+          section: 'R',
+          numero: i + 1,
+          reponse: 'B' as const,
+        })),
+        aPdfEntretien: true,
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/Étape 2 : OK/)).toBeTruthy();
+    expect(screen.getByText(/PDF lu \(21 réponses\), profil Sprinteur/)).toBeTruthy();
+  });
+
+  it('marque l étape réellement en cours, distincte de l étape affichée', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 1,
+        etapeMax: 3,
+        supportStatut: 'final',
+        dims: { outils: 7.5, strategie: 5.4, polyvalence: 9.5 },
+        profil: 'Sprinteur',
+        revue: { statut: 'brouillon' },
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const enCours = await screen.findByRole('button', { name: /Revue des préconisations/ });
+    expect(enCours.className).toContain('encours');
+    expect(screen.getByRole('button', { name: /Préparer la présentation/ }).textContent).toContain(
+      '✓',
+    );
+  });
+});

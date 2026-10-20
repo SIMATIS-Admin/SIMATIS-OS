@@ -3371,3 +3371,28 @@ tr.sel {
     animation: none;
   }
 }
+/* Statut des étapes : étape réellement en cours (ambre), étapes OK (coche), bannière de l'étape affichée. */
+.diag-etape.encours {
+  border-color: var(--amber);
+  box-shadow: inset 0 0 0 1px var(--amber);
+}
+.diag-etape .diag-ok {
+  color: var(--teal);
+  font-weight: 700;
+}
+.diag-etape .diag-tag {
+  font-size: 11px;
+  color: var(--amber);
+  font-weight: 600;
+}
+.diag-statut {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.diag-statut.ok {
+  color: var(--teal);
+}
+.diag-statut.attente {
+  color: var(--ink-3);
+}
