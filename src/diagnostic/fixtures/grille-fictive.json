@@ -1,0 +1,26 @@
+{
+  "seuil": 6,
+  "questions": [
+    {
+      "section": "Rubrique A",
+      "numero": 6,
+      "libelle": "Question fictive A6",
+      "dimension": "outils",
+      "poids": 2
+    },
+    {
+      "section": "Rubrique B",
+      "numero": 6,
+      "libelle": "Question fictive B6",
+      "dimension": "strategie",
+      "poids": 1
+    },
+    {
+      "section": "Rubrique A",
+      "numero": 7,
+      "libelle": "Question fictive A7",
+      "dimension": "polyvalence",
+      "poids": 3
+    }
+  ]
+}
