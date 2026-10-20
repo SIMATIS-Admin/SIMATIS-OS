@@ -3,10 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  outilsRapport,
   outilsSupport,
   promptDiagnostic,
+  promptRapport,
   promptSupport,
   skillsDe,
+  SKILL_RAPPORT,
   SKILL_SUPPORT,
   tourDiagnostic,
   type AttenteDiag,
@@ -35,6 +38,8 @@ const attente: AttenteDiag = {
   hypotheses: 'Hypothèse fictive',
   supportStatut: 'aucun',
   supportLien: null,
+  rapportLien: null,
+  rapportLienStatut: 'aucun',
   logo: null,
 };
 
@@ -185,5 +190,36 @@ describe('Support d ouverture par le runner', () => {
       },
     });
     expect(outils).toBe('mcp__simatis__repondre_diagnostic');
+  });
+});
+
+describe('Rapport par le runner', () => {
+  const rapport: AttenteDiag = {
+    ...attente,
+    etape: 4,
+    etapeMessage: 4,
+    demande: 'rapport',
+    rapportLien: null,
+    rapportLienStatut: 'en_cours',
+  };
+
+  it('demande la skill du rapport sur la revue validée, en nouvel artifact', () => {
+    const texte = promptRapport(rapport, null, new Date('2026-10-20T08:00:00Z'));
+    expect(texte).toContain(SKILL_RAPPORT);
+    expect(texte).toContain(`projetId ${rapport.id}`);
+    expect(texte).toContain('enregistrer_rapport');
+    expect(texte).toContain('nouvel artifact');
+    expect(texte).toContain('Second cerveau non accessible');
+  });
+
+  it('ne donne que l outil du rapport, jamais celui du support', () => {
+    const outils = outilsRapport(null, ['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_rapport');
+    expect(outils).not.toContain('enregistrer_support');
+    expect(outils).toContain('Artifact');
+    const avec = outilsRapport('/cerveau-fictif', ['/travail']);
+    expect(avec).toContain('Read(//cerveau-fictif/**)');
+    // Le second cerveau se lit seulement pour le rapport : aucune règle Edit dessus.
+    expect(avec).not.toContain('Edit(//cerveau-fictif/**)');
   });
 });

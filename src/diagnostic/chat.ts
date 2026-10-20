@@ -126,10 +126,15 @@ export async function finirAttente(
       projet.supportStatut === 'preparation'
         ? { supportStatut: projet.supportLien ? ('pret' as const) : ('aucun' as const) }
         : {};
+    // Un rapport resté « en cours » sans lien enregistré n'est pas bloqué : il repasse à son état réel.
+    const rapport =
+      projet.demande === 'rapport' && projet.rapportLienStatut === 'en_cours'
+        ? { rapportLienStatut: projet.rapportLien ? ('pret' as const) : ('aucun' as const) }
+        : {};
     if (projet.statutChat !== 'en_cours') {
       await tx
         .update(diagnosticProjets)
-        .set({ ...support, demande: null })
+        .set({ ...support, ...rapport, demande: null })
         .where(eq(diagnosticProjets.id, id));
       return;
     }
@@ -145,6 +150,7 @@ export async function finirAttente(
       .update(diagnosticProjets)
       .set({
         ...support,
+        ...rapport,
         conversation: [...projet.conversation, absence],
         statutChat: 'repos',
         demande: null,
@@ -182,6 +188,8 @@ export async function attentesClaude(db: Executor) {
         hypotheses: p.hypotheses,
         supportStatut: p.supportStatut,
         supportLien: p.supportLien,
+        rapportLien: p.rapportLien,
+        rapportLienStatut: p.rapportLienStatut,
         // Le logo ne voyage que pour préparer le deck.
         logo:
           p.demande === 'preparer_support' && p.logo && p.logoNom
