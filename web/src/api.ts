@@ -754,7 +754,7 @@ export type ProjetDiag = {
     erreur?: boolean;
   }[];
   statutChat: 'repos' | 'attente_claude' | 'en_cours';
-  demande: 'preparer_support' | 'support_final' | null;
+  demande: 'preparer_support' | 'support_final' | 'rapport' | null;
   ditParDirigeant: string;
   hypotheses: string;
   aLogo: boolean;
@@ -765,6 +765,9 @@ export type ProjetDiag = {
   supportFinalLe: string | null;
   aRapport: boolean;
   rapportNom: string | null;
+  rapportLienStatut: 'aucun' | 'en_cours' | 'pret';
+  rapportLien: string | null;
+  rapportLiens: { lien: string; le: string }[];
   updatedAt: string;
 };
 export type ProjetDiagPatch = Partial<
@@ -804,6 +807,13 @@ export const demandeSupportDiag = (
   sendJson<ProjetDiag>(
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/support/${action}`),
+    {},
+  );
+// Demande la rédaction du rapport par Claude (étape 4, revue validée).
+export const demandeRapportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/produire`),
     {},
   );
 export const urlLogoDiag = (slug: string, id: string) =>
