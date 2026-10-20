@@ -24,8 +24,9 @@ export const DEMANDES = ['preparer_support', 'support_final'] as const;
 export type Demande = (typeof DEMANDES)[number];
 export type Diapositive = { titre: string; texte: string; notes: string };
 
-// Un projet de diagnostic, pour une entreprise prospect de SIMATIS. Étape 1 : préparation,
-// étape 2 : résultat de l'outil externe, étape 3 : analyse et rapport.
+// Un projet de diagnostic, pour une entreprise prospect de SIMATIS. Étapes : 1 préparation,
+// 2 entretien et résultat de l'outil externe, 3 revue des préconisations, 4 rapport,
+// 5 restitution et capitalisation.
 export const diagnosticProjets = pgTable(
   'diagnostic_projets',
   {

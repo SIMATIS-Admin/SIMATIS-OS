@@ -122,7 +122,7 @@ describe('Diagnostic : liste et réglages', () => {
   it('montre chaque projet à l étape la plus haute atteinte', async () => {
     api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 1, etapeMax: 3 })]);
     render(<Diagnostic slug="simatis" />);
-    expect(await screen.findByText(/Étape 3 · Analyser et produire le rapport/)).toBeTruthy();
+    expect(await screen.findByText(/Étape 3 · Revue des préconisations/)).toBeTruthy();
   });
 
   it('change le modèle d une étape neuve avec un réglage complet', async () => {
@@ -143,6 +143,38 @@ describe('Diagnostic : liste et réglages', () => {
     fireEvent.change(await screen.findByLabelText('Effort'), { target: { value: 'max' } });
     expect(await screen.findByText('Réglage refusé')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Atelier Fictif Nord' })).toBeTruthy();
+  });
+});
+
+describe('Diagnostic en cinq étapes', () => {
+  it('propose les cinq étapes du processus', async () => {
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const etapes = await screen.findByRole('list', { name: 'Étapes du diagnostic' });
+    expect(etapes.querySelectorAll('li')).toHaveLength(5);
+  });
+
+  it('le rapport se télécharge à l étape 4', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, aRapport: true, rapportNom: 'rapport-fictif.docx' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByRole('link', { name: /rapport-fictif.docx/ })).toBeTruthy();
+  });
+
+  it('marque le diagnostic restitué à l étape 5', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 5 })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const restituer = await screen.findByRole('button', { name: 'Marquer comme restitué' });
+    expect(screen.queryByRole('button', { name: /Étape suivante/ })).toBeNull();
+    fireEvent.click(restituer);
+    await waitFor(() =>
+      expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', {
+        statutDiagnostic: 'Restitué',
+      }),
+    );
   });
 });
 

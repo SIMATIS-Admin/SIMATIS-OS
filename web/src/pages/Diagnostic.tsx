@@ -22,8 +22,10 @@ export const ACTIVITES = [
 ] as const;
 const ETAPES = [
   'Préparer la présentation',
-  'Entretien et rapport de l’outil',
-  'Analyser et produire le rapport',
+  'Entretien et résultat de l’outil',
+  'Revue des préconisations',
+  'Rapport',
+  'Restitution et capitalisation',
 ];
 const MODELES = [
   ['haiku', 'Haiku 5.5'],
@@ -37,12 +39,15 @@ const EFFORTS = [
   ['eleve', 'Élevé'],
   ['max', 'Max'],
 ] as const;
-// Préparation et entretien en Sonnet effort moyen ; rapport en Opus effort max. Le lien vide
+// Préparation, entretien et restitution en Sonnet effort moyen ; revue et rapport en Opus
+// effort max. Le lien vide
 // est requis par le serveur : sans lui, changer le modèle d'une étape neuve était refusé.
 const CHAT_DEFAUT: Record<number, ChatEtape> = {
   1: { modele: 'sonnet', effort: 'moyen', lien: '' },
   2: { modele: 'sonnet', effort: 'moyen', lien: '' },
   3: { modele: 'opus', effort: 'max', lien: '' },
+  4: { modele: 'opus', effort: 'max', lien: '' },
+  5: { modele: 'sonnet', effort: 'moyen', lien: '' },
 };
 const DIMENSIONS: [keyof Dimensions, string][] = [
   ['outils', 'Outils et méthode'],
@@ -303,7 +308,9 @@ function ProjetVue({
             />
           )}
           {projet.etape === 2 && <Resultat projet={projet} onSauver={sauver} />}
-          {projet.etape === 3 && <Analyse slug={slug} projet={projet} onSauver={sauver} />}
+          {projet.etape === 3 && <Revue projet={projet} onSauver={sauver} />}
+          {projet.etape === 4 && <Rapport slug={slug} projet={projet} />}
+          {projet.etape === 5 && <Restitution projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
         </div>
         <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
@@ -622,15 +629,7 @@ function Resultat({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }
   );
 }
 
-function Analyse({
-  slug,
-  projet,
-  onSauver,
-}: {
-  slug: string;
-  projet: ProjetDiag;
-  onSauver: Sauver;
-}) {
+function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
   if (!projet.dims) {
     return (
       <div className="panel empty">
@@ -662,14 +661,6 @@ function Analyse({
               </div>
             );
           })}
-          {projet.aRapport && (
-            <a
-              className="btn go"
-              href={`/api/i/${encodeURIComponent(slug)}/diagnostic/projets/${projet.id}/rapport`}
-            >
-              Télécharger le rapport ({projet.rapportNom})
-            </a>
-          )}
         </div>
       </div>
       {projet.revue ? (
@@ -679,6 +670,70 @@ function Analyse({
           Pas encore de formulaire de revue. Il se saisit ici, comme dans l’artefact.
         </div>
       )}
+    </div>
+  );
+}
+
+function Rapport({ slug, projet }: { slug: string; projet: ProjetDiag }) {
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <h2>Rapport remis au dirigeant</h2>
+        {projet.profil && <span className="badge green">Profil : {projet.profil}</span>}
+      </div>
+      <div className="panel-b stack">
+        {projet.aRapport ? (
+          <div className="row">
+            <a
+              className="btn go"
+              href={`/api/i/${encodeURIComponent(slug)}/diagnostic/projets/${projet.id}/rapport`}
+            >
+              Télécharger le rapport ({projet.rapportNom})
+            </a>
+          </div>
+        ) : (
+          <p className="small muted" style={{ margin: 0 }}>
+            Pas encore de rapport. Claude le produira ici à partir de la revue des préconisations.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Restitution({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
+  const restitue = projet.statutDiagnostic === 'Restitué';
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <h2>Restitution et capitalisation</h2>
+        <span className={`badge ${restitue ? 'green' : ''}`}>
+          {projet.statutDiagnostic ?? 'Statut à préciser'}
+        </span>
+      </div>
+      <div className="panel-b stack">
+        <p className="small muted" style={{ margin: 0 }}>
+          Une fois le rapport présenté au dirigeant, marquez le diagnostic comme restitué. Les
+          préconisations validées alimenteront ensuite la bibliothèque.
+        </p>
+        <div className="row">
+          {restitue ? (
+            <button
+              className="btn"
+              onClick={() => void onSauver({ statutDiagnostic: 'Rapport à rédiger' })}
+            >
+              Annuler la restitution
+            </button>
+          ) : (
+            <button
+              className="btn go"
+              onClick={() => void onSauver({ statutDiagnostic: 'Restitué' })}
+            >
+              Marquer comme restitué
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -862,7 +917,7 @@ function Pied({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
       ) : (
         <span />
       )}
-      {projet.etape < 3 && (
+      {projet.etape < ETAPES.length && (
         <button className="btn go" onClick={() => void onSauver({ etape: projet.etape + 1 })}>
           Étape suivante →
         </button>

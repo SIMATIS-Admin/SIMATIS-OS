@@ -43,7 +43,7 @@ describe('Prompt du chat de diagnostic', () => {
     const texte = promptDiagnostic(attente, new Date('2026-10-19T08:00:00Z'));
     expect(texte).toContain(`projetId ${attente.id}`);
     expect(texte).toContain('repondre_diagnostic');
-    expect(texte).toContain('étape 2 sur 3');
+    expect(texte).toContain('étape 2 sur 5');
   });
 
   it("ne reprend que l'échange de l'étape en cours", () => {
