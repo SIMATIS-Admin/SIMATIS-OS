@@ -664,7 +664,18 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
         </div>
       </div>
       {projet.revue ? (
-        <EditeurRevue revue={projet.revue} onChange={(revue) => void onSauver({ revue })} />
+        <>
+          <div className="row">
+            <button
+              className="btn go"
+              disabled={projet.revue.statut === 'validée'}
+              onClick={() => void onSauver({ revue: { ...projet.revue, statut: 'validée' } })}
+            >
+              Valider la revue
+            </button>
+          </div>
+          <EditeurRevue revue={projet.revue} onChange={(revue) => void onSauver({ revue })} />
+        </>
       ) : (
         <div className="panel empty">
           Pas encore de formulaire de revue. Il se saisit ici, comme dans l’artefact.
@@ -781,6 +792,8 @@ export function modifierRevue(
     cible = suivant;
   }
   cible[e.champ] = valeur;
+  // Une revue modifiée après validation n'est plus validée : il faut la valider à nouveau.
+  if (copie.statut === 'validée') copie.statut = 'brouillon';
   return copie;
 }
 

@@ -214,6 +214,36 @@ describe('Formulaire de revue saisi dans l OS', () => {
     });
     expect(revue.preconisations.r1.detail).toBe('Commentaire fictif.');
   });
+
+  it('une revue validée repasse en brouillon à la première modification', () => {
+    const suite = modifierRevue(
+      { ...revue, statut: 'validée' },
+      { chemin: [], champ: 'libre' },
+      'Autre remarque fictive.',
+    );
+    expect(suite.statut).toBe('brouillon');
+    expect(suite.libre).toBe('Autre remarque fictive.');
+  });
+});
+
+describe('Validation de la revue à l étape 3', () => {
+  it('valider la revue l enregistre comme validée', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 3,
+        etapeMax: 3,
+        dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
+        profil: 'Joggeur',
+        revue: { statut: 'brouillon', libre: 'Remarque fictive.' },
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Valider la revue' }));
+    await waitFor(() => expect(api.majProjetDiag).toHaveBeenCalled());
+    const patch = api.majProjetDiag.mock.calls[0]?.[2] as Partial<ProjetDiag>;
+    expect(patch.revue).toMatchObject({ statut: 'validée', libre: 'Remarque fictive.' });
+  });
 });
 
 describe('Assistant de l étape', () => {
