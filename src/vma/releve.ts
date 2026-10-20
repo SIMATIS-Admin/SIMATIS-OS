@@ -67,16 +67,28 @@ async function trouverInvitation(db: Database, instances: Instance[], invitation
 
 const euros = (v: number) => `${Math.round(v).toLocaleString('fr-FR')}\u00a0€`;
 
+// Contenu du sujet d'Inbox, et donc de la fiche rangée : tout ce qu'il faut pour le second cerveau.
+// Le potentiel et les blocs sont là parce que la fiche est réservée à Marc.
 export function resumeResultat(r: ResultatSite): string {
   const e = r.ecran as Record<string, unknown>;
+  const c = r.calcul as {
+    potentiel?: number;
+    top?: { label: string; bloc: string }[];
+  };
   const vma =
     typeof e.vma === 'number'
       ? `${euros(e.vma)} de CA commandé par mois (${String(e.statut)})`
       : 'non mesurable';
   const niveau = (e.niveau as { label?: string } | undefined)?.label ?? '';
+  const freins = (c.top ?? []).map((f) => `${f.label} (bloc ${f.bloc})`).join(', ');
   return [
+    `Entreprise : ${r.ecran.entreprise}`,
+    `Type : ${r.type === 'essai' ? 'essai (non rangé, hors historique)' : 'premier test'}`,
+    `Date du test : ${new Date(r.recueLe).toLocaleDateString('fr-FR')}`,
     `VMA : ${vma}`,
     niveau && `Ambition : ${niveau}`,
+    typeof c.potentiel === 'number' && `Potentiel brut : +${euros(c.potentiel)} par mois`,
+    freins && `Freins les plus lourds : ${freins}`,
     `Version de la configuration : ${r.version}`,
   ]
     .filter(Boolean)

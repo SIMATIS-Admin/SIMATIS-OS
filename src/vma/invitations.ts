@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, gte, or, sql } from 'drizzle-orm';
 import { entreprises } from '../crm/schema.js';
-import type { Database } from '../db.js';
+import type { Database, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { TYPES_TEST_VMA, vmaTests, type TestVma, type TypeTestVma } from './schema.js';
 
@@ -12,6 +12,55 @@ export type InvitationDeps = {
 };
 
 export class InvitationImpossible extends Error {}
+
+// Règle du semestre (cahier, §7.1) : un premier test par entreprise au plus tous les 182 jours
+// glissants. Au-delà, Marc doit confirmer explicitement. Les essais n'entrent pas dans la règle.
+export const SEMESTRE_JOURS = 182;
+
+export type DernierTest = { id: string; date: string; entrepriseNom: string };
+
+export class SemestreAConfirmer extends Error {
+  constructor(readonly dernier: DernierTest) {
+    super(
+      `${dernier.entrepriseNom} a déjà passé un test le ${new Date(dernier.date).toLocaleDateString('fr-FR')} : moins de ${SEMESTRE_JOURS} jours. Confirmez pour créer une nouvelle invitation.`,
+    );
+  }
+}
+
+// Le dernier premier test reçu de l'entreprise, s'il date de moins de 182 jours.
+async function testRecent(
+  tx: Tx,
+  instanceId: string,
+  p: { entrepriseId?: string | null; entrepriseNom: string },
+  maintenant: Date,
+): Promise<DernierTest | null> {
+  const limite = new Date(maintenant.getTime() - SEMESTRE_JOURS * 24 * 3600 * 1000);
+  const nom = sql`lower(${vmaTests.entrepriseNom}) = lower(${p.entrepriseNom})`;
+  const [dernier] = await tx
+    .select({
+      id: vmaTests.id,
+      recueLe: vmaTests.recueLe,
+      entrepriseNom: vmaTests.entrepriseNom,
+    })
+    .from(vmaTests)
+    .where(
+      and(
+        eq(vmaTests.instanceId, instanceId),
+        eq(vmaTests.type, 'premier'),
+        eq(vmaTests.statut, 'utilisee'),
+        gte(vmaTests.recueLe, limite),
+        p.entrepriseId ? or(eq(vmaTests.entrepriseId, p.entrepriseId), nom) : nom,
+      ),
+    )
+    .orderBy(desc(vmaTests.recueLe))
+    .limit(1);
+  if (!dernier?.recueLe) return null;
+  return {
+    id: dernier.id,
+    date: dernier.recueLe.toISOString(),
+    entrepriseNom: dernier.entrepriseNom,
+  };
+}
 
 const base = (url: string) => url.replace(/\/+$/, '');
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -28,6 +77,8 @@ export async function creerInvitation(
     type: TypeTestVma;
     contactNom?: string | null;
     contactEmail?: string | null;
+    // Réponse de Marc à l'alerte du semestre (true = il confirme).
+    confirmerSemestre?: boolean;
   },
 ): Promise<TestVma> {
   const nom = p.entrepriseNom.trim();
@@ -44,6 +95,11 @@ export async function creerInvitation(
         .from(entreprises)
         .where(and(eq(entreprises.instanceId, p.instanceId), eq(entreprises.id, p.entrepriseId)));
       if (!trouvee) throw new InvitationImpossible('Entreprise introuvable dans cette instance');
+    }
+
+    if (p.type === 'premier' && !p.confirmerSemestre) {
+      const dernier = await testRecent(tx, p.instanceId, { ...p, entrepriseNom: nom }, new Date());
+      if (dernier) throw new SemestreAConfirmer(dernier);
     }
 
     const http = deps.fetch ?? fetch;

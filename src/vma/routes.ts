@@ -9,6 +9,7 @@ import {
   creerInvitation,
   InvitationImpossible,
   revoquerInvitation,
+  SemestreAConfirmer,
   type InvitationDeps,
 } from './invitations.js';
 import { TYPES_TEST_VMA, vmaTests, type TestVma } from './schema.js';
@@ -29,6 +30,7 @@ const creationSchema = z.object({
   type: z.enum(TYPES_TEST_VMA),
   contactNom: z.string().trim().max(120).nullish(),
   contactEmail: z.string().trim().max(200).nullish(),
+  confirmerSemestre: z.boolean().optional(),
 });
 
 // Ce que l'écran affiche d'une invitation et de son résultat. Tout reste dans l'instance.
@@ -59,6 +61,11 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
 
   // Refus clair : une invitation refusée par le site ou par l'OS, ou un site injoignable.
   const erreur = (error: unknown, reply: FastifyReply) => {
+    // Alerte du semestre : 409 avec le test précédent, pour que l'écran propose la confirmation.
+    if (error instanceof SemestreAConfirmer)
+      return reply
+        .code(409)
+        .send({ error: error.message, code: 'semestre', dernierTest: error.dernier });
     if (error instanceof InvitationImpossible)
       return reply.code(400).send({ error: error.message });
     return reply.code(503).send({ error: 'Le site ne répond pas : réessayez dans un instant.' });
@@ -100,6 +107,7 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
           type: parsed.data.type,
           contactNom: parsed.data.contactNom ?? null,
           contactEmail: parsed.data.contactEmail ?? null,
+          confirmerSemestre: parsed.data.confirmerSemestre ?? false,
         });
         return reply.code(201).send(vueTest(test));
       } catch (error) {

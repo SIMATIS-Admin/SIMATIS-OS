@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  ApiError,
   creerTestVma,
   fetchTestsVma,
   revoquerTestVma,
@@ -64,13 +65,22 @@ export function TestsVma({ slug }: { slug: string }) {
   const creer = async () => {
     setEnvoi(true);
     setErreur(null);
+    const demande: NouveauTestVma = {
+      entrepriseNom: nouveau.entrepriseNom,
+      type: nouveau.type,
+      contactNom: nouveau.contactNom || null,
+      contactEmail: nouveau.contactEmail || null,
+    };
     try {
-      const cree = await creerTestVma(slug, {
-        entrepriseNom: nouveau.entrepriseNom,
-        type: nouveau.type,
-        contactNom: nouveau.contactNom || null,
-        contactEmail: nouveau.contactEmail || null,
-      });
+      let cree: TestVma;
+      try {
+        cree = await creerTestVma(slug, demande);
+      } catch (e) {
+        // Règle du semestre : Marc confirme ou renonce, rien n'est créé sans sa réponse.
+        if (!(e instanceof ApiError && e.status === 409 && e.corps.code === 'semestre')) throw e;
+        if (!window.confirm(`${e.message}\n\nCréer quand même cette invitation ?`)) return;
+        cree = await creerTestVma(slug, { ...demande, confirmerSemestre: true });
+      }
       setLienCree(cree.lien);
       setNouveau({ entrepriseNom: '', type: 'premier', contactNom: '', contactEmail: '' });
       await charger();

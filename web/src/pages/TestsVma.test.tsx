@@ -1,14 +1,26 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TestVma } from '../api.js';
 import { fmtEur, libelleStatut, TestsVma } from './TestsVma.js';
 
-const api = vi.hoisted(() => ({
-  fetchTestsVma: vi.fn(),
-  creerTestVma: vi.fn(),
-  revoquerTestVma: vi.fn(),
-}));
+const api = vi.hoisted(() => {
+  class ApiError extends Error {
+    constructor(
+      message: string,
+      readonly status: number,
+      readonly corps: Record<string, unknown>,
+    ) {
+      super(message);
+    }
+  }
+  return {
+    ApiError,
+    fetchTestsVma: vi.fn(),
+    creerTestVma: vi.fn(),
+    revoquerTestVma: vi.fn(),
+  };
+});
 vi.mock('../api.js', () => api);
 
 const test = (extra: Partial<TestVma> = {}): TestVma => ({
@@ -91,5 +103,25 @@ describe('Tests VMA : écran', () => {
     await waitFor(() => expect(screen.getByText('Pour Marc uniquement')).toBeTruthy());
     expect(screen.getByText('6. Plan de canaux')).toBeTruthy();
     expect(screen.getByText(/Potentiel brut/)).toBeTruthy();
+  });
+
+  it("demande confirmation à l'alerte du semestre, puis crée si Marc confirme", async () => {
+    api.fetchTestsVma.mockResolvedValue([]);
+    api.creerTestVma
+      .mockRejectedValueOnce(
+        new api.ApiError('Atelier Fictif a déjà passé un test.', 409, { code: 'semestre' }),
+      )
+      .mockResolvedValueOnce(test({ lien: 'https://www.simatis.fr/test-vma?i=ok' }));
+    const confirme = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<TestsVma slug="mandat-fictif" />);
+
+    await waitFor(() => expect(screen.getByText('Aucune invitation pour l’instant.')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Entreprise'), { target: { value: 'Atelier Fictif' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Créer l’invitation' }));
+
+    await waitFor(() => expect(api.creerTestVma).toHaveBeenCalledTimes(2));
+    expect(confirme).toHaveBeenCalled();
+    expect(api.creerTestVma.mock.calls[1]?.[1]).toMatchObject({ confirmerSemestre: true });
+    confirme.mockRestore();
   });
 });

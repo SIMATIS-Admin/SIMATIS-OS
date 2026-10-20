@@ -78,10 +78,27 @@ export type PortefeuilleLigne = {
   routinesActives: number | null;
 };
 
+// Erreur d'API : garde le statut et le corps, pour les refus qui appellent une réponse de l'écran
+// (par exemple l'alerte du semestre du Test de VMA, code « semestre »).
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly corps: Record<string, unknown>,
+  ) {
+    super(message);
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
-  if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status} sur ${url}`);
+  const body = (await response.json().catch(() => ({}))) as { error?: string } & Record<
+    string,
+    unknown
+  >;
+  if (!response.ok) {
+    throw new ApiError(body.error ?? `Erreur ${response.status} sur ${url}`, response.status, body);
+  }
   return body as T;
 }
 const getJson = <T>(url: string) => request<T>(url);
@@ -145,6 +162,8 @@ export type NouveauTestVma = {
   type: TestVmaType;
   contactNom?: string | null;
   contactEmail?: string | null;
+  // Confirmation de Marc à l'alerte du semestre.
+  confirmerSemestre?: boolean;
 };
 
 export const fetchTestsVma = (slug: string) => getJson<TestVma[]>(inst(slug, 'vma/tests'));
