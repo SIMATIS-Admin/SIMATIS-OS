@@ -229,7 +229,6 @@ export function Sidebar({
           );
         })}
       </nav>
-      <div className="side-foot">Données fictives de la maquette.</div>
     </aside>
   );
 }
