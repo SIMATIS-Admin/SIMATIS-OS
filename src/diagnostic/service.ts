@@ -9,10 +9,11 @@ import { diagnosticProjets, type Projet } from './schema.js';
 export class DiagnosticIndisponible extends Error {}
 export class ProjetIntrouvable extends Error {}
 
-export type ProjetVue = Omit<Projet, 'rapport' | 'logo'> & {
+export type ProjetVue = Omit<Projet, 'rapport' | 'logo' | 'pdfEntretien'> & {
   profil: Profil | null;
   aRapport: boolean;
   aLogo: boolean;
+  aPdfEntretien: boolean;
 };
 export type ProjetPatch = Partial<
   Pick<
@@ -37,11 +38,12 @@ export const verifierEspace = (instance: Instance) => {
 };
 
 // Le rapport et le logo (base64) ne voyagent pas avec la liste : ils se téléchargent à part.
-export const vue = ({ rapport, logo, ...projet }: Projet): ProjetVue => ({
+export const vue = ({ rapport, logo, pdfEntretien, ...projet }: Projet): ProjetVue => ({
   ...projet,
   profil: projet.dims ? profilDe(projet.dims) : null,
   aRapport: rapport !== null,
   aLogo: logo !== null,
+  aPdfEntretien: pdfEntretien !== null,
 });
 
 export async function listProjets(db: Executor, instance: Instance): Promise<ProjetVue[]> {
