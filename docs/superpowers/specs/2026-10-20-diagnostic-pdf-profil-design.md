@@ -1,7 +1,6 @@
 # Diagnostic, livraison 3 : import du PDF de l'outil et calcul du profil
 
-Date : 2026-10-20. Statut : conception à relire par Marc (aucune implémentation tant qu'elle n'est
-pas approuvée). Troisième livraison du processus : support (livraison 1), **PDF → profil** (ici),
+Date : 2026-10-20. Statut : approuvée par Marc le 20/10/2026 (réponses aux questions ouvertes ci-dessous). Troisième livraison du processus : support (livraison 1), **PDF → profil** (ici),
 rapport (livraison 2, déjà mergée), capitalisation.
 
 Ce document ne décrit que la partie **publique et générique**. La grille de scoring, les questions,
@@ -107,13 +106,10 @@ profil et notes par dimension, liste des réponses avec choix modifiable.
 - Capitalisation de la revue (livraison suivante).
 - Import des 57 questions de la version entretien : seule la grille de scoring est lue par l'OS.
 
-## Questions ouvertes pour Marc
+## Réponses de Marc (20/10/2026)
 
-1. **Exemple de PDF** : peux-tu me dire où se trouve un PDF réel de l'outil sur ton poste (il reste hors
-   dépôt, je le lis seulement pour ajuster la lecture) ? Je dois savoir si les lettres A–E y figurent
-   par question.
-2. **Grille** : la grille de référence est-elle l'onglet « Grille de scoring » actuel du classeur
-   (21 questions pondérées), ou la version à 57 questions que tu veux relire ?
-3. **Saisie manuelle** : je garde la saisie des trois notes à l'étape 2 comme solution de secours ?
-   Proposition : oui.
-4. **Taille maximale du PDF** : 10 Mo, ou autre ?
+1. **PDF** : Marc importe lui-même le PDF dans l'OS. Claude le lit à partir de là ; aucun exemple n'est
+   fourni hors de l'application.
+2. **Grille** : l'onglet « Grille de scoring » actuel du classeur (21 questions pondérées).
+3. **Saisie manuelle** : conservée comme secours à l'étape 2.
+4. **Taille maximale du PDF** : 10 Mo.
