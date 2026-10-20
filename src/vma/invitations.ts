@@ -14,17 +14,28 @@ export type InvitationDeps = {
 export class InvitationImpossible extends Error {}
 
 const base = (url: string) => url.replace(/\/+$/, '');
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Crée une invitation sur le site, puis la garde dans l'instance avec son lien. Le site ne reçoit
 // que le nom de l'entreprise et le type : aucune donnée de mandat.
 export async function creerInvitation(
   db: Database,
   deps: InvitationDeps,
-  p: { instanceId: string; entrepriseId?: string | null; entrepriseNom: string; type: TypeTestVma },
+  p: {
+    instanceId: string;
+    entrepriseId?: string | null;
+    entrepriseNom: string;
+    type: TypeTestVma;
+    contactNom?: string | null;
+    contactEmail?: string | null;
+  },
 ): Promise<TestVma> {
   const nom = p.entrepriseNom.trim();
   if (!nom) throw new InvitationImpossible("Nom de l'entreprise manquant");
   if (!TYPES_TEST_VMA.includes(p.type)) throw new InvitationImpossible("Type d'invitation inconnu");
+  const email = p.contactEmail?.trim() || null;
+  if (email && !EMAIL.test(email))
+    throw new InvitationImpossible('Adresse e-mail du contact invalide');
 
   return withInstance(db, p.instanceId, async (tx) => {
     if (p.entrepriseId) {
@@ -51,6 +62,8 @@ export async function creerInvitation(
         instanceId: p.instanceId,
         entrepriseId: p.entrepriseId ?? null,
         entrepriseNom: nom,
+        contactNom: p.contactNom?.trim() || null,
+        contactEmail: email,
         type: p.type,
         statut: 'envoyee',
         invitationId: id,

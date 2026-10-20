@@ -1,11 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { deposerSujet } from '../inbox/depot.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { echeanceDe } from '../site/releve.js';
+import { brouillonResultat, type EcranDirigeant } from './brouillon.js';
 import { vmaTests } from './schema.js';
 
 export type ReleveVmaDeps = {
@@ -13,6 +15,8 @@ export type ReleveVmaDeps = {
   // Jeton de relève : même valeur que OS_PULL_TOKEN côté site (SITE_CONTACT_TOKEN dans le .env).
   token: string;
   fetch?: typeof fetch;
+  // Écritures de la messagerie (brouillon du résultat) : absentes = pas de brouillon.
+  ecriture?: ConnexionDeps;
 };
 
 export type ResultatReleveVma = {
@@ -49,6 +53,8 @@ async function trouverInvitation(db: Database, instances: Instance[], invitation
           instanceId: vmaTests.instanceId,
           entrepriseId: vmaTests.entrepriseId,
           entrepriseNom: vmaTests.entrepriseNom,
+          contactNom: vmaTests.contactNom,
+          contactEmail: vmaTests.contactEmail,
           resultatId: vmaTests.resultatId,
         })
         .from(vmaTests)
@@ -75,6 +81,38 @@ export function resumeResultat(r: ResultatSite): string {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+// Brouillon du résultat dans la messagerie de l'instance. Jamais envoyé, jamais bloquant : l'échec
+// est noté dans le sujet, et le résultat reste rangé. Savepoint : une erreur ne casse pas la transaction.
+async function brouillonDuResultat(
+  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+  instance: Instance,
+  contact: { nom: string | null; email: string },
+  r: ResultatSite,
+  ecriture: ConnexionDeps,
+): Promise<string> {
+  const { subject, html } = brouillonResultat({
+    contactNom: contact.nom,
+    ecran: r.ecran as unknown as EcranDirigeant,
+  });
+  try {
+    const res = await tx.transaction((sp) =>
+      writeVia(
+        sp,
+        instance,
+        'messagerie',
+        { op: 'draft.create', data: { to: contact.email, subject, html } },
+        ecriture,
+      ),
+    );
+    return res.simulation
+      ? 'Brouillon du résultat : simulé (écritures réelles désactivées).'
+      : 'Brouillon du résultat créé dans la messagerie de l’instance.';
+  } catch (error) {
+    const raison = error instanceof Error ? error.message : String(error);
+    return `Brouillon du résultat non créé : ${raison}`;
+  }
 }
 
 // Relève les résultats du site : chacun est rangé dans l'instance de son invitation, avec un sujet
@@ -114,6 +152,8 @@ export async function releverTestsVma(
     const trouve = await trouverInvitation(db, instances, r.invitation);
     if (trouve) {
       if (trouve.resultatId === r.id) continue; // déjà reçu : rien à refaire
+      const instance = instances.find((i) => i.id === trouve.instanceId);
+      if (!instance) continue;
       await withInstance(db, trouve.instanceId, async (tx) => {
         await tx
           .update(vmaTests)
@@ -133,10 +173,20 @@ export async function releverTestsVma(
               eq(vmaTests.invitationId, r.invitation),
             ),
           );
+        const note =
+          deps.ecriture && trouve.contactEmail
+            ? await brouillonDuResultat(
+                tx,
+                instance,
+                { nom: trouve.contactNom, email: trouve.contactEmail },
+                r,
+                deps.ecriture,
+              )
+            : 'Aucun e-mail de contact : pas de brouillon.';
         await deposerSujet(tx, {
           type: 'autre',
           titre: `Test de VMA reçu : ${trouve.entrepriseNom}`,
-          resume: resumeResultat(r),
+          resume: `${resumeResultat(r)}\n${note}`,
           origine: 'test-vma',
           source: 'site',
           sourceId: r.id,

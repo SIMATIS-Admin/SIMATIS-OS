@@ -31,6 +31,7 @@ const app = buildApp({
   lectureRole: lectureRoleOf(config.appDbRole),
   realWrites: config.realWrites,
   secretsDir: config.secretsDir,
+  vma: config.site && config.vmaOsToken ? { url: config.site.url, token: config.vmaOsToken } : null,
   logger: { level: config.logLevel },
 });
 
@@ -75,6 +76,7 @@ try {
     });
     stopReleveVma = startReleveVma(db, {
       ...config.site,
+      ecriture: { secretsDir: config.secretsDir, realWrites: config.realWrites },
       onResult: (r) => {
         if (r.recus > 0) app.log.info(r, 'test de VMA results pulled');
       },

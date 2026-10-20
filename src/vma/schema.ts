@@ -17,6 +17,9 @@ export const vmaTests = pgTable(
     ...metierColumns(),
     entrepriseId: uuid('entreprise_id').references(() => entreprises.id),
     entrepriseNom: text('entreprise_nom').notNull(),
+    // Dirigeant qui passe le test : reste dans l'OS, jamais envoyé au site (il sert au brouillon du résultat).
+    contactNom: text('contact_nom'),
+    contactEmail: text('contact_email'),
     type: text('type', { enum: TYPES_TEST_VMA }).notNull(),
     statut: text('statut', { enum: STATUTS_TEST_VMA }).notNull().default('envoyee'),
     // Identifiant d'invitation (128 bits) : il fait partie du lien envoyé au dirigeant.

@@ -94,6 +94,65 @@ const sendJson = <T>(method: 'PUT' | 'PATCH' | 'POST', url: string, payload: unk
 
 const inst = (slug: string, path: string) => `/api/i/${encodeURIComponent(slug)}/${path}`;
 
+// Test de VMA : invitations envoyées par le site, résultats relevés (voir src/vma).
+export type TestVmaType = 'premier' | 'essai';
+export type TestVmaStatut = 'envoyee' | 'utilisee' | 'revoquee';
+export type TestVma = {
+  id: string;
+  entrepriseId: string | null;
+  entrepriseNom: string;
+  contactNom: string | null;
+  contactEmail: string | null;
+  type: TestVmaType;
+  statut: TestVmaStatut;
+  lien: string;
+  expireLe: string;
+  creeLe: string;
+  recueLe: string | null;
+  version: string | null;
+  // Écran du dirigeant (ce qu'il a vu) : seulement après l'envoi.
+  resultat: {
+    entreprise: string;
+    vma: number | null;
+    mesurable: boolean;
+    statut: string;
+    tenue: string;
+    allureVisee: number;
+    echeance: number;
+    niveau: { cle: string; label: string; phrase: string };
+    ecart: number | null;
+    freins: { n: number; titre: string; phrase: string }[];
+  } | null;
+  // Calcul complet, pour la fiche de Marc (gains et blocs inclus) : jamais montré au dirigeant.
+  calcul: {
+    vma?: number;
+    statut?: string;
+    potentiel?: number;
+    niveau?: { cle: string; part?: number; parAn?: number };
+    freins?: {
+      n: number;
+      label: string;
+      note: number;
+      gainMax: number;
+      gainRestant: number;
+      bloc: string;
+    }[];
+  } | null;
+};
+export type NouveauTestVma = {
+  entrepriseId?: string | null;
+  entrepriseNom: string;
+  type: TestVmaType;
+  contactNom?: string | null;
+  contactEmail?: string | null;
+};
+
+export const fetchTestsVma = (slug: string) => getJson<TestVma[]>(inst(slug, 'vma/tests'));
+export const creerTestVma = (slug: string, nouveau: NouveauTestVma) =>
+  sendJson<TestVma>('POST', inst(slug, 'vma/tests'), nouveau);
+export const revoquerTestVma = (slug: string, id: string) =>
+  sendJson<TestVma>('POST', inst(slug, `vma/tests/${encodeURIComponent(id)}/revoquer`), {});
+
 export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug, 'journal'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>
