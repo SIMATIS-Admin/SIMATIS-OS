@@ -5,6 +5,7 @@ import './connexions/index.js';
 import { startScheduler } from './connexions/service.js';
 import { startPlanification } from './routines/planification.js';
 import { startReleveSite } from './site/releve.js';
+import { startReleveVma } from './vma/releve.js';
 import { appDatabaseUrl, ensureAppRole, lectureRoleOf } from './db/roles.js';
 import { seedDemoIfEmpty } from './demo/seed.js';
 import { runMigrations } from './migrate.js';
@@ -52,6 +53,7 @@ async function prepareDatabase(): Promise<void> {
 let stopScheduler = () => {};
 let stopPlanification = () => {};
 let stopReleveSite = () => {};
+let stopReleveVma = () => {};
 try {
   await prepareDatabase();
   await app.listen({ host: config.host, port: config.port });
@@ -71,6 +73,13 @@ try {
       },
       onError: (err) => app.log.warn({ err }, 'website contact pass failed'),
     });
+    stopReleveVma = startReleveVma(db, {
+      ...config.site,
+      onResult: (r) => {
+        if (r.recus > 0) app.log.info(r, 'test de VMA results pulled');
+      },
+      onError: (err) => app.log.warn({ err }, 'test de VMA pass failed'),
+    });
   }
 } catch (err) {
   app.log.fatal({ err }, 'startup failed');
@@ -84,6 +93,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     stopScheduler();
     stopPlanification();
     stopReleveSite();
+    stopReleveVma();
     void app
       .close()
       .then(() => pool.end())

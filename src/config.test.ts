@@ -17,7 +17,14 @@ describe('loadConfig', () => {
       realWrites: false,
       backupStatusFile: './backup-status/last.json',
       site: null,
+      vmaOsToken: null,
     });
+  });
+
+  it('reads the Test de VMA invitation token, empty meaning unset', () => {
+    const token = 'y'.repeat(32);
+    expect(loadConfig({ ...BASE, VMA_OS_TOKEN: token }).vmaOsToken).toBe(token);
+    expect(loadConfig({ ...BASE, VMA_OS_TOKEN: '' }).vmaOsToken).toBeNull();
   });
 
   it('reads the website contact settings, empty values meaning unset', () => {
