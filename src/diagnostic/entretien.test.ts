@@ -6,8 +6,15 @@ import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { ChatIndisponible } from './chat.js';
-import { enregistrerReponses, importerEntretien, PDF_MAX, corrigerReponse } from './entretien.js';
+import { ChatIndisponible, demarrerAttente } from './chat.js';
+import {
+  autoriserSiEntretien,
+  corrigerReponse,
+  enregistrerReponses,
+  importerEntretien,
+  PDF_MAX,
+  reponsesSchema,
+} from './entretien.js';
 import { ScoreIncomplet, type ReponseQuestion } from './score.js';
 import { createProjet, listProjets } from './service.js';
 
@@ -184,5 +191,72 @@ describe('Entretien : import du PDF, réponses et correction', () => {
     const relu = await relire(id);
     expect(relu.dims).toEqual({ outils: 10, strategie: 10, polyvalence: 10 });
     expect(relu.historiqueReponses).toEqual([]);
+  });
+});
+
+describe('Entretien : permission du runner et réponses reçues', () => {
+  let t: TestApp;
+  let dossier: string;
+  let grilleAvant: string | undefined;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    dossier = await mkdtemp(path.join(tmpdir(), 'entretien-perm-'));
+    const chemin = path.join(dossier, 'grille.json');
+    await writeFile(chemin, JSON.stringify(grilleFictive));
+    grilleAvant = process.env.DIAGNOSTIC_GRILLE;
+    process.env.DIAGNOSTIC_GRILLE = chemin;
+  });
+
+  afterAll(async () => {
+    if (grilleAvant === undefined) delete process.env.DIAGNOSTIC_GRILLE;
+    else process.env.DIAGNOSTIC_GRILLE = grilleAvant;
+    await rm(dossier, { recursive: true, force: true });
+    await t.drop();
+  });
+
+  it('pendant la lecture du PDF, n autorise que la lecture ; le reste est refusé', async () => {
+    const instance = await createInstance(t.owner.db, {
+      slug: 'simatis-entretien-permission',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+    const p = await createProjet(t.app.db, instance, {
+      nom: 'Entretien Fictif I',
+      activite: 'services',
+    });
+    await importerEntretien(t.app.db, instance, p.id, { nom: 'entretien.pdf', base64: PDF_FICTIF });
+    await demarrerAttente(t.app.db, instance, p.id);
+    const decider = (outil: string, input: Record<string, unknown>) =>
+      withInstance(t.app.db, instance.id, (tx) => autoriserSiEntretien(tx, outil, input));
+    expect(await decider('Read', { file_path: '/dossier/entretien.pdf' })).toMatchObject({
+      behavior: 'allow',
+    });
+    expect(await decider('Edit', { file_path: '/dossier/entretien.pdf' })).toMatchObject({
+      behavior: 'deny',
+    });
+    expect(await decider('Artifact', { action: 'publish' })).toMatchObject({ behavior: 'deny' });
+  });
+
+  it('sans lecture de PDF en cours, ne décide rien', async () => {
+    const instance = await createInstance(t.owner.db, {
+      slug: 'simatis-entretien-sans',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+    const decision = await withInstance(t.app.db, instance.id, (tx) =>
+      autoriserSiEntretien(tx, 'Read', {}),
+    );
+    expect(decision).toBeNull();
+  });
+
+  it('accepte les lettres A à E et N/A, et refuse le reste', () => {
+    expect(reponsesSchema.safeParse([{ section: 'R1', numero: 1, reponse: 'N/A' }]).success).toBe(
+      true,
+    );
+    expect(reponsesSchema.safeParse([{ section: 'R1', numero: 1, reponse: 'F' }]).success).toBe(
+      false,
+    );
+    expect(reponsesSchema.safeParse([]).success).toBe(false);
   });
 });

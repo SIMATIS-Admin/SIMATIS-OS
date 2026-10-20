@@ -5,6 +5,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { ChatIndisponible, envoyerMessage } from './chat.js';
 import { chargerGrille, cleQuestion, GrilleInvalide, LETTRES, type Grille } from './grille.js';
+import type { Decision } from './support.js';
 import { diagnosticProjets } from './schema.js';
 import { scorer, ScoreIncomplet, type ReponseQuestion } from './score.js';
 import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
@@ -76,6 +77,21 @@ export async function enregistrerReponses(
     .update(diagnosticProjets)
     .set({ reponsesEntretien: reponses, dims, demande: null, updatedAt: new Date() })
     .where(eq(diagnosticProjets.id, id));
+}
+
+// Pendant la lecture du PDF, Claude ne peut que lire : le PDF est dans le dossier de travail.
+export async function autoriserSiEntretien(
+  tx: Tx,
+  outil: string,
+  input: Record<string, unknown>,
+): Promise<Decision | null> {
+  const enCours = await tx
+    .select()
+    .from(diagnosticProjets)
+    .where(eq(diagnosticProjets.statutChat, 'en_cours'));
+  if (enCours.length !== 1 || enCours[0]?.demande !== 'entretien') return null;
+  if (outil === 'Read') return { behavior: 'allow', updatedInput: input };
+  return { behavior: 'deny', message: `Outil ${outil} non autorisé pendant la lecture du PDF.` };
 }
 
 // Correction par le pilote : le profil se recalcule, et l'ancienne valeur reste dans l'historique.
