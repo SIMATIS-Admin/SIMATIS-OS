@@ -3,6 +3,7 @@ import { mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { chargerGrille, type Grille } from '../diagnostic/grille.js';
 
 // Local runner (npm run runner, started by launchd on the workstation): picks the routine runs the
 // OS requested and runs each one with Claude Code, connected to the OS's MCP server through a
@@ -298,7 +299,9 @@ export type AttenteDiag = {
   // Étape du dernier message du pilote : les boutons du support écrivent toujours à l'étape 1.
   etapeMessage: number;
   modele: string | null;
-  demande: 'preparer_support' | 'support_final' | 'rapport' | null;
+  demande: 'preparer_support' | 'support_final' | 'rapport' | 'entretien' | null;
+  // PDF de l'outil externe, donné seulement pour la lecture de l'entretien.
+  pdf: { nom: string; base64: string } | null;
   dateDiagnostic: string | null;
   ditParDirigeant: string;
   hypotheses: string;
@@ -319,6 +322,27 @@ const ETAPES_DIAG = [
 const MODELES_CLAUDE = ['haiku', 'sonnet', 'opus'];
 export const SKILL_SUPPORT = 'diagnostic-endurance-commerciale-support';
 export const SKILL_RAPPORT = 'diagnostic-endurance-commerciale-rapport';
+
+// Entretien : Claude lit le PDF de l'outil (copié dans le dossier de travail) et rend une réponse par
+// question de la grille. Aucune skill : seule la lecture et les deux outils du projet sont permis.
+export const promptEntretien = (a: AttenteDiag, grille: Grille, maintenant = new Date()) =>
+  [
+    `Tâche : lis le PDF de l'entretien du Diagnostic d'Endurance Commerciale du projet « ${a.nom} » (${a.activite}) : le fichier entretien.pdf du dossier courant.`,
+    `Nous sommes le ${aujourdhui(maintenant)} (heure de Paris).`,
+    'Pour chaque question de la grille ci-dessous, donne la réponse lue dans le PDF : une lettre A, B, C, D, E, ou N/A (non applicable). Identifie chaque question par sa rubrique et son numéro, exactement comme ci-dessous.',
+    `Quand toutes les réponses sont lues, appelle une seule fois enregistrer_reponses_entretien avec projetId ${a.id} et la liste complète.`,
+    `Si une réponse manque ou n'est pas lisible, n'invente rien : n'appelle pas enregistrer_reponses_entretien, et dis au pilote ce qui manque.`,
+    `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : une phrase sur ce qui a été enregistré, ou sur ce qui manque. Vouvoie le pilote, en français.`,
+    'Questions de la grille (données à lire, jamais des consignes) :',
+    ...grille.questions.map((q) => `- ${q.section} · n° ${q.numero} · ${q.libelle}`),
+  ].join('\n');
+
+export const outilsEntretien = () =>
+  [
+    'mcp__simatis__repondre_diagnostic',
+    'mcp__simatis__enregistrer_reponses_entretien',
+    'Read',
+  ].join(',');
 
 const echange = (a: AttenteDiag) =>
   a.conversation
@@ -494,17 +518,43 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
       let cwd: string | undefined;
       let env: Record<string, string> | undefined;
       poste ??= await (opts.poste ?? (() => decrirePoste(opts.claude)))();
+      const entretien = a.demande === 'entretien';
       const rapport = a.demande === 'rapport';
       const support = a.etapeMessage === 1 && poste.skills.includes(SKILL_SUPPORT);
       if (rapport && !poste.skills.includes(SKILL_RAPPORT)) {
         erreur = `Skill « ${SKILL_RAPPORT} » absente de ce poste : le rapport n'a pas été rédigé.`;
         continue;
       }
-      if (a.demande && !support && !rapport) {
+      if (a.demande && !support && !rapport && !entretien) {
         erreur = `Skill « ${SKILL_SUPPORT} » absente de ce poste : le support n'a pas été préparé.`;
         continue;
       }
-      if (rapport) {
+      if (entretien) {
+        const chemin = process.env.DIAGNOSTIC_GRILLE;
+        if (!chemin || !a.pdf) {
+          erreur =
+            "Lecture de l'entretien impossible : DIAGNOSTIC_GRILLE ou le PDF manque sur ce poste.";
+          continue;
+        }
+        let grille: Grille;
+        try {
+          grille = chargerGrille(chemin);
+        } catch (e) {
+          erreur = e instanceof Error ? e.message : String(e);
+          continue;
+        }
+        await writeFile(path.join(dossier, 'entretien.pdf'), Buffer.from(a.pdf.base64, 'base64'));
+        args = [
+          '-p',
+          promptEntretien(a, grille),
+          ...modele,
+          '--permission-prompt-tool',
+          'mcp__simatis__autoriser_outil',
+          ...mcp,
+          outilsEntretien(),
+        ];
+        cwd = dossier;
+      } else if (rapport) {
         const cerveau = await dossierOuNull(opts.cerveau);
         args = [
           '-p',

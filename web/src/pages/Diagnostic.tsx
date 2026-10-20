@@ -1,7 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   creerProjetDiag,
+  corrigerReponseDiag,
   demandeRapportDiag,
+  importerEntretienDiag,
+  type LettreReponse,
   demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
@@ -320,7 +323,15 @@ function ProjetVue({
               onErreur={onErreur}
             />
           )}
-          {projet.etape === 2 && <Resultat projet={projet} onSauver={sauver} />}
+          {projet.etape === 2 && (
+            <Resultat
+              slug={slug}
+              projet={projet}
+              onSauver={sauver}
+              onChange={onChange}
+              onErreur={onErreur}
+            />
+          )}
           {projet.etape === 3 && <Revue projet={projet} onSauver={sauver} />}
           {projet.etape === 4 && (
             <Rapport slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
@@ -565,7 +576,23 @@ function Support({
   );
 }
 
-function Resultat({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
+// Lettres proposées pour corriger une réponse lue dans le PDF (miroir de la grille côté serveur).
+const LETTRES_REPONSE: LettreReponse[] = ['A', 'B', 'C', 'D', 'E', 'N/A'];
+const PDF_MAX_OCTETS = 10 * 1024 * 1024;
+
+function Resultat({
+  slug,
+  projet,
+  onSauver,
+  onChange,
+  onErreur,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onSauver: Sauver;
+  onChange: (p: ProjetDiag) => void;
+  onErreur: (m: string) => void;
+}) {
   const [dims, setDims] = useState<Dimensions>(
     projet.dims ?? { outils: 0, strategie: 0, polyvalence: 0 },
   );
@@ -577,6 +604,24 @@ function Resultat({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }
     setStatut(projet.statutDiagnostic);
     setDate(projet.dateDiagnostic ?? '');
   }, [projet]);
+
+  const importer = async (fichier: File | undefined) => {
+    if (!fichier) return;
+    if (fichier.size > PDF_MAX_OCTETS) return onErreur('PDF trop lourd (10 Mo au plus).');
+    try {
+      const base64 = await lireBase64(fichier);
+      onChange(await importerEntretienDiag(slug, projet.id, { nom: fichier.name, base64 }));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const corriger = async (section: string, numero: number, reponse: LettreReponse) => {
+    try {
+      onChange(await corrigerReponseDiag(slug, projet.id, { section, numero, reponse }));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
 
   const enregistrer = async () => {
     setMessage(null);
@@ -595,9 +640,55 @@ function Resultat({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }
         {projet.profil && <span className="badge green">Profil : {projet.profil}</span>}
       </div>
       <div className="panel-b stack">
+        <div className="stack">
+          <label className="small">
+            Importer le PDF de l’outil (10 Mo au plus) :{' '}
+            <input
+              type="file"
+              accept="application/pdf"
+              aria-label="Importer le PDF de l'outil"
+              onChange={(e) => void importer(e.target.files?.[0])}
+            />
+          </label>
+          {projet.pdfEntretienNom && (
+            <p className="small muted" style={{ margin: 0 }}>
+              PDF importé : {projet.pdfEntretienNom}
+            </p>
+          )}
+          {projet.demande === 'entretien' && (
+            <p className="small muted" style={{ margin: 0 }}>
+              Claude lit le PDF… Les réponses apparaîtront ici.
+            </p>
+          )}
+          {projet.reponsesEntretien.length > 0 && (
+            <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+              {projet.reponsesEntretien.map((r) => (
+                <li key={`${r.section}#${r.numero}`}>
+                  <span>
+                    {r.section} · n° {r.numero}
+                  </span>{' '}
+                  <select
+                    aria-label={`Réponse ${r.section} n° ${r.numero}`}
+                    value={r.reponse}
+                    onChange={(e) =>
+                      void corriger(r.section, r.numero, e.target.value as LettreReponse)
+                    }
+                  >
+                    {LETTRES_REPONSE.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <p className="small muted" style={{ margin: 0 }}>
-          Saisissez les trois notes sur 10 fournies par l’outil. Le profil se calcule en cascade :
-          une dimension ne compte que si la précédente atteint {SEUIL}.
+          Saisie manuelle (secours) : saisissez les trois notes sur 10 fournies par l’outil. Le
+          profil se calcule en cascade : une dimension ne compte que si la précédente atteint{' '}
+          {SEUIL}.
         </p>
         <div className="diag-champs">
           {DIMENSIONS.map(([id, label]) => (

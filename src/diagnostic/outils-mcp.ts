@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { registerTool } from '../mcp/tools.js';
 import { repondreClaude } from './chat.js';
+import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
 import { autoriserSiRapport, enregistrerRapport } from './rapport.js';
 import { autoriserOutil, enregistrerSupport, LIEN_ARTIFACT } from './support.js';
 
@@ -62,7 +63,9 @@ registerTool({
   }),
   scope: 'instance',
   handler: async ({ tx }, { tool_name, input }) =>
-    (await autoriserSiRapport(tx, tool_name, input)) ?? autoriserOutil(tx, tool_name, input),
+    (await autoriserSiRapport(tx, tool_name, input)) ??
+    (await autoriserSiEntretien(tx, tool_name, input)) ??
+    autoriserOutil(tx, tool_name, input),
 });
 
 // Outil du rapport : Claude rend le lien du rapport rédigé, une fois l'artifact publié.
@@ -77,6 +80,22 @@ registerTool({
   scope: 'instance',
   handler: async ({ tx }, { projetId, lien }) => {
     await enregistrerRapport(tx, projetId, lien);
+    return { ok: true };
+  },
+});
+
+// Outil de l'entretien : Claude rend les réponses lues dans le PDF, une par question de la grille.
+registerTool({
+  name: 'enregistrer_reponses_entretien',
+  description:
+    "Enregistre les réponses de l'entretien lues dans le PDF de l'outil : une lettre (A à E, ou N/A) par question de la grille, identifiée par sa rubrique (section) et son numéro.",
+  input: z.object({
+    projetId: z.uuid(),
+    reponses: reponsesSchema,
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, reponses }) => {
+    await enregistrerReponses(tx, projetId, reponses);
     return { ok: true };
   },
 });

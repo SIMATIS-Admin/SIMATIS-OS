@@ -12,6 +12,8 @@ import {
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage } from '../diagnostic/chat.js';
 import { demanderRapport } from '../diagnostic/rapport.js';
+import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
+import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
 import { demanderSupport, logoDe, rouvrirSupport } from '../diagnostic/support.js';
 import {
   createContact,
@@ -416,6 +418,53 @@ export function registerApi(
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
         return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Entretien : import du PDF de l'outil (PDF de 10 Mo au plus, donc un corps plus grand que la limite
+  // par défaut), puis correction d'une réponse lue.
+  const corpsPdf = z.object({
+    nom: z.string().trim().min(1).max(200),
+    base64: z.string().min(1).max(14_000_000),
+  });
+  const corpsReponse = z.object({
+    section: z.string().trim().min(1).max(200),
+    numero: z.number().int().min(1).max(999),
+    reponse: z.enum(LETTRES),
+  });
+  const erreurEntretien = (error: unknown, reply: FastifyReply) => {
+    if (error instanceof ChatIndisponible) return reply.code(409).send({ error: error.message });
+    if (error instanceof GrilleInvalide) return reply.code(400).send({ error: error.message });
+    return diagnosticErreur(error, reply);
+  };
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/entretien',
+    { bodyLimit: 14_000_000 },
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = corpsPdf.safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'PDF attendu : nom et contenu' });
+      try {
+        return await importerEntretien(db, i, id, corps.data);
+      } catch (error) {
+        return erreurEntretien(error, reply);
+      }
+    }),
+  );
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/entretien/reponse',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = corpsReponse.safeParse(request.body);
+      if (!corps.success)
+        return reply.code(400).send({ error: 'Réponse attendue : section, numéro, lettre' });
+      try {
+        const { section, numero, reponse } = corps.data;
+        return await corrigerReponse(db, i, id, { section, numero }, reponse);
+      } catch (error) {
+        return erreurEntretien(error, reply);
       }
     }),
   );

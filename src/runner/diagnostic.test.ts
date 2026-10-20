@@ -3,9 +3,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  outilsEntretien,
   outilsRapport,
   outilsSupport,
   promptDiagnostic,
+  promptEntretien,
   promptRapport,
   promptSupport,
   skillsDe,
@@ -40,6 +42,7 @@ const attente: AttenteDiag = {
   supportLien: null,
   rapportLien: null,
   rapportLienStatut: 'aucun',
+  pdf: null,
   logo: null,
 };
 
@@ -221,5 +224,44 @@ describe('Rapport par le runner', () => {
     expect(avec).toContain('Read(//cerveau-fictif/**)');
     // Le second cerveau se lit seulement pour le rapport : aucune règle Edit dessus.
     expect(avec).not.toContain('Edit(//cerveau-fictif/**)');
+  });
+});
+
+describe('Entretien par le runner', () => {
+  const entretien: AttenteDiag = {
+    ...attente,
+    etape: 2,
+    etapeMessage: 2,
+    demande: 'entretien',
+    pdf: { nom: 'entretien.pdf', base64: Buffer.from('%PDF-1.4 fictif').toString('base64') },
+  };
+  const grille = {
+    seuil: 6,
+    questions: [
+      {
+        section: 'Rubrique fictive',
+        numero: 3,
+        libelle: 'Question fictive trois',
+        dimension: 'outils' as const,
+        poids: 2,
+      },
+    ],
+  };
+
+  it('demande de lire le PDF, question par question, et de ne rien inventer', () => {
+    const texte = promptEntretien(entretien, grille, new Date('2026-10-20T08:00:00Z'));
+    expect(texte).toContain(`projetId ${entretien.id}`);
+    expect(texte).toContain('enregistrer_reponses_entretien');
+    expect(texte).toContain('Question fictive trois');
+    expect(texte).toContain('N/A');
+    expect(texte).toContain("n'invente rien");
+  });
+
+  it('ne donne que la lecture et les deux outils du projet, jamais le deck ni l édition', () => {
+    const outils = outilsEntretien();
+    expect(outils).toContain('mcp__simatis__enregistrer_reponses_entretien');
+    expect(outils).toContain('Read');
+    expect(outils).not.toContain('Artifact');
+    expect(outils).not.toContain('Edit');
   });
 });
