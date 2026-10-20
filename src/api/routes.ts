@@ -11,6 +11,7 @@ import {
 } from '../diagnostic/service.js';
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage } from '../diagnostic/chat.js';
+import { demanderRapport } from '../diagnostic/rapport.js';
 import { demanderSupport, logoDe, rouvrirSupport } from '../diagnostic/support.js';
 import {
   createContact,
@@ -399,6 +400,21 @@ export function registerApi(
       try {
         return await updateProjet(db, i, request.params.id, parsed.data);
       } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Rapport : le pilote demande sa rédaction par Claude (étape 4, revue validée).
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/produire',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderRapport(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
         return diagnosticErreur(error, reply);
       }
     }),
