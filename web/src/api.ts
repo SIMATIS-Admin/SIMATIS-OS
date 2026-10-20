@@ -739,6 +739,7 @@ export type ProjetDiag = {
   activite: string;
   contexte: string;
   etape: number;
+  etapeMax: number;
   dims: Dimensions | null;
   statutDiagnostic: 'Rapport à rédiger' | 'Restitué' | null;
   dateDiagnostic: string | null;

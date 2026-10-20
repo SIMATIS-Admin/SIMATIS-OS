@@ -37,11 +37,12 @@ const EFFORTS = [
   ['eleve', 'Élevé'],
   ['max', 'Max'],
 ] as const;
-// Préparation et entretien en Sonnet effort moyen ; rapport en Opus effort max.
-const CHAT_DEFAUT: Record<number, Pick<ChatEtape, 'modele' | 'effort'>> = {
-  1: { modele: 'sonnet', effort: 'moyen' },
-  2: { modele: 'sonnet', effort: 'moyen' },
-  3: { modele: 'opus', effort: 'max' },
+// Préparation et entretien en Sonnet effort moyen ; rapport en Opus effort max. Le lien vide
+// est requis par le serveur : sans lui, changer le modèle d'une étape neuve était refusé.
+const CHAT_DEFAUT: Record<number, ChatEtape> = {
+  1: { modele: 'sonnet', effort: 'moyen', lien: '' },
+  2: { modele: 'sonnet', effort: 'moyen', lien: '' },
+  3: { modele: 'opus', effort: 'max', lien: '' },
 };
 const DIMENSIONS: [keyof Dimensions, string][] = [
   ['outils', 'Outils et méthode'],
@@ -75,31 +76,51 @@ export function Diagnostic({ slug }: { slug: string }) {
     setProjets((liste) => liste?.map((p) => (p.id === maj.id ? maj : p)) ?? null);
   const projet = projets?.find((p) => p.id === ouvert) ?? null;
 
-  if (erreur) return <div className="alert amber">{erreur}</div>;
-  if (!projets) return <div className="panel empty">Chargement…</div>;
+  if (!projets) {
+    return erreur ? (
+      <div className="alert amber">{erreur}</div>
+    ) : (
+      <div className="panel empty">Chargement…</div>
+    );
+  }
+  // Une action refusée s'affiche au-dessus de la page, sans la remplacer.
+  const alerte = erreur && (
+    <div className="alert amber diag-alerte" role="alert">
+      <span>{erreur}</span>
+      <button className="btn" onClick={() => setErreur(null)}>
+        Fermer
+      </button>
+    </div>
+  );
   if (projet) {
     return (
-      <ProjetVue
-        key={projet.id}
-        slug={slug}
-        projet={projet}
-        onChange={remplacer}
-        onRetour={() => setOuvert(null)}
-        onErreur={setErreur}
-      />
+      <div className="stack">
+        {alerte}
+        <ProjetVue
+          key={projet.id}
+          slug={slug}
+          projet={projet}
+          onChange={remplacer}
+          onRetour={() => setOuvert(null)}
+          onErreur={setErreur}
+        />
+      </div>
     );
   }
   return (
-    <ListeProjets
-      slug={slug}
-      projets={projets}
-      onOuvrir={setOuvert}
-      onCree={(p) => {
-        setProjets((liste) => [p, ...(liste ?? [])]);
-        setOuvert(p.id);
-      }}
-      onErreur={setErreur}
-    />
+    <div className="stack">
+      {alerte}
+      <ListeProjets
+        slug={slug}
+        projets={projets}
+        onOuvrir={setOuvert}
+        onCree={(p) => {
+          setProjets((liste) => [p, ...(liste ?? [])]);
+          setOuvert(p.id);
+        }}
+        onErreur={setErreur}
+      />
+    </div>
   );
 }
 
@@ -184,23 +205,21 @@ function ListeProjets({
           Aucun projet. Créez-en un pour préparer le premier entretien.
         </div>
       ) : (
-        <div className="panel">
-          <div className="panel-b">
-            {projets.map((p) => (
-              <button key={p.id} className="vq-item" onClick={() => onOuvrir(p.id)}>
-                <div className="row1">
-                  <b>{p.nom}</b>
-                  <span className="badge">
-                    Étape {p.etape} · {ETAPES[p.etape - 1]}
-                  </span>
-                </div>
-                <small>
-                  {libelle(ACTIVITES, p.activite)}, modifié le{' '}
-                  {new Date(p.updatedAt).toLocaleDateString('fr-FR')}
-                </small>
-              </button>
-            ))}
-          </div>
+        <div className="diag-projets">
+          {projets.map((p) => (
+            <button key={p.id} className="panel diag-projet" onClick={() => onOuvrir(p.id)}>
+              <div className="row1">
+                <b>{p.nom}</b>
+                <span className="badge">
+                  Étape {p.etapeMax} · {ETAPES[p.etapeMax - 1]}
+                </span>
+              </div>
+              <small>
+                {libelle(ACTIVITES, p.activite)}, modifié le{' '}
+                {new Date(p.updatedAt).toLocaleDateString('fr-FR')}
+              </small>
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -259,7 +278,7 @@ function ProjetVue({
             {ETAPES.map((titre, i) => (
               <li key={titre}>
                 <button
-                  className={`diag-etape ${projet.etape === i + 1 ? 'on' : ''}`}
+                  className={`diag-etape ${projet.etape === i + 1 ? 'on' : i < projet.etapeMax ? 'fait' : ''}`}
                   aria-current={projet.etape === i + 1 ? 'step' : undefined}
                   onClick={() => void sauver({ etape: i + 1 })}
                 >
@@ -865,7 +884,7 @@ function Assistant({
   onErreur: (m: string) => void;
 }) {
   const etape = projet.etape;
-  const chat = { ...CHAT_DEFAUT[etape], ...projet.chats[String(etape)] } as ChatEtape;
+  const chat: ChatEtape = { ...CHAT_DEFAUT[etape]!, ...projet.chats[String(etape)] };
   const [lien, setLien] = useState(chat.lien ?? '');
   const [erreurLien, setErreurLien] = useState<string | null>(null);
   const [texte, setTexte] = useState('');

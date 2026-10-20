@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Executor } from '../db.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
@@ -83,7 +83,14 @@ export async function updateProjet(
   return withInstance(db, instance.id, async (tx) => {
     const [row] = await tx
       .update(diagnosticProjets)
-      .set({ ...patch, ...colonnesLogo, updatedAt: new Date() })
+      .set({
+        ...patch,
+        ...colonnesLogo,
+        ...(patch.etape === undefined
+          ? {}
+          : { etapeMax: sql`greatest(${diagnosticProjets.etapeMax}, ${patch.etape})` }),
+        updatedAt: new Date(),
+      })
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
       .returning();
     if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');

@@ -97,6 +97,7 @@ export async function importerProjets(
         activite: p.activite,
         contexte: p.contexte ?? '',
         etape: p.etape,
+        etapeMax: p.etape,
         dims: p.dims ?? null,
         statutDiagnostic: p.statutDiagnostic ?? null,
         dateDiagnostic: p.dateDiagnostic ?? null,
