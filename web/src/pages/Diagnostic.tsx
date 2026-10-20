@@ -1,10 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   creerProjetDiag,
-  corrigerReponseDiag,
   demandeRapportDiag,
   importerEntretienDiag,
-  type LettreReponse,
   demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
@@ -576,8 +574,6 @@ function Support({
   );
 }
 
-// Lettres proposées pour corriger une réponse lue dans le PDF (miroir de la grille côté serveur).
-const LETTRES_REPONSE: LettreReponse[] = ['A', 'B', 'C', 'D', 'E', 'N/A'];
 const PDF_MAX_OCTETS = 10 * 1024 * 1024;
 
 function Resultat({
@@ -611,13 +607,6 @@ function Resultat({
     try {
       const base64 = await lireBase64(fichier);
       onChange(await importerEntretienDiag(slug, projet.id, { nom: fichier.name, base64 }));
-    } catch (err) {
-      onErreur(messageErreur(err));
-    }
-  };
-  const corriger = async (section: string, numero: number, reponse: LettreReponse) => {
-    try {
-      onChange(await corrigerReponseDiag(slug, projet.id, { section, numero, reponse }));
     } catch (err) {
       onErreur(messageErreur(err));
     }
@@ -659,30 +648,6 @@ function Resultat({
             <p className="small muted" style={{ margin: 0 }}>
               Claude lit le PDF… Les réponses apparaîtront ici.
             </p>
-          )}
-          {projet.reponsesEntretien.length > 0 && (
-            <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
-              {projet.reponsesEntretien.map((r) => (
-                <li key={`${r.section}#${r.numero}`}>
-                  <span>
-                    {r.section} · n° {r.numero}
-                  </span>{' '}
-                  <select
-                    aria-label={`Réponse ${r.section} n° ${r.numero}`}
-                    value={r.reponse}
-                    onChange={(e) =>
-                      void corriger(r.section, r.numero, e.target.value as LettreReponse)
-                    }
-                  >
-                    {LETTRES_REPONSE.map((l) => (
-                      <option key={l} value={l}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </li>
-              ))}
-            </ul>
           )}
         </div>
         <p className="small muted" style={{ margin: 0 }}>
