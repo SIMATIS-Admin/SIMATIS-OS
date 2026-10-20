@@ -14,6 +14,7 @@ import {
   type ProjetDiagPatch,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import { etapeEnCours, etatsEtapes } from './etapes.js';
 
 // Libellés des activités et des modèles : les valeurs sont celles que le serveur accepte.
 export const ACTIVITES = [
@@ -272,6 +273,10 @@ function ProjetVue({
     onChange,
   ]);
 
+  const etats = etatsEtapes(projet);
+  const encours = etapeEnCours(etats);
+  const etatAffiche = etats[projet.etape - 1];
+
   const sauver = async (patch: ProjetDiagPatch) => {
     try {
       onChange(await majProjetDiag(slug, projet.id, patch));
@@ -297,20 +302,36 @@ function ProjetVue({
             {ETAPES.map((titre, i) => (
               <li key={titre}>
                 <button
-                  className={`diag-etape ${projet.etape === i + 1 ? 'on' : i < projet.etapeMax ? 'fait' : ''}`}
+                  className={`diag-etape ${projet.etape === i + 1 ? 'on' : ''} ${etats[i]?.ok ? 'fait' : ''} ${encours === i + 1 ? 'encours' : ''}`}
                   aria-current={projet.etape === i + 1 ? 'step' : undefined}
                   onClick={() => void sauver({ etape: i + 1 })}
                 >
                   <span className="diag-num">{i + 1}</span>
                   {titre}
+                  {etats[i]?.ok && (
+                    <span className="diag-ok" aria-hidden="true">
+                      ✓
+                    </span>
+                  )}
+                  {encours === i + 1 && <span className="diag-tag">En cours</span>}
                 </button>
               </li>
             ))}
           </ol>
+          <p className="small muted" style={{ margin: 0 }}>
+            {encours
+              ? `Étape en cours : ${encours}, ${ETAPES[encours - 1]}.`
+              : 'Toutes les étapes sont OK.'}
+          </p>
         </div>
       </div>
       <div className="diag-layout">
         <div className="diag-main">
+          {etatAffiche && (
+            <p className={`diag-statut ${etatAffiche.ok ? 'ok' : 'attente'}`} role="status">
+              Étape {projet.etape} : {etatAffiche.ok ? 'OK' : 'à faire'} · {etatAffiche.libelle}
+            </p>
+          )}
           {projet.etape === 1 && <Preparation projet={projet} onSauver={sauver} />}
           {projet.etape === 1 && (
             <Support
