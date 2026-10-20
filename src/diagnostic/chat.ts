@@ -190,6 +190,11 @@ export async function attentesClaude(db: Executor) {
         supportLien: p.supportLien,
         rapportLien: p.rapportLien,
         rapportLienStatut: p.rapportLienStatut,
+        // Le PDF de l'entretien ne voyage que pour sa lecture.
+        pdf:
+          p.demande === 'entretien' && p.pdfEntretien && p.pdfEntretienNom
+            ? { nom: p.pdfEntretienNom, base64: p.pdfEntretien }
+            : null,
         // Le logo ne voyage que pour préparer le deck.
         logo:
           p.demande === 'preparer_support' && p.logo && p.logoNom
