@@ -18,13 +18,17 @@ const pct = (x: number) =>
   `${(x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}${NB}%`;
 const ans = (n: number) => `${n} ${n < 2 ? 'an' : 'ans'}`;
 
-// Forme de l'écran dirigeant, telle que la relève la reçoit du site.
+// Forme de l'écran dirigeant, telle que la relève la reçoit du site (v0.2 : avec le socle récurrent).
 export type EcranDirigeant = {
   entreprise: string;
   vma: number | null;
   mesurable: boolean;
   statut: string;
+  pastille?: string;
   tenue: string;
+  // Socle récurrent par mois, absent sans récurrent ; allure actuelle = VMA + récurrent.
+  recurrent?: number | null;
+  allureActuelle?: number;
   allureVisee: number;
   echeance: number;
   niveau: { cle: string; label: string; phrase: string };
@@ -40,19 +44,24 @@ export function brouillonResultat(p: { contactNom: string | null; ecran: EcranDi
 } {
   const e = p.ecran;
   const salut = p.contactNom ? `Bonjour ${esc(p.contactNom)},` : 'Bonjour,';
+  const socle =
+    typeof e.recurrent === 'number' && e.recurrent > 0 && e.allureActuelle !== undefined;
   const chiffres =
     e.mesurable && e.vma !== null
-      ? `${euros(e.vma)} de CA commandé par mois, soit ${euros(e.vma * 12)} par an.`
+      ? `${euros(e.vma)} de CA commandé par mois sur vos nouvelles affaires, soit ${euros(e.vma * 12)} par an.`
       : e.textes.nonMesurable;
-  const statut =
-    e.statut === 'prouvée'
-      ? 'chiffres réels'
-      : e.statut === 'à confirmer'
-        ? 'chiffres en partie estimés'
+  const allure = socle
+    ? `<p>+ socle récurrent : ${esc(euros(e.recurrent ?? 0))} par mois<br>= allure actuelle : ${esc(euros(e.allureActuelle ?? 0))} par mois, soit ${esc(euros((e.allureActuelle ?? 0) * 12))} par an.</p>`
+    : '';
+  const pastille =
+    e.pastille === 'estimés' || e.statut === 'à confirmer'
+      ? 'chiffres en partie estimés'
+      : e.statut === 'prouvée' && e.pastille !== 'non mesurable'
+        ? 'chiffres réels'
         : 'non mesurable';
   const tenue = e.tenue === 'tenue' ? 'activité régulière' : 'activité par vagues';
   const ecart =
-    e.mesurable && e.ecart !== null
+    e.ecart !== null
       ? e.ecart > 0
         ? `Il vous manque ${euros(e.ecart)} de CA commandé par mois${e.ecartPct !== null ? ` (+${pct(e.ecartPct)})` : ''}, soit ${euros(e.ecart * 12)} par an.`
         : `Vous dépassez déjà votre objectif de ${euros(-e.ecart)} par mois.`
@@ -64,12 +73,15 @@ export function brouillonResultat(p: { contactNom: string | null; ecran: EcranDi
   const html = [
     `<p>${salut}</p>`,
     `<p>Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.</p>`,
-    `<p><strong>Votre VMA commerciale : ${esc(chiffres)}</strong><br>${esc(statut)} · ${esc(tenue)}</p>`,
+    `<p><strong>Votre VMA commerciale : ${esc(chiffres)}</strong><br>${esc(pastille)} · ${esc(tenue)}</p>`,
+    allure,
     `<p><strong>Votre objectif : ${esc(e.niveau.label)}</strong><br>${esc(euros(e.allureVisee))} par mois dans ${esc(ans(e.echeance))}, soit ${esc(euros(e.allureVisee * 12))} par an.${ecart ? ` ${esc(ecart)}` : ''}</p>`,
     `<p>${esc(e.niveau.phrase)}</p>`,
     `<p><strong>Où se perd votre VMA :</strong></p>`,
     freins,
     `<p>Bien à vous,</p>`,
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
   return { subject: 'Votre résultat au Test de VMA', html };
 }

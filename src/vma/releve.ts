@@ -73,6 +73,9 @@ export function resumeResultat(r: ResultatSite): string {
   const e = r.ecran as Record<string, unknown>;
   const c = r.calcul as {
     potentiel?: number;
+    recurrent?: number;
+    allureActuelle?: number;
+    partRecurrent?: number | null;
     top?: { label: string; bloc: string }[];
   };
   const vma =
@@ -86,6 +89,8 @@ export function resumeResultat(r: ResultatSite): string {
     `Type : ${r.type === 'essai' ? 'essai (non rangé, hors historique)' : 'premier test'}`,
     `Date du test : ${new Date(r.recueLe).toLocaleDateString('fr-FR')}`,
     `VMA : ${vma}`,
+    c.recurrent && c.recurrent > 0 && `Socle récurrent : ${euros(c.recurrent)} par mois`,
+    typeof c.allureActuelle === 'number' && `Allure actuelle : ${euros(c.allureActuelle)} par mois`,
     niveau && `Ambition : ${niveau}`,
     typeof c.potentiel === 'number' && `Potentiel brut : +${euros(c.potentiel)} par mois`,
     freins && `Freins les plus lourds : ${freins}`,

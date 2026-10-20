@@ -26,11 +26,29 @@ describe('brouillon du résultat au dirigeant', () => {
     const { subject, html } = brouillonResultat({ contactNom: 'Jeanne', ecran: ecran() });
     expect(subject).toBe('Votre résultat au Test de VMA');
     expect(html).toContain('Bonjour Jeanne,');
-    expect(html).toContain('15\u00a0k€ de CA commandé par mois, soit 180\u00a0k€ par an.');
+    expect(html).toContain(
+      '15\u00a0k€ de CA commandé par mois sur vos nouvelles affaires, soit 180\u00a0k€ par an.',
+    );
     expect(html).toContain('Il vous manque 5\u00a0k€ de CA commandé par mois (+33\u00a0%)');
     expect(html).toContain('Le temps de vente');
     expect(html).toContain('Bien à vous,');
     expect(html).not.toMatch(/\btu\b|\bte\b|\bton\b/);
+  });
+
+  it('montre le socle récurrent et l’allure actuelle quand il y en a un', () => {
+    const { html } = brouillonResultat({
+      contactNom: null,
+      ecran: ecran({
+        recurrent: 8000,
+        allureActuelle: 23000,
+        ecart: -3000,
+        ecartPct: null,
+        niveau: { cle: 'deja', label: 'Déjà à votre allure', phrase: 'Phrase.' },
+      }),
+    });
+    expect(html).toContain('+ socle récurrent : 8\u00a0k€ par mois');
+    expect(html).toContain('= allure actuelle : 23\u00a0k€ par mois, soit 276\u00a0k€ par an.');
+    expect(html).toContain('Vous dépassez déjà votre objectif de 3\u00a0k€ par mois.');
   });
 
   it("n'annonce jamais le potentiel, réservé à Marc", () => {

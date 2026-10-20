@@ -259,6 +259,13 @@ function FicheResultat({ t }: { t: TestVma }) {
           {' · '}
           {r.statut} · {r.tenue}
         </p>
+        {r.recurrent !== null && r.recurrent !== undefined && (
+          <p>
+            <strong>Socle récurrent : </strong>
+            {fmtEur(r.recurrent)} par mois · <strong>allure actuelle : </strong>
+            {fmtEur(r.allureActuelle)} par mois
+          </p>
+        )}
         <p>
           <strong>Ambition : </strong>
           {r.niveau.label} · {fmtEur(r.allureVisee)} par mois dans {r.echeance} an(s)
@@ -278,6 +285,15 @@ function FicheResultat({ t }: { t: TestVma }) {
           <p className="small">
             Potentiel brut : +{fmtEur(c.potentiel)} par mois · part à convertir :{' '}
             {c.niveau?.part !== undefined ? pct(c.niveau.part) : '—'}
+          </p>
+        )}
+        {c?.recurrent !== undefined && c.recurrent > 0 && (
+          <p className="small">
+            Part du récurrent dans le CA des 12 derniers mois :{' '}
+            {c.partRecurrent !== null && c.partRecurrent !== undefined ? pct(c.partRecurrent) : '—'}
+            {' · '}allure actuelle / CA :{' '}
+            {c.ratioAllure !== null && c.ratioAllure !== undefined ? pct(c.ratioAllure) : '—'}
+            {c.recurrentEstime ? ' · récurrent déclaré estimé' : ''}
           </p>
         )}
         {c?.freins && (

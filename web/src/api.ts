@@ -138,12 +138,20 @@ export type TestVma = {
     echeance: number;
     niveau: { cle: string; label: string; phrase: string };
     ecart: number | null;
+    // Socle récurrent par mois (null sans récurrent) et allure actuelle = VMA + récurrent (v0.2).
+    recurrent?: number | null;
+    allureActuelle?: number;
     freins: { n: number; titre: string; phrase: string }[];
   } | null;
   // Calcul complet, pour la fiche de Marc (gains et blocs inclus) : jamais montré au dirigeant.
   calcul: {
     vma?: number;
     statut?: string;
+    recurrent?: number;
+    recurrentEstime?: boolean;
+    allureActuelle?: number;
+    partRecurrent?: number | null;
+    ratioAllure?: number | null;
     potentiel?: number;
     niveau?: { cle: string; part?: number; parAn?: number };
     freins?: {
