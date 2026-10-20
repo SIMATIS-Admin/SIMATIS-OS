@@ -3139,6 +3139,10 @@ tr.sel {
   outline: 1px solid var(--teal);
   color: var(--teal);
 }
+/* Étape affichée et OK : le numéro reste lisible sur le fond plein. */
+.diag-etape.on.fait .diag-num {
+  color: var(--white);
+}
 /* Un projet par bloc encadré, cliquable en entier. */
 .diag-projets {
   display: flex;

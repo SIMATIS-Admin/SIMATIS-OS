@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   creerProjetDiag,
   demandeRapportDiag,
+  viderConversationDiag,
   importerEntretienDiag,
   demandeSupportDiag,
   envoyerMessageDiag,
@@ -1117,6 +1118,17 @@ function Assistant({
   const enAttente = projet.statutChat !== 'repos';
   const messages = projet.conversation.filter((m) => m.etape === etape);
 
+  // Efface seulement les messages de cette étape ; le projet, son résultat et sa revue restent.
+  const vider = async () => {
+    if (!window.confirm('Vider la conversation de cette étape ? Les messages seront effacés.'))
+      return;
+    try {
+      onChange(await viderConversationDiag(slug, projet.id, etape));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+
   const majChat = async (patch: Partial<ChatEtape>) => {
     try {
       onChange(
@@ -1158,6 +1170,13 @@ function Assistant({
           <div className="small muted">Claude répond ici, par le runner de ce poste</div>
         </div>
         <Icon name="brain" />
+        <button
+          className="btn"
+          disabled={enAttente || messages.length === 0}
+          onClick={() => void vider()}
+        >
+          Vider la conversation
+        </button>
       </div>
       <div className="panel-b stack">
         <div className="diag-cfg">

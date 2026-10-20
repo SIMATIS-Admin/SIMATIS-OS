@@ -82,6 +82,16 @@ describe('Entretien : API', () => {
     expect(r.statusCode).toBe(409);
   });
 
+  it('refuse de vider une étape qui n existe pas', async () => {
+    const projet = await creerProjet('Entretien Fictif API C');
+    const r = await app.inject({
+      method: 'POST',
+      url: `/api/i/simatis/diagnostic/projets/${projet.id}/messages/vider`,
+      payload: { etape: 9 },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
   it('refuse un identifiant de projet mal formé', async () => {
     const r = await app.inject({
       method: 'POST',
