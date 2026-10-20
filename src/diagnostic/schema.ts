@@ -35,6 +35,8 @@ export const diagnosticProjets = pgTable(
     activite: text('activite').notNull(),
     contexte: text('contexte').notNull().default(''),
     etape: integer('etape').notNull().default(1),
+    // Étape la plus haute atteinte : revenir en arrière pour relire ne fait pas reculer le projet.
+    etapeMax: integer('etape_max').notNull().default(1),
     dims: jsonb('dims').$type<Dimensions>(),
     statutDiagnostic: text('statut_diagnostic'),
     dateDiagnostic: date('date_diagnostic'),

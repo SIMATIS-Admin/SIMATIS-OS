@@ -64,6 +64,13 @@ describe('Diagnostic : projets', () => {
     expect(saisi).toMatchObject({ etape: 2, profil: 'Sprinteur', dateDiagnostic: '2026-10-06' });
   });
 
+  it("retient l'étape la plus haute atteinte, même après un retour en arrière", async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Retour Fictif', activite: 'autre' });
+    await updateProjet(t.app.db, simatis, p.id, { etape: 3 });
+    const revenu = await updateProjet(t.app.db, simatis, p.id, { etape: 1 });
+    expect(revenu).toMatchObject({ etape: 1, etapeMax: 3 });
+  });
+
   it("refuse l'accès à un mandat, en lecture comme en écriture", async () => {
     await expect(listProjets(t.app.db, mandat)).rejects.toBeInstanceOf(DiagnosticIndisponible);
     await expect(

@@ -20,6 +20,7 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   activite: 'usinage',
   contexte: '',
   etape: 1,
+  etapeMax: 1,
   dims: null,
   statutDiagnostic: null,
   dateDiagnostic: null,
@@ -114,6 +115,34 @@ describe('Diagnostic', () => {
     await waitFor(() => expect(api.majProjetDiag).toHaveBeenCalled());
     const patch = api.majProjetDiag.mock.calls[0]?.[2] as Partial<ProjetDiag>;
     expect(patch.chats?.['1']?.lien).toBe('https://claude.ai/chat/fictif');
+  });
+});
+
+describe('Diagnostic : liste et réglages', () => {
+  it('montre chaque projet à l étape la plus haute atteinte', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 1, etapeMax: 3 })]);
+    render(<Diagnostic slug="simatis" />);
+    expect(await screen.findByText(/Étape 3 · Analyser et produire le rapport/)).toBeTruthy();
+  });
+
+  it('change le modèle d une étape neuve avec un réglage complet', async () => {
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.change(await screen.findByLabelText('Modèle'), { target: { value: 'opus' } });
+    await waitFor(() =>
+      expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', {
+        chats: { '1': { modele: 'opus', effort: 'moyen', lien: '' } },
+      }),
+    );
+  });
+
+  it('une action refusée laisse la page en place', async () => {
+    api.majProjetDiag.mockRejectedValue(new Error('Réglage refusé'));
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.change(await screen.findByLabelText('Effort'), { target: { value: 'max' } });
+    expect(await screen.findByText('Réglage refusé')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Atelier Fictif Nord' })).toBeTruthy();
   });
 });
 

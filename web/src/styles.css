@@ -3135,6 +3135,57 @@ tr.sel {
   background: var(--teal);
   color: var(--white);
 }
+.diag-etape.fait .diag-num {
+  outline: 1px solid var(--teal);
+  color: var(--teal);
+}
+/* Un projet par bloc encadré, cliquable en entier. */
+.diag-projets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.diag-projet {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.diag-projet:hover {
+  border-color: var(--teal);
+}
+.diag-projet .row1 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.diag-projet b {
+  font-weight: 600;
+}
+.diag-projet small {
+  display: block;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.diag-alerte {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+/* Les champs du diagnostic occupent toute la largeur de leur bloc. */
+.diag-main .field input:not([type='file'], [type='checkbox']),
+.diag-main .field select,
+.diag-main .field textarea {
+  width: 100%;
+}
+.diag-main .field textarea {
+  resize: vertical;
+}
 .diag-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -3150,6 +3201,12 @@ tr.sel {
 .diag-chat {
   position: sticky;
   top: 16px;
+}
+.diag-chat .panel-h > svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--ink-3);
 }
 @media (max-width: 900px) {
   .diag-layout {
