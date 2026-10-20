@@ -86,4 +86,17 @@ describe('Chat du diagnostic', () => {
       DiagnosticIndisponible,
     );
   });
+
+  it('range une demande de rapport à l étape 4 et pose son statut', async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Chat Fictif C', activite: 'services' });
+    const envoye = await envoyerMessage(t.app.db, simatis, p.id, 'Rédige le rapport', {
+      type: 'rapport',
+      verifier: () => {},
+      etape: 4,
+      maj: { rapportLienStatut: 'en_cours' },
+    });
+    expect(envoye.demande).toBe('rapport');
+    expect(envoye.rapportLienStatut).toBe('en_cours');
+    expect(envoye.conversation).toEqual([expect.objectContaining({ etape: 4, de: 'pilote' })]);
+  });
 });

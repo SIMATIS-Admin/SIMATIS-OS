@@ -28,7 +28,14 @@ export async function envoyerMessage(
   id: string,
   texte: string,
   // Bouton du support : le message porte la demande et reste à l'étape 1, même plus tard.
-  demande?: { type: Demande; verifier: (projet: Projet) => void },
+  demande?: {
+    type: Demande;
+    verifier: (projet: Projet) => void;
+    // Étape du message : le rapport se demande à l'étape 4, les boutons du support à l'étape 1.
+    etape?: number;
+    // Champs posés en même temps que la demande (ex. statut du rapport en cours).
+    maj?: Partial<Projet>;
+  },
 ): Promise<ProjetVue> {
   verifierEspace(instance);
   const message = texte.trim();
@@ -40,7 +47,7 @@ export async function envoyerMessage(
       throw new ChatIndisponible('Claude répond déjà à ce projet : attendez sa réponse.');
     demande?.verifier(projet);
     const nouveau: MessageDiag = {
-      etape: demande ? 1 : projet.etape,
+      etape: demande ? (demande.etape ?? 1) : projet.etape,
       de: 'pilote',
       texte: message,
       at: new Date().toISOString(),
@@ -52,6 +59,7 @@ export async function envoyerMessage(
         statutChat: 'attente_claude',
         demande: demande?.type ?? null,
         ...(demande?.type === 'preparer_support' ? { supportStatut: 'preparation' as const } : {}),
+        ...demande?.maj,
         updatedAt: new Date(),
       })
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))

@@ -20,7 +20,10 @@ export type ChatEtape = { modele: string; effort: string; lien: string };
 export const STATUTS_SUPPORT = ['aucun', 'preparation', 'pret', 'final'] as const;
 export type StatutSupport = (typeof STATUTS_SUPPORT)[number];
 // Travail demandé au runner avec le message du pilote (sans : une simple réponse dans le chat).
-export const DEMANDES = ['preparer_support', 'support_final'] as const;
+export const DEMANDES = ['preparer_support', 'support_final', 'rapport'] as const;
+// Rapport remis au dirigeant, rédigé par Claude : 'en_cours' tant que le runner le rédige, 'pret'
+// une fois son lien enregistré.
+export const STATUTS_RAPPORT = ['aucun', 'en_cours', 'pret'] as const;
 export type Demande = (typeof DEMANDES)[number];
 export type Diapositive = { titre: string; texte: string; notes: string };
 
@@ -47,6 +50,15 @@ export const diagnosticProjets = pgTable(
     // Rapport remis au dirigeant : fichier Word encodé en base64, avec son nom d'origine.
     rapport: text('rapport'),
     rapportNom: text('rapport_nom'),
+    // Rapport rédigé par Claude : lien vers l'artifact affiché, et l'historique des liens précédents.
+    rapportLienStatut: text('rapport_lien_statut', { enum: STATUTS_RAPPORT })
+      .notNull()
+      .default('aucun'),
+    rapportLien: text('rapport_lien'),
+    rapportLiens: jsonb('rapport_liens')
+      .$type<{ lien: string; le: string }[]>()
+      .notNull()
+      .default([]),
     // Conversation avec Claude (répondue par le runner de l'OS, comme l'Inbox) et son état :
     // 'repos', 'attente_claude' (le pilote a écrit), 'en_cours' (le runner travaille dessus).
     conversation: jsonb('conversation').$type<MessageDiag[]>().notNull().default([]),
