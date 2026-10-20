@@ -205,3 +205,30 @@ export async function attentesClaude(db: Executor) {
   }
   return sorties;
 }
+
+// Vider la conversation d'une étape : seuls les messages de cette étape partent, et jamais pendant
+// que Claude répond (sinon sa réponse arriverait dans une conversation déjà vidée).
+export async function viderConversation(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  etape: number,
+): Promise<ProjetVue> {
+  verifierEspace(instance);
+  return withInstance(db, instance.id, async (tx) => {
+    const projet = await lire(tx, instance.id, id);
+    if (projet.statutChat !== 'repos')
+      throw new ChatIndisponible(
+        'Claude répond encore : attendez sa réponse avant de vider la conversation.',
+      );
+    const [row] = await tx
+      .update(diagnosticProjets)
+      .set({
+        conversation: projet.conversation.filter((m) => m.etape !== etape),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
+      .returning();
+    return vue(row!);
+  });
+}

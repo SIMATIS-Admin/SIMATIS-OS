@@ -836,6 +836,13 @@ export const corrigerReponseDiag = (
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/entretien/reponse`),
     corps,
   );
+// Vide les messages de l'assistant pour une étape (refusé pendant que Claude répond).
+export const viderConversationDiag = (slug: string, id: string, etape: number) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/messages/vider`),
+    { etape },
+  );
 // Demande la rédaction du rapport par Claude (étape 4, revue validée).
 export const demandeRapportDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(

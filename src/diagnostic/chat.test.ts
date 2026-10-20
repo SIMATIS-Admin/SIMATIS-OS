@@ -11,6 +11,7 @@ import {
   finirAttente,
   REPONSE_ABSENTE,
   repondreClaude,
+  viderConversation,
 } from './chat.js';
 import { demanderRapport, enregistrerRapport } from './rapport.js';
 import { createProjet, DiagnosticIndisponible, listProjets, updateProjet } from './service.js';
@@ -150,5 +151,58 @@ describe('Fin du travail sur un rapport', () => {
     const relu = await relire(id);
     expect(relu.rapportLienStatut).toBe('pret');
     expect(relu.rapportLien).toBe(LIEN);
+  });
+});
+
+describe('Vider la conversation de l assistant', () => {
+  let t: TestApp;
+  let simatis: Instance;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    simatis = await createInstance(t.owner.db, {
+      slug: 'simatis-vider-chat',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+  });
+
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  it('vide seulement les messages de l étape choisie', async () => {
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Vider Fictif A',
+      activite: 'services',
+    });
+    await envoyerMessage(t.app.db, simatis, p.id, 'Question étape une');
+    await withInstance(t.app.db, simatis.id, (tx) =>
+      repondreClaude(tx, p.id, 'Réponse étape une.'),
+    );
+    await updateProjet(t.app.db, simatis, p.id, { etape: 2 });
+    await envoyerMessage(t.app.db, simatis, p.id, 'Question étape deux');
+    await withInstance(t.app.db, simatis.id, (tx) =>
+      repondreClaude(tx, p.id, 'Réponse étape deux.'),
+    );
+
+    const vue = await viderConversation(t.app.db, simatis, p.id, 1);
+    expect(vue.conversation.map((m) => m.texte)).toEqual([
+      'Question étape deux',
+      'Réponse étape deux.',
+    ]);
+  });
+
+  it('refuse pendant que Claude répond, sans rien effacer', async () => {
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Vider Fictif B',
+      activite: 'services',
+    });
+    await envoyerMessage(t.app.db, simatis, p.id, 'Question en attente');
+    await expect(viderConversation(t.app.db, simatis, p.id, 1)).rejects.toBeInstanceOf(
+      ChatIndisponible,
+    );
+    const relu = (await listProjets(t.app.db, simatis)).find((x) => x.id === p.id)!;
+    expect(relu.conversation).toHaveLength(1);
   });
 });

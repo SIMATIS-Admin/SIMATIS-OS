@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   demandeSupportDiag: vi.fn(),
   demandeRapportDiag: vi.fn(),
   importerEntretienDiag: vi.fn(),
+  viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
 }));
 vi.mock('../api.js', () => api);
@@ -514,5 +515,37 @@ describe('Statut des étapes', () => {
     expect(screen.getByRole('button', { name: /Préparer la présentation/ }).textContent).toContain(
       '✓',
     );
+  });
+});
+
+describe('Vider la conversation de l assistant', () => {
+  const question = {
+    etape: 1,
+    de: 'pilote' as const,
+    texte: 'Question à effacer',
+    at: '2026-10-20T08:00:00.000Z',
+  };
+
+  it('efface les messages de l étape après confirmation', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ conversation: [question] })]);
+    api.viderConversationDiag.mockResolvedValue(projet({ conversation: [] }));
+    const confirme = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Vider la conversation' }));
+    await waitFor(() => expect(api.viderConversationDiag).toHaveBeenCalledWith('simatis', 'p1', 1));
+    await waitFor(() => expect(screen.queryByText('Question à effacer')).toBeNull());
+    confirme.mockRestore();
+  });
+
+  it('ne fait rien si on annule la confirmation', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ conversation: [question] })]);
+    const confirme = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Vider la conversation' }));
+    expect(api.viderConversationDiag).not.toHaveBeenCalled();
+    expect(screen.getByText('Question à effacer')).toBeTruthy();
+    confirme.mockRestore();
   });
 });

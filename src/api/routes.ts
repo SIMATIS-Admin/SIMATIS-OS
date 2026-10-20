@@ -10,7 +10,7 @@ import {
   updateProjet,
 } from '../diagnostic/service.js';
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
-import { ChatIndisponible, envoyerMessage } from '../diagnostic/chat.js';
+import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
 import { demanderRapport } from '../diagnostic/rapport.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
 import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
@@ -402,6 +402,23 @@ export function registerApi(
       try {
         return await updateProjet(db, i, request.params.id, parsed.data);
       } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Vider la conversation d'une étape de l'assistant (jamais pendant que Claude répond).
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/messages/vider',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z.object({ etape: z.number().int().min(1).max(5) }).safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Étape attendue (1 à 5)' });
+      try {
+        return await viderConversation(db, i, id, corps.data.etape);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
         return diagnosticErreur(error, reply);
       }
     }),
