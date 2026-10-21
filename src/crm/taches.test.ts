@@ -11,7 +11,14 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { CrmIndisponible } from './service.js';
-import { compterAFaire, createTache, listTaches, updateTache, type TacheVue } from './taches.js';
+import {
+  compterAFaire,
+  createTache,
+  crmHubspot,
+  listTaches,
+  updateTache,
+  type TacheVue,
+} from './taches.js';
 
 const TOKEN = 'pat-eu1-fictif-0000';
 
@@ -104,6 +111,31 @@ describe('Tâches', () => {
     await expect(
       createTache(t.app.db, sansCrm, { titre: 'Relance', hubspot: true }, off()),
     ).rejects.toBeInstanceOf(CrmIndisponible);
+  });
+
+  it('keeps tasks in the OS when the CRM does not follow tasks', async () => {
+    const suivi = (objets: string[]) =>
+      withInstance(t.app.db, a.id, (tx) =>
+        configureConnexion(tx, {
+          kind: 'crm',
+          fournisseur: 'hubspot',
+          reglages: { sens: 'deux_sens', objets },
+        }),
+      );
+    await suivi(['entreprises', 'contacts', 'transactions']);
+    try {
+      expect(await withInstance(t.app.db, a.id, (tx) => crmHubspot(tx))).toBeNull();
+      const vue = await listTaches(
+        t.app.db,
+        armed,
+        { du: '2026-05-04', au: '2026-05-10' },
+        on(),
+        new Date('2026-05-06T10:00:00Z'),
+      );
+      expect(vue.hubspot).toBe(false);
+    } finally {
+      await suivi(['entreprises', 'contacts', 'transactions', 'taches']);
+    }
   });
 
   it('updates an OS task freely: type from the new title, done, reopened, journaled', async () => {
