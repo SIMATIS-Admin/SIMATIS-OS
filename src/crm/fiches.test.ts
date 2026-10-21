@@ -11,6 +11,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { ajouterNote, getFiche, updateFiche, type Fiche } from './fiches.js';
+import { lierFiches } from './liens.js';
 import { createEntreprise, CrmIndisponible } from './service.js';
 
 const TOKEN = 'pat-eu1-fictif-0000';
@@ -238,5 +239,77 @@ describe('Fiches détaillées', () => {
     } finally {
       await app.close();
     }
+  });
+
+  it('shows every link of a deal, a person and an organisation, primary first', async () => {
+    const ins = async (table: string, colonnes: string, valeurs: unknown[]) =>
+      (
+        await t.owner.pool.query<{ id: string }>(
+          `insert into ${table} (instance_id, ${colonnes}) values ($1, ${valeurs.map((_, n) => `$${n + 2}`).join(', ')}) returning id`,
+          [natif.id, ...valeurs],
+        )
+      ).rows[0]?.id as string;
+    const affaire = await ins('opportunites', 'titre, etape', ['Affaire liée fictive', 'prospect']);
+    const p1 = await ins('contacts', 'nom', ['Premier Contact']);
+    const p2 = await ins('contacts', 'nom', ['Second Contact']);
+    const o1 = await ins('entreprises', 'nom', ['Première Organisation']);
+    const o2 = await ins('entreprises', 'nom', ['Seconde Organisation']);
+    await t.owner.pool.query(
+      `insert into activites (instance_id, type, opportunite_id, titre, at) values ($1, 'note', $2, 'Note de l''affaire', now())`,
+      [natif.id, affaire],
+    );
+    const ref = (kind: 'affaire' | 'contact' | 'entreprise', id: string) => ({ kind, id });
+    for (const [x, y] of [
+      [ref('affaire', affaire), ref('contact', p1)],
+      [ref('affaire', affaire), ref('contact', p2)],
+      [ref('affaire', affaire), ref('entreprise', o1)],
+      [ref('affaire', affaire), ref('entreprise', o2)],
+      [ref('contact', p2), ref('entreprise', o1)],
+      [ref('contact', p2), ref('entreprise', o2)],
+    ] as const)
+      await lierFiches(t.app.db, natif, x, y, off());
+
+    const f = (await getFiche(t.app.db, natif, 'affaire', affaire))!;
+    expect(f.liens.contacts?.map((c) => [c.nom, c.principal])).toEqual([
+      ['Premier Contact', true],
+      ['Second Contact', false],
+    ]);
+    expect(f.liens.entreprises?.map((c) => [c.nom, c.principal])).toEqual([
+      ['Première Organisation', true],
+      ['Seconde Organisation', false],
+    ]);
+    expect(f.liens.contact?.nom).toBe('Premier Contact');
+
+    const personne = (await getFiche(t.app.db, natif, 'contact', p2))!;
+    expect(personne.liens.entreprises?.map((e) => e.nom)).toEqual([
+      'Première Organisation',
+      'Seconde Organisation',
+    ]);
+    expect(personne.liens.affaires?.map((o) => o.titre)).toEqual(['Affaire liée fictive']);
+
+    // The second organisation is not the deal's primary one, yet its page gathers the deal.
+    const orga = (await getFiche(t.app.db, natif, 'entreprise', o2))!;
+    expect(orga.liens.contacts?.map((c) => c.nom)).toEqual(['Second Contact']);
+    expect(orga.liens.affaires?.map((o) => o.titre)).toEqual(['Affaire liée fictive']);
+    expect(orga.historique.map((e) => e.titre)).toContain("Note de l'affaire");
+  });
+
+  it('keeps the link table in step when the primary link is edited', async () => {
+    const e1 = (await createEntreprise(t.app.db, natif, { nom: 'Organisation éditée' }, off())) as {
+      id: string;
+    };
+    const c = await t.owner.pool.query<{ id: string }>(
+      `insert into contacts (instance_id, nom) values ($1, 'Personne éditée') returning id`,
+      [natif.id],
+    );
+    const id = c.rows[0]!.id;
+    await updateFiche(t.app.db, natif, 'contact', id, { entrepriseId: e1.id }, off());
+    let f = (await getFiche(t.app.db, natif, 'contact', id))!;
+    expect(f.liens.entreprises?.map((e) => [e.nom, e.principal])).toEqual([
+      ['Organisation éditée', true],
+    ]);
+    await updateFiche(t.app.db, natif, 'contact', id, { entrepriseId: null }, off());
+    f = (await getFiche(t.app.db, natif, 'contact', id))!;
+    expect(f.liens.entreprises).toEqual([]);
   });
 });
