@@ -12,7 +12,12 @@ describe('Diagnostic : rapprochement des projets existants', () => {
     expect(
       proposerRapprochements([{ id: 'p1', nom: 'entreprise fictive a' }], entreprises),
     ).toEqual([
-      { projetId: 'p1', statut: 'exact', entrepriseId: 'e1', entrepriseNom: 'Entreprise Fictive A' },
+      {
+        projetId: 'p1',
+        statut: 'exact',
+        entrepriseId: 'e1',
+        entrepriseNom: 'Entreprise Fictive A',
+      },
     ]);
   });
 
@@ -42,7 +47,12 @@ describe('Diagnostic : rapprochement des projets existants', () => {
     expect(
       proposerRapprochements([{ id: 'p4', nom: '  Entreprise   Fictive, A. ' }], entreprises),
     ).toEqual([
-      { projetId: 'p4', statut: 'exact', entrepriseId: 'e1', entrepriseNom: 'Entreprise Fictive A' },
+      {
+        projetId: 'p4',
+        statut: 'exact',
+        entrepriseId: 'e1',
+        entrepriseNom: 'Entreprise Fictive A',
+      },
     ]);
   });
 });

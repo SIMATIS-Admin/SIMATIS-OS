@@ -11,7 +11,7 @@ export class DiagnosticIndisponible extends Error {}
 export class ProjetIntrouvable extends Error {}
 export class EntrepriseIntrouvable extends Error {
   constructor() {
-    super("Entreprise introuvable dans cet espace");
+    super('Entreprise introuvable dans cet espace');
   }
 }
 

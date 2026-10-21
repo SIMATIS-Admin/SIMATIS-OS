@@ -177,9 +177,7 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
             .select({ id: diagnosticProjets.id, nom: diagnosticProjets.nom })
             .from(diagnosticProjets)
             .where(isNull(diagnosticProjets.entrepriseId)),
-          annuaire: await tx
-            .select({ id: entreprises.id, nom: entreprises.nom })
-            .from(entreprises),
+          annuaire: await tx.select({ id: entreprises.id, nom: entreprises.nom }).from(entreprises),
         }));
         const propositions = proposerRapprochements(projets, annuaire);
         for (const p of propositions) {
