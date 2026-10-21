@@ -268,7 +268,7 @@ export function startReleveVma(
         running = false;
       });
   };
-  const timer = setInterval(tick, deps.tickMs ?? 5 * 60_000);
+  const timer = setInterval(tick, deps.tickMs ?? 60_000);
   tick();
   return () => clearInterval(timer);
 }

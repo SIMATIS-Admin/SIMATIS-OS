@@ -143,4 +143,68 @@ describe('brouillon du résultat au dirigeant', () => {
     });
     expect(html).toContain('Non mesurable.');
   });
+
+  describe('v2.2 : mode portefeuille', () => {
+    const portefeuille = (extra: Partial<EcranDirigeant> = {}) =>
+      ecran({
+        vma: 14000,
+        recurrent: 80000,
+        allureActuelle: 94000,
+        trajectoire: 84000,
+        socleEcheance: 80000,
+        allureVisee: 150000,
+        ecart: 66000,
+        modePortefeuille: true,
+        partRecActuelle: 0.85,
+        partRecVisee: 0.9,
+        recurrentCible: 135000,
+        spotCible: 15000,
+        spotEcheance: 4000,
+        ecartRecurrent: 55000,
+        ecartSpot: 11000,
+        freinsConquete: [{ n: 1, titre: 'Frein de conquête', phrase: 'Phrase conquête.' }],
+        freinsPortefeuille: [
+          { n: 8, titre: 'Frein de portefeuille', phrase: 'Phrase portefeuille.' },
+        ],
+        textes: {
+          definitionVma: 'Définition.',
+          nonMesurable: 'Non mesurable.',
+          aucunFrein: 'Aucun frein marqué.',
+          libelleAllureTotale: 'Votre allure commerciale',
+          titreConquete: 'Conquête',
+          titrePortefeuille: 'Portefeuille',
+          libelleSocleRecurrent: 'Socle récurrent',
+          libelleNouvellesAffaires: 'Nouvelles affaires',
+        },
+        ...extra,
+      });
+
+    it('ouvre sur l’allure totale décomposée, puis deux sections', () => {
+      const { html } = brouillonResultat({ contactNom: null, ecran: portefeuille() });
+      expect(html).toContain('Votre allure commerciale');
+      expect(html).not.toContain('Votre VMA commerciale');
+      expect(html).toContain('94\u00a0k€');
+      expect(html).toContain('Socle récurrent : 80\u00a0k€ par mois');
+      expect(html).toContain('Nouvelles affaires : 14\u00a0k€ par mois');
+      expect(html).toContain('Conquête');
+      expect(html).toContain('Portefeuille');
+      expect(html).toContain('Frein de conquête');
+      expect(html).toContain('Frein de portefeuille');
+      expect(html).toContain('votre cible est de 135\u00a0k€ par mois');
+    });
+
+    it('reste comme avant sans mode portefeuille', () => {
+      const { html } = brouillonResultat({ contactNom: null, ecran: ecran() });
+      expect(html).toContain('Votre VMA commerciale');
+      expect(html).not.toContain('Conquête');
+    });
+
+    it('se rend sans exception quand les listes de freins manquent', () => {
+      const { html } = brouillonResultat({
+        contactNom: null,
+        ecran: portefeuille({ freinsConquete: undefined, freinsPortefeuille: undefined }),
+      });
+      expect(html).toContain('Votre allure commerciale');
+    });
+  });
 });
