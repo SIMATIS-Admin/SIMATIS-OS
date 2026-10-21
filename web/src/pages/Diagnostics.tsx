@@ -10,6 +10,7 @@ import {
   type ProjetDiag,
   type TestVma,
 } from '../api.js';
+import { Icon } from '../icons.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
 import { Modale, NouveauDiagnostic, NouveauTestVma } from './diagnostics/Creation.js';
@@ -287,7 +288,9 @@ export function Diagnostics({ slug }: { slug: string }) {
                           Ouvrir le diagnostic
                         </button>{' '}
                         <button
-                          className="btn danger"
+                          className="btn carre danger"
+                          aria-label="Supprimer le diagnostic"
+                          title="Supprimer le diagnostic"
                           type="button"
                           onClick={() =>
                             setSuppression({
@@ -298,7 +301,7 @@ export function Diagnostics({ slug }: { slug: string }) {
                             })
                           }
                         >
-                          Supprimer le diagnostic
+                          <Icon name="trash" />
                         </button>
                       </>
                     ) : (
@@ -399,7 +402,9 @@ export function Diagnostics({ slug }: { slug: string }) {
                                 </>
                               )}
                               <button
-                                className="btn danger"
+                                className="btn carre danger"
+                                aria-label="Supprimer le test"
+                                title="Supprimer le test"
                                 type="button"
                                 onClick={() =>
                                   setSuppression({
@@ -410,7 +415,7 @@ export function Diagnostics({ slug }: { slug: string }) {
                                   })
                                 }
                               >
-                                Supprimer le test
+                                <Icon name="trash" />
                               </button>
                             </span>
                           </li>
@@ -429,7 +434,9 @@ export function Diagnostics({ slug }: { slug: string }) {
                   </section>
                   <div className="dg-supprimer-bloc">
                     <button
-                      className="btn danger"
+                      className="btn carre danger"
+                      aria-label="Supprimer ce bloc"
+                      title="Supprimer ce bloc"
                       type="button"
                       onClick={() => {
                         const projetIds = l.id
@@ -446,7 +453,7 @@ export function Diagnostics({ slug }: { slug: string }) {
                         });
                       }}
                     >
-                      Supprimer ce bloc
+                      <Icon name="trash" />
                     </button>
                   </div>
                 </div>
