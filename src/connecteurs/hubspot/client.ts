@@ -179,12 +179,13 @@ export function hubspotClient(auth: HubspotAuth, options: ClientOptions = {}) {
   }
 
   // First associated record of each object (deal → company, task → contact…).
-  async function firstAssociations(
+  // Every association from `from` records to `to` objects, in the order HubSpot returns them.
+  async function allAssociations(
     from: string,
     to: string,
     ids: string[],
-  ): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
+  ): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
     for (let i = 0; i < ids.length; i += 1000) {
       const chunk = ids.slice(i, i + 1000);
       const result = await request<{
@@ -193,14 +194,30 @@ export function hubspotClient(auth: HubspotAuth, options: ClientOptions = {}) {
         inputs: chunk.map((id) => ({ id })),
       });
       for (const r of result.results) {
-        const first = r.to[0];
-        if (first) out.set(r.from.id, String(first.toObjectId));
+        if (r.to.length > 0)
+          out.set(
+            r.from.id,
+            r.to.map((x) => String(x.toObjectId)),
+          );
       }
     }
     return out;
   }
 
-  return { request, listAll, modifiedSince, dealPipelines, firstAssociations };
+  async function firstAssociations(
+    from: string,
+    to: string,
+    ids: string[],
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    for (const [id, cibles] of await allAssociations(from, to, ids)) {
+      const first = cibles[0];
+      if (first) out.set(id, first);
+    }
+    return out;
+  }
+
+  return { request, listAll, modifiedSince, dealPipelines, firstAssociations, allAssociations };
 }
 
 export type HubspotClient = ReturnType<typeof hubspotClient>;

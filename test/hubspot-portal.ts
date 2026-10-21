@@ -12,7 +12,7 @@ export type PortalData = {
   deals: HsObject[];
   tasks: HsObject[];
   pipelines: HsPipeline[];
-  associations: Record<string, Record<string, string>>;
+  associations: Record<string, Record<string, string | string[]>>;
 };
 
 export type Recorded = { method: string; path: string; body: unknown };
@@ -250,7 +250,10 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
       return json({
         results: inputs
           .filter((i) => map[i.id])
-          .map((i) => ({ from: { id: i.id }, to: [{ toObjectId: map[i.id] }] })),
+          .map((i) => ({
+            from: { id: i.id },
+            to: [map[i.id]].flat().map((toObjectId) => ({ toObjectId })),
+          })),
       });
     }
     if (/^\/crm\/v3\/objects\/\w+\/\w+$/.test(u.pathname) && method === 'PATCH') {

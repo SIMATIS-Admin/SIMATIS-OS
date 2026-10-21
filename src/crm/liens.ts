@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
 import { connexions } from '../connexions/schema.js';
@@ -44,6 +44,7 @@ const tables = { affaire: opportunites, contact: contacts, entreprise: entrepris
 type Paire = {
   link: PgTable;
   id: AnyPgColumn;
+  source: AnyPgColumn;
   ownerKind: 'affaire' | 'contact';
   targetKind: 'contact' | 'entreprise';
   ownerKey: string;
@@ -61,6 +62,7 @@ const PAIRES: Paire[] = [
   {
     link: affaireContacts,
     id: affaireContacts.id,
+    source: affaireContacts.source,
     ownerKind: 'affaire',
     targetKind: 'contact',
     ownerKey: 'opportuniteId',
@@ -75,6 +77,7 @@ const PAIRES: Paire[] = [
   {
     link: affaireEntreprises,
     id: affaireEntreprises.id,
+    source: affaireEntreprises.source,
     ownerKind: 'affaire',
     targetKind: 'entreprise',
     ownerKey: 'opportuniteId',
@@ -89,6 +92,7 @@ const PAIRES: Paire[] = [
   {
     link: contactEntreprises,
     id: contactEntreprises.id,
+    source: contactEntreprises.source,
     ownerKind: 'contact',
     targetKind: 'entreprise',
     ownerKey: 'contactId',
@@ -388,4 +392,76 @@ async function affairesLiees(
       .where(and(eq(link.instanceId, currentInstance), condition))
       .orderBy(desc(opportunites.createdAt))
   ).map(({ titre, ...r }) => ({ ...r, nom: titre }));
+}
+
+// HubSpot's links of a batch of records replace the ones copied from HubSpot; links made in the OS
+// only (source « natif ») stay. The primary is HubSpot's one, else the existing one, else the first.
+export async function remplacerLiensHubspot(
+  tx: Tx,
+  ownerKind: 'affaire' | 'contact',
+  targetKind: 'contact' | 'entreprise',
+  liens: Map<string, { cibles: string[]; principal: string | null }>,
+): Promise<void> {
+  const p = PAIRES.find((x) => x.ownerKind === ownerKind && x.targetKind === targetKind);
+  if (!p || liens.size === 0) return;
+  const lignes = (await tx
+    .select({
+      id: p.id,
+      owner: p.ownerFk,
+      cible: p.targetFk,
+      source: p.source,
+      principal: p.principal,
+    })
+    .from(p.link)
+    .where(and(eq(p.instanceId, currentInstance), inArray(p.ownerFk, [...liens.keys()])))
+    .orderBy(asc(p.createdAt))) as {
+    id: string;
+    owner: string;
+    cible: string;
+    source: string;
+    principal: boolean;
+  }[];
+  for (const [ownerId, { cibles, principal }] of liens) {
+    const voulus = [...new Set(cibles)];
+    const existants = lignes.filter((l) => l.owner === ownerId);
+    const asupprimer = existants.filter((l) => l.source === 'hubspot' && !voulus.includes(l.cible));
+    for (const l of asupprimer)
+      await tx.delete(p.link).where(and(eq(p.instanceId, currentInstance), eq(p.id, l.id)));
+    let restants = existants.filter((l) => !asupprimer.includes(l));
+    for (const cible of voulus) {
+      const deja = restants.find((l) => l.cible === cible);
+      if (!deja) {
+        await tx.insert(p.link).values({
+          instanceId: currentInstance,
+          source: 'hubspot',
+          [p.ownerKey]: ownerId,
+          [p.targetKey]: cible,
+        } as never);
+        restants = [
+          ...restants,
+          { id: '', owner: ownerId, cible, source: 'hubspot', principal: false },
+        ];
+      } else if (deja.source !== 'hubspot') {
+        await tx
+          .update(p.link)
+          .set({ source: 'hubspot' } as never)
+          .where(and(eq(p.instanceId, currentInstance), eq(p.id, deja.id)));
+      }
+    }
+    const hubspotPrincipal = principal && voulus.includes(principal) ? principal : voulus[0];
+    const choix =
+      hubspotPrincipal ?? restants.find((l) => l.principal)?.cible ?? restants[0]?.cible ?? null;
+    await tx
+      .update(p.link)
+      .set({ principal: false } as never)
+      .where(and(eq(p.instanceId, currentInstance), eq(p.ownerFk, ownerId)));
+    if (choix)
+      await tx
+        .update(p.link)
+        .set({ principal: true } as never)
+        .where(
+          and(eq(p.instanceId, currentInstance), eq(p.ownerFk, ownerId), eq(p.targetFk, choix)),
+        );
+    await refleterPrincipal(tx, p, ownerId, choix);
+  }
 }
