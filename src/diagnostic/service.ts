@@ -119,6 +119,19 @@ export async function updateProjet(
   });
 }
 
+// Suppression définitive : le rapport, le PDF et la conversation partent avec le projet.
+export async function deleteProjet(db: Executor, instance: Instance, id: string): Promise<void> {
+  verifierEspace(instance);
+  await withInstance(db, instance.id, async (tx) => {
+    const supprimes = await tx
+      .delete(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
+      .returning({ id: diagnosticProjets.id });
+    if (supprimes.length === 0)
+      throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+  });
+}
+
 export async function rapportDe(
   db: Executor,
   instance: Instance,

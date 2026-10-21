@@ -4,13 +4,15 @@ import {
   fetchProjetsDiag,
   fetchTestsVma,
   revoquerTestVma,
+  supprimerProjetDiag,
+  supprimerTestVma,
   type Entreprise,
   type ProjetDiag,
   type TestVma,
 } from '../api.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
-import { NouveauDiagnostic, NouveauTestVma } from './diagnostics/Creation.js';
+import { Modale, NouveauDiagnostic, NouveauTestVma } from './diagnostics/Creation.js';
 import { libelleStatut, fmtEur } from './TestsVma.js';
 import {
   filtrer,
@@ -28,6 +30,18 @@ const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR');
 const libelleTest = (t: Pick<TestVma, 'type'>) =>
   t.type === 'essai' ? 'Essai (non compté dans l’historique)' : 'Premier test';
 
+// Ce qu'une suppression efface : les ids à supprimer et la phrase montrée dans la confirmation.
+type Suppression = { titre: string; phrase: string; projetIds: string[]; testIds: string[] };
+
+const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+const listeEffacee = (projetIds: string[], testIds: string[]) =>
+  [
+    projetIds.length ? pluriel(projetIds.length, 'diagnostic') : '',
+    testIds.length ? pluriel(testIds.length, 'test') : '',
+  ]
+    .filter(Boolean)
+    .join(' et ');
+
 // Une ligne sans entreprise (diagnostic orphelin) a un identifiant null : on la distingue par son nom de projet.
 const cleDe = (l: LigneEntreprise) => l.id ?? `projet-${l.diag?.id ?? l.nom}`;
 
@@ -43,6 +57,8 @@ export function Diagnostics({ slug }: { slug: string }) {
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [modale, setModale] = useState<{ type: 'diag' | 'vma'; preselect?: string } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [suppression, setSuppression] = useState<Suppression | null>(null);
+  const [enCours, setEnCours] = useState(false);
 
   const charger = async () => {
     try {
@@ -82,6 +98,22 @@ export function Diagnostics({ slug }: { slug: string }) {
       await charger();
     } catch (err) {
       setErreur(messageErreur(err));
+    }
+  };
+
+  // Tests d'abord : un test ouvert est révoqué côté site, et s'il échoue rien d'autre n'est effacé.
+  const confirmerSuppression = async () => {
+    if (!suppression) return;
+    setEnCours(true);
+    try {
+      for (const id of suppression.testIds) await supprimerTestVma(slug, id);
+      for (const id of suppression.projetIds) await supprimerProjetDiag(slug, id);
+    } catch (err) {
+      setErreur(messageErreur(err));
+    } finally {
+      setEnCours(false);
+      setSuppression(null);
+      await charger();
     }
   };
 
@@ -253,6 +285,20 @@ export function Diagnostics({ slug }: { slug: string }) {
                           onClick={() => setProjetOuvert(l.diag!.id)}
                         >
                           Ouvrir le diagnostic
+                        </button>{' '}
+                        <button
+                          className="btn danger"
+                          type="button"
+                          onClick={() =>
+                            setSuppression({
+                              titre: 'Supprimer le diagnostic',
+                              phrase: `Le diagnostic de ${l.nom} sera effacé définitivement, avec son rapport, son entretien et sa conversation.`,
+                              projetIds: [l.diag!.id],
+                              testIds: [],
+                            })
+                          }
+                        >
+                          Supprimer le diagnostic
                         </button>
                       </>
                     ) : (
@@ -333,24 +379,40 @@ export function Diagnostics({ slug }: { slug: string }) {
                               {libelleTest(t)} · {libelleStatut(t)}
                               {t.recueLe ? ` · reçu le ${date(t.recueLe)}` : ''}
                             </span>
-                            {t.statut === 'envoyee' && (
-                              <span className="dg-actions">
-                                <button
-                                  className="btn"
-                                  type="button"
-                                  onClick={() => void navigator.clipboard?.writeText(t.lien)}
-                                >
-                                  Copier le lien
-                                </button>
-                                <button
-                                  className="btn"
-                                  type="button"
-                                  onClick={() => void revoquer(t)}
-                                >
-                                  Révoquer
-                                </button>
-                              </span>
-                            )}
+                            <span className="dg-actions">
+                              {t.statut === 'envoyee' && (
+                                <>
+                                  <button
+                                    className="btn"
+                                    type="button"
+                                    onClick={() => void navigator.clipboard?.writeText(t.lien)}
+                                  >
+                                    Copier le lien
+                                  </button>
+                                  <button
+                                    className="btn"
+                                    type="button"
+                                    onClick={() => void revoquer(t)}
+                                  >
+                                    Révoquer
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                className="btn danger"
+                                type="button"
+                                onClick={() =>
+                                  setSuppression({
+                                    titre: 'Supprimer le test',
+                                    phrase: `Ce test VMA de ${t.entrepriseNom} sera effacé définitivement${t.statut === 'envoyee' ? ' ; son lien cessera de fonctionner' : ''}.`,
+                                    projetIds: [],
+                                    testIds: [t.id],
+                                  })
+                                }
+                              >
+                                Supprimer le test
+                              </button>
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -365,6 +427,28 @@ export function Diagnostics({ slug }: { slug: string }) {
                       </button>
                     )}
                   </section>
+                  <div className="dg-supprimer-bloc">
+                    <button
+                      className="btn danger"
+                      type="button"
+                      onClick={() => {
+                        const projetIds = l.id
+                          ? projets.filter((p) => p.entrepriseId === l.id).map((p) => p.id)
+                          : l.diag
+                            ? [l.diag.id]
+                            : [];
+                        const testIds = l.tests.map((t) => t.id);
+                        setSuppression({
+                          titre: 'Supprimer ce bloc',
+                          phrase: `${l.nom} : ${listeEffacee(projetIds, testIds)} seront effacés définitivement.${l.id ? ' La fiche de l’entreprise est conservée.' : ''}`,
+                          projetIds,
+                          testIds,
+                        });
+                      }}
+                    >
+                      Supprimer ce bloc
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -372,6 +456,25 @@ export function Diagnostics({ slug }: { slug: string }) {
         })
       )}
 
+      {suppression && (
+        <Modale titre={suppression.titre} onFermer={() => setSuppression(null)}>
+          <p>{suppression.phrase}</p>
+          <p className="small muted">Cette action est irréversible.</p>
+          <div className="dg-actions">
+            <button className="btn" type="button" onClick={() => setSuppression(null)}>
+              Annuler
+            </button>
+            <button
+              className="btn danger"
+              type="button"
+              disabled={enCours}
+              onClick={() => void confirmerSuppression()}
+            >
+              Confirmer
+            </button>
+          </div>
+        </Modale>
+      )}
       {modale?.type === 'diag' && (
         <NouveauDiagnostic
           slug={slug}

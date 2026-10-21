@@ -9,6 +9,8 @@ const api = vi.hoisted(() => ({
   fetchProjetsDiag: vi.fn(),
   fetchTestsVma: vi.fn(),
   revoquerTestVma: vi.fn(),
+  supprimerTestVma: vi.fn(),
+  supprimerProjetDiag: vi.fn(),
 }));
 vi.mock('../api.js', () => api);
 
@@ -178,5 +180,70 @@ describe('Diagnostics : écran fusionné', () => {
     expect(evolution.querySelectorAll('.dg-barre')).toHaveLength(2);
     const dernier = document.querySelector('.dg-resultat') as HTMLElement;
     expect(within(dernier).getByText(/Essai \(non compté dans l’historique\)/)).toBeTruthy();
+  });
+
+  describe('suppression', () => {
+    const ouvrir = async () => {
+      render(<Diagnostics slug="demo" />);
+      fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
+    };
+
+    beforeEach(() => {
+      api.supprimerTestVma.mockResolvedValue({ ok: true });
+      api.supprimerProjetDiag.mockResolvedValue({ ok: true });
+    });
+
+    it('supprime un test seulement après « Confirmer »', async () => {
+      charger([entreprise(1)], [diagPour(1)], [test({ id: 'a', entrepriseId: 'e1' })]);
+      await ouvrir();
+      fireEvent.click(screen.getByRole('button', { name: 'Supprimer le test' }));
+      expect(api.supprimerTestVma).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+      await waitFor(() => expect(api.supprimerTestVma).toHaveBeenCalledWith('demo', 'a'));
+      expect(api.fetchTestsVma).toHaveBeenCalledTimes(2);
+    });
+
+    it('« Annuler » ne supprime rien', async () => {
+      charger([entreprise(1)], [diagPour(1)], [test({ id: 'a', entrepriseId: 'e1' })]);
+      await ouvrir();
+      fireEvent.click(screen.getByRole('button', { name: 'Supprimer le test' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(api.supprimerTestVma).not.toHaveBeenCalled();
+    });
+
+    it('supprime le diagnostic après confirmation', async () => {
+      charger([entreprise(1)], [diagPour(1)]);
+      await ouvrir();
+      fireEvent.click(screen.getByRole('button', { name: 'Supprimer le diagnostic' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+      await waitFor(() => expect(api.supprimerProjetDiag).toHaveBeenCalledWith('demo', 'p1'));
+    });
+
+    it('supprime le bloc : tous les tests puis tous les diagnostics de l’entreprise', async () => {
+      charger(
+        [entreprise(1)],
+        [
+          { ...diagPour(1), updatedAt: '2026-01-01T00:00:00Z' },
+          { ...diagPour(1), id: 'p1bis', updatedAt: '2025-01-01T00:00:00Z' },
+        ],
+        [test({ id: 'a', entrepriseId: 'e1' }), test({ id: 'b', entrepriseId: 'e1' })],
+      );
+      await ouvrir();
+      fireEvent.click(screen.getByRole('button', { name: 'Supprimer ce bloc' }));
+      expect(screen.getByRole('dialog').textContent).toMatch(/2 diagnostics et 2 tests/);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+      await waitFor(() => expect(api.supprimerProjetDiag).toHaveBeenCalledTimes(2));
+      expect(api.supprimerTestVma.mock.calls.map((c: string[]) => c[1]).sort()).toEqual(['a', 'b']);
+    });
+
+    it('affiche l’erreur et garde le bloc si une suppression échoue', async () => {
+      api.supprimerTestVma.mockRejectedValue(new Error('Le site ne répond pas'));
+      charger([entreprise(1)], [diagPour(1)], [test({ id: 'a', entrepriseId: 'e1' })]);
+      await ouvrir();
+      fireEvent.click(screen.getByRole('button', { name: 'Supprimer le test' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+      expect(await screen.findByText('Le site ne répond pas')).toBeTruthy();
+    });
   });
 });

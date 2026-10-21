@@ -128,6 +128,28 @@ describe('Entretien : API', () => {
     expect(r.statusCode).toBe(400);
   });
 
+  it('supprime un projet, et refuse un projet d une autre instance', async () => {
+    const projet = await creerProjet('Suppression Fictive');
+    const supprime = await app.inject({
+      method: 'DELETE',
+      url: `/api/i/simatis/diagnostic/projets/${projet.id}`,
+    });
+    expect(supprime.statusCode).toBe(200);
+    const liste = await app.inject({ method: 'GET', url: '/api/i/simatis/diagnostic/projets' });
+    expect(liste.json<{ id: string }[]>().some((p) => p.id === projet.id)).toBe(false);
+
+    const encore = await app.inject({
+      method: 'DELETE',
+      url: `/api/i/simatis/diagnostic/projets/${projet.id}`,
+    });
+    expect(encore.statusCode).toBe(404);
+    const mauvais = await app.inject({
+      method: 'DELETE',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid',
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
   it('refuse un identifiant de projet mal formé', async () => {
     const r = await app.inject({
       method: 'POST',

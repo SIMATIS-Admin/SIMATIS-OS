@@ -14,6 +14,7 @@ export type InvitationDeps = {
 };
 
 export class InvitationImpossible extends Error {}
+export class TestIntrouvable extends Error {}
 
 // Règle du semestre (cahier, §7.1) : un premier test par entreprise au plus tous les 182 jours
 // glissants. Au-delà, Marc doit confirmer explicitement. Les essais n'entrent pas dans la règle.
@@ -231,4 +232,29 @@ export async function revoquerInvitation(
     if (!maj) throw new InvitationImpossible("Mise à jour de l'invitation impossible");
     return maj;
   });
+}
+
+// Suppression définitive d'un test (par exemple créé pour essayer). Une invitation encore ouverte
+// est d'abord révoquée côté site, pour que son lien cesse de fonctionner.
+export async function supprimerTest(
+  db: Database,
+  deps: InvitationDeps | null,
+  p: { instanceId: string; testId: string },
+): Promise<void> {
+  const [test] = await withInstance(db, p.instanceId, (tx) =>
+    tx
+      .select()
+      .from(vmaTests)
+      .where(and(eq(vmaTests.instanceId, p.instanceId), eq(vmaTests.id, p.testId))),
+  );
+  if (!test) throw new TestIntrouvable();
+  if (test.statut === 'envoyee') {
+    if (!deps) throw new InvitationImpossible('Test de VMA non configuré (VMA_OS_TOKEN)');
+    await revoquerInvitation(db, deps, p);
+  }
+  await withInstance(db, p.instanceId, (tx) =>
+    tx
+      .delete(vmaTests)
+      .where(and(eq(vmaTests.instanceId, p.instanceId), eq(vmaTests.id, p.testId))),
+  );
 }

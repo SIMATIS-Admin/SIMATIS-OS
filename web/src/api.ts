@@ -102,7 +102,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 const getJson = <T>(url: string) => request<T>(url);
-const sendJson = <T>(method: 'PUT' | 'PATCH' | 'POST', url: string, payload: unknown) =>
+const sendJson = <T>(method: 'PUT' | 'PATCH' | 'POST' | 'DELETE', url: string, payload: unknown) =>
   request<T>(url, {
     method,
     headers: { 'content-type': 'application/json' },
@@ -210,6 +210,9 @@ export const creerTestVma = (slug: string, nouveau: NouveauTestVma) =>
   sendJson<TestVmaCree>('POST', inst(slug, 'vma/tests'), nouveau);
 export const revoquerTestVma = (slug: string, id: string) =>
   sendJson<TestVma>('POST', inst(slug, `vma/tests/${encodeURIComponent(id)}/revoquer`), {});
+
+export const supprimerTestVma = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `vma/tests/${encodeURIComponent(id)}`), {});
 
 export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug, 'journal'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
@@ -913,6 +916,8 @@ export type ProjetDiagPatch = Partial<
 
 export const fetchProjetsDiag = (slug: string) =>
   getJson<ProjetDiag[]>(inst(slug, 'diagnostic/projets'));
+export const supprimerProjetDiag = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `diagnostic/projets/${encodeURIComponent(id)}`), {});
 export const creerProjetDiag = (
   slug: string,
   nom: string,
