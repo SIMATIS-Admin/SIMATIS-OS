@@ -3490,6 +3490,10 @@ tr.sel {
   gap: 14px;
   background: #f7fbfd;
 }
+.dg-supprimer-bloc {
+  grid-column: 1 / -1;
+  text-align: right;
+}
 .dg-bloc {
   border: 1px solid var(--line, #dfe4ee);
   border-top: 3px solid var(--navy-3);

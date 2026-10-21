@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   createProjet,
+  deleteProjet,
   DiagnosticIndisponible,
   listProjets,
   EntrepriseIntrouvable,
@@ -404,6 +405,18 @@ export function registerApi(
           .send({ error: parsed.error.issues[0]?.message ?? 'Projet invalide' });
       try {
         return await updateProjet(db, i, request.params.id, parsed.data);
+      } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.delete<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        await deleteProjet(db, i, request.params.id);
+        return { ok: true };
       } catch (error) {
         return diagnosticErreur(error, reply);
       }

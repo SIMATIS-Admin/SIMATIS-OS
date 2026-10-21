@@ -11,6 +11,8 @@ import {
   InvitationImpossible,
   revoquerInvitation,
   SemestreAConfirmer,
+  supprimerTest,
+  TestIntrouvable,
   type InvitationDeps,
 } from './invitations.js';
 import { TYPES_TEST_VMA, vmaTests, type TestVma } from './schema.js';
@@ -67,6 +69,8 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
       return reply
         .code(409)
         .send({ error: error.message, code: 'semestre', dernierTest: error.dernier });
+    if (error instanceof TestIntrouvable)
+      return reply.code(404).send({ error: 'Test introuvable' });
     if (error instanceof InvitationImpossible)
       return reply.code(400).send({ error: error.message });
     return reply.code(503).send({ error: 'Le site ne répond pas : réessayez dans un instant.' });
@@ -139,6 +143,24 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
           testId: request.params.id,
         });
         return vueTest(test);
+      } catch (error) {
+        return erreur(error, reply);
+      }
+    },
+  );
+
+  app.delete<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/vma/tests/:id',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Test invalide' });
+      try {
+        await supprimerTest(db, invitations(), {
+          instanceId: instance.id,
+          testId: request.params.id,
+        });
+        return { ok: true };
       } catch (error) {
         return erreur(error, reply);
       }
