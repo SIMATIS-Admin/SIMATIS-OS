@@ -592,7 +592,7 @@ export async function transfererLiens(
           await tx
             .update(p.link)
             // As owner, the moved link must not compete with the kept record's own primary link.
-            .set({ [c.cle]: gardeId, ...(c.aussi ? {} : { principal: false }) } as never)
+            .set({ [c.cle]: gardeId, ...(c.aussi ? {} : { principal: false }) })
             .where(and(eq(p.instanceId, currentInstance), eq(p.id, l.id)));
         if (c.aussi) aReparer.push({ kind: p.ownerKind, id: l.autre });
       }
