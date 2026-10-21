@@ -263,6 +263,12 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
     ) {
       return json({ status: 'COMPLETE' });
     }
+    if (
+      /^\/crm\/v4\/objects\/\w+\/\w+\/associations\/\w+\/\w+$/.test(u.pathname) &&
+      method === 'DELETE'
+    ) {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
     return json({ message: `Route inconnue ${method} ${u.pathname}` }, 404);
   };
 
