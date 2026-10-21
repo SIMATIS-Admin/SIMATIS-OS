@@ -260,7 +260,7 @@ export async function delierFiches(
       if (suivant) {
         await tx
           .update(p.link)
-          .set({ principal: true } as never)
+          .set({ principal: true })
           .where(and(eq(p.instanceId, currentInstance), eq(p.id, suivant.id)));
       }
       await refleterPrincipal(tx, p, ownerId, suivant?.cible ?? null);
@@ -298,11 +298,11 @@ export async function definirPrincipal(
     }
     await tx
       .update(p.link)
-      .set({ principal: false } as never)
+      .set({ principal: false })
       .where(and(eq(p.instanceId, currentInstance), eq(p.ownerFk, ownerId)));
     await tx
       .update(p.link)
-      .set({ principal: true } as never)
+      .set({ principal: true })
       .where(and(eq(p.instanceId, currentInstance), eq(p.id, existant.id)));
     await refleterPrincipal(tx, p, ownerId, targetId);
     return { ok: true as const };

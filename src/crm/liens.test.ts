@@ -44,10 +44,15 @@ describe('Liens entre fiches', () => {
       sourceId ?? null,
     ]);
   const colonne = async (table: string, col: string, id: string) =>
-    (await t.owner.pool.query(`select ${col} as v from ${table} where id = $1`, [id])).rows[0]
-      ?.v as string | null;
+    (
+      await t.owner.pool.query<{ v: string | null }>(
+        `select ${col} as v from ${table} where id = $1`,
+        [id],
+      )
+    ).rows[0]?.v ?? null;
   const nbLiens = async (table: string) =>
-    (await t.owner.pool.query<{ n: number }>(`select count(*)::int as n from ${table}`)).rows[0]?.n;
+    (await t.owner.pool.query<{ n: number }>(`select count(*)::int as n from ${table}`)).rows[0]
+      ?.n ?? 0;
   const hubspotId = async (table: string, sourceId: string) =>
     (
       await t.owner.pool.query<{ id: string }>(
