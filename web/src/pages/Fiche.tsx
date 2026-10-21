@@ -17,6 +17,7 @@ import {
 import { eur } from '../crm.js';
 import type { InstanceSummary } from '../nav.js';
 import { Icon } from '../icons.js';
+import { ActionsFiche } from './liens/ActionsFiche.js';
 import { CarteLiens, type LigneLien } from './liens/CarteLiens.js';
 import { Cloture } from './Pipeline.js';
 import { ACTIVITES } from './taches/commun.js';
@@ -381,6 +382,14 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
             <span className={`badge ${hubspot ? 'blue' : ''}`}>{hubspot ? 'HubSpot' : 'OS'}</span>
           </div>
         </div>
+        <ActionsFiche
+          slug={slug}
+          kind={kind}
+          id={id}
+          titre={titre}
+          onMessage={setMessage}
+          onChange={load}
+        />
         {kind === 'affaire' &&
           (f.clos ? (
             <span className={`badge ${f.clos === 'gagne' ? 'green' : 'red'}`}>

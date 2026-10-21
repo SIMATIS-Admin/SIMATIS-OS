@@ -91,6 +91,12 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+  if (url.includes('/recherche'))
+    return json({
+      affaires: [],
+      personnes: [{ id: 'c2', nom: 'Agathe Vallière (doublon)', entreprise: null }],
+      organisations: [],
+    });
   if (url.includes('/fiches/contact/')) return json(contact());
   if (url.endsWith('/mandat') || url.endsWith('/mandat/lier'))
     return json({ slug: 'beta', nom: 'Beta', type: 'mandat', phase: 'closing' });
@@ -253,5 +259,37 @@ describe('Fiche page', () => {
       '#/simatis/fiche/affaire/o1',
     );
     expect(screen.queryByLabelText('Aussi dans HubSpot')).toBeNull();
+  });
+
+  it('deletes the record after a confirmation', async () => {
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' }));
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'DELETE')?.url).toBe(
+        '/api/i/simatis/fiches/contact/c1',
+      ),
+    );
+  });
+
+  it('merges with another record found by name, keeping the chosen one', async () => {
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fusionner avec…' }));
+    fireEvent.change(screen.getByLabelText('Rechercher la fiche à fusionner'), {
+      target: { value: 'agathe' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Agathe Vallière (doublon)' }));
+    const confirmer = screen.getByRole('button', { name: 'Confirmer la fusion' });
+    expect((confirmer as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText('Agathe Vallière (doublon)'));
+    fireEvent.click(confirmer);
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/fusion'))).toMatchObject({
+        url: '/api/i/simatis/fiches/contact/c2/fusion',
+        body: { absorbeId: 'c1' },
+      }),
+    );
+    expect(location.hash).toBe('#/simatis/fiche/contact/c2');
   });
 });

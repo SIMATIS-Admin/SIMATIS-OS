@@ -224,7 +224,14 @@ export function Tableau<T extends { id: string }>({
   };
   const supprimer = async () => {
     if (!onSupprimer) return;
-    const r = await onSupprimer(choisies.map((l) => l.id));
+    let r: BilanSuppression;
+    try {
+      r = await onSupprimer(choisies.map((l) => l.id));
+    } catch (e) {
+      setBilan(e instanceof Error ? e.message : String(e));
+      fermer();
+      return;
+    }
     const nom = (id: string) => titre(lignes.find((l) => l.id === id) ?? choisies[0]!);
     setBilan(
       r.simulation
@@ -244,7 +251,14 @@ export function Tableau<T extends { id: string }>({
   const fusionner = async () => {
     const absorbe = choisies.find((l) => l.id !== garde);
     if (!onFusionner || !garde || !absorbe) return;
-    const r = await onFusionner(garde, absorbe.id);
+    let r: { simulation: boolean } | void;
+    try {
+      r = await onFusionner(garde, absorbe.id);
+    } catch (e) {
+      setBilan(e instanceof Error ? e.message : String(e));
+      fermer();
+      return;
+    }
     setBilan(
       r?.simulation
         ? "Simulation : rien n'a été fusionné (écritures réelles désactivées)."
