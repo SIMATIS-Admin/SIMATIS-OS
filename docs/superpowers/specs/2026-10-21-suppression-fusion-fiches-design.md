@@ -21,7 +21,8 @@ d'organisation à nettoyer.
 - Depuis une fiche : bouton « Supprimer » avec confirmation.
 - Depuis une liste : cases à cocher, « Supprimer la sélection », confirmation avec le nombre.
 - Mode réel, fiche issue de HubSpot : archivage HubSpot, puis suppression locale avec ses liens
-  (tables de liaison), ses tâches et ses activités liées.
+  (tables de liaison) ; tâches, activités et autres objets liés sont détachés, pas supprimés ;
+  une affaire avec devis ne se supprime pas.
 - Fiche locale uniquement (sans équivalent HubSpot) : suppression locale seule.
 - Traitement en masse fiche par fiche ; une erreur n'annule pas les autres ; récapitulatif
   (réussies, échouées, raison). Trace au journal.
@@ -33,8 +34,8 @@ d'organisation à nettoyer.
   absorbée passent sur la gardée ; liens en double dédoublonnés ; champs de l'absorbée
   n'écrasent jamais, ils ne remplissent que les vides ; l'absorbée est supprimée.
 - HubSpot : fonction de fusion native (`/crm/v3/objects/{type}/merge`) quand les deux fiches
-  existent dans HubSpot. Si une seule y existe, la fiche HubSpot est gardée comme référence.
-  Si aucune, fusion locale seule.
+  existent dans HubSpot. Garder une fiche locale en absorbant une fiche HubSpot est refusé (elle reviendrait à la
+  synchronisation). Si aucune n'est dans HubSpot, fusion locale seule.
 - Les doublons purement HubSpot-side sont résolus par la synchronisation suivante.
 
 ## Architecture
@@ -43,7 +44,7 @@ d'organisation à nettoyer.
 - `src/crm/fusion.ts` : fusion de deux fiches du même type.
 - `src/connecteurs/hubspot/write.ts` : nouvelles opérations `record.archive` et `record.merge`.
 - `src/api/routes.ts` : `DELETE` sur les fiches, `POST` pour la suppression en masse et la fusion.
-- Web : sélection en liste (Contacts, Entreprises, Pipeline/affaires), boîtes de confirmation,
+- Web : sélection en liste (Contacts, Entreprises, et une vue liste des affaires à créer dans le pipeline), boîtes de confirmation,
   boutons sur la fiche.
 
 ## Tests
