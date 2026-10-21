@@ -75,6 +75,43 @@ describe('brouillon du résultat au dirigeant', () => {
     expect(html).not.toContain('Il vous manque');
   });
 
+  it('v2.1 : reprend pour chaque frein la réponse, la pratique avancée, par où commencer et le signe', () => {
+    const { html } = brouillonResultat({
+      contactNom: null,
+      ecran: ecran({
+        freins: [
+          {
+            n: 1,
+            titre: 'Frein fictif',
+            phrase: 'Phrase fictive.',
+            enjeu: 3750,
+            reponse: 'Réponse fictive',
+            cible: 'Pratique fictive',
+            debut: ['Action une.', 'Action <deux>.'],
+            signe: 'Signe fictif.',
+          },
+        ],
+        textes: {
+          definitionVma: 'Définition.',
+          nonMesurable: 'Non mesurable.',
+          aucunFrein: 'Aucun frein marqué.',
+          libelleReponse: 'Votre réponse',
+          libelleCible: 'Les plus avancés',
+          libelleDebut: 'Par où commencer',
+          libelleSigne: 'Signe que c’est en place',
+          libelleEnjeu: 'Enjeu estimé',
+          noteEnjeu: 'Note fictive.',
+        },
+      }),
+    });
+    expect(html).toContain('Votre réponse : « Réponse fictive »');
+    expect(html).toContain('Les plus avancés : « Pratique fictive »');
+    expect(html).toContain('<li>Action une.</li><li>Action &lt;deux&gt;.</li>');
+    expect(html).toContain('Signe que c’est en place : Signe fictif.');
+    expect(html).toContain('Enjeu estimé : environ +3,8\u00a0k€ par mois*');
+    expect(html).toContain('<small>* Note fictive.</small>');
+  });
+
   it("n'annonce jamais le potentiel, réservé à Marc", () => {
     const { html } = brouillonResultat({ contactNom: null, ecran: ecran() });
     expect(html).not.toMatch(/potentiel|gain|multiplicateur/i);
