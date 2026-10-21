@@ -129,7 +129,10 @@ export async function crmHubspot(tx: Tx) {
     .select({ fournisseur: connexions.fournisseur, reglages: connexions.reglages })
     .from(connexions)
     .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'crm')));
-  return crm?.fournisseur === 'hubspot' ? parseReglages(crm.reglages) : null;
+  if (crm?.fournisseur !== 'hubspot') return null;
+  const reglages = parseReglages(crm.reglages);
+  // A CRM that does not follow tasks (not yet connected, say) leaves them in the OS.
+  return reglages.objets.includes('taches') ? reglages : null;
 }
 
 // The week (Paris days, `au` included), plus open tasks overdue or without a due date.
