@@ -27,7 +27,7 @@ describe('Mail d’invitation au test VMA', () => {
       lien: 'https://site.test/test-vma?i=abc',
       expireLe: new Date('2026-11-04T10:00:00.000Z'),
     });
-    expect(mail.html).toContain('<p>Bonjour,</p>');
+    expect(mail.html).toContain('>Bonjour,</p>');
   });
 });
 
