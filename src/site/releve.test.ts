@@ -142,6 +142,22 @@ describe('Site web : relevé des demandes de contact', () => {
     expect(lignes[0]?.type).toBe('mail_a_repondre');
   });
 
+  it('a white paper request from the blog pop-up lands in the Inbox as a mail to answer', async () => {
+    const d = demande({ objet: 'livre-blanc' });
+    const site = faux([d]);
+    const r = await releverDemandesSite(t.app.db, {
+      url: 'https://site.test',
+      token: TOKEN,
+      fetch: site.fetch,
+    });
+    expect(r).toEqual({ recues: 1, creees: 1, ignorees: 0 });
+    const [s] = await sujetsSite();
+    expect(s).toMatchObject({
+      type: 'mail_a_repondre',
+      titre: 'Demande du livre blanc — Atelier Fictif (Jeanne Fictive)',
+    });
+  });
+
   it('keeps one subject when the same request is delivered twice', async () => {
     const d = demande();
     await releverDemandesSite(t.app.db, {

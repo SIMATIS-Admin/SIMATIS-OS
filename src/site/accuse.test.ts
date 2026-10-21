@@ -10,4 +10,10 @@ describe('accusé de réception du formulaire de contact', () => {
     expect(html).toContain('Réserver un créneau');
     expect(html).not.toContain('<i>');
   });
+
+  it('livre blanc : promet le livre blanc sous 24 heures', () => {
+    const { subject, html } = mailAccuse({ nom: 'Jeanne', objet: 'livre-blanc' });
+    expect(subject).toContain('livre blanc');
+    expect(html).toContain('sous 24 heures');
+  });
 });
