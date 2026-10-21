@@ -1,9 +1,12 @@
 import { z } from 'zod';
+import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { deposerSujet } from '../inbox/depot.js';
+import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
+import { mailAccuse } from './accuse.js';
 
 // A request left on the public website's contact form, as the site's queue returns it.
 const demandeSchema = z.object({
@@ -25,6 +28,8 @@ export type ReleveDeps = {
   url: string;
   token: string;
   fetch?: typeof fetch;
+  // Sans elle, aucun accusé de réception n'est envoyé.
+  ecriture?: ConnexionDeps;
 };
 
 export type ResultatReleve = { recues: number; creees: number; ignorees: number };
@@ -58,6 +63,30 @@ export function resumeDe(d: DemandeSite): string {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+// Accusé de réception au visiteur, depuis la messagerie de l'instance. Jamais bloquant : la demande
+// est déjà dans l'Inbox. Savepoint : une erreur ne casse pas la transaction.
+async function accuser(
+  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+  instance: Instance,
+  d: DemandeSite,
+  ecriture: ConnexionDeps,
+): Promise<void> {
+  const { subject, html } = mailAccuse({ nom: d.nom });
+  try {
+    await tx.transaction((sp) =>
+      writeVia(
+        sp,
+        instance,
+        'messagerie',
+        { op: 'message.send', data: { to: d.email, subject, html } },
+        ecriture,
+      ),
+    );
+  } catch {
+    // Pas d'accusé : Marc répond de toute façon à la demande sous 48 heures.
+  }
 }
 
 export class ReleveImpossible extends Error {}
@@ -98,7 +127,10 @@ export async function releverDemandesSite(db: Database, deps: ReleveDeps): Promi
         sourceId: d.id,
         echeance: echeanceDe(new Date(d.recueLe)),
       });
-      if (statut === 'cree') creees++;
+      if (statut === 'cree') {
+        creees++;
+        if (deps.ecriture) await accuser(tx, propre, d, deps.ecriture);
+      }
     }
     if (creees > 0) {
       await logEvent(tx, {
