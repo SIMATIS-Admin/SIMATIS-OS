@@ -27,7 +27,8 @@ describe('Routes de liens entre fiches', () => {
 
   const creer = async (url: string, payload: Record<string, unknown>) => {
     const r = await app.inject({ method: 'POST', url: `${base}/${url}`, payload });
-    expect(r.statusCode, r.body).toBe(201);
+    // Deals answer 200 (existing route), the other creations 201.
+    expect([200, 201], r.body).toContain(r.statusCode);
     return r.json<{ id: string }>();
   };
   const fiche = async (kind: string, id: string) =>
