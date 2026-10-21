@@ -163,7 +163,9 @@ describe('brouillon du résultat au dirigeant', () => {
         ecartRecurrent: 55000,
         ecartSpot: 11000,
         freinsConquete: [{ n: 1, titre: 'Frein de conquête', phrase: 'Phrase conquête.' }],
-        freinsPortefeuille: [{ n: 8, titre: 'Frein de portefeuille', phrase: 'Phrase portefeuille.' }],
+        freinsPortefeuille: [
+          { n: 8, titre: 'Frein de portefeuille', phrase: 'Phrase portefeuille.' },
+        ],
         textes: {
           definitionVma: 'Définition.',
           nonMesurable: 'Non mesurable.',

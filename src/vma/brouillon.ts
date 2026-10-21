@@ -156,8 +156,8 @@ ${portefeuille || mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POL
   const allure = portefeuille
     ? `<tr><td style="padding:22px 32px 0;"><div style="padding:14px 18px;background:${C.glacier};border-radius:6px;">${ligneAllure(`${e.textes.libelleSocleRecurrent ?? 'Socle récurrent'} : ${euros(e.recurrent ?? 0)} par mois`)}${ligneAllure(`${e.textes.libelleNouvellesAffaires ?? 'Nouvelles affaires'} : ${euros((e.allureActuelle ?? 0) - (e.recurrent ?? 0))} par mois`)}</div></td></tr>`
     : socle
-    ? `<tr><td style="padding:22px 32px 0;"><div style="padding:14px 18px;background:${C.glacier};border-radius:6px;">${ligneAllure(`+ socle récurrent : ${euros(e.recurrent ?? 0)} par mois`)}${ligneAllure(`= allure actuelle : ${euros(e.allureActuelle ?? 0)} par mois, soit ${euros((e.allureActuelle ?? 0) * 12)} par an.`, true)}</div></td></tr>`
-    : '';
+      ? `<tr><td style="padding:22px 32px 0;"><div style="padding:14px 18px;background:${C.glacier};border-radius:6px;">${ligneAllure(`+ socle récurrent : ${euros(e.recurrent ?? 0)} par mois`)}${ligneAllure(`= allure actuelle : ${euros(e.allureActuelle ?? 0)} par mois, soit ${euros((e.allureActuelle ?? 0) * 12)} par an.`, true)}</div></td></tr>`
+      : '';
 
   const objectif = `<tr><td style="padding:22px 32px 0;"><div style="padding:16px 18px;border:1px solid ${C.trait};border-left:4px solid ${C.teal};border-radius:6px;">
 <div style="font:700 17px/1.4 ${POLICE};color:${C.marine};">Votre objectif : ${esc(e.niveau.label)}</div>
@@ -189,7 +189,12 @@ ${portefeuille || mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POL
     const conq = sectionFreins(
       e.freinsConquete ?? [],
       t.titreConquete ?? 'Conquête',
-      phraseEcart(t.libelleNouvellesAffaires ?? 'Nouvelles affaires', e.spotCible ?? 0, e.spotEcheance ?? 0, e.ecartSpot ?? 0),
+      phraseEcart(
+        t.libelleNouvellesAffaires ?? 'Nouvelles affaires',
+        e.spotCible ?? 0,
+        e.spotEcheance ?? 0,
+        e.ecartSpot ?? 0,
+      ),
     );
     const part =
       e.partRecVisee != null && e.partRecActuelle != null
@@ -198,7 +203,12 @@ ${portefeuille || mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POL
     const port = sectionFreins(
       e.freinsPortefeuille ?? [],
       t.titrePortefeuille ?? 'Portefeuille',
-      phraseEcart(t.libelleSocleRecurrent ?? 'Socle récurrent', e.recurrentCible ?? 0, e.socleEcheance ?? 0, e.ecartRecurrent ?? 0) + part,
+      phraseEcart(
+        t.libelleSocleRecurrent ?? 'Socle récurrent',
+        e.recurrentCible ?? 0,
+        e.socleEcheance ?? 0,
+        e.ecartRecurrent ?? 0,
+      ) + part,
     );
     return `${conq}${port}${noteEnjeu}`;
   };
