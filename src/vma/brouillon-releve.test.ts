@@ -98,7 +98,7 @@ describe('brouillon du résultat à la relève', () => {
     await t.owner.pool.query('delete from vma_tests');
   });
 
-  it("sans messagerie configurée, le sujet reste créé et dit pourquoi il n'y a pas de brouillon", async () => {
+  it("sans messagerie configurée, le sujet reste créé et dit pourquoi le résultat n'est pas parti", async () => {
     const site = faux();
     const test = await creerInvitation(
       t.app.db,
@@ -140,11 +140,11 @@ describe('brouillon du résultat à la relève', () => {
       )
     ).rows;
     expect(sujet?.instance_id).toBe(mandat.id);
-    expect(sujet?.resume).toContain('Brouillon du résultat non créé');
+    expect(sujet?.resume).toContain('Résultat non envoyé');
     expect(site.acquittes).toEqual([[id]]);
   });
 
-  it('sans e-mail de contact, la relève le signale et ne tente pas de brouillon', async () => {
+  it('sans e-mail de contact, la relève le signale et ne tente aucun envoi', async () => {
     const site = faux();
     const test = await creerInvitation(
       t.app.db,

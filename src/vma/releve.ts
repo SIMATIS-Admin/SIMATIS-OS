@@ -100,9 +100,11 @@ export function resumeResultat(r: ResultatSite): string {
     .join('\n');
 }
 
-// Brouillon du résultat dans la messagerie de l'instance. Jamais envoyé, jamais bloquant : l'échec
-// est noté dans le sujet, et le résultat reste rangé. Savepoint : une erreur ne casse pas la transaction.
-async function brouillonDuResultat(
+// Envoi du résultat au dirigeant depuis la messagerie de l'instance, dès la relève. Jamais bloquant :
+// si l'envoi échoue (messagerie qui ne sait qu'écrire des brouillons, autorisation expirée), le mail
+// est mis en brouillon pour que Marc l'envoie, et le sujet dit pourquoi. Savepoint : une erreur ne
+// casse pas la transaction.
+async function envoiDuResultat(
   tx: Parameters<Parameters<Database['transaction']>[0]>[0],
   instance: Instance,
   contact: { nom: string | null; email: string },
@@ -113,22 +115,31 @@ async function brouillonDuResultat(
     contactNom: contact.nom,
     ecran: r.ecran as unknown as EcranDirigeant,
   });
-  try {
-    const res = await tx.transaction((sp) =>
+  const ecrire = (op: 'message.send' | 'draft.create') =>
+    tx.transaction((sp) =>
       writeVia(
         sp,
         instance,
         'messagerie',
-        { op: 'draft.create', data: { to: contact.email, subject, html } },
+        { op, data: { to: contact.email, subject, html } },
         ecriture,
       ),
     );
+  const raison = (error: unknown) => (error instanceof Error ? error.message : String(error));
+  try {
+    const res = await ecrire('message.send');
     return res.simulation
-      ? 'Brouillon du résultat : simulé (écritures réelles désactivées).'
-      : 'Brouillon du résultat créé dans la messagerie de l’instance.';
-  } catch (error) {
-    const raison = error instanceof Error ? error.message : String(error);
-    return `Brouillon du résultat non créé : ${raison}`;
+      ? 'Envoi du résultat au dirigeant : simulé (écritures réelles désactivées).'
+      : `Résultat envoyé au dirigeant (${contact.email}).`;
+  } catch (erreurEnvoi) {
+    try {
+      const res = await ecrire('draft.create');
+      return res.simulation
+        ? `Envoi du résultat impossible (${raison(erreurEnvoi)}) ; brouillon simulé.`
+        : `Envoi du résultat impossible (${raison(erreurEnvoi)}) ; brouillon créé dans la messagerie, à envoyer.`;
+    } catch (erreurBrouillon) {
+      return `Résultat non envoyé (${raison(erreurEnvoi)}) et brouillon non créé : ${raison(erreurBrouillon)}`;
+    }
   }
 }
 
@@ -192,14 +203,14 @@ export async function releverTestsVma(
           );
         const note =
           deps.ecriture && trouve.contactEmail
-            ? await brouillonDuResultat(
+            ? await envoiDuResultat(
                 tx,
                 instance,
                 { nom: trouve.contactNom, email: trouve.contactEmail },
                 r,
                 deps.ecriture,
               )
-            : 'Aucun e-mail de contact : pas de brouillon.';
+            : 'Aucun e-mail de contact : résultat non envoyé.';
         await deposerSujet(tx, {
           type: 'autre',
           titre: `Test de VMA reçu : ${trouve.entrepriseNom}`,
