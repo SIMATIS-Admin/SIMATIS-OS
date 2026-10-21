@@ -1,3 +1,10 @@
+import {
+  COULEURS,
+  bouton,
+  echapper as echapperMail,
+  habillerMail,
+  paragraphe,
+} from '../mail/gabarit.js';
 import { and, desc, eq, gte, or, sql } from 'drizzle-orm';
 import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import { entreprises } from '../crm/schema.js';
@@ -137,14 +144,7 @@ export async function creerInvitation(
 
 export type EnvoiInvitation = { statut: 'envoye' | 'simule' | 'echec'; raison?: string };
 
-const ECHAPPEMENTS: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-const echapper = (s: string) => s.replace(/[&<>"']/g, (c) => ECHAPPEMENTS[c] ?? c);
+const echapper = echapperMail;
 
 // Mail d'invitation : le lien, le nom de l'entreprise et la date d'expiration, rien d'autre.
 export function mailInvitation(p: {
@@ -157,12 +157,18 @@ export function mailInvitation(p: {
   const lien = echapper(p.lien);
   return {
     subject: `Votre test VMA : ${p.entrepriseNom}`,
-    html: [
-      `<p>${bonjour}</p>`,
-      `<p>Voici votre lien pour passer le test VMA de ${echapper(p.entrepriseNom)} :</p>`,
-      `<p><a href="${lien}">${lien}</a></p>`,
-      `<p>Le lien expire le ${p.expireLe.toLocaleDateString('fr-FR')}.</p>`,
-    ].join(''),
+    html: habillerMail(
+      `<tr><td style="padding:26px 32px 4px;">${[
+        paragraphe(bonjour),
+        paragraphe(`Voici votre lien pour passer le test VMA de ${echapper(p.entrepriseNom)} :`),
+        bouton('Passer le test VMA', p.lien),
+        paragraphe(`Le lien expire le ${p.expireLe.toLocaleDateString('fr-FR')}.`),
+        paragraphe(
+          `Si le bouton ne s’ouvre pas : <a href="${lien}" style="color:${COULEURS.teal};">${lien}</a>`,
+          `font-size:13px;color:${COULEURS.roche};`,
+        ),
+      ].join('')}</td></tr>`,
+    ),
   };
 }
 

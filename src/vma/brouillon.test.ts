@@ -32,6 +32,7 @@ describe('brouillon du résultat au dirigeant', () => {
     expect(html).toContain('Il vous manque 5\u00a0k€ de CA commandé par mois (+33\u00a0%)');
     expect(html).toContain('Le temps de vente');
     expect(html).toContain('Bien à vous,');
+    expect(html).toContain('Marc Tabouret');
     expect(html).not.toMatch(/\btu\b|\bte\b|\bton\b/);
   });
 
@@ -106,16 +107,17 @@ describe('brouillon du résultat au dirigeant', () => {
     });
     expect(html).toContain('Votre réponse : « Réponse fictive »');
     expect(html).toContain('Les plus avancés : « Pratique fictive »');
-    expect(html).toContain('<li>Action une.</li><li>Action &lt;deux&gt;.</li>');
+    expect(html).toContain('>Action une.</li>');
+    expect(html).toContain('>Action &lt;deux&gt;.</li>');
     expect(html).toContain('Signe que c’est en place : Signe fictif.');
     expect(html).toContain('Enjeu estimé : environ +3,8\u00a0k€ par mois*');
-    expect(html).toContain('<small>* Note fictive.</small>');
+    expect(html).toContain('* Note fictive.</div>');
   });
 
   it("n'annonce jamais le potentiel, réservé à Marc", () => {
     const { html } = brouillonResultat({ contactNom: null, ecran: ecran() });
     expect(html).not.toMatch(/potentiel|gain|multiplicateur/i);
-    expect(html.startsWith('<p>Bonjour,</p>')).toBe(true);
+    expect(html).toContain('>Bonjour,</p>');
   });
 
   it('échappe le nom de l’entreprise et les textes saisis', () => {

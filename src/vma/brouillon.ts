@@ -1,10 +1,11 @@
 // Mail de résultat au dirigeant (cahier, §7.4). Le texte reprend l'écran que le dirigeant
 // a déjà vu : pas de potentiel, pas de délai, pas de phrase sur la suite. Il part tout seul à la relève (releve.ts).
 
+import { COULEURS, POLICE, echapper, habillerMail, paragraphe } from '../mail/gabarit.js';
+
 const NB = '\u00a0';
 
-const esc = (v: string) =>
-  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const esc = echapper;
 
 const euros = (v: number) => {
   const a = Math.abs(v);
@@ -63,41 +64,46 @@ export type EcranDirigeant = {
   };
 };
 
+const C = COULEURS;
+
+const p = paragraphe;
+
 // v2.1 : le détail pratique d'un frein, absent des résultats plus anciens.
 function detailFrein(f: EcranDirigeant['freins'][number], t: EcranDirigeant['textes']): string {
+  const ligne = (contenu: string) =>
+    `<div style="margin:6px 0 0;font:14px/1.5 ${POLICE};color:${C.roche};">${contenu}</div>`;
   const lignes: string[] = [];
   if (typeof f.enjeu === 'number' && f.enjeu > 0)
     lignes.push(
-      `<br>${esc(t.libelleEnjeu ?? 'Enjeu estimé')} : environ +${esc(euros(f.enjeu))} par mois*`,
+      ligne(
+        `<span style="color:${C.teal};font-weight:700;">${esc(t.libelleEnjeu ?? 'Enjeu estimé')} : environ +${esc(euros(f.enjeu))} par mois*</span>`,
+      ),
     );
   if (f.reponse)
-    lignes.push(`<br>${esc(t.libelleReponse ?? 'Votre réponse')} : « ${esc(f.reponse)} »`);
+    lignes.push(ligne(`${esc(t.libelleReponse ?? 'Votre réponse')} : « ${esc(f.reponse)} »`));
   if (f.cible && f.cible !== f.reponse)
-    lignes.push(`<br>${esc(t.libelleCible ?? 'Les plus avancés')} : « ${esc(f.cible)} »`);
+    lignes.push(ligne(`${esc(t.libelleCible ?? 'Les plus avancés')} : « ${esc(f.cible)} »`));
   if (f.debut?.length)
     lignes.push(
-      `<br><strong>${esc(t.libelleDebut ?? 'Par où commencer')}</strong><ul>${f.debut.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>`,
+      `<div style="margin:12px 0 0;padding:12px 16px;background:${C.mentheClair};border-left:3px solid ${C.teal};font:14px/1.5 ${POLICE};color:${C.nuit};"><strong style="color:${C.marine};">${esc(t.libelleDebut ?? 'Par où commencer')}</strong><ul style="margin:6px 0 0;padding-left:18px;">${f.debut.map((a) => `<li style="margin:3px 0;">${esc(a)}</li>`).join('')}</ul></div>`,
     );
   if (f.signe)
-    lignes.push(`${esc(t.libelleSigne ?? 'Signe que c’est en place')} : ${esc(f.signe)}`);
+    lignes.push(ligne(`${esc(t.libelleSigne ?? 'Signe que c’est en place')} : ${esc(f.signe)}`));
   return lignes.join('');
 }
 
-export function brouillonResultat(p: { contactNom: string | null; ecran: EcranDirigeant }): {
+export function brouillonResultat(p0: { contactNom: string | null; ecran: EcranDirigeant }): {
   subject: string;
   html: string;
 } {
-  const e = p.ecran;
-  const salut = p.contactNom ? `Bonjour ${esc(p.contactNom)},` : 'Bonjour,';
+  const e = p0.ecran;
+  const salut = p0.contactNom ? `Bonjour ${esc(p0.contactNom)},` : 'Bonjour,';
   const socle =
     typeof e.recurrent === 'number' && e.recurrent > 0 && e.allureActuelle !== undefined;
-  const chiffres =
-    e.mesurable && e.vma !== null
-      ? `${euros(e.vma)} de CA commandé par mois sur vos nouvelles affaires, soit ${euros(e.vma * 12)} par an.`
-      : e.textes.nonMesurable;
-  const allure = socle
-    ? `<p>+ socle récurrent : ${esc(euros(e.recurrent ?? 0))} par mois<br>= allure actuelle : ${esc(euros(e.allureActuelle ?? 0))} par mois, soit ${esc(euros((e.allureActuelle ?? 0) * 12))} par an.</p>`
-    : '';
+  const mesure = e.mesurable && e.vma !== null;
+  const chiffres = mesure
+    ? `${euros(e.vma ?? 0)} de CA commandé par mois sur vos nouvelles affaires, soit ${euros((e.vma ?? 0) * 12)} par an.`
+    : e.textes.nonMesurable;
   const pastille =
     e.pastille === 'estimés' || e.statut === 'à confirmer'
       ? 'chiffres en partie estimés'
@@ -106,9 +112,6 @@ export function brouillonResultat(p: { contactNom: string | null; ecran: EcranDi
         : 'non mesurable';
   const tenue = e.tenue === 'tenue' ? 'activité régulière' : 'activité par vagues';
   const lancee = socle && typeof e.trajectoire === 'number' && typeof e.socleEcheance === 'number';
-  const trajectoire = lancee
-    ? `<p>Sans rien changer, votre socle récurrent passerait de ${esc(euros(e.recurrent ?? 0))} à ${esc(euros(e.socleEcheance ?? 0))} par mois dans ${esc(ans(e.echeance))}.</p>`
-    : '';
   const ecart =
     e.ecart !== null && lancee
       ? e.ecart > 0
@@ -119,27 +122,52 @@ export function brouillonResultat(p: { contactNom: string | null; ecran: EcranDi
           ? `Il vous manque ${euros(e.ecart)} de CA commandé par mois${e.ecartPct !== null ? ` (+${pct(e.ecartPct)})` : ''}, soit ${euros(e.ecart * 12)} par an.`
           : `Vous dépassez déjà votre objectif de ${euros(-e.ecart)} par mois.`
         : '';
+
+  const puce = (t: string) =>
+    `<span style="display:inline-block;margin:10px 6px 0 0;padding:3px 10px;border:1px solid ${C.menthe};border-radius:12px;font:12px/1.4 ${POLICE};color:${C.menthe};">${esc(t)}</span>`;
+  const hero = `<tr><td style="background:${C.nuit};padding:28px 32px 26px;">
+<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.menthe};">Votre VMA commerciale</div>
+${mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POLICE};color:#FFFFFF;">${esc(euros(e.vma ?? 0))}<span style="font:400 16px/1.4 ${POLICE};color:#FFFFFF;"> par mois</span></div>` : ''}
+<div style="font:16px/1.5 ${POLICE};color:#FFFFFF;">${esc(chiffres)}</div>
+<div>${puce(pastille)}${puce(tenue)}</div>
+</td></tr>`;
+
+  const ligneAllure = (t: string, fort = false) =>
+    `<div style="font:${fort ? '700 ' : ''}15px/1.7 ${POLICE};color:${C.nuit};">${esc(t)}</div>`;
+  const allure = socle
+    ? `<tr><td style="padding:22px 32px 0;"><div style="padding:14px 18px;background:${C.glacier};border-radius:6px;">${ligneAllure(`+ socle récurrent : ${euros(e.recurrent ?? 0)} par mois`)}${ligneAllure(`= allure actuelle : ${euros(e.allureActuelle ?? 0)} par mois, soit ${euros((e.allureActuelle ?? 0) * 12)} par an.`, true)}</div></td></tr>`
+    : '';
+
+  const objectif = `<tr><td style="padding:22px 32px 0;"><div style="padding:16px 18px;border:1px solid ${C.trait};border-left:4px solid ${C.teal};border-radius:6px;">
+<div style="font:700 17px/1.4 ${POLICE};color:${C.marine};">Votre objectif : ${esc(e.niveau.label)}</div>
+<div style="margin-top:4px;font:15px/1.6 ${POLICE};color:${C.nuit};">${esc(euros(e.allureVisee))} par mois dans ${esc(ans(e.echeance))}, soit ${esc(euros(e.allureVisee * 12))} par an.${ecart ? ` ${esc(ecart)}` : ''}</div>
+</div></td></tr>`;
+
+  const trajectoire = lancee
+    ? `<tr><td style="padding:16px 32px 0;">${p(`Sans rien changer, votre socle récurrent passerait de ${esc(euros(e.recurrent ?? 0))} à ${esc(euros(e.socleEcheance ?? 0))} par mois dans ${esc(ans(e.echeance))}.`, 'margin:0;')}</td></tr>`
+    : '';
+  const phrase = `<tr><td style="padding:16px 32px 0;">${p(esc(e.niveau.phrase), 'margin:0;')}</td></tr>`;
+
   const noteEnjeu =
     e.textes.noteEnjeu && e.freins.some((f) => typeof f.enjeu === 'number' && f.enjeu > 0)
-      ? `<p><small>* ${esc(e.textes.noteEnjeu)}</small></p>`
+      ? `<tr><td style="padding:4px 32px 0;"><div style="font:12px/1.5 ${POLICE};color:${C.roche};">* ${esc(e.textes.noteEnjeu)}</div></td></tr>`
       : '';
+  const carte = (f: EcranDirigeant['freins'][number], i: number) =>
+    `<tr><td style="padding:12px 32px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.trait};border-radius:6px;"><tr>
+<td valign="top" width="44" style="padding:16px 0 16px 16px;"><div style="width:28px;height:28px;border-radius:14px;background:${C.marine};font:700 14px/28px ${POLICE};color:${C.menthe};text-align:center;">${i + 1}</div></td>
+<td valign="top" style="padding:16px 18px 16px 8px;"><div style="font:700 16px/1.4 ${POLICE};color:${C.marine};">${esc(f.titre)}</div><div style="margin-top:2px;font:15px/1.5 ${POLICE};color:${C.nuit};">${esc(f.phrase)}</div>${detailFrein(f, e.textes)}</td>
+</tr></table></td></tr>`;
   const freins = e.freins.length
-    ? `<ol>${e.freins.map((f) => `<li><strong>${esc(f.titre)}</strong> : ${esc(f.phrase)}${detailFrein(f, e.textes)}</li>`).join('')}</ol>${noteEnjeu}`
-    : `<p>${esc(e.textes.aucunFrein)}</p>`;
+    ? `<tr><td style="padding:28px 32px 0;"><div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">Où se perd votre ${lancee ? 'allure' : 'VMA'} :</div></td></tr>${e.freins.map(carte).join('')}${noteEnjeu}`
+    : `<tr><td style="padding:22px 32px 0;">${p(esc(e.textes.aucunFrein), 'margin:0;')}</td></tr>`;
 
-  const html = [
-    `<p>${salut}</p>`,
-    `<p>Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.</p>`,
-    `<p><strong>Votre VMA commerciale : ${esc(chiffres)}</strong><br>${esc(pastille)} · ${esc(tenue)}</p>`,
-    allure,
-    `<p><strong>Votre objectif : ${esc(e.niveau.label)}</strong><br>${esc(euros(e.allureVisee))} par mois dans ${esc(ans(e.echeance))}, soit ${esc(euros(e.allureVisee * 12))} par an.${ecart ? ` ${esc(ecart)}` : ''}</p>`,
-    trajectoire,
-    `<p>${esc(e.niveau.phrase)}</p>`,
-    `<p><strong>Où se perd votre ${lancee ? 'allure' : 'VMA'} :</strong></p>`,
-    freins,
-    `<p>Bien à vous,</p>`,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const html =
+    habillerMail(`<tr><td style="padding:26px 32px 20px;">${p(salut, 'margin:0 0 10px;')}${p(`Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.`, 'margin:0;')}</td></tr>
+${hero}
+${allure}
+${objectif}
+${trajectoire}
+${phrase}
+${freins}`);
   return { subject: 'Votre résultat au Test de VMA', html };
 }
