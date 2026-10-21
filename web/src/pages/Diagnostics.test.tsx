@@ -91,23 +91,43 @@ describe('Diagnostics : écran fusionné', () => {
     );
   });
 
-  it('garde « Résultat complet » désactivé : la page par mandat viendra plus tard', async () => {
+  it('« Résultat complet » ouvre l’écran du dirigeant, avec « par où commencer », et revient', async () => {
+    const complet = {
+      entreprise: 'Entreprise Fictive',
+      vma: 3400,
+      mesurable: true,
+      statut: 'prouvée',
+      tenue: 'tenue',
+      allureVisee: 8000,
+      echeance: 2,
+      niveau: { cle: 'amb', label: 'Ambitieux', phrase: 'Phrase du niveau fictive.' },
+      ecart: 4600,
+      ecartPct: 1.35,
+      freins: [
+        {
+          n: 1,
+          titre: 'Frein fictif',
+          phrase: 'Phrase du frein.',
+          enjeu: 1200,
+          debut: ['Première action fictive'],
+        },
+      ],
+      textes: { libelleDebut: 'Par où commencer', noteEnjeu: 'Estimation moyenne fictive.' },
+    } as TestVma['resultat'];
     charger(
       [entreprise(1)],
       [],
-      [
-        test({
-          id: 'a',
-          entrepriseId: 'e1',
-          recueLe: '2026-04-14T10:00:00Z',
-          resultat: resultat(3400),
-        }),
-      ],
+      [test({ id: 'a', entrepriseId: 'e1', recueLe: '2026-04-14T10:00:00Z', resultat: complet })],
     );
     render(<Diagnostics slug="demo" />);
     fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
-    const bouton = screen.getByRole('button', { name: /Résultat complet/ });
-    expect(bouton.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Résultat complet' }));
+    expect(screen.getByText('Votre VMA commerciale')).toBeTruthy();
+    expect(screen.getByText('Frein fictif')).toBeTruthy();
+    expect(screen.getByText('Première action fictive')).toBeTruthy();
+    expect(screen.getByText(/Estimation moyenne fictive/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Retour/ }));
+    expect(await screen.findByRole('button', { name: /Réduire/ })).toBeTruthy();
   });
 
   it('la recherche revient à la page 1 et trouve une entreprise sur toutes les pages', async () => {

@@ -144,7 +144,21 @@ export type TestVma = {
     // v2.0 (module Portefeuille) : allure et socle à l'échéance si rien ne change ; l'écart se lit alors sur elle.
     trajectoire?: number | null;
     socleEcheance?: number | null;
-    freins: { n: number; titre: string; phrase: string }[];
+    pastille?: string;
+    ecartPct?: number | null;
+    freins: {
+      n: number;
+      titre: string;
+      phrase: string;
+      // v2.1 : estimation moyenne, réponse du dirigeant, pratique la plus avancée, par où commencer.
+      enjeu?: number;
+      reponse?: string;
+      cible?: string;
+      debut?: string[];
+      signe?: string;
+    }[];
+    // Libellés et définitions tels que le dirigeant les a lus (absents des résultats anciens).
+    textes?: Record<string, string>;
   } | null;
   // Calcul complet, pour la fiche de Marc (gains et blocs inclus) : jamais montré au dirigeant.
   calcul: {

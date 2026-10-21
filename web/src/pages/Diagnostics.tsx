@@ -9,6 +9,7 @@ import {
   type TestVma,
 } from '../api.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
+import { ResultatComplet } from './diagnostics/ResultatComplet.js';
 import { NouveauDiagnostic, NouveauTestVma } from './diagnostics/Creation.js';
 import { libelleStatut, fmtEur } from './TestsVma.js';
 import {
@@ -38,6 +39,7 @@ export function Diagnostics({ slug }: { slug: string }) {
   const [page, setPage] = useState(1);
   const [ouvertes, setOuvertes] = useState<Set<string>>(new Set());
   const [projetOuvert, setProjetOuvert] = useState<string | null>(null);
+  const [testOuvert, setTestOuvert] = useState<string | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [modale, setModale] = useState<{ type: 'diag' | 'vma'; preselect?: string } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -109,6 +111,11 @@ export function Diagnostics({ slug }: { slug: string }) {
         </div>
       );
     }
+  }
+
+  const test = testOuvert ? tests.find((t) => t.id === testOuvert) : undefined;
+  if (test?.resultat) {
+    return <ResultatComplet test={test} onRetour={() => setTestOuvert(null)} />;
   }
 
   if (!entreprises) {
@@ -310,10 +317,9 @@ export function Diagnostics({ slug }: { slug: string }) {
                         <button
                           className="btn"
                           type="button"
-                          disabled
-                          title="Page complète par mandat : livraison ultérieure"
+                          onClick={() => setTestOuvert(resume.dernier!.id)}
                         >
-                          Résultat complet · bientôt
+                          Résultat complet
                         </button>
                       </div>
                     )}
