@@ -46,6 +46,28 @@ describe('Diagnostics : regroupement par entreprise', () => {
     expect(ligne?.tests.map((t) => t.id)).toEqual(['t2', 't1']);
   });
 
+  it('garde le diagnostic en cours, pas une année déjà restituée', () => {
+    const [ligne] = grouper(
+      [entreprises[0]!],
+      [
+        projet({
+          id: 'ancien',
+          entrepriseId: 'e1',
+          statutDiagnostic: 'Restitué',
+          updatedAt: '2026-10-30T10:00:00Z',
+        }),
+        projet({
+          id: 'courant',
+          entrepriseId: 'e1',
+          statutDiagnostic: null,
+          updatedAt: '2026-10-01T10:00:00Z',
+        }),
+      ],
+      [],
+    );
+    expect(ligne?.diag?.id).toBe('courant');
+  });
+
   it('garde une entreprise sans diagnostic ni test', () => {
     const [ligne] = grouper([entreprises[1]!], [], []);
     expect(ligne).toEqual({ id: 'e2', nom: 'Entreprise Fictive B', diag: null, tests: [] });

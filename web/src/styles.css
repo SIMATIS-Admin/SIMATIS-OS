@@ -3563,3 +3563,53 @@ tr.sel {
     grid-template-columns: 1fr;
   }
 }
+
+/* Création depuis la section Diagnostics : menu « + Nouveau » et fenêtres de saisie. */
+.dg-menu {
+  position: relative;
+}
+.dg-menu-liste {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 240px;
+  background: var(--carte, #fff);
+  border: 1px solid var(--line, #dfe4ee);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.dg-menu-liste button {
+  all: unset;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 8px;
+}
+.dg-menu-liste button:hover {
+  background: var(--gris, #e9eef5);
+}
+.dg-voile {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 20, 35, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+.dg-modale {
+  background: var(--carte, #fff);
+  border-radius: 14px;
+  padding: 22px;
+  width: min(460px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+}
+.dg-modale h2 {
+  margin: 0 0 12px;
+  font-size: 19px;
+}

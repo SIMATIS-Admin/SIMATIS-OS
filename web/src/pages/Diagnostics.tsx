@@ -9,6 +9,7 @@ import {
   type TestVma,
 } from '../api.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
+import { NouveauDiagnostic, NouveauTestVma } from './diagnostics/Creation.js';
 import { libelleStatut, fmtEur } from './TestsVma.js';
 import {
   filtrer,
@@ -36,6 +37,8 @@ export function Diagnostics({ slug }: { slug: string }) {
   const [page, setPage] = useState(1);
   const [ouvertes, setOuvertes] = useState<Set<string>>(new Set());
   const [projetOuvert, setProjetOuvert] = useState<string | null>(null);
+  const [menuOuvert, setMenuOuvert] = useState(false);
+  const [modale, setModale] = useState<{ type: 'diag' | 'vma'; preselect?: string } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const charger = async () => {
@@ -130,6 +133,39 @@ export function Diagnostics({ slug }: { slug: string }) {
               Une ligne par entreprise : son diagnostic et ses tests VMA.
             </div>
           </div>
+          <div className="dg-menu">
+            <button
+              className="btn go"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menuOuvert}
+              onClick={() => setMenuOuvert((o) => !o)}
+            >
+              + Nouveau
+            </button>
+            {menuOuvert && (
+              <div className="dg-menu-liste">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOuvert(false);
+                    setModale({ type: 'diag' });
+                  }}
+                >
+                  Nouveau diagnostic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOuvert(false);
+                    setModale({ type: 'vma' });
+                  }}
+                >
+                  Nouveau test VMA
+                </button>
+              </div>
+            )}
+          </div>
           <input
             type="search"
             aria-label="Rechercher une entreprise"
@@ -212,7 +248,18 @@ export function Diagnostics({ slug }: { slug: string }) {
                         </button>
                       </>
                     ) : (
-                      <p className="small muted">Pas encore lancé.</p>
+                      <>
+                        <p className="small muted">Pas encore lancé.</p>
+                        {l.id && (
+                          <button
+                            className="btn go"
+                            type="button"
+                            onClick={() => setModale({ type: 'diag', preselect: l.id! })}
+                          >
+                            Lancer le diagnostic
+                          </button>
+                        )}
+                      </>
                     )}
                   </section>
 
@@ -301,12 +348,44 @@ export function Diagnostics({ slug }: { slug: string }) {
                         ))}
                       </ul>
                     )}
+                    {l.id && (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => setModale({ type: 'vma', preselect: l.id! })}
+                      >
+                        + Nouveau test VMA
+                      </button>
+                    )}
                   </section>
                 </div>
               )}
             </div>
           );
         })
+      )}
+
+      {modale?.type === 'diag' && (
+        <NouveauDiagnostic
+          slug={slug}
+          entreprises={entreprises}
+          projets={projets}
+          preselect={modale.preselect}
+          onFermer={() => setModale(null)}
+          onCree={() => {
+            setModale(null);
+            void charger();
+          }}
+        />
+      )}
+      {modale?.type === 'vma' && (
+        <NouveauTestVma
+          slug={slug}
+          entreprises={entreprises}
+          preselect={modale.preselect}
+          onFermer={() => setModale(null)}
+          onCree={() => void charger()}
+        />
       )}
 
       {filtrees.length > 0 && (

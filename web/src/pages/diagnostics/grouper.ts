@@ -11,6 +11,13 @@ export type LigneEntreprise = {
 
 export type Entreprise = { id: string; nom: string; secteur: string | null };
 
+// Le diagnostic en cours est le plus récent non restitué ; à défaut, le plus récent (une année déjà restituée reste dans l'historique).
+const diagEnCours = (liste: ProjetDiag[]): ProjetDiag | null => {
+  const plusRecent = (a: ProjetDiag, b: ProjetDiag) => b.updatedAt.localeCompare(a.updatedAt);
+  const enCours = liste.filter((p) => p.statutDiagnostic !== 'Restitué').sort(plusRecent);
+  return enCours[0] ?? [...liste].sort(plusRecent)[0] ?? null;
+};
+
 // Les tests vont du plus récent au plus ancien ; un diagnostic déjà rattaché garde sa place.
 export function grouper(
   entreprises: Entreprise[],
@@ -20,7 +27,7 @@ export function grouper(
   const lignes: LigneEntreprise[] = entreprises.map((e) => ({
     id: e.id,
     nom: e.nom,
-    diag: projets.find((p) => p.entrepriseId === e.id) ?? null,
+    diag: diagEnCours(projets.filter((p) => p.entrepriseId === e.id)),
     tests: tests
       .filter((t) => t.entrepriseId === e.id)
       .sort((a, b) => b.creeLe.localeCompare(a.creeLe)),
