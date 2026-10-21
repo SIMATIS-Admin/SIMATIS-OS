@@ -37,6 +37,7 @@ services:
       BACKUP_STATUS_FILE: /app/backup-status/last.json
       SITE_CONTACT_URL: ${SITE_CONTACT_URL:-}
       SITE_CONTACT_TOKEN: ${SITE_CONTACT_TOKEN:-}
+      VMA_OS_TOKEN: ${VMA_OS_TOKEN:-}
       # Grille de scoring du diagnostic : copie dans secrets/ (le conteneur ne voit pas le second cerveau).
       DIAGNOSTIC_GRILLE: /app/secrets/diagnostic/grille-scoring.json
     volumes:

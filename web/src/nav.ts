@@ -24,6 +24,8 @@ export const NAV: NavGroup[] = [
     items: [
       item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage'),
       item('diagnostic', 'Diagnostic', 'radar', 'diagnostic'),
+      // Procédure à part du diagnostic (Marc, 20 octobre 2026) : même section, écran séparé.
+      item('tests-vma', 'Tests VMA', 'chart'),
     ],
   },
   {
@@ -74,6 +76,7 @@ export const BUILT = new Set([
   'rendez-vous',
   'devis',
   'diagnostic',
+  'tests-vma',
   'routines',
   'siteweb',
 ]);

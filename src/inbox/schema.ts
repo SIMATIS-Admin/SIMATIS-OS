@@ -21,8 +21,15 @@ export const TYPES_SUJET = [
   'a_valider',
   'autre',
 ] as const;
-// `site`: a request left on the public website's contact form.
-export const ORIGINES_SUJET = ['messagerie', 'agenda', 'cerveau', 'os', 'site'] as const;
+// `site`: a request left on the public website's contact form. `test-vma`: a result of the VMA test.
+export const ORIGINES_SUJET = [
+  'messagerie',
+  'agenda',
+  'cerveau',
+  'os',
+  'site',
+  'test-vma',
+] as const;
 export const STATUTS_SUJET = ['a_traiter', 'tache', 'traite'] as const;
 export const PRIORITE_MIN = 1;
 export const PRIORITE_MAX = 5;

@@ -7,6 +7,7 @@ import type { CompteImap } from './secrets.js';
 import { registerHealth } from './health.js';
 import { registerMcp } from './mcp/server.js';
 import { registerRunnerApi } from './routines/runner-api.js';
+import { registerVmaRoutes } from './vma/routes.js';
 import { registerWeb } from './web.js';
 
 export type AppDeps = {
@@ -19,6 +20,8 @@ export type AppDeps = {
   secretsDir?: string;
   googleFetch?: FetchLike;
   imapServeur?: Pick<CompteImap, 'host' | 'port' | 'secure'>;
+  // Test de VMA : site et jeton des invitations ; null ou absent = non configuré.
+  vma?: { url: string; token: string } | null;
   logger?: FastifyServerOptions['logger'];
 };
 
@@ -32,11 +35,13 @@ export function buildApp({
   secretsDir = './secrets/instances',
   googleFetch,
   imapServeur,
+  vma = null,
   logger = false,
 }: AppDeps): FastifyInstance {
   const app = Fastify({ logger });
   registerHealth(app, { pool, version, backupStatusFile });
   registerApi(app, { db, secretsDir, realWrites, googleFetch, imapServeur });
+  registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db });
   registerWeb(app);

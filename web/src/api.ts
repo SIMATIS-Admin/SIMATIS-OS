@@ -78,10 +78,27 @@ export type PortefeuilleLigne = {
   routinesActives: number | null;
 };
 
+// Erreur d'API : garde le statut et le corps, pour les refus qui appellent une réponse de l'écran
+// (par exemple l'alerte du semestre du Test de VMA, code « semestre »).
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly corps: Record<string, unknown>,
+  ) {
+    super(message);
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
-  if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status} sur ${url}`);
+  const body = (await response.json().catch(() => ({}))) as { error?: string } & Record<
+    string,
+    unknown
+  >;
+  if (!response.ok) {
+    throw new ApiError(body.error ?? `Erreur ${response.status} sur ${url}`, response.status, body);
+  }
   return body as T;
 }
 const getJson = <T>(url: string) => request<T>(url);
@@ -93,6 +110,75 @@ const sendJson = <T>(method: 'PUT' | 'PATCH' | 'POST', url: string, payload: unk
   });
 
 const inst = (slug: string, path: string) => `/api/i/${encodeURIComponent(slug)}/${path}`;
+
+// Test de VMA : invitations envoyées par le site, résultats relevés (voir src/vma).
+export type TestVmaType = 'premier' | 'essai';
+export type TestVmaStatut = 'envoyee' | 'utilisee' | 'revoquee';
+export type TestVma = {
+  id: string;
+  entrepriseId: string | null;
+  entrepriseNom: string;
+  contactNom: string | null;
+  contactEmail: string | null;
+  type: TestVmaType;
+  statut: TestVmaStatut;
+  lien: string;
+  expireLe: string;
+  creeLe: string;
+  recueLe: string | null;
+  version: string | null;
+  // Écran du dirigeant (ce qu'il a vu) : seulement après l'envoi.
+  resultat: {
+    entreprise: string;
+    vma: number | null;
+    mesurable: boolean;
+    statut: string;
+    tenue: string;
+    allureVisee: number;
+    echeance: number;
+    niveau: { cle: string; label: string; phrase: string };
+    ecart: number | null;
+    // Socle récurrent par mois (null sans récurrent) et allure actuelle = VMA + récurrent (v0.2).
+    recurrent?: number | null;
+    allureActuelle?: number;
+    freins: { n: number; titre: string; phrase: string }[];
+  } | null;
+  // Calcul complet, pour la fiche de Marc (gains et blocs inclus) : jamais montré au dirigeant.
+  calcul: {
+    vma?: number;
+    statut?: string;
+    recurrent?: number;
+    recurrentEstime?: boolean;
+    allureActuelle?: number;
+    partRecurrent?: number | null;
+    ratioAllure?: number | null;
+    potentiel?: number;
+    niveau?: { cle: string; part?: number; parAn?: number };
+    freins?: {
+      n: number;
+      label: string;
+      note: number;
+      gainMax: number;
+      gainRestant: number;
+      bloc: string;
+    }[];
+  } | null;
+};
+export type NouveauTestVma = {
+  entrepriseId?: string | null;
+  entrepriseNom: string;
+  type: TestVmaType;
+  contactNom?: string | null;
+  contactEmail?: string | null;
+  // Confirmation de Marc à l'alerte du semestre.
+  confirmerSemestre?: boolean;
+};
+
+export const fetchTestsVma = (slug: string) => getJson<TestVma[]>(inst(slug, 'vma/tests'));
+export const creerTestVma = (slug: string, nouveau: NouveauTestVma) =>
+  sendJson<TestVma>('POST', inst(slug, 'vma/tests'), nouveau);
+export const revoquerTestVma = (slug: string, id: string) =>
+  sendJson<TestVma>('POST', inst(slug, `vma/tests/${encodeURIComponent(id)}/revoquer`), {});
 
 export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug, 'journal'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));

@@ -33,6 +33,8 @@ const schema = z.object({
       .optional(),
   ),
   SITE_CONTACT_TOKEN: z.preprocess(vide, z.string().min(32, '32 caractères au moins').optional()),
+  // Test de VMA : création et révocation des invitations sur le site. Distinct du jeton de relève.
+  VMA_OS_TOKEN: z.preprocess(vide, z.string().min(32, '32 caractères au moins').optional()),
 });
 
 export type Config = {
@@ -47,6 +49,8 @@ export type Config = {
   backupStatusFile: string;
   // Public website whose contact form feeds the Inbox; null when not configured.
   site: { url: string; token: string } | null;
+  // Jeton des invitations du Test de VMA ; null tant qu'il n'est pas configuré.
+  vmaOsToken: string | null;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -76,5 +80,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     realWrites: e.REAL_WRITES === 'on',
     backupStatusFile: e.BACKUP_STATUS_FILE,
     site: siteUrl && siteToken ? { url: siteUrl, token: siteToken } : null,
+    vmaOsToken: e.VMA_OS_TOKEN ?? null,
   };
 }
