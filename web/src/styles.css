@@ -3642,6 +3642,8 @@ tr.sel {
   cursor: pointer;
   padding: 10px;
   border-radius: 8px;
+  /* all: unset hérite le blanc de l'en-tête : sans couleur propre, le texte disparaît sur le fond blanc. */
+  color: var(--navy);
 }
 .dg-menu-liste button:hover {
   background: var(--gris, #e9eef5);
