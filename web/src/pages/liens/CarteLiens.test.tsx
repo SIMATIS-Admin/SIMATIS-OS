@@ -6,6 +6,7 @@ import { CarteLiens, type LigneLien } from './CarteLiens.js';
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let simulation = false;
+let creationSimulee = false;
 
 function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
@@ -17,7 +18,10 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.includes('/opportunites/recherche'))
     return json([{ id: 'o9', titre: 'Affaire trouvée', entreprise: null, clos: null }]);
   if (url.endsWith('/pipeline')) return json({ etapes: [{ id: 'detection', label: 'Détection' }] });
-  if (url.endsWith('/contacts') && method === 'POST') return json({ id: 'c-nouveau' }, 201);
+  if (url.endsWith('/contacts') && method === 'POST')
+    return creationSimulee
+      ? json({ simulation: true, message: 'Simulation : rien créé.' }, 202)
+      : json({ id: 'c-nouveau' }, 201);
   if (url.includes('/liens'))
     return json(
       simulation ? { simulation: true, message: 'Simulation : rien écrit.' } : { ok: true },
@@ -55,6 +59,7 @@ describe('CarteLiens', () => {
   beforeEach(() => {
     calls = [];
     simulation = false;
+    creationSimulee = false;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -133,5 +138,16 @@ describe('CarteLiens', () => {
     monter({ principalGerable: false });
     expect(screen.queryByRole('button', { name: /comme principal/ })).toBeNull();
     expect(screen.queryByText('Principal')).toBeNull();
+  });
+
+  it('affiche le message quand la création est simulée, sans recharger', async () => {
+    creationSimulee = true;
+    const { onChange, onMessage } = monter();
+    fireEvent.click(screen.getByRole('button', { name: '+ Ajouter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+    fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Personne simulée' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Créer' }));
+    await waitFor(() => expect(onMessage).toHaveBeenCalledWith('Simulation : rien créé.'));
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

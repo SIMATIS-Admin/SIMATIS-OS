@@ -130,6 +130,12 @@ export function CarteLiens({
     onMessage(simulation(r) ? r.message : null);
     if (!simulation(r)) onChange();
   };
+  // No id: the creation was only simulated, nothing to reload.
+  const creee = (id: string | undefined, message?: string) => {
+    setMenu('ferme');
+    onMessage(message ?? null);
+    if (id) onChange();
+  };
   const erreur = (e: unknown) => onMessage(e instanceof Error ? e.message : String(e));
   const ref = (id: string): RefFiche => ({ kind, id });
 
@@ -200,19 +206,14 @@ export function CarteLiens({
         ))}
       </ul>
       {menu === 'creer' && kind === 'contact' && (
-        <NouveauContact
-          slug={slug}
-          lierA={de}
-          onClose={() => setMenu('ferme')}
-          onCreated={() => apres({})}
-        />
+        <NouveauContact slug={slug} lierA={de} onClose={() => setMenu('ferme')} onCreated={creee} />
       )}
       {menu === 'creer' && kind === 'entreprise' && (
         <NouvelleEntreprise
           slug={slug}
           lierA={de}
           onClose={() => setMenu('ferme')}
-          onCreated={() => apres({})}
+          onCreated={creee}
         />
       )}
       {menu === 'creer' && kind === 'affaire' && (

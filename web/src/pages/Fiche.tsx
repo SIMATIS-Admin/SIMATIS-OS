@@ -265,8 +265,9 @@ function Mandat({
 }
 
 // Cards of the links a record shows. The primary link is only editable on the owning side: a deal
-// owns its primary person and organisation, a person its primary organisation.
-function cartesDe(kind: KindFiche, liens: FicheDetail['liens']): Carte[] {
+// owns its primary person and organisation, a person its primary organisation. A HubSpot record's
+// primary link is chosen in HubSpot (the next sync would put it back).
+function cartesDe(kind: KindFiche, liens: FicheDetail['liens'], hubspot: boolean): Carte[] {
   const principal = (l?: { id: string; nom: string } | null): LigneLien[] =>
     l ? [{ ...l, principal: true }] : [];
   const personnes = { titre: 'Personnes', kind: 'contact' as const };
@@ -285,10 +286,14 @@ function cartesDe(kind: KindFiche, liens: FicheDetail['liens']): Carte[] {
   };
   if (kind === 'affaire')
     return [
-      { ...personnes, principalGerable: true, lignes: liens.contacts ?? principal(liens.contact) },
+      {
+        ...personnes,
+        principalGerable: !hubspot,
+        lignes: liens.contacts ?? principal(liens.contact),
+      },
       {
         ...organisations,
-        principalGerable: true,
+        principalGerable: !hubspot,
         lignes: liens.entreprises ?? principal(liens.entreprise),
       },
     ];
@@ -296,7 +301,7 @@ function cartesDe(kind: KindFiche, liens: FicheDetail['liens']): Carte[] {
     return [
       {
         ...organisations,
-        principalGerable: true,
+        principalGerable: !hubspot,
         lignes: liens.entreprises ?? principal(liens.entreprise),
       },
       affaires,
@@ -344,7 +349,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
 
   if (!data) return message ? <div className="empty">{message}</div> : null;
   const f = data.fiche;
-  const cartes = cartesDe(kind, data.liens);
+  const cartes = cartesDe(kind, data.liens, f.origine === 'hubspot');
   const hubspot = f.origine === 'hubspot';
   const titre = enTexte(f.titre) || enTexte(f.nom);
   const shown = data.historique.filter((e) => {

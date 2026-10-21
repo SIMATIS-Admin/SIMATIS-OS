@@ -12,6 +12,9 @@ import { Modal } from './Overlay.js';
 import { jour, Tableau } from './listes/Tableau.js';
 import { SearchBox } from './SearchBox.js';
 
+// Simulated creation (no id) or created-but-not-linked answer: what to tell the person.
+const messageDe = (r: { avertissement?: string; message?: string }) => r.avertissement ?? r.message;
+
 export function NouveauContact({
   slug,
   onClose,
@@ -20,7 +23,7 @@ export function NouveauContact({
 }: {
   slug: string;
   onClose: () => void;
-  onCreated: (id: string) => void;
+  onCreated: (id: string, message?: string) => void;
   // Record the person is added from: the new one is linked to it.
   lierA?: RefFiche;
 }) {
@@ -43,7 +46,7 @@ export function NouveauContact({
       entrepriseId: entrepriseId || null,
       ...(lierA ? { lierA } : {}),
     }).then(
-      (c) => onCreated(c.id),
+      (c) => onCreated(c.id, messageDe(c)),
       (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
     );
 

@@ -10,7 +10,13 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { FicheInvalide } from './fiches.js';
-import { definirPrincipal, delierFiches, lierFiches, lireLiens } from './liens.js';
+import {
+  definirPrincipal,
+  delierFiches,
+  lierFiches,
+  lireLiens,
+  reparerPrincipaux,
+} from './liens.js';
 import { CrmIndisponible } from './service.js';
 
 const TOKEN = 'pat-eu1-fictif-0000';
@@ -139,7 +145,7 @@ describe('Liens entre fiches', () => {
     await lierFiches(t.app.db, natif, aff, ref(e1), off());
     await lierFiches(t.app.db, natif, aff, ref(e2), off());
 
-    await definirPrincipal(t.app.db, natif, aff, ref(e2), off());
+    await definirPrincipal(t.app.db, natif, aff, ref(e2));
     expect(await colonne('opportunites', 'entreprise_id', a)).toBe(e2);
 
     await delierFiches(t.app.db, natif, aff, ref(e2), off());
@@ -192,7 +198,6 @@ describe('Liens entre fiches', () => {
         natif,
         { kind: 'contact', id: c1 },
         { kind: 'entreprise', id: etrangere },
-        off(),
       ),
     ).rejects.toBeInstanceOf(FicheInvalide);
   });
@@ -279,5 +284,42 @@ describe('Liens entre fiches', () => {
     expect(portal.calls).toHaveLength(0);
     const liens = await withInstance(t.app.db, hub.id, (tx) => lireLiens(tx, 'affaire', opp));
     expect(liens.contacts.map((l) => l.nom)).toContain('Personne locale fictive');
+  });
+
+  it('laisse HubSpot choisir le principal d’un lien HubSpot', async () => {
+    const opp = await hubspotId('opportunites', '301');
+    const agathe = await hubspotId('contacts', '201');
+    const armed = { ...hub, config: { ecrituresReelles: true } };
+    portal.calls.length = 0;
+    await expect(
+      definirPrincipal(
+        t.app.db,
+        armed,
+        { kind: 'affaire', id: opp },
+        { kind: 'contact', id: agathe },
+      ),
+    ).rejects.toThrow(/dans HubSpot/);
+    expect(portal.calls).toHaveLength(0);
+  });
+
+  it('promeut un lien quand la copie du principal disparaît', async () => {
+    const a = await affaire(natif, 'Affaire orpheline fictive');
+    const c1 = await contact(natif, 'Personne disparue');
+    const c2 = await contact(natif, 'Personne restante');
+    for (const c of [c1, c2])
+      await lierFiches(
+        t.app.db,
+        natif,
+        { kind: 'affaire', id: a },
+        { kind: 'contact', id: c },
+        off(),
+      );
+    await t.owner.pool.query('update opportunites set contact_id = null where id = $1', [a]);
+    await t.owner.pool.query('delete from contacts where id = $1', [c1]);
+
+    await withInstance(t.app.db, natif.id, (tx) => reparerPrincipaux(tx));
+    expect(await colonne('opportunites', 'contact_id', a)).toBe(c2);
+    const liens = await withInstance(t.app.db, natif.id, (tx) => lireLiens(tx, 'affaire', a));
+    expect(liens.contacts.map((l) => [l.nom, l.principal])).toEqual([['Personne restante', true]]);
   });
 });

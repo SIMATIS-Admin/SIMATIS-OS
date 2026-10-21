@@ -255,7 +255,12 @@ export const fetchContact = (slug: string, id: string) =>
 export const createEntreprise = (
   slug: string,
   input: { nom: string; secteur?: string; ville?: string; lierA?: RefFiche },
-) => sendJson<{ id: string }>('POST', inst(slug, 'entreprises'), input);
+) =>
+  sendJson<{ id: string; avertissement?: string; message?: string }>(
+    'POST',
+    inst(slug, 'entreprises'),
+    input,
+  );
 export const createContact = (
   slug: string,
   input: {
@@ -265,7 +270,12 @@ export const createContact = (
     entrepriseId?: string | null;
     lierA?: RefFiche;
   },
-) => sendJson<{ id: string }>('POST', inst(slug, 'contacts'), input);
+) =>
+  sendJson<{ id: string; avertissement?: string; message?: string }>(
+    'POST',
+    inst(slug, 'contacts'),
+    input,
+  );
 
 export type ReglagesCrm = {
   frequence?: '5min' | '15min' | '1h' | '1j' | 'manuel';

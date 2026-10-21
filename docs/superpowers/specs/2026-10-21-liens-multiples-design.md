@@ -67,4 +67,4 @@ Aucun changement de requête : une affaire créée ou liée depuis une fiche app
 
 ## Points ouverts
 
-- Les types d'association HubSpot utilisés pour dissocier et pour le principal (à confirmer dans l'API au moment de l'implémentation, sans écriture réelle).
+- Le lien principal d'une fiche HubSpot se choisit dans HubSpot : l'OS ne sait pas encore écrire les types d'association « primaire » (à confirmer dans l'API, sans écriture réelle). L'étoile est donc masquée sur ces fiches, et le principal d'un lien entre fiches HubSpot revient de la synchronisation.

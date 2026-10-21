@@ -19,7 +19,7 @@ export function NouvelleEntreprise({
 }: {
   slug: string;
   onClose: () => void;
-  onCreated: (id: string) => void;
+  onCreated: (id: string, message?: string) => void;
   // Record the organisation is added from: the new one is linked to it.
   lierA?: RefFiche;
 }) {
@@ -34,7 +34,7 @@ export function NouvelleEntreprise({
       ville: ville || undefined,
       ...(lierA ? { lierA } : {}),
     }).then(
-      (e) => onCreated(e.id),
+      (e) => onCreated(e.id, e.avertissement ?? e.message),
       (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
     );
   return (

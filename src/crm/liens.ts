@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
 import { connexions } from '../connexions/schema.js';
@@ -285,23 +285,15 @@ export async function definirPrincipal(
   instance: Instance,
   a: Ref,
   b: Ref,
-  deps: ConnexionDeps,
-): Promise<{ ok: true } | SimulationFiche> {
+): Promise<{ ok: true }> {
   return withInstance(db, instance.id, async (tx) => {
     const { p, ownerId, targetId, hubspot } = await preparer(tx, a, b);
     const existant = await lienExistant(tx, p, ownerId, targetId);
     if (!existant) throw new FicheInvalide('Ces deux fiches ne sont pas liées');
-    // HubSpot's « default » association is the one it shows first: the closest thing to a primary.
-    if (hubspot) {
-      const simulation = await ecrireHubspot(
-        tx,
-        instance,
-        'association.add',
-        donnees(p, ownerId, targetId),
-        deps,
-      );
-      if (simulation) return SIMULATION;
-    }
+    // The primary of a HubSpot link is HubSpot's own (« associatedcompanyid », primary label): the
+    // next sync would put it back, so it is chosen in HubSpot.
+    if (hubspot)
+      throw new CrmIndisponible('Le lien principal d’une fiche HubSpot se choisit dans HubSpot.');
     await tx
       .update(p.link)
       .set({ principal: false })
@@ -521,4 +513,37 @@ export async function assurerLiensPrincipaux(
       } as never);
     }
   }
+}
+
+// A primary link whose record left the mirror leaves its owner with links but no primary: the
+// oldest remaining link takes over, and the single-link column follows.
+export async function reparerPrincipaux(tx: Tx): Promise<void> {
+  for (const p of PAIRES) {
+    const lignes = (await tx
+      .select({ id: p.id, owner: p.ownerFk, cible: p.targetFk })
+      .from(p.link)
+      .where(
+        and(
+          eq(p.instanceId, currentInstance),
+          sql`${p.ownerFk} not in (select ${p.ownerFk} from ${p.link} where ${p.principal})`,
+        ),
+      )
+      .orderBy(asc(p.createdAt))) as { id: string; owner: string; cible: string }[];
+    const traites = new Set<string>();
+    for (const l of lignes) {
+      if (traites.has(l.owner)) continue;
+      traites.add(l.owner);
+      await tx
+        .update(p.link)
+        .set({ principal: true })
+        .where(and(eq(p.instanceId, currentInstance), eq(p.id, l.id)));
+      await refleterPrincipal(tx, p, l.owner, l.cible);
+    }
+  }
+}
+
+// Fails early, before anything is created from a record that is not in the instance.
+export async function verifierFiche(db: Executor, instance: Instance, ref: Ref): Promise<void> {
+  const trouvee = await withInstance(db, instance.id, (tx) => ligne(tx, ref.kind, ref.id));
+  if (!trouvee) throw new FicheInvalide('Fiche introuvable dans cette instance');
 }

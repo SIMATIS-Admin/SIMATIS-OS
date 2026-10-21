@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { connexions } from '../../connexions/schema.js';
-import { remplacerLiensHubspot } from '../../crm/liens.js';
+import { remplacerLiensHubspot, reparerPrincipaux } from '../../crm/liens.js';
 import type { SyncCtx, SyncReport } from '../../connexions/types.js';
 import {
   activites,
@@ -363,6 +363,8 @@ async function retirer(tx: Tx, contactIds: string[], entrepriseIds: string[]) {
         and(eq(entreprises.instanceId, currentInstance), inArray(entreprises.id, entrepriseIds)),
       );
   }
+  // Their links went with them: owners left without a primary link get another one.
+  await reparerPrincipaux(tx);
 }
 
 // Records read from HubSpot but excluded: a copy made before (email changed since) goes away.

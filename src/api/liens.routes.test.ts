@@ -123,4 +123,18 @@ describe('Routes de liens entre fiches', () => {
       ).statusCode,
     ).toBe(400);
   });
+
+  it('ne crée rien quand la fiche à lier est introuvable', async () => {
+    const inconnu = { kind: 'entreprise', id: '00000000-0000-4000-8000-000000000000' };
+    const r = await app.inject({
+      method: 'POST',
+      url: `${base}/contacts`,
+      payload: { nom: 'Personne orpheline', lierA: inconnu },
+    });
+    expect(r.statusCode).toBe(400);
+    const { rows } = await t.owner.pool.query(
+      "select 1 from contacts where nom = 'Personne orpheline'",
+    );
+    expect(rows).toHaveLength(0);
+  });
 });

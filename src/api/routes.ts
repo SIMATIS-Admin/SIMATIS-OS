@@ -102,7 +102,7 @@ import {
   updateTache,
 } from '../crm/taches.js';
 import { TYPES_ACTIVITE } from '../crm/type-tache.js';
-import { definirPrincipal, delierFiches, lierFiches } from '../crm/liens.js';
+import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../crm/liens.js';
 import {
   ajouterNote,
   FicheInvalide,
@@ -274,10 +274,19 @@ export function registerApi(
     creer: () => Promise<T>,
   ): Promise<T> => {
     if (lierA && lierA.kind === kind) throw new FicheInvalide('Lien impossible entre ces fiches');
+    if (lierA) await verifierFiche(db, i, lierA);
     const created = await creer();
     const id = (created as { id?: unknown } | null)?.id;
-    if (lierA && typeof id === 'string')
-      await lierFiches(db, i, { kind, id }, lierA, connexionDeps);
+    if (lierA && typeof id === 'string') {
+      // The record exists by now: a refused link is reported, never turned into a failed creation
+      // (retrying would create a duplicate).
+      try {
+        await lierFiches(db, i, { kind, id }, lierA, connexionDeps);
+      } catch (error) {
+        if (!(error instanceof CrmIndisponible || error instanceof FicheInvalide)) throw error;
+        return { ...created, avertissement: `Fiche créée, mais non liée : ${error.message}` };
+      }
+    }
     return created;
   };
 
@@ -709,7 +718,7 @@ export function registerApi(
   );
   app.put<FicheRoute>(
     '/api/i/:slug/fiches/:kind/:id/liens/principal',
-    surLien((i, de, avec) => definirPrincipal(db, i, de, avec, connexionDeps)),
+    surLien((i, de, avec) => definirPrincipal(db, i, de, avec)),
   );
   app.post<FicheRoute>(
     '/api/i/:slug/fiches/:kind/:id/notes',
