@@ -824,6 +824,8 @@ export type ProjetDiag = {
   id: string;
   nom: string;
   activite: string;
+  // Facultatif tant que le projet n'est pas rattaché (voir diagnostic:rattacher).
+  entrepriseId?: string | null;
   contexte: string;
   etape: number;
   etapeMax: number;
