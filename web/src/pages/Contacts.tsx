@@ -9,6 +9,7 @@ import {
   type RefFiche,
 } from '../api.js';
 import { Modal } from './Overlay.js';
+import { fusionnerDeux, supprimerEnLot } from './listes/lots.js';
 import { jour, Tableau } from './listes/Tableau.js';
 import { SearchBox } from './SearchBox.js';
 
@@ -162,6 +163,8 @@ export function Contacts({ slug }: { slug: string }) {
             titre={(c) => c.nom}
             onOuvrir={(c) => (location.hash = `#/${slug}/fiche/contact/${c.id}`)}
             onModifier={(c, champ, v) => modifier(c.id, champ, v)}
+            onSupprimer={supprimerEnLot(slug, 'contact', () => setVersion((n) => n + 1))}
+            onFusionner={fusionnerDeux(slug, 'contact', () => setVersion((n) => n + 1))}
             colonnes={[
               {
                 cle: 'nom',

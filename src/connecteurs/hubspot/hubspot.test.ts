@@ -722,6 +722,48 @@ describe('HubSpot mirror', () => {
     expect(await count('entreprises')).toBe(before + 1);
   });
 
+  it('archives and merges records in HubSpot, and refuses OS-only records', async () => {
+    const id = async (table: string, sourceId: string) =>
+      (
+        await t.owner.pool.query<{ id: string }>(
+          `select id from ${table} where instance_id = $1 and source_id = $2`,
+          [a.id, sourceId],
+        )
+      ).rows[0]?.id;
+    const fonderie = await id('entreprises', '101');
+    const dalmas = await id('entreprises', '103');
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    const ecrire = (op: string, data: Record<string, unknown>, realWrites = true) =>
+      inA((tx) => writeVia(tx, armed, 'crm', { op, data }, { secretsDir, realWrites }));
+    portal.calls.length = 0;
+
+    await ecrire('record.archive', { kind: 'entreprise', id: fonderie });
+    await ecrire('record.merge', { kind: 'entreprise', gardeId: fonderie, absorbeId: dalmas });
+    expect(portal.calls).toEqual([
+      { method: 'DELETE', path: '/crm/v3/objects/companies/101', body: undefined },
+      {
+        method: 'POST',
+        path: '/crm/v3/objects/companies/merge',
+        body: { primaryObjectId: '101', objectIdToMerge: '103' },
+      },
+    ]);
+
+    portal.calls.length = 0;
+    const simulation = await ecrire('record.archive', { kind: 'entreprise', id: fonderie }, false);
+    expect(simulation).toMatchObject({ simulation: true });
+    expect(portal.calls).toEqual([]);
+
+    const locale = (
+      await t.owner.pool.query<{ id: string }>(
+        "insert into entreprises (instance_id, nom) values ($1, 'Locale fictive') returning id",
+        [a.id],
+      )
+    ).rows[0]?.id;
+    await expect(
+      ecrire('record.archive', { kind: 'entreprise', id: locale }),
+    ).rejects.toBeInstanceOf(EcritureRefusee);
+  });
+
   it('refuses any write when the CRM is mirrored read-only', async () => {
     await inA((tx) =>
       configureConnexion(tx, {

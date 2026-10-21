@@ -14,6 +14,8 @@ import {
 } from '../api.js';
 import { eur } from '../crm.js';
 import { Icon } from '../icons.js';
+import { fusionnerDeux, supprimerEnLot } from './listes/lots.js';
+import { Tableau } from './listes/Tableau.js';
 import { Modal } from './Overlay.js';
 import { Tip } from './widgets.js';
 
@@ -326,7 +328,7 @@ function Recherche({
 
 export function Pipeline({ slug }: { slug: string }) {
   const [data, setData] = useState<PipelineData | null>(null);
-  const [mode, setMode] = useState<'board' | 'matrice'>('board');
+  const [mode, setMode] = useState<'board' | 'liste' | 'matrice'>('board');
   const [cloture, setCloture] = useState<{ id: string; r: 'gagne' | 'perdu' } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -497,6 +499,9 @@ export function Pipeline({ slug }: { slug: string }) {
           <button className={mode === 'board' ? 'on' : ''} onClick={() => setMode('board')}>
             Étapes
           </button>
+          <button className={mode === 'liste' ? 'on' : ''} onClick={() => setMode('liste')}>
+            Liste
+          </button>
           <button className={mode === 'matrice' ? 'on' : ''} onClick={() => setMode('matrice')}>
             Matrice
           </button>
@@ -556,6 +561,38 @@ export function Pipeline({ slug }: { slug: string }) {
             )}
           </div>
         </>
+      ) : mode === 'liste' ? (
+        <Tableau
+          cle="affaires"
+          lignes={data.opportunites}
+          titre={(o) => o.titre}
+          onOuvrir={(o) => ouvrir(o.id)}
+          onModifier={() => Promise.resolve()}
+          onSupprimer={supprimerEnLot(slug, 'affaire', load)}
+          onFusionner={fusionnerDeux(slug, 'affaire', load)}
+          colonnes={[
+            {
+              cle: 'titre',
+              label: 'Affaire',
+              valeur: (o) => o.titre,
+              affiche: (o) => <b>{o.titre}</b>,
+            },
+            { cle: 'entreprise', label: 'Organisation', valeur: (o) => o.entreprise },
+            { cle: 'contact', label: 'Personne', valeur: (o) => o.contact },
+            {
+              cle: 'etape',
+              label: 'Étape',
+              valeur: (o) => (o.clos ? (o.clos === 'gagne' ? 'Gagnée' : 'Perdue') : label(o.etape)),
+            },
+            {
+              cle: 'montant',
+              label: 'Montant',
+              valeur: (o) => o.montant,
+              affiche: (o) => (o.montant ? eur(o.montant) : ''),
+            },
+            { cle: 'echeance', label: 'Échéance', valeur: (o) => o.echeance },
+          ]}
+        />
       ) : (
         <div className="matrix">
           {(['eleve', 'limite'] as const).flatMap((pot) => [

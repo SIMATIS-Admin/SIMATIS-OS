@@ -8,6 +8,7 @@ import {
 } from '../api.js';
 import { eur } from '../crm.js';
 import { Modal } from './Overlay.js';
+import { fusionnerDeux, supprimerEnLot } from './listes/lots.js';
 import { jour, Tableau } from './listes/Tableau.js';
 import { SearchBox } from './SearchBox.js';
 
@@ -127,6 +128,8 @@ export function Entreprises({ slug }: { slug: string }) {
             titre={(e) => e.nom}
             onOuvrir={(e) => (location.hash = `#/${slug}/fiche/entreprise/${e.id}`)}
             onModifier={(e, champ, v) => modifier(e.id, champ, v)}
+            onSupprimer={supprimerEnLot(slug, 'entreprise', () => setVersion((n) => n + 1))}
+            onFusionner={fusionnerDeux(slug, 'entreprise', () => setVersion((n) => n + 1))}
             colonnes={[
               {
                 cle: 'nom',

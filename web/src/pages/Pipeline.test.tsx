@@ -203,4 +203,35 @@ describe('Pipeline screen', () => {
       body: { titre: 'Audit flotte', montant: 7000, etape: 'qualification' },
     });
   });
+
+  it('lists the deals and deletes the selected ones', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string; body?: string }) => {
+        const method = init?.method ?? 'GET';
+        calls.push({
+          url,
+          method,
+          body: init?.body ? (JSON.parse(init.body) as unknown) : undefined,
+        });
+        if (method === 'POST' && url.endsWith('/fiches/affaire/supprimer'))
+          return Promise.resolve(
+            new Response(JSON.stringify({ resultats: [{ id: 'o2', ok: true }] })),
+          );
+        return fakeFetch(url, init);
+      }),
+    );
+    render(<Pipeline slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Liste' }));
+    expect(await screen.findByText('Affaire o1')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Sélectionner Affaire o2'));
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer la sélection' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST')).toMatchObject({
+        url: '/api/i/simatis/fiches/affaire/supprimer',
+        body: { ids: ['o2'] },
+      }),
+    );
+  });
 });

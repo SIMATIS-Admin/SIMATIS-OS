@@ -824,6 +824,24 @@ export const delierFiche = (slug: string, de: RefFiche, avec: RefFiche) =>
   sendJson<ResultatLien>('DELETE', liensDe(slug, de), { avec });
 export const definirPrincipal = (slug: string, de: RefFiche, avec: RefFiche) =>
   sendJson<ResultatLien>('PUT', `${liensDe(slug, de)}/principal`, { avec });
+export type ResultatSuppression = {
+  id: string;
+  ok: boolean;
+  simulation?: boolean;
+  erreur?: string;
+};
+export const supprimerFiche = (slug: string, de: RefFiche) =>
+  sendJson<ResultatLien>('DELETE', fiche(slug, de.kind, de.id), {});
+export const supprimerFiches = (slug: string, kind: KindFiche, ids: string[]) =>
+  sendJson<{ resultats: ResultatSuppression[] }>('POST', inst(slug, `fiches/${kind}/supprimer`), {
+    ids,
+  });
+export const fusionnerFiches = (
+  slug: string,
+  kind: KindFiche,
+  gardeId: string,
+  absorbeId: string,
+) => sendJson<ResultatLien>('POST', `${fiche(slug, kind, gardeId)}/fusion`, { absorbeId });
 export const fetchOpportunitesRecherche = (slug: string, q: string) =>
   getJson<{ id: string; titre: string; entreprise: string | null; clos: string | null }[]>(
     inst(slug, `opportunites/recherche?q=${encodeURIComponent(q)}`),

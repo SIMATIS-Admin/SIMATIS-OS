@@ -95,4 +95,38 @@ describe('CRM screens', () => {
       body: { nom: 'Paul Brunet', email: 'p.brunet@exemple.test', entrepriseId: 'e1' },
     });
   });
+
+  it('deletes the selected companies in bulk and reloads the list', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string; body?: string }) => {
+        const method = init?.method ?? 'GET';
+        calls.push({
+          url,
+          method,
+          body: init?.body ? (JSON.parse(init.body) as unknown) : undefined,
+        });
+        if (method === 'POST' && url.endsWith('/fiches/entreprise/supprimer'))
+          return Promise.resolve(
+            new Response(JSON.stringify({ resultats: [{ id: 'e1', ok: true }] })),
+          );
+        return fakeFetch(url, init);
+      }),
+    );
+    render(<Entreprises slug="simatis" />);
+    fireEvent.click(await screen.findByLabelText('Sélectionner Plasturgie Mornand'));
+    const listes = () =>
+      calls.filter((c) => c.method === 'GET' && c.url.endsWith('/entreprises?q=')).length;
+    const avant = listes();
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer la sélection' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST')).toMatchObject({
+        url: '/api/i/simatis/fiches/entreprise/supprimer',
+        body: { ids: ['e1'] },
+      }),
+    );
+    expect((await screen.findByRole('status')).textContent).toContain('1 supprimée');
+    await waitFor(() => expect(listes()).toBeGreaterThan(avant));
+  });
 });
