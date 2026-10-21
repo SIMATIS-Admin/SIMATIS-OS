@@ -2824,6 +2824,32 @@ textarea.input {
   padding: 5px 0;
   border-bottom: 1px solid var(--line-2);
 }
+.fi-menu,
+.fi-lier {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line-2);
+}
+.fi-menu .btn {
+  color: var(--ink);
+}
+.fi-lier .input {
+  width: 100%;
+}
+.fi-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fi-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
 .fi-avenir {
   display: flex;
   align-items: center;

@@ -133,6 +133,20 @@ describe('Fiche page', () => {
     expect(screen.getByText('Budget validé')).toBeTruthy();
   });
 
+  it('shows « + Ajouter » on the people and deals cards, even empty', async () => {
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    expect(await screen.findByRole('heading', { name: 'Agathe Vallière' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Organisations (1)' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Affaires (1)' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: '+ Ajouter' })).toHaveLength(2);
+  });
+
+  it('lists every person and organisation of a deal', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    expect(await screen.findByRole('heading', { name: 'Personnes (1)' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Organisations (1)' })).toBeTruthy();
+  });
+
   it('creates the mandate of a deal of the own activity in two clicks', async () => {
     mandat = null;
     render(<Fiche slug="simatis" kind="affaire" id="o1" />);

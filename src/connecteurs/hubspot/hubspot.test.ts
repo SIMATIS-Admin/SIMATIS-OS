@@ -538,6 +538,65 @@ describe('HubSpot mirror', () => {
     ]);
   });
 
+  it('adds and removes associations between deals, contacts and companies', async () => {
+    const id = async (table: string, sourceId: string) =>
+      (
+        await t.owner.pool.query<{ id: string }>(
+          `select id from ${table} where instance_id = $1 and source_id = $2`,
+          [a.id, sourceId],
+        )
+      ).rows[0]?.id;
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    const ecrire = (op: string, data: Record<string, unknown>) =>
+      inA((tx) => writeVia(tx, armed, 'crm', { op, data }, { secretsDir, realWrites: true }));
+    const opp = await id('opportunites', '301');
+    const agathe = await id('contacts', '201');
+    const dalmas = await id('entreprises', '103');
+    portal.calls.length = 0;
+
+    await ecrire('association.add', { de: 'affaire', deId: opp, vers: 'contact', versId: agathe });
+    await ecrire('association.remove', {
+      de: 'affaire',
+      deId: opp,
+      vers: 'entreprise',
+      versId: dalmas,
+    });
+    await ecrire('association.add', {
+      de: 'contact',
+      deId: agathe,
+      vers: 'entreprise',
+      versId: dalmas,
+    });
+    expect(portal.calls.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      'PUT /crm/v4/objects/deals/301/associations/default/contacts/201',
+      'DELETE /crm/v4/objects/deals/301/associations/companies/103',
+      'PUT /crm/v4/objects/contacts/201/associations/default/companies/103',
+    ]);
+  });
+
+  it('refuses an association on a record that is not in HubSpot', async () => {
+    const armed = { ...a, config: { ecrituresReelles: true } };
+    const ecrire = (op: string, data: Record<string, unknown>) =>
+      inA((tx) => writeVia(tx, armed, 'crm', { op, data }, { secretsDir, realWrites: true }));
+    const natif = (
+      await t.owner.pool.query<{ id: string }>(
+        `insert into contacts (instance_id, nom) values ($1, 'Contact local fictif') returning id`,
+        [a.id],
+      )
+    ).rows[0]?.id;
+    const dalmas = (
+      await t.owner.pool.query<{ id: string }>(
+        "select id from entreprises where instance_id = $1 and source_id = '103'",
+        [a.id],
+      )
+    ).rows[0]?.id;
+    portal.calls.length = 0;
+    await expect(
+      ecrire('association.add', { de: 'contact', deId: natif, vers: 'entreprise', versId: dalmas }),
+    ).rejects.toThrow(/n'existe pas dans HubSpot/);
+    expect(portal.calls).toHaveLength(0);
+  });
+
   it('creates a deal in its stage and pipeline, linked to its contact and company', async () => {
     const id = async (table: string, sourceId: string) =>
       (

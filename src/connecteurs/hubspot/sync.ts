@@ -1,5 +1,6 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { connexions } from '../../connexions/schema.js';
+import { remplacerLiensHubspot, reparerPrincipaux } from '../../crm/liens.js';
 import type { SyncCtx, SyncReport } from '../../connexions/types.js';
 import {
   activites,
@@ -80,6 +81,25 @@ async function upsert(
   }
 }
 
+const premiers = (m: Map<string, string[]>): Map<string, string> =>
+  new Map([...m].flatMap(([k, v]) => (v[0] ? [[k, v[0]] as [string, string]] : [])));
+
+// Links of each copied record as local ids, the first one being the primary.
+function liensDe(
+  lus: { sourceId: string; cibles: (string | null)[] }[],
+  existing: Map<string, string>,
+  local: (sourceId: string | null) => string | null,
+) {
+  const out = new Map<string, { cibles: string[]; principal: string | null }>();
+  for (const { sourceId, cibles } of lus) {
+    const owner = existing.get(sourceId);
+    if (!owner) continue;
+    const ids = [...new Set(cibles.map(local).filter((c): c is string => c !== null))];
+    out.set(owner, { cibles: ids, principal: ids[0] ?? null });
+  }
+  return out;
+}
+
 export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<SyncReport> {
   const reglages = parseReglages(ctx.reglages);
   const exclus = reglages.champsExclus;
@@ -155,6 +175,26 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
       );
     }
     for (const [k, v] of existing) contactIds.set(k, v);
+    const toCompanies = await client.allAssociations(
+      'contacts',
+      'companies',
+      list.map((c) => c.id),
+    );
+    const companyLiens = await resolve(entreprises, companyIds, [...toCompanies.values()].flat());
+    await remplacerLiensHubspot(
+      ctx.tx,
+      'contact',
+      'entreprise',
+      liensDe(
+        list.map((c) => ({
+          sourceId: c.id,
+          // The associated company comes first: HubSpot's own notion of the primary one.
+          cibles: [c.properties.associatedcompanyid ?? null, ...(toCompanies.get(c.id) ?? [])],
+        })),
+        existing,
+        companyLiens,
+      ),
+    );
   }
 
   const dealIds = new Map<string, string>();
@@ -167,11 +207,13 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
     const deals = await read('deals', proprietesDatesEtapes(etapes));
     report.lus += deals.length;
     const ids = deals.map((d) => d.id);
-    const toCompany = await client.firstAssociations('deals', 'companies', ids);
-    const toContact = await client.firstAssociations('deals', 'contacts', ids);
+    const toCompanies = await client.allAssociations('deals', 'companies', ids);
+    const toContacts = await client.allAssociations('deals', 'contacts', ids);
+    const toCompany = premiers(toCompanies);
+    const toContact = premiers(toContacts);
     const existing = await localIds(ctx.tx, opportunites, ids);
-    const company = await resolve(entreprises, companyIds, [...toCompany.values()]);
-    const contact = await resolve(contacts, contactIds, [...toContact.values()]);
+    const company = await resolve(entreprises, companyIds, [...toCompanies.values()].flat());
+    const contact = await resolve(contacts, contactIds, [...toContacts.values()].flat());
     for (const d of deals) {
       await upsert(
         ctx.tx,
@@ -187,6 +229,14 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
       );
     }
     for (const [k, v] of existing) dealIds.set(k, v);
+    const liensDeals = (assoc: Map<string, string[]>, cible: (s: string | null) => string | null) =>
+      liensDe(
+        deals.map((d) => ({ sourceId: d.id, cibles: assoc.get(d.id) ?? [] })),
+        existing,
+        cible,
+      );
+    await remplacerLiensHubspot(ctx.tx, 'affaire', 'contact', liensDeals(toContacts, contact));
+    await remplacerLiensHubspot(ctx.tx, 'affaire', 'entreprise', liensDeals(toCompanies, company));
   }
 
   if (suit('taches')) {
@@ -313,6 +363,8 @@ async function retirer(tx: Tx, contactIds: string[], entrepriseIds: string[]) {
         and(eq(entreprises.instanceId, currentInstance), inArray(entreprises.id, entrepriseIds)),
       );
   }
+  // Their links went with them: owners left without a primary link get another one.
+  await reparerPrincipaux(tx);
 }
 
 // Records read from HubSpot but excluded: a copy made before (email changed since) goes away.

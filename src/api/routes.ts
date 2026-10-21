@@ -102,6 +102,7 @@ import {
   updateTache,
 } from '../crm/taches.js';
 import { TYPES_ACTIVITE } from '../crm/type-tache.js';
+import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../crm/liens.js';
 import {
   ajouterNote,
   FicheInvalide,
@@ -189,6 +190,10 @@ const contactSchema = z.object({
   role: texte,
   entrepriseId: z.uuid().nullish(),
 });
+// Record a new one is created from (a person or deal added from an organisation's page): the new
+// record is linked to it right after its creation.
+const lierASchema = z.object({ kind: z.enum(['affaire', 'contact', 'entreprise']), id: z.uuid() });
+const avecSchema = z.object({ avec: lierASchema }).strict();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const favorisSchema = z.object({
   favoris: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,40}$/)).max(30),
@@ -260,6 +265,31 @@ export function registerApi(
     byId((i, id) => getContact(db, i, id)),
   );
 
+  // Creates, then links to the record the form was opened from. The pair is checked first so a
+  // refused link never leaves a created record behind.
+  const creeEtLie = async <T>(
+    kind: Kind,
+    lierA: z.infer<typeof lierASchema> | undefined,
+    i: Instance,
+    creer: () => Promise<T>,
+  ): Promise<T> => {
+    if (lierA && lierA.kind === kind) throw new FicheInvalide('Lien impossible entre ces fiches');
+    if (lierA) await verifierFiche(db, i, lierA);
+    const created = await creer();
+    const id = (created as { id?: unknown } | null)?.id;
+    if (lierA && typeof id === 'string') {
+      // The record exists by now: a refused link is reported, never turned into a failed creation
+      // (retrying would create a duplicate).
+      try {
+        await lierFiches(db, i, { kind, id }, lierA, connexionDeps);
+      } catch (error) {
+        if (!(error instanceof CrmIndisponible || error instanceof FicheInvalide)) throw error;
+        return { ...created, avertissement: `Fiche créée, mais non liée : ${error.message}` };
+      }
+    }
+    return created;
+  };
+
   type Create = SlugParams & { Body: unknown };
   const creation = <S extends z.ZodType>(
     schema: S,
@@ -275,16 +305,21 @@ export function registerApi(
         return reply.code(simulated ? 202 : 201).send(created);
       } catch (error) {
         if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+        if (error instanceof FicheInvalide) return reply.code(400).send({ error: error.message });
         throw error;
       }
     });
   app.post<Create>(
     '/api/i/:slug/entreprises',
-    creation(entrepriseSchema, (i, input) => createEntreprise(db, i, input, connexionDeps)),
+    creation(entrepriseSchema.extend({ lierA: lierASchema.optional() }), (i, { lierA, ...input }) =>
+      creeEtLie('entreprise', lierA, i, () => createEntreprise(db, i, input, connexionDeps)),
+    ),
   );
   app.post<Create>(
     '/api/i/:slug/contacts',
-    creation(contactSchema, (i, input) => createContact(db, i, input, connexionDeps)),
+    creation(contactSchema.extend({ lierA: lierASchema.optional() }), (i, { lierA, ...input }) =>
+      creeEtLie('contact', lierA, i, () => createContact(db, i, input, connexionDeps)),
+    ),
   );
 
   app.get<SlugParams>(
@@ -654,6 +689,37 @@ export function registerApi(
       }
     }),
   );
+  // Links between records, HubSpot-like: add, remove, choose the primary one.
+  const surLien = (
+    action: (
+      i: Instance,
+      de: { kind: Kind; id: string },
+      avec: z.infer<typeof lierASchema>,
+    ) => ReturnType<typeof lierFiches>,
+  ) =>
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      const kind = ficheParams(request.params);
+      if (!kind) return reply.code(404).send({ error: 'Fiche introuvable' });
+      const parsed = avecSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Lien invalide' });
+      try {
+        return await action(i, { kind, id: request.params.id }, parsed.data.avec);
+      } catch (error) {
+        return ficheErreur(error, reply);
+      }
+    });
+  app.post<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/liens',
+    surLien((i, de, avec) => lierFiches(db, i, de, avec, connexionDeps)),
+  );
+  app.delete<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/liens',
+    surLien((i, de, avec) => delierFiches(db, i, de, avec, connexionDeps)),
+  );
+  app.put<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/liens/principal',
+    surLien((i, de, avec) => definirPrincipal(db, i, de, avec)),
+  );
   app.post<FicheRoute>(
     '/api/i/:slug/fiches/:kind/:id/notes',
     onInstance<FicheRoute>(async (i, request, reply) => {
@@ -918,6 +984,7 @@ export function registerApi(
       echeance: z.iso.date().nullable().optional(),
       contactId: z.uuid().nullable().optional(),
       entrepriseId: z.uuid().nullable().optional(),
+      lierA: lierASchema.optional(),
     })
     .strict();
   app.post<SlugParams & { Body: unknown }>(
@@ -926,9 +993,12 @@ export function registerApi(
       const parsed = nouvelleOppSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Opportunité invalide' });
       try {
-        return await createOpportunite(db, i, parsed.data, connexionDeps);
+        const { lierA, ...input } = parsed.data;
+        return await creeEtLie('affaire', lierA, i, () =>
+          createOpportunite(db, i, input, connexionDeps),
+        );
       } catch (error) {
-        if (error instanceof ChangementInvalide)
+        if (error instanceof ChangementInvalide || error instanceof FicheInvalide)
           return reply.code(400).send({ error: error.message });
         if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
         throw error;

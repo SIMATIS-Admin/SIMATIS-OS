@@ -8,6 +8,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
+import { assurerLiensPrincipaux, lireLiens, type LienFiche } from './liens.js';
 import { pipelineSource } from './pipeline.js';
 import { activites, contacts, entreprises, opportunites, taches } from './schema.js';
 import { CrmIndisponible } from './service.js';
@@ -39,8 +40,11 @@ export type Fiche = {
       etape: string;
       clos: string | null;
       montant: number | null;
+      principal: boolean;
     }[];
-    contacts?: Lien[];
+    // All links (HubSpot-like many-to-many); `contact` and `entreprise` above are the primary ones.
+    contacts?: LienFiche[];
+    entreprises?: LienFiche[];
   };
   aVenir: TacheVue[];
   historique: Evenement[];
@@ -85,22 +89,10 @@ async function lien(tx: Tx, kind: 'contact' | 'entreprise', id: string | null) {
 // Which history rows and tasks belong to the record (a company gathers its contacts and deals).
 async function portee(tx: Tx, kind: Kind, id: string) {
   if (kind === 'affaire') return { contacts: [] as string[], opps: [id], entreprise: null };
-  if (kind === 'contact') {
-    const opps = await tx
-      .select({ id: opportunites.id })
-      .from(opportunites)
-      .where(and(eq(opportunites.instanceId, currentInstance), eq(opportunites.contactId, id)));
-    return { contacts: [id], opps: opps.map((o) => o.id), entreprise: null };
-  }
-  const cs = await tx
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(and(eq(contacts.instanceId, currentInstance), eq(contacts.entrepriseId, id)));
-  const os = await tx
-    .select({ id: opportunites.id })
-    .from(opportunites)
-    .where(and(eq(opportunites.instanceId, currentInstance), eq(opportunites.entrepriseId, id)));
-  return { contacts: cs.map((c) => c.id), opps: os.map((o) => o.id), entreprise: id };
+  const liens = await lireLiens(tx, kind, id);
+  const opps = liens.affaires.map((o) => o.id);
+  if (kind === 'contact') return { contacts: [id], opps, entreprise: null };
+  return { contacts: liens.contacts.map((c) => c.id), opps, entreprise: id };
 }
 
 function lie(
@@ -164,6 +156,9 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
     const o = row as typeof opportunites.$inferSelect;
     liens.entreprise = await lien(tx, 'entreprise', o.entrepriseId);
     liens.contact = await lien(tx, 'contact', o.contactId);
+    const multiples = await lireLiens(tx, kind, id);
+    liens.contacts = multiples.contacts;
+    liens.entreprises = multiples.entreprises;
     const src = await pipelineSource(tx);
     const toutes = src.hubspot?.etapes ?? src.etapes.map((e) => ({ ...e, probabilite: null }));
     const dates = o.etapesDates;
@@ -194,30 +189,22 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
           origine: origine(o.source),
         });
     }
-  } else if (kind === 'contact') {
-    const c = row as typeof contacts.$inferSelect;
-    liens.entreprise = await lien(tx, 'entreprise', c.entrepriseId);
   } else {
-    liens.contacts = (
-      await tx
-        .select({ id: contacts.id, nom: contacts.nom })
-        .from(contacts)
-        .where(inArray(contacts.id, p.contacts.length ? p.contacts : [id]))
-    ).filter((c) => p.contacts.includes(c.id));
-  }
-  if (kind !== 'affaire') {
-    liens.affaires = p.opps.length
-      ? await tx
-          .select({
-            id: opportunites.id,
-            titre: opportunites.titre,
-            etape: opportunites.etape,
-            clos: opportunites.clos,
-            montant: opportunites.montant,
-          })
-          .from(opportunites)
-          .where(inArray(opportunites.id, p.opps))
-      : [];
+    const multiples = await lireLiens(tx, kind, id);
+    if (kind === 'contact') {
+      const c = row as typeof contacts.$inferSelect;
+      liens.entreprise = await lien(tx, 'entreprise', c.entrepriseId);
+      liens.entreprises = multiples.entreprises;
+    } else {
+      liens.contacts = multiples.contacts;
+    }
+    liens.affaires = multiples.affaires.map(({ nom, ...o }) => ({
+      ...o,
+      titre: nom,
+      etape: o.etape ?? '',
+      clos: o.clos ?? null,
+      montant: o.montant ?? null,
+    }));
   }
 
   historique.sort((x, y) => y.at.localeCompare(x.at));
@@ -357,6 +344,9 @@ export async function updateFiche(
       .update(t)
       .set({ ...champs, updatedAt: new Date() })
       .where(and(eq(t.instanceId, currentInstance), eq(t.id, id)));
+    // The link table follows the primary link just set in the single-link column.
+    if (kind !== 'entreprise' && ('contactId' in champs || 'entrepriseId' in champs))
+      await assurerLiensPrincipaux(tx, kind, id, { retirerSiVide: true });
     await logEvent(tx, {
       acteur: 'pilote',
       action: `Fiche modifiée (${Object.keys(champs).join(', ')})`,

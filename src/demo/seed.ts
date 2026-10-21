@@ -1,4 +1,5 @@
 import { contacts, entreprises, opportunites, taches, type Qualification } from '../crm/schema.js';
+import { assurerLiensPrincipaux } from '../crm/liens.js';
 import { configureConnexion } from '../connexions/service.js';
 import type { Database, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
@@ -49,7 +50,10 @@ export async function loadDemoData(tx: Tx, instanceId: string, f: Fixture, now =
         role: c.role,
       })
       .returning({ id: contacts.id });
-    if (row) ref.set(c.ref, row.id);
+    if (row) {
+      ref.set(c.ref, row.id);
+      await assurerLiensPrincipaux(tx, 'contact', row.id);
+    }
   }
   for (const o of f.opportunites) {
     const [row] = await tx
@@ -71,7 +75,10 @@ export async function loadDemoData(tx: Tx, instanceId: string, f: Fixture, now =
         prochaineEtape: o.prochaineEtape,
       })
       .returning({ id: opportunites.id });
-    if (row) ref.set(o.ref, row.id);
+    if (row) {
+      ref.set(o.ref, row.id);
+      await assurerLiensPrincipaux(tx, 'affaire', row.id);
+    }
   }
   const enAttente: Proposition[] = [];
   for (const p of f.propositions) {

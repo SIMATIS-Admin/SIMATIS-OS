@@ -254,12 +254,28 @@ export const fetchContact = (slug: string, id: string) =>
   getJson<FicheContact>(inst(slug, `contacts/${encodeURIComponent(id)}`));
 export const createEntreprise = (
   slug: string,
-  input: { nom: string; secteur?: string; ville?: string },
-) => sendJson<{ id: string }>('POST', inst(slug, 'entreprises'), input);
+  input: { nom: string; secteur?: string; ville?: string; lierA?: RefFiche },
+) =>
+  sendJson<{ id: string; avertissement?: string; message?: string }>(
+    'POST',
+    inst(slug, 'entreprises'),
+    input,
+  );
 export const createContact = (
   slug: string,
-  input: { nom: string; fonction?: string; email?: string; entrepriseId?: string | null },
-) => sendJson<{ id: string }>('POST', inst(slug, 'contacts'), input);
+  input: {
+    nom: string;
+    fonction?: string;
+    email?: string;
+    entrepriseId?: string | null;
+    lierA?: RefFiche;
+  },
+) =>
+  sendJson<{ id: string; avertissement?: string; message?: string }>(
+    'POST',
+    inst(slug, 'contacts'),
+    input,
+  );
 
 export type ReglagesCrm = {
   frequence?: '5min' | '15min' | '1h' | '1j' | 'manuel';
@@ -373,6 +389,7 @@ export const createOpportunite = (
     echeance: string | null;
     entrepriseId: string | null;
     contactId: string | null;
+    lierA?: RefFiche;
   },
 ) => sendJson<PipelineOpp | SimulationTache>('POST', inst(slug, 'opportunites'), input);
 export const saveReglagesPipeline = (slug: string, inactiviteJours: number) =>
@@ -753,6 +770,8 @@ export type Evenement = {
   at: string;
   origine: 'hubspot' | 'os';
 };
+export type LienFiche = { id: string; nom: string; principal: boolean };
+export type RefFiche = { kind: KindFiche; id: string };
 export type FicheDetail = {
   kind: KindFiche;
   fiche: Record<string, unknown> & { id: string; origine: 'hubspot' | 'os' };
@@ -765,8 +784,11 @@ export type FicheDetail = {
       etape: string;
       clos: string | null;
       montant: number | null;
+      principal?: boolean;
     }[];
-    contacts?: { id: string; nom: string }[];
+    // Every link (HubSpot-like many-to-many); `contact` and `entreprise` are the primary ones.
+    contacts?: LienFiche[];
+    entreprises?: LienFiche[];
   };
   aVenir: TacheVue[];
   historique: Evenement[];
@@ -791,6 +813,14 @@ export const noteFiche = (
   id: string,
   note: { corps: string; hubspot: boolean },
 ) => sendJson<FicheDetail | SimulationTache>('POST', `${fiche(slug, kind, id)}/notes`, note);
+const liensDe = (slug: string, de: RefFiche) => `${fiche(slug, de.kind, de.id)}/liens`;
+type ResultatLien = { ok: true } | SimulationTache;
+export const lierFiche = (slug: string, de: RefFiche, avec: RefFiche) =>
+  sendJson<ResultatLien>('POST', liensDe(slug, de), { avec });
+export const delierFiche = (slug: string, de: RefFiche, avec: RefFiche) =>
+  sendJson<ResultatLien>('DELETE', liensDe(slug, de), { avec });
+export const definirPrincipal = (slug: string, de: RefFiche, avec: RefFiche) =>
+  sendJson<ResultatLien>('PUT', `${liensDe(slug, de)}/principal`, { avec });
 export const fetchOpportunitesRecherche = (slug: string, q: string) =>
   getJson<{ id: string; titre: string; entreprise: string | null; clos: string | null }[]>(
     inst(slug, `opportunites/recherche?q=${encodeURIComponent(q)}`),

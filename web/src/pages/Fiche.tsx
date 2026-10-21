@@ -3,8 +3,6 @@ import {
   changeOpportunite,
   createTache,
   creerMandatDepuisAffaire,
-  fetchContacts,
-  fetchEntreprises,
   fetchFiche,
   fetchInstances,
   lierMandat,
@@ -19,6 +17,7 @@ import {
 import { eur } from '../crm.js';
 import type { InstanceSummary } from '../nav.js';
 import { Icon } from '../icons.js';
+import { CarteLiens, type LigneLien } from './liens/CarteLiens.js';
 import { Cloture } from './Pipeline.js';
 import { ACTIVITES } from './taches/commun.js';
 import { EditionTache } from './taches/Edition.js';
@@ -147,79 +146,6 @@ function ChampEditable({
   );
 }
 
-// Change the linked contact or company by searching it.
-function LienEditable({
-  slug,
-  kind,
-  actuel,
-  modifiable,
-  onChoix,
-}: {
-  slug: string;
-  kind: 'contact' | 'entreprise';
-  actuel: { id: string; nom: string } | null | undefined;
-  modifiable: boolean;
-  onChoix: (id: string) => void;
-}) {
-  const [recherche, setRecherche] = useState<string | null>(null);
-  const [resultats, setResultats] = useState<{ id: string; nom: string }[]>([]);
-  useEffect(() => {
-    if (recherche === null || recherche.trim().length < 2) return setResultats([]);
-    const charger = kind === 'contact' ? fetchContacts : fetchEntreprises;
-    void charger(slug, recherche).then(
-      (r) => setResultats(r.slice(0, 8)),
-      () => setResultats([]),
-    );
-  }, [slug, kind, recherche]);
-  const titre = kind === 'contact' ? 'Personne' : 'Organisation';
-  return (
-    <div className="fi-champ">
-      <span className="muted small">{titre}</span>
-      {recherche === null ? (
-        <span className="fi-valeur">
-          {actuel ? (
-            <a href={lien(slug, kind, actuel.id)}>{actuel.nom}</a>
-          ) : (
-            <span className="muted">—</span>
-          )}
-          {modifiable && (
-            <button
-              className="btn ghost sm"
-              aria-label={`Changer ${titre}`}
-              onClick={() => setRecherche('')}
-            >
-              <Icon name="edit" />
-            </button>
-          )}
-        </span>
-      ) : (
-        <div>
-          <input
-            className="input"
-            aria-label={`Rechercher ${titre}`}
-            autoFocus
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setRecherche(null)}
-          />
-          {resultats.map((r) => (
-            <button
-              key={r.id}
-              className="lien fi-resultat"
-              onClick={() => {
-                setRecherche(null);
-                onChoix(r.id);
-              }}
-            >
-              {r.nom}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // A deal of the own activity close to signature becomes a mandate (copy of the company and its
 // contacts), or is linked to a mandate created before. Two clicks to create, as for a demo.
 function Mandat({
@@ -338,6 +264,58 @@ function Mandat({
   );
 }
 
+// Cards of the links a record shows. The primary link is only editable on the owning side: a deal
+// owns its primary person and organisation, a person its primary organisation. A HubSpot record's
+// primary link is chosen in HubSpot (the next sync would put it back).
+function cartesDe(kind: KindFiche, liens: FicheDetail['liens'], hubspot: boolean): Carte[] {
+  const principal = (l?: { id: string; nom: string } | null): LigneLien[] =>
+    l ? [{ ...l, principal: true }] : [];
+  const personnes = { titre: 'Personnes', kind: 'contact' as const };
+  const organisations = { titre: 'Organisations', kind: 'entreprise' as const };
+  const affaires: Carte = {
+    titre: 'Affaires',
+    kind: 'affaire',
+    principalGerable: false,
+    lignes: (liens.affaires ?? []).map((o) => ({
+      id: o.id,
+      nom: o.titre,
+      principal: o.principal ?? false,
+      detail:
+        `${o.clos ? (o.clos === 'gagne' ? '· Gagnée' : '· Perdue') : ''}${o.montant ? ` · ${eur(o.montant)}` : ''}`.trim(),
+    })),
+  };
+  if (kind === 'affaire')
+    return [
+      {
+        ...personnes,
+        principalGerable: !hubspot,
+        lignes: liens.contacts ?? principal(liens.contact),
+      },
+      {
+        ...organisations,
+        principalGerable: !hubspot,
+        lignes: liens.entreprises ?? principal(liens.entreprise),
+      },
+    ];
+  if (kind === 'contact')
+    return [
+      {
+        ...organisations,
+        principalGerable: !hubspot,
+        lignes: liens.entreprises ?? principal(liens.entreprise),
+      },
+      affaires,
+    ];
+  return [{ ...personnes, principalGerable: false, lignes: liens.contacts ?? [] }, affaires];
+}
+
+type Carte = {
+  titre: string;
+  kind: KindFiche;
+  principalGerable: boolean;
+  lignes: LigneLien[];
+};
+
 export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: string }) {
   const [data, setData] = useState<FicheDetail | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -371,6 +349,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
 
   if (!data) return message ? <div className="empty">{message}</div> : null;
   const f = data.fiche;
+  const cartes = cartesDe(kind, data.liens, f.origine === 'hubspot');
   const hubspot = f.origine === 'hubspot';
   const titre = enTexte(f.titre) || enTexte(f.nom);
   const shown = data.historique.filter((e) => {
@@ -489,61 +468,25 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                     onSave={(v) => v !== (f[c.cle] ?? null) && modifier({ [c.cle]: v })}
                   />
                 ))}
-              {kind === 'affaire' && (
-                <LienEditable
-                  slug={slug}
-                  kind="contact"
-                  actuel={data.liens.contact}
-                  modifiable={data.ecrit}
-                  onChoix={(contactId) => modifier({ contactId })}
-                />
-              )}
-              {kind !== 'entreprise' && (
-                <LienEditable
-                  slug={slug}
-                  kind="entreprise"
-                  actuel={data.liens.entreprise}
-                  modifiable={data.ecrit}
-                  onChoix={(entrepriseId) => modifier({ entrepriseId })}
-                />
-              )}
             </div>
           </section>
           {kind === 'affaire' && data.mandat !== undefined && (
             <Mandat slug={slug} id={id} mandat={data.mandat} onChange={load} />
           )}
-          {data.liens.contacts && (
-            <section className="panel">
-              <div className="panel-h">
-                <h2>Personnes ({data.liens.contacts.length})</h2>
-              </div>
-              <ul className="panel-b fi-liste">
-                {data.liens.contacts.map((c) => (
-                  <li key={c.id}>
-                    <a href={lien(slug, 'contact', c.id)}>{c.nom}</a>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          {data.liens.affaires && (
-            <section className="panel">
-              <div className="panel-h">
-                <h2>Affaires ({data.liens.affaires.length})</h2>
-              </div>
-              <ul className="panel-b fi-liste">
-                {data.liens.affaires.map((o) => (
-                  <li key={o.id}>
-                    <a href={lien(slug, 'affaire', o.id)}>{o.titre}</a>
-                    <span className="small muted">
-                      {o.clos ? (o.clos === 'gagne' ? ' · Gagnée' : ' · Perdue') : ''}
-                      {o.montant ? ` · ${eur(o.montant)}` : ''}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {cartes.map((c) => (
+            <CarteLiens
+              key={c.titre}
+              slug={slug}
+              titre={c.titre}
+              kind={c.kind}
+              de={{ kind, id }}
+              lignes={c.lignes}
+              ecrit={data.ecrit}
+              principalGerable={c.principalGerable}
+              onChange={load}
+              onMessage={setMessage}
+            />
+          ))}
         </div>
         <div className="fi-droite">
           <section className="panel">

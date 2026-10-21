@@ -10,6 +10,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
+import { assurerLiensPrincipaux } from './liens.js';
 import { createInCrm, CrmIndisponible, likePattern } from './service.js';
 
 // Native pipeline (instances without CRM, demo data): the mockup's stages (data.js ETAPES).
@@ -298,6 +299,7 @@ export async function createOpportunite(
       })
       .returning();
     if (!row) throw new Error('Opportunité non créée');
+    await assurerLiensPrincipaux(tx, 'affaire', row.id);
     await logEvent(tx, {
       acteur: 'pilote',
       action: `Opportunité créée : ${row.titre}`,

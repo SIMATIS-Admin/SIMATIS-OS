@@ -126,6 +126,68 @@ export const taches = pgTable(
   ],
 );
 
+// Many-to-many links, like HubSpot. The single-link columns (opportunites.contact_id…) stay as
+// the primary link, so the pipeline, tasks and fiches keep reading them unchanged.
+export const affaireContacts = pgTable(
+  'affaire_contacts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    opportuniteId: uuid('opportunite_id')
+      .notNull()
+      .references(() => opportunites.id, { onDelete: 'cascade' }),
+    contactId: uuid('contact_id')
+      .notNull()
+      .references(() => contacts.id, { onDelete: 'cascade' }),
+    principal: boolean('principal').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('affaire_contacts_paire_idx').on(t.instanceId, t.opportuniteId, t.contactId),
+    index('affaire_contacts_contact_idx').on(t.contactId),
+    instanceIsolation('affaire_contacts'),
+  ],
+);
+
+export const affaireEntreprises = pgTable(
+  'affaire_entreprises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    opportuniteId: uuid('opportunite_id')
+      .notNull()
+      .references(() => opportunites.id, { onDelete: 'cascade' }),
+    entrepriseId: uuid('entreprise_id')
+      .notNull()
+      .references(() => entreprises.id, { onDelete: 'cascade' }),
+    principal: boolean('principal').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('affaire_entreprises_paire_idx').on(t.instanceId, t.opportuniteId, t.entrepriseId),
+    index('affaire_entreprises_entreprise_idx').on(t.entrepriseId),
+    instanceIsolation('affaire_entreprises'),
+  ],
+);
+
+export const contactEntreprises = pgTable(
+  'contact_entreprises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    contactId: uuid('contact_id')
+      .notNull()
+      .references(() => contacts.id, { onDelete: 'cascade' }),
+    entrepriseId: uuid('entreprise_id')
+      .notNull()
+      .references(() => entreprises.id, { onDelete: 'cascade' }),
+    principal: boolean('principal').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('contact_entreprises_paire_idx').on(t.instanceId, t.contactId, t.entrepriseId),
+    index('contact_entreprises_entreprise_idx').on(t.entrepriseId),
+    instanceIsolation('contact_entreprises'),
+  ],
+);
+
 // Contact or company a Google meeting is about, chosen by the pilot when the guests' emails
 // do not tell it (Google has no such notion: the link lives in the OS only).
 export const rdvLiens = pgTable(

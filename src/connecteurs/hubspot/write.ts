@@ -52,6 +52,14 @@ const defini = (associationTypeId: number) => ({
   associationTypeId,
 });
 
+// Local kind of a link end → its table and HubSpot object type.
+function lienHubspot(kind: unknown): { table: Table; objet: string } {
+  if (kind === 'affaire') return { table: opportunites, objet: 'deals' };
+  if (kind === 'contact') return { table: contacts, objet: 'contacts' };
+  if (kind === 'entreprise') return { table: entreprises, objet: 'companies' };
+  throw new EcritureRefusee('Type de fiche inconnu');
+}
+
 export async function writeHubspot(
   ctx: SyncCtx,
   op: WriteOp,
@@ -166,6 +174,23 @@ export async function writeHubspot(
         if (contact) await associer('deals', id, 'contacts', contact);
         if (company) await associer('deals', id, 'companies', company);
         return { id };
+      };
+      break;
+    }
+    case 'association.add':
+    case 'association.remove': {
+      const de = lienHubspot(d.de);
+      const vers = lienHubspot(d.vers);
+      const from = await hubspotId(ctx, de.table, d.deId);
+      const to = await hubspotId(ctx, vers.table, d.versId);
+      call = async () => {
+        if (op.op === 'association.add') await associer(de.objet, from, vers.objet, to);
+        else
+          await client.request(
+            'DELETE',
+            `/crm/v4/objects/${de.objet}/${from}/associations/${vers.objet}/${to}`,
+          );
+        return { id: from };
       };
       break;
     }

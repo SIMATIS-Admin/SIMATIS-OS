@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { contacts, entreprises, opportunites } from '../crm/schema.js';
+import { assurerLiensPrincipaux } from '../crm/liens.js';
 import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
@@ -100,19 +101,23 @@ export async function creerMandatDepuisAffaire(
         })
         .returning({ id: entreprises.id });
       if (personnes.length > 0) {
-        await itx.insert(contacts).values(
-          personnes.map((c) => ({
-            instanceId: mandat.id,
-            source: 'simatis',
-            sourceId: c.id,
-            entrepriseId: copie?.id ?? null,
-            nom: c.nom,
-            fonction: c.fonction,
-            email: c.email,
-            telephone: c.telephone,
-            role: c.role,
-          })),
-        );
+        const copies = await itx
+          .insert(contacts)
+          .values(
+            personnes.map((c) => ({
+              instanceId: mandat.id,
+              source: 'simatis',
+              sourceId: c.id,
+              entrepriseId: copie?.id ?? null,
+              nom: c.nom,
+              fonction: c.fonction,
+              email: c.email,
+              telephone: c.telephone,
+              role: c.role,
+            })),
+          )
+          .returning({ id: contacts.id });
+        for (const c of copies) await assurerLiensPrincipaux(itx, 'contact', c.id);
       }
       await brancherConnexions(itx, crm);
       await logEvent(itx, {
