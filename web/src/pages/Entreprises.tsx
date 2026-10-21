@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { createEntreprise, fetchEntreprises, patchFiche, type Entreprise } from '../api.js';
+import {
+  createEntreprise,
+  fetchEntreprises,
+  patchFiche,
+  type Entreprise,
+  type RefFiche,
+} from '../api.js';
 import { eur } from '../crm.js';
 import { Modal } from './Overlay.js';
 import { jour, Tableau } from './listes/Tableau.js';
@@ -9,10 +15,13 @@ export function NouvelleEntreprise({
   slug,
   onClose,
   onCreated,
+  lierA,
 }: {
   slug: string;
   onClose: () => void;
   onCreated: (id: string) => void;
+  // Record the organisation is added from: the new one is linked to it.
+  lierA?: RefFiche;
 }) {
   const [nom, setNom] = useState('');
   const [secteur, setSecteur] = useState('');
@@ -23,6 +32,7 @@ export function NouvelleEntreprise({
       nom,
       secteur: secteur || undefined,
       ville: ville || undefined,
+      ...(lierA ? { lierA } : {}),
     }).then(
       (e) => onCreated(e.id),
       (e: unknown) => setError(e instanceof Error ? e.message : String(e)),

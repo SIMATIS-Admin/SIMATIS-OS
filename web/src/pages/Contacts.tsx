@@ -6,6 +6,7 @@ import {
   type Contact,
   type Entreprise,
   patchFiche,
+  type RefFiche,
 } from '../api.js';
 import { Modal } from './Overlay.js';
 import { jour, Tableau } from './listes/Tableau.js';
@@ -15,10 +16,13 @@ export function NouveauContact({
   slug,
   onClose,
   onCreated,
+  lierA,
 }: {
   slug: string;
   onClose: () => void;
   onCreated: (id: string) => void;
+  // Record the person is added from: the new one is linked to it.
+  lierA?: RefFiche;
 }) {
   const [nom, setNom] = useState('');
   const [fonction, setFonction] = useState('');
@@ -37,6 +41,7 @@ export function NouveauContact({
       fonction: fonction || undefined,
       email: email || undefined,
       entrepriseId: entrepriseId || null,
+      ...(lierA ? { lierA } : {}),
     }).then(
       (c) => onCreated(c.id),
       (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
@@ -61,21 +66,23 @@ export function NouveauContact({
           onChange={(e) => setEmail(e.target.value)}
         />
       </label>
-      <label className="field">
-        <span>Entreprise</span>
-        <select
-          className="input"
-          value={entrepriseId}
-          onChange={(e) => setEntrepriseId(e.target.value)}
-        >
-          <option value="">Aucune</option>
-          {entreprises.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.nom}
-            </option>
-          ))}
-        </select>
-      </label>
+      {lierA?.kind !== 'entreprise' && (
+        <label className="field">
+          <span>Entreprise</span>
+          <select
+            className="input"
+            value={entrepriseId}
+            onChange={(e) => setEntrepriseId(e.target.value)}
+          >
+            <option value="">Aucune</option>
+            {entreprises.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nom}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {error && (
         <p className="small" style={{ color: 'var(--red)' }}>
           {error}
