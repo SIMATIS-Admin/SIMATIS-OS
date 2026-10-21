@@ -483,6 +483,8 @@ export type TacheVue = {
   contact: { id: string; nom: string; email?: string | null; telephone?: string | null } | null;
   entreprise?: { id: string; nom: string } | null;
   opportunite: { id: string; titre: string; clos: 'gagne' | 'perdu' | null } | null;
+  // Set by the Agenda: Mon activité also lists the tasks of its mandates.
+  instance?: { slug: string; nom: string; couleur: string | null };
 };
 // A Google Agenda event as the Agenda shows it; `couleur` is the event's own Google colour.
 export type RdvAgenda = {
@@ -503,6 +505,7 @@ export type SemaineTaches = {
   rdvEtat: 'ok' | 'non_configure' | 'erreur';
   hubspot: boolean;
   ecrit: boolean;
+  instances: { slug: string; nom: string; couleur: string | null }[];
 };
 export type SimulationTache = { simulation: true; message: string };
 export type TacheSaisie = {

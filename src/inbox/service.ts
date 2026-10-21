@@ -7,7 +7,7 @@ import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
-import { listInstances } from '../instances/service.js';
+import { perimetre } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import { enrichirPropositions } from '../pilotage/validations.js';
 import { propositions } from '../propositions/schema.js';
@@ -126,14 +126,6 @@ async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise
     instance: { slug: instance.slug, nom: instance.nom, couleur: instance.config.couleur ?? null },
     proposition: liees.find((p) => p.id === s.propositionId) ?? null,
   }));
-}
-
-// Mon activité sees its own subjects plus those of every active mandate (signed or in closing);
-// a mandate or a demo sees only its own.
-async function perimetre(db: Executor, instance: Instance): Promise<Instance[]> {
-  if (instance.type !== 'propre') return [instance];
-  const mandats = (await listInstances(db)).filter((i) => i.type === 'mandat');
-  return [instance, ...mandats];
 }
 
 const condition = (filtre: FiltreInbox): SQL | undefined => {

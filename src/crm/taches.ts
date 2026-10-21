@@ -7,6 +7,7 @@ import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
+import { perimetre } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import { rendezVous } from '../pilotage/brief.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
@@ -129,7 +130,10 @@ export async function crmHubspot(tx: Tx) {
     .select({ fournisseur: connexions.fournisseur, reglages: connexions.reglages })
     .from(connexions)
     .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'crm')));
-  return crm?.fournisseur === 'hubspot' ? parseReglages(crm.reglages) : null;
+  if (crm?.fournisseur !== 'hubspot') return null;
+  const reglages = parseReglages(crm.reglages);
+  // A CRM that does not follow tasks (not yet connected, say) leaves them in the OS.
+  return reglages.objets.includes('taches') ? reglages : null;
 }
 
 // The week (Paris days, `au` included), plus open tasks overdue or without a due date.
@@ -144,25 +148,45 @@ export async function listTaches(
   const fin = zoned(decaler(periode.au, 1), '00:00', FUSEAU);
   const aujourdhui = zoned(jourDe(maintenant, FUSEAU), '00:00', FUSEAU);
   const dansLaSemaine = and(gte(taches.echeance, debut), lt(taches.echeance, fin));
-  const data = await withInstance(db, instance.id, async (tx) => {
-    const ouverte = isNull(taches.faitAt);
-    return {
-      taches: await vues(tx, dansLaSemaine),
-      // Overdue is relative to today; a task of the week shown stays in its day.
-      enRetard: await vues(
-        tx,
-        and(ouverte, lt(taches.echeance, aujourdhui), not(dansLaSemaine ?? sql`false`)),
-      ),
-      sansEcheance: await vues(tx, and(ouverte, isNull(taches.echeance))),
-      crm: await crmHubspot(tx),
-      agenda: (
-        await tx
-          .select({ fournisseur: connexions.fournisseur, reglages: connexions.reglages })
-          .from(connexions)
-          .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'agenda')))
-      )[0],
-    };
-  });
+  const ouverte = isNull(taches.faitAt);
+  // Mon activité also lists the tasks of every mandate, each read in its own isolated transaction.
+  const perimetreInstances = await perimetre(db, instance);
+  const refDe = (i: Instance) => ({ slug: i.slug, nom: i.nom, couleur: i.config.couleur ?? null });
+  const parInstance = await Promise.all(
+    perimetreInstances.map((i) =>
+      withInstance(db, i.id, async (tx) => {
+        const ref = refDe(i);
+        const avecInstance = async (where: SQL | undefined) =>
+          (await vues(tx, where)).map((v) => ({ ...v, instance: ref }));
+        return {
+          taches: await avecInstance(dansLaSemaine),
+          // Overdue is relative to today; a task of the week shown stays in its day.
+          enRetard: await avecInstance(
+            and(ouverte, lt(taches.echeance, aujourdhui), not(dansLaSemaine ?? sql`false`)),
+          ),
+          sansEcheance: await avecInstance(and(ouverte, isNull(taches.echeance))),
+        };
+      }),
+    ),
+  );
+  const parEcheance = (a: TacheVue, b: TacheVue) =>
+    (a.echeance ? Date.parse(a.echeance) : Infinity) -
+    (b.echeance ? Date.parse(b.echeance) : Infinity);
+  const reunir = (cle: 'taches' | 'enRetard' | 'sansEcheance') =>
+    parInstance.flatMap((p) => p[cle]).sort(parEcheance);
+  // The CRM and the calendar are the viewed instance's own.
+  const data = await withInstance(db, instance.id, async (tx) => ({
+    taches: reunir('taches'),
+    enRetard: reunir('enRetard'),
+    sansEcheance: reunir('sansEcheance'),
+    crm: await crmHubspot(tx),
+    agenda: (
+      await tx
+        .select({ fournisseur: connexions.fournisseur, reglages: connexions.reglages })
+        .from(connexions)
+        .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'agenda')))
+    )[0],
+  }));
   const { rdv, etat } = await rendezVous(instance, data.agenda, deps, debut, fin);
   return {
     taches: data.taches,
@@ -172,6 +196,7 @@ export async function listTaches(
     rdvEtat: etat,
     hubspot: data.crm !== null,
     ecrit: data.crm?.sens === 'deux_sens',
+    instances: perimetreInstances.map(refDe),
   };
 }
 

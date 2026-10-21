@@ -8,6 +8,7 @@ let calls: Call[] = [];
 let hubspot = true;
 let patchReponse: unknown = null;
 let ensuite = true;
+let plusieurs = false;
 let oppClose: 'gagne' | 'perdu' | null = null;
 
 const tache = (id: string, titre: string, extra: Record<string, unknown> = {}) => ({
@@ -87,6 +88,12 @@ const semaine = () => ({
   rdvEtat: 'ok',
   hubspot,
   ecrit: true,
+  instances: plusieurs
+    ? [
+        { slug: 'simatis', nom: 'SIMATIS', couleur: null },
+        { slug: 'mandat-a', nom: 'Mandat A', couleur: null },
+      ]
+    : [{ slug: 'simatis', nom: 'SIMATIS', couleur: null }],
 });
 
 function fakeFetch(url: string, init?: { method?: string; body?: string }) {
@@ -118,6 +125,7 @@ describe('Tâches screen', () => {
     hubspot = true;
     patchReponse = null;
     ensuite = true;
+    plusieurs = false;
     oppClose = null;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
@@ -184,6 +192,46 @@ describe('Tâches screen', () => {
       url: '/api/i/simatis/taches/t1',
       body: { fait: true },
     });
+  });
+
+  it("filters Mon activité's tasks by instance, and acts on a task through its own instance", async () => {
+    plusieurs = true;
+    const base = semaine;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string; body?: string }) => {
+        if (!url.includes('/taches?')) return fakeFetch(url, init);
+        const s = base();
+        const de = (slug: string, nom: string) => ({ slug, nom, couleur: null });
+        const marque = <T extends { id: string }>(liste: T[]) =>
+          liste.map((t) => ({
+            ...t,
+            instance: t.id === 't1' ? de('mandat-a', 'Mandat A') : de('simatis', 'SIMATIS'),
+          }));
+        const corps = {
+          ...s,
+          taches: marque(s.taches),
+          enRetard: marque(s.enRetard),
+          sansEcheance: marque(s.sansEcheance),
+        };
+        return Promise.resolve(new Response(JSON.stringify(corps)));
+      }),
+    );
+    await liste();
+    expect(titres()).toContain('Appeler Romain Arpin');
+    fireEvent.click(screen.getByLabelText('Marquer faite : Appeler Romain Arpin'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')?.url).toBe('/api/i/mandat-a/taches/t1');
+    fireEvent.change(screen.getByLabelText('Instance'), { target: { value: 'simatis' } });
+    expect(titres()).not.toContain('Appeler Romain Arpin');
+    expect(titres()).toContain('Envoyer la plaquette');
+    fireEvent.change(screen.getByLabelText('Instance'), { target: { value: '' } });
+    expect(titres()).toContain('Appeler Romain Arpin');
+  });
+
+  it('shows no instance filter when there is a single instance', async () => {
+    await liste();
+    expect(screen.queryByLabelText('Instance')).toBeNull();
   });
 
   it('creates an OS task by default, and a HubSpot one when the box is checked', async () => {

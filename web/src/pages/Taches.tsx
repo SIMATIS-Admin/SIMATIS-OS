@@ -60,12 +60,14 @@ function Liste({
   slug,
   version,
   hubspot,
+  mandat,
   onOpen,
   onFait,
   onModifier,
 }: {
   slug: string;
   version: number;
+  mandat: string;
   hubspot: boolean;
   onOpen: (t: TacheVue) => void;
   onFait: (t: TacheVue) => void;
@@ -111,6 +113,7 @@ function Liste({
     .filter((t) => (statut === 'faites' ? t.fait : !t.fait))
     .filter((t) => types.has(t.type))
     .filter((t) => origine === 'tout' || t.origine === origine)
+    .filter((t) => !mandat || t.instance?.slug === mandat)
     .sort(
       (a, b) =>
         (a.echeance ? Date.parse(a.echeance) : Infinity) -
@@ -288,7 +291,9 @@ export function Taches({ slug }: { slug: string }) {
       setLundi(lundiDu(j));
     } else setLundi((l) => plusJours(l, 7 * n));
   };
-  const [data, setData] = useState<SemaineTaches | null>(null);
+  const [brut, setData] = useState<SemaineTaches | null>(null);
+  // Mon activité lists its mandates' tasks too: '' is all of them, else one instance.
+  const [mandat, setMandat] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [edition, setEdition] = useState<TacheVue | 'nouvelle' | null>(null);
   const [ensuite, setEnsuite] = useState<TacheVue | null>(null);
@@ -321,8 +326,10 @@ export function Taches({ slug }: { slug: string }) {
     setMessage(estSimulation(r) ? r.message : null);
     load();
   };
+  // A task is always changed through the slug of its own instance.
+  const slugDe = (t: TacheVue) => t.instance?.slug ?? slug;
   const modifier = (t: TacheVue, patch: TacheSaisie) =>
-    updateTache(slug, t.id, patch).then(apres, (e: unknown) =>
+    updateTache(slugDe(t), t.id, patch).then(apres, (e: unknown) =>
       setMessage(e instanceof Error ? e.message : String(e)),
     );
   // Several moves, then one reload: the message keeps the first simulation or error.
@@ -330,7 +337,7 @@ export function Taches({ slug }: { slug: string }) {
     let note: string | null = null;
     for (const [t, echeance] of moves) {
       try {
-        const r = await updateTache(slug, t.id, { echeance });
+        const r = await updateTache(slugDe(t), t.id, { echeance });
         if (estSimulation(r)) note ??= r.message;
       } catch (e) {
         note ??= e instanceof Error ? e.message : String(e);
@@ -340,6 +347,13 @@ export function Taches({ slug }: { slug: string }) {
     load();
   };
 
+  const deMandat = (t: TacheVue) => !mandat || t.instance?.slug === mandat;
+  const data = brut && {
+    ...brut,
+    taches: brut.taches.filter(deMandat),
+    enRetard: brut.enRetard.filter(deMandat),
+    sansEcheance: brut.sansEcheance.filter(deMandat),
+  };
   const toutes = data ? [...data.enRetard, ...data.taches, ...data.sansEcheance] : [];
   const accepte = (e: DragEvent) => {
     if (e.dataTransfer.types.includes(MIME_TACHE)) e.preventDefault();
@@ -353,7 +367,7 @@ export function Taches({ slug }: { slug: string }) {
   };
 
   const cocher = (t: TacheVue) =>
-    void updateTache(slug, t.id, { fait: !t.fait }).then(
+    void updateTache(slugDe(t), t.id, { fait: !t.fait }).then(
       (r) => {
         apres(r);
         if (!t.fait) proposerSuite(t, r);
@@ -424,6 +438,21 @@ export function Taches({ slug }: { slug: string }) {
       <div className="ag-barre">
         {nav || <span />}
         <div className="ag-barre-d">
+          {brut && brut.instances.length > 1 && (
+            <select
+              className="input"
+              aria-label="Instance"
+              value={mandat}
+              onChange={(e) => setMandat(e.target.value)}
+            >
+              <option value="">Toutes</option>
+              {brut.instances.map((i) => (
+                <option key={i.slug} value={i.slug}>
+                  {i.nom}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="seg" role="group" aria-label="Affichage de l'agenda">
             {MODES.map(([m, l]) => (
               <button
@@ -458,6 +487,7 @@ export function Taches({ slug }: { slug: string }) {
           <Liste
             slug={slug}
             version={version}
+            mandat={mandat}
             hubspot={data.hubspot}
             onOpen={setEdition}
             onModifier={modifier}
@@ -503,7 +533,7 @@ export function Taches({ slug }: { slug: string }) {
         <EditionTache
           tache={edition === 'nouvelle' ? null : edition}
           hubspot={data.hubspot}
-          slug={slug}
+          slug={edition === 'nouvelle' ? slug : slugDe(edition)}
           onClose={() => setEdition(null)}
           onSave={async ({ hubspot, ...saisie }) => {
             if (edition === 'nouvelle') {
@@ -511,7 +541,7 @@ export function Taches({ slug }: { slug: string }) {
               setEdition(null);
               return;
             }
-            const r = await updateTache(slug, edition.id, saisie);
+            const r = await updateTache(slugDe(edition), edition.id, saisie);
             setEdition(null);
             apres(r);
             if (saisie.fait && !edition.fait) proposerSuite(edition, r);
