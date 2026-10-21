@@ -23,9 +23,8 @@ export const NAV: NavGroup[] = [
     title: 'Stratégie',
     items: [
       item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage'),
-      item('diagnostic', 'Diagnostic', 'radar', 'diagnostic'),
-      // Procédure à part du diagnostic (Marc, 20 octobre 2026) : même section, écran séparé.
-      item('tests-vma', 'Tests VMA', 'chart'),
+      // Diagnostic et tests VMA réunis par entreprise (spec du 21 octobre 2026).
+      item('diagnostics', 'Diagnostics', 'radar', 'diagnostic'),
     ],
   },
   {
@@ -75,8 +74,7 @@ export const BUILT = new Set([
   'agenda',
   'rendez-vous',
   'devis',
-  'diagnostic',
-  'tests-vma',
+  'diagnostics',
   'routines',
   'siteweb',
 ]);
@@ -93,9 +91,15 @@ export const LOTS: Record<string, string> = {
 
 export const isBuilt = (id: string) => BUILT.has(id);
 
-// Former screen ids still found in bookmarks: « À valider » became the Inbox.
-export const vueCanonique = (view: string) =>
-  view === 'validations' ? 'inbox' : view === 'taches' ? 'agenda' : view;
+// Former screen ids still found in bookmarks: « À valider » became the Inbox,
+// and the Diagnostic and Tests VMA screens became one Diagnostics screen.
+const ANCIENNES_VUES = new Map<string, string>([
+  ['validations', 'inbox'],
+  ['taches', 'agenda'],
+  ['diagnostic', 'diagnostics'],
+  ['tests-vma', 'diagnostics'],
+]);
+export const vueCanonique = (view: string) => ANCIENNES_VUES.get(view) ?? view;
 
 export const allItems = () => NAV.flatMap((g) => g.items);
 
