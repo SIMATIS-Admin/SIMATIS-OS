@@ -70,12 +70,28 @@ ni dans l'historique ni dans l'évolution (cahier des charges §5.1) ; un essai 
 Ce qui n'est **pas** dans l'aperçu (réservé à la page par mandat, plus tard) : le potentiel brut,
 la part à convertir, le détail des freins avec leur note et leurs gains, et le contenu du brouillon.
 
-## Règles métier à confirmer dans le code avant implémentation
+## Données existantes et liaison entreprise
 
-- **Lien diagnostic ↔ entreprise** : la maquette suppose qu'une entreprise a au plus un diagnostic
-  en cours. Le lien entre un projet de diagnostic et une entreprise reste à vérifier dans
-  `src/diagnostic/schema.ts` (le projet a un nom et une activité, pas forcément un identifiant d'entreprise).
-- **Test VMA ↔ entreprise** : `vmaTests.entrepriseId` existe, à utiliser pour regrouper les tests.
+Les données actuelles sont reprises : la fusion change l'écran, pas les tables. Projets de
+diagnostic (`diagnostic_projets`) et tests VMA (`vma_tests`) restent en place.
+
+Constat vérifié dans le code :
+
+- **Diagnostic** : un projet n'a pas d'identifiant d'entreprise. Il porte un nom et une activité en
+  texte libre (`src/diagnostic/schema.ts`). Le regroupement par entreprise n'est donc pas possible
+  en l'état.
+- **Test VMA** : `vma_tests.entreprise_id` existe mais est facultatif, et le nom de l'entreprise
+  est gardé en texte (`src/vma/schema.ts`).
+
+Mise en place prévue :
+
+1. Migration : ajout d'une colonne `entreprise_id` facultative à `diagnostic_projets`. Aucune donnée supprimée.
+2. Rattachement des projets existants par rapprochement de nom avec l'annuaire des entreprises.
+   Le rapprochement n'est pas appliqué automatiquement : une liste de correspondances est présentée
+   pour validation, et les cas sans correspondance se rattachent à la main.
+3. Les nouveaux diagnostics sont rattachés à une entreprise dès leur création (pas de projet orphelin).
+
+Règle : une entreprise a au plus un diagnostic en cours (voir la question ouverte).
 
 ## Question ouverte
 
