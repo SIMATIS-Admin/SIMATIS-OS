@@ -35,11 +35,12 @@ export const paragraphe = (contenu: string, extra = '') =>
 export const bouton = (libelle: string, lien: string) =>
   `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 16px;"><tr><td style="background:${C.marine};border-radius:4px;"><a href="${echapper(lien)}" style="display:inline-block;padding:12px 24px;font:700 16px/1.2 ${POLICE};color:#FFFFFF;text-decoration:none;">${echapper(libelle)}</a></td></tr></table>`;
 
+// Signature : même police, même taille et même couleur que le texte ; seul le nom est en gras.
 export const signature = () =>
-  `<tr><td style="padding:28px 32px 30px;">${paragraphe('Bien à vous,', 'margin:0 0 10px;')}
-<div style="font:700 16px/1.4 ${POLICE};color:${C.marine};">Marc Tabouret</div>
-<div style="font:14px/1.5 ${POLICE};color:${C.roche};">Directeur commercial en mode partagé · SIMATIS</div>
-<div style="font:14px/1.5 ${POLICE};"><a href="mailto:marc.tabouret@simatis.fr" style="color:${C.teal};text-decoration:none;">marc.tabouret@simatis.fr</a></div></td></tr>`;
+  `<tr><td style="padding:28px 32px 30px;font:16px/1.6 ${POLICE};color:${C.nuit};">${paragraphe('Bien à vous,', 'margin:0 0 10px;')}
+<div><strong>Marc Tabouret</strong></div>
+<div>Directeur commercial en mode partagé · SIMATIS</div>
+<div><a href="mailto:marc.tabouret@simatis.fr" style="color:${C.nuit};text-decoration:underline;">marc.tabouret@simatis.fr</a></div></td></tr>`;
 
 // Habille des lignes de tableau (`<tr>…`) : logo, filet menthe, contenu, signature (sauf si le
 // contenu porte la sienne), pied nuit.
