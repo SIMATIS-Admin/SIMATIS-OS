@@ -84,6 +84,7 @@ describe('brouillon du résultat au dirigeant', () => {
             n: 1,
             titre: 'Frein fictif',
             phrase: 'Phrase fictive.',
+            enjeu: 3750,
             reponse: 'Réponse fictive',
             cible: 'Pratique fictive',
             debut: ['Action une.', 'Action <deux>.'],
@@ -98,6 +99,8 @@ describe('brouillon du résultat au dirigeant', () => {
           libelleCible: 'Les plus avancés',
           libelleDebut: 'Par où commencer',
           libelleSigne: 'Signe que c’est en place',
+          libelleEnjeu: 'Enjeu estimé',
+          noteEnjeu: 'Note fictive.',
         },
       }),
     });
@@ -105,6 +108,8 @@ describe('brouillon du résultat au dirigeant', () => {
     expect(html).toContain('Les plus avancés : « Pratique fictive »');
     expect(html).toContain('<li>Action une.</li><li>Action &lt;deux&gt;.</li>');
     expect(html).toContain('Signe que c’est en place : Signe fictif.');
+    expect(html).toContain('Enjeu estimé : environ +3,8\u00a0k€ par mois*');
+    expect(html).toContain('<small>* Note fictive.</small>');
   });
 
   it("n'annonce jamais le potentiel, réservé à Marc", () => {

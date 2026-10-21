@@ -43,6 +43,8 @@ export type EcranDirigeant = {
     n: number;
     titre: string;
     phrase: string;
+    // Enjeu estimé en € par mois, présenté comme une estimation moyenne (décision de Marc, 21 octobre 2026).
+    enjeu?: number;
     reponse?: string;
     cible?: string;
     debut?: string[];
@@ -56,12 +58,18 @@ export type EcranDirigeant = {
     libelleCible?: string;
     libelleDebut?: string;
     libelleSigne?: string;
+    libelleEnjeu?: string;
+    noteEnjeu?: string;
   };
 };
 
 // v2.1 : le détail pratique d'un frein, absent des résultats plus anciens.
 function detailFrein(f: EcranDirigeant['freins'][number], t: EcranDirigeant['textes']): string {
   const lignes: string[] = [];
+  if (typeof f.enjeu === 'number' && f.enjeu > 0)
+    lignes.push(
+      `<br>${esc(t.libelleEnjeu ?? 'Enjeu estimé')} : environ +${esc(euros(f.enjeu))} par mois*`,
+    );
   if (f.reponse)
     lignes.push(`<br>${esc(t.libelleReponse ?? 'Votre réponse')} : « ${esc(f.reponse)} »`);
   if (f.cible && f.cible !== f.reponse)
@@ -111,8 +119,12 @@ export function brouillonResultat(p: { contactNom: string | null; ecran: EcranDi
           ? `Il vous manque ${euros(e.ecart)} de CA commandé par mois${e.ecartPct !== null ? ` (+${pct(e.ecartPct)})` : ''}, soit ${euros(e.ecart * 12)} par an.`
           : `Vous dépassez déjà votre objectif de ${euros(-e.ecart)} par mois.`
         : '';
+  const noteEnjeu =
+    e.textes.noteEnjeu && e.freins.some((f) => typeof f.enjeu === 'number' && f.enjeu > 0)
+      ? `<p><small>* ${esc(e.textes.noteEnjeu)}</small></p>`
+      : '';
   const freins = e.freins.length
-    ? `<ol>${e.freins.map((f) => `<li><strong>${esc(f.titre)}</strong> : ${esc(f.phrase)}${detailFrein(f, e.textes)}</li>`).join('')}</ol>`
+    ? `<ol>${e.freins.map((f) => `<li><strong>${esc(f.titre)}</strong> : ${esc(f.phrase)}${detailFrein(f, e.textes)}</li>`).join('')}</ol>${noteEnjeu}`
     : `<p>${esc(e.textes.aucunFrein)}</p>`;
 
   const html = [
