@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
+import { entreprises } from '../crm/schema.js';
+import { createInstance, getInstanceBySlug } from '../instances/service.js';
 
 // Routes HTTP de l'entretien : import du PDF (corps plus grand que la limite par défaut) et correction.
 const grilleFictive = {
@@ -60,6 +62,40 @@ describe('Entretien : API', () => {
     });
     return r.json<{ id: string }>();
   };
+
+  it('refuse le rattachement à une entreprise d une autre instance', async () => {
+    const autre = await createInstance(t.owner.db, {
+      slug: 'rattach-croise',
+      nom: 'Autre',
+      type: 'propre',
+    });
+    const [e] = await t.owner.db
+      .insert(entreprises)
+      .values({ instanceId: autre.id, nom: 'Entreprise Fictive Z' })
+      .returning({ id: entreprises.id });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets',
+      payload: { nom: 'Rattachement croisé', activite: 'services', entrepriseId: e!.id },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json<{ error: string }>().error).toMatch(/entreprise/i);
+  });
+
+  it('rattache un projet à une entreprise de la même instance', async () => {
+    const simatis = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
+    const [e] = await t.owner.db
+      .insert(entreprises)
+      .values({ instanceId: simatis.id, nom: 'Entreprise Fictive Y' })
+      .returning({ id: entreprises.id });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets',
+      payload: { nom: 'Rattachement local', activite: 'services', entrepriseId: e!.id },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json<{ entrepriseId: string }>().entrepriseId).toBe(e!.id);
+  });
 
   it('accepte un PDF de 2 Mo, plus grand que la limite par défaut de la route', async () => {
     const projet = await creerProjet('Entretien Fictif API A');

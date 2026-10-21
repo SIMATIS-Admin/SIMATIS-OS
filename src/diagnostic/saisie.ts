@@ -20,6 +20,7 @@ const lienClaude = z
 export const creationSchema = z.object({
   nom: z.string().trim().min(1, 'Nom requis').max(200),
   activite,
+  entrepriseId: z.string().uuid().nullish(),
 });
 
 export const projetSchema = z

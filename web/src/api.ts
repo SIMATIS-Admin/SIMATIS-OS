@@ -882,8 +882,17 @@ export type ProjetDiagPatch = Partial<
 
 export const fetchProjetsDiag = (slug: string) =>
   getJson<ProjetDiag[]>(inst(slug, 'diagnostic/projets'));
-export const creerProjetDiag = (slug: string, nom: string, activite: string) =>
-  sendJson<ProjetDiag>('POST', inst(slug, 'diagnostic/projets'), { nom, activite });
+export const creerProjetDiag = (
+  slug: string,
+  nom: string,
+  activite: string,
+  entrepriseId?: string,
+) =>
+  sendJson<ProjetDiag>('POST', inst(slug, 'diagnostic/projets'), {
+    nom,
+    activite,
+    ...(entrepriseId ? { entrepriseId } : {}),
+  });
 export const majProjetDiag = (slug: string, id: string, patch: ProjetDiagPatch) =>
   sendJson<ProjetDiag>('PATCH', inst(slug, `diagnostic/projets/${encodeURIComponent(id)}`), patch);
 export const envoyerMessageDiag = (slug: string, id: string, texte: string) =>
