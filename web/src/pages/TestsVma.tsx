@@ -271,6 +271,13 @@ function FicheResultat({ t }: { t: TestVma }) {
             {fmtEur(r.allureActuelle)} par mois
           </p>
         )}
+        {typeof r.trajectoire === 'number' && (
+          <p>
+            <strong>Sur sa lancée dans {r.echeance} an(s) : </strong>
+            {fmtEur(r.trajectoire)} par mois · socle récurrent {fmtEur(r.recurrent ?? 0)} →{' '}
+            {fmtEur(r.socleEcheance ?? 0)} par mois
+          </p>
+        )}
         <p>
           <strong>Ambition : </strong>
           {r.niveau.label} · {fmtEur(r.allureVisee)} par mois dans {r.echeance} an(s)
@@ -301,6 +308,15 @@ function FicheResultat({ t }: { t: TestVma }) {
             {c.recurrentEstime ? ' · récurrent déclaré estimé' : ''}
           </p>
         )}
+        {c?.attrition !== undefined && (c.recurrent ?? 0) > 0 && (
+          <p className="small">
+            Portefeuille : contrats récurrents {pct(c.partRec ?? 0)} des commandes · attrition{' '}
+            {pct(c.attrition)} par an · développement {pct(c.developpement ?? 0)} par an
+            {c.potentielVma !== undefined
+              ? ` · potentiel de la seule VMA : +${fmtEur(c.potentielVma)} par mois`
+              : ''}
+          </p>
+        )}
         {c?.freins && (
           <table className="small">
             <thead>
@@ -310,6 +326,7 @@ function FicheResultat({ t }: { t: TestVma }) {
                 <th>Note</th>
                 <th>Gain max</th>
                 <th>Gain restant</th>
+                <th>Poids à l’échéance</th>
                 <th>Bloc du plan d’action</th>
               </tr>
             </thead>
@@ -317,10 +334,14 @@ function FicheResultat({ t }: { t: TestVma }) {
               {c.freins.map((f) => (
                 <tr key={f.n}>
                   <td>{f.n}</td>
-                  <td>{f.label}</td>
+                  <td>
+                    {f.label}
+                    {f.moteur === 'portefeuille' ? ' (portefeuille)' : ''}
+                  </td>
                   <td>{f.note} / 4</td>
                   <td>{pct(f.gainMax)}</td>
                   <td>{pct(f.gainRestant)}</td>
+                  <td>{f.impact !== undefined ? `+${fmtEur(f.impact)} / mois` : '—'}</td>
                   <td>{f.bloc}</td>
                 </tr>
               ))}

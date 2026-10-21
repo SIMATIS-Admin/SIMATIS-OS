@@ -141,6 +141,9 @@ export type TestVma = {
     // Socle récurrent par mois (null sans récurrent) et allure actuelle = VMA + récurrent (v0.2).
     recurrent?: number | null;
     allureActuelle?: number;
+    // v2.0 (module Portefeuille) : allure et socle à l'échéance si rien ne change ; l'écart se lit alors sur elle.
+    trajectoire?: number | null;
+    socleEcheance?: number | null;
     freins: { n: number; titre: string; phrase: string }[];
   } | null;
   // Calcul complet, pour la fiche de Marc (gains et blocs inclus) : jamais montré au dirigeant.
@@ -153,6 +156,13 @@ export type TestVma = {
     partRecurrent?: number | null;
     ratioAllure?: number | null;
     potentiel?: number;
+    // v2.0 : potentiel de la seule VMA, et dynamique du portefeuille (taux annuels).
+    potentielVma?: number;
+    trajectoire?: number;
+    socleEcheance?: number;
+    partRec?: number;
+    attrition?: number;
+    developpement?: number;
     niveau?: { cle: string; part?: number; parAn?: number };
     freins?: {
       n: number;
@@ -161,6 +171,10 @@ export type TestVma = {
       gainMax: number;
       gainRestant: number;
       bloc: string;
+      moteur?: string;
+      effet?: string;
+      // Gain d'allure à l'échéance si ce frein seul était levé (v2.0).
+      impact?: number;
     }[];
   } | null;
 };

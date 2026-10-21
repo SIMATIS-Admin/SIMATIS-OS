@@ -51,6 +51,30 @@ describe('brouillon du résultat au dirigeant', () => {
     expect(html).toContain('Vous dépassez déjà votre objectif de 3\u00a0k€ par mois.');
   });
 
+  it('v2.0 : avec une trajectoire, l’écart se lit à l’échéance, sur la lancée', () => {
+    const { html } = brouillonResultat({
+      contactNom: null,
+      ecran: ecran({
+        vma: 15000,
+        recurrent: 8000,
+        allureActuelle: 23000,
+        trajectoire: 19826.68,
+        socleEcheance: 4826.68,
+        allureVisee: 20000,
+        ecart: 173.32,
+        ecartPct: 0.01,
+      }),
+    });
+    expect(html).toContain(
+      'Sans rien changer, votre socle récurrent passerait de 8\u00a0k€ à 4,8\u00a0k€ par mois dans 2 ans.',
+    );
+    expect(html).toContain(
+      'Sur votre lancée, il vous manquera 173\u00a0€ par mois à l’échéance (+1\u00a0%)',
+    );
+    expect(html).toContain('Où se perd votre allure :');
+    expect(html).not.toContain('Il vous manque');
+  });
+
   it("n'annonce jamais le potentiel, réservé à Marc", () => {
     const { html } = brouillonResultat({ contactNom: null, ecran: ecran() });
     expect(html).not.toMatch(/potentiel|gain|multiplicateur/i);

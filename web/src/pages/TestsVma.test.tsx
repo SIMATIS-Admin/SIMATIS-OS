@@ -105,6 +105,61 @@ describe('Tests VMA : écran', () => {
     expect(screen.getByText(/Potentiel brut/)).toBeTruthy();
   });
 
+  it('v2.0 : montre la trajectoire, le portefeuille et le poids de chaque frein', async () => {
+    api.fetchTestsVma.mockResolvedValue([
+      test({
+        statut: 'utilisee',
+        recueLe: '2026-10-21T09:00:00.000Z',
+        resultat: {
+          entreprise: 'Atelier Fictif',
+          vma: 15000,
+          mesurable: true,
+          statut: 'prouvée',
+          tenue: 'tenue',
+          recurrent: 8000,
+          allureActuelle: 23000,
+          trajectoire: 19826.68,
+          socleEcheance: 4826.68,
+          allureVisee: 20000,
+          echeance: 2,
+          niveau: { cle: 'real', label: 'Réaliste', phrase: 'Phrase fictive.' },
+          ecart: 173.32,
+          freins: [{ n: 1, titre: 'Le temps de vente', phrase: 'Phrase fictive.' }],
+        },
+        calcul: {
+          recurrent: 8000,
+          potentiel: 11718.75,
+          potentielVma: 11718.75,
+          partRec: 0,
+          attrition: 0.25,
+          developpement: 0,
+          niveau: { cle: 'real', part: 0.015 },
+          freins: [
+            {
+              n: 8,
+              label: 'Frein fictif',
+              note: 1,
+              gainMax: 0.5,
+              gainRestant: 0.375,
+              bloc: 'Bloc fictif',
+              moteur: 'portefeuille',
+              effet: 'attrition',
+              impact: 1200,
+            },
+          ],
+        },
+      }),
+    ]);
+    render(<TestsVma slug="mandat-fictif" />);
+
+    await waitFor(() => expect(screen.getByText('Atelier Fictif')).toBeTruthy());
+    screen.getByRole('button', { name: 'Voir le résultat' }).click();
+    await waitFor(() => expect(screen.getByText(/Sur sa lancée dans 2 an/)).toBeTruthy());
+    expect(screen.getByText(/attrition 25/)).toBeTruthy();
+    expect(screen.getByText('Frein fictif (portefeuille)')).toBeTruthy();
+    expect(screen.getByText(/\+1,2.k€ \/ mois/)).toBeTruthy();
+  });
+
   it("demande confirmation à l'alerte du semestre, puis crée si Marc confirme", async () => {
     api.fetchTestsVma.mockResolvedValue([]);
     api.creerTestVma
