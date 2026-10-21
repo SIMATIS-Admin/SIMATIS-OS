@@ -48,6 +48,19 @@ const charger = (entreprises: Entreprise[], projets: ProjetDiag[] = [], tests: T
   api.fetchTestsVma.mockResolvedValue(tests);
 };
 
+// Une entreprise n'apparaît dans la liste que si elle est suivie : on lui donne un diagnostic.
+const diagPour = (n: number): ProjetDiag =>
+  ({
+    id: `p${n}`,
+    nom: `Projet ${n}`,
+    activite: 'services',
+    contexte: '',
+    etape: 1,
+    etapeMax: 1,
+    entrepriseId: `e${n}`,
+    statutDiagnostic: null,
+  }) as ProjetDiag;
+
 const lignes = () => Array.from(document.querySelectorAll('.dg-ligne'));
 
 describe('Diagnostics : écran fusionné', () => {
@@ -57,7 +70,10 @@ describe('Diagnostics : écran fusionné', () => {
   afterEach(() => cleanup());
 
   it('affiche au plus 5 entreprises et la pagination', async () => {
-    charger(Array.from({ length: 6 }, (_, i) => entreprise(i + 1)));
+    charger(
+      Array.from({ length: 6 }, (_, i) => entreprise(i + 1)),
+      Array.from({ length: 6 }, (_, i) => diagPour(i + 1)),
+    );
     render(<Diagnostics slug="demo" />);
     await screen.findByText('Entreprise Fictive A');
     expect(lignes()).toHaveLength(5);
@@ -65,7 +81,7 @@ describe('Diagnostics : écran fusionné', () => {
   });
 
   it('ouvre une ligne au clic sur « Détail » et la referme sur « Réduire »', async () => {
-    charger([entreprise(1)]);
+    charger([entreprise(1)], [diagPour(1)]);
     render(<Diagnostics slug="demo" />);
     const bouton = await screen.findByRole('button', { name: /Détail/ });
     expect(bouton.getAttribute('aria-expanded')).toBe('false');
@@ -95,7 +111,10 @@ describe('Diagnostics : écran fusionné', () => {
   });
 
   it('la recherche revient à la page 1 et trouve une entreprise sur toutes les pages', async () => {
-    charger(Array.from({ length: 6 }, (_, i) => entreprise(i + 1)));
+    charger(
+      Array.from({ length: 6 }, (_, i) => entreprise(i + 1)),
+      Array.from({ length: 6 }, (_, i) => diagPour(i + 1)),
+    );
     render(<Diagnostics slug="demo" />);
     await screen.findByText('Entreprise Fictive A');
     fireEvent.click(screen.getByRole('button', { name: '2' }));

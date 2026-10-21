@@ -14,6 +14,7 @@ import { libelleStatut, fmtEur } from './TestsVma.js';
 import {
   filtrer,
   grouper,
+  lignesSuivies,
   paginer,
   resumerVma,
   type LigneEntreprise,
@@ -118,7 +119,7 @@ export function Diagnostics({ slug }: { slug: string }) {
     );
   }
 
-  const lignes = grouper(entreprises, projets, tests);
+  const lignes = lignesSuivies(grouper(entreprises, projets, tests));
   const filtrees = filtrer(lignes, recherche);
   const { items, page: pageCourante, pages } = paginer(filtrees, page, PAR_PAGE);
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjetDiag, TestVma } from '../../api.js';
-import { filtrer, grouper, paginer, resumerVma } from './grouper.js';
+import { filtrer, grouper, lignesSuivies, paginer, resumerVma } from './grouper.js';
 
 const projet = (extra: Partial<ProjetDiag>): ProjetDiag =>
   ({
@@ -133,5 +133,20 @@ describe('Diagnostics : résumé des tests VMA', () => {
     ]);
     expect(r.evolution).toEqual([{ date: '2026-10-02T10:00:00Z', vma: 4150 }]);
     expect(r.ecart).toBeNull();
+  });
+});
+
+describe('Diagnostics : entreprises suivies seulement', () => {
+  it('ne garde que les lignes avec un diagnostic ou un test VMA', () => {
+    const lignes = grouper(
+      [
+        { id: 'e1', nom: 'Suivie avec diagnostic', secteur: null },
+        { id: 'e2', nom: 'Suivie avec test', secteur: null },
+        { id: 'e3', nom: 'Jamais suivie', secteur: null },
+      ],
+      [projet({ id: 'p1', entrepriseId: 'e1' })],
+      [test({ id: 't1', entrepriseId: 'e2' })],
+    );
+    expect(lignesSuivies(lignes).map((l) => l.id)).toEqual(['e1', 'e2']);
   });
 });
