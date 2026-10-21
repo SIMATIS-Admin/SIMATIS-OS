@@ -444,7 +444,7 @@ export async function remplacerLiensHubspot(
       } else if (deja.source !== 'hubspot') {
         await tx
           .update(p.link)
-          .set({ source: 'hubspot' } as never)
+          .set({ source: 'hubspot' })
           .where(and(eq(p.instanceId, currentInstance), eq(p.id, deja.id)));
       }
     }
@@ -453,12 +453,12 @@ export async function remplacerLiensHubspot(
       hubspotPrincipal ?? restants.find((l) => l.principal)?.cible ?? restants[0]?.cible ?? null;
     await tx
       .update(p.link)
-      .set({ principal: false } as never)
+      .set({ principal: false })
       .where(and(eq(p.instanceId, currentInstance), eq(p.ownerFk, ownerId)));
     if (choix)
       await tx
         .update(p.link)
-        .set({ principal: true } as never)
+        .set({ principal: true })
         .where(
           and(eq(p.instanceId, currentInstance), eq(p.ownerFk, ownerId), eq(p.targetFk, choix)),
         );
