@@ -1,5 +1,5 @@
-// Brouillon du mail de résultat au dirigeant (cahier, §7.4). Le texte reprend l'écran que le dirigeant
-// a déjà vu : pas de potentiel, pas de délai, pas de phrase sur la suite. Marc l'envoie lui-même.
+// Mail de résultat au dirigeant (cahier, §7.4). Le texte reprend l'écran que le dirigeant
+// a déjà vu : pas de potentiel, pas de délai, pas de phrase sur la suite. Il part tout seul à la relève (releve.ts).
 
 const NB = '\u00a0';
 
