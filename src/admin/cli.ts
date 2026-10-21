@@ -8,7 +8,10 @@ import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { connexions } from '../connexions/schema.js';
 import { brancherGoogle } from '../connexions/brancher.js';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
+import { entreprises } from '../crm/schema.js';
+import { diagnosticProjets } from '../diagnostic/schema.js';
+import { proposerRapprochements } from '../diagnostic/rapprochement.js';
 import { currentInstance } from '../db/columns.js';
 import { loadInstanceSecrets, writeGoogleToken } from '../secrets.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
@@ -36,6 +39,7 @@ export const USAGE = `Commandes :
   instance:module --slug <slug> --module <devis|site-web|…> --on|--off
   demo:seed
   diagnostic:import --slug <slug> --fichier <chemin.json|->   (projets de diagnostic, espace SIMATIS)
+  diagnostic:rattacher --slug <slug> [--appliquer]   (rattache les projets à leur entreprise ; simulation sans --appliquer)
   token:create --nom <nom> (--instance <slug> | --portefeuille | --runner)
   token:list
   token:revoke --id <id>
@@ -88,6 +92,7 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
       frequence: { type: 'string' },
       module: { type: 'string' },
       fichier: { type: 'string' },
+      appliquer: { type: 'boolean', default: false },
     },
   });
   const need = (
@@ -162,6 +167,42 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
         out(`Créés : ${crees.join(', ') || 'aucun'}`);
         out(`Support ajouté : ${completes.join(', ') || 'aucun'}`);
         out(`Déjà présents (inchangés) : ${deja.join(', ') || 'aucun'}`);
+        return 0;
+      }
+      case 'diagnostic:rattacher': {
+        // Simulation par défaut : on affiche les rapprochements, rien n'est écrit sans --appliquer.
+        const instance = await requireActive(db, need('slug'));
+        const { projets, annuaire } = await withInstance(db, instance.id, async (tx) => ({
+          projets: await tx
+            .select({ id: diagnosticProjets.id, nom: diagnosticProjets.nom })
+            .from(diagnosticProjets)
+            .where(isNull(diagnosticProjets.entrepriseId)),
+          annuaire: await tx
+            .select({ id: entreprises.id, nom: entreprises.nom })
+            .from(entreprises),
+        }));
+        const propositions = proposerRapprochements(projets, annuaire);
+        for (const p of propositions) {
+          const nom = projets.find((x) => x.id === p.projetId)?.nom ?? p.projetId;
+          if (p.statut === 'exact') out(`exact : ${nom} → ${p.entrepriseNom}`);
+          else if (p.statut === 'ambigu')
+            out(`ambigu : ${nom} → ${p.candidates.map((c) => c.entrepriseNom).join(' ou ')}`);
+          else out(`aucun : ${nom}`);
+        }
+        if (values.appliquer) {
+          for (const p of propositions) {
+            if (p.statut !== 'exact') continue;
+            await withInstance(db, instance.id, (tx) =>
+              tx
+                .update(diagnosticProjets)
+                .set({ entrepriseId: p.entrepriseId })
+                .where(eq(diagnosticProjets.id, p.projetId)),
+            );
+          }
+          out(`Rattachés : ${propositions.filter((p) => p.statut === 'exact').length}`);
+        } else {
+          out('Simulation : rien n’a été écrit. Ajoutez --appliquer pour rattacher les « exact ».');
+        }
         return 0;
       }
       case 'demo:seed':
