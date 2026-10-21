@@ -3402,9 +3402,49 @@ tr.sel {
 }
 
 /* Section Diagnostics : une ligne par entreprise, vue macro fermée, détail ouvert. */
+.dg-titre {
+  background: linear-gradient(120deg, var(--navy) 0%, var(--navy-3) 100%);
+  border-color: var(--navy);
+  color: var(--white);
+}
+.dg-titre h2,
+.dg-titre .muted {
+  color: var(--white);
+}
+.dg-titre .muted {
+  opacity: 0.85;
+}
+.dg-titre input[type='search'] {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 280px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--r-s);
+}
+.dg-titre input {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: var(--white);
+}
+.dg-titre input::placeholder {
+  color: rgba(255, 255, 255, 0.75);
+}
+.dg-titre .btn.go {
+  background: var(--mint);
+  border-color: var(--mint);
+  color: var(--navy);
+}
+.dg-titre .btn.go:hover {
+  background: var(--white);
+  border-color: var(--white);
+}
 .dg-ligne {
   padding: 0;
   overflow: hidden;
+  /* Les entreprises sont décalées sous le bloc de titre, avec une barre d'accent. */
+  margin-left: 32px;
+  border-left: 5px solid var(--teal);
 }
 .dg-entete {
   all: unset;
@@ -3416,6 +3456,7 @@ tr.sel {
   gap: 12px;
   align-items: center;
   padding: 14px 16px;
+  background: linear-gradient(90deg, #e6f7f3 0%, var(--white) 70%);
 }
 .dg-entete:focus-visible {
   outline: 2px solid var(--accent, #3b6fb5);
@@ -3428,14 +3469,16 @@ tr.sel {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted, #6b7a90);
+  color: var(--teal);
+  font-weight: 700;
 }
 .dg-bascule {
   justify-self: end;
   white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
-  border: 1px solid var(--line, #dfe4ee);
+  background: var(--mint);
+  color: var(--navy);
   border-radius: 999px;
   padding: 4px 12px;
 }
@@ -3445,16 +3488,20 @@ tr.sel {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
+  background: #f7fbfd;
 }
 .dg-bloc {
   border: 1px solid var(--line, #dfe4ee);
+  border-top: 3px solid var(--navy-3);
   border-radius: 10px;
   padding: 14px;
   min-width: 0;
+  background: var(--white);
 }
 .dg-bloc h3 {
   margin: 0 0 8px;
   font-size: 15px;
+  color: var(--navy);
 }
 .dg-etapes {
   display: flex;
@@ -3474,7 +3521,7 @@ tr.sel {
   background: #b7791f;
 }
 .dg-resultat {
-  background: var(--fond, #f4f6fa);
+  background: linear-gradient(135deg, #e0f7f2 0%, var(--blue-bg) 100%);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 10px;
@@ -3482,6 +3529,7 @@ tr.sel {
 .dg-grand {
   font-size: 24px;
   font-weight: 700;
+  color: var(--navy);
 }
 .dg-grand small {
   font-size: 13px;
@@ -3513,7 +3561,7 @@ tr.sel {
 .dg-barre span {
   width: 100%;
   max-width: 56px;
-  background: #3fa08a;
+  background: linear-gradient(180deg, var(--mint) 0%, var(--teal) 100%);
   border-radius: 6px 6px 0 0;
   margin: 4px 0;
 }
@@ -3553,6 +3601,9 @@ tr.sel {
   gap: 6px;
 }
 @media (max-width: 720px) {
+  .dg-ligne {
+    margin-left: 14px;
+  }
   .dg-entete {
     grid-template-columns: 1fr 1fr;
   }
@@ -3612,4 +3663,25 @@ tr.sel {
 .dg-modale h2 {
   margin: 0 0 12px;
   font-size: 19px;
+}
+/* Les champs nus (sans classe .input) s'étirent à la largeur de la fenêtre, sans déborder. */
+.dg-modale input,
+.dg-modale select,
+.dg-modale textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--white);
+}
+.dg-modale textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.dg-modale input[type='checkbox'] {
+  width: auto;
+  display: inline-block;
 }
