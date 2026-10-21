@@ -24,6 +24,14 @@ export async function listInstances(
   return rows.sort(byTypeThenName);
 }
 
+// Mon activité sees its own data plus that of every active mandate (signed or in closing);
+// a mandate or a demo sees only its own.
+export async function perimetre(db: Executor, instance: Instance): Promise<Instance[]> {
+  if (instance.type !== 'propre') return [instance];
+  const mandats = (await listInstances(db)).filter((i) => i.type === 'mandat');
+  return [instance, ...mandats];
+}
+
 export async function getInstanceBySlug(db: Executor, slug: string): Promise<Instance | null> {
   const [row] = await db
     .select()
