@@ -40,6 +40,17 @@ export type EcranDirigeant = {
   ecart: number | null;
   ecartPct: number | null;
   // v2.1 : réponse du dirigeant, pratique la plus avancée, par où commencer et signe que c'est en place.
+  // v2.2 (mode portefeuille : le récurrent domine l'allure) : l'objectif en CA total se découpe en récurrent et spot.
+  modePortefeuille?: boolean;
+  partRecActuelle?: number | null;
+  partRecVisee?: number | null;
+  recurrentCible?: number | null;
+  spotCible?: number | null;
+  spotEcheance?: number | null;
+  ecartRecurrent?: number | null;
+  ecartSpot?: number | null;
+  freinsConquete?: EcranDirigeant['freins'];
+  freinsPortefeuille?: EcranDirigeant['freins'];
   freins: {
     n: number;
     titre: string;
@@ -61,6 +72,11 @@ export type EcranDirigeant = {
     libelleSigne?: string;
     libelleEnjeu?: string;
     noteEnjeu?: string;
+    libelleAllureTotale?: string;
+    titreConquete?: string;
+    titrePortefeuille?: string;
+    libelleSocleRecurrent?: string;
+    libelleNouvellesAffaires?: string;
   };
 };
 
@@ -101,9 +117,12 @@ export function brouillonResultat(p0: { contactNom: string | null; ecran: EcranD
   const socle =
     typeof e.recurrent === 'number' && e.recurrent > 0 && e.allureActuelle !== undefined;
   const mesure = e.mesurable && e.vma !== null;
-  const chiffres = mesure
-    ? `${euros(e.vma ?? 0)} de CA commandé par mois sur vos nouvelles affaires, soit ${euros((e.vma ?? 0) * 12)} par an.`
-    : e.textes.nonMesurable;
+  const portefeuille = e.modePortefeuille === true && socle;
+  const chiffres = portefeuille
+    ? `${euros(e.allureActuelle ?? 0)} de CA commandé par mois, soit ${euros((e.allureActuelle ?? 0) * 12)} par an.`
+    : mesure
+      ? `${euros(e.vma ?? 0)} de CA commandé par mois sur vos nouvelles affaires, soit ${euros((e.vma ?? 0) * 12)} par an.`
+      : e.textes.nonMesurable;
   const pastille =
     e.pastille === 'estimés' || e.statut === 'à confirmer'
       ? 'chiffres en partie estimés'
@@ -126,15 +145,17 @@ export function brouillonResultat(p0: { contactNom: string | null; ecran: EcranD
   const puce = (t: string) =>
     `<span style="display:inline-block;margin:10px 6px 0 0;padding:3px 10px;border:1px solid ${C.menthe};border-radius:12px;font:12px/1.4 ${POLICE};color:${C.menthe};">${esc(t)}</span>`;
   const hero = `<tr><td style="background:${C.nuit};padding:28px 32px 26px;">
-<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.menthe};">Votre VMA commerciale</div>
-${mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POLICE};color:#FFFFFF;">${esc(euros(e.vma ?? 0))}<span style="font:400 16px/1.4 ${POLICE};color:#FFFFFF;"> par mois</span></div>` : ''}
+<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.menthe};">${esc(portefeuille ? (e.textes.libelleAllureTotale ?? 'Votre allure commerciale') : 'Votre VMA commerciale')}</div>
+${portefeuille || mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POLICE};color:#FFFFFF;">${esc(euros(portefeuille ? (e.allureActuelle ?? 0) : (e.vma ?? 0)))}<span style="font:400 16px/1.4 ${POLICE};color:#FFFFFF;"> par mois</span></div>` : ''}
 <div style="font:16px/1.5 ${POLICE};color:#FFFFFF;">${esc(chiffres)}</div>
 <div>${puce(pastille)}${puce(tenue)}</div>
 </td></tr>`;
 
   const ligneAllure = (t: string, fort = false) =>
     `<div style="font:${fort ? '700 ' : ''}15px/1.7 ${POLICE};color:${C.nuit};">${esc(t)}</div>`;
-  const allure = socle
+  const allure = portefeuille
+    ? `<tr><td style="padding:22px 32px 0;"><div style="padding:14px 18px;background:${C.glacier};border-radius:6px;">${ligneAllure(`${e.textes.libelleSocleRecurrent ?? 'Socle récurrent'} : ${euros(e.recurrent ?? 0)} par mois`)}${ligneAllure(`${e.textes.libelleNouvellesAffaires ?? 'Nouvelles affaires'} : ${euros((e.allureActuelle ?? 0) - (e.recurrent ?? 0))} par mois`)}</div></td></tr>`
+    : socle
     ? `<tr><td style="padding:22px 32px 0;"><div style="padding:14px 18px;background:${C.glacier};border-radius:6px;">${ligneAllure(`+ socle récurrent : ${euros(e.recurrent ?? 0)} par mois`)}${ligneAllure(`= allure actuelle : ${euros(e.allureActuelle ?? 0)} par mois, soit ${euros((e.allureActuelle ?? 0) * 12)} par an.`, true)}</div></td></tr>`
     : '';
 
@@ -157,9 +178,35 @@ ${mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POLICE};color:#FFFF
 <td valign="top" width="44" style="padding:16px 0 16px 16px;"><div style="width:28px;height:28px;border-radius:14px;background:${C.marine};font:700 14px/28px ${POLICE};color:${C.menthe};text-align:center;">${i + 1}</div></td>
 <td valign="top" style="padding:16px 18px 16px 8px;"><div style="font:700 16px/1.4 ${POLICE};color:${C.marine};">${esc(f.titre)}</div><div style="margin-top:2px;font:15px/1.5 ${POLICE};color:${C.nuit};">${esc(f.phrase)}</div>${detailFrein(f, e.textes)}</td>
 </tr></table></td></tr>`;
-  const freins = e.freins.length
-    ? `<tr><td style="padding:28px 32px 0;"><div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">Où se perd votre ${lancee ? 'allure' : 'VMA'} :</div></td></tr>${e.freins.map(carte).join('')}${noteEnjeu}`
-    : `<tr><td style="padding:22px 32px 0;">${p(esc(e.textes.aucunFrein), 'margin:0;')}</td></tr>`;
+  const sectionFreins = (liste: EcranDirigeant['freins'], titre: string, phrase: string) =>
+    `<tr><td style="padding:28px 32px 0;"><div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">${esc(titre)}</div>${phrase ? `<div style="margin-top:8px;font:15px/1.6 ${POLICE};color:${C.nuit};">${esc(phrase)}</div>` : ''}</td></tr>${liste.map(carte).join('')}`;
+  const phraseEcart = (nom: string, cible: number, lancee: number, ecartV: number) =>
+    ecartV > 0
+      ? `${nom} : votre cible est de ${euros(cible)} par mois ; sur votre lancée, ${euros(lancee)} dans ${ans(e.echeance)}, soit ${euros(ecartV)} par mois d’écart.`
+      : `${nom} : votre cible de ${euros(cible)} par mois est couverte sur votre lancée (${euros(lancee)} dans ${ans(e.echeance)}).`;
+  const freinsPortefeuille = () => {
+    const t = e.textes;
+    const conq = sectionFreins(
+      e.freinsConquete ?? [],
+      t.titreConquete ?? 'Conquête',
+      phraseEcart(t.libelleNouvellesAffaires ?? 'Nouvelles affaires', e.spotCible ?? 0, e.spotEcheance ?? 0, e.ecartSpot ?? 0),
+    );
+    const part =
+      e.partRecVisee != null && e.partRecActuelle != null
+        ? ` Part visée : ${pct(e.partRecVisee)} (aujourd’hui ${pct(e.partRecActuelle)}).`
+        : '';
+    const port = sectionFreins(
+      e.freinsPortefeuille ?? [],
+      t.titrePortefeuille ?? 'Portefeuille',
+      phraseEcart(t.libelleSocleRecurrent ?? 'Socle récurrent', e.recurrentCible ?? 0, e.socleEcheance ?? 0, e.ecartRecurrent ?? 0) + part,
+    );
+    return `${conq}${port}${noteEnjeu}`;
+  };
+  const freins = portefeuille
+    ? freinsPortefeuille()
+    : e.freins.length
+      ? `<tr><td style="padding:28px 32px 0;"><div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">Où se perd votre ${lancee ? 'allure' : 'VMA'} :</div></td></tr>${e.freins.map(carte).join('')}${noteEnjeu}`
+      : `<tr><td style="padding:22px 32px 0;">${p(esc(e.textes.aucunFrein), 'margin:0;')}</td></tr>`;
 
   const html =
     habillerMail(`<tr><td style="padding:26px 32px 20px;">${p(salut, 'margin:0 0 10px;')}${p(`Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.`, 'margin:0;')}</td></tr>
