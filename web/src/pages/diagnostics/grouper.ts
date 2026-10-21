@@ -49,6 +49,11 @@ const normaliser = (s: string) =>
     .toLowerCase()
     .trim();
 
+// Seules comptent les entreprises déjà suivies (diagnostic ou test VMA) ; le reste de l'annuaire n'apparaît pas.
+export function lignesSuivies(lignes: LigneEntreprise[]): LigneEntreprise[] {
+  return lignes.filter((l) => l.diag !== null || l.tests.length > 0);
+}
+
 export function filtrer(lignes: LigneEntreprise[], recherche: string): LigneEntreprise[] {
   const q = normaliser(recherche);
   if (!q) return lignes;

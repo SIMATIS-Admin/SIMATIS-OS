@@ -79,7 +79,12 @@ describe('Diagnostics : création', () => {
   afterEach(() => cleanup());
 
   it('« Lancer le diagnostic » crée un diagnostic rattaché à l’entreprise', async () => {
-    charger([entreprise('e1', 'Entreprise Fictive A')]);
+    // Une entreprise suivie grâce à un test VMA, mais sans diagnostic encore.
+    charger(
+      [entreprise('e1', 'Entreprise Fictive A')],
+      [],
+      [test({ id: 'v0', entrepriseId: 'e1' })],
+    );
     api.creerProjetDiag.mockResolvedValue(projet({ id: 'nouveau', entrepriseId: 'e1' }));
     render(<Diagnostics slug="demo" />);
     fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
@@ -142,7 +147,7 @@ describe('Diagnostics : création', () => {
   });
 
   it('la règle du semestre demande une confirmation avant de créer', async () => {
-    charger([entreprise('e1', 'Entreprise Fictive A')]);
+    charger([entreprise('e1', 'Entreprise Fictive A')], [projet({ id: 'p1', entrepriseId: 'e1' })]);
     api.creerTestVma
       .mockRejectedValueOnce(
         new api.ApiError('Atelier Fictif a déjà passé un test.', 409, { code: 'semestre' }),
