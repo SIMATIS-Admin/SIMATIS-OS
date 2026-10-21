@@ -38,9 +38,42 @@ export type EcranDirigeant = {
   niveau: { cle: string; label: string; phrase: string };
   ecart: number | null;
   ecartPct: number | null;
-  freins: { n: number; titre: string; phrase: string }[];
-  textes: { definitionVma: string; nonMesurable: string; aucunFrein: string };
+  // v2.1 : réponse du dirigeant, pratique la plus avancée, par où commencer et signe que c'est en place.
+  freins: {
+    n: number;
+    titre: string;
+    phrase: string;
+    reponse?: string;
+    cible?: string;
+    debut?: string[];
+    signe?: string;
+  }[];
+  textes: {
+    definitionVma: string;
+    nonMesurable: string;
+    aucunFrein: string;
+    libelleReponse?: string;
+    libelleCible?: string;
+    libelleDebut?: string;
+    libelleSigne?: string;
+  };
 };
+
+// v2.1 : le détail pratique d'un frein, absent des résultats plus anciens.
+function detailFrein(f: EcranDirigeant['freins'][number], t: EcranDirigeant['textes']): string {
+  const lignes: string[] = [];
+  if (f.reponse)
+    lignes.push(`<br>${esc(t.libelleReponse ?? 'Votre réponse')} : « ${esc(f.reponse)} »`);
+  if (f.cible && f.cible !== f.reponse)
+    lignes.push(`<br>${esc(t.libelleCible ?? 'Les plus avancés')} : « ${esc(f.cible)} »`);
+  if (f.debut?.length)
+    lignes.push(
+      `<br><strong>${esc(t.libelleDebut ?? 'Par où commencer')}</strong><ul>${f.debut.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>`,
+    );
+  if (f.signe)
+    lignes.push(`${esc(t.libelleSigne ?? 'Signe que c’est en place')} : ${esc(f.signe)}`);
+  return lignes.join('');
+}
 
 export function brouillonResultat(p: { contactNom: string | null; ecran: EcranDirigeant }): {
   subject: string;
@@ -79,7 +112,7 @@ export function brouillonResultat(p: { contactNom: string | null; ecran: EcranDi
           : `Vous dépassez déjà votre objectif de ${euros(-e.ecart)} par mois.`
         : '';
   const freins = e.freins.length
-    ? `<ol>${e.freins.map((f) => `<li><strong>${esc(f.titre)}</strong> : ${esc(f.phrase)}</li>`).join('')}</ol>`
+    ? `<ol>${e.freins.map((f) => `<li><strong>${esc(f.titre)}</strong> : ${esc(f.phrase)}${detailFrein(f, e.textes)}</li>`).join('')}</ol>`
     : `<p>${esc(e.textes.aucunFrein)}</p>`;
 
   const html = [
