@@ -1,4 +1,5 @@
 import { date, index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { entreprises } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Dimensions } from './profil.js';
 import type { ReponseQuestion } from './score.js';
@@ -84,9 +85,12 @@ export const diagnosticProjets = pgTable(
     supportLien: text('support_lien'),
     supportTexte: jsonb('support_texte').$type<Diapositive[]>(),
     supportFinalLe: timestamp('support_final_le', { withTimezone: true }),
+    // Facultatif : les projets créés avant la fusion Diagnostics n'ont pas encore d'entreprise.
+    entrepriseId: uuid('entreprise_id').references(() => entreprises.id, { onDelete: 'set null' }),
   },
   (t) => [
     index('diagnostic_projets_instance_idx').on(t.instanceId),
+    index('diagnostic_projets_entreprise_idx').on(t.entrepriseId),
     instanceIsolation('diagnostic_projets'),
   ],
 );

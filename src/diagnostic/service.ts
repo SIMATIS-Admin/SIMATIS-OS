@@ -61,13 +61,18 @@ export async function listProjets(db: Executor, instance: Instance): Promise<Pro
 export async function createProjet(
   db: Executor,
   instance: Instance,
-  input: { nom: string; activite: string },
+  input: { nom: string; activite: string; entrepriseId?: string | null },
 ): Promise<ProjetVue> {
   verifierEspace(instance);
   return withInstance(db, instance.id, async (tx) => {
     const [row] = await tx
       .insert(diagnosticProjets)
-      .values({ instanceId: instance.id, nom: input.nom.trim(), activite: input.activite })
+      .values({
+        instanceId: instance.id,
+        nom: input.nom.trim(),
+        activite: input.activite,
+        entrepriseId: input.entrepriseId ?? null,
+      })
       .returning();
     return vue(row!);
   });
