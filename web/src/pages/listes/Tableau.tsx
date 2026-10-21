@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Icon } from '../../icons.js';
+import { Modal } from '../Overlay.js';
 
 // Pipedrive-like list view: chosen and sortable columns, saved filters, in-place and bulk editing.
 // Column choice and saved filters are per-browser conveniences (localStorage).
@@ -12,6 +13,11 @@ export type Colonne<T> = {
   edition?: { champ: string; type?: 'text' | 'number' | 'email' };
   // Hidden until chosen in « Colonnes ».
   masquee?: boolean;
+};
+export type BilanSuppression = {
+  ok: number;
+  erreurs: { id: string; erreur: string }[];
+  simulation: boolean;
 };
 type Filtre = { champ: string; valeur: string };
 type Enregistre = Filtre & { nom: string };
@@ -116,6 +122,8 @@ export function Tableau<T extends { id: string }>({
   titre,
   onOuvrir,
   onModifier,
+  onSupprimer,
+  onFusionner,
 }: {
   cle: string;
   lignes: T[];
@@ -123,6 +131,9 @@ export function Tableau<T extends { id: string }>({
   titre: (l: T) => string;
   onOuvrir: (l: T) => void;
   onModifier: (l: T, champ: string, v: string | number | null) => Promise<void>;
+  // Without them the list neither deletes nor merges.
+  onSupprimer?: (ids: string[]) => Promise<BilanSuppression>;
+  onFusionner?: (gardeId: string, absorbeId: string) => Promise<{ simulation: boolean } | void>;
 }) {
   const prefixe = `simatis.liste.${cle}`;
   const [masquees, setMasquees] = useState<string[]>(() =>
@@ -141,6 +152,9 @@ export function Tableau<T extends { id: string }>({
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [lot, setLot] = useState({ champ: '', valeur: '' });
   const [limite, setLimite] = useState(PAGE);
+  const [action, setAction] = useState<'supprimer' | 'fusionner' | null>(null);
+  const [garde, setGarde] = useState('');
+  const [bilan, setBilan] = useState<string | null>(null);
 
   const visibles = colonnes.filter((c) => !masquees.includes(c.cle));
   const editables = colonnes.filter((c) => c.edition);
@@ -203,8 +217,50 @@ export function Tableau<T extends { id: string }>({
     setLot({ champ: '', valeur: '' });
   };
 
+  const choisies = lignes.filter((l) => selection.has(l.id));
+  const fermer = () => {
+    setAction(null);
+    setGarde('');
+  };
+  const supprimer = async () => {
+    if (!onSupprimer) return;
+    const r = await onSupprimer(choisies.map((l) => l.id));
+    const nom = (id: string) => titre(lignes.find((l) => l.id === id) ?? choisies[0]!);
+    setBilan(
+      r.simulation
+        ? "Simulation : rien n'a été supprimé (écritures réelles désactivées)."
+        : [
+            `${r.ok} supprimée${r.ok > 1 ? 's' : ''}`,
+            ...(r.erreurs.length > 0
+              ? [
+                  `${r.erreurs.length} échec${r.erreurs.length > 1 ? 's' : ''} : ${r.erreurs.map((e) => `${nom(e.id)} (${e.erreur})`).join(' ; ')}`,
+                ]
+              : []),
+          ].join(', '),
+    );
+    fermer();
+    setSelection(new Set());
+  };
+  const fusionner = async () => {
+    const absorbe = choisies.find((l) => l.id !== garde);
+    if (!onFusionner || !garde || !absorbe) return;
+    const r = await onFusionner(garde, absorbe.id);
+    setBilan(
+      r?.simulation
+        ? "Simulation : rien n'a été fusionné (écritures réelles désactivées)."
+        : 'Fiches fusionnées.',
+    );
+    fermer();
+    setSelection(new Set());
+  };
+
   return (
     <div className="tb">
+      {bilan && (
+        <div className="alert amber" role="status" style={{ margin: 8 }}>
+          <div>{bilan}</div>
+        </div>
+      )}
       <div className="tb-outils">
         <select
           className="input"
@@ -309,10 +365,75 @@ export function Tableau<T extends { id: string }>({
           <button className="btn primary sm" disabled={!lot.champ} onClick={() => void appliquer()}>
             Appliquer
           </button>
+          {onFusionner && (
+            <button
+              className="btn sm"
+              disabled={selection.size !== 2}
+              title={selection.size === 2 ? undefined : 'Cochez exactement deux fiches'}
+              onClick={() => setAction('fusionner')}
+            >
+              Fusionner
+            </button>
+          )}
+          {onSupprimer && (
+            <button className="btn sm" onClick={() => setAction('supprimer')}>
+              Supprimer la sélection
+            </button>
+          )}
           <button className="btn ghost sm" onClick={() => setSelection(new Set())}>
             Annuler
           </button>
         </section>
+      )}
+      {action === 'supprimer' && (
+        <Modal
+          title={`Supprimer ${choisies.length} fiche${choisies.length > 1 ? 's' : ''} ?`}
+          onClose={fermer}
+        >
+          <p>
+            Les fiches sont supprimées de l’OS et archivées dans HubSpot si elles y existent. Leurs
+            tâches et activités restent, détachées.
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button className="btn primary" onClick={() => void supprimer()}>
+              Confirmer la suppression
+            </button>
+            <button className="btn ghost" onClick={fermer}>
+              Annuler
+            </button>
+          </div>
+        </Modal>
+      )}
+      {action === 'fusionner' && choisies.length === 2 && (
+        <Modal title="Fusionner deux fiches" onClose={fermer}>
+          <fieldset style={{ border: 0, padding: 0 }}>
+            <legend>Quelle fiche garder ?</legend>
+            {choisies.map((l) => (
+              <label key={l.id} className="check">
+                <input
+                  type="radio"
+                  name="garde"
+                  value={l.id}
+                  checked={garde === l.id}
+                  onChange={() => setGarde(l.id)}
+                />
+                <span>{titre(l)}</span>
+              </label>
+            ))}
+          </fieldset>
+          <p className="small muted">
+            Liens, tâches et historique de l’autre fiche passent sur celle-ci, puis l’autre est
+            supprimée. La fusion est définitive dans HubSpot.
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button className="btn primary" disabled={!garde} onClick={() => void fusionner()}>
+              Confirmer la fusion
+            </button>
+            <button className="btn ghost" onClick={fermer}>
+              Annuler
+            </button>
+          </div>
+        </Modal>
       )}
       <table className="tbl">
         <thead>
