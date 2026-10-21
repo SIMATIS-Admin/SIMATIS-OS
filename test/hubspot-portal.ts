@@ -259,6 +259,12 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
     if (/^\/crm\/v3\/objects\/\w+\/\w+$/.test(u.pathname) && method === 'PATCH') {
       return json({ id: u.pathname.split('/').at(-1) });
     }
+    if (/^\/crm\/v3\/objects\/\w+\/merge$/.test(u.pathname) && method === 'POST') {
+      return json({ id: String(body?.primaryObjectId) });
+    }
+    if (/^\/crm\/v3\/objects\/\w+\/\w+$/.test(u.pathname) && method === 'DELETE') {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
     if (list && method === 'POST') return json({ id: `9${(cree += 1)}` }, 201);
     if (
       /^\/crm\/v4\/objects\/\w+\/\w+\/associations\/default\/\w+\/\w+$/.test(u.pathname) &&

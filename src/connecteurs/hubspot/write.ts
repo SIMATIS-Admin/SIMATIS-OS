@@ -194,6 +194,27 @@ export async function writeHubspot(
       };
       break;
     }
+    case 'record.archive': {
+      const cible = lienHubspot(d.kind);
+      const id = await hubspotId(ctx, cible.table, d.id);
+      // HubSpot archives rather than deletes: the record stays recoverable on its side.
+      call = async () => {
+        await client.request('DELETE', `/crm/v3/objects/${cible.objet}/${id}`);
+        return { id };
+      };
+      break;
+    }
+    case 'record.merge': {
+      const cible = lienHubspot(d.kind);
+      const garde = await hubspotId(ctx, cible.table, d.gardeId);
+      const absorbe = await hubspotId(ctx, cible.table, d.absorbeId);
+      call = () =>
+        client.request('POST', `/crm/v3/objects/${cible.objet}/merge`, {
+          primaryObjectId: garde,
+          objectIdToMerge: absorbe,
+        });
+      break;
+    }
     case 'company.update': {
       const id = await hubspotId(ctx, entreprises, d.entrepriseId);
       const properties = sans({
