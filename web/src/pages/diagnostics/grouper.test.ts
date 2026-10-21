@@ -3,7 +3,14 @@ import type { ProjetDiag, TestVma } from '../../api.js';
 import { filtrer, grouper, paginer, resumerVma } from './grouper.js';
 
 const projet = (extra: Partial<ProjetDiag>): ProjetDiag =>
-  ({ id: 'p', nom: 'Projet', activite: 'Conseil', entrepriseId: null, etape: 1, ...extra }) as ProjetDiag;
+  ({
+    id: 'p',
+    nom: 'Projet',
+    activite: 'Conseil',
+    entrepriseId: null,
+    etape: 1,
+    ...extra,
+  }) as ProjetDiag;
 
 const test = (extra: Partial<TestVma>): TestVma =>
   ({
@@ -39,16 +46,18 @@ describe('Diagnostics : regroupement par entreprise', () => {
     expect(ligne?.tests.map((t) => t.id)).toEqual(['t2', 't1']);
   });
 
-  it("garde une entreprise sans diagnostic ni test", () => {
+  it('garde une entreprise sans diagnostic ni test', () => {
     const [ligne] = grouper([entreprises[1]!], [], []);
     expect(ligne).toEqual({ id: 'e2', nom: 'Entreprise Fictive B', diag: null, tests: [] });
   });
 
   it('met un diagnostic sans entreprise dans sa propre ligne, sans identifiant', () => {
     const lignes = grouper([], [projet({ id: 'p9', nom: 'Projet orphelin' })], []);
-    expect(lignes).toEqual([
-      { id: null, nom: 'Projet orphelin', diag: expect.objectContaining({ id: 'p9' }), tests: [] },
-    ]);
+    expect(lignes).toHaveLength(1);
+    expect(lignes[0]?.id).toBeNull();
+    expect(lignes[0]?.nom).toBe('Projet orphelin');
+    expect(lignes[0]?.diag?.id).toBe('p9');
+    expect(lignes[0]?.tests).toEqual([]);
   });
 });
 

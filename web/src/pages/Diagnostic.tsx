@@ -24,7 +24,7 @@ export const ACTIVITES = [
   ['batiment', 'Artisanat et bâtiment'],
   ['autre', 'Autre activité'],
 ] as const;
-const ETAPES = [
+export const ETAPES = [
   'Préparer la présentation',
   'Entretien et résultat de l’outil',
   'Revue des préconisations',
@@ -235,7 +235,8 @@ function ListeProjets({
   );
 }
 
-function ProjetVue({
+// Écran d'un projet : réutilisé par la section Diagnostics (une ligne ouverte mène ici).
+export function ProjetVue({
   slug,
   projet,
   onChange,
