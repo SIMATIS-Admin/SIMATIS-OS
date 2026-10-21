@@ -69,6 +69,7 @@ try {
   if (config.site) {
     stopReleveSite = startReleveSite(db, {
       ...config.site,
+      ecriture: { secretsDir: config.secretsDir, realWrites: config.realWrites },
       onResult: (r) => {
         if (r.recues > 0) app.log.info(r, 'website contact requests pulled');
       },
