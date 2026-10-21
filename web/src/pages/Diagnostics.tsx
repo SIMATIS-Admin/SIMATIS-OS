@@ -126,7 +126,7 @@ export function Diagnostics({ slug }: { slug: string }) {
   return (
     <div className="stack dg">
       {alerte}
-      <div className="panel">
+      <div className="panel dg-titre">
         <div className="panel-h">
           <div>
             <h2>Diagnostics</h2>
@@ -170,7 +170,7 @@ export function Diagnostics({ slug }: { slug: string }) {
           <input
             type="search"
             aria-label="Rechercher une entreprise"
-            placeholder="Rechercher une entreprise…"
+            placeholder="Recherche"
             value={recherche}
             onChange={(e) => {
               setRecherche(e.target.value);
