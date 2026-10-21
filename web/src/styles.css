@@ -3400,3 +3400,216 @@ tr.sel {
 .diag-statut.attente {
   color: var(--ink-3);
 }
+
+/* Section Diagnostics : une ligne par entreprise, vue macro fermée, détail ouvert. */
+.dg-ligne {
+  padding: 0;
+  overflow: hidden;
+}
+.dg-entete {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.3fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+}
+.dg-entete:focus-visible {
+  outline: 2px solid var(--accent, #3b6fb5);
+  outline-offset: -2px;
+}
+.dg-nom {
+  font-weight: 700;
+}
+.dg-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #6b7a90);
+}
+.dg-bascule {
+  justify-self: end;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--line, #dfe4ee);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.dg-detail {
+  border-top: 1px solid var(--line, #dfe4ee);
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.dg-bloc {
+  border: 1px solid var(--line, #dfe4ee);
+  border-radius: 10px;
+  padding: 14px;
+  min-width: 0;
+}
+.dg-bloc h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.dg-etapes {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+.dg-etapes span {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--gris, #e9eef5);
+}
+.dg-etapes span.fait {
+  background: #3fa08a;
+}
+.dg-etapes span.en-cours {
+  background: #b7791f;
+}
+.dg-resultat {
+  background: var(--fond, #f4f6fa);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.dg-grand {
+  font-size: 24px;
+  font-weight: 700;
+}
+.dg-grand small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted, #6b7a90);
+}
+.dg-evolution {
+  margin-top: 10px;
+  border-top: 1px solid var(--line, #dfe4ee);
+  padding-top: 10px;
+}
+.dg-barres {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  height: 120px;
+  margin-top: 8px;
+}
+.dg-barre {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 12px;
+}
+.dg-barre span {
+  width: 100%;
+  max-width: 56px;
+  background: #3fa08a;
+  border-radius: 6px 6px 0 0;
+  margin: 4px 0;
+}
+.dg-barre small {
+  color: var(--muted, #6b7a90);
+}
+.dg-tests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dg-tests li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid var(--line, #dfe4ee);
+  font-size: 14px;
+}
+.dg-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.dg-pages {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.dg-pages-boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+@media (max-width: 720px) {
+  .dg-entete {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dg-entete > :first-child {
+    grid-column: 1 / -1;
+  }
+  .dg-detail {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Création depuis la section Diagnostics : menu « + Nouveau » et fenêtres de saisie. */
+.dg-menu {
+  position: relative;
+}
+.dg-menu-liste {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 240px;
+  background: var(--carte, #fff);
+  border: 1px solid var(--line, #dfe4ee);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.dg-menu-liste button {
+  all: unset;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 8px;
+}
+.dg-menu-liste button:hover {
+  background: var(--gris, #e9eef5);
+}
+.dg-voile {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 20, 35, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+.dg-modale {
+  background: var(--carte, #fff);
+  border-radius: 14px;
+  padding: 22px;
+  width: min(460px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+}
+.dg-modale h2 {
+  margin: 0 0 12px;
+  font-size: 19px;
+}

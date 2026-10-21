@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { createInstance } from '../instances/service.js';
+import { entreprises } from '../crm/schema.js';
 import type { Instance } from '../instances/schema.js';
 import {
   createProjet,
@@ -138,5 +139,19 @@ describe('Diagnostic : colonnes de l entretien', () => {
     expect(relu.reponsesEntretien).toEqual([]);
     expect(relu.historiqueReponses).toEqual([]);
     expect(relu.pdfEntretienNom).toBeNull();
+  });
+
+  it('rattache un projet à une entreprise et la garde à la relecture', async () => {
+    const [e] = await t.owner.db
+      .insert(entreprises)
+      .values({ instanceId: simatis.id, nom: 'Entreprise Fictive A' })
+      .returning({ id: entreprises.id });
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Projet rattaché',
+      activite: 'Conseil',
+      entrepriseId: e!.id,
+    });
+    const relu = (await listProjets(t.app.db, simatis)).find((x) => x.id === p.id)!;
+    expect(relu.entrepriseId).toBe(e!.id);
   });
 });

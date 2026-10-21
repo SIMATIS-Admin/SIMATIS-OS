@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype Diagnostics v3</title>
+<style>
+  :root {
+    --fond: #f4f6fa; --carte: #ffffff; --bord: #dfe4ee; --texte: #13233f; --doux: #6b7a90;
+    --marine: #0f2f5c; --vert: #3fa08a; --vert-doux: #e3f4ef; --gris: #e9eef5; --ambre: #b7791f; --ambre-doux: #fdf3e1; --rouge: #a33a3a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond: #0e1726; --carte: #162238; --bord: #26354f; --texte: #e6ecf5; --doux: #8fa0b8; --marine: #3d6fb5; --vert-doux: #17372f; --gris: #1d2b43; --ambre-doux: #3a2c12; --rouge: #e08080; }
+  }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 20px 16px 12px; max-width: 980px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 26px; }
+  main { padding: 0 16px 40px; max-width: 980px; margin: 0 auto; }
+  .bandeau { margin: 0 auto 16px; max-width: 980px; padding: 10px 14px; background: var(--ambre-doux); border-radius: 10px; font-size: 13px; }
+  .recherche { min-width: 200px; padding: 9px 12px; border: 1px solid var(--bord); border-radius: 8px; background: var(--carte); color: var(--texte); }
+  .menu { position: relative; }
+  .btn { background: var(--marine); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; font-weight: 600; cursor: pointer; }
+  .btn-doux { background: var(--carte); color: var(--texte); border: 1px solid var(--bord); border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
+  .btn-doux:disabled { opacity: .5; cursor: default; }
+  .liste-menu { position: absolute; right: 0; top: calc(100% + 6px); background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 280px; padding: 6px; display: none; z-index: 5; }
+  .menu.ouvert .liste-menu { display: block; }
+  .liste-menu button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 10px; border-radius: 8px; color: var(--texte); cursor: pointer; }
+  .liste-menu button:hover { background: var(--gris); }
+  .liste-menu small { display: block; color: var(--doux); }
+
+  .entreprise { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .entreprise > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(180px, 1.3fr) minmax(150px, 1fr) minmax(150px, 1fr) auto; gap: 12px; align-items: center; padding: 14px 16px; }
+  .entreprise > summary::-webkit-details-marker { display: none; }
+  .entreprise > summary::after { content: "Détail ▾"; justify-self: end; color: var(--marine); font-size: 13px; font-weight: 600; border: 1px solid var(--bord); border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
+  .entreprise[open] > summary::after { content: "Réduire ▴"; }
+  .entreprise > summary:hover::after { background: var(--gris); }
+  .pages { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; max-width: 980px; margin: 0 auto 40px; padding: 0 16px; font-size: 13px; color: var(--doux); }
+  .pages-boutons { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pages .actif { background: var(--marine); color: #fff; border-color: var(--marine); }
+  .nom { font-weight: 700; font-size: 16px; }
+  .sous { color: var(--doux); font-size: 13px; }
+  .cellule-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--doux); }
+  .cellule-val { font-size: 14px; font-weight: 600; }
+  .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--gris); white-space: nowrap; }
+  .pill.vert { background: var(--vert-doux); }
+  .pill.ambre { background: var(--ambre-doux); }
+  .pill.rouge { color: var(--rouge); }
+
+  .detail { border-top: 1px solid var(--bord); padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .bloc { border: 1px solid var(--bord); border-radius: 10px; padding: 14px; min-width: 0; }
+  .bloc h3 { margin: 0 0 6px; font-size: 15px; display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .bloc p { margin: 4px 0; font-size: 13px; color: var(--doux); }
+  .etapes { display: flex; gap: 4px; margin: 10px 0 4px; }
+  .etapes span { flex: 1; height: 6px; border-radius: 3px; background: var(--gris); }
+  .etapes span.fait { background: var(--vert); }
+  .etapes span.en-cours { background: var(--ambre); }
+  .outils { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .ligne-vma { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--bord); font-size: 14px; }
+  .ligne-vma:first-of-type { border-top: 0; }
+  .ligne-vma .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .vide { color: var(--doux); font-size: 13px; font-style: italic; margin: 8px 0; }
+
+  .resultat { background: var(--fond); border-radius: 10px; padding: 12px; margin: 8px 0 10px; font-size: 14px; }
+  .resultat p { margin: 4px 0; font-size: 13px; color: var(--texte); }
+  .resultat-tete { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .grand { font-size: 24px; font-weight: 700; margin-top: 6px; }
+  .grand small { font-size: 13px; font-weight: 400; color: var(--doux); }
+  .freins { margin: 4px 0 0; padding-left: 20px; font-size: 13px; }
+  .evolution { margin-top: 12px; border-top: 1px solid var(--bord); padding-top: 10px; }
+  .barres { display: flex; align-items: flex-end; gap: 14px; height: 120px; margin-top: 8px; }
+  .barre { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; font-size: 12px; min-width: 0; }
+  .barre b { font-size: 12px; }
+  .barre span { width: 100%; max-width: 56px; background: var(--vert); border-radius: 6px 6px 0 0; margin: 4px 0; }
+  .barre small { color: var(--doux); }
+
+  /* Fenêtres de saisie */
+  dialog { border: 1px solid var(--bord); border-radius: 14px; background: var(--carte); color: var(--texte); padding: 22px; width: min(440px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(10,20,35,.45); }
+  dialog h2 { margin: 0 0 14px; font-size: 19px; }
+  dialog label { display: block; font-size: 13px; color: var(--doux); margin: 10px 0 4px; }
+  dialog input, dialog select { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); color: var(--texte); font: inherit; }
+  dialog .msg { font-size: 13px; color: var(--rouge); min-height: 18px; margin-top: 8px; }
+  dialog .pied { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  dialog .aide { font-size: 12px; color: var(--doux); margin-top: 4px; }
+  .lien-cree { margin-top: 10px; padding: 10px; background: var(--vert-doux); border-radius: 8px; font-size: 13px; word-break: break-all; }
+
+  @media (max-width: 720px) {
+    .entreprise > summary { grid-template-columns: 1fr 1fr; }
+    .entreprise > summary > :first-child { grid-column: 1 / -1; }
+    .entreprise > summary::after { justify-self: start; }
+    .detail { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Diagnostics</h1>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <input class="recherche" id="recherche" placeholder="Rechercher une entreprise…" aria-label="Rechercher">
+    <div class="menu" id="menu">
+      <button class="btn" type="button" onclick="document.getElementById('menu').classList.toggle('ouvert')">+ Nouveau</button>
+      <div class="liste-menu" role="menu">
+        <button type="button" onclick="ouvrirDiag()">Nouveau diagnostic<small>Une entreprise, son étude d’endurance</small></button>
+        <button type="button" onclick="ouvrirVma()">Nouveau test VMA<small>Une invitation envoyée au dirigeant</small></button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<p class="bandeau">Maquette v3 : les formulaires fonctionnent, mais rien n’est enregistré. Un rechargement remet les données de départ. Entreprises fictives.</p>
+
+<main id="liste">
+      <details class="entreprise">
+        <summary>
+          <div><div class="nom">Entreprise A</div><div class="sous">Conseil et services aux PME</div></div>
+          <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Étape 3 sur 5</div></div>
+          <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">4 tests · 2 reçus</div></div>
+        </summary>
+        <div class="detail"><section class="bloc"><h3>Diagnostic d’endurance commerciale <span class="pill vert">2026</span></h3>
+      <div class="etapes"><span class="fait"></span><span class="fait"></span><span class="en-cours"></span><span class=""></span><span class=""></span></div>
+      <p>Étape 3 · Revue des préconisations</p><p>Diagnostic 2025 terminé, restitué le 12/03/2025.</p>
+      <div class="outils">
+        <button class="btn-doux" type="button" onclick="outil('Continuer l’étape')">Continuer l’étape</button>
+        <button class="btn-doux" type="button" onclick="outil('Support d’ouverture')">Support d’ouverture</button>
+        <button class="btn-doux" type="button" onclick="outil('Résultat outil externe')">Résultat outil externe</button>
+        <button class="btn-doux" type="button" onclick="outil('Rapport')">Rapport</button>
+      </div></section><section class="bloc"><h3>Tests VMA <span class="pill">4</span></h3>
+      <div class="resultat">
+      <div class="resultat-tete"><span class="pill vert">Dernier résultat · Premier test</span><span class="sous">02 oct. 2026</span></div>
+      <div class="grand">4 150 €<small> de CA commandé par mois</small></div>
+      <p>Soit 49 800 € par an. Socle récurrent : 1 200 € par mois. Allure actuelle : 5 350 € par mois.</p>
+      <p>Ambition : <strong>Croissance</strong>, 6 000 € par mois dans 3 ans.</p>
+      <div class="cellule-label">Freins principaux</div>
+      <ol class="freins"><li>Relances clients absentes</li><li>Offre peu lisible</li><li>Temps commercial dispersé</li></ol>
+      <div class="evolution"><div class="cellule-label">Évolution : VMA par mois (premiers tests)</div>
+        <div class="barres"><div class="barre"><b>3 400 €</b><span style="height:82%"></span><small>14 avr. 2026</small></div><div class="barre"><b>4 150 €</b><span style="height:100%"></span><small>02 oct. 2026</small></div></div>
+        <p>+750 € par mois (+22 %) depuis le premier test.</p></div>
+      <div class="outils"><button class="btn-doux" type="button" disabled="" title="Page par mandat, à construire plus tard">Résultat complet · bientôt</button></div>
+    </div>
+      <div class="ligne-vma"><div>Premier test · utilisé<br><small class="sous">Résultat reçu le 14/04</small></div>
+      <div class="actions"><button class="btn-doux" type="button" onclick="outil('Brouillon du résultat')">Brouillon du résultat</button>
+      </div></div><div class="ligne-vma"><div>Premier test · utilisé<br><small class="sous">Résultat reçu le 02/10</small></div>
+      <div class="actions"><button class="btn-doux" type="button" onclick="outil('Brouillon du résultat')">Brouillon du résultat</button>
+      </div></div><div class="ligne-vma"><div>Essai · envoyé<br><small class="sous">Expire le 28/10</small></div>
+      <div class="actions"><button class="btn-doux" type="button" onclick="copier('a2')">Copier le lien</button><button class="btn-doux" type="button" onclick="revoquer(1,'a2')">Révoquer</button>
+      </div></div><div class="ligne-vma"><div>Essai · révoqué<br><small class="sous">Invitation annulée</small></div>
+      <div class="actions">
+      </div></div>
+      <div class="outils"><button class="btn-doux" type="button" onclick="ouvrirVma(1)">+ Nouveau test VMA</button></div></section></div>
+      </details>
+      <details class="entreprise">
+        <summary>
+          <div><div class="nom">Entreprise B</div><div class="sous">Artisanat et bâtiment</div></div>
+          <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Pas encore lancé</div></div>
+          <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">1 test</div></div>
+        </summary>
+        <div class="detail"><section class="bloc"><h3>Diagnostic d’endurance commerciale <span class="pill ambre">À lancer</span></h3>
+        <p>Pas encore démarré. Un test VMA est déjà envoyé.</p>
+        <div class="outils"><button class="btn-doux" type="button" onclick="lancerDiag(2)">Lancer le diagnostic</button></div></section><section class="bloc"><h3>Tests VMA <span class="pill">1</span></h3>
+      
+      <div class="ligne-vma"><div>Premier test · envoyé<br><small class="sous">Expire le 30/10</small></div>
+      <div class="actions"><button class="btn-doux" type="button" onclick="copier('b1')">Copier le lien</button><button class="btn-doux" type="button" onclick="revoquer(2,'b1')">Révoquer</button>
+      </div></div>
+      <div class="outils"><button class="btn-doux" type="button" onclick="ouvrirVma(2)">+ Nouveau test VMA</button></div></section></div>
+      </details>
+      <details class="entreprise">
+        <summary>
+          <div><div class="nom">Entreprise C</div><div class="sous">Autre activité</div></div>
+          <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Étape 1 sur 5</div></div>
+          <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">Aucun</div></div>
+        </summary>
+        <div class="detail"><section class="bloc"><h3>Diagnostic d’endurance commerciale <span class="pill vert">2026</span></h3>
+      <div class="etapes"><span class="en-cours"></span><span class=""></span><span class=""></span><span class=""></span><span class=""></span></div>
+      <p>Étape 1 · Préparer la présentation</p>
+      <div class="outils">
+        <button class="btn-doux" type="button" onclick="outil('Continuer l’étape')">Continuer l’étape</button>
+        <button class="btn-doux" type="button" onclick="outil('Support d’ouverture')">Support d’ouverture</button>
+        <button class="btn-doux" type="button" onclick="outil('Résultat outil externe')">Résultat outil externe</button>
+        <button class="btn-doux" type="button" onclick="outil('Rapport')">Rapport</button>
+      </div></section><section class="bloc"><h3>Tests VMA <span class="pill">0</span></h3>
+      
+      <p class="vide">Aucun test pour l’instant.</p>
+      <div class="outils"><button class="btn-doux" type="button" onclick="ouvrirVma(3)">+ Nouveau test VMA</button></div></section></div>
+      </details>
+      <details class="entreprise">
+        <summary>
+          <div><div class="nom">Entreprise D</div><div class="sous">Commerce de détail</div></div>
+          <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Étape 2 sur 5</div></div>
+          <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">1 test · 1 reçu</div></div>
+        </summary>
+        <div class="detail"><section class="bloc"><h3>Diagnostic d’endurance commerciale <span class="pill vert">2026</span></h3>
+      <div class="etapes"><span class="fait"></span><span class="en-cours"></span><span class=""></span><span class=""></span><span class=""></span></div>
+      <p>Étape 2 · Support d’ouverture</p>
+      <div class="outils">
+        <button class="btn-doux" type="button" onclick="outil('Continuer l’étape')">Continuer l’étape</button>
+        <button class="btn-doux" type="button" onclick="outil('Support d’ouverture')">Support d’ouverture</button>
+        <button class="btn-doux" type="button" onclick="outil('Résultat outil externe')">Résultat outil externe</button>
+        <button class="btn-doux" type="button" onclick="outil('Rapport')">Rapport</button>
+      </div></section><section class="bloc"><h3>Tests VMA <span class="pill">1</span></h3>
+      <div class="resultat">
+      <div class="resultat-tete"><span class="pill ">Dernier résultat · Essai (hors historique)</span><span class="sous">15 oct. 2026</span></div>
+      <div class="grand">2 100 €<small> de CA commandé par mois</small></div>
+      <p>Soit 25 200 € par an. Allure actuelle : 2 100 € par mois.</p>
+      <p>Ambition : <strong>Démarrage</strong>, 3 000 € par mois dans 2 ans.</p>
+      <div class="cellule-label">Freins principaux</div>
+      <ol class="freins"><li>Pas de suivi des devis</li><li>Offre peu lisible</li><li>Relances clients absentes</li></ol>
+      
+      <div class="outils"><button class="btn-doux" type="button" disabled="" title="Page par mandat, à construire plus tard">Résultat complet · bientôt</button></div>
+    </div>
+      <div class="ligne-vma"><div>Essai · utilisé<br><small class="sous">Résultat reçu le 15/10</small></div>
+      <div class="actions"><button class="btn-doux" type="button" onclick="outil('Brouillon du résultat')">Brouillon du résultat</button>
+      </div></div>
+      <div class="outils"><button class="btn-doux" type="button" onclick="ouvrirVma(4)">+ Nouveau test VMA</button></div></section></div>
+      </details>
+      <details class="entreprise">
+        <summary>
+          <div><div class="nom">Entreprise E</div><div class="sous">Santé et bien-être</div></div>
+          <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Pas encore lancé</div></div>
+          <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">Aucun</div></div>
+        </summary>
+        <div class="detail"><section class="bloc"><h3>Diagnostic d’endurance commerciale <span class="pill ambre">À lancer</span></h3>
+        <p>Pas encore démarré.</p>
+        <div class="outils"><button class="btn-doux" type="button" onclick="lancerDiag(5)">Lancer le diagnostic</button></div></section><section class="bloc"><h3>Tests VMA <span class="pill">0</span></h3>
+      
+      <p class="vide">Aucun test pour l’instant.</p>
+      <div class="outils"><button class="btn-doux" type="button" onclick="ouvrirVma(5)">+ Nouveau test VMA</button></div></section></div>
+      </details></main>
+<nav class="pages" id="pages" aria-label="Pages">
+      <span>Entreprises 1 à 5 sur 6</span>
+      <div class="pages-boutons">
+        <button class="btn-doux" type="button" onclick="aller(0)" disabled="">← Précédent</button>
+        <button class="btn-doux actif" type="button" onclick="aller(1)" aria-current="page">1</button><button class="btn-doux " type="button" onclick="aller(2)">2</button>
+        <button class="btn-doux" type="button" onclick="aller(2)">Suivant →</button>
+      </div></nav>
+
+<!-- Nouveau diagnostic -->
+<dialog id="dlg-diag">
+  <form method="dialog" id="form-diag">
+    <h2>Nouveau diagnostic</h2>
+    <label for="diag-entreprise">Entreprise</label>
+    <select id="diag-entreprise" required></select>
+    <p class="aide" id="diag-aide"></p>
+    <div class="msg" id="diag-msg"></div>
+    <div class="pied">
+      <button class="btn-doux" type="button" onclick="this.closest('dialog').close()">Annuler</button>
+      <button class="btn" type="submit" id="diag-ok">Créer le diagnostic</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Nouveau test VMA -->
+<dialog id="dlg-vma">
+  <form method="dialog" id="form-vma">
+    <h2>Nouveau test VMA</h2>
+    <label for="vma-entreprise">Entreprise</label>
+    <select id="vma-entreprise" required></select>
+    <label for="vma-nouvelle">Ou nouvelle entreprise (nom)</label>
+    <input id="vma-nouvelle" placeholder="Nom de l’entreprise">
+    <label for="vma-type">Type de test</label>
+    <select id="vma-type">
+      <option value="premier">Premier test</option>
+      <option value="essai">Essai</option>
+    </select>
+    <label for="vma-contact">Dirigeant qui passe le test</label>
+    <input id="vma-contact" placeholder="Nom et prénom">
+    <label for="vma-email">E-mail du dirigeant</label>
+    <input id="vma-email" type="email" placeholder="prenom@entreprise.exemple">
+    <p class="aide">Le lien d’invitation est créé immédiatement. Il expire dans 14 jours (valeur de maquette).</p>
+    <div class="msg" id="vma-msg"></div>
+    <div class="lien-cree" id="vma-lien" hidden></div>
+    <div class="pied">
+      <button class="btn-doux" type="button" onclick="this.closest('dialog').close()">Fermer</button>
+      <button class="btn" type="submit" id="vma-ok">Créer l’invitation</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  // Données de départ. Rien n'est sauvegardé : un rechargement remet ces valeurs.
+  const annee = 2026;
+  let entreprises = [
+    { id: 1, nom: 'Entreprise A', secteur: 'Conseil et services aux PME',
+      diag: { annee, etape: 3, passes: [{ annee: 2025, restitue: '12/03/2025' }] },
+      vma: [
+        { id: 'a1', type: 'premier', statut: 'utilisee', detail: 'Résultat reçu le 14/04',
+          resultat: { date: '2026-04-14', vma: 3400, recurrent: 900, allureActuelle: 4300, niveau: 'Stabilisation', objectif: 5000, echeance: 3,
+            freins: ['Relances clients absentes', 'Offre peu lisible', 'Prix non justifié'] } },
+        { id: 'a5', type: 'premier', statut: 'utilisee', detail: 'Résultat reçu le 02/10',
+          resultat: { date: '2026-10-02', vma: 4150, recurrent: 1200, allureActuelle: 5350, niveau: 'Croissance', objectif: 6000, echeance: 3,
+            freins: ['Relances clients absentes', 'Offre peu lisible', 'Temps commercial dispersé'] } },
+        { id: 'a2', type: 'essai', statut: 'envoyee', detail: 'Expire le 28/10' },
+        { id: 'a3', type: 'essai', statut: 'revoquee', detail: 'Invitation annulée' },
+      ] },
+    { id: 2, nom: 'Entreprise B', secteur: 'Artisanat et bâtiment',
+      diag: null,
+      vma: [ { id: 'b1', type: 'premier', statut: 'envoyee', detail: 'Expire le 30/10' } ] },
+    { id: 3, nom: 'Entreprise C', secteur: 'Autre activité',
+      diag: { annee, etape: 1, passes: [] },
+      vma: [] },
+    { id: 4, nom: 'Entreprise D', secteur: 'Commerce de détail',
+      diag: { annee, etape: 2, passes: [] },
+      vma: [ { id: 'd1', type: 'essai', statut: 'utilisee', detail: 'Résultat reçu le 15/10',
+        resultat: { date: '2026-10-15', vma: 2100, recurrent: 0, allureActuelle: 2100, niveau: 'Démarrage', objectif: 3000, echeance: 2,
+          freins: ['Pas de suivi des devis', 'Offre peu lisible', 'Relances clients absentes'] } } ] },
+    { id: 5, nom: 'Entreprise E', secteur: 'Santé et bien-être',
+      diag: null,
+      vma: [] },
+    { id: 6, nom: 'Entreprise F', secteur: 'Transport et logistique',
+      diag: { annee, etape: 4, passes: [] },
+      vma: [ { id: 'f1', type: 'premier', statut: 'envoyee', detail: 'Expire le 03/11' } ] },
+  ];
+  let prochainId = 7;
+  let prochainVma = 100;
+
+  const ETAPES = ['Préparer la présentation', 'Support d’ouverture', 'Revue des préconisations', 'Entretien', 'Restitution et capitalisation'];
+  const LIBELLE_TYPE = { premier: 'Premier test', essai: 'Essai' };
+  const LIBELLE_STATUT = { envoyee: 'envoyé', utilisee: 'utilisé', revoquee: 'révoqué' };
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function resumeDiag(e) {
+    if (!e.diag) return 'Pas encore lancé';
+    return 'Étape ' + e.diag.etape + ' sur 5';
+  }
+  function resumeVma(e) {
+    if (!e.vma.length) return 'Aucun';
+    const recus = e.vma.filter((t) => t.statut === 'utilisee').length;
+    return e.vma.length + ' test' + (e.vma.length > 1 ? 's' : '') + (recus ? ' · ' + recus + ' reçu' + (recus > 1 ? 's' : '') : '');
+  }
+
+  function blocDiag(e) {
+    if (!e.diag) {
+      return `<section class="bloc"><h3>Diagnostic d’endurance commerciale <span class="pill ambre">À lancer</span></h3>
+        <p>Pas encore démarré.${e.vma.length ? ' Un test VMA est déjà envoyé.' : ''}</p>
+        <div class="outils"><button class="btn-doux" type="button" onclick="lancerDiag(${e.id})">Lancer le diagnostic</button></div></section>`;
+    }
+    const d = e.diag;
+    const etapes = [0, 1, 2, 3, 4].map((i) => `<span class="${i < d.etape - 1 ? 'fait' : i === d.etape - 1 ? 'en-cours' : ''}"></span>`).join('');
+    const passes = d.passes.map((p) => `<p>Diagnostic ${p.annee} terminé, restitué le ${esc(p.restitue)}.</p>`).join('');
+    return `<section class="bloc"><h3>Diagnostic d’endurance commerciale <span class="pill vert">${d.annee}</span></h3>
+      <div class="etapes">${etapes}</div>
+      <p>Étape ${d.etape} · ${ETAPES[d.etape - 1]}</p>${passes}
+      <div class="outils">
+        <button class="btn-doux" type="button" onclick="outil('Continuer l’étape')">Continuer l’étape</button>
+        <button class="btn-doux" type="button" onclick="outil('Support d’ouverture')">Support d’ouverture</button>
+        <button class="btn-doux" type="button" onclick="outil('Résultat outil externe')">Résultat outil externe</button>
+        <button class="btn-doux" type="button" onclick="outil('Rapport')">Rapport</button>
+      </div></section>`;
+  }
+
+  // Aperçu synthétique du dernier résultat reçu, et évolution des premiers tests.
+  // Les essais ne rentrent pas dans l'historique (cahier des charges §5.1) : ils sont montrés à part.
+  const euro = (v) => Number(v).toLocaleString('fr-FR') + ' €';
+  const dateCourte = (iso) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  function blocResultat(e) {
+    const recus = e.vma.filter((t) => t.resultat).sort((a, b) => a.resultat.date.localeCompare(b.resultat.date));
+    if (!recus.length) return '';
+    const dernier = recus[recus.length - 1];
+    const r = dernier.resultat;
+    const premiers = recus.filter((t) => t.type === 'premier');
+
+    const evolution = premiers.length >= 2 ? (() => {
+      const max = Math.max(...premiers.map((t) => t.resultat.vma));
+      const barres = premiers.map((t) => `<div class="barre"><b>${euro(t.resultat.vma)}</b><span style="height:${Math.round((t.resultat.vma / max) * 100)}%"></span><small>${dateCourte(t.resultat.date)}</small></div>`).join('');
+      const premier = premiers[0].resultat.vma, dernierV = premiers[premiers.length - 1].resultat.vma;
+      const delta = dernierV - premier;
+      const pct = Math.round((delta / premier) * 100);
+      return `<div class="evolution"><div class="cellule-label">Évolution : VMA par mois (premiers tests)</div>
+        <div class="barres">${barres}</div>
+        <p>${delta >= 0 ? '+' : ''}${euro(delta)} par mois (${pct >= 0 ? '+' : ''}${pct} %) depuis le premier test.</p></div>`;
+    })() : '';
+
+    const libelleTest = dernier.type === 'premier' ? 'Premier test' : 'Essai (hors historique)';
+    return `<div class="resultat">
+      <div class="resultat-tete"><span class="pill ${dernier.type === 'premier' ? 'vert' : ''}">Dernier résultat · ${libelleTest}</span><span class="sous">${dateCourte(r.date)}</span></div>
+      <div class="grand">${euro(r.vma)}<small> de CA commandé par mois</small></div>
+      <p>Soit ${euro(r.vma * 12)} par an.${r.recurrent ? ` Socle récurrent : ${euro(r.recurrent)} par mois.` : ''} Allure actuelle : ${euro(r.allureActuelle)} par mois.</p>
+      <p>Ambition : <strong>${esc(r.niveau)}</strong>, ${euro(r.objectif)} par mois dans ${r.echeance} ans.</p>
+      <div class="cellule-label">Freins principaux</div>
+      <ol class="freins">${r.freins.map((f) => `<li>${esc(f)}</li>`).join('')}</ol>
+      ${evolution}
+      <div class="outils"><button class="btn-doux" type="button" disabled title="Page par mandat, à construire plus tard">Résultat complet · bientôt</button></div>
+    </div>`;
+  }
+
+  function blocVma(e) {
+    const lignes = e.vma.map((t) => `<div class="ligne-vma"><div>${LIBELLE_TYPE[t.type]} · ${LIBELLE_STATUT[t.statut]}<br><small class="sous">${esc(t.detail)}</small></div>
+      <div class="actions">${t.statut === 'envoyee'
+        ? `<button class="btn-doux" type="button" onclick="copier('${t.id}')">Copier le lien</button><button class="btn-doux" type="button" onclick="revoquer(${e.id},'${t.id}')">Révoquer</button>`
+        : t.statut === 'utilisee' ? `<button class="btn-doux" type="button" onclick="outil('Brouillon du résultat')">Brouillon du résultat</button>` : ''}
+      </div></div>`).join('');
+    return `<section class="bloc"><h3>Tests VMA <span class="pill">${e.vma.length}</span></h3>
+      ${blocResultat(e)}
+      ${lignes || '<p class="vide">Aucun test pour l’instant.</p>'}
+      <div class="outils"><button class="btn-doux" type="button" onclick="ouvrirVma(${e.id})">+ Nouveau test VMA</button></div></section>`;
+  }
+
+  // Pagination : 5 entreprises par page. La recherche filtre sur toutes les entreprises, puis la pagination s'applique.
+  let page = 1;
+  const PAR_PAGE = 5;
+
+  function filtrees() {
+    const q = document.getElementById('recherche').value.trim().toLowerCase();
+    return entreprises.filter((e) => !q || e.nom.toLowerCase().includes(q));
+  }
+
+  function aller(n) {
+    page = n;
+    rendu();
+    document.getElementById('liste').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Après une création : efface la recherche et ouvre la page qui contient l'entreprise.
+  function montrer(e) {
+    document.getElementById('recherche').value = '';
+    page = Math.floor(entreprises.indexOf(e) / PAR_PAGE) + 1;
+  }
+
+  function rendu() {
+    const liste = filtrees();
+    const pages = Math.max(1, Math.ceil(liste.length / PAR_PAGE));
+    page = Math.min(Math.max(1, page), pages);
+    const debut = (page - 1) * PAR_PAGE;
+    const visibles = liste.slice(debut, debut + PAR_PAGE);
+
+    document.getElementById('liste').innerHTML = visibles.map((e) => `
+      <details class="entreprise">
+        <summary>
+          <div><div class="nom">${esc(e.nom)}</div><div class="sous">${esc(e.secteur)}</div></div>
+          <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">${resumeDiag(e)}</div></div>
+          <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">${resumeVma(e)}</div></div>
+        </summary>
+        <div class="detail">${blocDiag(e)}${blocVma(e)}</div>
+      </details>`).join('') || '<p class="vide">Aucune entreprise ne correspond.</p>';
+
+    const numeros = Array.from({ length: pages }, (_, i) => i + 1).map((n) =>
+      `<button class="btn-doux ${n === page ? 'actif' : ''}" type="button" onclick="aller(${n})" ${n === page ? 'aria-current="page"' : ''}>${n}</button>`).join('');
+    document.getElementById('pages').innerHTML = liste.length ? `
+      <span>Entreprises ${debut + 1} à ${debut + visibles.length} sur ${liste.length}</span>
+      <div class="pages-boutons">
+        <button class="btn-doux" type="button" onclick="aller(${page - 1})" ${page === 1 ? 'disabled' : ''}>← Précédent</button>
+        ${numeros}
+        <button class="btn-doux" type="button" onclick="aller(${page + 1})" ${page === pages ? 'disabled' : ''}>Suivant →</button>
+      </div>` : '';
+  }
+
+  // Remplit la liste des entreprises du formulaire diagnostic : seulement celles sans diagnostic en cours.
+  function ouvrirDiag(idPreselect) {
+    document.getElementById('menu').classList.remove('ouvert');
+    const sel = document.getElementById('diag-entreprise');
+    sel.innerHTML = entreprises.map((e) => `<option value="${e.id}" ${e.diag ? 'disabled' : ''} ${e.id === idPreselect ? 'selected' : ''}>${esc(e.nom)}${e.diag ? ' (diagnostic déjà en cours)' : ''}</option>`).join('');
+    const libres = entreprises.find((e) => !e.diag);
+    if (!idPreselect && libres) sel.value = libres.id;
+    document.getElementById('diag-aide').textContent = 'Une entreprise ne peut avoir qu’un diagnostic en cours. Les entreprises déjà suivies sont grisées.';
+    document.getElementById('diag-msg').textContent = '';
+    document.getElementById('dlg-diag').showModal();
+  }
+  function lancerDiag(id) { ouvrirDiag(id); }
+
+  function ouvrirVma(idPreselect) {
+    document.getElementById('menu').classList.remove('ouvert');
+    const sel = document.getElementById('vma-entreprise');
+    sel.innerHTML = '<option value="">— Choisir une entreprise —</option>' + entreprises.map((e) => `<option value="${e.id}" ${e.id === idPreselect ? 'selected' : ''}>${esc(e.nom)}</option>`).join('');
+    document.getElementById('form-vma').reset();
+    if (idPreselect) sel.value = idPreselect;
+    document.getElementById('vma-msg').textContent = '';
+    const lien = document.getElementById('vma-lien');
+    lien.hidden = true; lien.textContent = '';
+    document.getElementById('vma-ok').disabled = false;
+    document.getElementById('dlg-vma').showModal();
+  }
+
+  function ajouterEntreprise(nom) {
+    const e = { id: prochainId++, nom, secteur: 'Nouvelle entreprise', diag: null, vma: [] };
+    entreprises.push(e);
+    return e;
+  }
+
+  document.getElementById('form-diag').addEventListener('submit', (ev) => {
+    const id = Number(document.getElementById('diag-entreprise').value);
+    const e = entreprises.find((x) => x.id === id);
+    if (!e) { ev.preventDefault(); document.getElementById('diag-msg').textContent = 'Choisissez une entreprise.'; return; }
+    if (e.diag) { ev.preventDefault(); document.getElementById('diag-msg').textContent = 'Cette entreprise a déjà un diagnostic en cours.'; return; }
+    e.diag = { annee, etape: 1, passes: [] };
+    montrer(e);
+    rendu();
+  });
+
+  document.getElementById('form-vma').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const msg = document.getElementById('vma-msg');
+    const nouvelle = document.getElementById('vma-nouvelle').value.trim();
+    const choisie = Number(document.getElementById('vma-entreprise').value);
+    const contact = document.getElementById('vma-contact').value.trim();
+    const email = document.getElementById('vma-email').value.trim();
+    if (!nouvelle && !choisie) { msg.textContent = 'Choisissez une entreprise ou saisissez un nom.'; return; }
+    if (!contact) { msg.textContent = 'Indiquez le dirigeant qui passe le test.'; return; }
+    if (!email.includes('@')) { msg.textContent = 'Indiquez une adresse e-mail valide.'; return; }
+    const e = nouvelle ? ajouterEntreprise(nouvelle) : entreprises.find((x) => x.id === choisie);
+    const type = document.getElementById('vma-type').value;
+    const id = 'v' + prochainVma++;
+    e.vma.push({ id, type, statut: 'envoyee', detail: 'Expire le ' + expire(14) });
+    const lien = document.getElementById('vma-lien');
+    lien.textContent = 'Lien d’invitation (maquette) : https://exemple.invalid/vma/' + id;
+    lien.hidden = false;
+    msg.textContent = '';
+    document.getElementById('vma-ok').disabled = true;
+    montrer(e);
+    rendu();
+  });
+
+  function expire(jours) {
+    const d = new Date(Date.now() + jours * 864e5);
+    return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+
+  function copier(id) {
+    const t = entreprises.flatMap((e) => e.vma).find((x) => x.id === id);
+    const texte = 'https://exemple.invalid/vma/' + id;
+    if (navigator.clipboard) navigator.clipboard.writeText(texte).catch(() => {});
+    alert('Lien copié (maquette) : ' + texte + (t ? '' : ''));
+  }
+  function revoquer(entrepriseId, id) {
+    const e = entreprises.find((x) => x.id === entrepriseId);
+    const t = e.vma.find((x) => x.id === id);
+    if (!confirm('Révoquer ce test VMA ? Le lien ne fonctionnera plus.')) return;
+    t.statut = 'revoquee'; t.detail = 'Invitation annulée';
+    rendu();
+  }
+  function outil(nom) { alert('Maquette : ouvrirait « ' + nom + ' ».'); }
+
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('menu');
+    if (!menu.contains(e.target)) menu.classList.remove('ouvert');
+  });
+  document.getElementById('recherche').addEventListener('input', () => { page = 1; rendu(); });
+  rendu();
+</script>
+</body>
+</html>

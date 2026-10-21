@@ -3,11 +3,17 @@ import type { Executor } from '../db.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { profilDe, type Profil } from './profil.js';
+import { entreprises } from '../crm/schema.js';
 import { diagnosticProjets, type Projet } from './schema.js';
 
 // Le diagnostic est un outil de SIMATIS seulement : un mandat ne le voit pas (il verra son résultat).
 export class DiagnosticIndisponible extends Error {}
 export class ProjetIntrouvable extends Error {}
+export class EntrepriseIntrouvable extends Error {
+  constructor() {
+    super('Entreprise introuvable dans cet espace');
+  }
+}
 
 export type ProjetVue = Omit<Projet, 'rapport' | 'logo' | 'pdfEntretien'> & {
   profil: Profil | null;
@@ -61,13 +67,26 @@ export async function listProjets(db: Executor, instance: Instance): Promise<Pro
 export async function createProjet(
   db: Executor,
   instance: Instance,
-  input: { nom: string; activite: string },
+  input: { nom: string; activite: string; entrepriseId?: string | null },
 ): Promise<ProjetVue> {
   verifierEspace(instance);
   return withInstance(db, instance.id, async (tx) => {
+    // Une entreprise d'une autre instance est invisible ici (RLS) : elle n'est donc pas trouvée.
+    if (input.entrepriseId) {
+      const [trouvee] = await tx
+        .select({ id: entreprises.id })
+        .from(entreprises)
+        .where(eq(entreprises.id, input.entrepriseId));
+      if (!trouvee) throw new EntrepriseIntrouvable();
+    }
     const [row] = await tx
       .insert(diagnosticProjets)
-      .values({ instanceId: instance.id, nom: input.nom.trim(), activite: input.activite })
+      .values({
+        instanceId: instance.id,
+        nom: input.nom.trim(),
+        activite: input.activite,
+        entrepriseId: input.entrepriseId ?? null,
+      })
       .returning();
     return vue(row!);
   });

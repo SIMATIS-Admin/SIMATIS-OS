@@ -43,6 +43,16 @@ describe('nav', () => {
     expect(vueCanonique('rendez-vous')).toBe('rendez-vous');
   });
 
+  it('garde une seule entrée Diagnostics et redirige les anciennes adresses', () => {
+    const entrees = allItems().filter((i) =>
+      ['diagnostic', 'diagnostics', 'tests-vma'].includes(i.id),
+    );
+    expect(entrees.map((i) => i.id)).toEqual(['diagnostics']);
+    expect(isBuilt('diagnostics')).toBe(true);
+    expect(vueCanonique('diagnostic')).toBe('diagnostics');
+    expect(vueCanonique('tests-vma')).toBe('diagnostics');
+  });
+
   it('groups instances by type and keeps their order', () => {
     const groups = groupInstances([
       inst('b', 'mandat'),

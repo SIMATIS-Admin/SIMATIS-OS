@@ -31,8 +31,7 @@ import { Portefeuille } from './pages/Portefeuille.js';
 import { Tableau } from './pages/Tableau.js';
 import { Routines } from './pages/Routines.js';
 import { Devis } from './pages/Devis.js';
-import { Diagnostic } from './pages/Diagnostic.js';
-import { TestsVma } from './pages/TestsVma.js';
+import { Diagnostics } from './pages/Diagnostics.js';
 import { SiteWeb } from './pages/SiteWeb.js';
 import { Sidebar } from './shell/Sidebar.js';
 
@@ -157,10 +156,8 @@ export function App() {
         );
       case 'devis':
         return <Devis key={current.slug} slug={current.slug} />;
-      case 'diagnostic':
-        return <Diagnostic key={current.slug} slug={current.slug} />;
-      case 'tests-vma':
-        return <TestsVma key={current.slug} slug={current.slug} />;
+      case 'diagnostics':
+        return <Diagnostics key={current.slug} slug={current.slug} />;
       case 'siteweb':
         return <SiteWeb key={current.slug} slug={current.slug} />;
       case 'tableau':
