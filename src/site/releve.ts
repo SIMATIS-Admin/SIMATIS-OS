@@ -12,7 +12,7 @@ import { mailAccuse } from './accuse.js';
 const demandeSchema = z.object({
   id: z.uuid(),
   recueLe: z.iso.datetime({ offset: true }),
-  objet: z.enum(['diagnostic', 'echange', 'autre']),
+  objet: z.enum(['diagnostic', 'echange', 'livre-blanc', 'autre']),
   nom: z.string().min(1).max(120),
   entreprise: z.string().min(1).max(160),
   email: z.email().max(200),
@@ -37,6 +37,7 @@ export type ResultatReleve = { recues: number; creees: number; ignorees: number 
 const LIBELLE: Record<DemandeSite['objet'], string> = {
   diagnostic: 'Demande de diagnostic',
   echange: "Demande d'échange",
+  'livre-blanc': 'Demande du livre blanc',
   autre: 'Demande de contact',
 };
 
@@ -73,7 +74,7 @@ async function accuser(
   d: DemandeSite,
   ecriture: ConnexionDeps,
 ): Promise<void> {
-  const { subject, html } = mailAccuse({ nom: d.nom });
+  const { subject, html } = mailAccuse({ nom: d.nom, objet: d.objet });
   try {
     await tx.transaction((sp) =>
       writeVia(
