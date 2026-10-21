@@ -31,7 +31,7 @@ export type LienFiche = {
 };
 export type LiensFiche = { contacts: LienFiche[]; entreprises: LienFiche[]; affaires: LienFiche[] };
 
-const SIMULATION: SimulationFiche = {
+export const SIMULATION: SimulationFiche = {
   simulation: true,
   message: "Simulation : rien n'a été écrit dans HubSpot (écritures réelles désactivées).",
 };
@@ -116,7 +116,7 @@ function paireDe(a: Ref, b: Ref) {
   throw new FicheInvalide('Lien impossible entre ces deux types de fiche');
 }
 
-async function ligne(tx: Tx, kind: Kind, id: string) {
+export async function ligne(tx: Tx, kind: Kind, id: string) {
   const t = tables[kind];
   const [row] = await tx
     .select({ id: t.id, source: t.source })
@@ -125,10 +125,10 @@ async function ligne(tx: Tx, kind: Kind, id: string) {
   return row ?? null;
 }
 
-async function ecrireHubspot(
+export async function ecrireHubspot(
   tx: Tx,
   instance: Instance,
-  op: 'association.add' | 'association.remove',
+  op: 'association.add' | 'association.remove' | 'record.archive' | 'record.merge',
   data: Record<string, unknown>,
   deps: ConnexionDeps,
 ) {
@@ -143,7 +143,7 @@ async function ecrireHubspot(
 
 // Both ends must be HubSpot copies of an instance whose CRM is HubSpot: the link is then written to
 // HubSpot first. A link with an OS-only record lives in the OS only.
-async function viaHubspot(tx: Tx, a: { source: string }, b: { source: string }) {
+export async function viaHubspot(tx: Tx, a: { source: string }, b: { source: string }) {
   if (a.source !== 'hubspot' || b.source !== 'hubspot') return false;
   const [c] = await tx
     .select({ fournisseur: connexions.fournisseur, reglages: connexions.reglages })
@@ -540,6 +540,67 @@ export async function reparerPrincipaux(tx: Tx): Promise<void> {
       await refleterPrincipal(tx, p, l.owner, l.cible);
     }
   }
+}
+
+// A record that goes away takes its links with it; owners left without a primary link get one.
+export async function retirerFicheDesLiens(tx: Tx, kind: Kind, id: string): Promise<void> {
+  for (const p of PAIRES) {
+    if (p.ownerKind === kind)
+      await tx.delete(p.link).where(and(eq(p.instanceId, currentInstance), eq(p.ownerFk, id)));
+    if (p.targetKind === kind)
+      await tx.delete(p.link).where(and(eq(p.instanceId, currentInstance), eq(p.targetFk, id)));
+  }
+  await reparerPrincipaux(tx);
+}
+
+// Merge: the links of the absorbed record move to the kept one; a link the kept record already has
+// is dropped instead of duplicated. The single-link columns must already point to the kept record.
+export async function transfererLiens(
+  tx: Tx,
+  kind: Kind,
+  absorbeId: string,
+  gardeId: string,
+): Promise<void> {
+  const aReparer: { kind: 'affaire' | 'contact'; id: string }[] = [];
+  for (const p of PAIRES) {
+    const cotes = [
+      p.ownerKind === kind && { fk: p.ownerFk, autre: p.targetFk, cle: p.ownerKey, aussi: false },
+      p.targetKind === kind && { fk: p.targetFk, autre: p.ownerFk, cle: p.targetKey, aussi: true },
+    ].filter((c) => c !== false);
+    for (const c of cotes) {
+      const lignes = (await tx
+        .select({ id: p.id, autre: c.autre })
+        .from(p.link)
+        .where(and(eq(p.instanceId, currentInstance), eq(c.fk, absorbeId)))) as {
+        id: string;
+        autre: string;
+      }[];
+      const dejaLies = new Set(
+        (
+          (await tx
+            .select({ autre: c.autre })
+            .from(p.link)
+            .where(and(eq(p.instanceId, currentInstance), eq(c.fk, gardeId)))) as {
+            autre: string;
+          }[]
+        ).map((l) => l.autre),
+      );
+      for (const l of lignes) {
+        if (dejaLies.has(l.autre))
+          await tx.delete(p.link).where(and(eq(p.instanceId, currentInstance), eq(p.id, l.id)));
+        else
+          await tx
+            .update(p.link)
+            // As owner, the moved link must not compete with the kept record's own primary link.
+            .set({ [c.cle]: gardeId, ...(c.aussi ? {} : { principal: false }) } as never)
+            .where(and(eq(p.instanceId, currentInstance), eq(p.id, l.id)));
+        if (c.aussi) aReparer.push({ kind: p.ownerKind, id: l.autre });
+      }
+    }
+  }
+  await reparerPrincipaux(tx);
+  for (const o of aReparer) await assurerLiensPrincipaux(tx, o.kind, o.id);
+  if (kind !== 'entreprise') await assurerLiensPrincipaux(tx, kind, gardeId);
 }
 
 // Fails early, before anything is created from a record that is not in the instance.
