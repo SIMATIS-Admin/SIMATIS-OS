@@ -102,7 +102,9 @@ import {
   updateTache,
 } from '../crm/taches.js';
 import { TYPES_ACTIVITE } from '../crm/type-tache.js';
+import { fusionnerFiches } from '../crm/fusion.js';
 import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../crm/liens.js';
+import { supprimerFiche } from '../crm/suppression.js';
 import {
   ajouterNote,
   FicheInvalide,
@@ -719,6 +721,77 @@ export function registerApi(
   app.put<FicheRoute>(
     '/api/i/:slug/fiches/:kind/:id/liens/principal',
     surLien((i, de, avec) => definirPrincipal(db, i, de, avec)),
+  );
+  // Deleting and merging records: HubSpot first when the record lives there (archive / merge), then
+  // the OS. Real writes off: simulation, nothing changes.
+  const fusionSchema = z.object({ absorbeId: z.uuid() }).strict();
+  const lotSchema = z.object({ ids: z.array(z.uuid()).min(1).max(200) }).strict();
+  const introuvable = (error: unknown) =>
+    error instanceof FicheInvalide && error.message.startsWith('Fiche introuvable');
+  app.delete<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id',
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      const kind = ficheParams(request.params);
+      if (!kind) return reply.code(404).send({ error: 'Fiche introuvable' });
+      try {
+        return await supprimerFiche(db, i, { kind, id: request.params.id }, connexionDeps);
+      } catch (error) {
+        if (introuvable(error)) return reply.code(404).send({ error: 'Fiche introuvable' });
+        return ficheErreur(error, reply);
+      }
+    }),
+  );
+  app.post<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/supprimer',
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      const kind = KINDS.includes(request.params.kind as Kind)
+        ? (request.params.kind as Kind)
+        : null;
+      if (!kind) return reply.code(404).send({ error: 'Fiche introuvable' });
+      const parsed = lotSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Sélection invalide' });
+      // One by one: a refusal on one record does not stop the others.
+      const resultats: { id: string; ok: boolean; simulation?: true; erreur?: string }[] = [];
+      for (const id of new Set(parsed.data.ids)) {
+        try {
+          const r = await supprimerFiche(db, i, { kind, id }, connexionDeps);
+          resultats.push(
+            'simulation' in r ? { id, ok: false, simulation: true } : { id, ok: true },
+          );
+        } catch (error) {
+          resultats.push({
+            id,
+            ok: false,
+            erreur:
+              error instanceof FicheInvalide || error instanceof CrmIndisponible
+                ? error.message
+                : 'Erreur inattendue',
+          });
+        }
+      }
+      return { resultats };
+    }),
+  );
+  app.post<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/fusion',
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      const kind = ficheParams(request.params);
+      if (!kind) return reply.code(404).send({ error: 'Fiche introuvable' });
+      const parsed = fusionSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Fusion invalide' });
+      try {
+        return await fusionnerFiches(
+          db,
+          i,
+          kind,
+          request.params.id,
+          parsed.data.absorbeId,
+          connexionDeps,
+        );
+      } catch (error) {
+        return ficheErreur(error, reply);
+      }
+    }),
   );
   app.post<FicheRoute>(
     '/api/i/:slug/fiches/:kind/:id/notes',
