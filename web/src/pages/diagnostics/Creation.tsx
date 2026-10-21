@@ -10,6 +10,7 @@ import {
   type TestVmaType,
 } from '../../api.js';
 import { ACTIVITES } from '../Diagnostic.js';
+import { messageEnvoi } from './envoi.js';
 
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -157,6 +158,7 @@ export function NouveauTestVma({
     null,
   );
   const [lien, setLien] = useState<string | null>(null);
+  const [mail, setMail] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
 
   const envoyer = async (demande: NouveauTestVma) => {
@@ -164,6 +166,7 @@ export function NouveauTestVma({
       const cree = await creerTestVma(slug, demande);
       setSemestre(null);
       setLien(cree.lien);
+      setMail(messageEnvoi(cree.envoi, cree.contactEmail));
       onCree();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.corps.code === 'semestre') {
@@ -206,7 +209,9 @@ export function NouveauTestVma({
   if (lien) {
     return (
       <Modale titre="Invitation créée" onFermer={onFermer}>
-        <p className="small muted">Envoyez ce lien au dirigeant. Il expire dans 14 jours.</p>
+        <p className="small muted">
+          {mail ?? 'Envoyez ce lien au dirigeant.'} Il expire dans 14 jours.
+        </p>
         <div className="alert">{lien}</div>
         <div className="decision">
           <button

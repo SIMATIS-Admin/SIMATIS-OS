@@ -175,8 +175,11 @@ export type NouveauTestVma = {
 };
 
 export const fetchTestsVma = (slug: string) => getJson<TestVma[]>(inst(slug, 'vma/tests'));
+// Le mail d'invitation part à la création quand une adresse est donnée : null sans adresse.
+export type EnvoiInvitation = { statut: 'envoye' | 'simule' | 'echec'; raison?: string };
+export type TestVmaCree = TestVma & { envoi: EnvoiInvitation | null };
 export const creerTestVma = (slug: string, nouveau: NouveauTestVma) =>
-  sendJson<TestVma>('POST', inst(slug, 'vma/tests'), nouveau);
+  sendJson<TestVmaCree>('POST', inst(slug, 'vma/tests'), nouveau);
 export const revoquerTestVma = (slug: string, id: string) =>
   sendJson<TestVma>('POST', inst(slug, `vma/tests/${encodeURIComponent(id)}/revoquer`), {});
 

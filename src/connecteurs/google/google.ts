@@ -120,6 +120,31 @@ export async function createDraft(
   return { draftId: created.id, simulation: false };
 }
 
+// Envoi direct, choisi pour l'invitation au test VMA. Même garde que le brouillon : sans écritures
+// réelles, rien ne part.
+export async function sendMessage(
+  ctx: SyncCtx,
+  message: { to: string; subject: string; html: string },
+  options: GoogleOptions = {},
+): Promise<{ simulation: boolean }> {
+  if (!ctx.reel) {
+    await logEvent(ctx.tx, {
+      acteur: 'os',
+      action: `Simulation : mail non envoyé (${message.subject})`,
+    });
+    return { simulation: true };
+  }
+  await googleApi(ctx, options).request<{ id: string }>('POST', `${GMAIL}/messages/send`, {
+    raw: mimeMessage(message),
+  });
+  await logEvent(ctx.tx, {
+    acteur: 'os',
+    action: `Mail envoyé : ${message.subject}`,
+    niveau: 'L1',
+  });
+  return { simulation: false };
+}
+
 const header = (headers: { name: string; value: string }[] | undefined, name: string) =>
   headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
 
