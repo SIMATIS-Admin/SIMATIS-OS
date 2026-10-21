@@ -164,8 +164,7 @@ export function mailInvitation(p: {
         bouton('Passer le test VMA', p.lien),
         paragraphe(`Le lien expire le ${p.expireLe.toLocaleDateString('fr-FR')}.`),
         paragraphe(
-          `Si le bouton ne s’ouvre pas : <a href="${lien}" style="color:${COULEURS.teal};">${lien}</a>`,
-          `font-size:13px;color:${COULEURS.roche};`,
+          `Si le bouton ne s’ouvre pas, copiez ce lien : <a href="${lien}" style="color:${COULEURS.nuit};text-decoration:underline;">${lien}</a>`,
         ),
       ].join('')}</td></tr>`,
     ),
