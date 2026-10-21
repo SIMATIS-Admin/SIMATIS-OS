@@ -1,11 +1,11 @@
 import { registerConnector } from '../../connexions/service.js';
 import type { Connector } from '../../connexions/types.js';
-import { createDraft, googleApi, type GoogleOptions } from './google.js';
+import { createDraft, googleApi, sendMessage, type GoogleOptions } from './google.js';
 
 const VIDE = { lus: 0, crees: 0, maj: 0, erreurs: [] };
 
-// Gmail: nothing is copied for now; a "sync" checks that the authorization still works. The one
-// write is a draft, never a sent email.
+// Gmail: nothing is copied for now; a "sync" checks that the authorization still works. The writes
+// are a draft (résultat VMA) and, for the invitation au test VMA, a message sent directly.
 export function gmailConnector(options: GoogleOptions = {}): Connector {
   return {
     fournisseur: 'gmail',
@@ -14,9 +14,13 @@ export function gmailConnector(options: GoogleOptions = {}): Connector {
       return VIDE;
     },
     write: async (ctx, op) => {
+      const { to, subject, html } = op.data as { to: string; subject: string; html: string };
+      if (op.op === 'message.send') {
+        const result = await sendMessage(ctx, { to, subject, html }, options);
+        return { simulation: result.simulation };
+      }
       if (op.op !== 'draft.create')
         throw new Error(`Écriture Gmail non prise en charge : ${op.op}`);
-      const { to, subject, html } = op.data as { to: string; subject: string; html: string };
       const result = await createDraft(ctx, { to, subject, html }, options);
       return { simulation: result.simulation, ...(result.draftId ? { id: result.draftId } : {}) };
     },

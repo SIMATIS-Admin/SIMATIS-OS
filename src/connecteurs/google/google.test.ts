@@ -23,6 +23,7 @@ import {
   historique,
   mimeBrut,
   sansSignature,
+  sendMessage,
 } from './google.js';
 import { gmailConnector } from './index.js';
 import { connectGoogle } from './oauth.js';
@@ -50,6 +51,7 @@ function fakeGoogle() {
         : json({ error: 'invalid_grant' }, 400);
     }
     if (url.endsWith('/drafts')) return json({ id: 'draft-42' });
+    if (url.endsWith('/messages/send')) return json({ id: 'sent-7', labelIds: ['SENT'] });
     if (url.includes('/messages?')) return json({ messages: [{ id: 'm1' }] });
     if (url.includes('/messages/m1')) {
       return json({
@@ -231,6 +233,24 @@ describe('Gmail and Calendar', () => {
       { kind: 'agenda', fournisseur: 'google-agenda', etat: 'ok' },
       { kind: 'messagerie', fournisseur: 'gmail', etat: 'ok' },
     ]);
+  });
+
+  it('sends the invitation directly, and nothing at all in simulation', async () => {
+    const message = {
+      to: 'jeanne@exemple.test',
+      subject: 'Votre test VMA : Atelier',
+      html: '<p>Lien</p>',
+    };
+    const simulated = await ctx(false, (c) => sendMessage(c, message, google));
+    expect(simulated).toEqual({ simulation: true });
+    expect(google.calls.filter((c) => c.url.endsWith('/messages/send'))).toHaveLength(0);
+
+    const envoye = await ctx(true, (c) => sendMessage(c, message, google));
+    expect(envoye).toEqual({ simulation: false });
+    const appel = google.calls.find((c) => c.url.endsWith('/messages/send'));
+    expect(appel?.method).toBe('POST');
+    const corps = JSON.parse(appel?.body ?? '{}') as { raw?: unknown };
+    expect(typeof corps.raw).toBe('string');
   });
 
   it('creates a draft without signature, and nothing at all in simulation', async () => {

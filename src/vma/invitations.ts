@@ -1,7 +1,9 @@
 import { and, desc, eq, gte, or, sql } from 'drizzle-orm';
+import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import { entreprises } from '../crm/schema.js';
 import type { Database, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
+import type { Instance } from '../instances/schema.js';
 import { TYPES_TEST_VMA, vmaTests, type TestVma, type TypeTestVma } from './schema.js';
 
 export type InvitationDeps = {
@@ -129,6 +131,73 @@ export async function creerInvitation(
       .returning();
     if (!cree) throw new InvitationImpossible("Enregistrement de l'invitation impossible");
     return cree;
+  });
+}
+
+export type EnvoiInvitation = { statut: 'envoye' | 'simule' | 'echec'; raison?: string };
+
+const ECHAPPEMENTS: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+const echapper = (s: string) => s.replace(/[&<>"']/g, (c) => ECHAPPEMENTS[c] ?? c);
+
+// Mail d'invitation : le lien, le nom de l'entreprise et la date d'expiration, rien d'autre.
+export function mailInvitation(p: {
+  entrepriseNom: string;
+  contactNom: string | null;
+  lien: string;
+  expireLe: Date;
+}): { subject: string; html: string } {
+  const bonjour = p.contactNom ? `Bonjour ${echapper(p.contactNom)},` : 'Bonjour,';
+  const lien = echapper(p.lien);
+  return {
+    subject: `Votre test VMA : ${p.entrepriseNom}`,
+    html: [
+      `<p>${bonjour}</p>`,
+      `<p>Voici votre lien pour passer le test VMA de ${echapper(p.entrepriseNom)} :</p>`,
+      `<p><a href="${lien}">${lien}</a></p>`,
+      `<p>Le lien expire le ${p.expireLe.toLocaleDateString('fr-FR')}.</p>`,
+    ].join(''),
+  };
+}
+
+// Envoie le mail d'invitation depuis la messagerie de l'instance. Jamais bloquant : l'invitation
+// existe déjà, le résultat dit si le mail est parti, simulé, ou en échec (avec la raison).
+export async function envoyerInvitation(
+  db: Database,
+  instance: Instance,
+  ecriture: ConnexionDeps,
+  test: Pick<TestVma, 'entrepriseNom' | 'contactNom' | 'contactEmail' | 'lien' | 'expireLe'>,
+): Promise<EnvoiInvitation> {
+  if (!test.contactEmail) return { statut: 'echec', raison: 'aucune adresse e-mail' };
+  const message = mailInvitation({
+    entrepriseNom: test.entrepriseNom,
+    contactNom: test.contactNom,
+    lien: test.lien,
+    expireLe: test.expireLe,
+  });
+  return withInstance(db, instance.id, async (tx) => {
+    try {
+      const res = await tx.transaction((sp) =>
+        writeVia(
+          sp,
+          instance,
+          'messagerie',
+          { op: 'message.send', data: { to: test.contactEmail, ...message } },
+          ecriture,
+        ),
+      );
+      return res.simulation ? { statut: 'simule' } : { statut: 'envoye' };
+    } catch (error) {
+      return {
+        statut: 'echec',
+        raison: error instanceof Error ? error.message : String(error),
+      };
+    }
   });
 }
 

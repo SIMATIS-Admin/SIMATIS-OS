@@ -6,8 +6,10 @@ import {
   revoquerTestVma,
   type NouveauTestVma,
   type TestVma,
+  type TestVmaCree,
   type TestVmaType,
 } from '../api.js';
+import { messageEnvoi } from './diagnostics/envoi.js';
 
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -47,6 +49,7 @@ export function TestsVma({ slug }: { slug: string }) {
     contactEmail: '',
   });
   const [lienCree, setLienCree] = useState<string | null>(null);
+  const [mailCree, setMailCree] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
 
   const charger = () =>
@@ -72,7 +75,7 @@ export function TestsVma({ slug }: { slug: string }) {
       contactEmail: nouveau.contactEmail || null,
     };
     try {
-      let cree: TestVma;
+      let cree: TestVmaCree;
       try {
         cree = await creerTestVma(slug, demande);
       } catch (e) {
@@ -82,6 +85,7 @@ export function TestsVma({ slug }: { slug: string }) {
         cree = await creerTestVma(slug, { ...demande, confirmerSemestre: true });
       }
       setLienCree(cree.lien);
+      setMailCree(messageEnvoi(cree.envoi, cree.contactEmail));
       setNouveau({ entrepriseNom: '', type: 'premier', contactNom: '', contactEmail: '' });
       await charger();
     } catch (e) {
@@ -128,6 +132,7 @@ export function TestsVma({ slug }: { slug: string }) {
             <div className="alert">
               <div>Invitation créée. Lien à transmettre au dirigeant :</div>
               <div className="mono">{lienCree}</div>
+              {mailCree && <div>{mailCree}</div>}
               <div className="row">
                 <button className="btn" type="button" onClick={() => copier(lienCree)}>
                   Copier le lien

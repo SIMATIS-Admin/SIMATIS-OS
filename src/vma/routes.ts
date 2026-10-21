@@ -7,6 +7,7 @@ import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import {
   creerInvitation,
+  envoyerInvitation,
   InvitationImpossible,
   revoquerInvitation,
   SemestreAConfirmer,
@@ -109,7 +110,11 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
           contactEmail: parsed.data.contactEmail ?? null,
           confirmerSemestre: parsed.data.confirmerSemestre ?? false,
         });
-        return reply.code(201).send(vueTest(test));
+        // Le mail part tout de suite si une adresse est donnée ; son résultat accompagne l'invitation.
+        const envoi = test.contactEmail
+          ? await envoyerInvitation(db, instance, deps.connexionDeps, test)
+          : null;
+        return reply.code(201).send({ ...vueTest(test), envoi });
       } catch (error) {
         return erreur(error, reply);
       }
