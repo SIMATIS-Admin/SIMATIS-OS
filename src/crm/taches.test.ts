@@ -138,6 +138,26 @@ describe('Tâches', () => {
     }
   });
 
+  it('shows Mon activité the tasks of every mandate, each tagged with its instance', async () => {
+    const propre = await createInstance(t.owner.db, {
+      slug: 'propre-taches',
+      nom: 'Mon activité',
+      type: 'propre',
+    });
+    await createTache(t.app.db, propre, { titre: 'Tâche maison', echeance: null }, off());
+    await createTache(t.app.db, a, { titre: 'Tâche du mandat', hubspot: false }, off());
+    const lire = (i: Instance) =>
+      listTaches(t.app.db, i, { du: '2026-05-04', au: '2026-05-10' }, off());
+    const titres = (v: Awaited<ReturnType<typeof lire>>) =>
+      v.sansEcheance.map((x) => `${x.instance.slug}:${x.titre}`);
+    expect(titres(await lire(propre))).toEqual(
+      expect.arrayContaining(['propre-taches:Tâche maison', 'mandat-taches:Tâche du mandat']),
+    );
+    expect((await lire(propre)).instances.map((i) => i.slug)).toContain('mandat-taches');
+    expect((await lire(a)).instances).toHaveLength(1);
+    expect(titres(await lire(a)).every((x) => x.startsWith('mandat-taches:'))).toBe(true);
+  });
+
   it('updates an OS task freely: type from the new title, done, reopened, journaled', async () => {
     const tache = (await createTache(t.app.db, a, { titre: 'Préparer' }, off())) as TacheVue;
     const maj = (await updateTache(
