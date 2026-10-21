@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
 import { connexions } from '../connexions/schema.js';
@@ -163,6 +163,8 @@ async function preparer(tx: Tx, a: Ref, b: Ref) {
   const owner = await ligne(tx, p.ownerKind, ownerId);
   const target = await ligne(tx, p.targetKind, targetId);
   if (!owner || !target) throw new FicheInvalide('Fiche introuvable dans cette instance');
+  // Heals a primary set in the column by a writer that skipped the link table.
+  await assurerLiensPrincipaux(tx, p.ownerKind, ownerId);
   return { p, ownerId, targetId, owner, target, hubspot: await viaHubspot(tx, owner, target) };
 }
 
@@ -463,5 +465,60 @@ export async function remplacerLiensHubspot(
           and(eq(p.instanceId, currentInstance), eq(p.ownerFk, ownerId), eq(p.targetFk, choix)),
         );
     await refleterPrincipal(tx, p, ownerId, choix);
+  }
+}
+
+// Writers that set the single-link column directly (seed, creation forms, mandate copy, edit of
+// the primary link) call this so the link table follows: the column's target becomes the primary
+// link. `retirerSiVide` also drops the primary link when the column was emptied.
+export async function assurerLiensPrincipaux(
+  tx: Tx,
+  kind: 'affaire' | 'contact',
+  id: string,
+  { retirerSiVide = false } = {},
+): Promise<void> {
+  const t = tables[kind];
+  const [row] = await tx
+    .select()
+    .from(t)
+    .where(and(eq(t.instanceId, currentInstance), eq(t.id, id)));
+  if (!row) return;
+  const colonnes = row as unknown as Record<string, string | null>;
+  for (const p of PAIRES.filter((x) => x.ownerKind === kind)) {
+    const cible = colonnes[p.mirror] ?? null;
+    if (!cible) {
+      if (retirerSiVide)
+        await tx
+          .delete(p.link)
+          .where(and(eq(p.instanceId, currentInstance), eq(p.ownerFk, id), eq(p.principal, true)));
+      continue;
+    }
+    const target = await ligne(tx, p.targetKind, cible);
+    await tx
+      .update(p.link)
+      .set({ principal: false })
+      .where(
+        and(
+          eq(p.instanceId, currentInstance),
+          eq(p.ownerFk, id),
+          eq(p.principal, true),
+          ne(p.targetFk, cible),
+        ),
+      );
+    const existant = await lienExistant(tx, p, id, cible);
+    if (existant) {
+      await tx
+        .update(p.link)
+        .set({ principal: true })
+        .where(and(eq(p.instanceId, currentInstance), eq(p.id, existant.id)));
+    } else {
+      await tx.insert(p.link).values({
+        instanceId: currentInstance,
+        source: colonnes.source === 'hubspot' && target?.source === 'hubspot' ? 'hubspot' : 'natif',
+        [p.ownerKey]: id,
+        [p.targetKey]: cible,
+        principal: true,
+      } as never);
+    }
   }
 }

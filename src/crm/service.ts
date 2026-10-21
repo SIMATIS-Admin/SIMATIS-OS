@@ -7,6 +7,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import { logEvent } from '../journal/service.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
+import { assurerLiensPrincipaux } from './liens.js';
 
 export const likePattern = (q: string) => `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
@@ -296,6 +297,7 @@ export async function createContact(
       })
       .returning();
     if (!row) throw new Error('Contact non créé');
+    await assurerLiensPrincipaux(tx, 'contact', row.id);
     await logEvent(tx, { acteur: 'pilote', action: `Contact créé : ${row.nom}`, niveau: 'L2' });
     return row;
   });

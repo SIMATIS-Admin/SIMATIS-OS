@@ -33,6 +33,9 @@ describe('tables de liaison', () => {
     const all = await listInstances(t.owner.db);
     simatis = all.find((i) => i.slug === 'simatis') as Instance;
     helioval = all.find((i) => i.slug === 'helioval') as Instance;
+    // The seed now fills the link tables itself: empty them to replay the backfill on old data.
+    for (const table of ['affaire_contacts', 'affaire_entreprises', 'contact_entreprises'])
+      await t.owner.pool.query(`delete from ${table}`);
     for (const statement of backfillStatements()) await t.owner.pool.query(statement);
   });
 
