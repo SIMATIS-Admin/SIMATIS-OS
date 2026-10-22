@@ -23,7 +23,7 @@ type Resultat = {
 type Ajout = 'affaire' | 'contact' | 'entreprise' | 'activite';
 const AJOUTS: [Ajout, string][] = [
   ['affaire', 'Affaire'],
-  ['contact', 'Personne'],
+  ['contact', 'Contact'],
   ['entreprise', 'Organisation'],
   ['activite', 'Activité'],
 ];
@@ -39,7 +39,7 @@ const aplatir = (r: Recherche): [string, Resultat[]][] => [
     })),
   ],
   [
-    'Personnes',
+    'Contacts',
     r.personnes.map((p) => ({ kind: 'contact', id: p.id, titre: p.nom, sous: p.entreprise ?? '' })),
   ],
   [

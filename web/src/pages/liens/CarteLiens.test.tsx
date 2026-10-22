@@ -41,7 +41,7 @@ function monter(extra: Partial<Parameters<typeof CarteLiens>[0]> = {}) {
   render(
     <CarteLiens
       slug="demo"
-      titre="Personnes"
+      titre="Contacts"
       kind="contact"
       de={de}
       lignes={lignes}
@@ -69,7 +69,7 @@ describe('CarteLiens', () => {
 
   it('liste les liens avec le principal et le compte dans le titre', () => {
     monter();
-    expect(screen.getByRole('heading', { name: 'Personnes (2)' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Contacts (2)' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Agathe Fictive' }).getAttribute('href')).toBe(
       '#/demo/fiche/contact/c1',
     );
@@ -78,7 +78,7 @@ describe('CarteLiens', () => {
 
   it('affiche « (0) » et « + Ajouter » pour une fiche sans lien', () => {
     monter({ lignes: [] });
-    expect(screen.getByRole('heading', { name: 'Personnes (0)' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Contacts (0)' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '+ Ajouter' })).toBeTruthy();
   });
 

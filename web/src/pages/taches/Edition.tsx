@@ -299,7 +299,7 @@ export function EditionTache({
         {slug && (
           <div className="grid g2">
             <Lien
-              label="Personne"
+              label="Contact"
               chercher={chercherPersonne}
               choix={personne}
               onChoix={setPersonne}

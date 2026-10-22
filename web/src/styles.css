@@ -2739,42 +2739,92 @@ textarea.input {
   align-items: center;
   flex-wrap: wrap;
 }
+.fi-retour {
+  color: var(--ink-3);
+  text-decoration: none;
+}
+.fi-retour:hover {
+  color: var(--navy);
+}
+.fi-montant {
+  font-size: 15px;
+  color: var(--ink);
+}
+/* Links to the organisation / contact shown as buttons, like the chips of Pipedrive. */
+.fi-puce {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--navy);
+  font-weight: 600;
+  text-decoration: none;
+}
+.fi-puce:hover {
+  border-color: var(--teal);
+  background: var(--line-2);
+}
+.fi-puce svg {
+  width: 13px;
+  height: 13px;
+}
 .fi-gagne {
-  background: var(--green);
+  background: var(--teal);
   color: var(--white);
-  border-color: var(--green);
+  border-color: var(--teal);
+}
+.fi-gagne:hover {
+  background: #378f80;
+  border-color: #378f80;
 }
 .fi-perdu {
-  background: var(--red);
-  color: var(--white);
+  background: var(--white);
+  color: var(--red);
+  border-color: var(--red-bg);
+}
+.fi-perdu:hover {
+  background: var(--red-bg);
   border-color: var(--red);
 }
+/* Stages as chevrons: each one overlaps the previous so the arrows interlock. */
 .fi-etapes {
   display: flex;
-  margin-bottom: 14px;
-  border-radius: var(--r-s);
-  overflow: hidden;
-  border: 1px solid var(--line);
+  margin: 0 0 16px 6px;
 }
 .fi-etape {
   flex: 1;
   border: 0;
-  border-right: 1px solid var(--panel);
-  background: var(--line-2);
+  background: var(--line);
   color: var(--ink-2);
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 8px 14px;
+  margin-left: -6px;
+  font-size: 13px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   min-width: 0;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%);
+}
+.fi-etape:first-child {
+  margin-left: -6px;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%);
+}
+.fi-etape:hover:not(:disabled) {
+  background: var(--teal-mid);
 }
 .fi-etape span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+}
+.fi-etape small {
+  font-size: 11px;
+  opacity: 0.85;
 }
 .fi-etape.passee {
   background: var(--teal-mid);
@@ -2830,8 +2880,12 @@ textarea.input {
   margin: 0;
 }
 .fi-liste li {
-  padding: 5px 0;
+  padding: 7px 0;
   border-bottom: 1px solid var(--line-2);
+}
+.fi-liste li:last-child,
+.fi-evt:last-child {
+  border-bottom: 0;
 }
 .fi-menu,
 .fi-lier {
@@ -2853,6 +2907,29 @@ textarea.input {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.fi-ident {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.fi-av {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--green-bg);
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fi-av.carre {
+  border-radius: 8px;
+  background: var(--blue-bg);
 }
 .fi-actions {
   display: flex;

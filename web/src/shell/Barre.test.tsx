@@ -38,7 +38,7 @@ describe('Barre (recherche globale et ajout rapide)', () => {
     fireEvent.change(screen.getByLabelText('Recherche globale'), { target: { value: 'vall' } });
     const resultats = await screen.findByRole('listbox');
     expect(within(resultats).getByText('Affaires')).toBeTruthy();
-    expect(within(resultats).getByText('Personnes')).toBeTruthy();
+    expect(within(resultats).getByText('Contacts')).toBeTruthy();
     expect(within(resultats).getByText('Organisations')).toBeTruthy();
     expect(calls.at(-1)?.url).toBe('/api/i/simatis/recherche?q=vall');
     fireEvent.click(within(resultats).getByRole('option', { name: /Agathe Vallière/ }));
@@ -57,7 +57,7 @@ describe('Barre (recherche globale et ajout rapide)', () => {
   it('adds a deal from the quick-add menu, in the first stage', async () => {
     render(<Barre slug="simatis" />);
     fireEvent.click(screen.getByRole('button', { name: 'Ajout rapide' }));
-    expect(screen.getByRole('menuitem', { name: 'Personne' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Contact' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Organisation' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Activité' })).toBeTruthy();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Affaire' }));

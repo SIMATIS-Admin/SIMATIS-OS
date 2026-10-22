@@ -168,7 +168,7 @@ export function Contacts({ slug }: { slug: string }) {
             colonnes={[
               {
                 cle: 'nom',
-                label: 'Personne',
+                label: 'Contact',
                 valeur: (c) => c.nom,
                 affiche: (c) => <b>{c.nom}</b>,
               },

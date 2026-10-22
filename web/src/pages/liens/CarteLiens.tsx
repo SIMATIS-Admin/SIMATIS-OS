@@ -19,6 +19,13 @@ import { NouvelleAffaire } from '../Pipeline.js';
 export type LigneLien = { id: string; nom: string; principal: boolean; detail?: string };
 
 const lien = (slug: string, kind: KindFiche, id: string) => `#/${slug}/fiche/${kind}/${id}`;
+const initiales = (nom: string) =>
+  nom
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((m) => m[0]?.toUpperCase())
+    .join('');
 const simulation = (r: unknown): r is { simulation: true; message: string } =>
   typeof r === 'object' && r !== null && 'simulation' in r;
 
@@ -146,10 +153,7 @@ export function CarteLiens({
           {titre} ({lignes.length})
         </h2>
         {ecrit && (
-          <button
-            className="btn ghost sm"
-            onClick={() => setMenu(menu === 'ferme' ? 'choix' : 'ferme')}
-          >
+          <button className="btn sm" onClick={() => setMenu(menu === 'ferme' ? 'choix' : 'ferme')}>
             + Ajouter
           </button>
         )}
@@ -175,10 +179,15 @@ export function CarteLiens({
       <ul className="panel-b fi-liste">
         {lignes.map((l) => (
           <li key={l.id} className="fi-ligne">
-            <span>
-              <a href={lien(slug, kind, l.id)}>{l.nom}</a>
-              {principalGerable && l.principal && <span className="badge blue"> Principal</span>}
-              {l.detail && <span className="small muted"> {l.detail}</span>}
+            <span className="fi-ident">
+              <span className={`fi-av ${kind === 'contact' ? '' : 'carre'}`} aria-hidden="true">
+                {initiales(l.nom)}
+              </span>
+              <span>
+                <a href={lien(slug, kind, l.id)}>{l.nom}</a>
+                {principalGerable && l.principal && <span className="badge blue"> Principal</span>}
+                {l.detail && <span className="small muted"> {l.detail}</span>}
+              </span>
             </span>
             {ecrit && (
               <span className="fi-actions">

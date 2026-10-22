@@ -115,7 +115,7 @@ export function App() {
     view === 'portefeuille'
       ? 'Portefeuille'
       : view === 'fiche'
-        ? ({ affaire: 'Affaire', contact: 'Personne', entreprise: 'Organisation' }[
+        ? ({ affaire: 'Affaire', contact: 'Contact', entreprise: 'Organisation' }[
             route.kind ?? ''
           ] ?? 'Fiche')
         : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');

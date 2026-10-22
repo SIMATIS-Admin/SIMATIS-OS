@@ -148,7 +148,7 @@ describe('Tâches screen', () => {
     expect(within(ligne).getByText('Appel')).toBeTruthy();
     expect(within(ligne).getByText('HubSpot')).toBeTruthy();
     expect(within(ligne).getByText('Romain Arpin')).toBeTruthy();
-    for (const col of ['Affaire', 'Personne', 'Organisation', 'Échéance']) {
+    for (const col of ['Affaire', 'Contact', 'Organisation', 'Échéance']) {
       expect(screen.getByRole('button', { name: `Trier par ${col}` })).toBeTruthy();
     }
   });
@@ -403,7 +403,7 @@ describe('Tâches screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Nouvelle tâche' }));
     const fenetre = within(screen.getByRole('dialog'));
     fireEvent.change(fenetre.getByLabelText('Intitulé'), { target: { value: 'Rappeler' } });
-    fireEvent.change(fenetre.getByLabelText('Personne'), { target: { value: 'Rom' } });
+    fireEvent.change(fenetre.getByLabelText('Contact'), { target: { value: 'Rom' } });
     fireEvent.click(await fenetre.findByRole('button', { name: 'Romain Arpin' }));
     fireEvent.change(fenetre.getByLabelText('Affaire'), { target: { value: 'Str' } });
     fireEvent.click(await fenetre.findByRole('button', { name: /Structuration/ }));

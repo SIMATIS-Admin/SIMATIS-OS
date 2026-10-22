@@ -231,7 +231,7 @@ function Liste({
                 ),
               },
               { cle: 'affaire', label: 'Affaire', valeur: (t) => t.opportunite?.titre ?? null },
-              { cle: 'personne', label: 'Personne', valeur: (t) => t.contact?.nom ?? null },
+              { cle: 'personne', label: 'Contact', valeur: (t) => t.contact?.nom ?? null },
               {
                 cle: 'email',
                 label: 'Email',
