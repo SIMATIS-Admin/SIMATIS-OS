@@ -19,6 +19,7 @@ import { Bientot } from './pages/Bientot.js';
 import { Brief } from './pages/Brief.js';
 import { Fiche } from './pages/Fiche.js';
 import { Barre } from './shell/Barre.js';
+import { Console } from './shell/Console.js';
 import type { KindFiche } from './api.js';
 import { Agenda } from './pages/Agenda.js';
 import { RendezVous } from './pages/RendezVous.js';
@@ -237,6 +238,7 @@ export function App() {
           {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
         </div>
         <div className="content">{page()}</div>
+        {view !== 'portefeuille' && <Console key={current.slug} slug={current.slug} />}
       </main>
     </div>
   );
