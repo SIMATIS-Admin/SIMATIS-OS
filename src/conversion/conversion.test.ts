@@ -220,6 +220,13 @@ describe('Rendez-vous and Devis', () => {
       entreprise: { id: entreprise.id, nom: entreprise.nom },
       lienManuel: true,
     });
+    // Linked by hand to the deal's contact: the open deal is still found for the preparation.
+    expect((await lien({ contactId: contact.id, entrepriseId: null })).status).toBe(200);
+    expect((await lister()).rdv[0]).toMatchObject({
+      contact: { id: contact.id },
+      lienManuel: true,
+      opportunite: { id: list.rdv[0]?.opportunite?.id },
+    });
     expect((await lien({ contactId: null, entrepriseId: null })).status).toBe(200);
     expect((await lister()).rdv[0]).toMatchObject({
       contact: { id: contact.id },

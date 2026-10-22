@@ -316,10 +316,8 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
           : undefined);
       const opp =
         (mAffaires[0] ? { id: mAffaires[0].id, titre: mAffaires[0].nom } : undefined) ??
-        (!manuel
-          ? ((contact && ouvertes.find((o) => o.contactId === contact.id)) ??
-            (entreprise && ouvertes.find((o) => o.entrepriseId === entreprise.id)))
-          : undefined);
+        (contact && ouvertes.find((o) => o.contactId === contact.id)) ??
+        (entreprise && ouvertes.find((o) => o.entrepriseId === entreprise.id));
       return {
         id: e.id,
         debut: e.debut,
