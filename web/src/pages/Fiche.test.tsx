@@ -149,7 +149,7 @@ describe('Fiche page', () => {
 
   it('lists every person and organisation of a deal', async () => {
     render(<Fiche slug="simatis" kind="affaire" id="o1" />);
-    expect(await screen.findByRole('heading', { name: 'Personnes (1)' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Contacts (1)' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Organisations (1)' })).toBeTruthy();
   });
 

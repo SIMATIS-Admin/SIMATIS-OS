@@ -271,7 +271,7 @@ function Mandat({
 function cartesDe(kind: KindFiche, liens: FicheDetail['liens'], hubspot: boolean): Carte[] {
   const principal = (l?: { id: string; nom: string } | null): LigneLien[] =>
     l ? [{ ...l, principal: true }] : [];
-  const personnes = { titre: 'Personnes', kind: 'contact' as const };
+  const personnes = { titre: 'Contacts', kind: 'contact' as const };
   const organisations = { titre: 'Organisations', kind: 'entreprise' as const };
   const affaires: Carte = {
     titre: 'Affaires',
@@ -363,21 +363,29 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
     <>
       <div className="fi-entete">
         <div>
-          <a className="small" href="#" onClick={(e) => (e.preventDefault(), history.back())}>
+          <a
+            className="small fi-retour"
+            href="#"
+            onClick={(e) => (e.preventDefault(), history.back())}
+          >
             ‹ Retour
           </a>
           <h1>{titre}</h1>
           <div className="small muted fi-sous">
             {kind === 'affaire' && f.montant ? (
-              <b className="num">{eur(Number(f.montant))}</b>
+              <b className="num fi-montant">{eur(Number(f.montant))}</b>
             ) : null}
             {data.liens.entreprise && (
-              <a href={lien(slug, 'entreprise', data.liens.entreprise.id)}>
+              <a className="fi-puce" href={lien(slug, 'entreprise', data.liens.entreprise.id)}>
+                <Icon name="building" />
                 {data.liens.entreprise.nom}
               </a>
             )}
             {data.liens.contact && (
-              <a href={lien(slug, 'contact', data.liens.contact.id)}>{data.liens.contact.nom}</a>
+              <a className="fi-puce" href={lien(slug, 'contact', data.liens.contact.id)}>
+                <Icon name="users" />
+                {data.liens.contact.nom}
+              </a>
             )}
             <span className={`badge ${hubspot ? 'blue' : ''}`}>{hubspot ? 'HubSpot' : 'OS'}</span>
           </div>

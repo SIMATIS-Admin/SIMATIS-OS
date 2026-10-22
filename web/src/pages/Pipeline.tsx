@@ -295,7 +295,7 @@ function Recherche({
       () => setRes([]),
     );
   }, [slug, kind, q]);
-  const label = kind === 'contact' ? 'Personne' : 'Organisation';
+  const label = kind === 'contact' ? 'Contact' : 'Organisation';
   return (
     <div className="field">
       <span>{label}</span>
@@ -578,7 +578,7 @@ export function Pipeline({ slug }: { slug: string }) {
               affiche: (o) => <b>{o.titre}</b>,
             },
             { cle: 'entreprise', label: 'Organisation', valeur: (o) => o.entreprise },
-            { cle: 'contact', label: 'Personne', valeur: (o) => o.contact },
+            { cle: 'contact', label: 'Contact', valeur: (o) => o.contact },
             {
               cle: 'etape',
               label: 'Étape',

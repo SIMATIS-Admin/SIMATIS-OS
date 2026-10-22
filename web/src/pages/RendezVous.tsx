@@ -136,7 +136,7 @@ function LienRdv({ slug, rdv, onDone }: { slug: string; rdv: Rdv; onDone: () => 
   return (
     <div className="stack">
       <div className="grid g2">
-        <Lien label="Personne" chercher={chercherPersonne} choix={personne} onChoix={setPersonne} />
+        <Lien label="Contact" chercher={chercherPersonne} choix={personne} onChoix={setPersonne} />
         <Lien
           label="Entreprise"
           chercher={chercherEntreprise}

@@ -151,7 +151,7 @@ export function Entreprises({ slug }: { slug: string }) {
                 valeur: (e) => e.taille,
                 edition: { champ: 'taille', type: 'number' },
               },
-              { cle: 'contacts', label: 'Personnes', valeur: (e) => e.nbContacts },
+              { cle: 'contacts', label: 'Contacts', valeur: (e) => e.nbContacts },
               { cle: 'opps', label: 'Affaires ouvertes', valeur: (e) => e.oppsOuvertes },
               {
                 cle: 'valeur',
