@@ -1109,6 +1109,7 @@ export type ChampBase =
   | 'nomComplet'
   | 'email'
   | 'telephone'
+  | 'portable'
   | 'fonction'
   | 'linkedin';
 export type CorrespondanceBase = Partial<Record<ChampBase, number>>;

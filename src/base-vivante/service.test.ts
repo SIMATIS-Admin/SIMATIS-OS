@@ -278,6 +278,34 @@ describe('base vivante : chaîne d’import', () => {
     expect(corrige.compteurs).toMatchObject({ aEnrichir: 2, sousMinimum: 0 });
   });
 
+  it('lit une colonne « Nom » unique comme « Prénom Nom »', async () => {
+    const imp = await importer(
+      'SalesNav',
+      'Nom;Entreprise;Poste\nJean Dupont;Atelier Fictif;Directeur\nClaire Martin;Bureau Fictif;Gérante',
+    );
+    expect(imp.correspondance).toMatchObject({ nomComplet: 0, entreprise: 1, fonction: 2 });
+    expect(imp.lignes[0]?.fiche).toMatchObject({ prenom: 'Jean', nom: 'DUPONT' });
+  });
+
+  it('laisse de côté un onglet de synthèse sans entreprise ni nom', async () => {
+    const xlsx = fabriquerXlsx([
+      { nom: 'Synthese', lignes: [['Email'], ['total : 3']] },
+      {
+        nom: 'Liste',
+        lignes: [
+          ['Société', 'Nom'],
+          ['Atelier Fictif', 'Durand'],
+        ],
+      },
+    ]);
+    const imports = await creerImports(t.app.db, mandat.id, {
+      nomFichier: 'x.xlsx',
+      contenu: xlsx,
+      provenance: 'Marc',
+    });
+    expect(imports.map((i) => i.feuille)).toEqual(['Liste']);
+  });
+
   it('cloisonne les instances', async () => {
     const imp = await importer();
     await integrerImport(t.app.db, mandat.id, imp.id);

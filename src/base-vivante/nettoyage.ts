@@ -24,6 +24,7 @@ export const CHAMPS_BRUTS = [
   'nomComplet',
   'email',
   'telephone',
+  'portable',
   'fonction',
   'linkedin',
 ] as const;
@@ -214,8 +215,9 @@ export function normaliserFiche(brut: Brut): Normalisation {
   const emailBrut = texte(brut.email);
   const email = normaliserEmail(emailBrut);
   if (emailBrut && !email) avertissements.push('Email invalide');
-  const telBrut = texte(brut.telephone);
-  const telephone = normaliserTelephone(telBrut);
+  // Landline first, then mobile: the record keeps a single number.
+  const telBrut = texte(brut.telephone) ?? texte(brut.portable);
+  const telephone = normaliserTelephone(brut.telephone) ?? normaliserTelephone(brut.portable);
   if (telBrut && !telephone) avertissements.push('Téléphone invalide');
   const domaine = domaineDeEmail(email);
 

@@ -129,6 +129,18 @@ describe('fiche', () => {
     expect(normaliserFiche(fiche).fiche).toEqual(fiche);
   });
 
+  it('prend le portable quand il n’y a pas de fixe valide', () => {
+    expect(normaliserFiche({ telephone: '', portable: '06 12 34 56 78' }).fiche.telephone).toBe(
+      '+33612345678',
+    );
+    expect(
+      normaliserFiche({ telephone: '04 50 12 34 56', portable: '06 12 34 56 78' }).fiche.telephone,
+    ).toBe('+33450123456');
+    expect(normaliserFiche({ telephone: 'xx', portable: '0612345678' }).fiche.telephone).toBe(
+      '+33612345678',
+    );
+  });
+
   it('normalise l’URL LinkedIn', () => {
     expect(normaliserLinkedin('https://fr.linkedin.com/in/Jean-Dupont/?trk=x')).toBe(
       'https://www.linkedin.com/in/jean-dupont',

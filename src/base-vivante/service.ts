@@ -127,7 +127,19 @@ function preparer(feuille: Feuille, memoire: MemoireColonnes) {
     indexEntete === null ? [] : entetes,
     memoire,
   );
-  return { entetes, donnees, correspondance, inconnues };
+  // A lone « Nom » column whose cells mostly hold two words is really « Prénom Nom ».
+  const colonneNom = correspondance.nom;
+  if (colonneNom !== undefined && correspondance.prenom === undefined) {
+    const valeurs = donnees
+      .slice(0, 200)
+      .map((l) => (l[colonneNom] ?? '').trim())
+      .filter(Boolean);
+    if (valeurs.length > 0 && valeurs.filter((v) => v.includes(' ')).length > valeurs.length / 2) {
+      delete correspondance.nom;
+      correspondance.nomComplet = colonneNom;
+    }
+  }
+  return { entetes, donnees, correspondance, inconnues, entete: indexEntete !== null };
 }
 
 export async function creerImports(
@@ -146,8 +158,19 @@ export async function creerImports(
   const ids: string[] = [];
   await withInstance(db, instanceId, async (tx) => {
     const memoire = await memoireDeSource(tx, instanceId, entree.provenance);
-    for (const feuille of utiles) {
-      const { entetes, donnees, correspondance } = preparer(feuille, memoire);
+    const preparees = utiles.map((feuille) => ({ feuille, ...preparer(feuille, memoire) }));
+    // A summary or notes sheet (header found, but no company nor name column) is left out when
+    // the file has other sheets to read.
+    const lisibles = preparees.filter(
+      (p) =>
+        !p.entete ||
+        p.correspondance.entreprise !== undefined ||
+        p.correspondance.nom !== undefined ||
+        p.correspondance.nomComplet !== undefined,
+    );
+    for (const { feuille, entetes, donnees, correspondance } of lisibles.length > 0
+      ? lisibles
+      : preparees) {
       const [cree] = await tx
         .insert(baseImports)
         .values({

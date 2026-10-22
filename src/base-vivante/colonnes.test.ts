@@ -26,6 +26,11 @@ describe('correspondance des colonnes', () => {
     expect(inconnues).toEqual([5]);
   });
 
+  it('distingue le téléphone fixe du portable', () => {
+    const { correspondance } = proposerCorrespondance(['Telephone', 'Portable', 'Mobile 2']);
+    expect(correspondance).toEqual({ telephone: 0, portable: 1 });
+  });
+
   it('ne prend pas « nom de l’entreprise » pour un nom de personne', () => {
     const { correspondance } = proposerCorrespondance(['Nom de l’entreprise', 'Nom', 'Prénom']);
     expect(correspondance).toEqual({ entreprise: 0, nom: 1, prenom: 2 });

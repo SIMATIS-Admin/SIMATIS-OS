@@ -24,6 +24,7 @@ const CHAMPS: [ChampBase, string][] = [
   ['civilite', 'Civilité'],
   ['email', 'Email'],
   ['telephone', 'Téléphone'],
+  ['portable', 'Portable'],
   ['fonction', 'Fonction'],
   ['linkedin', 'LinkedIn'],
 ];
