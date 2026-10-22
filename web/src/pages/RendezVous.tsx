@@ -204,6 +204,8 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
   }
   if (data.etat === 'erreur') return <div className="empty">{data.erreur}</div>;
   const maintenant = Date.now();
+  // A block sorted as « pas un RDV » never comes back in the list.
+  const visibles = data.rdv.filter((r) => r.statut !== 'ignore');
   const introuvable = ouvrir && !data.rdv.some((r) => r.id === ouvrir);
   return (
     <div className="panel">
@@ -219,7 +221,7 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
           Connexions.
         </p>
       )}
-      {data.rdv.length ? (
+      {visibles.length ? (
         <table className="tbl">
           <thead>
             <tr>
@@ -231,13 +233,15 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
             </tr>
           </thead>
           <tbody>
-            {data.rdv.map((r) => {
+            {visibles.map((r) => {
               const passe = new Date(r.debut).getTime() <= maintenant;
               return [
                 <tr key={r.id} id={`rdv-${r.id}`} className={r.id === ouvrir ? 'cible' : ''}>
                   <td className="num">{quand(r.debut)}</td>
                   <td>
-                    <b>{r.titre}</b>
+                    <a href={`#/${slug}/fiche/rdv/${encodeURIComponent(r.id)}`}>
+                      <b>{r.titre}</b>
+                    </a>
                     {r.opportunite && <div className="small muted">{r.opportunite.titre}</div>}
                     {r.compteRendu && (
                       <div className="small" style={{ color: 'var(--green)' }}>

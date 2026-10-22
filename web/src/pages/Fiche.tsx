@@ -63,6 +63,7 @@ const EVENEMENTS: Record<Evenement['type'], [string, string]> = {
   appel: ['phone', 'Appel'],
   email: ['send', 'Email'],
   reunion: ['users', 'Réunion'],
+  compte_rendu: ['file', 'Compte rendu'],
   activite: ['check', 'Activité faite'],
   etape: ['flag', 'Étape'],
 };
@@ -72,7 +73,7 @@ const FILTRES: [string, string, Evenement['type'][]][] = [
   ['activites', 'Activités', ['activite']],
   ['appels', 'Appels', ['appel']],
   ['emails', 'Emails', ['email']],
-  ['reunions', 'Réunions', ['reunion']],
+  ['reunions', 'Réunions', ['reunion', 'compte_rendu']],
 ];
 const dateHeure = (iso: string) =>
   new Date(iso).toLocaleString('fr-FR', {
@@ -85,7 +86,8 @@ const dateHeure = (iso: string) =>
   });
 // Record fields come as unknown JSON: only strings and numbers are shown.
 const enTexte = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '');
-const lien = (slug: string, kind: KindFiche, id: string) => `#/${slug}/fiche/${kind}/${id}`;
+const lien = (slug: string, kind: KindFiche | 'rdv', id: string) =>
+  `#/${slug}/fiche/${kind}/${encodeURIComponent(id)}`;
 
 function ChampEditable({
   champ,
@@ -490,6 +492,32 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
           {kind === 'affaire' && data.mandat !== undefined && (
             <Mandat slug={slug} id={id} mandat={data.mandat} onChange={load} />
           )}
+          <section className="panel">
+            <div className="panel-h">
+              <h2>Rendez-vous ({data.rendezVous.length})</h2>
+            </div>
+            <ul className="panel-b fi-liste">
+              {data.rendezVous.length === 0 && (
+                <li className="muted small">Aucun rendez-vous lié.</li>
+              )}
+              {data.rendezVous.map((r) => (
+                <li key={r.id} className="fi-ligne">
+                  <span className="fi-ident">
+                    <span className="fi-av carre" aria-hidden="true">
+                      <Icon name="cal" />
+                    </span>
+                    <span>
+                      <a href={lien(slug, 'rdv', r.id)}>{r.titre || 'Rendez-vous'}</a>
+                      <span className="small muted">
+                        {r.debut ? ` ${dateHeure(r.debut)}` : ''}
+                        {r.compteRendu ? ' · compte rendu fait' : ''}
+                      </span>
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
           {cartes.map((c) => (
             <CarteLiens
               key={c.titre}

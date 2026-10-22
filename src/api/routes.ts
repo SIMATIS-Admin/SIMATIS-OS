@@ -140,9 +140,12 @@ import {
 } from '../conversion/devis.js';
 import {
   compteRenduSchema,
+  decrireRdv,
   enregistrerCompteRendu,
+  getRendezVous,
   listerAgendas,
   LienRdvInvalide,
+  lierRdv,
   lierRendezVous,
   listerRendezVous,
   preparer,
@@ -1228,6 +1231,57 @@ export function registerApi(
       }
     }),
   );
+  // The meeting as a record, sorting it (« Pas un RDV ») and its links to contacts, companies, deals.
+  app.get<ById>(
+    '/api/i/:slug/rendez-vous/:id',
+    onInstance<ById>(async (i, request, reply) => {
+      try {
+        return await getRendezVous(db, i, request.params.id.slice(0, 300), connexionDeps);
+      } catch (error) {
+        if (error instanceof RdvIndisponible) return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+  const statutRdvSchema = z.object({ statut: z.enum(['a_trier', 'rdv', 'ignore']) }).strict();
+  app.patch<CrRoute>(
+    '/api/i/:slug/rendez-vous/:id',
+    onInstance<CrRoute>(async (i, request, reply) => {
+      const parsed = statutRdvSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Statut invalide' });
+      return decrireRdv(db, i, request.params.id.slice(0, 300), parsed.data.statut);
+    }),
+  );
+  const cibleRdvSchema = z
+    .object({ kind: z.enum(['contact', 'entreprise', 'affaire']), id: z.uuid() })
+    .strict();
+  for (const [method, retirer] of [
+    ['POST', false],
+    ['DELETE', true],
+  ] as const) {
+    app.route<CrRoute>({
+      method,
+      url: '/api/i/:slug/rendez-vous/:id/liens',
+      handler: onInstance<CrRoute>(async (i, request, reply) => {
+        const parsed = cibleRdvSchema.safeParse(request.body);
+        if (!parsed.success) return reply.code(400).send({ error: 'Lien invalide' });
+        try {
+          return await lierRdv(
+            db,
+            i,
+            request.params.id.slice(0, 300),
+            parsed.data.kind,
+            parsed.data.id,
+            retirer,
+          );
+        } catch (error) {
+          if (error instanceof LienRdvInvalide)
+            return reply.code(400).send({ error: error.message });
+          throw error;
+        }
+      }),
+    });
+  }
   app.post<CrRoute>(
     '/api/i/:slug/rendez-vous/:id/compte-rendu',
     onInstance<CrRoute>(async (i, request, reply) => {

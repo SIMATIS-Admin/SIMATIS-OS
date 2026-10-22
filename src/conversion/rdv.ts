@@ -15,17 +15,20 @@ import {
   contacts,
   entreprises,
   opportunites,
-  rdvLiens,
+  rdvAffaires,
+  rdvContacts,
+  rdvEntreprises,
+  rendezVous,
   type Qualification,
 } from '../crm/schema.js';
-import type { Executor } from '../db.js';
+import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { decaler, estCreneau, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
-import { propose } from '../propositions/service.js';
+import { propose, PropositionRefusee } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 
 const FUSEAU = 'Europe/Paris';
@@ -150,29 +153,96 @@ export async function listerAgendas(
   }
 }
 
+export type StatutRdv = 'a_trier' | 'rdv' | 'ignore';
+type Ref = { id: string; nom: string };
+
+// Keeps a copy of the calendar blocks (title and times) so each one can be sorted, linked and
+// opened later. The pilot's decision (statut) and links are never touched by the refresh.
+async function memoriser(tx: Tx, liste: Evenement[]) {
+  if (liste.length === 0) return [];
+  const uniques = [...new Map(liste.map((e) => [e.id, e])).values()];
+  return tx
+    .insert(rendezVous)
+    .values(
+      uniques.map((e) => ({
+        instanceId: currentInstance,
+        eventId: e.id,
+        titre: e.titre,
+        debut: e.debut,
+        fin: e.fin,
+        lieu: e.lieu,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [rendezVous.instanceId, rendezVous.eventId],
+      set: {
+        titre: sql`excluded.titre`,
+        debut: sql`excluded.debut`,
+        fin: sql`excluded.fin`,
+        lieu: sql`excluded.lieu`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning({
+      id: rendezVous.id,
+      eventId: rendezVous.eventId,
+      statut: rendezVous.statut,
+      compteRendu: rendezVous.compteRendu,
+    });
+}
+
+// What a meeting is linked to by hand, by meeting id.
+async function liensDe(tx: Tx, rdvIds: string[]) {
+  const vide = {
+    contacts: new Map<string, Ref[]>(),
+    entreprises: new Map<string, Ref[]>(),
+    affaires: new Map<string, Ref[]>(),
+  };
+  if (rdvIds.length === 0) return vide;
+  const ranger = (m: Map<string, Ref[]>, rdv: string, ref: Ref) =>
+    m.set(rdv, [...(m.get(rdv) ?? []), ref]);
+  for (const l of await tx
+    .select({ rdv: rdvContacts.rendezVousId, id: contacts.id, nom: contacts.nom })
+    .from(rdvContacts)
+    .innerJoin(contacts, eq(contacts.id, rdvContacts.contactId))
+    .where(
+      and(eq(rdvContacts.instanceId, currentInstance), inArray(rdvContacts.rendezVousId, rdvIds)),
+    )
+    .orderBy(rdvContacts.createdAt))
+    ranger(vide.contacts, l.rdv, { id: l.id, nom: l.nom });
+  for (const l of await tx
+    .select({ rdv: rdvEntreprises.rendezVousId, id: entreprises.id, nom: entreprises.nom })
+    .from(rdvEntreprises)
+    .innerJoin(entreprises, eq(entreprises.id, rdvEntreprises.entrepriseId))
+    .where(
+      and(
+        eq(rdvEntreprises.instanceId, currentInstance),
+        inArray(rdvEntreprises.rendezVousId, rdvIds),
+      ),
+    )
+    .orderBy(rdvEntreprises.createdAt))
+    ranger(vide.entreprises, l.rdv, { id: l.id, nom: l.nom });
+  for (const l of await tx
+    .select({ rdv: rdvAffaires.rendezVousId, id: opportunites.id, nom: opportunites.titre })
+    .from(rdvAffaires)
+    .innerJoin(opportunites, eq(opportunites.id, rdvAffaires.opportuniteId))
+    .where(
+      and(eq(rdvAffaires.instanceId, currentInstance), inArray(rdvAffaires.rendezVousId, rdvIds)),
+    )
+    .orderBy(rdvAffaires.createdAt))
+    ranger(vide.affaires, l.rdv, { id: l.id, nom: l.nom });
+  return vide;
+}
+
 async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
   const emails = [...new Set(liste.flatMap((e) => e.participants))];
   return withInstance(db, instance.id, async (tx) => {
-    // Links chosen by the pilot win over the guests' emails.
-    const manuels = liste.length
-      ? await tx
-          .select({
-            eventId: rdvLiens.eventId,
-            contactId: rdvLiens.contactId,
-            entrepriseId: rdvLiens.entrepriseId,
-          })
-          .from(rdvLiens)
-          .where(
-            and(
-              eq(rdvLiens.instanceId, currentInstance),
-              inArray(
-                rdvLiens.eventId,
-                liste.map((e) => e.id),
-              ),
-            ),
-          )
-      : [];
-    const contactsChoisis = manuels.flatMap((m) => (m.contactId ? [m.contactId] : []));
+    const lignes = await memoriser(tx, liste);
+    const manuels = await liensDe(
+      tx,
+      lignes.map((l) => l.id),
+    );
+    const contactsChoisis = [...manuels.contacts.values()].flat().map((c) => c.id);
     const lies =
       emails.length || contactsChoisis.length
         ? await tx
@@ -201,20 +271,8 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
               ),
             )
         : [];
-    const entreprisesChoisies = manuels.flatMap((m) => (m.entrepriseId ? [m.entrepriseId] : []));
-    const choisies = entreprisesChoisies.length
-      ? await tx
-          .select({ id: entreprises.id, nom: entreprises.nom })
-          .from(entreprises)
-          .where(
-            and(
-              eq(entreprises.instanceId, currentInstance),
-              inArray(entreprises.id, entreprisesChoisies),
-            ),
-          )
-      : [];
     const ouvertes =
-      lies.length || choisies.length
+      lignes.length > 0
         ? await tx
             .select({
               id: opportunites.id,
@@ -241,33 +299,41 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
           )
       : [];
     return liste.map((e) => {
-      const manuel = manuels.find((m) => m.eventId === e.id);
+      const ligne = lignes.find((l) => l.eventId === e.id);
+      const rdvId = ligne?.id ?? '';
+      const mContacts = manuels.contacts.get(rdvId) ?? [];
+      const mEntreprises = manuels.entreprises.get(rdvId) ?? [];
+      const mAffaires = manuels.affaires.get(rdvId) ?? [];
+      // Linked by hand in the OS rather than through the guests' emails.
+      const manuel = mContacts.length + mEntreprises.length + mAffaires.length > 0;
       const contact = manuel
-        ? lies.find((c) => c.id === manuel.contactId)
+        ? lies.find((c) => c.id === mContacts[0]?.id)
         : lies.find((c) => c.email && e.participants.includes(c.email.toLowerCase()));
-      const choisie = manuel ? choisies.find((x) => x.id === manuel.entrepriseId) : undefined;
       const entreprise =
-        choisie ??
+        mEntreprises[0] ??
         (contact?.entrepriseId && contact.entreprise
           ? { id: contact.entrepriseId, nom: contact.entreprise }
           : undefined);
       const opp =
-        (contact && ouvertes.find((o) => o.contactId === contact.id)) ??
-        (entreprise && ouvertes.find((o) => o.entrepriseId === entreprise.id));
+        (mAffaires[0] ? { id: mAffaires[0].id, titre: mAffaires[0].nom } : undefined) ??
+        (!manuel
+          ? ((contact && ouvertes.find((o) => o.contactId === contact.id)) ??
+            (entreprise && ouvertes.find((o) => o.entrepriseId === entreprise.id)))
+          : undefined);
       return {
         id: e.id,
         debut: e.debut,
         fin: e.fin,
         titre: e.titre,
         lieu: e.lieu,
+        statut: (ligne?.statut ?? 'a_trier') as StatutRdv,
         contact: contact
           ? { id: contact.id, nom: contact.nom, entreprise: contact.entreprise }
           : null,
         entreprise: entreprise ?? null,
-        // Linked by hand in the OS rather than through the guests' emails.
-        lienManuel: manuel !== undefined,
+        lienManuel: manuel,
         opportunite: opp ? { id: opp.id, titre: opp.titre } : null,
-        compteRendu: faits.some((f) => f.sourceId === e.id),
+        compteRendu: ligne?.compteRendu != null || faits.some((f) => f.sourceId === e.id),
       };
     });
   });
@@ -275,8 +341,58 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
 
 export class LienRdvInvalide extends Error {}
 
-// Links a meeting to a contact and/or a company of the instance; both null removes the link
-// (the guests' emails count again).
+const cibles = {
+  contact: { table: contacts, nom: 'Contact' },
+  entreprise: { table: entreprises, nom: 'Entreprise' },
+  affaire: { table: opportunites, nom: 'Affaire' },
+} as const;
+export type CibleRdv = keyof typeof cibles;
+
+// The meeting's row, created on the spot when the calendar block was never listed (a link from the
+// Agenda, a compte rendu): its title and times come with the next read of the agenda.
+async function assurerRdv(tx: Tx, eventId: string) {
+  const [row] = await tx
+    .insert(rendezVous)
+    .values({ instanceId: currentInstance, eventId })
+    .onConflictDoUpdate({
+      target: [rendezVous.instanceId, rendezVous.eventId],
+      set: { updatedAt: new Date() },
+    })
+    .returning({ id: rendezVous.id });
+  if (!row) throw new RdvIndisponible('Rendez-vous introuvable');
+  return row.id;
+}
+
+async function verifierCible(tx: Tx, kind: CibleRdv, id: string) {
+  const { table, nom } = cibles[kind];
+  const [found] = await tx
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.instanceId, currentInstance), eq(table.id, id)));
+  if (!found) throw new LienRdvInvalide(`${nom} introuvable dans cette instance`);
+}
+
+async function ajouterLien(tx: Tx, rdvId: string, kind: CibleRdv, id: string) {
+  const base = { instanceId: currentInstance, rendezVousId: rdvId };
+  if (kind === 'contact')
+    await tx
+      .insert(rdvContacts)
+      .values({ ...base, contactId: id })
+      .onConflictDoNothing();
+  else if (kind === 'entreprise')
+    await tx
+      .insert(rdvEntreprises)
+      .values({ ...base, entrepriseId: id })
+      .onConflictDoNothing();
+  else
+    await tx
+      .insert(rdvAffaires)
+      .values({ ...base, opportuniteId: id })
+      .onConflictDoNothing();
+}
+
+// Replaces the contact and company a meeting is linked to; both null removes the links (the
+// guests' emails count again). Kept for the list screen's « Lier ».
 export async function lierRendezVous(
   db: Executor,
   instance: Instance,
@@ -284,32 +400,131 @@ export async function lierRendezVous(
   lien: { contactId: string | null; entrepriseId: string | null },
 ) {
   return withInstance(db, instance.id, async (tx) => {
-    for (const [table, id, nom] of [
-      [contacts, lien.contactId, 'Contact'],
-      [entreprises, lien.entrepriseId, 'Entreprise'],
-    ] as const) {
-      if (!id) continue;
-      const [found] = await tx
-        .select({ id: table.id })
-        .from(table)
-        .where(and(eq(table.instanceId, currentInstance), eq(table.id, id)));
-      if (!found) throw new LienRdvInvalide(`${nom} introuvable dans cette instance`);
-    }
-    const cible = and(eq(rdvLiens.instanceId, currentInstance), eq(rdvLiens.eventId, eventId));
-    if (!lien.contactId && !lien.entrepriseId) {
-      await tx.delete(rdvLiens).where(cible);
-    } else {
+    if (lien.contactId) await verifierCible(tx, 'contact', lien.contactId);
+    if (lien.entrepriseId) await verifierCible(tx, 'entreprise', lien.entrepriseId);
+    const rdvId = await assurerRdv(tx, eventId);
+    await tx
+      .delete(rdvContacts)
+      .where(and(eq(rdvContacts.instanceId, currentInstance), eq(rdvContacts.rendezVousId, rdvId)));
+    await tx
+      .delete(rdvEntreprises)
+      .where(
+        and(eq(rdvEntreprises.instanceId, currentInstance), eq(rdvEntreprises.rendezVousId, rdvId)),
+      );
+    if (lien.contactId) await ajouterLien(tx, rdvId, 'contact', lien.contactId);
+    if (lien.entrepriseId) await ajouterLien(tx, rdvId, 'entreprise', lien.entrepriseId);
+    await logEvent(tx, { acteur: 'pilote', action: 'Rendez-vous relié', niveau: 'L2' });
+    return { ok: true };
+  });
+}
+
+// Adds (or removes) one link of any kind to a meeting.
+export async function lierRdv(
+  db: Executor,
+  instance: Instance,
+  eventId: string,
+  kind: CibleRdv,
+  id: string,
+  retirer = false,
+) {
+  return withInstance(db, instance.id, async (tx) => {
+    const rdvId = await assurerRdv(tx, eventId);
+    if (retirer) {
+      const [table, colonne] =
+        kind === 'contact'
+          ? ([rdvContacts, rdvContacts.contactId] as const)
+          : kind === 'entreprise'
+            ? ([rdvEntreprises, rdvEntreprises.entrepriseId] as const)
+            : ([rdvAffaires, rdvAffaires.opportuniteId] as const);
       await tx
-        .insert(rdvLiens)
-        .values({ instanceId: currentInstance, eventId, ...lien })
-        .onConflictDoUpdate({
-          target: [rdvLiens.instanceId, rdvLiens.eventId],
-          set: { ...lien, updatedAt: new Date() },
-        });
+        .delete(table)
+        .where(
+          and(
+            eq(table.instanceId, currentInstance),
+            eq(table.rendezVousId, rdvId),
+            eq(colonne, id),
+          ),
+        );
+    } else {
+      await verifierCible(tx, kind, id);
+      await ajouterLien(tx, rdvId, kind, id);
     }
     await logEvent(tx, { acteur: 'pilote', action: 'Rendez-vous relié', niveau: 'L2' });
     return { ok: true };
   });
+}
+
+// « Pas un RDV » (ignore) takes the block out of the lists for good; a_trier puts it back.
+export async function decrireRdv(
+  db: Executor,
+  instance: Instance,
+  eventId: string,
+  statut: StatutRdv,
+) {
+  return withInstance(db, instance.id, async (tx) => {
+    const rdvId = await assurerRdv(tx, eventId);
+    await tx
+      .update(rendezVous)
+      .set({ statut, updatedAt: new Date() })
+      .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.id, rdvId)));
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: statut === 'ignore' ? 'Rendez-vous écarté (pas un RDV)' : 'Rendez-vous trié',
+      niveau: 'L1',
+    });
+    return { ok: true };
+  });
+}
+
+// The meeting as a record: its links, its compte rendu, and the open tasks it gave rise to.
+export async function getRendezVous(
+  db: Executor,
+  instance: Instance,
+  eventId: string,
+  deps: ConnexionDeps,
+  options: GoogleOptions = {},
+) {
+  const lire = () =>
+    withInstance(db, instance.id, async (tx) => {
+      const [r] = await tx
+        .select()
+        .from(rendezVous)
+        .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.eventId, eventId)));
+      if (!r) return null;
+      const liens = await liensDe(tx, [r.id]);
+      const contactsLies = (liens.contacts.get(r.id) ?? []).map((c) => c.id);
+      const fonctions = contactsLies.length
+        ? await tx
+            .select({ id: contacts.id, fonction: contacts.fonction, entreprise: entreprises.nom })
+            .from(contacts)
+            .leftJoin(entreprises, eq(entreprises.id, contacts.entrepriseId))
+            .where(
+              and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, contactsLies)),
+            )
+        : [];
+      return {
+        id: r.eventId,
+        titre: r.titre,
+        debut: r.debut,
+        fin: r.fin,
+        lieu: r.lieu,
+        statut: r.statut as StatutRdv,
+        contacts: (liens.contacts.get(r.id) ?? []).map((c) => ({
+          ...c,
+          detail: fonctions.find((f) => f.id === c.id)?.entreprise ?? null,
+        })),
+        entreprises: liens.entreprises.get(r.id) ?? [],
+        affaires: liens.affaires.get(r.id) ?? [],
+        compteRendu: r.compteRendu ? { texte: r.compteRendu, at: r.compteRenduAt } : null,
+      };
+    });
+  const trouve = await lire();
+  if (trouve) return trouve;
+  // Never listed: one read of the agenda records it.
+  await listerRendezVous(db, instance, deps, new Date(), options);
+  const apres = await lire();
+  if (!apres) throw new RdvIndisponible('Rendez-vous introuvable');
+  return apres;
 }
 
 // What to look into before the meeting: the deal's qualification and the criteria still below 3.
@@ -362,17 +577,37 @@ export const compteRenduSchema = z.object({
   texte: z.string().trim().min(1).max(10_000),
   contactId: z.uuid().nullish(),
   opportuniteId: z.uuid().nullish(),
+  proposerTache: z.boolean().default(true),
+  versCerveau: z.boolean().default(true),
 });
 
-// Saves the compte rendu, then proposes the next-step task for validation.
+// Saves the compte rendu on the meeting (and in the history of the records it is linked to), then
+// proposes the next-step task and a draft note for the second brain, both for validation.
 export async function enregistrerCompteRendu(
   db: Executor,
   instance: Instance,
   evenementId: string,
-  input: z.infer<typeof compteRenduSchema>,
+  input: z.input<typeof compteRenduSchema>,
   deps: ConnexionDeps,
 ) {
+  const { proposerTache = true, versCerveau = true, ...cr } = input;
   return withInstance(db, instance.id, async (tx) => {
+    const rdvId = await assurerRdv(tx, evenementId);
+    const liens = await liensDe(tx, [rdvId]);
+    const contactId = liens.contacts.get(rdvId)?.[0]?.id ?? cr.contactId ?? null;
+    const entrepriseId = liens.entreprises.get(rdvId)?.[0]?.id ?? null;
+    const opportuniteId = liens.affaires.get(rdvId)?.[0]?.id ?? cr.opportuniteId ?? null;
+    const maintenant = new Date();
+    await tx
+      .update(rendezVous)
+      .set({
+        compteRendu: cr.texte,
+        compteRenduAt: maintenant,
+        // A meeting with a compte rendu is a meeting, whatever it was sorted as.
+        statut: 'rdv',
+        updatedAt: maintenant,
+      })
+      .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.id, rdvId)));
     await tx
       .insert(activites)
       .values({
@@ -380,36 +615,58 @@ export async function enregistrerCompteRendu(
         type: 'compte_rendu',
         source: 'rdv',
         sourceId: evenementId,
-        contactId: input.contactId ?? null,
-        at: new Date(),
-        resume: input.texte,
+        contactId,
+        entrepriseId,
+        opportuniteId,
+        titre: cr.titre,
+        at: maintenant,
+        resume: cr.texte,
       })
       .onConflictDoUpdate({
         target: [activites.instanceId, activites.source, activites.sourceId],
-        set: { resume: input.texte, updatedAt: new Date() },
+        set: {
+          resume: cr.texte,
+          titre: cr.titre,
+          contactId,
+          entrepriseId,
+          opportuniteId,
+          updatedAt: maintenant,
+        },
       });
     await logEvent(tx, {
       acteur: 'pilote',
-      action: `Compte rendu enregistré : ${input.titre}`,
+      action: `Compte rendu enregistré : ${cr.titre}`,
       niveau: 'L1',
     });
-    const echeance = new Date(Date.now() + 3 * 864e5).toISOString();
-    return propose(
-      tx,
-      { instance, realWrites: deps.realWrites, secretsDir: deps.secretsDir },
-      {
-        type: 'crm.tache',
+    const ctx = { instance, realWrites: deps.realWrites, secretsDir: deps.secretsDir };
+    if (versCerveau) {
+      // The compte rendu is saved whatever the autonomy says about the second brain.
+      await propose(tx, ctx, {
+        type: 'note.second_cerveau',
         auteur: 'os',
         contenu: {
-          titre: `Prochaine étape après le rendez-vous : ${input.titre}`.slice(0, 300),
-          detail: input.texte.slice(0, 5000),
-          canal: 'tache',
-          echeance,
-          contactId: input.contactId ?? null,
-          opportuniteId: input.opportuniteId ?? null,
+          titre: `Compte rendu : ${cr.titre}`.slice(0, 300),
+          texte: cr.texte,
           origine: 'Compte rendu de rendez-vous',
         },
+      }).catch((error: unknown) => {
+        if (!(error instanceof PropositionRefusee)) throw error;
+      });
+    }
+    if (!proposerTache) return { ok: true };
+    const echeance = new Date(Date.now() + 3 * 864e5).toISOString();
+    return propose(tx, ctx, {
+      type: 'crm.tache',
+      auteur: 'os',
+      contenu: {
+        titre: `Prochaine étape après le rendez-vous : ${cr.titre}`.slice(0, 300),
+        detail: cr.texte.slice(0, 5000),
+        canal: 'tache',
+        echeance,
+        contactId,
+        opportuniteId,
+        origine: 'Compte rendu de rendez-vous',
       },
-    );
+    });
   });
 }

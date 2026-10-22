@@ -37,7 +37,7 @@ async function chercher(slug: string, kind: KindFiche, q: string) {
   return (await fetchOpportunitesRecherche(slug, q)).map((o) => ({ id: o.id, nom: o.titre }));
 }
 
-function LierExistant({
+export function LierExistant({
   slug,
   kind,
   exclus,

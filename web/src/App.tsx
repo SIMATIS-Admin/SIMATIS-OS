@@ -18,6 +18,7 @@ import { Inbox } from './pages/Inbox.js';
 import { Bientot } from './pages/Bientot.js';
 import { Brief } from './pages/Brief.js';
 import { Fiche } from './pages/Fiche.js';
+import { FicheRdv } from './pages/FicheRdv.js';
 import { Barre } from './shell/Barre.js';
 import { Console } from './shell/Console.js';
 import type { KindFiche } from './api.js';
@@ -41,13 +42,26 @@ const DEFAULT_VIEW = 'brief';
 // Same URL scheme as the mockup: #/<instance>/<screen>.
 // `#/<slug>/<view>`, or `#/<slug>/fiche/<kind>/<id>` for a detail page.
 function readHash(): { slug: string | null; view: string; kind?: string; id?: string } {
-  const m = /^#\/([\w-]+)\/([\w-]+)(?:\/([\w-]+)\/([\w-]+))?/.exec(location.hash);
+  const m = /^#\/([\w-]+)\/([\w-]+)(?:\/([\w-]+)\/([^/?#]+))?/.exec(location.hash);
   if (!m) return { slug: null, view: DEFAULT_VIEW };
   const view = vueCanonique(m[2] ?? DEFAULT_VIEW);
   if (m[1] && view !== m[2]) history.replaceState(null, '', `#/${m[1]}/${view}`);
-  return { slug: m[1] ?? null, view, kind: m[3], id: m[4] };
+  // A calendar event id is not always plain letters and digits: links carry it encoded.
+  let id = m[4];
+  try {
+    if (id) id = decodeURIComponent(id);
+  } catch {
+    // Left as written.
+  }
+  return { slug: m[1] ?? null, view, kind: m[3], id };
 }
 const KINDS_FICHE = ['affaire', 'contact', 'entreprise'];
+const TITRES_FICHE: Record<string, string> = {
+  affaire: 'Affaire',
+  contact: 'Contact',
+  entreprise: 'Organisation',
+  rdv: 'Rendez-vous',
+};
 
 export function App() {
   const [instances, setInstances] = useState<InstanceSummary[] | null>(null);
@@ -115,9 +129,7 @@ export function App() {
     view === 'portefeuille'
       ? 'Portefeuille'
       : view === 'fiche'
-        ? ({ affaire: 'Affaire', contact: 'Contact', entreprise: 'Organisation' }[
-            route.kind ?? ''
-          ] ?? 'Fiche')
+        ? (TITRES_FICHE[route.kind ?? ''] ?? 'Fiche')
         : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
@@ -168,6 +180,10 @@ export function App() {
       case 'parametres':
         return <Parametres key={current.slug} slug={current.slug} onRenamed={loadInstances} />;
       case 'fiche':
+        if (route.kind === 'rdv' && route.id)
+          return (
+            <FicheRdv key={`${current.slug}-rdv-${route.id}`} slug={current.slug} id={route.id} />
+          );
         return route.kind && KINDS_FICHE.includes(route.kind) && route.id ? (
           <Fiche
             key={`${current.slug}-${route.kind}-${route.id}`}

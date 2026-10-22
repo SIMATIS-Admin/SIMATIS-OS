@@ -24,6 +24,7 @@ const affaire = () => ({
     entreprise: { id: 'e1', nom: 'Fonderie Vallière' },
     contact: { id: 'c1', nom: 'Agathe Vallière' },
   },
+  rendezVous: [],
   aVenir: [
     {
       id: 't1',
@@ -83,6 +84,9 @@ const contact = () => ({
     affaires: [{ id: 'o1', titre: 'Structuration', etape: 'q', clos: null, montant: 14000 }],
   },
   aVenir: [],
+  rendezVous: [
+    { id: 'evt-9', titre: 'Réunion fictive', debut: '2026-10-12T12:00:00.000Z', compteRendu: true },
+  ],
   historique: [],
   ecrit: true,
 });
@@ -259,6 +263,14 @@ describe('Fiche page', () => {
       '#/simatis/fiche/affaire/o1',
     );
     expect(screen.queryByLabelText('Aussi dans HubSpot')).toBeNull();
+  });
+
+  it('lists the meetings linked to a record, each opening its own page', async () => {
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    const lienRdv = await screen.findByRole('link', { name: 'Réunion fictive' });
+    expect(lienRdv.getAttribute('href')).toBe('#/simatis/fiche/rdv/evt-9');
+    expect(screen.getByRole('heading', { name: 'Rendez-vous (1)' })).toBeTruthy();
+    expect(screen.getByText(/compte rendu fait/)).toBeTruthy();
   });
 
   it('deletes the record after a confirmation', async () => {

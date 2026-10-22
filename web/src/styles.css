@@ -2908,6 +2908,10 @@ textarea.input {
   justify-content: space-between;
   gap: 8px;
 }
+.fi-cr {
+  margin: 0;
+  white-space: pre-wrap;
+}
 .fi-ident {
   display: flex;
   align-items: center;

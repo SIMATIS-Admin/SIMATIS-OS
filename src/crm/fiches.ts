@@ -10,6 +10,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { assurerLiensPrincipaux, lireLiens, type LienFiche } from './liens.js';
 import { pipelineSource } from './pipeline.js';
+import { rendezVousDe, type RdvLie } from './rdv-liens.js';
 import { activites, contacts, entreprises, opportunites, taches } from './schema.js';
 import { CrmIndisponible } from './service.js';
 import { listTachesOuvertes, type TacheVue } from './taches.js';
@@ -21,7 +22,7 @@ export const KINDS: Kind[] = ['affaire', 'contact', 'entreprise'];
 
 export type Evenement = {
   id: string;
-  type: 'note' | 'appel' | 'email' | 'reunion' | 'activite' | 'etape';
+  type: 'note' | 'appel' | 'email' | 'reunion' | 'compte_rendu' | 'activite' | 'etape';
   titre: string | null;
   texte: string | null;
   at: string;
@@ -47,6 +48,7 @@ export type Fiche = {
     entreprises?: LienFiche[];
   };
   aVenir: TacheVue[];
+  rendezVous: RdvLie[];
   historique: Evenement[];
   etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
   ecrit: boolean;
@@ -213,6 +215,7 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
     fiche,
     liens,
     aVenir: await listTachesOuvertes(tx, lie(p, taches)),
+    rendezVous: await rendezVousDe(tx, kind, id),
     historique,
     ...(etapes ? { etapes } : {}),
     ecrit: row.source !== 'hubspot' || reglages?.sens === 'deux_sens',
