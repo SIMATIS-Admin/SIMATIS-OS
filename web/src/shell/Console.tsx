@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchConsole, type ConsoleOS, type LigneConsole } from '../api.js';
 
-const GLYPHES: Record<LigneConsole['niveau'], string> = {
-  ok: '✔',
-  info: '›',
-  attention: '!',
-  erreur: '✖',
+// The label says what the colour means, so a line can be read without knowing the code.
+const ETIQUETTES: Record<LigneConsole['niveau'], string> = {
+  ok: 'FAIT',
+  info: 'INFO',
+  attention: 'À VOIR',
+  erreur: 'ÉCHEC',
 };
 
 const emoji = (l: LigneConsole) =>
@@ -117,7 +118,9 @@ export function Console({ slug }: { slug: string }) {
               'Console injoignable…'
             ) : derniere ? (
               <>
-                <span className={`pastille ${derniere.niveau}`} aria-hidden="true" />
+                <span className={`console-badge ${derniere.niveau}`}>
+                  {ETIQUETTES[derniere.niveau]}
+                </span>
                 {derniere.texte}
               </>
             ) : donnees ? (
@@ -150,9 +153,7 @@ export function Console({ slug }: { slug: string }) {
               className={`console-ligne ${l.niveau} ${nouvelles.has(l.id) ? 'nouvelle' : ''}`}
             >
               <span className="console-heure">{heure(l.at)}</span>
-              <span className="console-glyphe" aria-hidden="true">
-                {GLYPHES[l.niveau]}
-              </span>
+              <span className="console-badge">{ETIQUETTES[l.niveau]}</span>
               <span aria-hidden="true">{emoji(l)}</span>
               <span className="console-texte">{l.texte}</span>
             </div>
@@ -160,9 +161,7 @@ export function Console({ slug }: { slug: string }) {
           {donnees?.enCours && (
             <div className="console-ligne info">
               <span className="console-heure" />
-              <span className="console-glyphe" aria-hidden="true">
-                ›
-              </span>
+              <span className="console-badge">INFO</span>
               <span className="console-texte">
                 Claude travaille
                 <span className="console-curseur" aria-hidden="true" />

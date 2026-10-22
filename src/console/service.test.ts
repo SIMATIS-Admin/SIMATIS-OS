@@ -61,6 +61,16 @@ describe('fusionnerConsole', () => {
     expect(fusionnerConsole([], [run({})]).enCours).toBe(false);
   });
 
+  it('warns when a request nobody took stays unanswered for two minutes', () => {
+    const demandee = run({ statut: 'demandee', fin: null });
+    const avant = fusionnerConsole([], [demandee], new Date('2026-10-22T08:01:00Z'));
+    expect(avant.lignes.some((l) => /ne répond pas/.test(l.texte))).toBe(false);
+    const apres = fusionnerConsole([], [demandee], new Date('2026-10-22T08:03:00Z'));
+    expect(apres.lignes.at(-1)).toMatchObject({ niveau: 'attention' });
+    expect(apres.lignes.at(-1)?.texte).toMatch(/ne répond pas/);
+    expect(apres.enCours).toBe(true);
+  });
+
   it('mixes journal and routines, oldest first', () => {
     const { lignes } = fusionnerConsole(
       [

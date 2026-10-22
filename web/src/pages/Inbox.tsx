@@ -351,10 +351,6 @@ function MiseAJour({
     );
   };
   const enCours = idOuverte !== null;
-  const sansReponse =
-    execution?.statut === 'demandee' &&
-    Date.now() - new Date(execution.createdAt).getTime() > SANS_REPONSE_MS;
-  const abandon = execution?.statut === 'echouee' ? execution.rapport?.echec[0] : undefined;
 
   return (
     <>
@@ -368,17 +364,6 @@ function MiseAJour({
         <Icon name="refresh" />
       </button>
       {!routine.actif && <span className="hint">Routine en pause</span>}
-      {sansReponse && (
-        <span className="small" style={{ color: 'var(--red)' }}>
-          L'exécuteur ne répond pas : la demande sera abandonnée au bout de 15 minutes. Vérifiez
-          qu'il tourne sur l'ordinateur.
-        </span>
-      )}
-      {abandon && (
-        <span className="small" style={{ color: 'var(--red)' }}>
-          {abandon}
-        </span>
-      )}
       {error && (
         <span className="small" style={{ color: 'var(--red)' }}>
           {error}
@@ -709,16 +694,10 @@ export function Inbox({
     );
   }, [slug]);
 
-  const fini = useCallback(
-    (e: Execution) => {
-      load();
-      onChange?.();
-      setMessage(
-        e.statut === 'echouee' ? 'La mise à jour de l’Inbox a échoué.' : 'Inbox mise à jour.',
-      );
-    },
-    [load, onChange],
-  );
+  const fini = useCallback(() => {
+    load();
+    onChange?.();
+  }, [load, onChange]);
 
   const instances = [...new Map((list ?? []).map((s) => [s.instance.slug, s.instance])).values()];
   const ensemble = instances.some((i) => i.slug !== slug);
