@@ -4,7 +4,7 @@ import { fmtEur } from '../TestsVma.js';
 const NB = ' ';
 const pct = (x: number) =>
   `${(x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}${NB}%`;
-const ans = (n: number) => `${n} ${n < 2 ? 'an' : 'ans'}`;
+const ans = (n: number) => (n < 1 ? `${Math.round(n * 12)} mois` : `${n} ${n < 2 ? 'an' : 'ans'}`);
 
 // Reproduit l'écran « Votre résultat » du site, tel que le dirigeant l'a lu : mêmes textes, mêmes
 // chiffres, rien du calcul réservé à Marc (potentiel, gains, blocs).
@@ -15,12 +15,15 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
   const socle = e.recurrent !== null && e.recurrent !== undefined;
   const allure = e.allureActuelle ?? 0;
   const lancee = socle && typeof e.trajectoire === 'number';
+  const previsionnel = e.previsionnel === true;
   const pastille =
-    e.pastille === 'estimés'
-      ? (['warn', 'Chiffres en partie estimés'] as const)
-      : e.pastille === 'non mesurable'
-        ? (['risk', 'Non mesurable'] as const)
-        : (['ok', 'Chiffres réels'] as const);
+    e.pastille === 'prévisionnelle'
+      ? (['warn', t.pastillePrev ?? 'Chiffres prévisionnels'] as const)
+      : e.pastille === 'estimés'
+        ? (['warn', 'Chiffres en partie estimés'] as const)
+        : e.pastille === 'non mesurable'
+          ? (['risk', 'Non mesurable'] as const)
+          : (['ok', 'Chiffres réels'] as const);
 
   const echelle =
     Math.max(allure, e.allureVisee, lancee ? (e.trajectoire as number) : 0) * 1.15 || 1;
@@ -51,11 +54,15 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
       </div>
 
       <div className="panel rc-carte">
-        <div className="rc-eyebrow">Votre VMA commerciale</div>
+        <div className="rc-eyebrow">
+          {previsionnel
+            ? (t.libelleVmaPrev ?? 'Votre VMA prévisionnelle')
+            : 'Votre VMA commerciale'}
+        </div>
         <div className="rc-grand">
           {e.mesurable ? fmtEur(e.vma) : '—'}
           <small>
-            de CA commandé par mois sur vos nouvelles affaires
+            de CA commandé par mois {previsionnel ? 'attendu ' : ''}sur vos nouvelles affaires
             {e.mesurable && e.vma !== null ? `, soit ${fmtEur(e.vma * 12)} par an` : ''}
           </small>
         </div>
@@ -69,11 +76,24 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
             </p>
           </>
         )}
-        {(socle ? t.definitionAllure : e.mesurable ? t.definitionVma : t.nonMesurable) && (
+        {(socle
+          ? t.definitionAllure
+          : e.mesurable
+            ? previsionnel
+              ? t.definitionVmaPrev
+              : t.definitionVma
+            : t.nonMesurable) && (
           <p className="small muted">
-            {socle ? t.definitionAllure : e.mesurable ? t.definitionVma : t.nonMesurable}
+            {socle
+              ? t.definitionAllure
+              : e.mesurable
+                ? previsionnel
+                  ? t.definitionVmaPrev
+                  : t.definitionVma
+                : t.nonMesurable}
           </p>
         )}
+        {e.indicatif === true && t.indicatif && <p className="small muted">{t.indicatif}</p>}
         <div className="rc-chips">
           <span className={`rc-chip ${pastille[0]}`}>{pastille[1]}</span>
           <span className={`rc-chip ${e.tenue === 'tenue' ? 'ok' : 'warn'}`}>
