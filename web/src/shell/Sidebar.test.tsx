@@ -65,9 +65,9 @@ describe('Sidebar', () => {
 
   it('marks screens not built yet with « Bientôt »', () => {
     renderSidebar(simatis, []);
-    const bases = screen.getByText('Bases vivantes').closest('a');
+    const prospection = screen.getByText('Prospection').closest('a');
     const contacts = screen.getByText('Contacts').closest('a');
-    expect(bases && within(bases).queryByText('Bientôt')).toBeTruthy();
+    expect(prospection && within(prospection).queryByText('Bientôt')).toBeTruthy();
     expect(contacts && within(contacts).queryByText('Bientôt')).toBeNull();
   });
 

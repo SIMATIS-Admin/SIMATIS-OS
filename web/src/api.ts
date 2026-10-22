@@ -1097,3 +1097,122 @@ export const demandeRapportDiag = (slug: string, id: string) =>
   );
 export const urlLogoDiag = (slug: string, id: string) =>
   inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/logo`);
+
+// Bases vivantes : sas d'import puis base homogène (voir src/base-vivante).
+export type ZoneBase = 'a_enrichir' | 'prospectable';
+export type StatutLigneBase = 'pret' | 'sous_minimum' | 'doublon_interne' | 'integre';
+export type ChampBase =
+  | 'entreprise'
+  | 'civilite'
+  | 'prenom'
+  | 'nom'
+  | 'nomComplet'
+  | 'email'
+  | 'telephone'
+  | 'fonction'
+  | 'linkedin';
+export type CorrespondanceBase = Partial<Record<ChampBase, number>>;
+export type CompteursImportBase = {
+  total: number;
+  prospectables: number;
+  aEnrichir: number;
+  sousMinimum: number;
+  doublonsInternes: number;
+  integrees: number;
+};
+export type LigneImportBase = {
+  numero: number;
+  statut: StatutLigneBase;
+  zone: ZoneBase | null;
+  raison: string | null;
+  avertissements: string[];
+  brut: string[];
+  fiche: {
+    entreprise: string | null;
+    civilite: 'M.' | 'Mme' | null;
+    civiliteDeduite: boolean;
+    prenom: string | null;
+    nom: string | null;
+    email: string | null;
+    telephone: string | null;
+    fonction: string | null;
+  };
+};
+export type ImportBase = {
+  id: string;
+  nomFichier: string;
+  feuille: string;
+  provenance: string;
+  mandat: string | null;
+  statut: 'apercu' | 'integre';
+  creeLe: string;
+  entetes: string[];
+  correspondance: CorrespondanceBase;
+  echantillon: string[][];
+  compteurs: CompteursImportBase;
+  lignes: LigneImportBase[];
+  rapport: { creees: number; fusionnees: number } | null;
+};
+export type ResumeImportBase = Pick<
+  ImportBase,
+  'id' | 'nomFichier' | 'feuille' | 'provenance' | 'mandat' | 'statut' | 'creeLe' | 'rapport'
+> & { compteurs: CompteursImportBase };
+export type FicheBase = {
+  id: string;
+  zone: ZoneBase;
+  entreprise: string;
+  civilite: 'M.' | 'Mme' | null;
+  prenom: string | null;
+  nom: string;
+  email: string | null;
+  telephone: string | null;
+  fonction: string | null;
+  provenance: string;
+  mandat: string | null;
+};
+export type EtatBase = {
+  fiches: FicheBase[];
+  total: number;
+  compteurs: { aEnrichir: number; prospectable: number };
+  imports: ResumeImportBase[];
+};
+export const fetchBase = (slug: string, zone?: ZoneBase, q = '', page = 0) => {
+  const params = new URLSearchParams();
+  if (zone) params.set('zone', zone);
+  if (q.trim()) params.set('q', q.trim());
+  if (page > 0) params.set('page', String(page));
+  const suite = params.toString();
+  return getJson<EtatBase>(inst(slug, `base${suite ? `?${suite}` : ''}`));
+};
+export const creerImportBase = (
+  slug: string,
+  payload: {
+    nomFichier: string;
+    contenuBase64?: string;
+    texte?: string;
+    provenance: string;
+    mandat?: string;
+  },
+) => sendJson<ImportBase[]>('POST', inst(slug, 'base/imports'), payload);
+export const fetchImportBase = (slug: string, id: string, statut: StatutLigneBase = 'pret') =>
+  getJson<ImportBase>(inst(slug, `base/imports/${id}?statut=${statut}`));
+export const reglerCorrespondanceBase = (
+  slug: string,
+  id: string,
+  correspondance: Record<string, number | null>,
+) =>
+  sendJson<ImportBase>('PUT', inst(slug, `base/imports/${id}/correspondance`), { correspondance });
+export const completerLigneBase = (
+  slug: string,
+  id: string,
+  numero: number,
+  champs: { entreprise?: string; nom?: string },
+) => sendJson<LigneImportBase>('PATCH', inst(slug, `base/imports/${id}/lignes/${numero}`), champs);
+export const integrerImportBase = (slug: string, id: string) =>
+  sendJson<{ creees: number; fusionnees: number; restantes: number }>(
+    'POST',
+    inst(slug, `base/imports/${id}/integrer`),
+    {},
+  );
+export const annulerImportBase = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/imports/${id}`), undefined);

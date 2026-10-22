@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type pg from 'pg';
 import { registerApi } from './api/routes.js';
+import { registerBaseVivanteRoutes } from './base-vivante/routes.js';
 import type { FetchLike } from './connecteurs/google/oauth.js';
 import type { Database } from './db.js';
 import type { CompteImap } from './secrets.js';
@@ -41,6 +42,7 @@ export function buildApp({
   const app = Fastify({ logger });
   registerHealth(app, { pool, version, backupStatusFile });
   registerApi(app, { db, secretsDir, realWrites, googleFetch, imapServeur });
+  registerBaseVivanteRoutes(app, { db });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db });

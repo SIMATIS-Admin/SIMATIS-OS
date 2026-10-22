@@ -24,6 +24,7 @@ import { Barre } from './shell/Barre.js';
 import { Console } from './shell/Console.js';
 import type { KindFiche } from './api.js';
 import { Agenda } from './pages/Agenda.js';
+import { Bases } from './pages/Bases.js';
 import { RendezVous } from './pages/RendezVous.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
@@ -175,6 +176,8 @@ export function App() {
         return <Devis key={current.slug} slug={current.slug} />;
       case 'diagnostics':
         return <Diagnostics key={current.slug} slug={current.slug} />;
+      case 'bases':
+        return <Bases key={current.slug} slug={current.slug} />;
       case 'siteweb':
         return <SiteWeb key={current.slug} slug={current.slug} />;
       case 'tableau':

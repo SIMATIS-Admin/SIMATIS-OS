@@ -253,6 +253,13 @@
       "when": 1792673320418,
       "tag": "0035_violet_prima",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792675931427,
+      "tag": "0036_base_vivante",
+      "breakpoints": true
     }
   ]
 }

@@ -77,6 +77,7 @@ export const BUILT = new Set([
   'diagnostics',
   'routines',
   'siteweb',
+  'bases',
 ]);
 
 // Where each screen comes from in docs/plans/2026-10-08-implementation-maquette.md.
@@ -86,7 +87,6 @@ export const LOTS: Record<string, string> = {
   agenda: 'Lot 15, Rendez-vous et Devis',
   devis: 'Lot 15, Rendez-vous et Devis',
   prospection: 'M4, spécification à finir',
-  bases: 'M4, spécification à finir',
 };
 
 export const isBuilt = (id: string) => BUILT.has(id);
