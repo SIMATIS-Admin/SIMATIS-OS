@@ -239,6 +239,13 @@
       "when": 1792597068371,
       "tag": "0033_liens_multiples",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792664976812,
+      "tag": "0034_chief_captain_america",
+      "breakpoints": true
     }
   ]
 }

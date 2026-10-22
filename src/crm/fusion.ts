@@ -7,6 +7,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { FicheInvalide, type Kind, type SimulationFiche } from './fiches.js';
 import { ecrireHubspot, ligne, SIMULATION, transfererLiens, viaHubspot } from './liens.js';
+import { transfererRendezVous } from './rdv-liens.js';
 import { contacts, entreprises, opportunites } from './schema.js';
 import { REFERENCES, supprimerLocalement } from './suppression.js';
 
@@ -84,6 +85,7 @@ export async function fusionnerFiches(
       );
     }
     await transfererLiens(tx, kind, absorbeId, gardeId);
+    await transfererRendezVous(tx, kind, absorbeId, gardeId);
     await supprimerLocalement(tx, { kind, id: absorbeId });
     await logEvent(tx, { acteur: 'pilote', action: `Fiches fusionnées (${kind})`, niveau: 'L2' });
     return { ok: true as const };

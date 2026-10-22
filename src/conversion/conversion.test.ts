@@ -10,6 +10,8 @@ import { withInstance } from '../db/context.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { writeGoogleAppSecret } from '../secrets.js';
+import { getFiche } from '../crm/fiches.js';
+import { transfererRendezVous } from '../crm/rdv-liens.js';
 import { listerRendezVous } from './rdv.js';
 
 type Row = Record<string, unknown>;
@@ -19,7 +21,11 @@ describe('Rendez-vous and Devis', () => {
   let app: FastifyInstance;
   let secretsDir: string;
 
-  const send = async (method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, payload?: unknown) => {
+  const send = async (
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+    url: string,
+    payload?: unknown,
+  ) => {
     const res = await app.inject({ method, url, payload: payload as object });
     return { status: res.statusCode, body: res.json<Row & Row[]>() };
   };
@@ -214,6 +220,13 @@ describe('Rendez-vous and Devis', () => {
       entreprise: { id: entreprise.id, nom: entreprise.nom },
       lienManuel: true,
     });
+    // Linked by hand to the deal's contact: the open deal is still found for the preparation.
+    expect((await lien({ contactId: contact.id, entrepriseId: null })).status).toBe(200);
+    expect((await lister()).rdv[0]).toMatchObject({
+      contact: { id: contact.id },
+      lienManuel: true,
+      opportunite: { id: list.rdv[0]?.opportunite?.id },
+    });
     expect((await lien({ contactId: null, entrepriseId: null })).status).toBe(200);
     expect((await lister()).rdv[0]).toMatchObject({
       contact: { id: contact.id },
@@ -224,6 +237,118 @@ describe('Rendez-vous and Devis', () => {
       (await lien({ contactId: '00000000-0000-4000-8000-000000000000', entrepriseId: null }))
         .status,
     ).toBe(400);
+  });
+
+  it('sorts a meeting as a RDV or not, links it to several records and keeps its compte rendu', async () => {
+    const instance = await getInstanceBySlug(t.app.db, 'helioval');
+    if (!instance) throw new Error('no instance');
+    const fetch = (url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url.includes('oauth2')
+              ? { access_token: 'a' }
+              : {
+                  items: [
+                    {
+                      id: 'evt-3',
+                      summary: 'Point fictif',
+                      start: { dateTime: '2026-10-13T12:00:00Z' },
+                      end: { dateTime: '2026-10-13T13:00:00Z' },
+                    },
+                  ],
+                },
+          ),
+        ),
+      );
+    const lister = () =>
+      listerRendezVous(
+        t.app.db,
+        instance,
+        { secretsDir, realWrites: false },
+        new Date('2026-10-09T08:00:00Z'),
+        { fetch },
+      );
+    expect((await lister()).rdv[0]).toMatchObject({ id: 'evt-3', statut: 'a_trier' });
+
+    // « Pas un RDV » sticks, even after the agenda is read again.
+    expect(
+      (await send('PATCH', '/api/i/helioval/rendez-vous/evt-3', { statut: 'ignore' })).status,
+    ).toBe(200);
+    expect((await lister()).rdv[0]).toMatchObject({ statut: 'ignore' });
+    expect(
+      (await send('PATCH', '/api/i/helioval/rendez-vous/evt-3', { statut: 'nimporte' })).status,
+    ).toBe(400);
+    expect(
+      (await send('PATCH', '/api/i/helioval/rendez-vous/evt-3', { statut: 'rdv' })).status,
+    ).toBe(200);
+
+    const { rows: ents } = await t.owner.pool.query<{ id: string; nom: string }>(
+      "select e.id, e.nom from entreprises e join instances i on i.id = e.instance_id where i.slug = 'helioval' order by e.nom limit 2",
+    );
+    const [ent1, ent2] = ents;
+    if (!ent1 || !ent2) throw new Error('no companies');
+    const opp = await oppOf('helioval');
+    const lien = (method: 'POST' | 'DELETE', kind: string, id: string) =>
+      send(method, '/api/i/helioval/rendez-vous/evt-3/liens', { kind, id });
+    expect((await lien('POST', 'entreprise', ent1.id)).status).toBe(200);
+    expect((await lien('POST', 'entreprise', ent1.id)).status).toBe(200);
+    expect((await lien('POST', 'affaire', opp.id)).status).toBe(200);
+    expect((await lien('POST', 'contact', opp.contact_id)).status).toBe(200);
+    expect((await lien('POST', 'affaire', crypto.randomUUID())).status).toBe(400);
+    expect(
+      (await send('POST', '/api/i/helioval/rendez-vous/evt-3/liens', { kind: 'x' })).status,
+    ).toBe(400);
+    const fiche = (await send('GET', '/api/i/helioval/rendez-vous/evt-3')).body;
+    expect(fiche).toMatchObject({
+      id: 'evt-3',
+      titre: 'Point fictif',
+      statut: 'rdv',
+      compteRendu: null,
+    });
+    expect((fiche.entreprises as Row[]).map((e) => e.id)).toEqual([ent1.id]);
+    expect((fiche.affaires as Row[]).map((a) => a.id)).toEqual([opp.id]);
+    expect((fiche.contacts as Row[]).map((c) => c.id)).toEqual([opp.contact_id]);
+
+    // The records show the meeting in their own card.
+    const ficheEntreprise = await getFiche(t.app.db, instance, 'entreprise', ent1.id);
+    expect(ficheEntreprise?.rendezVous.map((r) => r.id)).toEqual(['evt-3']);
+    expect((await lien('DELETE', 'contact', opp.contact_id)).status).toBe(200);
+    expect(
+      ((await send('GET', '/api/i/helioval/rendez-vous/evt-3')).body.contacts as Row[]).length,
+    ).toBe(0);
+
+    // A merge moves the meetings of the absorbed company to the kept one.
+    await withInstance(t.app.db, instance.id, (tx) =>
+      transfererRendezVous(tx, 'entreprise', ent1.id, ent2.id),
+    );
+    expect(
+      (await getFiche(t.app.db, instance, 'entreprise', ent2.id))?.rendezVous.map((r) => r.id),
+    ).toEqual(['evt-3']);
+
+    // The compte rendu belongs to the meeting, reaches the history of its records and is offered to
+    // the second brain; the next-step task is optional.
+    const cr = await send('POST', '/api/i/helioval/rendez-vous/evt-3/compte-rendu', {
+      titre: 'Point fictif',
+      texte: 'Décision : lancer la phase deux.',
+      proposerTache: false,
+    });
+    expect(cr.body).toEqual({ ok: true });
+    expect((await send('GET', '/api/i/helioval/rendez-vous/evt-3')).body.compteRendu).toMatchObject(
+      {
+        texte: 'Décision : lancer la phase deux.',
+      },
+    );
+    const { rows: props } = await t.owner.pool.query<{ type: string }>(
+      "select type from propositions where type = 'note.second_cerveau' and contenu->>'titre' = 'Compte rendu : Point fictif'",
+    );
+    expect(props).toHaveLength(1);
+    const historique = (await getFiche(t.app.db, instance, 'entreprise', ent2.id))?.historique;
+    expect(historique?.some((h) => h.type === 'compte_rendu')).toBe(true);
+    expect((await lister()).rdv[0]).toMatchObject({ compteRendu: true, statut: 'rdv' });
+
+    // Never listed, and no agenda to look into: not found.
+    expect((await send('GET', '/api/i/aquaterra/rendez-vous/evt-absent')).status).toBe(404);
   });
 
   it('lists the calendars of the connected account, and none when the agenda is not connected', async () => {

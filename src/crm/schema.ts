@@ -205,6 +205,86 @@ export const rdvLiens = pgTable(
   ],
 );
 
+// A calendar block the pilot treats as a client meeting. Google stays the source of the block
+// (event_id); the title and times are a copy so the record opens outside the agenda window.
+// statut: a_trier (not decided yet), rdv (a commercial meeting), ignore (not one, never shown again).
+export const rendezVous = pgTable(
+  'rendez_vous',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    eventId: text('event_id').notNull(),
+    titre: text('titre').notNull().default(''),
+    debut: timestamp('debut', { withTimezone: true }),
+    fin: timestamp('fin', { withTimezone: true }),
+    lieu: text('lieu'),
+    statut: text('statut').notNull().default('a_trier'),
+    compteRendu: text('compte_rendu'),
+    compteRenduAt: timestamp('compte_rendu_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('rendez_vous_event_idx').on(t.instanceId, t.eventId),
+    instanceIsolation('rendez_vous'),
+  ],
+);
+
+export const rdvContacts = pgTable(
+  'rdv_contacts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    rendezVousId: uuid('rendez_vous_id')
+      .notNull()
+      .references(() => rendezVous.id, { onDelete: 'cascade' }),
+    contactId: uuid('contact_id')
+      .notNull()
+      .references(() => contacts.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('rdv_contacts_paire_idx').on(t.instanceId, t.rendezVousId, t.contactId),
+    index('rdv_contacts_contact_idx').on(t.contactId),
+    instanceIsolation('rdv_contacts'),
+  ],
+);
+
+export const rdvEntreprises = pgTable(
+  'rdv_entreprises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    rendezVousId: uuid('rendez_vous_id')
+      .notNull()
+      .references(() => rendezVous.id, { onDelete: 'cascade' }),
+    entrepriseId: uuid('entreprise_id')
+      .notNull()
+      .references(() => entreprises.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('rdv_entreprises_paire_idx').on(t.instanceId, t.rendezVousId, t.entrepriseId),
+    index('rdv_entreprises_entreprise_idx').on(t.entrepriseId),
+    instanceIsolation('rdv_entreprises'),
+  ],
+);
+
+export const rdvAffaires = pgTable(
+  'rdv_affaires',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    rendezVousId: uuid('rendez_vous_id')
+      .notNull()
+      .references(() => rendezVous.id, { onDelete: 'cascade' }),
+    opportuniteId: uuid('opportunite_id')
+      .notNull()
+      .references(() => opportunites.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('rdv_affaires_paire_idx').on(t.instanceId, t.rendezVousId, t.opportuniteId),
+    index('rdv_affaires_affaire_idx').on(t.opportuniteId),
+    instanceIsolation('rdv_affaires'),
+  ],
+);
+
 export const activites = pgTable(
   'activites',
   {

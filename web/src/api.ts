@@ -646,7 +646,10 @@ export type RendezVous = {
   lienManuel: boolean;
   opportunite: { id: string; titre: string } | null;
   compteRendu: boolean;
+  // a_trier: not decided yet; rdv: a commercial meeting; ignore: « Pas un RDV ».
+  statut: StatutRdv;
 };
+export type StatutRdv = 'a_trier' | 'rdv' | 'ignore';
 export type RendezVousReponse = {
   etat: 'ok' | 'non_configure' | 'erreur';
   erreur?: string;
@@ -689,6 +692,44 @@ export const lierRendezVous = (
   id: string,
   lien: { contactId: string | null; entrepriseId: string | null },
 ) => sendJson<{ ok: true }>('PUT', inst(slug, `rendez-vous/${encodeURIComponent(id)}/lien`), lien);
+export type RdvFiche = {
+  id: string;
+  titre: string;
+  debut: string | null;
+  fin: string | null;
+  lieu: string | null;
+  statut: StatutRdv;
+  contacts: { id: string; nom: string; detail: string | null }[];
+  entreprises: { id: string; nom: string }[];
+  affaires: { id: string; nom: string }[];
+  compteRendu: { texte: string; at: string | null } | null;
+};
+export const fetchRdv = (slug: string, id: string) =>
+  getJson<RdvFiche>(inst(slug, `rendez-vous/${encodeURIComponent(id)}`));
+export const trierRdv = (slug: string, id: string, statut: StatutRdv) =>
+  sendJson<{ ok: true }>('PATCH', inst(slug, `rendez-vous/${encodeURIComponent(id)}`), { statut });
+export const lierRdv = (
+  slug: string,
+  id: string,
+  cible: { kind: KindFiche; id: string },
+  retirer = false,
+) =>
+  sendJson<{ ok: true }>(
+    retirer ? 'DELETE' : 'POST',
+    inst(slug, `rendez-vous/${encodeURIComponent(id)}/liens`),
+    cible,
+  );
+export const enregistrerCompteRenduRdv = (
+  slug: string,
+  rdv: { id: string; titre: string },
+  texte: string,
+  options: { proposerTache: boolean; versCerveau: boolean },
+) =>
+  sendJson<unknown>('POST', inst(slug, `rendez-vous/${encodeURIComponent(rdv.id)}/compte-rendu`), {
+    titre: rdv.titre,
+    texte,
+    ...options,
+  });
 export const envoyerCompteRendu = (slug: string, rdv: RendezVous, texte: string) =>
   sendJson<{ id: string; statut: string }>(
     'POST',
@@ -778,12 +819,13 @@ export const fetchSante = (slug: string) => getJson<Sante>(inst(slug, 'routines/
 export type KindFiche = 'affaire' | 'contact' | 'entreprise';
 export type Evenement = {
   id: string;
-  type: 'note' | 'appel' | 'email' | 'reunion' | 'activite' | 'etape';
+  type: 'note' | 'appel' | 'email' | 'reunion' | 'compte_rendu' | 'activite' | 'etape';
   titre: string | null;
   texte: string | null;
   at: string;
   origine: 'hubspot' | 'os';
 };
+export type RdvLie = { id: string; titre: string; debut: string | null; compteRendu: boolean };
 export type LienFiche = { id: string; nom: string; principal: boolean };
 export type RefFiche = { kind: KindFiche; id: string };
 export type FicheDetail = {
@@ -805,6 +847,7 @@ export type FicheDetail = {
     entreprises?: LienFiche[];
   };
   aVenir: TacheVue[];
+  rendezVous: RdvLie[];
   historique: Evenement[];
   etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
   ecrit: boolean;
