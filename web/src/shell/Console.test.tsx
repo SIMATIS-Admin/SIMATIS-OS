@@ -53,6 +53,15 @@ describe('Console (journal en lecture seule)', () => {
     expect(screen.getByRole('log').textContent).toContain('ACME non rangé');
   });
 
+  it('labels each line with what its colour means', async () => {
+    render(<Console slug="simatis" />);
+    await screen.findByText('Test de VMA reçu : ACME non rangé');
+    fireEvent.click(screen.getByLabelText('Déplier la console'));
+    const journal = screen.getByRole('log');
+    expect(journal.textContent).toContain('INFO');
+    expect(journal.textContent).toContain('À VOIR');
+  });
+
   it('empties the display without losing anything, then shows everything again', async () => {
     render(<Console slug="simatis" />);
     await screen.findByText('Test de VMA reçu : ACME non rangé');

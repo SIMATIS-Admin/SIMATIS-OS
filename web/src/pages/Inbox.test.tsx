@@ -195,8 +195,9 @@ describe('Inbox screen', () => {
         'disabled',
       ),
     ).toBe(true);
-    await screen.findByText('Inbox mise à jour.', {}, { timeout: 8000 });
-    expect(onChange).toHaveBeenCalled();
+    // The outcome is told by the console, not by a message beside the button.
+    await waitFor(() => expect(onChange).toHaveBeenCalled(), { timeout: 8000 });
+    expect(screen.queryByText('Inbox mise à jour.')).toBeNull();
     expect(calls.filter((c) => c.url.includes('/inbox?')).length).toBeGreaterThan(1);
     expect(
       screen.getByRole('button', { name: "Mettre à jour l'Inbox" }).hasAttribute('disabled'),
@@ -360,24 +361,24 @@ describe('Inbox screen', () => {
     expect(screen.getByRole('button', { name: "Mettre à jour l'Inbox" }).textContent).toBe('');
   });
 
-  it('says the runner does not answer when a request stays untouched', async () => {
+  it('keeps the button busy on an untouched request, and says nothing beside it', async () => {
     derniereRoutine = execution('demandee');
     render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
-    await screen.findByText(/L'exécuteur ne répond pas/);
+    expect(screen.queryByText(/L'exécuteur ne répond pas/)).toBeNull();
     expect(
       screen.getByRole('button', { name: 'Mise à jour en cours…' }).hasAttribute('disabled'),
     ).toBe(true);
   });
 
-  it('shows why an abandoned request failed and lets the button run again', async () => {
+  it('lets the button run again after an abandoned request, without a red message', async () => {
     derniereRoutine = {
       ...execution('echouee'),
       rapport: { fait: [], attente: [], echec: ["Abandonnée : l'exécuteur n'a pas répondu."] },
     };
     render(<AvecEntete slug="simatis" />);
     await screen.findAllByText('Répondre à Hélène');
-    await screen.findByText(/Abandonnée : l'exécuteur/);
+    expect(screen.queryByText(/Abandonnée : l'exécuteur/)).toBeNull();
     expect(
       screen.getByRole('button', { name: "Mettre à jour l'Inbox" }).hasAttribute('disabled'),
     ).toBe(false);

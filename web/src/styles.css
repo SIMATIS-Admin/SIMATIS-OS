@@ -3963,27 +3963,33 @@ tr.sel {
   opacity: 0.4;
   cursor: default;
 }
-.console .pastille {
+.console-badge {
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  flex: none;
+  min-width: 7ch;
   margin-right: 8px;
-  background: #7ea6d1;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(126, 166, 209, 0.22);
+  color: #9fc2e8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
 }
-.console .pastille.ok,
-.console-ligne.ok .console-glyphe {
-  background: #3ddc97;
+.console-badge.ok,
+.console-ligne.ok .console-badge {
+  background: rgba(61, 220, 151, 0.2);
   color: #3ddc97;
 }
-.console .pastille.attention,
-.console-ligne.attention .console-glyphe {
-  background: #ffb547;
+.console-badge.attention,
+.console-ligne.attention .console-badge {
+  background: rgba(255, 181, 71, 0.22);
   color: #ffb547;
 }
-.console .pastille.erreur,
-.console-ligne.erreur .console-glyphe {
-  background: #ff6b6b;
+.console-badge.erreur,
+.console-ligne.erreur .console-badge {
+  background: rgba(255, 107, 107, 0.22);
   color: #ff6b6b;
 }
 .console-corps {
@@ -4006,13 +4012,6 @@ tr.sel {
   flex: none;
   width: 5ch;
   color: #6f8db3;
-}
-.console-glyphe {
-  flex: none;
-  width: 1.5ch;
-  background: none !important;
-  color: #7ea6d1;
-  font-weight: 700;
 }
 .console-ligne.erreur .console-texte {
   color: #ffb3b3;
