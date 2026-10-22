@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  createContact,
   enregistrerCompteRenduRdv,
   fetchRdv,
   lierRdv,
@@ -90,6 +91,70 @@ function Groupe({
             >
               <Icon name="x" />
             </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// « jean.dupont@exemple.test » gives « Jean Dupont »: a name to correct afterwards, never an empty one.
+export const nomDepuisEmail = (email: string) =>
+  (email.split('@')[0] ?? email)
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((m) => m.charAt(0).toUpperCase() + m.slice(1))
+    .join(' ');
+
+// The guests of the meeting: a known one links to its contact, an unknown one can become a contact
+// in one click (in the meeting's organisation when it has one), linked to the meeting at once.
+function Participants({
+  slug,
+  rdv,
+  onChange,
+  onMessage,
+}: {
+  slug: string;
+  rdv: RdvFiche;
+  onChange: () => void;
+  onMessage: (m: string | null) => void;
+}) {
+  if (rdv.participants.length === 0) return null;
+  const creer = (email: string) =>
+    createContact(slug, {
+      nom: nomDepuisEmail(email),
+      email,
+      entrepriseId: rdv.entreprises[0]?.id ?? null,
+    })
+      .then(async (r) => {
+        if (!r.id) return onMessage(r.message ?? 'Contact non créé.');
+        await lierRdv(slug, rdv.id, { kind: 'contact', id: r.id });
+        onMessage(r.avertissement ?? null);
+        onChange();
+      })
+      .catch((e: unknown) => onMessage(erreurDe(e)));
+  return (
+    <section className="panel">
+      <div className="panel-h">
+        <h2>Participants</h2>
+      </div>
+      <ul className="panel-b fi-liste">
+        {rdv.participants.map((p) => (
+          <li key={p.email} className="fi-ligne">
+            {p.contact ? (
+              <a href={lien(slug, 'contact', p.contact.id)}>{p.contact.nom}</a>
+            ) : (
+              <>
+                <span className="small">{p.email}</span>
+                <button
+                  className="btn sm"
+                  aria-label={`Créer le contact ${p.email}`}
+                  onClick={() => void creer(p.email)}
+                >
+                  Créer le contact
+                </button>
+              </>
+            )}
           </li>
         ))}
       </ul>
@@ -271,6 +336,7 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
             onChange={load}
             onMessage={setMessage}
           />
+          <Participants slug={slug} rdv={rdv} onChange={load} onMessage={setMessage} />
         </div>
         <div className="fi-droite">
           <CompteRendu

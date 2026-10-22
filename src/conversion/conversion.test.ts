@@ -242,6 +242,10 @@ describe('Rendez-vous and Devis', () => {
   it('sorts a meeting as a RDV or not, links it to several records and keeps its compte rendu', async () => {
     const instance = await getInstanceBySlug(t.app.db, 'helioval');
     if (!instance) throw new Error('no instance');
+    const guest = await t.owner.pool.query<{ email: string; id: string }>(
+      "select c.id, c.email from contacts c join instances i on i.id = c.instance_id where i.slug = 'helioval' and c.email is not null limit 1",
+    );
+    const guestEmail = guest.rows[0]?.email.toUpperCase() ?? '';
     const fetch = (url: string) =>
       Promise.resolve(
         new Response(
@@ -255,6 +259,11 @@ describe('Rendez-vous and Devis', () => {
                       summary: 'Point fictif',
                       start: { dateTime: '2026-10-13T12:00:00Z' },
                       end: { dateTime: '2026-10-13T13:00:00Z' },
+                      attendees: [
+                        { email: 'moi@example.fr', self: true },
+                        { email: 'Inconnu.Fictif@example.test' },
+                        { email: guestEmail },
+                      ],
                     },
                   ],
                 },
@@ -315,6 +324,16 @@ describe('Rendez-vous and Devis', () => {
     expect((fiche.entreprises as Row[]).map((e) => e.id)).toEqual([ent1.id]);
     expect((fiche.affaires as Row[]).map((a) => a.id)).toEqual([opp.id]);
     expect((fiche.contacts as Row[]).map((c) => c.id)).toEqual([opp.contact_id]);
+
+    // The guests: the pilot is left out, a known one points to its contact, an unknown one to none.
+    const invites = fiche.participants as {
+      email: string;
+      contact: { id: string } | null;
+    }[];
+    expect(invites.map((p) => [p.email, p.contact?.id ?? null])).toEqual([
+      ['inconnu.fictif@example.test', null],
+      [guestEmail.toLowerCase(), guest.rows[0]?.id],
+    ]);
 
     // The records show the meeting in their own card.
     const ficheEntreprise = await getFiche(t.app.db, instance, 'entreprise', ent1.id);

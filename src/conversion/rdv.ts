@@ -171,6 +171,7 @@ async function memoriser(tx: Tx, liste: Evenement[]) {
         debut: e.debut,
         fin: e.fin,
         lieu: e.lieu,
+        participants: e.participants,
       })),
     )
     .onConflictDoUpdate({
@@ -180,6 +181,7 @@ async function memoriser(tx: Tx, liste: Evenement[]) {
         debut: sql`excluded.debut`,
         fin: sql`excluded.fin`,
         lieu: sql`excluded.lieu`,
+        participants: sql`excluded.participants`,
         updatedAt: new Date(),
       },
     })
@@ -519,6 +521,17 @@ export async function getRendezVous(
               and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, contactsLies)),
             )
         : [];
+      const connus = r.participants.length
+        ? await tx
+            .select({ id: contacts.id, nom: contacts.nom, email: contacts.email })
+            .from(contacts)
+            .where(
+              and(
+                eq(contacts.instanceId, currentInstance),
+                inArray(sql`lower(${contacts.email})`, r.participants),
+              ),
+            )
+        : [];
       return {
         id: r.eventId,
         titre: r.titre,
@@ -532,6 +545,10 @@ export async function getRendezVous(
         })),
         entreprises: liens.entreprises.get(r.id) ?? [],
         affaires: liens.affaires.get(r.id) ?? [],
+        participants: r.participants.map((email) => ({
+          email,
+          contact: connus.find((c) => c.email?.toLowerCase() === email) ?? null,
+        })),
         compteRendu: r.compteRendu ? { texte: r.compteRendu, at: r.compteRenduAt } : null,
       };
     });

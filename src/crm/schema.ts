@@ -218,6 +218,8 @@ export const rendezVous = pgTable(
     debut: timestamp('debut', { withTimezone: true }),
     fin: timestamp('fin', { withTimezone: true }),
     lieu: text('lieu'),
+    // Guests' emails (the pilot excluded), kept to offer creating the ones the CRM does not know.
+    participants: jsonb('participants').$type<string[]>().notNull().default([]),
     statut: text('statut').notNull().default('a_trier'),
     compteRendu: text('compte_rendu'),
     compteRenduAt: timestamp('compte_rendu_at', { withTimezone: true }),

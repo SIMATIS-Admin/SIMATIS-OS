@@ -704,6 +704,7 @@ export type RdvFiche = {
   contacts: { id: string; nom: string; detail: string | null }[];
   entreprises: { id: string; nom: string }[];
   affaires: { id: string; nom: string }[];
+  participants: { email: string; contact: { id: string; nom: string } | null }[];
   compteRendu: { texte: string; at: string | null } | null;
 };
 export const fetchRdv = (slug: string, id: string) =>
