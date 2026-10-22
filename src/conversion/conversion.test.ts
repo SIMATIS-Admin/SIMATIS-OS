@@ -12,7 +12,7 @@ import { getInstanceBySlug } from '../instances/service.js';
 import { writeGoogleAppSecret } from '../secrets.js';
 import { getFiche } from '../crm/fiches.js';
 import { transfererRendezVous } from '../crm/rdv-liens.js';
-import { listerRendezVous } from './rdv.js';
+import { compterATrier, listerRendezVous } from './rdv.js';
 
 type Row = Record<string, unknown>;
 
@@ -270,12 +270,18 @@ describe('Rendez-vous and Devis', () => {
         { fetch },
       );
     expect((await lister()).rdv[0]).toMatchObject({ id: 'evt-3', statut: 'a_trier' });
+    expect(await compterATrier(t.app.db, instance, new Date('2026-10-09T08:00:00Z'))).toBe(1);
 
     // « Pas un RDV » sticks, even after the agenda is read again.
     expect(
       (await send('PATCH', '/api/i/helioval/rendez-vous/evt-3', { statut: 'ignore' })).status,
     ).toBe(200);
     expect((await lister()).rdv[0]).toMatchObject({ statut: 'ignore' });
+    // The menu badge counts what is still to sort, and drops when a block is set aside.
+    expect(await compterATrier(t.app.db, instance, new Date('2026-10-09T08:00:00Z'))).toBe(0);
+    expect(typeof (await send('GET', '/api/i/helioval/rendez-vous/compteur')).body.n).toBe(
+      'number',
+    );
     expect(
       (await send('PATCH', '/api/i/helioval/rendez-vous/evt-3', { statut: 'nimporte' })).status,
     ).toBe(400);

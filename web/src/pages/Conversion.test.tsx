@@ -36,6 +36,7 @@ const rdv = {
       lienManuel: false,
       opportunite: { id: 'o1', titre: 'Audit des utilités' },
       compteRendu: false,
+      statut: 'rdv',
     },
   ],
 };

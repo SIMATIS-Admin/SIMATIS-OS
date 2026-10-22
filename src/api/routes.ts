@@ -140,6 +140,7 @@ import {
 } from '../conversion/devis.js';
 import {
   compteRenduSchema,
+  compterATrier,
   decrireRdv,
   enregistrerCompteRendu,
   getRendezVous,
@@ -1230,6 +1231,10 @@ export function registerApi(
         throw error;
       }
     }),
+  );
+  app.get<SlugParams>(
+    '/api/i/:slug/rendez-vous/compteur',
+    onInstance(async (i) => ({ n: await compterATrier(db, i) })),
   );
   // The meeting as a record, sorting it (« Pas un RDV ») and its links to contacts, companies, deals.
   app.get<ById>(

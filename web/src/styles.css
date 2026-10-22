@@ -2992,6 +2992,23 @@ textarea.input {
   }
 }
 
+/* Liste des rendez-vous : onglets, jours, puces de liens */
+.rdv-onglets {
+  padding: 12px 12px 4px;
+}
+.rdv-jour td {
+  background: var(--line-2);
+  color: var(--ink-3);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+.rdv-puces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* Pipeline à la Pipedrive : totaux, personne, ajout */
 .pipe-totaux {
   display: flex;
