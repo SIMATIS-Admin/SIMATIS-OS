@@ -68,6 +68,8 @@ services:
       RESTIC_PASSWORD: ${RESTIC_PASSWORD:?À définir dans .env}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      # « oui » : sauvegarde sans le dossier secrets (temporaire, voir .env.example).
+      BACKUP_SANS_SECRETS: ${BACKUP_SANS_SECRETS:-}
     volumes:
       - backup-status:/status
       - backup-local:/backups
