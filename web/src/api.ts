@@ -114,6 +114,18 @@ const inst = (slug: string, path: string) => `/api/i/${encodeURIComponent(slug)}
 // Test de VMA : invitations envoyées par le site, résultats relevés (voir src/vma).
 export type TestVmaType = 'premier' | 'essai';
 export type TestVmaStatut = 'envoyee' | 'utilisee' | 'revoquee';
+type FreinEcran = {
+  n: number;
+  titre: string;
+  phrase: string;
+  // v2.1 : estimation moyenne, réponse du dirigeant, pratique la plus avancée, par où commencer.
+  enjeu?: number;
+  reponse?: string;
+  cible?: string;
+  debut?: string[];
+  signe?: string;
+};
+
 export type TestVma = {
   id: string;
   entrepriseId: string | null;
@@ -146,17 +158,18 @@ export type TestVma = {
     socleEcheance?: number | null;
     pastille?: string;
     ecartPct?: number | null;
-    freins: {
-      n: number;
-      titre: string;
-      phrase: string;
-      // v2.1 : estimation moyenne, réponse du dirigeant, pratique la plus avancée, par où commencer.
-      enjeu?: number;
-      reponse?: string;
-      cible?: string;
-      debut?: string[];
-      signe?: string;
-    }[];
+    // v2.2 (mode portefeuille) : objectif découpé en récurrent et nouvelles affaires, freins par écran.
+    modePortefeuille?: boolean;
+    partRecActuelle?: number | null;
+    partRecVisee?: number | null;
+    recurrentCible?: number | null;
+    spotCible?: number | null;
+    spotEcheance?: number | null;
+    ecartRecurrent?: number | null;
+    ecartSpot?: number | null;
+    freinsConquete?: FreinEcran[];
+    freinsPortefeuille?: FreinEcran[];
+    freins: FreinEcran[];
     // Libellés et définitions tels que le dirigeant les a lus (absents des résultats anciens).
     textes?: Record<string, string>;
   } | null;
