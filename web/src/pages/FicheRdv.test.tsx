@@ -18,6 +18,10 @@ const rdv = () => ({
   contacts: [{ id: 'c1', nom: 'Claire Exemple', detail: 'Société Fictive' }],
   entreprises: [{ id: 'e1', nom: 'Société Fictive' }],
   affaires: [],
+  participants: [
+    { email: 'claire@exemple.test', contact: { id: 'c1', nom: 'Claire Exemple' } },
+    { email: 'jean.dupont@exemple.test', contact: null },
+  ],
   compteRendu,
 });
 
@@ -27,6 +31,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
   if (url.includes('/entreprises?q='))
     return json([{ id: 'e2', nom: 'Entreprise Trouvée', ville: null }]);
+  if (url.endsWith('/contacts')) return json({ id: 'c9' });
   if (method !== 'GET') return json({ ok: true });
   return json(rdv());
 }
@@ -52,9 +57,10 @@ describe('FicheRdv', () => {
     expect(screen.getByRole('link', { name: 'Société Fictive' }).getAttribute('href')).toBe(
       '#/simatis/fiche/entreprise/e1',
     );
-    expect(screen.getByRole('link', { name: 'Claire Exemple' }).getAttribute('href')).toBe(
-      '#/simatis/fiche/contact/c1',
-    );
+    // Once in the contacts card, once among the guests.
+    for (const a of screen.getAllByRole('link', { name: 'Claire Exemple' })) {
+      expect(a.getAttribute('href')).toBe('#/simatis/fiche/contact/c1');
+    }
     expect(screen.getByText('À trier')).toBeTruthy();
   });
 
@@ -91,6 +97,20 @@ describe('FicheRdv', () => {
       kind: 'contact',
       id: 'c1',
     });
+  });
+
+  it('creates the contact of an unknown guest in the meeting organisation, and links it', async () => {
+    render(<FicheRdv slug="simatis" id="evt-1" />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Créer le contact jean.dupont@exemple.test' }),
+    );
+    await waitFor(() => expect(envoi('/rendez-vous/evt-1/liens', 'POST')).toBeTruthy());
+    expect(envoi('/contacts', 'POST')?.body).toEqual({
+      nom: 'Jean Dupont',
+      email: 'jean.dupont@exemple.test',
+      entrepriseId: 'e1',
+    });
+    expect(envoi('/rendez-vous/evt-1/liens', 'POST')?.body).toEqual({ kind: 'contact', id: 'c9' });
   });
 
   it('saves the compte rendu, with the task and the second brain checked by default', async () => {
