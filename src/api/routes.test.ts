@@ -103,6 +103,15 @@ describe('API instances, entreprises, contacts', () => {
     expect(body.every((e) => String(e.action).includes('Helioval'))).toBe(true);
   });
 
+  it('serves the console of the instance only, and 404 for an unknown one', async () => {
+    expect((await get('/api/i/inconnu/console')).status).toBe(404);
+    const { status, body } = await get('/api/i/helioval/console');
+    expect(status).toBe(200);
+    const lignes = (body as unknown as { lignes: { texte: string }[] }).lignes;
+    expect(lignes.length).toBeGreaterThan(0);
+    expect(lignes.every((l) => !l.texte.includes('Aquaterra'))).toBe(true);
+  });
+
   it('returns only counters in the portfolio', async () => {
     const { body } = await get('/api/portefeuille');
     expect(body).toHaveLength(4);

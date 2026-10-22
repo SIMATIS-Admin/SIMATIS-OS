@@ -64,6 +64,7 @@ import {
   ouvrirEchange,
   repondrePilote,
 } from '../inbox/echanges.js';
+import { lireConsole } from '../console/service.js';
 import { logEvent, recentEvents } from '../journal/service.js';
 import { normaliserDomaine } from '../connecteurs/hubspot/domaines.js';
 import {
@@ -1111,6 +1112,11 @@ export function registerApi(
   app.get<SlugParams>(
     '/api/i/:slug/journal',
     onInstance((i) => withInstance(db, i.id, (tx) => recentEvents(tx, 200))),
+  );
+
+  app.get<SlugParams>(
+    '/api/i/:slug/console',
+    onInstance((i) => withInstance(db, i.id, (tx) => lireConsole(tx))),
   );
 
   app.get<SlugParams>(

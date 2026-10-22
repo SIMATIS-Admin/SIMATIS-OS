@@ -61,6 +61,16 @@ export type JournalEntry = {
   niveau: string | null;
 };
 
+export type LigneConsole = {
+  id: string;
+  at: string;
+  source: 'journal' | 'routine';
+  acteur: string;
+  niveau: 'ok' | 'info' | 'attention' | 'erreur';
+  texte: string;
+};
+export type ConsoleOS = { lignes: LigneConsole[]; enCours: boolean };
+
 export type InstanceFiche = InstanceSummary & {
   statut: 'actif' | 'archive';
   ecrituresReelles: boolean;
@@ -215,6 +225,7 @@ export const supprimerTestVma = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `vma/tests/${encodeURIComponent(id)}`), {});
 
 export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug, 'journal'));
+export const fetchConsole = (slug: string) => getJson<ConsoleOS>(inst(slug, 'console'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>
   sendJson<InstanceSummary>('PATCH', inst(slug, 'instance'), { nom });
