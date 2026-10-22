@@ -225,6 +225,11 @@ function ApercuImport({
   const colonneDe = (index: number): ChampBase | '' =>
     CHAMPS.find(([champ]) => imp.correspondance[champ] === index)?.[0] ?? '';
 
+  // Columns that carry something come first; the ignored ones follow, in file order.
+  const ordre = imp.entetes
+    .map((_, i) => i)
+    .sort((a, b) => Number(colonneDe(a) === '') - Number(colonneDe(b) === '') || a - b);
+
   const changerColonne = (index: number, champ: ChampBase | '') =>
     agir(async () => {
       const demande: Record<string, number | null> = {};
@@ -278,45 +283,50 @@ function ApercuImport({
 
         <details open>
           <summary>Colonnes du fichier</summary>
-          <table className="tbl small">
-            <thead>
-              <tr>
-                <th>Colonne</th>
-                <th>Exemple</th>
-                <th>Contenu</th>
-              </tr>
-            </thead>
-            <tbody>
-              {imp.entetes.map((entete, i) => (
-                <tr key={i}>
-                  <td>{entete || `Colonne ${i + 1}`}</td>
-                  <td className="muted">
-                    {imp.echantillon
-                      .map((l) => l[i])
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .join(' · ')}
-                  </td>
-                  <td>
-                    <select
-                      className="input"
-                      aria-label={`Contenu de la colonne ${entete || i + 1}`}
-                      value={colonneDe(i)}
-                      disabled={occupe}
-                      onChange={(e) => void changerColonne(i, e.target.value as ChampBase | '')}
-                    >
-                      <option value="">Ignorée</option>
-                      {CHAMPS.map(([champ, libelle]) => (
-                        <option key={champ} value={champ}>
-                          {libelle}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+          <div className="mapping-scroll">
+            <table className="tbl small mapping">
+              <thead>
+                <tr>
+                  {ordre.map((i) => (
+                    <th key={i} className={colonneDe(i) ? 'retenue' : 'ignoree'}>
+                      {imp.entetes[i] || `Colonne ${i + 1}`}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+                <tr>
+                  {ordre.map((i) => (
+                    <th key={i} className={colonneDe(i) ? 'retenue' : 'ignoree'}>
+                      <select
+                        className="input"
+                        aria-label={`Contenu de la colonne ${imp.entetes[i] || i + 1}`}
+                        value={colonneDe(i)}
+                        disabled={occupe}
+                        onChange={(e) => void changerColonne(i, e.target.value as ChampBase | '')}
+                      >
+                        <option value="">Ignorée</option>
+                        {CHAMPS.map(([champ, libelle]) => (
+                          <option key={champ} value={champ}>
+                            {libelle}
+                          </option>
+                        ))}
+                      </select>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {imp.echantillon.map((ligne, k) => (
+                  <tr key={k}>
+                    {ordre.map((i) => (
+                      <td key={i} className={colonneDe(i) ? '' : 'ignoree'} title={ligne[i]}>
+                        {ligne[i] || '—'}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </details>
 
         <div>

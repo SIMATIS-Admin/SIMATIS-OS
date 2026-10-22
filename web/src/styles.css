@@ -4152,3 +4152,37 @@ tr.sel {
     animation: none;
   }
 }
+
+/* Bases vivantes: file columns side by side, each with the content chosen for it. */
+.mapping-scroll {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+.mapping {
+  width: max-content;
+  min-width: 100%;
+}
+.mapping th,
+.mapping td {
+  min-width: 170px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.mapping th.retenue {
+  background: var(--blue-bg);
+}
+.mapping th.ignoree,
+.mapping td.ignoree {
+  min-width: 120px;
+  max-width: 140px;
+}
+.mapping .ignoree {
+  color: var(--ink-3, var(--ink-2));
+  opacity: 0.6;
+}
+.mapping select.input {
+  font-weight: 400;
+}
