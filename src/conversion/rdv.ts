@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import {
@@ -335,6 +335,25 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
       };
     });
   });
+}
+
+// Blocks of the agenda window still to sort, for the badge of the menu. Counted from the copies kept
+// by the last read of the agenda, so the menu never waits for Google.
+export async function compterATrier(db: Executor, instance: Instance, maintenant = new Date()) {
+  const [r] = await withInstance(db, instance.id, (tx) =>
+    tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(rendezVous)
+      .where(
+        and(
+          eq(rendezVous.instanceId, currentInstance),
+          eq(rendezVous.statut, 'a_trier'),
+          gte(rendezVous.debut, new Date(maintenant.getTime() - 7 * 864e5)),
+          lte(rendezVous.debut, new Date(maintenant.getTime() + 15 * 864e5)),
+        ),
+      ),
+  );
+  return r?.n ?? 0;
 }
 
 export class LienRdvInvalide extends Error {}

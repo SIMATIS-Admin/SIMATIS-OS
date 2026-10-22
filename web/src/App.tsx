@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   fetchCompteurInbox,
+  fetchCompteurRdv,
   fetchCompteurTaches,
   fetchFavoris,
   fetchInstances,
@@ -106,7 +107,10 @@ export function App() {
       Promise.all([
         fetchCompteurTaches(slugCourant).catch(() => 0),
         fetchCompteurInbox(slugCourant).catch(() => 0),
-      ]).then(([taches, inbox]) => setCompteurs({ agenda: taches, inbox }));
+        fetchCompteurRdv(slugCourant).catch(() => 0),
+      ]).then(([taches, inbox, rdv]) =>
+        setCompteurs({ agenda: taches, inbox, 'rendez-vous': rdv }),
+      );
     void charger();
     const minuteur = window.setInterval(() => void charger(), 5 * 60_000);
     return () => window.clearInterval(minuteur);

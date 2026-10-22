@@ -539,6 +539,8 @@ export const saveOptions = (options: Partial<Options>) =>
   sendJson<{ options: Options }>('PUT', '/api/preferences/options', options);
 export const fetchTaches = (slug: string, du: string, au: string) =>
   getJson<SemaineTaches>(inst(slug, `taches?du=${du}&au=${au}`));
+export const fetchCompteurRdv = (slug: string) =>
+  getJson<{ n: number }>(inst(slug, 'rendez-vous/compteur')).then((r) => r.n);
 export const fetchCompteurTaches = (slug: string) =>
   getJson<{ n: number }>(inst(slug, 'taches/compteur')).then((r) => r.n);
 export const createTache = (slug: string, input: TacheSaisie & { hubspot: boolean }) =>
