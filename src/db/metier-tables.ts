@@ -3,10 +3,20 @@ import { devis } from '../conversion/schema.js';
 import { executions, routines } from '../routines/schema.js';
 import { activites, contacts, entreprises, opportunites, taches } from '../crm/schema.js';
 import { autonomie, propositions } from '../propositions/schema.js';
+import {
+  baseCorrespondances,
+  baseImports,
+  baseLignesBrutes,
+  baseVivante,
+} from '../base-vivante/schema.js';
 import { echangesAjout, sujets } from '../inbox/schema.js';
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
+  baseLignesBrutes,
+  baseVivante,
+  baseImports,
+  baseCorrespondances,
   echangesAjout,
   sujets,
   connexions,
