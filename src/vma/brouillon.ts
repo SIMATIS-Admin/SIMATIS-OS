@@ -17,7 +17,7 @@ const euros = (v: number) => {
 
 const pct = (x: number) =>
   `${(x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}${NB}%`;
-const ans = (n: number) => `${n} ${n < 2 ? 'an' : 'ans'}`;
+const ans = (n: number) => (n < 1 ? `${Math.round(n * 12)} mois` : `${n} ${n < 2 ? 'an' : 'ans'}`);
 
 // Forme de l'écran dirigeant, telle que la relève la reçoit du site (v0.2 : avec le socle récurrent).
 export type EcranDirigeant = {
@@ -26,6 +26,10 @@ export type EcranDirigeant = {
   mesurable: boolean;
   statut: string;
   pastille?: string;
+  // v2.3 (parcours Lancement) : VMA prévue faute de devis envoyés, ou calculée sur peu de devis.
+  previsionnel?: boolean;
+  indicatif?: boolean;
+  parcours?: string;
   tenue: string;
   // Socle récurrent par mois, absent sans récurrent ; allure actuelle = VMA + récurrent.
   recurrent?: number | null;
@@ -77,6 +81,9 @@ export type EcranDirigeant = {
     titrePortefeuille?: string;
     libelleSocleRecurrent?: string;
     libelleNouvellesAffaires?: string;
+    libelleVmaPrev?: string;
+    pastillePrev?: string;
+    indicatif?: string;
   };
 };
 
@@ -118,13 +125,15 @@ export function brouillonResultat(p0: { contactNom: string | null; ecran: EcranD
     typeof e.recurrent === 'number' && e.recurrent > 0 && e.allureActuelle !== undefined;
   const mesure = e.mesurable && e.vma !== null;
   const portefeuille = e.modePortefeuille === true && socle;
+  const previsionnel = e.previsionnel === true && mesure;
   const chiffres = portefeuille
     ? `${euros(e.allureActuelle ?? 0)} de CA commandé par mois, soit ${euros((e.allureActuelle ?? 0) * 12)} par an.`
     : mesure
-      ? `${euros(e.vma ?? 0)} de CA commandé par mois sur vos nouvelles affaires, soit ${euros((e.vma ?? 0) * 12)} par an.`
+      ? `${euros(e.vma ?? 0)} de CA commandé par mois ${previsionnel ? 'attendu ' : ''}sur vos nouvelles affaires, soit ${euros((e.vma ?? 0) * 12)} par an.`
       : e.textes.nonMesurable;
-  const pastille =
-    e.pastille === 'estimés' || e.statut === 'à confirmer'
+  const pastille = previsionnel
+    ? (e.textes.pastillePrev ?? 'Chiffres prévisionnels').toLowerCase()
+    : e.pastille === 'estimés' || e.statut === 'à confirmer'
       ? 'chiffres en partie estimés'
       : e.statut === 'prouvée' && e.pastille !== 'non mesurable'
         ? 'chiffres réels'
@@ -145,7 +154,7 @@ export function brouillonResultat(p0: { contactNom: string | null; ecran: EcranD
   const puce = (t: string) =>
     `<span style="display:inline-block;margin:10px 6px 0 0;padding:3px 10px;border:1px solid ${C.menthe};border-radius:12px;font:12px/1.4 ${POLICE};color:${C.menthe};">${esc(t)}</span>`;
   const hero = `<tr><td style="background:${C.nuit};padding:28px 32px 26px;">
-<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.menthe};">${esc(portefeuille ? (e.textes.libelleAllureTotale ?? 'Votre allure commerciale') : 'Votre VMA commerciale')}</div>
+<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.menthe};">${esc(portefeuille ? (e.textes.libelleAllureTotale ?? 'Votre allure commerciale') : previsionnel ? (e.textes.libelleVmaPrev ?? 'Votre VMA prévisionnelle') : 'Votre VMA commerciale')}</div>
 ${portefeuille || mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POLICE};color:#FFFFFF;">${esc(euros(portefeuille ? (e.allureActuelle ?? 0) : (e.vma ?? 0)))}<span style="font:400 16px/1.4 ${POLICE};color:#FFFFFF;"> par mois</span></div>` : ''}
 <div style="font:16px/1.5 ${POLICE};color:#FFFFFF;">${esc(chiffres)}</div>
 <div>${puce(pastille)}${puce(tenue)}</div>
@@ -167,7 +176,7 @@ ${portefeuille || mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POL
   const trajectoire = lancee
     ? `<tr><td style="padding:16px 32px 0;">${p(`Sans rien changer, votre socle récurrent passerait de ${esc(euros(e.recurrent ?? 0))} à ${esc(euros(e.socleEcheance ?? 0))} par mois dans ${esc(ans(e.echeance))}.`, 'margin:0;')}</td></tr>`
     : '';
-  const phrase = `<tr><td style="padding:16px 32px 0;">${p(esc(e.niveau.phrase), 'margin:0;')}</td></tr>`;
+  const phrase = `<tr><td style="padding:16px 32px 0;">${p(esc(e.niveau.phrase), 'margin:0;')}${e.indicatif === true && e.textes.indicatif ? p(esc(e.textes.indicatif), 'margin:8px 0 0;') : ''}</td></tr>`;
 
   const noteEnjeu =
     e.textes.noteEnjeu && e.freins.some((f) => typeof f.enjeu === 'number' && f.enjeu > 0)

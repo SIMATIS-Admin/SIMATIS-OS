@@ -22,6 +22,34 @@ const ecran = (extra: Partial<EcranDirigeant> = {}): EcranDirigeant => ({
 });
 
 describe('brouillon du résultat au dirigeant', () => {
+  it('v2.3 : parcours Lancement, VMA prévisionnelle sur une échéance de 6 mois', () => {
+    const { html } = brouillonResultat({
+      contactNom: null,
+      ecran: ecran({
+        vma: 10000,
+        statut: 'prévisionnelle',
+        pastille: 'prévisionnelle',
+        previsionnel: true,
+        indicatif: true,
+        parcours: 'lancement',
+        echeance: 0.5,
+        textes: {
+          definitionVma: 'Définition.',
+          nonMesurable: 'Non mesurable.',
+          aucunFrein: 'Aucun frein marqué.',
+          libelleVmaPrev: 'Votre VMA prévisionnelle',
+          pastillePrev: 'Chiffres prévisionnels',
+          indicatif: 'Résultat indicatif : peu de devis.',
+        },
+      }),
+    });
+    expect(html).toContain('Votre VMA prévisionnelle');
+    expect(html).toContain('de CA commandé par mois attendu sur vos nouvelles affaires');
+    expect(html).toContain('chiffres prévisionnels');
+    expect(html).toContain('dans 6 mois');
+    expect(html).toContain('Résultat indicatif : peu de devis.');
+  });
+
   it('reprend le résultat du dirigeant, en vouvoyant et avec la signature de Marc', () => {
     const { subject, html } = brouillonResultat({ contactNom: 'Jeanne', ecran: ecran() });
     expect(subject).toBe('Votre résultat au Test de VMA');

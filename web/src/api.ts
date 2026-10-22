@@ -155,6 +155,10 @@ export type TestVma = {
     trajectoire?: number | null;
     socleEcheance?: number | null;
     pastille?: string;
+    // v2.3 (parcours Lancement) : VMA prévue faute de devis, résultat sur peu de devis, parcours suivi.
+    previsionnel?: boolean;
+    indicatif?: boolean;
+    parcours?: string;
     ecartPct?: number | null;
     freins: {
       n: number;
