@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, sql } from 'drizzle-orm';
 import { activites, contacts } from '../crm/schema.js';
-import type { Database } from '../db.js';
+import type { Executor } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { listInstances } from '../instances/service.js';
 import { majHistorique } from './integration.js';
@@ -21,7 +21,7 @@ export type ContactCrm = {
 // What every mandate's CRM knows about these addresses. Only the correspondence comes back (which
 // mandate, when, how, how many times), never the content of the exchanges.
 export async function historiqueCrm(
-  db: Database,
+  db: Executor,
   emails: string[],
 ): Promise<Map<string, ContactCrm[]>> {
   const resultat = new Map<string, ContactCrm[]>();
@@ -134,7 +134,7 @@ export function alertesCrm(entrees: ContactCrm[] | undefined, maintenant = new D
 
 // Reads the CRM history of every record of the base and brings it up to date.
 export async function actualiserHistorique(
-  db: Database,
+  db: Executor,
   instanceId: string,
 ): Promise<{ verifiees: number; trouvees: number }> {
   let apres = '00000000-0000-0000-0000-000000000000';

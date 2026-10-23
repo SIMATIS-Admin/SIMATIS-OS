@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, gt, ilike, isNotNull, or, sql } from 'drizzle-orm';
-import type { Database, Tx } from '../db.js';
+import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import {
   CHAMPS_CIBLES,
@@ -11,7 +11,14 @@ import {
   type MemoireColonnes,
 } from './colonnes.js';
 import type { Zone } from './completude.js';
-import { alertesCrm, alertesDe, historiqueCrm, MOIS_RECONTACT, type Alerte } from './historique.js';
+import {
+  alertesCrm,
+  alertesDe,
+  historiqueCrm,
+  MOIS_RECONTACT,
+  type Alerte,
+  type ContactCrm,
+} from './historique.js';
 import { integrerFiches, majConformite, type PatchConformite } from './integration.js';
 import { lireFichier, lireTexte, FichierIllisible, type Feuille } from './lecture.js';
 import {
@@ -150,7 +157,7 @@ function preparer(feuille: Feuille, memoire: MemoireColonnes) {
 }
 
 export async function creerImports(
-  db: Database,
+  db: Executor,
   instanceId: string,
   entree: NouvelImport,
 ): Promise<ApercuImport[]> {
@@ -245,10 +252,11 @@ async function compteursDe(tx: Tx, instanceId: string, importId: string): Promis
 
 // What the base and the CRMs already know about the lines shown: informs, never blocks.
 async function avecAlertes(
-  db: Database,
+  db: Executor,
   tx: Tx,
   instanceId: string,
   lignes: (typeof baseLignesBrutes.$inferSelect)[],
+  lireLesCrm: boolean,
 ): Promise<LigneApercu[]> {
   const emails = [
     ...new Set(lignes.map((l) => l.fiche.email).filter((e): e is string => e !== null)),
@@ -269,7 +277,7 @@ async function avecAlertes(
               )}]::text[]`,
             ),
           );
-  const crm = await historiqueCrm(db, emails);
+  const crm = lireLesCrm ? await historiqueCrm(db, emails) : new Map<string, ContactCrm[]>();
   return lignes.map((l) => {
     const alertes = alertesCrm(l.fiche.email ? crm.get(l.fiche.email) : undefined);
     const cle = clesDoublon(l.fiche);
@@ -291,11 +299,13 @@ async function avecAlertes(
 export const FILTRES_LIGNES = ['pret', 'sous_minimum', 'doublon_interne', 'integre'] as const;
 
 export async function apercu(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
   filtre: StatutLigne = 'pret',
   limite = 40,
+  // Reading the CRMs goes through every instance: not from inside a tool's own transaction.
+  lireLesCrm = true,
 ): Promise<ApercuImport> {
   return withInstance(db, instanceId, async (tx) => {
     const imp = await chargerImport(tx, instanceId, id);
@@ -332,7 +342,7 @@ export async function apercu(
       inconnues: imp.entetes.map((_, i) => i).filter((i) => !pris.has(i)),
       echantillon: echantillon.map((e) => e.brut),
       compteurs: await compteursDe(tx, instanceId, id),
-      lignes: await avecAlertes(db, tx, instanceId, lignes),
+      lignes: await avecAlertes(db, tx, instanceId, lignes, lireLesCrm),
       rapport: imp.rapport,
     };
   });
@@ -343,7 +353,7 @@ export type ResumeImport = Pick<
   'id' | 'nomFichier' | 'feuille' | 'provenance' | 'mandat' | 'statut' | 'creeLe' | 'rapport'
 > & { compteurs: Compteurs };
 
-export async function listerImports(db: Database, instanceId: string): Promise<ResumeImport[]> {
+export async function listerImports(db: Executor, instanceId: string): Promise<ResumeImport[]> {
   return withInstance(db, instanceId, async (tx) => {
     const imports = await tx
       .select()
@@ -368,10 +378,11 @@ export async function listerImports(db: Database, instanceId: string): Promise<R
 
 // The user fixed a column: every line of the sheet is read again with the new mapping.
 export async function reglerCorrespondance(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
   demande: Record<string, number | null>,
+  lireLesCrm = true,
 ): Promise<ApercuImport> {
   await withInstance(db, instanceId, async (tx) => {
     const imp = await chargerImport(tx, instanceId, id);
@@ -407,7 +418,7 @@ export async function reglerCorrespondance(
       .set({ correspondance, updatedAt: new Date() })
       .where(eq(baseImports.id, id));
   });
-  return apercu(db, instanceId, id);
+  return apercu(db, instanceId, id, 'pret', 40, lireLesCrm);
 }
 
 const CHAMPS_COMPLETABLES = [
@@ -421,7 +432,7 @@ const CHAMPS_COMPLETABLES = [
 
 // Completing a line left in the airlock (company or name missing, or a contact way added).
 export async function completerLigne(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
   numero: number,
@@ -482,7 +493,7 @@ export type RapportIntegration = {
 // Validated by the user: lines ready leave the airlock, batch by batch, through the single entry
 // point of the living base. Replays are harmless (only lines still `pret` move).
 export async function integrerImport(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
 ): Promise<RapportIntegration> {
@@ -557,7 +568,7 @@ export async function integrerImport(
   });
 }
 
-export async function annulerImport(db: Database, instanceId: string, id: string): Promise<void> {
+export async function annulerImport(db: Executor, instanceId: string, id: string): Promise<void> {
   await withInstance(db, instanceId, async (tx) => {
     const imp = await chargerImport(tx, instanceId, id);
     if (imp.statut === 'integre')
@@ -612,7 +623,7 @@ function conditions(instanceId: string, f: FiltresBase) {
 export type FicheAvecAlertes = FicheBase & { alertes: Alerte[] };
 
 export async function listerFiches(
-  db: Database,
+  db: Executor,
   instanceId: string,
   options: FiltresBase & { limite?: number; decalage?: number } = {},
 ) {
@@ -679,7 +690,7 @@ const cellule = (v: string | number | null | undefined): string => {
 
 // Same filters as the screen; semicolon-separated with a BOM, as French Excel expects.
 export async function exporterCsv(
-  db: Database,
+  db: Executor,
   instanceId: string,
   filtres: FiltresBase = {},
 ): Promise<string> {
@@ -719,7 +730,7 @@ export async function exporterCsv(
 }
 
 export async function modifierConformite(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
   patch: PatchConformite,

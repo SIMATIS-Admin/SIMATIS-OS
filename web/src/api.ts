@@ -1260,3 +1260,62 @@ export const integrerImportBase = (slug: string, id: string) =>
   );
 export const annulerImportBase = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `base/imports/${id}`), undefined);
+
+// Rapprochement avec la boîte Gmail d'un mandat (lecture seule, depuis le début du mandat).
+export type MandatBase = { slug: string; nom: string; debutMandat: string | null };
+export type RapportBoiteBase = {
+  messages: number;
+  contactes: number;
+  reponses: number;
+  autos: number;
+  bounces: number;
+  jamaisContactes: number;
+};
+export type EtatRapprochementBase = {
+  etat: 'en_cours' | 'termine' | 'echec';
+  mandat: string;
+  depuis: string;
+  lus: number;
+  total: number;
+  rapport?: RapportBoiteBase;
+  erreur?: string;
+} | null;
+export const fetchMandatsBase = (slug: string) => getJson<MandatBase[]>(inst(slug, 'base/mandats'));
+export const majDebutMandatBase = (slug: string, mandat: string, debut: string | null) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, `base/mandats/${encodeURIComponent(mandat)}`), {
+    debut,
+  });
+export const fetchRapprochementBase = (slug: string) =>
+  getJson<EtatRapprochementBase>(inst(slug, 'base/rapprochement-mail'));
+export const lancerRapprochementBase = (slug: string, mandat: string) =>
+  sendJson<EtatRapprochementBase>('POST', inst(slug, 'base/rapprochement-mail'), { mandat });
+
+// Réponses reçues : classées par Claude (routine « Base vivante »), validées par le pilote.
+export type ClasseReponseBase =
+  | 'sans_reponse'
+  | 'repondu'
+  | 'interesse'
+  | 'pas_interesse'
+  | 'mauvais_interlocuteur'
+  | 'reponse_auto'
+  | 'ne_plus_contacter';
+export type ReponseBase = {
+  id: string;
+  entreprise: string;
+  contact: string;
+  mandat: string;
+  recuLe: string;
+  objet: string | null;
+  extrait: string;
+  classe: ClasseReponseBase | null;
+};
+export const fetchReponsesBase = (slug: string) =>
+  getJson<{ aValider: ReponseBase[]; aClasser: number }>(inst(slug, 'base/reponses'));
+export const validerReponseBase = (slug: string, id: string, classe: ClasseReponseBase) =>
+  sendJson<{ ok: true }>('POST', inst(slug, `base/reponses/${id}/valider`), { classe });
+export const entrerRepondantsBase = (slug: string) =>
+  sendJson<{ cree: number; existant: number; simulation: number; refuse: number }>(
+    'POST',
+    inst(slug, 'base/crm/repondants'),
+    {},
+  );

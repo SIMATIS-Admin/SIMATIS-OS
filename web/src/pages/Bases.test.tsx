@@ -7,6 +7,9 @@ import { Bases } from './Bases.js';
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let etat: EtatBase;
+let mandats: unknown[] = [];
+let rapprochement: unknown = null;
+let reponses: unknown[] = [];
 
 const apercu: ImportBase = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -60,6 +63,14 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (method === 'POST' && url.endsWith('/integrer'))
     return json({ creees: 2, fusionnees: 0, restantes: 1 });
   if (method === 'PUT') return json(apercu);
+  if (url.endsWith('/base/mandats')) return json(mandats);
+  if (url.endsWith('/base/rapprochement-mail'))
+    return method === 'POST' ? json(rapprochement, 202) : json(rapprochement);
+  if (url.endsWith('/base/reponses')) return json({ aValider: reponses, aClasser: 2 });
+  if (url.includes('/base/reponses/') && method === 'POST') return json({ ok: true });
+  if (url.endsWith('/base/crm/repondants'))
+    return json({ cree: 2, existant: 0, simulation: 0, refuse: 1 });
+  if (method === 'PUT' && url.includes('/base/mandats/')) return json({ ok: true });
   if (method === 'PATCH') return json({ ok: true });
   if (url.endsWith('/historique/actualiser')) return json({ verifiees: 1, trouvees: 0 });
   if (url.includes('/base/imports/'))
@@ -175,6 +186,9 @@ describe('base vivante : filtres, export, conformité', () => {
 
   beforeEach(() => {
     calls = [];
+    mandats = [];
+    rapprochement = null;
+    reponses = [];
     etat = {
       fiches: [fiche],
       total: 1,
@@ -230,5 +244,106 @@ describe('base vivante : filtres, export, conformité', () => {
     await waitFor(() =>
       expect(calls.some((c) => c.url.endsWith('/base/historique/actualiser'))).toBe(true),
     );
+  });
+});
+
+describe('base vivante : boîte mail et réponses', () => {
+  beforeEach(() => {
+    calls = [];
+    mandats = [{ slug: 'mandat-a', nom: 'Mandat A', debutMandat: '2026-09-01' }];
+    rapprochement = null;
+    reponses = [
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        entreprise: 'Atelier Fictif',
+        contact: 'Léa MARTIN',
+        mandat: 'Mandat A',
+        recuLe: '2026-09-12T09:00:00Z',
+        objet: 'Re: Proposition',
+        extrait: 'Merci, merci de ne plus me contacter.',
+        classe: 'ne_plus_contacter',
+      },
+    ];
+    etat = {
+      fiches: [],
+      total: 0,
+      compteurs: { aEnrichir: 0, prospectable: 0 },
+      provenances: [],
+      imports: [],
+    };
+    vi.stubGlobal('fetch', vi.fn(fakeFetch));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('lance la lecture de la boîte d’un mandat et suit son avancement', async () => {
+    render(<Bases slug="simatis" />);
+    const bouton = await screen.findByText('Lire la boîte mail');
+    rapprochement = {
+      etat: 'en_cours',
+      mandat: 'Mandat A',
+      depuis: '2026-09-01',
+      lus: 40,
+      total: 200,
+    };
+    fireEvent.click(bouton);
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/rapprochement-mail'))).toBe(
+        true,
+      ),
+    );
+    expect(
+      calls.find((c) => c.method === 'POST' && c.url.endsWith('/rapprochement-mail'))?.body,
+    ).toEqual({
+      mandat: 'mandat-a',
+    });
+    expect(await screen.findByText(/40 messages lus sur 200/)).toBeTruthy();
+  });
+
+  it('montre le rapport d’un rapprochement terminé', async () => {
+    rapprochement = {
+      etat: 'termine',
+      mandat: 'Mandat A',
+      depuis: '2026-09-01',
+      lus: 9,
+      total: 9,
+      rapport: { messages: 9, contactes: 4, reponses: 1, autos: 1, bounces: 2, jamaisContactes: 1 },
+    };
+    render(<Bases slug="simatis" />);
+    expect(await screen.findByText('4 contactés')).toBeTruthy();
+    expect(screen.getByText('2 adresses en erreur')).toBeTruthy();
+    expect(screen.getByText('1 jamais contactés')).toBeTruthy();
+  });
+
+  it('enregistre la date de début du mandat', async () => {
+    render(<Bases slug="simatis" />);
+    const champ = await screen.findByLabelText('Début du mandat');
+    fireEvent.change(champ, { target: { value: '2026-08-15' } });
+    fireEvent.blur(champ);
+    await waitFor(() => {
+      const put = calls.find((c) => c.method === 'PUT' && c.url.endsWith('/base/mandats/mandat-a'));
+      expect(put?.body).toEqual({ debut: '2026-08-15' });
+    });
+  });
+
+  it('propose la classe de Claude et la valide', async () => {
+    render(<Bases slug="simatis" />);
+    expect(await screen.findByText(/merci de ne plus me contacter/)).toBeTruthy();
+    expect(screen.getByText(/2 réponses attendent la routine/)).toBeTruthy();
+    const classe = screen.getByLabelText<HTMLSelectElement>('Classe de la réponse de Léa MARTIN');
+    expect(classe.value).toBe('ne_plus_contacter');
+    fireEvent.click(screen.getByText('Valider'));
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.endsWith('/valider'));
+      expect(post?.body).toEqual({ classe: 'ne_plus_contacter' });
+    });
+  });
+
+  it('ajoute les répondants au CRM et résume le résultat', async () => {
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Ajouter les répondants au CRM du mandat'));
+    expect(await screen.findByText(/2 ajoutés au CRM, 1 écartés/)).toBeTruthy();
   });
 });

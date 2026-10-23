@@ -17,6 +17,8 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { BaseTable } from './BaseTable.js';
+import { RapprochementMail } from './RapprochementMail.js';
+import { ReponsesBase } from './ReponsesBase.js';
 
 const CHAMPS: [ChampBase, string][] = [
   ['entreprise', 'Entreprise'],
@@ -507,6 +509,10 @@ export function Bases({ slug }: { slug: string }) {
         onPage={setPage}
         onChange={() => void charger()}
       />
+
+      <RapprochementMail slug={slug} onTermine={() => void charger()} />
+
+      <ReponsesBase slug={slug} onChange={() => void charger()} />
 
       {integres.length > 0 && (
         <div className="panel">

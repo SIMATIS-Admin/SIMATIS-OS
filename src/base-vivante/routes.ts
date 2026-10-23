@@ -1,9 +1,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import type { FetchLike } from '../connecteurs/google/oauth.js';
 import type { Database } from '../db.js';
-import { getInstanceBySlug } from '../instances/service.js';
+import { instances } from '../instances/schema.js';
+import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { ZONES } from './completude.js';
 import { actualiserHistorique } from './historique.js';
+import {
+  etatRapprochement,
+  lancerRapprochement,
+  RapprochementImpossible,
+  verifierMessagerie,
+} from './rapprochement.js';
 import { FichierIllisible } from './lecture.js';
 import {
   annulerImport,
@@ -22,6 +31,15 @@ import {
   listerImports,
   reglerCorrespondance,
 } from './service.js';
+import {
+  ClasseRefusee,
+  CLASSES,
+  ReponseIntrouvable,
+  reponsesAClasser,
+  reponsesAValider,
+  validerReponse,
+} from './reponses.js';
+import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
 import { FicheIntrouvable, FicheNonHomogene } from './integration.js';
 import { EXCLUSIONS, STATUTS_PROSPECTION } from './schema.js';
 
@@ -51,6 +69,15 @@ const completementSchema = z.object({
   fonction: z.string().max(200).optional(),
 });
 
+const validationSchema = z.object({ classe: z.enum(CLASSES).optional() });
+
+const debutSchema = z.object({ debut: z.iso.date().nullable() });
+
+const rapprochementSchema = z.object({
+  mandat: z.string().min(1).max(63),
+  depuis: z.iso.date().nullish(),
+});
+
 const conformiteSchema = z
   .object({
     opposition: z.boolean().optional(),
@@ -59,23 +86,42 @@ const conformiteSchema = z
   })
   .strict();
 
-export type BaseVivanteRoutesDeps = { db: Database };
+export type BaseVivanteRoutesDeps = {
+  db: Database;
+  secretsDir?: string;
+  realWrites?: boolean;
+  googleFetch?: FetchLike;
+};
 
-export function registerBaseVivanteRoutes(app: FastifyInstance, { db }: BaseVivanteRoutesDeps) {
+export function registerBaseVivanteRoutes(
+  app: FastifyInstance,
+  {
+    db,
+    secretsDir = './secrets/instances',
+    realWrites = false,
+    googleFetch,
+  }: BaseVivanteRoutesDeps,
+) {
   const erreur = (error: unknown, reply: FastifyReply) => {
-    if (error instanceof ImportIntrouvable || error instanceof FicheIntrouvable)
+    if (
+      error instanceof ImportIntrouvable ||
+      error instanceof FicheIntrouvable ||
+      error instanceof ReponseIntrouvable
+    )
       return reply.code(404).send({ error: error.message });
     if (
       error instanceof ImportRefuse ||
       error instanceof FichierIllisible ||
-      error instanceof FicheNonHomogene
+      error instanceof FicheNonHomogene ||
+      error instanceof RapprochementImpossible ||
+      error instanceof ClasseRefusee
     )
       return reply.code(400).send({ error: error.message });
     throw error;
   };
 
   type Route = {
-    Params: { slug: string; id?: string; numero?: string };
+    Params: { slug: string; id?: string; numero?: string; mandat?: string };
     Querystring: {
       zone?: string;
       q?: string;
@@ -88,7 +134,13 @@ export function registerBaseVivanteRoutes(app: FastifyInstance, { db }: BaseViva
   };
 
   const surInstance =
-    (f: (instanceId: string, request: FastifyRequest<Route>) => Promise<unknown>) =>
+    (
+      f: (
+        instanceId: string,
+        request: FastifyRequest<Route>,
+        reply: FastifyReply,
+      ) => Promise<unknown>,
+    ) =>
     async (request: FastifyRequest<Route>, reply: FastifyReply) => {
       const instance = await getInstanceBySlug(db, request.params.slug);
       if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
@@ -96,11 +148,103 @@ export function registerBaseVivanteRoutes(app: FastifyInstance, { db }: BaseViva
       if (id !== undefined && !UUID.test(id))
         return reply.code(400).send({ error: 'Identifiant invalide' });
       try {
-        return await f(instance.id, request);
+        return await f(instance.id, request, reply);
       } catch (error) {
         return erreur(error, reply);
       }
     };
+
+  // Mandates whose mailbox can be read, with the date their history starts from.
+  app.get<Route>(
+    '/api/i/:slug/base/mandats',
+    surInstance(async () =>
+      (await listInstances(db))
+        .filter((i) => i.type === 'mandat')
+        .map((i) => ({ slug: i.slug, nom: i.nom, debutMandat: i.config.debutMandat ?? null })),
+    ),
+  );
+
+  app.put<Route>(
+    '/api/i/:slug/base/mandats/:mandat',
+    surInstance(async (_instanceId, request) => {
+      const corps = debutSchema.safeParse(request.body);
+      const mandat = await getInstanceBySlug(db, request.params.mandat as string);
+      if (!corps.success || mandat?.type !== 'mandat') throw new ImportRefuse('Date invalide');
+      const reste = { ...mandat.config };
+      delete reste.debutMandat;
+      await db
+        .update(instances)
+        .set({
+          config: corps.data.debut ? { ...reste, debutMandat: corps.data.debut } : reste,
+          updatedAt: new Date(),
+        })
+        .where(eq(instances.id, mandat.id));
+      return { ok: true };
+    }),
+  );
+
+  app.get<Route>(
+    '/api/i/:slug/base/rapprochement-mail',
+    surInstance((instanceId) => Promise.resolve(etatRapprochement(instanceId))),
+  );
+
+  app.post<Route>(
+    '/api/i/:slug/base/rapprochement-mail',
+    surInstance(async (instanceId, request, reply) => {
+      const corps = rapprochementSchema.safeParse(request.body);
+      if (!corps.success) throw new ImportRefuse('Mandat ou date invalide');
+      const base = await getInstanceBySlug(db, request.params.slug);
+      const mandat = await getInstanceBySlug(db, corps.data.mandat);
+      if (!base || mandat?.type !== 'mandat') throw new ImportRefuse('Mandat inconnu');
+      const debut = corps.data.depuis ?? mandat.config.debutMandat;
+      if (!debut)
+        throw new ImportRefuse(
+          `Indiquez la date de début du mandat de ${mandat.nom} : l'historique de la boîte est lu à partir de là.`,
+        );
+      await verifierMessagerie(db, mandat);
+      void instanceId;
+      const etat = lancerRapprochement(
+        db,
+        { secretsDir, ...(googleFetch ? { fetch: googleFetch } : {}) },
+        base,
+        mandat,
+        new Date(`${debut}T00:00:00Z`),
+      );
+      return reply.code(202).send(etat);
+    }),
+  );
+
+  app.get<Route>(
+    '/api/i/:slug/base/reponses',
+    surInstance(async (instanceId) => ({
+      aValider: await reponsesAValider(db, instanceId),
+      aClasser: (await reponsesAClasser(db, instanceId, 200)).length,
+    })),
+  );
+
+  app.post<Route>(
+    '/api/i/:slug/base/reponses/:id/valider',
+    surInstance(async (instanceId, request) => {
+      const corps = validationSchema.safeParse(request.body ?? {});
+      if (!corps.success) throw new ImportRefuse('Classe invalide');
+      await validerReponse(db, instanceId, request.params.id as string, corps.data.classe);
+      return { ok: true };
+    }),
+  );
+
+  // From the base to the CRM of the mandate that wrote: only the answerers, never a record to
+  // enrich; HubSpot mandates follow their double lock (simulation unless real writes are on).
+  app.post<Route>(
+    '/api/i/:slug/base/crm/repondants',
+    surInstance((instanceId) => entrerRepondants(db, { secretsDir, realWrites }, instanceId)),
+  );
+
+  app.post<Route>(
+    '/api/i/:slug/base/fiches/:id/crm',
+    surInstance((instanceId, request) =>
+      entrerDansCrm(db, { secretsDir, realWrites }, instanceId, request.params.id as string),
+    ),
+  );
 
   const filtresDe = (q: Route['Querystring']): FiltresBase => ({
     zone: ZONES.find((z) => z === q.zone),
