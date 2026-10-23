@@ -1127,6 +1127,7 @@ export type LigneImportBase = {
   zone: ZoneBase | null;
   raison: string | null;
   avertissements: string[];
+  alertes: string[];
   brut: string[];
   fiche: {
     entreprise: string | null;
@@ -1170,21 +1171,63 @@ export type FicheBase = {
   fonction: string | null;
   provenance: string;
   mandat: string | null;
+  statutProspection: StatutProspectionBase;
+  dernierContactLe: string | null;
+  dernierContactCanal: string | null;
+  resultat: string | null;
+  nbContacts: number;
+  mandatContacteur: string | null;
+  opposition: boolean;
+  exclusion: ExclusionBase | null;
+  emailInvalide: boolean;
+  crmMandat: string | null;
+  alertes: { code: string; libelle: string; bloquante: boolean }[];
+};
+export type StatutProspectionBase = 'jamais_contacte' | 'contacte' | 'a_repondu';
+export type ExclusionBase = 'client' | 'partenaire' | 'concurrent';
+export type AlerteBase =
+  'recontact' | 'opposition' | 'email_invalide' | 'exclusion' | 'deja_en_crm';
+export type FiltresBaseWeb = {
+  zone?: ZoneBase;
+  statut?: StatutProspectionBase;
+  alerte?: AlerteBase;
+  provenance?: string;
+  q?: string;
 };
 export type EtatBase = {
   fiches: FicheBase[];
   total: number;
   compteurs: { aEnrichir: number; prospectable: number };
+  provenances: string[];
   imports: ResumeImportBase[];
 };
-export const fetchBase = (slug: string, zone?: ZoneBase, q = '', page = 0) => {
+const paramsBase = (filtres: FiltresBaseWeb) => {
   const params = new URLSearchParams();
-  if (zone) params.set('zone', zone);
-  if (q.trim()) params.set('q', q.trim());
+  for (const [cle, valeur] of Object.entries(filtres))
+    if (typeof valeur === 'string' && valeur.trim()) params.set(cle, valeur.trim());
+  return params;
+};
+export const fetchBase = (slug: string, filtres: FiltresBaseWeb = {}, page = 0) => {
+  const params = paramsBase(filtres);
   if (page > 0) params.set('page', String(page));
   const suite = params.toString();
   return getJson<EtatBase>(inst(slug, `base${suite ? `?${suite}` : ''}`));
 };
+export const urlExportBase = (slug: string, filtres: FiltresBaseWeb = {}) => {
+  const suite = paramsBase(filtres).toString();
+  return inst(slug, `base/export.csv${suite ? `?${suite}` : ''}`);
+};
+export const actualiserHistoriqueBase = (slug: string) =>
+  sendJson<{ verifiees: number; trouvees: number }>(
+    'POST',
+    inst(slug, 'base/historique/actualiser'),
+    {},
+  );
+export const majConformiteBase = (
+  slug: string,
+  id: string,
+  patch: { opposition?: boolean; exclusion?: ExclusionBase | null; emailInvalide?: boolean },
+) => sendJson<{ ok: true }>('PATCH', inst(slug, `base/fiches/${id}`), patch);
 export const creerImportBase = (
   slug: string,
   payload: {

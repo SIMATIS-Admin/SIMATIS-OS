@@ -260,6 +260,13 @@
       "when": 1792675931427,
       "tag": "0036_base_vivante",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792741456772,
+      "tag": "0037_base_vivante_historique",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Database } from '../db.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { ZONES } from './completude.js';
+import { actualiserHistorique } from './historique.js';
 import { FichierIllisible } from './lecture.js';
 import {
   annulerImport,
@@ -13,11 +14,16 @@ import {
   ImportIntrouvable,
   ImportRefuse,
   integrerImport,
+  exporterCsv,
+  FILTRES_ALERTE,
   listerFiches,
+  modifierConformite,
+  type FiltresBase,
   listerImports,
   reglerCorrespondance,
 } from './service.js';
-import { FicheNonHomogene } from './integration.js';
+import { FicheIntrouvable, FicheNonHomogene } from './integration.js';
+import { EXCLUSIONS, STATUTS_PROSPECTION } from './schema.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -45,11 +51,20 @@ const completementSchema = z.object({
   fonction: z.string().max(200).optional(),
 });
 
+const conformiteSchema = z
+  .object({
+    opposition: z.boolean().optional(),
+    emailInvalide: z.boolean().optional(),
+    exclusion: z.enum(EXCLUSIONS).nullable().optional(),
+  })
+  .strict();
+
 export type BaseVivanteRoutesDeps = { db: Database };
 
 export function registerBaseVivanteRoutes(app: FastifyInstance, { db }: BaseVivanteRoutesDeps) {
   const erreur = (error: unknown, reply: FastifyReply) => {
-    if (error instanceof ImportIntrouvable) return reply.code(404).send({ error: error.message });
+    if (error instanceof ImportIntrouvable || error instanceof FicheIntrouvable)
+      return reply.code(404).send({ error: error.message });
     if (
       error instanceof ImportRefuse ||
       error instanceof FichierIllisible ||
@@ -61,7 +76,14 @@ export function registerBaseVivanteRoutes(app: FastifyInstance, { db }: BaseViva
 
   type Route = {
     Params: { slug: string; id?: string; numero?: string };
-    Querystring: { zone?: string; q?: string; page?: string; statut?: string };
+    Querystring: {
+      zone?: string;
+      q?: string;
+      page?: string;
+      statut?: string;
+      alerte?: string;
+      provenance?: string;
+    };
     Body: unknown;
   };
 
@@ -72,7 +94,7 @@ export function registerBaseVivanteRoutes(app: FastifyInstance, { db }: BaseViva
       if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
       const id = request.params.id;
       if (id !== undefined && !UUID.test(id))
-        return reply.code(400).send({ error: 'Import invalide' });
+        return reply.code(400).send({ error: 'Identifiant invalide' });
       try {
         return await f(instance.id, request);
       } catch (error) {
@@ -80,18 +102,49 @@ export function registerBaseVivanteRoutes(app: FastifyInstance, { db }: BaseViva
       }
     };
 
+  const filtresDe = (q: Route['Querystring']): FiltresBase => ({
+    zone: ZONES.find((z) => z === q.zone),
+    statut: STATUTS_PROSPECTION.find((s) => s === q.statut),
+    alerte: FILTRES_ALERTE.find((a) => a === q.alerte),
+    provenance: q.provenance?.trim() || undefined,
+    q: q.q,
+  });
+
   app.get<Route>(
     '/api/i/:slug/base',
     surInstance(async (instanceId, request) => {
-      const zone = ZONES.find((z) => z === request.query.zone);
       const page = Math.max(0, Number(request.query.page) || 0);
       const liste = await listerFiches(db, instanceId, {
-        zone,
-        q: request.query.q,
+        ...filtresDe(request.query),
         limite: 50,
         decalage: page * 50,
       });
       return { ...liste, imports: await listerImports(db, instanceId) };
+    }),
+  );
+
+  app.get<Route>('/api/i/:slug/base/export.csv', async (request, reply) => {
+    const instance = await getInstanceBySlug(db, request.params.slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    const csv = await exporterCsv(db, instance.id, filtresDe(request.query));
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', 'attachment; filename="base-vivante.csv"')
+      .send(csv);
+  });
+
+  app.post<Route>(
+    '/api/i/:slug/base/historique/actualiser',
+    surInstance((instanceId) => actualiserHistorique(db, instanceId)),
+  );
+
+  app.patch<Route>(
+    '/api/i/:slug/base/fiches/:id',
+    surInstance(async (instanceId, request) => {
+      const corps = conformiteSchema.safeParse(request.body);
+      if (!corps.success) throw new ImportRefuse('Modification invalide');
+      await modifierConformite(db, instanceId, request.params.id as string, corps.data);
+      return { ok: true };
     }),
   );
 
@@ -101,7 +154,7 @@ export function registerBaseVivanteRoutes(app: FastifyInstance, { db }: BaseViva
     surInstance(async (instanceId, request) => {
       const corps = creationSchema.safeParse(request.body);
       if (!corps.success)
-        throw new ImportRefuse(corps.error.issues[0]?.message ?? 'Import invalide');
+        throw new ImportRefuse(corps.error.issues[0]?.message ?? 'Identifiant invalide');
       const imports = await creerImports(db, instanceId, {
         nomFichier: corps.data.nomFichier,
         contenu: corps.data.contenuBase64

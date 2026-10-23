@@ -16,6 +16,8 @@ export type InstanceConfig = {
   phase?: 'closing' | 'en_cours';
   // Site web screen (module site-web): the website's Google Analytics 4 property.
   siteWeb?: { proprieteId: string; proprieteNom: string };
+  // Mandate only: start of the mandate (AAAA-MM-JJ). The living base reads the mailbox from there.
+  debutMandat?: string;
   // Mandate created from (or linked to) a deal of the own activity.
   origine?: { opportuniteId: string; entrepriseId: string | null };
 };

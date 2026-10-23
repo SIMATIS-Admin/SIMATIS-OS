@@ -23,6 +23,20 @@ export type StatutImport = (typeof STATUTS_IMPORT)[number];
 export const STATUTS_LIGNE = ['pret', 'sous_minimum', 'doublon_interne', 'integre'] as const;
 export type StatutLigne = (typeof STATUTS_LIGNE)[number];
 
+export const RESULTATS = [
+  'sans_reponse',
+  'repondu',
+  'interesse',
+  'pas_interesse',
+  'mauvais_interlocuteur',
+  'reponse_auto',
+] as const;
+export type Resultat = (typeof RESULTATS)[number];
+export const STATUTS_PROSPECTION = ['jamais_contacte', 'contacte', 'a_repondu'] as const;
+export type StatutProspection = (typeof STATUTS_PROSPECTION)[number];
+export const EXCLUSIONS = ['client', 'partenaire', 'concurrent'] as const;
+export type Exclusion = (typeof EXCLUSIONS)[number];
+
 export type RapportImport = {
   creees: number;
   fusionnees: number;
@@ -98,11 +112,53 @@ export const baseVivante = pgTable(
     collecteLe: date('collecte_le'),
     // Duplicate keys (nettoyage.ts, clesDoublon): one stored record per key.
     cles: jsonb('cles').$type<string[]>().notNull().default([]),
+    // History: read from the CRMs of every mandate and from a mandate's mailbox, never typed in.
+    dernierContactLe: timestamp('dernier_contact_le', { withTimezone: true }),
+    dernierContactCanal: text('dernier_contact_canal'),
+    resultat: text('resultat', { enum: RESULTATS }),
+    nbContacts: integer('nb_contacts').notNull().default(0),
+    mandatContacteur: text('mandat_contacteur'),
+    statutProspection: text('statut_prospection', { enum: STATUTS_PROSPECTION })
+      .notNull()
+      .default('jamais_contacte'),
+    // Compliance: an opposition wins over everything else.
+    emailInvalide: boolean('email_invalide').notNull().default(false),
+    opposition: boolean('opposition').notNull().default(false),
+    exclusion: text('exclusion', { enum: EXCLUSIONS }),
+    // Set when the record entered the CRM of a mandate (first contact): keeps the link for history.
+    crmMandat: text('crm_mandat'),
+    crmContactId: uuid('crm_contact_id'),
   },
   (t) => [
     index('base_vivante_instance_idx').on(t.instanceId, t.zone),
     index('base_vivante_cles_idx').using('gin', t.cles),
     instanceIsolation('base_vivante'),
+  ],
+);
+
+// A reply read in a mandate's mailbox, with the class Claude proposed; the pilot validates it.
+// Mail content stays in this local database, never in the repository.
+export const baseReponses = pgTable(
+  'base_reponses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    ficheId: uuid('fiche_id')
+      .notNull()
+      .references(() => baseVivante.id, { onDelete: 'cascade' }),
+    mandat: text('mandat').notNull(),
+    messageId: text('message_id').notNull(),
+    recuLe: timestamp('recu_le', { withTimezone: true }).notNull(),
+    objet: text('objet'),
+    extrait: text('extrait').notNull().default(''),
+    auto: boolean('auto').notNull().default(false),
+    classe: text('classe', { enum: [...RESULTATS, 'ne_plus_contacter'] }),
+    validee: boolean('validee').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('base_reponses_message_idx').on(t.instanceId, t.messageId),
+    index('base_reponses_fiche_idx').on(t.ficheId),
+    instanceIsolation('base_reponses'),
   ],
 );
 
@@ -125,3 +181,4 @@ export const baseCorrespondances = pgTable(
 export type BaseImport = typeof baseImports.$inferSelect;
 export type LigneBrute = typeof baseLignesBrutes.$inferSelect;
 export type FicheBase = typeof baseVivante.$inferSelect;
+export type ReponseBase = typeof baseReponses.$inferSelect;
