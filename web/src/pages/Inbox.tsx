@@ -6,6 +6,7 @@ import {
   modifierSujet,
   annulerEchange,
   decider,
+  envoyerLivreBlanc,
   fetchEchange,
   fetchExecution,
   fetchInbox,
@@ -233,18 +234,82 @@ function Reglages({
   );
 }
 
+// Livres blancs proposés, dans l'ordre de la série (mêmes numéros que le serveur).
+const LIVRES_BLANCS = [
+  [1, 'n° 1 · Le second cerveau'],
+  [2, 'n° 2 · Vous avez essayé ChatGPT. Et après ?'],
+] as const;
+
+// Envoi direct au demandeur : un premier clic prépare, le second confirme (rien ne part avant).
+function EnvoiLivreBlanc({
+  destinataire,
+  onEnvoyer,
+}: {
+  destinataire: string;
+  onEnvoyer: (numero: 1 | 2) => void;
+}) {
+  const [numero, setNumero] = useState<1 | 2>(1);
+  const [confirmer, setConfirmer] = useState(false);
+  return (
+    <div className="decision" style={{ marginBottom: 12 }}>
+      <select
+        className="input"
+        aria-label="Livre blanc à envoyer"
+        value={numero}
+        onChange={(e) => {
+          setNumero(Number(e.target.value) === 2 ? 2 : 1);
+          setConfirmer(false);
+        }}
+      >
+        {LIVRES_BLANCS.map(([n, titre]) => (
+          <option key={n} value={n}>
+            {titre}
+          </option>
+        ))}
+      </select>
+      {confirmer ? (
+        <>
+          <span className="small">
+            Envoyer le livre blanc n° {numero} à {destinataire} ?
+          </span>
+          <button
+            className="btn go"
+            onClick={() => {
+              setConfirmer(false);
+              onEnvoyer(numero);
+            }}
+          >
+            <Icon name="send" />
+            Confirmer l’envoi
+          </button>
+          <button className="btn" onClick={() => setConfirmer(false)}>
+            Annuler
+          </button>
+        </>
+      ) : (
+        <button className="btn" onClick={() => setConfirmer(true)}>
+          <Icon name="send" />
+          Envoyer le livre blanc
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Detail({
   s,
   onTraite,
   onRemettre,
   onTache,
   onModifier,
+  onLivreBlanc,
 }: {
   s: SujetVue;
   onTraite: () => void;
   onRemettre: () => void;
   onTache: () => void;
   onModifier: (modif: { echeance?: string | null; priorite?: number }) => void;
+  onLivreBlanc: (numero: 1 | 2) => void;
 }) {
   return (
     <div className="panel inbox-detail">
@@ -271,6 +336,9 @@ function Detail({
         {s.resume && <p style={{ whiteSpace: 'pre-line' }}>{s.resume}</p>}
         {s.statut === 'a_traiter' && s.type !== 'a_valider' && (
           <Reglages key={s.id} s={s} onModifier={onModifier} />
+        )}
+        {s.statut === 'a_traiter' && s.livreBlanc && (
+          <EnvoiLivreBlanc key={s.id} destinataire={s.livreBlanc.email} onEnvoyer={onLivreBlanc} />
         )}
         <div className="decision">
           {lienWeb(s.lien) && (
@@ -767,6 +835,17 @@ export function Inbox({
         onTraite={() => void agir(marquerSujetTraite(s.instance.slug, s.id), 'Traité.')}
         onRemettre={() => void agir(remettreSujet(s.instance.slug, s.id), 'Remis à traiter.')}
         onTache={() => setEdition(s)}
+        onLivreBlanc={(numero) =>
+          void envoyerLivreBlanc(s.instance.slug, s.id, numero).then(
+            (r) =>
+              apres(
+                'simulation' in r
+                  ? r.message
+                  : `Livre blanc n° ${numero} envoyé à ${s.livreBlanc?.email ?? ''}.`,
+              ),
+            erreur,
+          )
+        }
         onModifier={(modif) =>
           void agir(modifierSujet(s.instance.slug, s.id, modif), 'Entrée modifiée.')
         }

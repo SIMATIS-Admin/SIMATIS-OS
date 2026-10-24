@@ -58,6 +58,7 @@ const sujet = (id: string, extra: Record<string, unknown> = {}) => ({
   entreprise: null,
   instance: { slug: 'simatis', nom: 'SIMATIS', couleur: '#0B2545' },
   proposition: null,
+  livreBlanc: null,
   ...extra,
 });
 
@@ -67,6 +68,7 @@ const liste = () => [
     echeance: '2020-01-02T10:00:00Z',
     contact: { id: 'c1', nom: 'Hélène Morvan' },
     lien: 'https://mail.exemple.fr/fil/1',
+    livreBlanc: { email: 'jeanne@exemple.test', nom: 'Jeanne' },
   }),
   sujet('s2', {
     type: 'devis',
@@ -135,6 +137,10 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     );
   }
   if (url.includes('/decision')) return json({ ...proposition, statut: 'appliquee' });
+  if (url.endsWith('/livre-blanc'))
+    return simulation
+      ? json({ simulation: true, message: 'Envoi simulé : rien n’est parti.' }, 202)
+      : json(sujet('s1', { statut: 'traite' }));
   if (url.endsWith('/tache'))
     return simulation
       ? json({ simulation: true, message: 'Simulation : rien n’a été écrit dans HubSpot.' }, 202)
@@ -514,6 +520,37 @@ describe('Inbox screen', () => {
       contactId: 'c1',
     });
     expect(posts()[0]?.body).not.toHaveProperty('hubspot');
+  });
+
+  it('sends the chosen white paper only after a confirmation', async () => {
+    render(<AvecEntete slug="simatis" />);
+    fireEvent.change(await screen.findByLabelText('Livre blanc à envoyer'), {
+      target: { value: '2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer le livre blanc' }));
+    expect(screen.getByText(/Envoyer le livre blanc n° 2 à jeanne@exemple.test/)).toBeTruthy();
+    expect(posts()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’envoi' }));
+    await waitFor(() => expect(posts()[0]?.url).toBe('/api/i/simatis/sujets/s1/livre-blanc'));
+    expect(posts()[0]?.body).toEqual({ numero: 2 });
+    expect(await screen.findByText(/Livre blanc n° 2 envoyé à jeanne@exemple.test/)).toBeTruthy();
+  });
+
+  it('cancels a white paper send without posting, and shows the simulation message', async () => {
+    render(<AvecEntete slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Envoyer le livre blanc' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(posts()).toHaveLength(0);
+    simulation = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer le livre blanc' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’envoi' }));
+    expect(await screen.findByText(/Envoi simulé : rien n’est parti/)).toBeTruthy();
+  });
+
+  it('offers no white paper button on an ordinary subject', async () => {
+    render(<AvecEntete slug="simatis" />);
+    fireEvent.click(await screen.findByText('Devis Fonderie'));
+    expect(screen.queryByRole('button', { name: 'Envoyer le livre blanc' })).toBeNull();
   });
 
   it('shows the simulation message and keeps the subject', async () => {
