@@ -4,6 +4,7 @@ import {
   echapper as echapperMail,
   habillerMail,
   paragraphe,
+  salutation,
 } from '../mail/gabarit.js';
 import { and, desc, eq, gte, or, sql } from 'drizzle-orm';
 import { writeVia, type ConnexionDeps } from '../connexions/service.js';
@@ -153,7 +154,7 @@ export function mailInvitation(p: {
   lien: string;
   expireLe: Date;
 }): { subject: string; html: string } {
-  const bonjour = p.contactNom ? `Bonjour ${echapper(p.contactNom)},` : 'Bonjour,';
+  const bonjour = salutation(p.contactNom);
   const lien = echapper(p.lien);
   return {
     subject: `Votre test VMA : ${p.entrepriseNom}`,
