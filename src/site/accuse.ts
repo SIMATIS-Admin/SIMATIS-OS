@@ -1,6 +1,6 @@
 import { bouton, habillerMail, paragraphe, salutation } from '../mail/gabarit.js';
 
-const AGENDA = 'https://calendar.app.google/ZAAztHjmT4fnKaeC8';
+export const AGENDA = 'https://calendar.app.google/ZAAztHjmT4fnKaeC8';
 
 // Accusé de réception du formulaire de contact : même promesse que la page « Merci » du site.
 export function mailAccuse(p: { nom: string; objet?: string }): { subject: string; html: string } {
