@@ -27,6 +27,25 @@ export const echapper = (s: string) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+const CIVILITES = /^(m\.|mme|mlle|monsieur|madame|mademoiselle|dr|pr)\.?$/i;
+const enMajuscules = (m: string) => m.length > 1 && m === m.toUpperCase() && m !== m.toLowerCase();
+
+// Les mails saluent par le prénom seul. Le nom de famille est souvent saisi en majuscules, avant ou
+// après le prénom (« Jeanne DUPONT », « DUPONT Jeanne ») : on garde le premier mot qui ne l'est pas.
+export function prenomDe(nomComplet: string): string {
+  const mots = nomComplet
+    .trim()
+    .split(/\s+/)
+    .filter((m) => m && !CIVILITES.test(m));
+  return mots.find((m) => !enMajuscules(m)) ?? mots[0] ?? '';
+}
+
+// « Bonjour Jeanne, » ; `Bonjour,` sans nom. Renvoie du HTML déjà échappé.
+export function salutation(nomComplet: string | null | undefined): string {
+  const prenom = nomComplet ? prenomDe(nomComplet) : '';
+  return prenom ? `Bonjour ${echapper(prenom)},` : 'Bonjour,';
+}
+
 // Paragraphe du gabarit ; `contenu` est du HTML déjà échappé.
 export const paragraphe = (contenu: string, extra = '') =>
   `<p style="margin:0 0 14px;font:16px/1.6 ${POLICE};color:${C.nuit};${extra}">${contenu}</p>`;

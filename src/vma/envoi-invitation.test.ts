@@ -8,12 +8,13 @@ describe('Mail d’invitation au test VMA', () => {
   it('reprend le lien, le nom et la date, et échappe ce que l’on saisit', () => {
     const mail = mailInvitation({
       entrepriseNom: 'Atelier <b>Fictif</b>',
-      contactNom: 'Jeanne "J"',
+      contactNom: 'Jeanne DUPONT',
       lien: 'https://site.test/test-vma?i=abc',
       expireLe: new Date('2026-11-04T10:00:00.000Z'),
     });
     expect(mail.subject).toBe('Votre test VMA : Atelier <b>Fictif</b>');
-    expect(mail.html).toContain('Bonjour Jeanne &quot;J&quot;,');
+    expect(mail.html).toContain('Bonjour Jeanne,');
+    expect(mail.html).not.toContain('DUPONT');
     expect(mail.html).toContain('Atelier &lt;b&gt;Fictif&lt;/b&gt;');
     expect(mail.html).toContain('href="https://site.test/test-vma?i=abc"');
     expect(mail.html).not.toContain('<b>');
