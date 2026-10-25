@@ -115,8 +115,14 @@ export async function rapprocherBoite(
           dernierContactLe: dernier ?? null,
           dernierContactCanal: 'email',
           mandatContacteur: mandat.nom,
-          nbContacts: Math.max(r.envoyes, 1),
-          resultat: CLASSES.includes(fiche.resultat) ? undefined : suggere,
+          nbContacts: r.envoyes,
+          // A pass over a shorter period must not downgrade what an earlier one established.
+          resultat:
+            CLASSES.includes(fiche.resultat) ||
+            fiche.resultat === 'repondu' ||
+            (suggere === 'sans_reponse' && fiche.resultat)
+              ? undefined
+              : suggere,
         });
       }
       if (r.bounce) await majConformite(tx, base.id, fiche.id, { emailInvalide: true });

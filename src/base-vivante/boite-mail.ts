@@ -46,6 +46,19 @@ const OBJET_ERREUR =
 const OBJET_AUTO =
   /réponse automatique|reponse automatique|automatic reply|auto[- ]?reply|absence du bureau|out of office|absent\(e\)|autoréponse/i;
 
+// A bounce report quotes the original message (with all its recipients): only the failed
+// recipient lines count, or else what precedes the quoted message.
+export function adressesEnEchec(corps: string): string[] {
+  const finales = [
+    ...corps.matchAll(/(?:final|original)-recipient:\s*(?:rfc822;)?\s*(\S+)/gi),
+  ].flatMap((m) => adressesDe(m[1] ?? ''));
+  if (finales.length > 0) return finales;
+  const coupe = corps.search(
+    /message\/rfc822|original message|message d'origine|^-{3,}.*forwarded/im,
+  );
+  return adressesDe(coupe > 0 ? corps.slice(0, coupe) : corps);
+}
+
 export const estRetourEnErreur = (m: MessageBoite): boolean =>
   EXPEDITEUR_ERREUR.test(m.de ?? '') || OBJET_ERREUR.test(m.objet ?? '');
 
@@ -84,7 +97,7 @@ export async function analyser(
     const date = m.date ?? new Date(0);
     if (estRetourEnErreur(m)) {
       const echecs = adressesDe(m.failedRecipients);
-      const trouvees = echecs.length > 0 ? echecs : adressesDe(await corpsErreur(m));
+      const trouvees = echecs.length > 0 ? echecs : adressesEnEchec(await corpsErreur(m));
       for (const email of new Set(trouvees)) if (emails.has(email)) de(email).bounce = true;
       continue;
     }
@@ -123,6 +136,7 @@ type MessageApi = {
   id: string;
   labelIds?: string[];
   snippet?: string;
+  internalDate?: string;
   payload?: {
     headers?: Entetes;
     body?: { data?: string };
@@ -188,7 +202,12 @@ export async function parcourirBoite(
         a: entete(h, 'To'),
         cc: entete(h, 'Cc'),
         objet: entete(h, 'Subject'),
-        date: date && !Number.isNaN(Date.parse(date)) ? new Date(date) : null,
+        date:
+          date && !Number.isNaN(Date.parse(date))
+            ? new Date(date)
+            : m.internalDate
+              ? new Date(Number(m.internalDate))
+              : null,
         extrait: m.snippet ?? '',
         autoSubmitted: entete(h, 'Auto-Submitted'),
         autoreply: entete(h, 'X-Autoreply'),

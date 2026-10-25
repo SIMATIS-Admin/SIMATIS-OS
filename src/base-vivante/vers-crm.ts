@@ -29,12 +29,9 @@ export function motifRefus(f: FicheBase): string | null {
   return null;
 }
 
-async function mandatDe(db: Executor, f: FicheBase): Promise<Instance | null> {
+function mandatDe(instances: Instance[], f: FicheBase): Instance | null {
   if (!f.mandatContacteur) return null;
-  return (
-    (await listInstances(db)).find((i) => i.type === 'mandat' && i.nom === f.mandatContacteur) ??
-    null
-  );
+  return instances.find((i) => i.type === 'mandat' && i.nom === f.mandatContacteur) ?? null;
 }
 
 export async function entrerDansCrm(
@@ -42,6 +39,7 @@ export async function entrerDansCrm(
   deps: ConnexionDeps,
   baseId: string,
   ficheId: string,
+  instances?: Instance[],
 ): Promise<EntreeCrm> {
   const fiche = await withInstance(db, baseId, async (tx) => {
     const [f] = await tx
@@ -53,17 +51,17 @@ export async function entrerDansCrm(
   if (!fiche) return refus('Fiche introuvable.');
   const motif = motifRefus(fiche);
   if (motif) return refus(motif);
-  const mandat = await mandatDe(db, fiche);
+  const mandat = mandatDe(instances ?? (await listInstances(db)), fiche);
   if (!mandat) return refus('Le mandat qui a contacté cette fiche est introuvable.');
 
-  const existant = fiche.email
+  // An address known to bounce never enters a CRM.
+  const email = fiche.emailInvalide ? null : fiche.email;
+  const existant = email
     ? await withInstance(db, mandat.id, async (tx) => {
         const [c] = await tx
           .select({ id: contacts.id })
           .from(contacts)
-          .where(
-            and(eq(contacts.instanceId, mandat.id), sql`lower(${contacts.email}) = ${fiche.email}`),
-          );
+          .where(and(eq(contacts.instanceId, mandat.id), sql`lower(${contacts.email}) = ${email}`));
         return c ?? null;
       })
     : null;
@@ -105,7 +103,7 @@ export async function entrerDansCrm(
         {
           nom: [fiche.prenom, fiche.nom].filter(Boolean).join(' '),
           fonction: fiche.fonction,
-          email: fiche.email,
+          email,
           telephone: fiche.telephone,
           entrepriseId,
         },
@@ -163,6 +161,8 @@ export async function entrerRepondants(
       ),
   );
   const rapport: RapportEntrees = { cree: 0, existant: 0, simulation: 0, refuse: 0 };
-  for (const { id } of ids) rapport[(await entrerDansCrm(db, deps, baseId, id)).resultat]++;
+  const instances = await listInstances(db);
+  for (const { id } of ids)
+    rapport[(await entrerDansCrm(db, deps, baseId, id, instances)).resultat]++;
   return rapport;
 }
