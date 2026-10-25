@@ -4,6 +4,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { profilDe, type Profil } from './profil.js';
 import { entreprises } from '../crm/schema.js';
+import { genererRapportWord, nomFichier } from './rapport-word.js';
 import { diagnosticProjets, type Projet } from './schema.js';
 
 // Le diagnostic est un outil de SIMATIS seulement : un mandat ne le voit pas (il verra son résultat).
@@ -15,8 +16,10 @@ export class EntrepriseIntrouvable extends Error {
   }
 }
 
-export type ProjetVue = Omit<Projet, 'rapport' | 'logo' | 'pdfEntretien'> & {
+export type ProjetVue = Omit<Projet, 'rapport' | 'logo' | 'pdfEntretien' | 'rapportVersions'> & {
   profil: Profil | null;
+  // Versions du rapport (sans contenu) : chacune se télécharge à part.
+  rapportVersions: { version: number; le: string }[];
   aRapport: boolean;
   aLogo: boolean;
   aPdfEntretien: boolean;
@@ -35,6 +38,7 @@ export type ProjetPatch = Partial<
     | 'revue'
     | 'ditParDirigeant'
     | 'hypotheses'
+    | 'restitutionAvecProposition'
   >
 > & { logo?: { nom: string; base64: string } | null };
 
@@ -44,8 +48,15 @@ export const verifierEspace = (instance: Instance) => {
 };
 
 // Le rapport et le logo (base64) ne voyagent pas avec la liste : ils se téléchargent à part.
-export const vue = ({ rapport, logo, pdfEntretien, ...projet }: Projet): ProjetVue => ({
+export const vue = ({
+  rapport,
+  logo,
+  pdfEntretien,
+  rapportVersions,
+  ...projet
+}: Projet): ProjetVue => ({
   ...projet,
+  rapportVersions: rapportVersions.map(({ version, le }) => ({ version, le })),
   profil: projet.dims ? profilDe(projet.dims) : null,
   aRapport: rapport !== null,
   aLogo: logo !== null,
@@ -132,18 +143,33 @@ export async function deleteProjet(db: Executor, instance: Instance, id: string)
   });
 }
 
+// Le Word du rapport : la dernière version par défaut, ou une version précédente (régénérée depuis
+// son contenu).
 export async function rapportDe(
   db: Executor,
   instance: Instance,
   id: string,
+  version?: number,
 ): Promise<{ nom: string; contenu: Buffer }> {
   verifierEspace(instance);
   return withInstance(db, instance.id, async (tx) => {
     const [row] = await tx
-      .select({ rapport: diagnosticProjets.rapport, nom: diagnosticProjets.rapportNom })
+      .select({
+        rapport: diagnosticProjets.rapport,
+        nom: diagnosticProjets.rapportNom,
+        versions: diagnosticProjets.rapportVersions,
+      })
       .from(diagnosticProjets)
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
     if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    if (version !== undefined && version !== row.versions.at(-1)?.version) {
+      const v = row.versions.find((x) => x.version === version);
+      if (!v) throw new ProjetIntrouvable('Version du rapport introuvable');
+      return {
+        nom: nomFichier(v.contenu.entreprise, v.version),
+        contenu: Buffer.from(genererRapportWord(v.contenu)),
+      };
+    }
     if (!row.rapport || !row.nom) throw new ProjetIntrouvable('Aucun rapport pour ce projet');
     return { nom: row.nom, contenu: Buffer.from(row.rapport, 'base64') };
   });

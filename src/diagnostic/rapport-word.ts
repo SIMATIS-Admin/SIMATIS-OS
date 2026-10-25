@@ -368,3 +368,9 @@ export function genererRapportWord(contenu: ContenuRapport, maintenant = new Dat
   };
   return zipSync(fichiers, { level: 6 });
 }
+
+export const nomFichier = (entreprise: string, version: number) =>
+  `Rapport Diagnostic Endurance - ${entreprise
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()} - v${version}.docx`;

@@ -3,12 +3,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  depuisDerniereProduction,
   outilsEntretien,
   outilsRapport,
+  outilsRestitution,
   outilsSupport,
   promptDiagnostic,
   promptEntretien,
   promptRapport,
+  promptRestitution,
   promptSupport,
   skillsDe,
   SKILL_RAPPORT,
@@ -34,6 +37,7 @@ const attente: AttenteDiag = {
   ],
   etapeMessage: 2,
   modele: 'sonnet',
+  effort: 'moyen',
   demande: null,
   dateDiagnostic: '2026-11-02',
   ditParDirigeant: 'Ambition fictive',
@@ -42,6 +46,11 @@ const attente: AttenteDiag = {
   supportLien: null,
   rapportLien: null,
   rapportLienStatut: 'aucun',
+  rapportVersion: null,
+  rapportContenu: null,
+  rapportNom: null,
+  restitutionLien: null,
+  restitutionAvecProposition: true,
   pdf: null,
   logo: null,
 };
@@ -130,6 +139,59 @@ describe('Support d ouverture par le runner', () => {
       return Promise.resolve(new Response(JSON.stringify(reponse), { status: 200 }));
     }) as typeof fetch;
 
+  const lanceAvec = async (a: AttenteDiag) => {
+    let args: string[] = [];
+    await tourDiagnostic({
+      base: 'http://os.test',
+      token: 'r',
+      claude: 'claude',
+      fetch: fauxOs(a, []),
+      poste: () =>
+        Promise.resolve({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT, SKILL_RAPPORT] }),
+      lancer: (_c, a2) => {
+        args = a2;
+        return Promise.resolve(0);
+      },
+    });
+    return args;
+  };
+
+  it('passe le modèle et l effort choisis dans le chat à Claude', async () => {
+    const args = await lanceAvec({ ...attente, modele: 'opus', effort: 'max' });
+    expect(args.slice(args.indexOf('--model'), args.indexOf('--model') + 4)).toEqual([
+      '--model',
+      'opus',
+      '--effort',
+      'max',
+    ]);
+    const eleve = await lanceAvec({ ...attente, modele: 'sonnet', effort: 'eleve' });
+    expect(eleve[eleve.indexOf('--effort') + 1]).toBe('high');
+  });
+
+  it('lance la création du deck de restitution avec Artifact et ses outils', async () => {
+    const args = await lanceAvec({
+      ...attente,
+      etape: 5,
+      etapeMessage: 5,
+      demande: 'restitution',
+      modele: 'fable',
+      effort: 'moyen',
+      conversation: [
+        {
+          etape: 5,
+          de: 'pilote',
+          texte: 'Produire le deck de restitution.',
+          at: '2026-10-25T08:00:00Z',
+        },
+      ],
+    });
+    expect(args[args.indexOf('--model') + 1]).toBe('fable');
+    expect(args[args.indexOf('--allowedTools') + 1]).toContain(
+      'mcp__simatis__enregistrer_restitution',
+    );
+    expect(args[args.indexOf('--tools') + 1]).toContain('Artifact');
+  });
+
   it('lance Claude avec la skill, l outil Artifact et le logo dans le dossier de travail', async () => {
     const appels: { url: string; body: unknown }[] = [];
     let vu:
@@ -193,6 +255,131 @@ describe('Support d ouverture par le runner', () => {
       },
     });
     expect(outils).toBe('mcp__simatis__repondre_diagnostic');
+  });
+});
+
+describe('Production par le runner : modifications et deck', () => {
+  const base: AttenteDiag = { ...attente, etape: 4, etapeMessage: 4, demande: 'rapport' };
+  const msg = (etape: number, de: 'pilote' | 'claude', texte: string) => ({
+    etape,
+    de,
+    texte,
+    at: '2026-10-25T08:00:00Z',
+  });
+
+  it('ne retient que les messages écrits depuis la production précédente', () => {
+    const a: AttenteDiag = {
+      ...base,
+      conversation: [
+        msg(4, 'pilote', 'Ancienne demande déjà intégrée'),
+        msg(4, 'claude', 'Noté'),
+        msg(4, 'pilote', 'Produire le rapport version 1.'),
+        msg(4, 'pilote', 'Ajoute le sujet des tarifs'),
+        msg(4, 'claude', 'Noté : tarifs'),
+        msg(5, 'pilote', 'Message d une autre étape'),
+        msg(4, 'pilote', 'Produire le rapport version 2.'),
+      ],
+    };
+    expect(depuisDerniereProduction(a, 4, 'Produire le rapport version')).toEqual([
+      'Pilote : Ajoute le sujet des tarifs',
+      'Toi : Noté : tarifs',
+    ]);
+  });
+
+  it('à la première production, reprend tout l échange de l étape', () => {
+    const a: AttenteDiag = {
+      ...base,
+      conversation: [
+        msg(4, 'pilote', 'Premier avis'),
+        msg(4, 'pilote', 'Produire le rapport version 1.'),
+      ],
+    };
+    expect(depuisDerniereProduction(a, 4, 'Produire le rapport version')).toEqual([
+      'Pilote : Premier avis',
+    ]);
+  });
+
+  it('le rapport est révisé à partir de la version précédente et des modifications', () => {
+    const a: AttenteDiag = {
+      ...base,
+      rapportVersion: 2,
+      rapportContenu: { entreprise: 'Atelier Fictif Nord' },
+      conversation: [
+        msg(4, 'pilote', 'Insiste sur la fidélisation'),
+        msg(4, 'pilote', 'Produire le rapport version 3.'),
+      ],
+    };
+    const texte = promptRapport(a, null, new Date('2026-10-25T08:00:00Z'));
+    expect(texte).toContain('Rapport précédent (version 2');
+    expect(texte).toContain('Atelier Fictif Nord');
+    expect(texte).toContain('Pilote : Insiste sur la fidélisation');
+  });
+
+  it('un Word importé est signalé sans contenu', () => {
+    const texte = promptRapport({ ...base, rapportNom: 'importe.docx' }, null);
+    expect(texte).toContain('un Word importé (importe.docx)');
+  });
+
+  it('les chats des étapes 4 et 5 recueillent sans rien produire', () => {
+    const chat4 = promptDiagnostic({ ...base, rapportContenu: { a: 1 }, rapportVersion: 1 });
+    expect(chat4).toContain('Tu ne rédiges pas le rapport ici');
+    expect(chat4).toContain('Rapport actuel (version 1');
+    const chat5 = promptDiagnostic({ ...base, etape: 5, etapeMessage: 5, demande: null });
+    expect(chat5).toContain('Tu ne crées pas le deck ici');
+    expect(promptDiagnostic({ ...base, etape: 2, etapeMessage: 2 })).not.toContain('Tu ne ');
+  });
+
+  const restitution: AttenteDiag = {
+    ...base,
+    etape: 5,
+    etapeMessage: 5,
+    demande: 'restitution',
+    rapportVersion: 1,
+    rapportContenu: { entreprise: 'Atelier Fictif Nord' },
+    restitutionLien: null,
+    restitutionAvecProposition: true,
+    conversation: [
+      msg(5, 'pilote', 'Premier cycle de trois mois, forfait fictif de 1 000 euros'),
+      msg(5, 'pilote', 'Produire le deck de restitution.'),
+    ],
+  };
+
+  it('le deck de restitution reprend le rapport, dure moins d une heure et finit sur la proposition', () => {
+    const texte = promptRestitution(restitution, new Date('2026-10-25T08:00:00Z'));
+    expect(texte).toContain("moins d'une heure");
+    expect(texte).toContain('le score');
+    expect(texte).toContain('Atelier Fictif Nord');
+    expect(texte).toContain('Dernière diapositive : la proposition de collaboration');
+    expect(texte).toContain('forfait fictif de 1 000 euros');
+    expect(texte).toContain('intent « slides »');
+    expect(texte).toContain('enregistrer_restitution');
+  });
+
+  it('sans proposition, le deck ne contient ni offre ni tarif', () => {
+    const texte = promptRestitution({ ...restitution, restitutionAvecProposition: false });
+    expect(texte).toContain('sans aucune offre ni tarif');
+    expect(texte).not.toContain('forfait fictif');
+  });
+
+  it('sans élément donné, aucun tarif n est inventé', () => {
+    const texte = promptRestitution({ ...restitution, conversation: [] });
+    expect(texte).toContain('ne rédige pas de tarif');
+  });
+
+  it('un deck existant est révisé, pas recréé', () => {
+    const texte = promptRestitution({
+      ...restitution,
+      restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
+    });
+    expect(texte).toContain('révise le deck existant');
+  });
+
+  it('les outils du deck sont ceux de la restitution seulement', () => {
+    const outils = outilsRestitution(['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_restitution');
+    expect(outils).toContain('Artifact');
+    expect(outils).not.toContain('enregistrer_rapport');
+    expect(outils).not.toContain('enregistrer_support');
   });
 });
 

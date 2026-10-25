@@ -14,6 +14,7 @@ import {
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
 import { demanderRapport } from '../diagnostic/rapport.js';
+import { demanderRestitution } from '../diagnostic/restitution.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
 import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
 import { demanderSupport, logoDe, rouvrirSupport } from '../diagnostic/support.js';
@@ -498,6 +499,21 @@ export function registerApi(
       }
     }),
   );
+  // Restitution : le pilote demande le deck de présentation du rapport (étape 5).
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/produire',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderRestitution(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
   // Entretien : import du PDF de l'outil (PDF de 10 Mo au plus, donc un corps plus grand que la limite
   // par défaut), puis correction d'une réponse lue.
   const corpsPdf = z.object({
@@ -545,12 +561,16 @@ export function registerApi(
       }
     }),
   );
-  app.get<ProjetRoute>(
+  app.get<ProjetRoute & { Querystring: { version?: string } }>(
     '/api/i/:slug/diagnostic/projets/:id/rapport',
-    onInstance<ProjetRoute>(async (i, request, reply) => {
+    onInstance<ProjetRoute & { Querystring: { version?: string } }>(async (i, request, reply) => {
       if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const version =
+        request.query.version === undefined ? undefined : Number(request.query.version);
+      if (version !== undefined && !Number.isInteger(version))
+        return reply.code(400).send({ error: 'Version invalide' });
       try {
-        const { nom, contenu } = await rapportDe(db, i, request.params.id);
+        const { nom, contenu } = await rapportDe(db, i, request.params.id, version);
         reply.header(
           'content-type',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

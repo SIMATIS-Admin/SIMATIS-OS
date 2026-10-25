@@ -1,7 +1,18 @@
-import { date, index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  date,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { entreprises } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Dimensions } from './profil.js';
+import type { ContenuRapport } from './rapport-word.js';
 import type { ReponseQuestion } from './score.js';
 
 // Conversation avec l'assistant Claude d'une étape : le chat vit sur claude.ai, l'OS garde son
@@ -22,11 +33,19 @@ export type ChatEtape = { modele: string; effort: string; lien: string };
 export const STATUTS_SUPPORT = ['aucun', 'preparation', 'pret', 'final'] as const;
 export type StatutSupport = (typeof STATUTS_SUPPORT)[number];
 // Travail demandé au runner avec le message du pilote (sans : une simple réponse dans le chat).
-export const DEMANDES = ['preparer_support', 'support_final', 'rapport', 'entretien'] as const;
+export const DEMANDES = [
+  'preparer_support',
+  'support_final',
+  'rapport',
+  'restitution',
+  'entretien',
+] as const;
 // Rapport remis au dirigeant, rédigé par Claude : 'en_cours' tant que le runner le rédige, 'pret'
 // une fois son lien enregistré.
 export const STATUTS_RAPPORT = ['aucun', 'en_cours', 'pret'] as const;
 export type Demande = (typeof DEMANDES)[number];
+// Une version du rapport : son contenu structuré, d'où le Word se régénère et que Claude révise.
+export type VersionRapport = { version: number; le: string; contenu: ContenuRapport };
 export type Diapositive = { titre: string; texte: string; notes: string };
 
 // Un projet de diagnostic, pour une entreprise prospect de SIMATIS. Étapes : 1 préparation,
@@ -61,6 +80,20 @@ export const diagnosticProjets = pgTable(
       .$type<{ lien: string; le: string }[]>()
       .notNull()
       .default([]),
+    // Versions du rapport rédigées par Claude (la dernière est le Word affiché). Un Word importé
+    // compte pour la version 1 sans contenu : la première version rédigée porte alors le numéro 2.
+    rapportVersions: jsonb('rapport_versions').$type<VersionRapport[]>().notNull().default([]),
+    // Deck de restitution (étape 5) : statut, lien du deck affiché, historique, et choix d'y
+    // inclure ou non la proposition de collaboration (dernière diapositive).
+    restitutionStatut: text('restitution_statut', { enum: STATUTS_RAPPORT })
+      .notNull()
+      .default('aucun'),
+    restitutionLien: text('restitution_lien'),
+    restitutionLiens: jsonb('restitution_liens')
+      .$type<{ lien: string; le: string }[]>()
+      .notNull()
+      .default([]),
+    restitutionAvecProposition: boolean('restitution_avec_proposition').notNull().default(true),
     // Entretien : PDF de l'outil externe (base64) et ses réponses lues par Claude, par question.
     pdfEntretien: text('pdf_entretien'),
     pdfEntretienNom: text('pdf_entretien_nom'),
