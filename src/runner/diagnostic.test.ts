@@ -206,12 +206,15 @@ describe('Rapport par le runner', () => {
     rapportLienStatut: 'en_cours',
   };
 
-  it('demande la skill du rapport sur la revue validée, en nouvel artifact', () => {
+  it('demande la skill du rapport, rendu structuré sans artifact ni fichier', () => {
     const texte = promptRapport(rapport, null, new Date('2026-10-20T08:00:00Z'));
     expect(texte).toContain(SKILL_RAPPORT);
     expect(texte).toContain(`projetId ${rapport.id}`);
     expect(texte).toContain('enregistrer_rapport');
-    expect(texte).toContain('nouvel artifact');
+    expect(texte).toContain('ni formulaire, ni artifact, ni fichier');
+    expect(promptRapport({ ...rapport, revue: null }, null)).toContain(
+      'aucune : fonde-toi sur le résultat',
+    );
     expect(texte).toContain('Second cerveau non accessible');
   });
 
@@ -219,7 +222,7 @@ describe('Rapport par le runner', () => {
     const outils = outilsRapport(null, ['/travail']);
     expect(outils).toContain('mcp__simatis__enregistrer_rapport');
     expect(outils).not.toContain('enregistrer_support');
-    expect(outils).toContain('Artifact');
+    expect(outils).not.toContain('Artifact');
     const avec = outilsRapport('/cerveau-fictif', ['/travail']);
     expect(avec).toContain('Read(//cerveau-fictif/**)');
     // Le second cerveau se lit seulement pour le rapport : aucune règle Edit dessus.

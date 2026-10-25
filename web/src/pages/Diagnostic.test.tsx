@@ -343,33 +343,23 @@ describe('Assistant de l étape', () => {
 });
 
 describe('Rapport à l étape 4', () => {
-  const revueValidee = { statut: 'validée', libre: 'Remarque fictive.' };
   const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
 
-  it('désactive le bouton et dit pourquoi tant que la revue n est pas validée', async () => {
-    api.fetchProjetsDiag.mockResolvedValue([
-      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', revue: { statut: 'brouillon' } }),
-    ]);
+  it('désactive le bouton et dit pourquoi tant que le résultat n est pas saisi', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 4, etapeMax: 4 })]);
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     const bouton = await screen.findByRole('button', { name: 'Produire le rapport' });
     expect((bouton as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/Validez d'abord la revue/)).toBeTruthy();
+    expect(screen.getByText(/Saisissez d'abord le résultat/)).toBeTruthy();
   });
 
-  it('active le bouton une fois le résultat saisi et la revue validée, puis demande le rapport', async () => {
+  it('active le bouton dès le résultat saisi, sans revue validée, puis demande le rapport', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
-      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', revue: revueValidee }),
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', revue: null }),
     ]);
     api.demandeRapportDiag.mockResolvedValue(
-      projet({
-        etape: 4,
-        etapeMax: 4,
-        dims,
-        profil: 'Joggeur',
-        revue: revueValidee,
-        rapportLienStatut: 'en_cours',
-      }),
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', rapportLienStatut: 'en_cours' }),
     );
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
@@ -380,6 +370,28 @@ describe('Rapport à l étape 4', () => {
     expect(await screen.findByText(/Claude rédige le rapport/)).toBeTruthy();
   });
 
+  it('prévient avant de remplacer un rapport existant, et s arrête si on refuse', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        profil: 'Joggeur',
+        aRapport: true,
+        rapportNom: 'rapport-fictif.docx',
+        rapportLienStatut: 'pret',
+      }),
+    ]);
+    const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/Téléchargez-le pour le relire ou le modifier/)).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Produire un nouveau rapport' }));
+    expect(confirmation).toHaveBeenCalled();
+    expect(api.demandeRapportDiag).not.toHaveBeenCalled();
+    confirmation.mockRestore();
+  });
+
   it('ouvre le rapport rédigé dans un nouvel onglet', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
       projet({
@@ -387,7 +399,6 @@ describe('Rapport à l étape 4', () => {
         etapeMax: 4,
         dims,
         profil: 'Joggeur',
-        revue: revueValidee,
         rapportLienStatut: 'pret',
         rapportLien: 'https://claude.ai/artifact/RapportFictif0004',
         rapportLiens: [
