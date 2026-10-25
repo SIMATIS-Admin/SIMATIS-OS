@@ -12,7 +12,7 @@ import { Icon } from '../icons.js';
 const entier = (n: number) => n.toLocaleString('fr-FR');
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-// One pass over the mandate's mailbox, from the start of the mandate: who was contacted, who
+// Content of the « Mettre à jour depuis les mails » window. One pass over the mandate's mailbox, from the start of the mandate: who was contacted, who
 // answered, which addresses bounced. Read-only: nothing is written in the mailbox.
 export function RapprochementMail({ slug, onTermine }: { slug: string; onTermine: () => void }) {
   const [mandats, setMandats] = useState<MandatBase[]>([]);
@@ -78,20 +78,12 @@ export function RapprochementMail({ slug, onTermine }: { slug: string; onTermine
     }
   };
 
-  if (mandats.length === 0) return null;
+  if (mandats.length === 0)
+    return <div className="empty">Aucun mandat n'est connecté à une boîte mail.</div>;
   const r = etat?.rapport;
   return (
-    <div className="panel">
-      <div className="panel-h">
-        <div>
-          <h2>Rapprochement avec une boîte mail</h2>
-          <div className="small muted">
-            Lit la boîte Gmail d'un mandat, en lecture seule, depuis le début du mandat : met à jour
-            le dernier contact, les réponses et les adresses en erreur de chaque fiche.
-          </div>
-        </div>
-      </div>
-      <div className="panel-b">
+    <div className="stack">
+      <div>
         <div className="grid g2">
           <label className="field">
             <span>Mandat</span>

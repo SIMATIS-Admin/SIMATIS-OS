@@ -78,16 +78,30 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   return json(etat);
 }
 
-describe('écran Bases vivantes', () => {
+const videEtat = (): EtatBase => ({
+  fiches: [],
+  total: 0,
+  compteurs: { aEnrichir: 0, prospectable: 0 },
+  provenances: [],
+  imports: [],
+});
+const ouvrirImport = () => fireEvent.click(screen.getByText('+ Importer une liste'));
+const remplirDepot = (texte: string) => {
+  fireEvent.change(screen.getByPlaceholderText('Sharp, LinkedIn, salon…'), {
+    target: { value: 'Sharp' },
+  });
+  fireEvent.change(document.querySelector('textarea') as HTMLTextAreaElement, {
+    target: { value: texte },
+  });
+};
+
+describe('base vivante : import en trois temps', () => {
   beforeEach(() => {
     calls = [];
-    etat = {
-      fiches: [],
-      total: 0,
-      compteurs: { aEnrichir: 0, prospectable: 0 },
-      provenances: [],
-      imports: [],
-    };
+    mandats = [];
+    rapprochement = null;
+    reponses = [];
+    etat = videEtat();
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -98,33 +112,35 @@ describe('écran Bases vivantes', () => {
   it('invite à importer une première liste quand la base est vide', async () => {
     render(<Bases slug="simatis" />);
     expect(await screen.findByText(/La base est vide/)).toBeTruthy();
+    fireEvent.click(screen.getByText('Importer une liste'));
+    expect(screen.getByRole('dialog', { name: 'Importer une liste' })).toBeTruthy();
   });
 
   it('exige la source de la liste avant de lire', async () => {
     render(<Bases slug="simatis" />);
     await screen.findByText(/La base est vide/);
+    ouvrirImport();
     fireEvent.click(screen.getByText('Lire la liste'));
     expect(await screen.findByText(/Indiquez la source/)).toBeTruthy();
     expect(calls.some((c) => c.method === 'POST')).toBe(false);
   });
 
-  it('lit du texte collé, montre l’aperçu, puis intègre après validation', async () => {
+  it('lit du texte collé, fait vérifier les colonnes, puis intègre après validation', async () => {
     render(<Bases slug="simatis" />);
     await screen.findByText(/La base est vide/);
-    fireEvent.change(screen.getByPlaceholderText('Sharp, LinkedIn, salon…'), {
-      target: { value: 'Sharp' },
-    });
-    fireEvent.change(document.querySelector('textarea') as HTMLTextAreaElement, {
-      target: { value: 'Société\tNom\nAtelier Fictif\tDurand' },
-    });
+    ouvrirImport();
+    remplirDepot('Société\tNom\nAtelier Fictif\tDurand');
     fireEvent.click(screen.getByText('Lire la liste'));
 
-    expect(await screen.findByText('1 prospectables')).toBeTruthy();
-    expect(screen.getByText('Contacté par Mandat A le 01/09/2026')).toBeTruthy();
-    expect(screen.getByText('1 sous le minimum')).toBeTruthy();
+    expect(await screen.findByText(/3 colonnes reconnues sur 4/)).toBeTruthy();
     const envoi = calls.find((c) => c.method === 'POST');
     expect(envoi?.body).toMatchObject({ provenance: 'Sharp' });
     expect((envoi?.body as { texte: string }).texte).toContain('Atelier Fictif');
+
+    fireEvent.click(screen.getByText('Continuer'));
+    expect(await screen.findByText('1 prospectables')).toBeTruthy();
+    expect(screen.getByText('Contacté par Mandat A le 01/09/2026')).toBeTruthy();
+    expect(screen.getByText('1 sous le minimum')).toBeTruthy();
     expect(calls.some((c) => c.url.endsWith('/integrer'))).toBe(false);
 
     fireEvent.click(screen.getByText('Intégrer 2 fiches à la base'));
@@ -134,12 +150,8 @@ describe('écran Bases vivantes', () => {
   it('corrige le contenu d’une colonne', async () => {
     render(<Bases slug="simatis" />);
     await screen.findByText(/La base est vide/);
-    fireEvent.change(screen.getByPlaceholderText('Sharp, LinkedIn, salon…'), {
-      target: { value: 'Sharp' },
-    });
-    fireEvent.change(document.querySelector('textarea') as HTMLTextAreaElement, {
-      target: { value: 'x' },
-    });
+    ouvrirImport();
+    remplirDepot('x');
     fireEvent.click(screen.getByText('Lire la liste'));
     const colonne = await screen.findByLabelText('Contenu de la colonne Code');
     fireEvent.change(colonne, { target: { value: 'fonction' } });
@@ -150,9 +162,25 @@ describe('écran Bases vivantes', () => {
       });
     });
   });
+
+  it('range un import en attente dans « À faire » et le rouvre à la validation', async () => {
+    etat = { ...videEtat(), imports: [{ ...apercu }] };
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText(/Valider l'import « Texte collé » \(3 lignes\)/));
+    expect(await screen.findByText('1 prospectables')).toBeTruthy();
+    expect(screen.getByText('Intégrer 2 fiches à la base')).toBeTruthy();
+  });
+
+  it('se ferme avec Échap', async () => {
+    render(<Bases slug="simatis" />);
+    await screen.findByText(/La base est vide/);
+    ouvrirImport();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });
 
-describe('base vivante : filtres, export, conformité', () => {
+describe('base vivante : liste unique, filtres, fiche, sélection', () => {
   const fiche = {
     id: '22222222-2222-4222-8222-222222222222',
     zone: 'prospectable' as const,
@@ -192,7 +220,7 @@ describe('base vivante : filtres, export, conformité', () => {
     etat = {
       fiches: [fiche],
       total: 1,
-      compteurs: { aEnrichir: 0, prospectable: 1 },
+      compteurs: { aEnrichir: 4, prospectable: 1 },
       provenances: ['Sharp'],
       imports: [],
     };
@@ -203,6 +231,8 @@ describe('base vivante : filtres, export, conformité', () => {
     vi.unstubAllGlobals();
   });
 
+  const lectures = () => calls.filter((c) => c.method === 'GET').map((c) => c.url);
+
   it('montre le dernier contact et les alertes de chaque fiche', async () => {
     render(<Bases slug="simatis" />);
     expect(await screen.findByText('Atelier Fictif')).toBeTruthy();
@@ -211,39 +241,78 @@ describe('base vivante : filtres, export, conformité', () => {
     expect(screen.getByText(/2 contacts · Mandat A/)).toBeTruthy();
   });
 
-  it('envoie les filtres au serveur et propose l’export avec les mêmes filtres', async () => {
+  it('propose de compléter les fiches sans moyen de contact', async () => {
     render(<Bases slug="simatis" />);
-    await screen.findByText('Atelier Fictif');
-    fireEvent.change(screen.getByLabelText('Filtrer par statut'), {
-      target: { value: 'jamais_contacte' },
-    });
-    await waitFor(() =>
-      expect(calls.some((c) => c.url.includes('/base?statut=jamais_contacte'))).toBe(true),
-    );
-    const lien = screen.getByText<HTMLAnchorElement>('Exporter en CSV');
-    expect(lien.getAttribute('href')).toBe('/api/i/simatis/base/export.csv?statut=jamais_contacte');
+    fireEvent.click(await screen.findByText(/4 fiches sans email ni téléphone/));
+    await waitFor(() => expect(lectures().some((u) => u.includes('zone=a_enrichir'))).toBe(true));
+    expect(await screen.findByText(/n'entre jamais dans un CRM/)).toBeTruthy();
   });
 
-  it('marque une opposition', async () => {
+  it('chaque onglet envoie ses filtres au serveur', async () => {
     render(<Bases slug="simatis" />);
     await screen.findByText('Atelier Fictif');
+    fireEvent.click(screen.getByRole('tab', { name: 'Prêtes à contacter' }));
+    await waitFor(() =>
+      expect(
+        lectures().some(
+          (u) => u.includes('zone=prospectable') && u.includes('statut=jamais_contacte'),
+        ),
+      ).toBe(true),
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Contactées' }));
+    await waitFor(() => expect(lectures().some((u) => /statut=contacte(&|$)/.test(u))).toBe(true));
+    expect(screen.getByRole('tab', { name: 'Contactées' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('envoie la recherche et l’alerte, et propose l’export avec les mêmes filtres', async () => {
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    fireEvent.change(screen.getByLabelText('Filtrer par alerte'), {
+      target: { value: 'email_invalide' },
+    });
+    fireEvent.change(screen.getByLabelText('Rechercher dans la base'), {
+      target: { value: 'fictif' },
+    });
+    await waitFor(() => {
+      const url = lectures().at(-1) ?? '';
+      expect(url).toContain('alerte=email_invalide');
+      expect(url).toContain('q=fictif');
+    });
+    const lien = screen.getByText('Exporter en CSV').closest('a');
+    expect(lien?.getAttribute('href')).toContain('export.csv?');
+    expect(lien?.getAttribute('href')).toContain('alerte=email_invalide');
+  });
+
+  it('marque une opposition depuis la fiche', async () => {
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Léa MARTIN'));
     fireEvent.change(screen.getByLabelText('Conformité de Léa MARTIN'), {
       target: { value: 'opposition' },
     });
     await waitFor(() => {
       const patch = calls.find((c) => c.method === 'PATCH');
-      expect(patch?.url).toBe('/api/i/simatis/base/fiches/22222222-2222-4222-8222-222222222222');
+      expect(patch?.url).toContain('/base/fiches/22222222');
+      expect(patch?.body).toEqual({ opposition: true, exclusion: null });
+    });
+  });
+
+  it('agit sur plusieurs fiches à la fois', async () => {
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
+    expect(screen.getByText('1 sélectionnée')).toBeTruthy();
+    fireEvent.click(screen.getByText('Ne plus contacter'));
+    await waitFor(() => {
+      const patch = calls.find((c) => c.method === 'PATCH');
       expect(patch?.body).toEqual({ opposition: true, exclusion: null });
     });
   });
 
   it('actualise l’historique depuis les CRM', async () => {
     render(<Bases slug="simatis" />);
-    await screen.findByText('Atelier Fictif');
-    fireEvent.click(screen.getByText("Actualiser l'historique"));
-    await waitFor(() =>
-      expect(calls.some((c) => c.url.endsWith('/base/historique/actualiser'))).toBe(true),
-    );
+    fireEvent.click(await screen.findByText("Actualiser l'historique"));
+    expect(await screen.findByText(/1 adresses vérifiées dans les CRM/)).toBeTruthy();
   });
 });
 
@@ -280,6 +349,7 @@ describe('base vivante : boîte mail et réponses', () => {
 
   it('lance la lecture de la boîte d’un mandat et suit son avancement', async () => {
     render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Mettre à jour depuis les mails'));
     const bouton = await screen.findByText('Lire la boîte mail');
     rapprochement = {
       etat: 'en_cours',
@@ -312,6 +382,7 @@ describe('base vivante : boîte mail et réponses', () => {
       rapport: { messages: 9, contactes: 4, reponses: 1, autos: 1, bounces: 2, jamaisContactes: 1 },
     };
     render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Mettre à jour depuis les mails'));
     expect(await screen.findByText('4 contactés')).toBeTruthy();
     expect(screen.getByText('2 adresses en erreur')).toBeTruthy();
     expect(screen.getByText('1 jamais contactés')).toBeTruthy();
@@ -319,6 +390,7 @@ describe('base vivante : boîte mail et réponses', () => {
 
   it('enregistre la date de début du mandat', async () => {
     render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Mettre à jour depuis les mails'));
     const champ = await screen.findByLabelText('Début du mandat');
     fireEvent.change(champ, { target: { value: '2026-08-15' } });
     fireEvent.blur(champ);
@@ -328,21 +400,33 @@ describe('base vivante : boîte mail et réponses', () => {
     });
   });
 
-  it('propose la classe de Claude et la valide', async () => {
+  it('propose la classe de Claude et la valide en un clic', async () => {
     render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Classer 1 réponse'));
     expect(await screen.findByText(/merci de ne plus me contacter/)).toBeTruthy();
     expect(screen.getByText(/2 réponses attendent la routine/)).toBeTruthy();
-    const classe = screen.getByLabelText<HTMLSelectElement>('Classe de la réponse de Léa MARTIN');
-    expect(classe.value).toBe('ne_plus_contacter');
-    fireEvent.click(screen.getByText('Valider'));
+    expect(screen.getByText('Proposé par Claude : Ne plus me contacter')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Ne plus me contacter/ }));
     await waitFor(() => {
       const post = calls.find((c) => c.url.endsWith('/valider'));
       expect(post?.body).toEqual({ classe: 'ne_plus_contacter' });
     });
   });
 
+  it('valide une réponse avec le clavier', async () => {
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Classer 1 réponse'));
+    await screen.findByText(/merci de ne plus me contacter/);
+    fireEvent.keyDown(document, { key: '1' });
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.endsWith('/valider'));
+      expect(post?.body).toEqual({ classe: 'interesse' });
+    });
+  });
+
   it('ajoute les répondants au CRM et résume le résultat', async () => {
     render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Classer 1 réponse'));
     fireEvent.click(await screen.findByText('Ajouter les répondants au CRM du mandat'));
     expect(await screen.findByText(/2 ajoutés au CRM, 1 écartés/)).toBeTruthy();
   });
