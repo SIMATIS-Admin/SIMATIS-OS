@@ -1,7 +1,14 @@
 // Mail de résultat au dirigeant (cahier, §7.4). Le texte reprend l'écran que le dirigeant
 // a déjà vu : pas de potentiel, pas de délai, pas de phrase sur la suite. Il part tout seul à la relève (releve.ts).
 
-import { COULEURS, POLICE, echapper, habillerMail, paragraphe } from '../mail/gabarit.js';
+import {
+  COULEURS,
+  POLICE,
+  echapper,
+  habillerMail,
+  paragraphe,
+  salutation,
+} from '../mail/gabarit.js';
 
 const NB = '\u00a0';
 
@@ -120,7 +127,7 @@ export function brouillonResultat(p0: { contactNom: string | null; ecran: EcranD
   html: string;
 } {
   const e = p0.ecran;
-  const salut = p0.contactNom ? `Bonjour ${esc(p0.contactNom)},` : 'Bonjour,';
+  const salut = salutation(p0.contactNom);
   const socle =
     typeof e.recurrent === 'number' && e.recurrent > 0 && e.allureActuelle !== undefined;
   const mesure = e.mesurable && e.vma !== null;

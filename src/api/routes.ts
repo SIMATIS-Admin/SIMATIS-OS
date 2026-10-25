@@ -53,7 +53,9 @@ import {
   ajouterSujet,
   modifierSujet,
   transformerEnTache,
+  envoyerLivreBlanc,
 } from '../inbox/service.js';
+import { estNumeroLivreBlanc } from '../inbox/livre-blanc.js';
 import { PRIORITE_MAX, PRIORITE_MIN } from '../inbox/schema.js';
 import {
   ajouterDepuisEchange,
@@ -980,6 +982,17 @@ export function registerApi(
   app.post<EchangeRoute>(
     '/api/i/:slug/echanges/:id/annuler',
     surEchange((i, id) => annulerEchange(db, i, id)),
+  );
+  // Envoie le livre blanc choisi au demandeur ; 202 quand l'écriture n'est que simulée.
+  app.post<SujetRoute>(
+    '/api/i/:slug/sujets/:id/livre-blanc',
+    surSujet(async (i, id, request, reply) => {
+      const numero = (request.body as { numero?: unknown } | null)?.numero;
+      if (!estNumeroLivreBlanc(numero))
+        return reply.code(400).send({ error: 'Livre blanc inconnu' });
+      const r = await envoyerLivreBlanc(db, i, id, numero, connexionDeps);
+      return r && 'simulation' in r ? reply.code(202).send(r) : r;
+    }),
   );
   const sujetTacheSchema = tacheSchema.omit({ hubspot: true });
   app.post<SujetRoute>(

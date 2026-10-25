@@ -44,6 +44,7 @@ const vue = (id: string, echeance: string | null, createdAt: string): SujetVue =
   entreprise: null,
   instance: { slug: 's', nom: 'S', couleur: null },
   proposition: null,
+  livreBlanc: null,
 });
 
 describe('Inbox : service', () => {

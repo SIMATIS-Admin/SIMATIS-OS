@@ -96,6 +96,18 @@ describe('Inbox : API', () => {
     expect(r.body).toMatchObject({ statut: 'tache' });
   });
 
+  it('refuses a white-paper send for an unknown number, an unknown subject or a plain subject', async () => {
+    const { id } = await deposer('helioval', 'api-livre-blanc');
+    const url = (sujet: string) => `/api/i/helioval/sujets/${sujet}/livre-blanc`;
+    expect((await req('POST', url(id), { numero: 3 })).status).toBe(400);
+    expect((await req('POST', url(id))).status).toBe(400);
+    // No readable address in a plain subject: nothing is sent.
+    expect((await req('POST', url(id), { numero: 1 })).status).toBe(409);
+    expect(
+      (await req('POST', url('00000000-0000-4000-8000-000000000000'), { numero: 1 })).status,
+    ).toBe(404);
+  });
+
   it('adds an entry by hand to the instance of the slug, and refuses an empty title', async () => {
     const r = await req('POST', '/api/i/helioval/sujets', {
       titre: 'Appeler le fournisseur',

@@ -480,6 +480,7 @@ export type SujetVue = {
   entreprise: { id: string; nom: string } | null;
   instance: { slug: string; nom: string; couleur: string | null };
   proposition: PropositionItem | null;
+  livreBlanc: { email: string; nom: string | null } | null;
 };
 
 export const fetchBrief = (slug: string) => getJson<Brief>(inst(slug, 'brief'));
@@ -601,6 +602,8 @@ export const remettreSujet = (slug: string, id: string) =>
   sendJson<SujetVue>('POST', sujet(slug, id, 'a-traiter'), {});
 export const sujetEnTache = (slug: string, id: string, saisie: TacheSaisie) =>
   sendJson<SujetVue | SimulationTache>('POST', sujet(slug, id, 'tache'), saisie);
+export const envoyerLivreBlanc = (slug: string, id: string, numero: 1 | 2) =>
+  sendJson<SujetVue | SimulationTache>('POST', sujet(slug, id, 'livre-blanc'), { numero });
 export const decider = (
   slug: string,
   id: string,

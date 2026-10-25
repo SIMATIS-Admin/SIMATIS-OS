@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
-import type { ConnexionDeps } from '../connexions/service.js';
+import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import { contacts, entreprises } from '../crm/schema.js';
 import { createTache, crmHubspot, type SimulationTache } from '../crm/taches.js';
 import type { Executor, Tx } from '../db.js';
@@ -12,6 +12,12 @@ import { logEvent } from '../journal/service.js';
 import { enrichirPropositions } from '../pilotage/validations.js';
 import { propositions } from '../propositions/schema.js';
 import { deposerSujet } from './depot.js';
+import {
+  destinataireLivreBlanc,
+  mailLivreBlanc,
+  type DestinataireLivreBlanc,
+  type NumeroLivreBlanc,
+} from './livre-blanc.js';
 import {
   SOURCE_MANUELLE,
   sujets,
@@ -61,6 +67,8 @@ export type SujetVue = {
   instance: { slug: string; nom: string; couleur: string | null };
   // For an "à valider" subject: the proposal to decide, as the decision screen shows it.
   proposition: PropositionVue | null;
+  // Pour une demande de livre blanc dont l'adresse est lisible : à qui l'envoyer.
+  livreBlanc: DestinataireLivreBlanc | null;
 };
 
 export class SujetRefuse extends Error {}
@@ -125,6 +133,7 @@ async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise
     entreprise: s.entrepriseId && entrepriseNom ? { id: s.entrepriseId, nom: entrepriseNom } : null,
     instance: { slug: instance.slug, nom: instance.nom, couleur: instance.config.couleur ?? null },
     proposition: liees.find((p) => p.id === s.propositionId) ?? null,
+    livreBlanc: destinataireLivreBlanc(s.titre, s.resume),
   }));
 }
 
@@ -330,6 +339,60 @@ export async function transformerEnTache(
       acteur: 'pilote',
       action: `Sujet transformé en tâche : ${s.titre}`,
       details: { sujet: id, tache: tache.id },
+    });
+    return vue(tx, instance, id);
+  });
+}
+
+export type EnvoiLivreBlanc = { simulation: true; message: string } | SujetVue;
+
+// Envoie le livre blanc depuis la messagerie de l'instance, puis range l'entrée en « traité ».
+// Une écriture simulée (verrous d'écriture réelle fermés) n'envoie rien et laisse l'entrée à traiter.
+export async function envoyerLivreBlanc(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  numero: NumeroLivreBlanc,
+  deps: ConnexionDeps,
+): Promise<EnvoiLivreBlanc | null> {
+  return withInstance(db, instance.id, async (tx) => {
+    const s = await charger(tx, id);
+    if (!s) return null;
+    if (s.statut !== 'a_traiter') throw new SujetRefuse('Sujet déjà traité.');
+    const dest = destinataireLivreBlanc(s.titre, s.resume);
+    if (!dest) throw new SujetRefuse('Aucune adresse e-mail lisible dans cette demande.');
+    let res;
+    try {
+      res = await tx.transaction((sp) =>
+        writeVia(
+          sp,
+          instance,
+          'messagerie',
+          {
+            op: 'message.send',
+            data: { to: dest.email, ...mailLivreBlanc({ numero, nom: dest.nom }) },
+          },
+          deps,
+        ),
+      );
+    } catch (error) {
+      const raison = error instanceof Error ? error.message : String(error);
+      throw new SujetRefuse(`Envoi impossible : ${raison}`);
+    }
+    if (res.simulation) {
+      return {
+        simulation: true as const,
+        message: `Envoi simulé (écritures réelles désactivées) : rien n'est parti vers ${dest.email}.`,
+      };
+    }
+    await tx
+      .update(sujets)
+      .set({ statut: 'traite', traiteAt: new Date(), traitePar: 'pilote', updatedAt: new Date() })
+      .where(eq(sujets.id, id));
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: `Livre blanc n° ${numero} envoyé : ${s.titre}`,
+      details: { sujet: id, livreBlanc: numero },
     });
     return vue(tx, instance, id);
   });
