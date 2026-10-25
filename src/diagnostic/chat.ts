@@ -126,10 +126,10 @@ export async function finirAttente(
       projet.supportStatut === 'preparation'
         ? { supportStatut: projet.supportLien ? ('pret' as const) : ('aucun' as const) }
         : {};
-    // Un rapport resté « en cours » sans lien enregistré n'est pas bloqué : il repasse à son état réel.
+    // Un rapport resté « en cours » sans fichier enregistré n'est pas bloqué : il repasse à son état réel.
     const rapport =
       projet.demande === 'rapport' && projet.rapportLienStatut === 'en_cours'
-        ? { rapportLienStatut: projet.rapportLien ? ('pret' as const) : ('aucun' as const) }
+        ? { rapportLienStatut: projet.rapport ? ('pret' as const) : ('aucun' as const) }
         : {};
     if (projet.statutChat !== 'en_cours') {
       await tx

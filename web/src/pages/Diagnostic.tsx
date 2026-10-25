@@ -779,12 +779,10 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
   );
 }
 
-// Pré-requis du rapport, repris de l'OS (le serveur reste l'autorité et refuse sinon).
-const raisonRapport = (projet: ProjetDiag) => {
-  if (!projet.dims) return "Saisissez d'abord le résultat à l'étape 2.";
-  if (projet.revue?.statut !== 'validée') return "Validez d'abord la revue à l'étape 3.";
-  return null;
-};
+// Pré-requis du rapport, repris de l'OS (le serveur reste l'autorité et refuse sinon) : le résultat de
+// l'étape 2 suffit, la revue de l'étape 3 enrichit le rapport quand elle existe.
+const raisonRapport = (projet: ProjetDiag) =>
+  projet.dims ? null : "Saisissez d'abord le résultat à l'étape 2.";
 
 function Rapport({
   slug,
@@ -800,6 +798,13 @@ function Rapport({
   const enCours = projet.rapportLienStatut === 'en_cours';
   const raison = raisonRapport(projet);
   const demander = async () => {
+    if (
+      projet.aRapport &&
+      !window.confirm(
+        'Le nouveau rapport remplace le précédent. Si vous l’avez modifié, téléchargez-le d’abord. Continuer ?',
+      )
+    )
+      return;
     try {
       onChange(await demandeRapportDiag(slug, projet.id));
     } catch (err) {
@@ -824,6 +829,11 @@ function Rapport({
             </a>
           </div>
         )}
+        {projet.aRapport && !enCours && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Le rapport est enregistré ici. Téléchargez-le pour le relire ou le modifier dans Word.
+          </p>
+        )}
         {enCours ? (
           <p className="small muted" style={{ margin: 0 }}>
             Claude rédige le rapport… La page se mettra à jour dès qu’il sera prêt.
@@ -843,7 +853,9 @@ function Rapport({
             disabled={enCours || raison !== null}
             onClick={() => void demander()}
           >
-            {projet.rapportLien ? 'Produire un nouveau rapport' : 'Produire le rapport'}
+            {projet.aRapport || projet.rapportLien
+              ? 'Produire un nouveau rapport'
+              : 'Produire le rapport'}
           </button>
         </div>
         {!enCours && raison && (

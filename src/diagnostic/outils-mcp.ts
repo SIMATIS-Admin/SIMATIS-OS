@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { registerTool } from '../mcp/tools.js';
 import { repondreClaude } from './chat.js';
 import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
-import { autoriserSiRapport, enregistrerRapport } from './rapport.js';
+import { enregistrerRapport } from './rapport.js';
+import { contenuRapportSchema } from './rapport-word.js';
 import { autoriserOutil, enregistrerSupport, LIEN_ARTIFACT } from './support.js';
 
 // Outil du chat de diagnostic : Claude y répond au pilote (un seul appel par message).
@@ -63,23 +64,21 @@ registerTool({
   }),
   scope: 'instance',
   handler: async ({ tx }, { tool_name, input }) =>
-    (await autoriserSiRapport(tx, tool_name, input)) ??
-    (await autoriserSiEntretien(tx, tool_name, input)) ??
-    autoriserOutil(tx, tool_name, input),
+    (await autoriserSiEntretien(tx, tool_name, input)) ?? autoriserOutil(tx, tool_name, input),
 });
 
-// Outil du rapport : Claude rend le lien du rapport rédigé, une fois l'artifact publié.
+// Outil du rapport : Claude rend le texte du rapport, structuré ; l'OS le met en page en Word.
 registerTool({
   name: 'enregistrer_rapport',
   description:
-    "Enregistre le rapport rédigé d'un projet de diagnostic : le lien claude.ai de l'artifact, une fois publié et relu.",
+    "Enregistre le rapport rédigé d'un projet de diagnostic : son contenu structuré (essentiel, contexte, résultats, préconisations, plan d'action, conclusion). L'OS le met en page en fichier Word, sans que tu aies à produire de fichier.",
   input: z.object({
     projetId: z.uuid(),
-    lien: z.string().regex(LIEN_ARTIFACT, 'Lien d’artifact claude.ai attendu'),
+    contenu: contenuRapportSchema,
   }),
   scope: 'instance',
-  handler: async ({ tx }, { projetId, lien }) => {
-    await enregistrerRapport(tx, projetId, lien);
+  handler: async ({ tx }, { projetId, contenu }) => {
+    await enregistrerRapport(tx, projetId, contenu);
     return { ok: true };
   },
 });

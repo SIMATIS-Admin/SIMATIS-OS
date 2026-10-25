@@ -3,8 +3,9 @@ import { setupTestApp, type TestApp } from '../../test/database.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { ChatIndisponible, demarrerAttente, finirAttente } from './chat.js';
-import { createProjet, listProjets, updateProjet } from './service.js';
-import { autoriserSiRapport, demanderRapport, enregistrerRapport, rapportPret } from './rapport.js';
+import { createProjet, listProjets, rapportDe, updateProjet } from './service.js';
+import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
+import { demanderRapport, enregistrerRapport, rapportPret } from './rapport.js';
 import { SupportInvalide } from './support.js';
 import { withInstance } from '../db/context.js';
 
@@ -12,25 +13,14 @@ const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
 
 describe('Rapport : pré-requis', () => {
   it('refuse sans résultat saisi à l étape 2', () => {
-    expect(rapportPret({ dims: null, revue: { statut: 'validée' } })).toEqual({
+    expect(rapportPret({ dims: null })).toEqual({
       ok: false,
       raison: "Saisissez d'abord le résultat à l'étape 2.",
     });
   });
 
-  it('refuse sans revue validée à l étape 3', () => {
-    expect(rapportPret({ dims, revue: { statut: 'brouillon' } })).toEqual({
-      ok: false,
-      raison: "Validez d'abord la revue à l'étape 3.",
-    });
-    expect(rapportPret({ dims, revue: null })).toEqual({
-      ok: false,
-      raison: "Validez d'abord la revue à l'étape 3.",
-    });
-  });
-
-  it('accepte un résultat et une revue validée', () => {
-    expect(rapportPret({ dims, revue: { statut: 'validée' } })).toEqual({ ok: true });
+  it('accepte dès que le résultat est saisi, revue validée ou non', () => {
+    expect(rapportPret({ dims })).toEqual({ ok: true });
   });
 });
 
@@ -58,7 +48,6 @@ describe('Demande de rapport', () => {
     const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
     return updateProjet(t.app.db, simatis, p.id, {
       dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
-      revue: { statut: 'validée' },
     });
   };
 
@@ -96,13 +85,11 @@ describe('Demande de rapport', () => {
 describe('Enregistrement du rapport', () => {
   let t: TestApp;
   let simatis: Instance;
-  const LIEN_1 = 'https://claude.ai/artifact/RapportFictif0001';
-  const LIEN_2 = 'https://claude.ai/artifact/RapportFictif0002';
 
   beforeAll(async () => {
     t = await setupTestApp();
     simatis = await createInstance(t.owner.db, {
-      slug: 'simatis-rapport-lien',
+      slug: 'simatis-rapport-word',
       nom: 'SIMATIS',
       type: 'propre',
     });
@@ -116,87 +103,59 @@ describe('Enregistrement du rapport', () => {
     (await listProjets(t.app.db, simatis)).find((p) => p.id === id)!;
 
   // Projet dont le runner a pris la demande de rapport (statut « en cours »).
-  const enCours = async (instance: Instance, nom: string) => {
-    const p = await createProjet(t.app.db, instance, { nom, activite: 'services' });
-    await updateProjet(t.app.db, instance, p.id, {
+  const enCours = async (nom: string) => {
+    const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+    await updateProjet(t.app.db, simatis, p.id, {
       dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
-      revue: { statut: 'validée' },
     });
-    await demanderRapport(t.app.db, instance, p.id);
-    await demarrerAttente(t.app.db, instance, p.id);
+    await demanderRapport(t.app.db, simatis, p.id);
+    await demarrerAttente(t.app.db, simatis, p.id);
     return p.id;
   };
 
-  const enregistrer = (id: string, lien: string) =>
-    withInstance(t.app.db, simatis.id, (tx) => enregistrerRapport(tx, id, lien));
+  const enregistrer = (id: string, contenu: unknown = contenuRapportFictif) =>
+    withInstance(t.app.db, simatis.id, (tx) => enregistrerRapport(tx, id, contenu as never));
 
-  it('refuse un lien hors claude.ai et ne change rien', async () => {
-    const id = await enCours(simatis, 'Rapport Fictif D');
-    await expect(
-      enregistrer(id, 'https://example.com/artifact/RapportFictif0001'),
-    ).rejects.toBeInstanceOf(SupportInvalide);
+  it('met le rapport en page en Word, le garde dans le projet et passe à prêt', async () => {
+    const id = await enCours('Rapport Fictif E');
+    await enregistrer(id);
     const relu = await relire(id);
-    expect(relu.rapportLien).toBeNull();
+    expect(relu.aRapport).toBe(true);
+    expect(relu.rapportNom).toBe('Rapport Diagnostic Endurance - Atelier Fictif Nord.docx');
+    expect(relu.rapportLienStatut).toBe('pret');
+    const fichier = await rapportDe(t.app.db, simatis, id);
+    expect(fichier.contenu.subarray(0, 2).toString()).toBe('PK');
+  });
+
+  it('refuse un contenu invalide et ne change rien', async () => {
+    const id = await enCours('Rapport Fictif D');
+    await expect(enregistrer(id, { entreprise: 'X' })).rejects.toBeInstanceOf(SupportInvalide);
+    const relu = await relire(id);
+    expect(relu.aRapport).toBe(false);
     expect(relu.rapportLienStatut).toBe('en_cours');
-    expect(relu.rapportLiens).toEqual([]);
   });
 
-  it('pose le lien, passe à prêt, et garde l ancien lien dans l historique', async () => {
-    const id = await enCours(simatis, 'Rapport Fictif E');
-    await enregistrer(id, LIEN_1);
-    let relu = await relire(id);
-    expect(relu.rapportLien).toBe(LIEN_1);
-    expect(relu.rapportLienStatut).toBe('pret');
-    await enregistrer(id, LIEN_2);
-    relu = await relire(id);
-    expect(relu.rapportLien).toBe(LIEN_2);
-    expect(relu.rapportLiens.map((r) => r.lien)).toEqual([LIEN_2, LIEN_1]);
+  it('refuse sans demande de rapport en cours', async () => {
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Rapport Fictif F',
+      activite: 'services',
+    });
+    await expect(enregistrer(p.id)).rejects.toBeInstanceOf(SupportInvalide);
   });
 
-  it('autorise la création et la publication sur le seul rapport du projet', async () => {
-    const instance = await createInstance(t.owner.db, {
-      slug: 'simatis-rapport-auto',
-      nom: 'SIMATIS',
-      type: 'propre',
-    });
-    const id = await enCours(instance, 'Rapport Fictif F');
-    await withInstance(t.app.db, instance.id, (tx) => enregistrerRapport(tx, id, LIEN_1));
-    const decider = (input: Record<string, unknown>) =>
-      withInstance(t.app.db, instance.id, (tx) => autoriserSiRapport(tx, 'Artifact', input));
-    expect(await decider({ action: 'publish', url: LIEN_1 })).toMatchObject({ behavior: 'allow' });
-    expect(await decider({ action: 'publish', type_url: 'type-fictif' })).toMatchObject({
-      behavior: 'allow',
-    });
-    expect(await decider({ action: 'read', url: LIEN_2 })).toMatchObject({ behavior: 'allow' });
-    expect(await decider({ action: 'publish', url: LIEN_2 })).toMatchObject({ behavior: 'deny' });
-    expect(await decider({ action: 'delete', url: LIEN_1 })).toMatchObject({ behavior: 'deny' });
-  });
+  it('scénario complet : un second rapport remplace le premier', async () => {
+    const id = await enCours('Rapport Fictif I');
+    await enregistrer(id);
+    await finirAttente(t.app.db, simatis, id);
+    expect(await relire(id)).toMatchObject({ rapportLienStatut: 'pret', demande: null });
 
-  it('scénario complet : premier rapport, puis un second qui garde l historique', async () => {
-    const instance = await createInstance(t.owner.db, {
-      slug: 'simatis-rapport-deux',
-      nom: 'SIMATIS',
-      type: 'propre',
-    });
-    const id = await enCours(instance, 'Rapport Fictif I');
-    await withInstance(t.app.db, instance.id, (tx) => enregistrerRapport(tx, id, LIEN_1));
-    await finirAttente(t.app.db, instance, id);
-    const premier = (await listProjets(t.app.db, instance)).find((p) => p.id === id)!;
-    expect(premier).toMatchObject({
-      rapportLienStatut: 'pret',
-      rapportLien: LIEN_1,
-      demande: null,
-    });
-
-    const second = await demanderRapport(t.app.db, instance, id);
+    const second = await demanderRapport(t.app.db, simatis, id);
     expect(second).toMatchObject({ demande: 'rapport', rapportLienStatut: 'en_cours' });
-    await demarrerAttente(t.app.db, instance, id);
-    await withInstance(t.app.db, instance.id, (tx) => enregistrerRapport(tx, id, LIEN_2));
-    await finirAttente(t.app.db, instance, id);
-
-    const relu = (await listProjets(t.app.db, instance)).find((p) => p.id === id)!;
-    expect(relu.rapportLien).toBe(LIEN_2);
+    await demarrerAttente(t.app.db, simatis, id);
+    await enregistrer(id, { ...contenuRapportFictif, entreprise: 'Atelier Fictif Sud' });
+    await finirAttente(t.app.db, simatis, id);
+    const relu = await relire(id);
+    expect(relu.rapportNom).toBe('Rapport Diagnostic Endurance - Atelier Fictif Sud.docx');
     expect(relu.rapportLienStatut).toBe('pret');
-    expect(relu.rapportLiens.map((r) => r.lien)).toEqual([LIEN_2, LIEN_1]);
   });
 });
