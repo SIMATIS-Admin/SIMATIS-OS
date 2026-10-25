@@ -4,7 +4,13 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { evaluer, type Zone } from './completude.js';
 import { clesDoublon, normaliserFiche, type Fiche } from './nettoyage.js';
-import { baseVivante, type FicheBase } from './schema.js';
+import {
+  baseVivante,
+  type Exclusion,
+  type FicheBase,
+  type Resultat,
+  type StatutProspection,
+} from './schema.js';
 
 // THE only way into the living base: nothing else may insert or update `base_vivante`
 // (guarded by integration.test.ts). Whatever the caller — import, API, routine — a record that is
@@ -70,7 +76,8 @@ function fusionner(cible: Travail, fiche: Fiche): void {
     civiliteDeduite: v.civiliteDeduite ?? false,
     prenom: v.prenom ?? null,
     nom: v.nom,
-    email: v.email ?? null,
+    // An address known to bounce no longer makes the record prospectable.
+    email: v.emailInvalide ? null : (v.email ?? null),
     telephone: v.telephone ?? null,
     fonction: v.fonction ?? null,
     linkedin: v.linkedin ?? null,
@@ -160,4 +167,121 @@ export async function integrerFiches(
       .where(and(eq(baseVivante.id, t.valeurs.id), eq(baseVivante.instanceId, instanceId)));
   }
   return resultats;
+}
+
+const RESULTATS_REPONDU: Resultat[] = [
+  'repondu',
+  'interesse',
+  'pas_interesse',
+  'mauvais_interlocuteur',
+];
+
+// Where the prospecting stands, from what is known of the contacts.
+export function statutProspectionDe(
+  resultat: Resultat | null,
+  nbContacts: number,
+  dernierContactLe: Date | null,
+): StatutProspection {
+  if (resultat && RESULTATS_REPONDU.includes(resultat)) return 'a_repondu';
+  return nbContacts > 0 || dernierContactLe ? 'contacte' : 'jamais_contacte';
+}
+
+export type PatchHistorique = {
+  dernierContactLe?: Date | null;
+  dernierContactCanal?: string | null;
+  resultat?: Resultat | null;
+  nbContacts?: number;
+  mandatContacteur?: string | null;
+};
+
+const zoneDe = (f: Pick<FicheBase, 'email' | 'emailInvalide' | 'telephone'>): Zone =>
+  (f.email && !f.emailInvalide) || f.telephone ? 'prospectable' : 'a_enrichir';
+
+async function charger(tx: Tx, instanceId: string, id: string): Promise<FicheBase> {
+  const [fiche] = await tx
+    .select()
+    .from(baseVivante)
+    .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
+  if (!fiche) throw new FicheIntrouvable('Fiche introuvable');
+  return fiche;
+}
+
+export class FicheIntrouvable extends Error {}
+
+// History comes from the CRMs and the mailboxes: it only moves forward in time, and never
+// erases a more recent contact with an older one.
+export async function majHistorique(
+  tx: Tx,
+  instanceId: string,
+  id: string,
+  patch: PatchHistorique,
+): Promise<void> {
+  const f = await charger(tx, instanceId, id);
+  const plusRecent =
+    patch.dernierContactLe !== undefined &&
+    patch.dernierContactLe !== null &&
+    (!f.dernierContactLe || patch.dernierContactLe >= f.dernierContactLe);
+  const valeurs = {
+    dernierContactLe: plusRecent ? (patch.dernierContactLe ?? null) : f.dernierContactLe,
+    dernierContactCanal: plusRecent
+      ? (patch.dernierContactCanal ?? f.dernierContactCanal)
+      : f.dernierContactCanal,
+    mandatContacteur: plusRecent
+      ? (patch.mandatContacteur ?? f.mandatContacteur)
+      : f.mandatContacteur,
+    nbContacts: Math.max(f.nbContacts, patch.nbContacts ?? 0),
+    resultat: patch.resultat === undefined ? f.resultat : patch.resultat,
+  };
+  await tx
+    .update(baseVivante)
+    .set({
+      ...valeurs,
+      statutProspection: statutProspectionDe(
+        valeurs.resultat,
+        valeurs.nbContacts,
+        valeurs.dernierContactLe,
+      ),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
+}
+
+export type PatchConformite = {
+  opposition?: boolean;
+  emailInvalide?: boolean;
+  exclusion?: Exclusion | null;
+};
+
+export async function majConformite(
+  tx: Tx,
+  instanceId: string,
+  id: string,
+  patch: PatchConformite,
+): Promise<void> {
+  const f = await charger(tx, instanceId, id);
+  const suivant = { ...f, ...patch };
+  await tx
+    .update(baseVivante)
+    .set({
+      opposition: suivant.opposition,
+      emailInvalide: suivant.emailInvalide,
+      exclusion: suivant.exclusion,
+      zone: zoneDe(suivant),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
+}
+
+// The record entered the CRM of a mandate: the link is kept for history and duplicates.
+export async function lierCrm(
+  tx: Tx,
+  instanceId: string,
+  id: string,
+  lien: { crmMandat: string; crmContactId: string },
+): Promise<void> {
+  await charger(tx, instanceId, id);
+  await tx
+    .update(baseVivante)
+    .set({ ...lien, updatedAt: new Date() })
+    .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
 }

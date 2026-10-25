@@ -16,6 +16,11 @@ const DECLENCHEMENTS = [
   'À la demande seulement',
 ] as const;
 
+const DECLENCHEMENTS_BASE = [
+  'Après chaque rapprochement de boîte mail',
+  'À la demande seulement',
+] as const;
+
 export const paramsSchemas = {
   inbox: z.object({
     heure: z.enum(HEURES),
@@ -43,6 +48,9 @@ export const paramsSchemas = {
     devis: z.number().int().min(3).max(30),
     stop: z.boolean(),
   }),
+  base: z.object({
+    declenchement: z.enum(DECLENCHEMENTS_BASE),
+  }),
 } satisfies Record<CleRoutine, z.ZodObject>;
 
 export type ParamsQuotidienne = z.infer<typeof paramsSchemas.quotidienne>;
@@ -63,6 +71,7 @@ export const PARAMS_DEFAUT: { [K in CleRoutine]: z.infer<(typeof paramsSchemas)[
   nettoyage: { declenchement: 'Après chaque envoi de relances', suivi: 21 },
   hebdo: { jour: 'Lundi', heure: '8h00' },
   evenement: { devis: 10, stop: true },
+  base: { declenchement: 'Après chaque rapprochement de boîte mail' },
 };
 
 // Steps that need a connection stop the run when the instance does not have it.
@@ -134,6 +143,16 @@ export const ROUTINES: {
       e("Préparer la relance d'un devis sans réponse", 'messagerie'),
     ],
   },
+  {
+    cle: 'base',
+    nom: 'Base vivante',
+    skill: 'base-vivante',
+    etapes: [
+      e('Lire les imports en attente et leurs colonnes non reconnues'),
+      e('Proposer la correspondance des colonnes et corriger les lignes signalées, dans le sas'),
+      e('Classer les réponses reçues, à valider par le pilote'),
+    ],
+  },
 ];
 
 export const CLES = ROUTINES.map((r) => r.cle);
@@ -153,6 +172,7 @@ export function rythme(cle: CleRoutine, params: Record<string, unknown>): string
     return `${jours} à ${p.heure}, ou à la demande`;
   }
   if (cle === 'nettoyage') return paramsOf('nettoyage', params).declenchement;
+  if (cle === 'base') return paramsOf('base', params).declenchement;
   if (cle === 'hebdo') {
     const p = paramsOf('hebdo', params);
     return `${p.jour} à ${p.heure}`;
@@ -187,6 +207,9 @@ export function resume(cle: CleRoutine, params: Record<string, unknown>): string
   if (cle === 'hebdo') {
     const p = paramsOf('hebdo', params);
     return `Chaque ${p.jour.toLowerCase()} à ${p.heure} : revue du pipeline, devis à relancer, notes pour le second cerveau.`;
+  }
+  if (cle === 'base') {
+    return `${rythme(cle, params)} : propose la correspondance des colonnes des imports, corrige les lignes signalées dans le sas et classe les réponses reçues. Rien n'entre dans la base ni dans un CRM sans votre validation.`;
   }
   const p = paramsOf('evenement', params);
   return `Relance un devis sans réponse après ${pluriel(p.devis, 'jour')}${p.stop ? ", et arrête la séquence dès qu'un contact répond" : ''}.`;

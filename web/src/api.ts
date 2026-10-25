@@ -1130,6 +1130,7 @@ export type LigneImportBase = {
   zone: ZoneBase | null;
   raison: string | null;
   avertissements: string[];
+  alertes: string[];
   brut: string[];
   fiche: {
     entreprise: string | null;
@@ -1173,21 +1174,63 @@ export type FicheBase = {
   fonction: string | null;
   provenance: string;
   mandat: string | null;
+  statutProspection: StatutProspectionBase;
+  dernierContactLe: string | null;
+  dernierContactCanal: string | null;
+  resultat: string | null;
+  nbContacts: number;
+  mandatContacteur: string | null;
+  opposition: boolean;
+  exclusion: ExclusionBase | null;
+  emailInvalide: boolean;
+  crmMandat: string | null;
+  alertes: { code: string; libelle: string; bloquante: boolean }[];
+};
+export type StatutProspectionBase = 'jamais_contacte' | 'contacte' | 'a_repondu';
+export type ExclusionBase = 'client' | 'partenaire' | 'concurrent';
+export type AlerteBase =
+  'recontact' | 'opposition' | 'email_invalide' | 'exclusion' | 'deja_en_crm';
+export type FiltresBaseWeb = {
+  zone?: ZoneBase;
+  statut?: StatutProspectionBase;
+  alerte?: AlerteBase;
+  provenance?: string;
+  q?: string;
 };
 export type EtatBase = {
   fiches: FicheBase[];
   total: number;
   compteurs: { aEnrichir: number; prospectable: number };
+  provenances: string[];
   imports: ResumeImportBase[];
 };
-export const fetchBase = (slug: string, zone?: ZoneBase, q = '', page = 0) => {
+const paramsBase = (filtres: FiltresBaseWeb) => {
   const params = new URLSearchParams();
-  if (zone) params.set('zone', zone);
-  if (q.trim()) params.set('q', q.trim());
+  for (const [cle, valeur] of Object.entries(filtres))
+    if (typeof valeur === 'string' && valeur.trim()) params.set(cle, valeur.trim());
+  return params;
+};
+export const fetchBase = (slug: string, filtres: FiltresBaseWeb = {}, page = 0) => {
+  const params = paramsBase(filtres);
   if (page > 0) params.set('page', String(page));
   const suite = params.toString();
   return getJson<EtatBase>(inst(slug, `base${suite ? `?${suite}` : ''}`));
 };
+export const urlExportBase = (slug: string, filtres: FiltresBaseWeb = {}) => {
+  const suite = paramsBase(filtres).toString();
+  return inst(slug, `base/export.csv${suite ? `?${suite}` : ''}`);
+};
+export const actualiserHistoriqueBase = (slug: string) =>
+  sendJson<{ verifiees: number; trouvees: number }>(
+    'POST',
+    inst(slug, 'base/historique/actualiser'),
+    {},
+  );
+export const majConformiteBase = (
+  slug: string,
+  id: string,
+  patch: { opposition?: boolean; exclusion?: ExclusionBase | null; emailInvalide?: boolean },
+) => sendJson<{ ok: true }>('PATCH', inst(slug, `base/fiches/${id}`), patch);
 export const creerImportBase = (
   slug: string,
   payload: {
@@ -1220,3 +1263,62 @@ export const integrerImportBase = (slug: string, id: string) =>
   );
 export const annulerImportBase = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `base/imports/${id}`), undefined);
+
+// Rapprochement avec la boîte Gmail d'un mandat (lecture seule, depuis le début du mandat).
+export type MandatBase = { slug: string; nom: string; debutMandat: string | null };
+export type RapportBoiteBase = {
+  messages: number;
+  contactes: number;
+  reponses: number;
+  autos: number;
+  bounces: number;
+  jamaisContactes: number;
+};
+export type EtatRapprochementBase = {
+  etat: 'en_cours' | 'termine' | 'echec';
+  mandat: string;
+  depuis: string;
+  lus: number;
+  total: number;
+  rapport?: RapportBoiteBase;
+  erreur?: string;
+} | null;
+export const fetchMandatsBase = (slug: string) => getJson<MandatBase[]>(inst(slug, 'base/mandats'));
+export const majDebutMandatBase = (slug: string, mandat: string, debut: string | null) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, `base/mandats/${encodeURIComponent(mandat)}`), {
+    debut,
+  });
+export const fetchRapprochementBase = (slug: string) =>
+  getJson<EtatRapprochementBase>(inst(slug, 'base/rapprochement-mail'));
+export const lancerRapprochementBase = (slug: string, mandat: string) =>
+  sendJson<EtatRapprochementBase>('POST', inst(slug, 'base/rapprochement-mail'), { mandat });
+
+// Réponses reçues : classées par Claude (routine « Base vivante »), validées par le pilote.
+export type ClasseReponseBase =
+  | 'sans_reponse'
+  | 'repondu'
+  | 'interesse'
+  | 'pas_interesse'
+  | 'mauvais_interlocuteur'
+  | 'reponse_auto'
+  | 'ne_plus_contacter';
+export type ReponseBase = {
+  id: string;
+  entreprise: string;
+  contact: string;
+  mandat: string;
+  recuLe: string;
+  objet: string | null;
+  extrait: string;
+  classe: ClasseReponseBase | null;
+};
+export const fetchReponsesBase = (slug: string) =>
+  getJson<{ aValider: ReponseBase[]; aClasser: number }>(inst(slug, 'base/reponses'));
+export const validerReponseBase = (slug: string, id: string, classe: ClasseReponseBase) =>
+  sendJson<{ ok: true }>('POST', inst(slug, `base/reponses/${id}/valider`), { classe });
+export const entrerRepondantsBase = (slug: string) =>
+  sendJson<{ cree: number; existant: number; simulation: number; refuse: number }>(
+    'POST',
+    inst(slug, 'base/crm/repondants'),
+    {},
+  );

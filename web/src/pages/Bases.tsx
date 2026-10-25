@@ -9,12 +9,16 @@ import {
   reglerCorrespondanceBase,
   type ChampBase,
   type EtatBase,
+  type FiltresBaseWeb,
   type ImportBase,
   type LigneImportBase,
   type StatutLigneBase,
   type ZoneBase,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import { BaseTable } from './BaseTable.js';
+import { RapprochementMail } from './RapprochementMail.js';
+import { ReponsesBase } from './ReponsesBase.js';
 
 const CHAMPS: [ChampBase, string][] = [
   ['entreprise', 'Entreprise'],
@@ -34,8 +38,6 @@ const ONGLETS_LIGNES: [StatutLigneBase, string][] = [
   ['sous_minimum', 'Sous le minimum'],
   ['doublon_interne', 'Doublons du fichier'],
 ];
-
-const PAR_PAGE = 50;
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const entier = (n: number) => n.toLocaleString('fr-FR');
@@ -379,6 +381,11 @@ function ApercuImport({
                         {a}
                       </div>
                     ))}
+                    {l.alertes.map((a) => (
+                      <div key={a}>
+                        <span className="badge amber">{a}</span>
+                      </div>
+                    ))}
                     {onglet === 'sous_minimum' && (
                       <CompleterLigne
                         ligne={l}
@@ -430,8 +437,7 @@ function ApercuImport({
 export function Bases({ slug }: { slug: string }) {
   const [etat, setEtat] = useState<EtatBase | null>(null);
   const [apercus, setApercus] = useState<ImportBase[]>([]);
-  const [zone, setZone] = useState<ZoneBase | undefined>();
-  const [recherche, setRecherche] = useState('');
+  const [filtres, setFiltres] = useState<FiltresBaseWeb>({});
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   // Closed previews: the list may still hold them until it is read again.
@@ -439,14 +445,14 @@ export function Bases({ slug }: { slug: string }) {
 
   const charger = useCallback(
     () =>
-      fetchBase(slug, zone, recherche, page).then(
+      fetchBase(slug, filtres, page).then(
         (e) => {
           setEtat(e);
           setError(null);
         },
         (e: unknown) => setError(message(e)),
       ),
-    [slug, zone, recherche, page],
+    [slug, filtres, page],
   );
   useEffect(() => void charger(), [charger]);
 
@@ -467,7 +473,6 @@ export function Bases({ slug }: { slug: string }) {
   if (error && !etat) return <div className="empty">{error}</div>;
   if (!etat) return null;
 
-  const total = etat.compteurs.aEnrichir + etat.compteurs.prospectable;
   const terminer = (id: string) => {
     termines.current.add(id);
     setApercus((avant) => avant.filter((a) => a.id !== id));
@@ -495,110 +500,19 @@ export function Bases({ slug }: { slug: string }) {
         />
       ))}
 
-      <div className="panel">
-        <div className="panel-h">
-          <div>
-            <h2>Base vivante</h2>
-            <div className="small muted">
-              {entier(total)} fiches : {entier(etat.compteurs.prospectable)} prospectables,{' '}
-              {entier(etat.compteurs.aEnrichir)} à enrichir. Une fiche à enrichir n'entre jamais
-              dans un CRM.
-            </div>
-          </div>
-        </div>
-        <div className="panel-b">
-          <div className="chips">
-            {(
-              [
-                [undefined, 'Toutes'],
-                ['prospectable', 'Prospectables'],
-                ['a_enrichir', 'À enrichir'],
-              ] as const
-            ).map(([z, libelle]) => (
-              <button
-                key={libelle}
-                className={`chip ${zone === z ? 'on' : ''}`}
-                onClick={() => {
-                  setZone(z);
-                  setPage(0);
-                }}
-              >
-                {libelle}
-              </button>
-            ))}
-            <input
-              className="input"
-              style={{ maxWidth: 260 }}
-              aria-label="Rechercher dans la base"
-              placeholder="Entreprise, nom, email…"
-              value={recherche}
-              onChange={(e) => {
-                setRecherche(e.target.value);
-                setPage(0);
-              }}
-            />
-          </div>
-          {etat.fiches.length === 0 ? (
-            <div className="empty">
-              {total === 0
-                ? 'La base est vide : importez une première liste.'
-                : 'Aucune fiche ne correspond.'}
-            </div>
-          ) : (
-            <table className="tbl small">
-              <thead>
-                <tr>
-                  <th>Entreprise</th>
-                  <th>Contact</th>
-                  <th>Fonction</th>
-                  <th>Email</th>
-                  <th>Téléphone</th>
-                  <th>Zone</th>
-                  <th>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {etat.fiches.map((f) => (
-                  <tr key={f.id}>
-                    <td>{f.entreprise}</td>
-                    <td>{[f.prenom, f.nom].filter(Boolean).join(' ')}</td>
-                    <td>{f.fonction ?? '—'}</td>
-                    <td>{f.email ?? '—'}</td>
-                    <td>{f.telephone ?? '—'}</td>
-                    <td>{libelleZone(f.zone)}</td>
-                    <td>
-                      {f.provenance}
-                      {f.mandat && <div className="small muted">{f.mandat}</div>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {etat.total > PAR_PAGE && (
-            <div className="chips">
-              <button
-                className="btn sm"
-                disabled={page === 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                Précédent
-              </button>
-              <span className="small muted">
-                {entier(page * PAR_PAGE + 1)}–{entier(Math.min(etat.total, (page + 1) * PAR_PAGE))}{' '}
-                sur {entier(etat.total)}
-              </span>
-              <button
-                className="btn sm"
-                disabled={(page + 1) * PAR_PAGE >= etat.total}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Suivant
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <BaseTable
+        slug={slug}
+        etat={etat}
+        filtres={filtres}
+        onFiltres={setFiltres}
+        page={page}
+        onPage={setPage}
+        onChange={() => void charger()}
+      />
+
+      <RapprochementMail slug={slug} onTermine={() => void charger()} />
+
+      <ReponsesBase slug={slug} onChange={() => void charger()} />
 
       {integres.length > 0 && (
         <div className="panel">

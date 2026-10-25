@@ -42,7 +42,7 @@ export function buildApp({
   const app = Fastify({ logger });
   registerHealth(app, { pool, version, backupStatusFile });
   registerApi(app, { db, secretsDir, realWrites, googleFetch, imapServeur });
-  registerBaseVivanteRoutes(app, { db });
+  registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db });

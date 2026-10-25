@@ -5,6 +5,7 @@ import { activites, contacts, entreprises, opportunites, taches } from '../crm/s
 import { autonomie, propositions } from '../propositions/schema.js';
 import {
   baseCorrespondances,
+  baseReponses,
   baseImports,
   baseLignesBrutes,
   baseVivante,
@@ -13,6 +14,7 @@ import { echangesAjout, sujets } from '../inbox/schema.js';
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
+  baseReponses,
   baseLignesBrutes,
   baseVivante,
   baseImports,

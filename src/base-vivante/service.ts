@@ -1,5 +1,5 @@
-import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
-import type { Database, Tx } from '../db.js';
+import { and, asc, count, desc, eq, gt, ilike, isNotNull, or, sql } from 'drizzle-orm';
+import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import {
   CHAMPS_CIBLES,
@@ -11,16 +11,28 @@ import {
   type MemoireColonnes,
 } from './colonnes.js';
 import type { Zone } from './completude.js';
-import { integrerFiches } from './integration.js';
+import {
+  alertesCrm,
+  alertesDe,
+  historiqueCrm,
+  MOIS_RECONTACT,
+  type Alerte,
+  type ContactCrm,
+} from './historique.js';
+import { integrerFiches, majConformite, type PatchConformite } from './integration.js';
 import { lireFichier, lireTexte, FichierIllisible, type Feuille } from './lecture.js';
 import {
   baseCorrespondances,
   baseImports,
   baseLignesBrutes,
   baseVivante,
+  STATUTS_PROSPECTION,
   type BaseImport,
+  type FicheBase,
+  type StatutProspection,
   type StatutLigne,
 } from './schema.js';
+import { clesDoublon } from './nettoyage.js';
 import { calculerLigne, calculerLignes, type LigneCalculee } from './traitement.js';
 
 export class ImportIntrouvable extends Error {}
@@ -53,6 +65,8 @@ export type LigneApercu = {
   zone: Zone | null;
   raison: string | null;
   avertissements: string[];
+  // Known elsewhere: already in the base, or in the CRM of a mandate (informs, never blocks).
+  alertes: string[];
   fiche: LigneCalculee['fiche'];
   brut: string[];
 };
@@ -143,7 +157,7 @@ function preparer(feuille: Feuille, memoire: MemoireColonnes) {
 }
 
 export async function creerImports(
-  db: Database,
+  db: Executor,
   instanceId: string,
   entree: NouvelImport,
 ): Promise<ApercuImport[]> {
@@ -236,14 +250,62 @@ async function compteursDe(tx: Tx, instanceId: string, importId: string): Promis
   return c;
 }
 
+// What the base and the CRMs already know about the lines shown: informs, never blocks.
+async function avecAlertes(
+  db: Executor,
+  tx: Tx,
+  instanceId: string,
+  lignes: (typeof baseLignesBrutes.$inferSelect)[],
+  lireLesCrm: boolean,
+): Promise<LigneApercu[]> {
+  const emails = [
+    ...new Set(lignes.map((l) => l.fiche.email).filter((e): e is string => e !== null)),
+  ];
+  const cles = [...new Set(lignes.flatMap((l) => clesDoublon(l.fiche)))];
+  const enBase =
+    cles.length === 0
+      ? []
+      : await tx
+          .select({ entreprise: baseVivante.entreprise, cles: baseVivante.cles })
+          .from(baseVivante)
+          .where(
+            and(
+              eq(baseVivante.instanceId, instanceId),
+              sql`${baseVivante.cles} ?| array[${sql.join(
+                cles.map((c) => sql`${c}`),
+                sql`, `,
+              )}]::text[]`,
+            ),
+          );
+  const crm = lireLesCrm ? await historiqueCrm(db, emails) : new Map<string, ContactCrm[]>();
+  return lignes.map((l) => {
+    const alertes = alertesCrm(l.fiche.email ? crm.get(l.fiche.email) : undefined);
+    const cle = clesDoublon(l.fiche);
+    if (l.statut !== 'integre' && enBase.some((b) => b.cles.some((c) => cle.includes(c))))
+      alertes.unshift('Déjà dans la base : les informations seront fusionnées');
+    return {
+      numero: l.numero,
+      statut: l.statut,
+      zone: l.zone,
+      raison: l.raison,
+      avertissements: l.avertissements,
+      alertes,
+      fiche: l.fiche,
+      brut: l.brut,
+    };
+  });
+}
+
 export const FILTRES_LIGNES = ['pret', 'sous_minimum', 'doublon_interne', 'integre'] as const;
 
 export async function apercu(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
   filtre: StatutLigne = 'pret',
   limite = 40,
+  // Reading the CRMs goes through every instance: not from inside a tool's own transaction.
+  lireLesCrm = true,
 ): Promise<ApercuImport> {
   return withInstance(db, instanceId, async (tx) => {
     const imp = await chargerImport(tx, instanceId, id);
@@ -280,15 +342,7 @@ export async function apercu(
       inconnues: imp.entetes.map((_, i) => i).filter((i) => !pris.has(i)),
       echantillon: echantillon.map((e) => e.brut),
       compteurs: await compteursDe(tx, instanceId, id),
-      lignes: lignes.map((l) => ({
-        numero: l.numero,
-        statut: l.statut,
-        zone: l.zone,
-        raison: l.raison,
-        avertissements: l.avertissements,
-        fiche: l.fiche,
-        brut: l.brut,
-      })),
+      lignes: await avecAlertes(db, tx, instanceId, lignes, lireLesCrm),
       rapport: imp.rapport,
     };
   });
@@ -299,7 +353,7 @@ export type ResumeImport = Pick<
   'id' | 'nomFichier' | 'feuille' | 'provenance' | 'mandat' | 'statut' | 'creeLe' | 'rapport'
 > & { compteurs: Compteurs };
 
-export async function listerImports(db: Database, instanceId: string): Promise<ResumeImport[]> {
+export async function listerImports(db: Executor, instanceId: string): Promise<ResumeImport[]> {
   return withInstance(db, instanceId, async (tx) => {
     const imports = await tx
       .select()
@@ -324,10 +378,11 @@ export async function listerImports(db: Database, instanceId: string): Promise<R
 
 // The user fixed a column: every line of the sheet is read again with the new mapping.
 export async function reglerCorrespondance(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
   demande: Record<string, number | null>,
+  lireLesCrm = true,
 ): Promise<ApercuImport> {
   await withInstance(db, instanceId, async (tx) => {
     const imp = await chargerImport(tx, instanceId, id);
@@ -363,7 +418,7 @@ export async function reglerCorrespondance(
       .set({ correspondance, updatedAt: new Date() })
       .where(eq(baseImports.id, id));
   });
-  return apercu(db, instanceId, id);
+  return apercu(db, instanceId, id, 'pret', 40, lireLesCrm);
 }
 
 const CHAMPS_COMPLETABLES = [
@@ -377,7 +432,7 @@ const CHAMPS_COMPLETABLES = [
 
 // Completing a line left in the airlock (company or name missing, or a contact way added).
 export async function completerLigne(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
   numero: number,
@@ -422,6 +477,7 @@ export async function completerLigne(
       zone: calculee.zone,
       raison: calculee.raison,
       avertissements: calculee.avertissements,
+      alertes: [],
       fiche: calculee.fiche,
       brut: ligne.brut,
     };
@@ -437,7 +493,7 @@ export type RapportIntegration = {
 // Validated by the user: lines ready leave the airlock, batch by batch, through the single entry
 // point of the living base. Replays are harmless (only lines still `pret` move).
 export async function integrerImport(
-  db: Database,
+  db: Executor,
   instanceId: string,
   id: string,
 ): Promise<RapportIntegration> {
@@ -512,7 +568,7 @@ export async function integrerImport(
   });
 }
 
-export async function annulerImport(db: Database, instanceId: string, id: string): Promise<void> {
+export async function annulerImport(db: Executor, instanceId: string, id: string): Promise<void> {
   await withInstance(db, instanceId, async (tx) => {
     const imp = await chargerImport(tx, instanceId, id);
     if (imp.statut === 'integre')
@@ -521,33 +577,63 @@ export async function annulerImport(db: Database, instanceId: string, id: string
   });
 }
 
+export const FILTRES_ALERTE = [
+  'recontact',
+  'opposition',
+  'email_invalide',
+  'exclusion',
+  'deja_en_crm',
+] as const;
+export type FiltreAlerte = (typeof FILTRES_ALERTE)[number];
+
+export type FiltresBase = {
+  zone?: Zone;
+  statut?: StatutProspection;
+  alerte?: FiltreAlerte;
+  provenance?: string;
+  q?: string;
+};
+
+function conditions(instanceId: string, f: FiltresBase) {
+  const recherche = f.q?.trim();
+  const motif = recherche ? `%${recherche.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+  const limiteRecontact = new Date();
+  limiteRecontact.setMonth(limiteRecontact.getMonth() - MOIS_RECONTACT);
+  return and(
+    eq(baseVivante.instanceId, instanceId),
+    f.zone ? eq(baseVivante.zone, f.zone) : undefined,
+    f.statut ? eq(baseVivante.statutProspection, f.statut) : undefined,
+    f.provenance ? eq(baseVivante.provenance, f.provenance) : undefined,
+    f.alerte === 'opposition' ? eq(baseVivante.opposition, true) : undefined,
+    f.alerte === 'email_invalide' ? eq(baseVivante.emailInvalide, true) : undefined,
+    f.alerte === 'exclusion' ? isNotNull(baseVivante.exclusion) : undefined,
+    f.alerte === 'deja_en_crm' ? isNotNull(baseVivante.crmMandat) : undefined,
+    f.alerte === 'recontact' ? gt(baseVivante.dernierContactLe, limiteRecontact) : undefined,
+    motif
+      ? or(
+          ilike(baseVivante.entreprise, motif),
+          ilike(baseVivante.nom, motif),
+          ilike(baseVivante.prenom, motif),
+          ilike(baseVivante.email, motif),
+        )
+      : undefined,
+  );
+}
+
+export type FicheAvecAlertes = FicheBase & { alertes: Alerte[] };
+
 export async function listerFiches(
-  db: Database,
+  db: Executor,
   instanceId: string,
-  options: { zone?: Zone; q?: string; limite?: number; decalage?: number } = {},
+  options: FiltresBase & { limite?: number; decalage?: number } = {},
 ) {
   return withInstance(db, instanceId, async (tx) => {
-    const recherche = options.q?.trim();
-    const motif = recherche ? `%${recherche.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
-    const filtres = [
-      eq(baseVivante.instanceId, instanceId),
-      ...(options.zone ? [eq(baseVivante.zone, options.zone)] : []),
-      ...(motif
-        ? [
-            or(
-              ilike(baseVivante.entreprise, motif),
-              ilike(baseVivante.nom, motif),
-              ilike(baseVivante.prenom, motif),
-              ilike(baseVivante.email, motif),
-            ) ?? sql`true`,
-          ]
-        : []),
-    ];
+    const filtre = conditions(instanceId, options);
     const fiches = await tx
       .select()
       .from(baseVivante)
-      .where(and(...filtres))
-      .orderBy(asc(baseVivante.entreprise), asc(baseVivante.nom))
+      .where(filtre)
+      .orderBy(asc(baseVivante.entreprise), asc(baseVivante.nom), asc(baseVivante.id))
       .limit(Math.min(options.limite ?? 50, 200))
       .offset(options.decalage ?? 0);
     const parZone = await tx
@@ -559,11 +645,97 @@ export async function listerFiches(
     const [{ n: total } = { n: 0 }] = await tx
       .select({ n: count() })
       .from(baseVivante)
-      .where(and(...filtres));
+      .where(filtre);
+    const provenances = await tx
+      .selectDistinct({ provenance: baseVivante.provenance })
+      .from(baseVivante)
+      .where(eq(baseVivante.instanceId, instanceId))
+      .orderBy(asc(baseVivante.provenance));
     return {
-      fiches,
+      fiches: fiches.map((f): FicheAvecAlertes => ({ ...f, alertes: alertesDe(f) })),
       total,
       compteurs: { aEnrichir: nombre('a_enrichir'), prospectable: nombre('prospectable') },
+      provenances: provenances.map((p) => p.provenance),
     };
   });
 }
+
+const COLONNES_CSV = [
+  'Entreprise',
+  'Civilité',
+  'Prénom',
+  'Nom',
+  'Email',
+  'Téléphone',
+  'Fonction',
+  'LinkedIn',
+  'Zone',
+  'Source',
+  'Mandat',
+  'Statut',
+  'Dernier contact',
+  'Canal',
+  'Résultat',
+  'Contacts',
+  'Contacté par',
+  'Alertes',
+];
+
+// A spreadsheet runs a cell that starts with = + - @ as a formula: prefix it.
+const cellule = (v: string | number | null | undefined): string => {
+  let t = v === null || v === undefined ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+  return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+
+// Same filters as the screen; semicolon-separated with a BOM, as French Excel expects.
+export async function exporterCsv(
+  db: Executor,
+  instanceId: string,
+  filtres: FiltresBase = {},
+): Promise<string> {
+  const lignes = [COLONNES_CSV.map(cellule).join(';')];
+  for (let decalage = 0; ; decalage += 200) {
+    const { fiches } = await listerFiches(db, instanceId, { ...filtres, limite: 200, decalage });
+    if (fiches.length === 0) break;
+    for (const f of fiches)
+      lignes.push(
+        [
+          f.entreprise,
+          f.civilite,
+          f.prenom,
+          f.nom,
+          f.email,
+          f.telephone,
+          f.fonction,
+          f.linkedin,
+          f.zone === 'prospectable' ? 'Prospectable' : 'À enrichir',
+          f.provenance,
+          f.mandat,
+          { jamais_contacte: 'Jamais contacté', contacte: 'Contacté', a_repondu: 'A répondu' }[
+            f.statutProspection
+          ],
+          f.dernierContactLe?.toISOString().slice(0, 7).replace('-', '/') ?? 'NA',
+          f.dernierContactCanal,
+          f.resultat,
+          f.nbContacts,
+          f.mandatContacteur,
+          f.alertes.map((a) => a.libelle).join(' | '),
+        ]
+          .map(cellule)
+          .join(';'),
+      );
+  }
+  return `\uFEFF${lignes.join('\r\n')}\r\n`;
+}
+
+export async function modifierConformite(
+  db: Executor,
+  instanceId: string,
+  id: string,
+  patch: PatchConformite,
+): Promise<void> {
+  await withInstance(db, instanceId, (tx) => majConformite(tx, instanceId, id, patch));
+}
+
+export { STATUTS_PROSPECTION };

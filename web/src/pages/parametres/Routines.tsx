@@ -97,6 +97,14 @@ const CHAMPS: Record<string, Champ[]> = {
     { k: 'jour', l: 'Jour', t: 'select', o: ['Lundi', 'Vendredi'] },
     { k: 'heure', l: 'Heure', t: 'select', o: HEURES },
   ],
+  base: [
+    {
+      k: 'declenchement',
+      l: 'Déclenchement',
+      t: 'select',
+      o: ['Après chaque rapprochement de boîte mail', 'À la demande seulement'],
+    },
+  ],
   evenement: [
     {
       k: 'devis',
