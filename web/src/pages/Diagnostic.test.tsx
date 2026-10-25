@@ -11,9 +11,12 @@ const api = vi.hoisted(() => ({
   envoyerMessageDiag: vi.fn(),
   demandeSupportDiag: vi.fn(),
   demandeRapportDiag: vi.fn(),
+  demandeRestitutionDiag: vi.fn(),
   importerEntretienDiag: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
+  urlRapportDiag: (slug: string, id: string, version?: number) =>
+    `/api/i/${slug}/diagnostic/projets/${id}/rapport${version === undefined ? '' : `?version=${version}`}`,
 }));
 vi.mock('../api.js', () => api);
 
@@ -46,6 +49,11 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   rapportLienStatut: 'aucun',
   rapportLien: null,
   rapportLiens: [],
+  rapportVersions: [],
+  restitutionStatut: 'aucun',
+  restitutionLien: null,
+  restitutionLiens: [],
+  restitutionAvecProposition: true,
   aPdfEntretien: false,
   pdfEntretienNom: null,
   reponsesEntretien: [],
@@ -370,7 +378,7 @@ describe('Rapport à l étape 4', () => {
     expect(await screen.findByText(/Claude rédige le rapport/)).toBeTruthy();
   });
 
-  it('prévient avant de remplacer un rapport existant, et s arrête si on refuse', async () => {
+  it('prévient avant de produire une nouvelle version, et s arrête si on refuse', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
       projet({
         etape: 4,
@@ -385,8 +393,8 @@ describe('Rapport à l étape 4', () => {
     const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    expect(await screen.findByText(/Téléchargez-le pour le relire ou le modifier/)).toBeTruthy();
-    fireEvent.click(await screen.findByRole('button', { name: 'Produire un nouveau rapport' }));
+    expect(await screen.findByText(/Donnez vos modifications dans le chat/)).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Produire la version 2' }));
     expect(confirmation).toHaveBeenCalled();
     expect(api.demandeRapportDiag).not.toHaveBeenCalled();
     confirmation.mockRestore();
@@ -558,5 +566,125 @@ describe('Vider la conversation de l assistant', () => {
     expect(api.viderConversationDiag).not.toHaveBeenCalled();
     expect(screen.getByText('Question à effacer')).toBeTruthy();
     confirme.mockRestore();
+  });
+});
+
+describe('Versions du rapport et chat de l étape 4', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const avecRapport = (extra: Partial<ProjetDiag> = {}) =>
+    projet({
+      etape: 4,
+      etapeMax: 4,
+      dims,
+      profil: 'Joggeur',
+      aRapport: true,
+      rapportNom: 'Rapport Diagnostic Endurance - Atelier Fictif Nord - v2.docx',
+      rapportLienStatut: 'pret',
+      rapportVersions: [
+        { version: 1, le: '2026-10-20T08:00:00.000Z' },
+        { version: 2, le: '2026-10-22T08:00:00.000Z' },
+      ],
+      ...extra,
+    });
+
+  it('le chat de l étape 4 sert à donner ses modifications', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([avecRapport()]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText('Modifications du rapport')).toBeTruthy();
+    expect(screen.getByText(/Donnez ici les modifications à intégrer au rapport/)).toBeTruthy();
+  });
+
+  it('propose la version suivante et liste les versions précédentes en téléchargement', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([avecRapport()]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByRole('button', { name: 'Produire la version 3' })).toBeTruthy();
+    const ancienne = await screen.findByRole('link', { name: /Version 1, du/ });
+    expect(ancienne.getAttribute('href')).toBe(
+      '/api/i/simatis/diagnostic/projets/p1/rapport?version=1',
+    );
+  });
+
+  it('un Word importé compte pour la version 1', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      avecRapport({ rapportVersions: [], rapportNom: 'rapport-importe.docx' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByRole('button', { name: 'Produire la version 2' })).toBeTruthy();
+  });
+});
+
+describe('Deck de restitution à l étape 5', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+
+  it('refuse sans rapport et dit pourquoi', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 5, etapeMax: 5, dims })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const bouton = await screen.findByRole('button', { name: 'Produire le deck de restitution' });
+    expect((bouton as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/Produisez d'abord le rapport à l'étape 4/)).toBeTruthy();
+    expect(screen.getByText('Proposition de collaboration')).toBeTruthy();
+  });
+
+  it('demande le deck une fois le rapport produit', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 5, etapeMax: 5, dims, aRapport: true, rapportNom: 'r.docx' }),
+    ]);
+    api.demandeRestitutionDiag.mockResolvedValue(
+      projet({ etape: 5, dims, aRapport: true, restitutionStatut: 'en_cours' }),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Produire le deck de restitution' }));
+    await waitFor(() => expect(api.demandeRestitutionDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    expect(await screen.findByText(/Claude crée le deck/)).toBeTruthy();
+  });
+
+  it('permet d exclure la proposition de collaboration', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 5, etapeMax: 5, dims, aRapport: true, rapportNom: 'r.docx' }),
+    ]);
+    api.majProjetDiag.mockResolvedValue(
+      projet({ etape: 5, dims, aRapport: true, restitutionAvecProposition: false }),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const case_ = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: /Terminer par ma proposition de collaboration/,
+    });
+    expect(case_.checked).toBe(true);
+    fireEvent.click(case_);
+    await waitFor(() =>
+      expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', {
+        restitutionAvecProposition: false,
+      }),
+    );
+  });
+
+  it('ouvre le deck de restitution créé', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 5,
+        etapeMax: 5,
+        dims,
+        aRapport: true,
+        restitutionStatut: 'pret',
+        restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
+        restitutionLiens: [
+          {
+            lien: 'https://claude.ai/artifact/RestitutionFictive01',
+            le: '2026-10-25T08:00:00.000Z',
+          },
+        ],
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const lien = await screen.findByRole('link', { name: 'Ouvrir le deck de restitution' });
+    expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/RestitutionFictive01');
+    expect(lien.getAttribute('target')).toBe('_blank');
   });
 });

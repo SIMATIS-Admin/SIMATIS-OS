@@ -58,6 +58,8 @@ export const projetSchema = z
       .optional(),
     // Formulaire de revue saisi dans l'OS (commentaires, choix par préconisation et par action).
     revue: z.record(z.string(), z.unknown()).nullable().optional(),
+    // Étape 5 : inclure ou non la proposition de collaboration dans le deck de restitution.
+    restitutionAvecProposition: z.boolean().optional(),
     chats: z
       .record(
         z.string().regex(/^[1-5]$/),

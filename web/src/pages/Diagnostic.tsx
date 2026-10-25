@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   creerProjetDiag,
   demandeRapportDiag,
+  demandeRestitutionDiag,
   viderConversationDiag,
   importerEntretienDiag,
   demandeSupportDiag,
@@ -9,6 +10,7 @@ import {
   fetchProjetsDiag,
   majProjetDiag,
   urlLogoDiag,
+  urlRapportDiag,
   type ChatEtape,
   type Dimensions,
   type ProjetDiag,
@@ -52,6 +54,19 @@ const CHAT_DEFAUT: Record<number, ChatEtape> = {
   3: { modele: 'opus', effort: 'max', lien: '' },
   4: { modele: 'opus', effort: 'max', lien: '' },
   5: { modele: 'sonnet', effort: 'moyen', lien: '' },
+};
+// Aux étapes 4 et 5, le chat sert à donner ses modifications avant de lancer une production.
+const CHAT_TITRE: Record<number, string> = {
+  4: 'Modifications du rapport',
+  5: 'Proposition de collaboration',
+};
+const CHAT_AIDE: Record<number, string> = {
+  4: 'Plusieurs messages possibles avant de produire la nouvelle version du rapport',
+  5: 'Plusieurs messages possibles avant de produire le deck de restitution',
+};
+const CHAT_VIDE: Record<number, string> = {
+  4: 'Donnez ici les modifications à intégrer au rapport. Claude les note et vous répond, sans produire le rapport : la production se lance avec le bouton, avec le modèle et l’effort choisis ci-dessous.',
+  5: 'Donnez ici vos tarifs et votre mode de fonctionnement pour la dernière diapositive. Claude les note, sans créer le deck : la production se lance avec le bouton « Produire le deck de restitution ».',
 };
 const DIMENSIONS: [keyof Dimensions, string][] = [
   ['outils', 'Outils et méthode'],
@@ -254,7 +269,8 @@ export function ProjetVue({
     if (
       projet.statutChat === 'repos' &&
       projet.supportStatut !== 'preparation' &&
-      projet.rapportLienStatut !== 'en_cours'
+      projet.rapportLienStatut !== 'en_cours' &&
+      projet.restitutionStatut !== 'en_cours'
     )
       return;
     const minuteur = setInterval(() => {
@@ -272,6 +288,7 @@ export function ProjetVue({
     projet.statutChat,
     projet.supportStatut,
     projet.rapportLienStatut,
+    projet.restitutionStatut,
     onChange,
   ]);
 
@@ -356,6 +373,15 @@ export function ProjetVue({
           {projet.etape === 3 && <Revue projet={projet} onSauver={sauver} />}
           {projet.etape === 4 && (
             <Rapport slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
+          )}
+          {projet.etape === 5 && (
+            <RestitutionDeck
+              slug={slug}
+              projet={projet}
+              onSauver={sauver}
+              onChange={onChange}
+              onErreur={onErreur}
+            />
           )}
           {projet.etape === 5 && <Restitution projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
@@ -797,11 +823,14 @@ function Rapport({
 }) {
   const enCours = projet.rapportLienStatut === 'en_cours';
   const raison = raisonRapport(projet);
+  // Un Word importé compte pour la version 1.
+  const prochaine =
+    Math.max(projet.rapportVersions.at(-1)?.version ?? 0, projet.aRapport ? 1 : 0) + 1;
   const demander = async () => {
     if (
       projet.aRapport &&
       !window.confirm(
-        'Le nouveau rapport remplace le précédent. Si vous l’avez modifié, téléchargez-le d’abord. Continuer ?',
+        'Une nouvelle version du rapport va être produite à partir de vos modifications dans le chat. Les versions précédentes restent téléchargeables. Continuer ?',
       )
     )
       return;
@@ -812,6 +841,7 @@ function Rapport({
     }
   };
   const precedents = projet.rapportLiens.slice(1);
+  const versionsPrecedentes = projet.rapportVersions.slice(0, -1).reverse();
   return (
     <div className="panel">
       <div className="panel-h">
@@ -821,17 +851,15 @@ function Rapport({
       <div className="panel-b stack">
         {projet.aRapport && (
           <div className="row">
-            <a
-              className="btn"
-              href={`/api/i/${encodeURIComponent(slug)}/diagnostic/projets/${projet.id}/rapport`}
-            >
+            <a className="btn" href={urlRapportDiag(slug, projet.id)}>
               Télécharger le rapport ({projet.rapportNom})
             </a>
           </div>
         )}
         {projet.aRapport && !enCours && (
           <p className="small muted" style={{ margin: 0 }}>
-            Le rapport est enregistré ici. Téléchargez-le pour le relire ou le modifier dans Word.
+            Le rapport est enregistré ici, version par version. Donnez vos modifications dans le
+            chat à droite, puis produisez la nouvelle version.
           </p>
         )}
         {enCours ? (
@@ -854,7 +882,7 @@ function Rapport({
             onClick={() => void demander()}
           >
             {projet.aRapport || projet.rapportLien
-              ? 'Produire un nouveau rapport'
+              ? `Produire la version ${prochaine}`
               : 'Produire le rapport'}
           </button>
         </div>
@@ -862,6 +890,20 @@ function Rapport({
           <p className="small muted" style={{ margin: 0 }}>
             {raison}
           </p>
+        )}
+        {versionsPrecedentes.length > 0 && (
+          <details>
+            <summary className="small">Versions précédentes ({versionsPrecedentes.length})</summary>
+            <ul className="small">
+              {versionsPrecedentes.map((v) => (
+                <li key={v.version}>
+                  <a href={urlRapportDiag(slug, projet.id, v.version)}>
+                    Version {v.version}, du {new Date(v.le).toLocaleDateString('fr-FR')}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
         {precedents.length > 0 && (
           <details>
@@ -871,6 +913,102 @@ function Rapport({
                 <li key={r.lien}>
                   <a href={r.lien} target="_blank" rel="noreferrer">
                     Rapport du {new Date(r.le).toLocaleDateString('fr-FR')}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Deck de restitution (étape 5) : présente le rapport en moins d'une heure ; la dernière diapositive
+// est la proposition de collaboration, que le pilote peut exclure. Ses éléments (tarifs, mode de
+// fonctionnement) se donnent dans le chat de l'étape.
+function RestitutionDeck({
+  slug,
+  projet,
+  onSauver,
+  onChange,
+  onErreur,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onSauver: Sauver;
+  onChange: (p: ProjetDiag) => void;
+  onErreur: (m: string) => void;
+}) {
+  const enCours = projet.restitutionStatut === 'en_cours';
+  const raison = projet.aRapport ? null : "Produisez d'abord le rapport à l'étape 4.";
+  const demander = async () => {
+    try {
+      onChange(await demandeRestitutionDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const precedents = projet.restitutionLiens.slice(1);
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <h2>Deck de restitution</h2>
+        {projet.profil && <span className="badge green">Profil : {projet.profil}</span>}
+      </div>
+      <div className="panel-b stack">
+        <p className="small muted" style={{ margin: 0 }}>
+          Le deck présente le score, son explication, l’essentiel des préconisations et le plan
+          d’action, pour une restitution de moins d’une heure.
+        </p>
+        <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <input
+            type="checkbox"
+            checked={projet.restitutionAvecProposition}
+            onChange={(e) => void onSauver({ restitutionAvecProposition: e.target.checked })}
+          />
+          <span>
+            Terminer par ma proposition de collaboration (tarifs et mode de fonctionnement, à donner
+            dans le chat)
+          </span>
+        </label>
+        {enCours ? (
+          <p className="small muted" style={{ margin: 0 }}>
+            Claude crée le deck… La page se mettra à jour dès qu’il sera prêt.
+          </p>
+        ) : (
+          projet.restitutionLien && (
+            <div className="row">
+              <a className="btn go" href={projet.restitutionLien} target="_blank" rel="noreferrer">
+                Ouvrir le deck de restitution
+              </a>
+            </div>
+          )
+        )}
+        <div className="row">
+          <button
+            className="btn"
+            disabled={enCours || raison !== null}
+            onClick={() => void demander()}
+          >
+            {projet.restitutionLien
+              ? 'Produire un nouveau deck'
+              : 'Produire le deck de restitution'}
+          </button>
+        </div>
+        {!enCours && raison && (
+          <p className="small muted" style={{ margin: 0 }}>
+            {raison}
+          </p>
+        )}
+        {precedents.length > 0 && (
+          <details>
+            <summary className="small">Decks précédents ({precedents.length})</summary>
+            <ul className="small">
+              {precedents.map((r) => (
+                <li key={r.lien}>
+                  <a href={r.lien} target="_blank" rel="noreferrer">
+                    Deck du {new Date(r.le).toLocaleDateString('fr-FR')}
                   </a>
                 </li>
               ))}
@@ -1179,8 +1317,10 @@ function Assistant({
     <aside className="panel diag-chat" aria-label={`Assistant Claude, étape ${etape}`}>
       <div className="panel-h">
         <div>
-          <h2>Assistant · {ETAPES[etape - 1]}</h2>
-          <div className="small muted">Claude répond ici, par le runner de ce poste</div>
+          <h2>{CHAT_TITRE[etape] ?? `Assistant · ${ETAPES[etape - 1]}`}</h2>
+          <div className="small muted">
+            {CHAT_AIDE[etape] ?? 'Claude répond ici, par le runner de ce poste'}
+          </div>
         </div>
         <Icon name="brain" />
         <button
@@ -1217,8 +1357,8 @@ function Assistant({
         <div className="diag-log" aria-live="polite">
           {messages.length === 0 && (
             <p className="small muted" style={{ margin: 0 }}>
-              Posez une question sur cette étape. Claude voit le contexte, le résultat et le
-              formulaire de revue.
+              {CHAT_VIDE[etape] ??
+                'Posez une question sur cette étape. Claude voit le contexte, le résultat et le formulaire de revue.'}
             </p>
           )}
           {messages.map((m, i) => (

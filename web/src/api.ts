@@ -992,7 +992,7 @@ export type ProjetDiag = {
     erreur?: boolean;
   }[];
   statutChat: 'repos' | 'attente_claude' | 'en_cours';
-  demande: 'preparer_support' | 'support_final' | 'rapport' | 'entretien' | null;
+  demande: 'preparer_support' | 'support_final' | 'rapport' | 'restitution' | 'entretien' | null;
   aPdfEntretien: boolean;
   pdfEntretienNom: string | null;
   reponsesEntretien: { section: string; numero: number; reponse: LettreReponse }[];
@@ -1010,6 +1010,11 @@ export type ProjetDiag = {
   rapportLienStatut: 'aucun' | 'en_cours' | 'pret';
   rapportLien: string | null;
   rapportLiens: { lien: string; le: string }[];
+  rapportVersions: { version: number; le: string }[];
+  restitutionStatut: 'aucun' | 'en_cours' | 'pret';
+  restitutionLien: string | null;
+  restitutionLiens: { lien: string; le: string }[];
+  restitutionAvecProposition: boolean;
   updatedAt: string;
 };
 export type ProjetDiagPatch = Partial<
@@ -1026,6 +1031,7 @@ export type ProjetDiagPatch = Partial<
     | 'revue'
     | 'ditParDirigeant'
     | 'hypotheses'
+    | 'restitutionAvecProposition'
   >
 > & { logo?: { nom: string; base64: string } | null };
 
@@ -1091,13 +1097,23 @@ export const viderConversationDiag = (slug: string, id: string, etape: number) =
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/messages/vider`),
     { etape },
   );
-// Demande la rédaction du rapport par Claude (étape 4, revue validée).
+// Demande la rédaction du rapport par Claude (étape 4) : une nouvelle version à chaque fois.
 export const demandeRapportDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/produire`),
     {},
   );
+// Demande le deck de restitution du rapport (étape 5).
+export const demandeRestitutionDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/produire`),
+    {},
+  );
+export const urlRapportDiag = (slug: string, id: string, version?: number) =>
+  inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport`) +
+  (version === undefined ? '' : `?version=${version}`);
 export const urlLogoDiag = (slug: string, id: string) =>
   inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/logo`);
 

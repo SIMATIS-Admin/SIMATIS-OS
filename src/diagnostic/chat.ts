@@ -131,10 +131,15 @@ export async function finirAttente(
       projet.demande === 'rapport' && projet.rapportLienStatut === 'en_cours'
         ? { rapportLienStatut: projet.rapport ? ('pret' as const) : ('aucun' as const) }
         : {};
+    // Même principe pour le deck de restitution resté « en cours » sans lien enregistré.
+    const restitution =
+      projet.demande === 'restitution' && projet.restitutionStatut === 'en_cours'
+        ? { restitutionStatut: projet.restitutionLien ? ('pret' as const) : ('aucun' as const) }
+        : {};
     if (projet.statutChat !== 'en_cours') {
       await tx
         .update(diagnosticProjets)
-        .set({ ...support, ...rapport, demande: null })
+        .set({ ...support, ...rapport, ...restitution, demande: null })
         .where(eq(diagnosticProjets.id, id));
       return;
     }
@@ -151,6 +156,7 @@ export async function finirAttente(
       .set({
         ...support,
         ...rapport,
+        ...restitution,
         conversation: [...projet.conversation, absence],
         statutChat: 'repos',
         demande: null,
@@ -182,6 +188,7 @@ export async function attentesClaude(db: Executor) {
         conversation: p.conversation,
         etapeMessage: dernier?.etape ?? p.etape,
         modele: p.chats[String(dernier?.etape ?? p.etape)]?.modele ?? null,
+        effort: p.chats[String(dernier?.etape ?? p.etape)]?.effort ?? null,
         demande: p.demande,
         dateDiagnostic: p.dateDiagnostic,
         ditParDirigeant: p.ditParDirigeant,
@@ -190,6 +197,12 @@ export async function attentesClaude(db: Executor) {
         supportLien: p.supportLien,
         rapportLien: p.rapportLien,
         rapportLienStatut: p.rapportLienStatut,
+        // Dernier contenu du rapport, pour le réviser selon les modifications du pilote.
+        rapportVersion: p.rapportVersions.at(-1)?.version ?? null,
+        rapportContenu: p.rapportVersions.at(-1)?.contenu ?? null,
+        rapportNom: p.rapportNom,
+        restitutionLien: p.restitutionLien,
+        restitutionAvecProposition: p.restitutionAvecProposition,
         // Le PDF de l'entretien ne voyage que pour sa lecture.
         pdf:
           p.demande === 'entretien' && p.pdfEntretien && p.pdfEntretienNom

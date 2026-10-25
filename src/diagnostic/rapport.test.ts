@@ -6,6 +6,7 @@ import { ChatIndisponible, demarrerAttente, finirAttente } from './chat.js';
 import { createProjet, listProjets, rapportDe, updateProjet } from './service.js';
 import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
 import { demanderRapport, enregistrerRapport, rapportPret } from './rapport.js';
+import { sql } from 'drizzle-orm';
 import { SupportInvalide } from './support.js';
 import { withInstance } from '../db/context.js';
 
@@ -121,7 +122,9 @@ describe('Enregistrement du rapport', () => {
     await enregistrer(id);
     const relu = await relire(id);
     expect(relu.aRapport).toBe(true);
-    expect(relu.rapportNom).toBe('Rapport Diagnostic Endurance - Atelier Fictif Nord.docx');
+    expect(relu.rapportNom).toBe('Rapport Diagnostic Endurance - Atelier Fictif Nord - v1.docx');
+    expect(relu.rapportVersions).toEqual([expect.objectContaining({ version: 1 })]);
+    expect(relu.rapportVersions[0]).not.toHaveProperty('contenu');
     expect(relu.rapportLienStatut).toBe('pret');
     const fichier = await rapportDe(t.app.db, simatis, id);
     expect(fichier.contenu.subarray(0, 2).toString()).toBe('PK');
@@ -143,7 +146,7 @@ describe('Enregistrement du rapport', () => {
     await expect(enregistrer(p.id)).rejects.toBeInstanceOf(SupportInvalide);
   });
 
-  it('scénario complet : un second rapport remplace le premier', async () => {
+  it('scénario complet : chaque production crée une version, les précédentes se téléchargent', async () => {
     const id = await enCours('Rapport Fictif I');
     await enregistrer(id);
     await finirAttente(t.app.db, simatis, id);
@@ -155,7 +158,39 @@ describe('Enregistrement du rapport', () => {
     await enregistrer(id, { ...contenuRapportFictif, entreprise: 'Atelier Fictif Sud' });
     await finirAttente(t.app.db, simatis, id);
     const relu = await relire(id);
-    expect(relu.rapportNom).toBe('Rapport Diagnostic Endurance - Atelier Fictif Sud.docx');
+    expect(relu.rapportNom).toBe('Rapport Diagnostic Endurance - Atelier Fictif Sud - v2.docx');
+    expect(relu.rapportVersions.map((v) => v.version)).toEqual([1, 2]);
     expect(relu.rapportLienStatut).toBe('pret');
+    // La version 1 se régénère depuis son contenu ; la dernière est le Word enregistré.
+    const v1 = await rapportDe(t.app.db, simatis, id, 1);
+    expect(v1.nom).toBe('Rapport Diagnostic Endurance - Atelier Fictif Nord - v1.docx');
+    expect(v1.contenu.subarray(0, 2).toString()).toBe('PK');
+    expect((await rapportDe(t.app.db, simatis, id)).nom).toContain('Atelier Fictif Sud - v2');
+    await expect(rapportDe(t.app.db, simatis, id, 9)).rejects.toThrow(
+      'Version du rapport introuvable',
+    );
+  });
+
+  it('un Word importé compte pour la version 1 : la première production est la version 2', async () => {
+    const id = await enCours('Rapport Fictif J');
+    await t.owner.db.execute(
+      sql`update diagnostic_projets set rapport = 'UEs=', rapport_nom = 'importe.docx' where id = ${id}`,
+    );
+    await enregistrer(id);
+    const relu = await relire(id);
+    expect(relu.rapportNom).toBe('Rapport Diagnostic Endurance - Atelier Fictif Nord - v2.docx');
+    expect(relu.rapportVersions.map((v) => v.version)).toEqual([2]);
+  });
+
+  it('la demande de production annonce la version suivante dans le chat', async () => {
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Rapport Fictif K',
+      activite: 'services',
+    });
+    await updateProjet(t.app.db, simatis, p.id, {
+      dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
+    });
+    const envoye = await demanderRapport(t.app.db, simatis, p.id);
+    expect(envoye.conversation.at(-1)?.texte).toBe('Produire le rapport version 1.');
   });
 });

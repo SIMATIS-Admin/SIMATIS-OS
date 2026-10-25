@@ -4,6 +4,7 @@ import { repondreClaude } from './chat.js';
 import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
 import { enregistrerRapport } from './rapport.js';
 import { contenuRapportSchema } from './rapport-word.js';
+import { autoriserSiRestitution, enregistrerRestitution } from './restitution.js';
 import { autoriserOutil, enregistrerSupport, LIEN_ARTIFACT } from './support.js';
 
 // Outil du chat de diagnostic : Claude y répond au pilote (un seul appel par message).
@@ -64,7 +65,9 @@ registerTool({
   }),
   scope: 'instance',
   handler: async ({ tx }, { tool_name, input }) =>
-    (await autoriserSiEntretien(tx, tool_name, input)) ?? autoriserOutil(tx, tool_name, input),
+    (await autoriserSiRestitution(tx, tool_name, input)) ??
+    (await autoriserSiEntretien(tx, tool_name, input)) ??
+    autoriserOutil(tx, tool_name, input),
 });
 
 // Outil du rapport : Claude rend le texte du rapport, structuré ; l'OS le met en page en Word.
@@ -79,6 +82,22 @@ registerTool({
   scope: 'instance',
   handler: async ({ tx }, { projetId, contenu }) => {
     await enregistrerRapport(tx, projetId, contenu);
+    return { ok: true };
+  },
+});
+
+// Outil de la restitution : Claude rend le lien du deck créé pour présenter le rapport.
+registerTool({
+  name: 'enregistrer_restitution',
+  description:
+    "Enregistre le deck de restitution d'un projet de diagnostic : le lien claude.ai de l'artifact, dès sa création puis une fois publié et relu.",
+  input: z.object({
+    projetId: z.uuid(),
+    lien: z.string().regex(LIEN_ARTIFACT, 'Lien d’artifact claude.ai attendu'),
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, lien }) => {
+    await enregistrerRestitution(tx, projetId, lien);
     return { ok: true };
   },
 });
