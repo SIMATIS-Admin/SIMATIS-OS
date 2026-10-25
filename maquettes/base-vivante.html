@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette Base vivante</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@85..100,400..800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0c376b; --ink: #12253f; --doux: #5d6f86; --line: #dce3ec; --bg: #f3f6f9; --blanc: #fff;
+    --teal: #41a594; --teal-fonce: #1f7a69; --teal-bg: #e3f5f1;
+    --amber: #c98a12; --amber-bg: #fff4dc; --red: #c0442e; --red-bg: #fcebe7;
+    --green: #2f8f5b; --green-bg: #e5f5ec; --blue-bg: #e8f0fa;
+    --f: 'Archivo', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f); }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+  .page { max-width: 1180px; margin: 0 auto; padding: 20px 16px 120px; }
+  .bandeau { background: var(--amber-bg); border-radius: 10px; padding: 8px 14px; font-size: 13px; margin-bottom: 18px; }
+
+  /* Barre du haut : les 3 actions principales, toujours au même endroit */
+  .tete { display: flex; flex-wrap: wrap; gap: 12px 20px; justify-content: space-between; align-items: center; }
+  h1 { margin: 0; font-size: 32px; letter-spacing: -.02em; font-weight: 800; }
+  .tete-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn { border: 1px solid var(--line); background: var(--blanc); border-radius: 8px; padding: 9px 15px; font-weight: 600; font-size: 14px; display: inline-flex; gap: 8px; align-items: center; transition: background .15s; text-decoration: none; color: var(--ink); }
+  .btn:hover { background: var(--bg); }
+  .btn.primaire { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .btn.primaire:hover { background: #0a2d58; }
+  .btn.gros { padding: 12px 22px; font-size: 15px; }
+  .btn.sm { padding: 5px 11px; font-size: 13px; }
+  .btn.danger { color: var(--red); }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .recherche { position: relative; }
+  .recherche input { width: 250px; padding-left: 34px; }
+  .recherche svg { position: absolute; left: 10px; top: 11px; color: var(--doux); }
+  .recherche kbd { position: absolute; right: 9px; top: 8px; font: 500 12px var(--mono); color: var(--doux); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; }
+  .input { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: #fff; font-size: 14px; width: 100%; }
+
+  /* À faire : ce qui attend l'utilisateur, en une ligne */
+  .afaire { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 4px; align-items: center; }
+  .afaire > span { font-size: 13px; color: var(--doux); font-weight: 600; margin-right: 4px; }
+  .tache { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 14px 6px 10px; font-size: 13.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+  .tache:hover { border-color: var(--navy); }
+  .tache i { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
+  .tache.fait { display: none; }
+
+  /* Liste unique */
+  .liste { background: #fff; border: 1px solid var(--line); border-radius: 14px; margin-top: 14px; overflow: hidden; }
+  .onglets { display: flex; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 0 8px; }
+  .onglet { border: 0; background: none; padding: 14px 14px 12px; font-weight: 600; color: var(--doux); border-bottom: 3px solid transparent; white-space: nowrap; display: flex; gap: 8px; align-items: center; }
+  .onglet:hover { color: var(--ink); }
+  .onglet[aria-selected="true"] { color: var(--ink); border-color: var(--c, var(--navy)); }
+  .onglet b { font: 500 13px var(--mono); background: var(--bg); border-radius: 999px; padding: 1px 8px; color: var(--ink); }
+  .onglet i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+  .barre { display: flex; height: 5px; gap: 2px; }
+  .barre i { display: block; transition: opacity .2s; }
+  .barre.filtre i:not(.sel) { opacity: .25; }
+  .astuce { padding: 10px 20px; font-size: 13.5px; background: var(--blue-bg); display: none; gap: 10px; }
+  .astuce.visible { display: flex; }
+  .outils { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; }
+  .puce { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
+  .puce[aria-pressed="true"] { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .compte { margin-left: auto; font-size: 13px; color: var(--doux); }
+
+  .glisse { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 12px; color: var(--doux); font-weight: 600; padding: 8px 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); white-space: nowrap; background: #fafcfd; }
+  td { padding: 10px 12px; border-bottom: 1px solid #edf1f6; vertical-align: middle; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #f7fafc; }
+  tbody tr.coche { background: var(--blue-bg); }
+  td small { display: block; color: var(--doux); font-size: 12.5px; }
+  td.case, th.case { width: 40px; padding-right: 0; }
+  input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--navy); }
+  .manque { border: 1px dashed #b9c8da; border-radius: 7px; background: none; color: var(--teal-fonce); font-weight: 600; font-size: 13px; padding: 2px 9px; }
+  .manque:hover { background: var(--teal-bg); }
+  .badge { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .badge.vert { background: var(--green-bg); color: var(--green); } .badge.ambre { background: var(--amber-bg); color: #8a5d05; }
+  .badge.rouge { background: var(--red-bg); color: var(--red); } .badge.bleu { background: var(--blue-bg); color: var(--navy); }
+  .vide { text-align: center; padding: 40px 16px; color: var(--doux); }
+  .pied { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-size: 13px; color: var(--doux); }
+
+  /* Barre d'actions groupées */
+  .selection { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 140%); background: var(--ink); color: #fff; border-radius: 14px; padding: 10px 12px 10px 18px; display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; box-shadow: 0 10px 30px rgba(12,37,63,.35); transition: transform .25s; max-width: calc(100% - 24px); z-index: 5; }
+  .selection.visible { transform: translate(-50%, 0); }
+  .selection .btn { background: transparent; color: #fff; border-color: rgba(255,255,255,.3); }
+  .selection .btn:hover { background: rgba(255,255,255,.12); }
+  .selection .btn.primaire { background: var(--teal); border-color: var(--teal); color: #08241f; }
+  .selection .btn.primaire[disabled] { background: transparent; color: #fff; border-color: rgba(255,255,255,.3); }
+  .selection .raison { flex-basis: 100%; font-size: 12.5px; color: #f6d38a; }
+  .selection .x { border: 0; background: none; color: #fff; font-size: 20px; padding: 0 8px; }
+
+  /* Fenêtres : import, boîte mail, réponses, fiche */
+  dialog { border: 0; border-radius: 16px; padding: 0; width: min(640px, calc(100% - 24px)); color: var(--ink); box-shadow: 0 20px 60px rgba(12,37,63,.35); }
+  dialog::backdrop { background: rgba(12,37,63,.4); }
+  dialog.tiroir { margin: 0 0 0 auto; height: 100vh; max-height: none; width: min(430px, 100%); border-radius: 0; }
+  .dlg-tete { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 24px 8px; }
+  .dlg-tete h2 { margin: 0; font-size: 21px; } .dlg-tete p { margin: 2px 0 0; color: var(--doux); font-size: 14px; }
+  .dlg-corps { padding: 8px 24px 8px; } .dlg-pied { display: flex; gap: 10px; justify-content: flex-end; align-items: center; padding: 16px 24px 22px; }
+  .fermer { border: 0; background: var(--bg); border-radius: 8px; width: 34px; height: 34px; font-size: 18px; flex: none; }
+  .pas { display: flex; gap: 6px; padding: 0 24px; margin: 6px 0 10px; }
+  .pas li { list-style: none; flex: 1; font-size: 13px; font-weight: 600; color: var(--doux); border-top: 4px solid var(--line); padding-top: 6px; }
+  .pas li.ok { color: var(--ink); border-color: var(--navy); }
+  .pas { margin-block: 6px 10px; padding-inline: 24px; }
+  .etape[hidden] { display: none; }
+  .depot { border: 2px dashed #b9c8da; border-radius: 14px; padding: 26px 20px; text-align: center; background: #fafcfe; }
+  .depot.survol { border-color: var(--teal); background: var(--teal-bg); }
+  .depot strong { display: block; font-size: 17px; } .depot span { color: var(--doux); font-size: 14px; }
+  .champs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+  label.champ { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--doux); }
+  .colonne { display: grid; grid-template-columns: 1fr 24px 1fr; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid #edf1f6; font-size: 14px; }
+  .colonne small { color: var(--doux); display: block; } .colonne em { color: var(--teal-fonce); font-style: normal; font-weight: 700; }
+  .compteurs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+  .compteurs div { border-radius: 12px; padding: 12px 14px; background: var(--bg); } .compteurs b { display: block; font: 500 26px var(--mono); }
+  .compteurs .v { background: var(--green-bg); } .compteurs .a { background: var(--amber-bg); }
+  .compteurs span { font-size: 13px; color: var(--doux); }
+  .chiffres { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+  .chiffres div { text-align: center; background: var(--bg); border-radius: 10px; padding: 10px 4px; } .chiffres b { display: block; font: 500 20px var(--mono); } .chiffres span { font-size: 12px; color: var(--doux); }
+
+  .progres { height: 5px; background: var(--line); border-radius: 3px; margin: 4px 24px 12px; overflow: hidden; } .progres i { display: block; height: 100%; background: var(--teal); width: 0; transition: width .3s; }
+  .reponse blockquote { margin: 10px 0 0; padding: 12px 16px; border-left: 4px solid var(--teal); background: var(--bg); border-radius: 0 10px 10px 0; font-size: 16px; }
+  .classes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .classe { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 12px 14px; font-weight: 600; text-align: left; display: flex; justify-content: space-between; align-items: center; }
+  .classe:hover { background: var(--bg); } .classe kbd { font: 500 12px var(--mono); color: var(--doux); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; }
+  .classe.propose { border-color: var(--teal); background: var(--teal-bg); color: var(--teal-fonce); }
+  .classe.opposition { color: var(--red); }
+  .propose-par { font-size: 13px; color: var(--teal-fonce); font-weight: 600; margin-top: 14px; }
+
+  .tiroir .dlg-corps dl { display: grid; grid-template-columns: 100px 1fr; gap: 10px 12px; margin: 14px 0; font-size: 14px; align-items: center; } .tiroir dt { color: var(--doux); } .tiroir dd { margin: 0; }
+  .histo { list-style: none; padding: 0; margin: 8px 0 20px; border-left: 2px solid var(--line); }
+  .histo li { padding: 0 0 12px 14px; position: relative; font-size: 14px; } .histo li::before { content: ""; position: absolute; left: -6px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--teal); } .histo small { display: block; color: var(--doux); }
+
+  #toast { position: fixed; left: 50%; top: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 50; }
+  @media (max-width: 760px) { h1 { font-size: 26px; } .recherche input { width: 100%; } .recherche { flex: 1 1 100%; } .champs, .classes { grid-template-columns: 1fr; } .chiffres { grid-template-columns: 1fr 1fr; } .masque-mobile { display: none; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="bandeau">Maquette v2 : données fictives. Essayez de cocher des lignes, de cliquer sur une fiche, sur « Importer une liste » ou sur les tâches « À faire ».</div>
+
+  <header class="tete">
+    <h1>Base vivante</h1>
+    <div class="tete-actions">
+      <label class="recherche"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="input" id="recherche" type="search" placeholder="Nom, entreprise, email…" aria-label="Chercher une fiche"><kbd>/</kbd></label>
+      <button class="btn" data-ouvrir="d-mail">Mettre à jour depuis les mails</button>
+      <a class="btn" href="#" data-toast="Export CSV lancé (filtre actuel)." onclick="return false">Exporter</a>
+      <button class="btn primaire" data-ouvrir="d-import">+ Importer une liste</button>
+    </div>
+  </header>
+
+  <div class="afaire" id="afaire"><span>À faire</span>
+    <button class="tache" data-ouvrir="d-import" data-etape="3" id="tache-import"><i></i>Valider l'import « Salon_industrie_2026 » (1 612 lignes)</button>
+    <button class="tache" data-ouvrir="d-triage" id="tache-triage"><i></i>Classer 3 réponses</button>
+    <button class="tache" id="tache-enrichir"><i></i>Compléter 1 240 fiches sans email ni téléphone</button>
+  </div>
+
+  <section class="liste" aria-label="Fiches">
+    <div class="onglets" role="tablist" id="onglets">
+      <button class="onglet" role="tab" aria-selected="true" data-z="toutes" style="--c:var(--navy)">Toutes <b>5 120</b></button>
+      <button class="onglet" role="tab" aria-selected="false" data-z="enrichir" style="--c:var(--amber)"><i></i>À enrichir <b>1 240</b></button>
+      <button class="onglet" role="tab" aria-selected="false" data-z="pret" style="--c:var(--teal)"><i></i>Prêtes à contacter <b>2 620</b></button>
+      <button class="onglet" role="tab" aria-selected="false" data-z="contacte" style="--c:var(--navy)"><i></i>Contactées <b>1 180</b></button>
+      <button class="onglet" role="tab" aria-selected="false" data-z="repondu" style="--c:var(--green)"><i></i>Ont répondu <b>80</b></button>
+    </div>
+    <div class="barre" id="barre" aria-hidden="true">
+      <i data-z="enrichir" style="flex:1240;background:var(--amber)"></i><i data-z="pret" style="flex:2620;background:var(--teal)"></i><i data-z="contacte" style="flex:1180;background:var(--navy)"></i><i data-z="repondu" style="flex:80;background:var(--green)"></i>
+    </div>
+    <div class="astuce" id="astuce"><span>ⓘ</span><span id="astuce-txt"></span></div>
+    <div class="outils">
+      <button class="puce" id="p-erreur" aria-pressed="false">Email en erreur · 46</button>
+      <button class="puce" id="p-jamais" aria-pressed="false">Jamais contactées</button>
+      <span class="compte" id="compte"></span>
+    </div>
+    <div class="glisse"><table>
+      <thead><tr><th class="case"><input type="checkbox" id="tout" aria-label="Tout sélectionner"></th><th>Contact</th><th>Entreprise</th><th>Coordonnées</th><th class="masque-mobile">Dernier contact</th><th>Statut</th></tr></thead>
+      <tbody id="corps"></tbody>
+    </table></div>
+    <div class="vide" id="vide" hidden>Aucune fiche ne correspond. Essayez un autre mot ou retirez un filtre.</div>
+    <div class="pied"><span>Les 12 premières fiches sont affichées</span><span><button class="btn sm">Précédent</button> <button class="btn sm">Suivant</button></span></div>
+  </section>
+</div>
+
+<div class="selection" id="selection" role="region" aria-label="Actions sur la sélection">
+  <strong id="nb-sel"></strong>
+  <button class="btn primaire" id="b-crm" data-toast="Fiches ajoutées au CRM du mandat.">Ajouter au CRM du mandat</button>
+  <button class="btn" id="b-claude" data-toast="Claude cherche les coordonnées…">Chercher les coordonnées</button>
+  <button class="btn" data-toast="Sélection exportée.">Exporter</button>
+  <button class="btn danger" data-toast="Fiches exclues de la prospection.">Exclure</button>
+  <button class="x" id="b-annuler" aria-label="Désélectionner">×</button>
+  <div class="raison" id="raison" hidden>Une fiche à enrichir ne peut pas entrer dans un CRM : ajoutez d'abord son email ou son téléphone.</div>
+</div>
+
+<!-- IMPORT en 3 temps -->
+<dialog id="d-import" aria-labelledby="t-import">
+  <div class="dlg-tete"><div><h2 id="t-import">Importer une liste</h2><p>Rien n'entre dans la base avant votre validation.</p></div><button class="fermer" data-fermer aria-label="Fermer">×</button></div>
+  <ol class="pas" id="pas"><li class="ok">1. Déposer</li><li>2. Vérifier</li><li>3. Intégrer</li></ol>
+  <div class="dlg-corps">
+    <div class="etape" data-e="1">
+      <div class="depot" id="depot"><strong>Glissez votre fichier ici</strong><span>Excel (.xlsx), CSV, ou lignes copiées depuis un tableur</span><br><br><button class="btn">Choisir un fichier</button> <button class="btn">Coller des lignes</button></div>
+      <div class="champs"><label class="champ">D'où vient cette liste ?<input class="input" placeholder="Salon, LinkedIn, achat de fichier…"></label>
+        <label class="champ">Pour quel mandat ? (facultatif)<select class="input"><option>Aucun mandat précis</option><option>Mandat démo</option></select></label></div>
+    </div>
+    <div class="etape" data-e="2" hidden>
+      <p style="margin:0 0 6px;color:var(--doux);font-size:14px">J'ai reconnu <strong style="color:var(--ink)">7 colonnes sur 9</strong>. Corrigez si une est mal comprise.</p>
+      <div class="colonne"><div>Société<small>Atelier Exemple SA</small></div><span>→</span><select class="input"><option>Entreprise</option></select></div>
+      <div class="colonne"><div>Contact<small>Camille Durand</small></div><span>→</span><select class="input"><option>Prénom et nom ensemble</option></select></div>
+      <div class="colonne"><div>Mail pro<small>c.durand@exemple.test</small></div><span>→</span><select class="input"><option>Email</option></select></div>
+      <div class="colonne"><div>Tél.<small>04 00 00 00 01</small></div><span>→</span><select class="input"><option>Téléphone</option></select></div>
+      <div class="colonne"><div>Colonne 5<small>stand B12</small></div><span>→</span><select class="input"><option>Ignorée</option></select></div>
+    </div>
+    <div class="etape" data-e="3" hidden>
+      <p style="margin:0 0 6px;color:var(--doux);font-size:14px">Salon_industrie_2026.xlsx · 1 612 lignes lues</p>
+      <div class="compteurs"><div class="v"><b>1 102</b><span>prêtes à contacter</span></div><div class="a"><b>380</b><span>à enrichir (sans email ni téléphone)</span></div>
+        <div><b>34</b><span>doublons dans le fichier, fusionnés</span></div><div><b>96</b><span>incomplètes : restent de côté</span></div></div>
+      <p style="font-size:13.5px;color:var(--doux)"><button class="btn sm">Compléter les 96 lignes incomplètes</button></p>
+    </div>
+  </div>
+  <div class="dlg-pied"><button class="btn" id="i-retour" hidden>Retour</button><button class="btn" data-fermer>Annuler</button><button class="btn primaire gros" id="i-suite">Lire la liste</button></div>
+</dialog>
+
+<!-- BOÎTE MAIL -->
+<dialog id="d-mail" aria-labelledby="t-mail">
+  <div class="dlg-tete"><div><h2 id="t-mail">Mettre à jour depuis les mails</h2><p>Lit la boîte Gmail d'un mandat, en lecture seule, pour repérer qui a déjà été contacté, qui a répondu et quelles adresses sont en erreur.</p></div><button class="fermer" data-fermer aria-label="Fermer">×</button></div>
+  <div class="dlg-corps">
+    <div class="champs"><label class="champ">Mandat<select class="input"><option>Mandat démo</option></select></label><label class="champ">Depuis le<input class="input" type="date" value="2026-03-01"></label></div>
+    <strong style="font-size:14px">Dernière lecture, le 20/10</strong>
+    <div class="chiffres"><div><b>1 180</b><span>contactées</span></div><div><b>80</b><span>réponses</span></div><div><b>46</b><span>en erreur</span></div><div><b>1 440</b><span>jamais contactées</span></div></div>
+  </div>
+  <div class="dlg-pied"><button class="btn" data-fermer>Fermer</button><button class="btn primaire gros" data-toast="Lecture de la boîte mail lancée." data-fermer>Lire la boîte mail</button></div>
+</dialog>
+
+<!-- TRIAGE DES RÉPONSES -->
+<dialog id="d-triage" aria-labelledby="t-triage">
+  <div class="dlg-tete"><div><h2 id="t-triage">Classer les réponses</h2><p id="triage-sous"></p></div><button class="fermer" data-fermer aria-label="Fermer">×</button></div>
+  <div class="progres"><i id="triage-barre"></i></div>
+  <div class="dlg-corps reponse" id="triage-corps"></div>
+  <div class="dlg-pied"><button class="btn" id="triage-passer">Passer</button></div>
+</dialog>
+
+<!-- FICHE -->
+<dialog id="d-fiche" class="tiroir" aria-label="Fiche"></dialog>
+<div id="toast" role="status"></div>
+
+<script>
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const ZONES = { enrichir: ['À enrichir', 'ambre'], pret: ['Prête', 'vert'], contacte: ['Contactée', 'bleu'], repondu: ['A répondu', 'vert'] };
+  const TOTAL = { toutes: 5120, enrichir: 1240, pret: 2620, contacte: 1180, repondu: 80 };
+  const ASTUCES = { enrichir: "Ces fiches n'ont ni email ni téléphone. Cliquez sur « + Ajouter » dans la ligne : la fiche passe seule en « prêtes à contacter ». Elles n'entrent jamais dans un CRM tant qu'elles sont incomplètes." };
+  const FICHES = [
+    ['Camille Durand', 'Directrice achats', 'Atelier Exemple SA', 'c.durand@exemple.test', '04 00 00 00 01', 'pret', 'Jamais'],
+    ['Alex Martin', 'Responsable production', 'Fonderie Démo', 'a.martin@demo.test', '04 00 00 00 02', 'contacte', '03/2026 · mail'],
+    ['Sacha Petit', 'Gérant', 'Usinage Fictif', 's.petit@fictif.test', '', 'contacte', '06/2026 · mail', 'erreur'],
+    ['Noa Bernard', 'Directeur technique', 'Tôlerie Modèle', 'n.bernard@exemple.test', '04 00 00 00 04', 'repondu', '09/2026 · mail'],
+    ['Léa Fontaine', 'Cheffe de projet', 'Mécanique Test', '', '', 'enrichir', 'Jamais'],
+    ['Eliott Roux', 'Acheteur', 'Plasturgie Exemple', '', '', 'enrichir', 'Jamais'],
+    ['Inès Girard', 'Directrice', 'Découpe Démo SARL', 'i.girard@decoupe.test', '', 'pret', 'Jamais'],
+    ['Malo Perrin', 'Responsable qualité', 'Forge Fictive', '', '04 00 00 00 08', 'pret', 'Jamais'],
+    ['Zoé Colin', 'Gérante', 'Atelier Modèle', '', '', 'enrichir', 'Jamais'],
+    ['Hugo Blanc', 'Directeur industriel', 'Soudure Exemple', 'h.blanc@soudure.test', '04 00 00 00 11', 'contacte', '05/2026 · mail'],
+    ['Jade Moreau', 'Acheteuse', 'Fonderie Test', 'j.moreau@fonderie.test', '', 'pret', 'Jamais'],
+    ['Louis Faure', 'Gérant', 'Traitement Démo', 'l.faure@traitement.test', '04 00 00 00 13', 'repondu', '08/2026 · mail'],
+  ].map(([n, f, e, m, t, z, d, a], id) => ({ id, n, f, e, m, t, z, d, a }));
+
+  const etat = { z: 'toutes', q: '', erreur: false, jamais: false, sel: new Set() };
+  const visibles = () => FICHES.filter(x => (etat.z === 'toutes' || x.z === etat.z) && (!etat.erreur || x.a) && (!etat.jamais || x.d === 'Jamais')
+    && (!etat.q || [x.n, x.e, x.m].join(' ').toLowerCase().includes(etat.q.toLowerCase())));
+
+  function rendre() {
+    const l = visibles();
+    $('#corps').innerHTML = l.map(x => `<tr data-id="${x.id}" class="${etat.sel.has(x.id) ? 'coche' : ''}">
+      <td class="case"><input type="checkbox" ${etat.sel.has(x.id) ? 'checked' : ''} aria-label="Sélectionner ${x.n}"></td>
+      <td>${x.n}<small>${x.f}</small></td><td>${x.e}</td>
+      <td>${x.m ? x.m : '<button class="manque" data-add>+ Ajouter un email</button>'}<small>${x.t ? x.t : (x.m ? '' : '')}</small></td>
+      <td class="masque-mobile">${x.d}</td>
+      <td><span class="badge ${x.a ? 'rouge' : ZONES[x.z][1]}">${x.a ? 'Email en erreur' : ZONES[x.z][0]}</span></td></tr>`).join('');
+    $('#vide').hidden = l.length > 0;
+    const n = etat.q || etat.erreur || etat.jamais ? l.length : TOTAL[etat.z];
+    $('#compte').textContent = n.toLocaleString('fr-FR') + ' fiche' + (n > 1 ? 's' : '');
+    $$('.onglet').forEach(b => b.setAttribute('aria-selected', String(b.dataset.z === etat.z)));
+    $('#barre').classList.toggle('filtre', etat.z !== 'toutes');
+    $$('#barre i').forEach(i => i.classList.toggle('sel', i.dataset.z === etat.z));
+    const a = $('#astuce'); a.classList.toggle('visible', !!ASTUCES[etat.z]); $('#astuce-txt').textContent = ASTUCES[etat.z] || '';
+    $('#p-erreur').setAttribute('aria-pressed', etat.erreur); $('#p-jamais').setAttribute('aria-pressed', etat.jamais);
+    barreSelection();
+  }
+
+  function barreSelection() {
+    const s = [...etat.sel].map(i => FICHES[i]), bar = $('#selection');
+    bar.classList.toggle('visible', s.length > 0);
+    $('#nb-sel').textContent = s.length + ' sélectionnée' + (s.length > 1 ? 's' : '');
+    const incomplet = s.some(x => x.z === 'enrichir');
+    $('#b-crm').disabled = incomplet; $('#raison').hidden = !incomplet;
+  }
+
+  $('#onglets').addEventListener('click', e => { const b = e.target.closest('.onglet'); if (b) { etat.z = b.dataset.z; rendre(); } });
+  $('#barre').addEventListener('click', e => { const b = e.target.closest('i'); if (b) { etat.z = b.dataset.z; rendre(); } });
+  $('#p-erreur').onclick = () => { etat.erreur = !etat.erreur; rendre(); };
+  $('#p-jamais').onclick = () => { etat.jamais = !etat.jamais; rendre(); };
+  $('#recherche').oninput = e => { etat.q = e.target.value; rendre(); };
+  $('#tache-enrichir').onclick = () => { etat.z = 'enrichir'; rendre(); $('.liste').scrollIntoView({ behavior: 'smooth' }); };
+  $('#b-annuler').onclick = () => { etat.sel.clear(); rendre(); };
+  $('#tout').onchange = e => { visibles().forEach(x => e.target.checked ? etat.sel.add(x.id) : etat.sel.delete(x.id)); rendre(); };
+  $('#corps').addEventListener('click', e => {
+    const tr = e.target.closest('tr'); if (!tr) return; const id = +tr.dataset.id;
+    if (e.target.matches('input[type=checkbox]')) { e.target.checked ? etat.sel.add(id) : etat.sel.delete(id); rendre(); }
+    else if (e.target.matches('[data-add]')) ouvrirFiche(id, true);
+    else ouvrirFiche(id);
+  });
+
+  const toast = t => { const el = $('#toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(toast.id); toast.id = setTimeout(() => el.style.opacity = 0, 2200); };
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
+    const o = e.target.closest('[data-ouvrir]'); if (o) { if (o.dataset.ouvrir === 'd-import') etapeImport(+(o.dataset.etape || 1)); if (o.dataset.ouvrir === 'd-triage') triage(); $('#' + o.dataset.ouvrir).showModal(); }
+    if (e.target.closest('[data-fermer]')) e.target.closest('dialog').close();
+  });
+  $$('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); })); // clic hors fenêtre
+  document.addEventListener('keydown', e => { if (e.key === '/' && !e.target.matches('input,select,textarea')) { e.preventDefault(); $('#recherche').focus(); } });
+
+  // Import en 3 temps
+  let ei = 1;
+  const SUITE = ['Lire la liste', 'Continuer', 'Intégrer 1 482 fiches à la base'];
+  function etapeImport(n) {
+    ei = n; $$('#d-import .etape').forEach(x => x.hidden = +x.dataset.e !== n);
+    $$('#pas li').forEach((li, i) => li.classList.toggle('ok', i < n));
+    $('#i-suite').textContent = SUITE[n - 1]; $('#i-retour').hidden = n === 1;
+  }
+  $('#i-suite').onclick = () => { if (ei < 3) return etapeImport(ei + 1); $('#d-import').close(); $('#tache-import').classList.add('fait'); toast('1 482 fiches intégrées à la base.'); };
+  $('#i-retour').onclick = () => etapeImport(ei - 1);
+  const depot = $('#depot');
+  ['dragenter', 'dragover'].forEach(v => depot.addEventListener(v, e => { e.preventDefault(); depot.classList.add('survol'); }));
+  ['dragleave', 'drop'].forEach(v => depot.addEventListener(v, e => { e.preventDefault(); depot.classList.remove('survol'); }));
+
+  // Tri des réponses, une à la fois, au clavier (1 à 4)
+  const REPONSES = [
+    ['Noa Bernard', 'Tôlerie Modèle', "Merci pour votre message, rappelez-moi la semaine prochaine, c'est un bon moment.", 1],
+    ['Alex Martin', 'Fonderie Démo', "Je suis absent jusqu'au 4 novembre, je reviens vers vous à mon retour.", 1],
+    ['Jean Lambert', 'Mécanique Test', "Merci de ne plus m'écrire.", 3],
+  ];
+  const CLASSES = ['Intéressé', 'À rappeler', 'Pas intéressé', 'Ne plus me contacter'];
+  let ri = 0;
+  function triage(reset = true) {
+    if (reset) ri = 0; const total = REPONSES.length;
+    $('#triage-barre').style.width = (ri / total * 100) + '%';
+    if (ri >= total) { $('#triage-sous').textContent = 'Tout est classé.'; $('#triage-corps').innerHTML = '<p style="font-size:18px;text-align:center;padding:24px 0"><strong>Bravo, il ne reste rien à classer.</strong><br><span style="color:var(--doux);font-size:14px">Les répondants intéressés peuvent être ajoutés au CRM du mandat depuis la liste.</span></p>'; $('#triage-passer').hidden = true; $('#tache-triage').classList.add('fait'); return; }
+    $('#triage-passer').hidden = false;
+    const [n, e, txt, p] = REPONSES[ri]; $('#triage-sous').textContent = `Réponse ${ri + 1} sur ${total}. Claude propose une classe, vous validez.`;
+    $('#triage-corps').innerHTML = `<strong>${n}</strong> · ${e}<blockquote>« ${txt} »</blockquote><div class="propose-par">Proposé par Claude : ${CLASSES[p]}</div>
+      <div class="classes">${CLASSES.map((c, i) => `<button class="classe ${i === p ? 'propose' : ''} ${i === 3 ? 'opposition' : ''}" data-c="${i}">${c}<kbd>${i + 1}</kbd></button>`).join('')}</div>
+      ${p === 3 ? '<p style="font-size:13px;color:var(--doux)">« Ne plus me contacter » bloque la fiche, avant tout le reste.</p>' : ''}`;
+  }
+  $('#triage-corps').addEventListener('click', e => { const b = e.target.closest('.classe'); if (b) { toast('Classée : ' + CLASSES[+b.dataset.c]); ri++; triage(false); } });
+  $('#triage-passer').onclick = () => { ri++; triage(false); };
+  $('#d-triage').addEventListener('keydown', e => { const k = +e.key; if (k >= 1 && k <= 4 && ri < REPONSES.length) { toast('Classée : ' + CLASSES[k - 1]); ri++; triage(false); } });
+
+  // Fiche : on corrige directement, sans changer d'écran
+  function ouvrirFiche(id, enrichir) {
+    const x = FICHES[id], d = $('#d-fiche');
+    d.innerHTML = `<div class="dlg-tete"><div><h2>${x.n}</h2><p>${x.f}, ${x.e}</p></div><button class="fermer" data-fermer aria-label="Fermer">×</button></div>
+      <div class="dlg-corps"><dl><dt>Statut</dt><dd><span class="badge ${ZONES[x.z][1]}">${ZONES[x.z][0]}</span></dd>
+      <dt>Email</dt><dd><input class="input" value="${x.m}" placeholder="prenom@entreprise…" ${enrichir ? 'autofocus' : ''}></dd>
+      <dt>Téléphone</dt><dd><input class="input" value="${x.t}" placeholder="04 …"></dd></dl>
+      <strong>Historique</strong><ul class="histo"><li>${x.d === 'Jamais' ? 'Jamais contactée' : 'Dernier contact : ' + x.d}<small>d'après la boîte mail du mandat</small></li><li>Importée<small>Liste LinkedIn, 12/10/2026</small></li></ul></div>
+      <div class="dlg-pied" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn primaire" data-toast="Fiche enregistrée." data-fermer>Enregistrer</button><button class="btn" ${x.z === 'enrichir' ? 'disabled title="Ajoutez d\'abord un email ou un téléphone"' : ''} data-toast="Ajoutée au CRM du mandat." data-fermer>Ajouter au CRM</button><button class="btn danger" data-toast="Fiche exclue." data-fermer>Ne plus contacter</button></div>`;
+    d.showModal();
+  }
+  rendre();
+</script>
+</body>
+</html>

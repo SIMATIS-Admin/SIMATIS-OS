@@ -1,8 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  actualiserHistoriqueBase,
   majConformiteBase,
-  urlExportBase,
   type AlerteBase,
   type EtatBase,
   type ExclusionBase,
@@ -12,22 +10,26 @@ import {
   type ZoneBase,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import { Fenetre } from './Fenetre.js';
 
 export const PAR_PAGE = 50;
 const entier = (n: number) => n.toLocaleString('fr-FR');
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-const ZONES: [ZoneBase | undefined, string][] = [
-  [undefined, 'Toutes'],
-  ['prospectable', 'Prospectables'],
-  ['a_enrichir', 'À enrichir'],
-];
-const STATUTS: [StatutProspectionBase | undefined, string][] = [
-  [undefined, 'Tous statuts'],
-  ['jamais_contacte', 'Jamais contactés'],
-  ['contacte', 'Contactés'],
-  ['a_repondu', 'Ont répondu'],
-];
+// One list, five views: each tab is a pair of server filters (zone, status).
+const ONGLETS: { id: string; libelle: string; zone?: ZoneBase; statut?: StatutProspectionBase }[] =
+  [
+    { id: 'toutes', libelle: 'Toutes' },
+    { id: 'a_enrichir', libelle: 'À enrichir', zone: 'a_enrichir' },
+    {
+      id: 'pretes',
+      libelle: 'Prêtes à contacter',
+      zone: 'prospectable',
+      statut: 'jamais_contacte',
+    },
+    { id: 'contactees', libelle: 'Contactées', statut: 'contacte' },
+    { id: 'reponses', libelle: 'Ont répondu', statut: 'a_repondu' },
+  ];
 const ALERTES: [AlerteBase | undefined, string][] = [
   [undefined, 'Toutes alertes'],
   ['recontact', 'Contactés depuis moins de 6 mois'],
@@ -49,6 +51,8 @@ const LIBELLE_RESULTAT: Record<string, string> = {
   mauvais_interlocuteur: 'mauvais interlocuteur',
   reponse_auto: 'réponse automatique',
 };
+const ASTUCE_ENRICHIR =
+  "Ces fiches n'ont ni email ni téléphone. Une fiche à enrichir n'entre jamais dans un CRM : dès qu'un moyen de contact valide est ajouté, elle devient prête à contacter.";
 
 const libelleZone = (zone: ZoneBase) =>
   zone === 'prospectable' ? (
@@ -61,6 +65,19 @@ const libelleZone = (zone: ZoneBase) =>
 const moisAnnee = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('fr-FR', { month: '2-digit', year: 'numeric' }) : 'NA';
 
+const nomComplet = (f: FicheBase) => [f.prenom, f.nom].filter(Boolean).join(' ');
+
+const detailContact = (f: FicheBase) =>
+  [
+    moisAnnee(f.dernierContactLe),
+    f.dernierContactCanal,
+    f.resultat ? (LIBELLE_RESULTAT[f.resultat] ?? f.resultat) : null,
+    f.nbContacts > 0 ? `${f.nbContacts} contact${f.nbContacts > 1 ? 's' : ''}` : null,
+    f.mandatContacteur,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
 const choixConformite = (f: FicheBase) =>
   f.opposition ? 'opposition' : f.exclusion ? `exclusion:${f.exclusion}` : '';
 
@@ -68,7 +85,7 @@ function Conformite({ f, onChange }: { f: FicheBase; onChange: (valeur: string) 
   return (
     <select
       className="input"
-      aria-label={`Conformité de ${f.prenom ?? ''} ${f.nom}`}
+      aria-label={`Conformité de ${nomComplet(f)}`}
       value={choixConformite(f)}
       onChange={(e) => onChange(e.target.value)}
     >
@@ -81,6 +98,60 @@ function Conformite({ f, onChange }: { f: FicheBase; onChange: (valeur: string) 
   );
 }
 
+const patchConformite = (valeur: string) => ({
+  opposition: valeur === 'opposition',
+  exclusion: valeur.startsWith('exclusion:')
+    ? (valeur.slice('exclusion:'.length) as ExclusionBase)
+    : null,
+});
+
+function FicheTiroir({
+  f,
+  onConformite,
+  onFermer,
+}: {
+  f: FicheBase;
+  onConformite: (valeur: string) => void;
+  onFermer: () => void;
+}) {
+  return (
+    <Fenetre
+      tiroir
+      titre={nomComplet(f)}
+      sousTitre={[f.fonction, f.entreprise].filter(Boolean).join(', ')}
+      onFermer={onFermer}
+    >
+      <dl className="bv-fiche">
+        <dt>Zone</dt>
+        <dd>{libelleZone(f.zone)}</dd>
+        <dt>Email</dt>
+        <dd>{f.email ?? '—'}</dd>
+        <dt>Téléphone</dt>
+        <dd>{f.telephone ?? '—'}</dd>
+        <dt>Source</dt>
+        <dd>
+          {f.provenance}
+          {f.mandat ? ` · ${f.mandat}` : ''}
+        </dd>
+        <dt>Conformité</dt>
+        <dd>
+          <Conformite f={f} onChange={onConformite} />
+        </dd>
+      </dl>
+      <h3 className="bv-sous-titre">Historique</h3>
+      <p>
+        {LIBELLE_STATUT[f.statutProspection]}
+        <span className="small muted"> {detailContact(f)}</span>
+      </p>
+      {f.alertes.map((a) => (
+        <div key={a.code}>
+          <span className={`badge ${a.bloquante ? 'red' : 'amber'}`}>{a.libelle}</span>
+        </div>
+      ))}
+    </Fenetre>
+  );
+}
+
 export function BaseTable({
   slug,
   etat,
@@ -89,6 +160,7 @@ export function BaseTable({
   page,
   onPage,
   onChange,
+  onImporter,
 }: {
   slug: string;
   etat: EtatBase;
@@ -97,19 +169,26 @@ export function BaseTable({
   page: number;
   onPage: (p: number) => void;
   onChange: () => void;
+  onImporter: () => void;
 }) {
-  const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [ouverte, setOuverte] = useState<string | null>(null);
   const total = etat.compteurs.aEnrichir + etat.compteurs.prospectable;
+
+  // A selection never outlives the rows it was made on.
+  useEffect(() => setSelection(new Set()), [etat.fiches]);
+
   const filtrer = (f: FiltresBaseWeb) => {
     onFiltres({ ...filtres, ...f });
     onPage(0);
   };
+  const actif =
+    ONGLETS.find((o) => o.zone === filtres.zone && o.statut === filtres.statut)?.id ?? null;
 
   const agir = async (f: () => Promise<void>) => {
     setError(null);
-    setInfo(null);
     setOccupe(true);
     try {
       await f();
@@ -120,213 +199,227 @@ export function BaseTable({
     }
   };
 
-  const actualiser = () =>
+  const conformite = (ids: string[], valeur: string) =>
     agir(async () => {
-      const r = await actualiserHistoriqueBase(slug);
-      setInfo(
-        `${entier(r.verifiees)} adresses vérifiées dans les CRM, ${entier(r.trouvees)} déjà connues.`,
-      );
+      for (const id of ids) await majConformiteBase(slug, id, patchConformite(valeur));
       onChange();
     });
 
-  const conformite = (f: FicheBase, valeur: string) =>
-    agir(async () => {
-      const exclusion = valeur.startsWith('exclusion:')
-        ? (valeur.slice('exclusion:'.length) as ExclusionBase)
-        : null;
-      await majConformiteBase(slug, f.id, { opposition: valeur === 'opposition', exclusion });
-      onChange();
+  const basculer = (id: string) =>
+    setSelection((s) => {
+      const n = new Set(s);
+      if (!n.delete(id)) n.add(id);
+      return n;
     });
+  const toutesCochees = etat.fiches.length > 0 && selection.size === etat.fiches.length;
+  const fiche = etat.fiches.find((f) => f.id === ouverte);
 
   return (
-    <div className="panel">
-      <div className="panel-h">
-        <div>
-          <h2>Base vivante</h2>
-          <div className="small muted">
-            {entier(total)} fiches : {entier(etat.compteurs.prospectable)} prospectables,{' '}
-            {entier(etat.compteurs.aEnrichir)} à enrichir. Une fiche à enrichir n'entre jamais dans
-            un CRM.
-          </div>
+    <section className="bv-liste" aria-label="Fiches de la base">
+      <div className="bv-onglets" role="tablist">
+        {ONGLETS.map((o) => (
+          <button
+            key={o.id}
+            role="tab"
+            aria-selected={actif === o.id}
+            className="bv-onglet"
+            onClick={() => filtrer({ zone: o.zone, statut: o.statut })}
+          >
+            {o.libelle}
+          </button>
+        ))}
+      </div>
+      {actif === 'a_enrichir' && (
+        <div className="bv-astuce">
+          <Icon name="info" />
+          <span>{ASTUCE_ENRICHIR}</span>
         </div>
-        <div className="sw-actions">
+      )}
+      <div className="bv-outils">
+        <select
+          className="input"
+          aria-label="Filtrer par alerte"
+          value={filtres.alerte ?? ''}
+          onChange={(e) => filtrer({ alerte: (e.target.value || undefined) as AlerteBase })}
+        >
+          {ALERTES.map(([v, libelle]) => (
+            <option key={libelle} value={v ?? ''}>
+              {libelle}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input"
+          aria-label="Filtrer par source"
+          value={filtres.provenance ?? ''}
+          onChange={(e) => filtrer({ provenance: e.target.value || undefined })}
+        >
+          <option value="">Toutes sources</option>
+          {etat.provenances.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+        <span className="bv-compte small muted">
+          {entier(etat.total)} fiche{etat.total > 1 ? 's' : ''}
+        </span>
+      </div>
+      {error && (
+        <div className="alert amber">
+          <Icon name="info" />
+          <div>{error}</div>
+        </div>
+      )}
+      {etat.fiches.length === 0 ? (
+        <div className="empty">
+          {total === 0 ? (
+            <>
+              La base est vide : importez une première liste.
+              <p>
+                <button className="btn primary" onClick={onImporter}>
+                  Importer une liste
+                </button>
+              </p>
+            </>
+          ) : (
+            'Aucune fiche ne correspond. Essayez un autre mot ou retirez un filtre.'
+          )}
+        </div>
+      ) : (
+        <div className="mapping-scroll">
+          <table className="tbl small bv-table">
+            <thead>
+              <tr>
+                <th className="bv-case">
+                  <input
+                    type="checkbox"
+                    aria-label="Tout sélectionner"
+                    checked={toutesCochees}
+                    onChange={() =>
+                      setSelection(
+                        toutesCochees ? new Set() : new Set(etat.fiches.map((f) => f.id)),
+                      )
+                    }
+                  />
+                </th>
+                <th>Contact</th>
+                <th>Entreprise</th>
+                <th>Coordonnées</th>
+                <th>Dernier contact</th>
+                <th>Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {etat.fiches.map((f) => (
+                <tr
+                  key={f.id}
+                  className={selection.has(f.id) ? 'coche' : ''}
+                  onClick={() => setOuverte(f.id)}
+                >
+                  <td className="bv-case" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Sélectionner ${nomComplet(f)}`}
+                      checked={selection.has(f.id)}
+                      onChange={() => basculer(f.id)}
+                    />
+                  </td>
+                  <td>
+                    <button className="bv-lien" onClick={() => setOuverte(f.id)}>
+                      {nomComplet(f)}
+                    </button>
+                    <div className="small muted">{f.fonction ?? ''}</div>
+                  </td>
+                  <td>{f.entreprise}</td>
+                  <td>
+                    {f.email ?? <span className="muted">Pas d'email</span>}
+                    <div className="small muted">{f.telephone ?? ''}</div>
+                  </td>
+                  <td>
+                    {LIBELLE_STATUT[f.statutProspection]}
+                    <div className="small muted">{detailContact(f)}</div>
+                  </td>
+                  <td>
+                    {libelleZone(f.zone)}
+                    {f.alertes.map((a) => (
+                      <div key={a.code}>
+                        <span className={`badge ${a.bloquante ? 'red' : 'amber'}`}>
+                          {a.libelle}
+                        </span>
+                      </div>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {etat.total > PAR_PAGE && (
+        <div className="bv-pied">
           <button
             className="btn sm"
-            disabled={occupe || total === 0}
-            onClick={() => void actualiser()}
+            disabled={page === 0}
+            onClick={() => onPage(Math.max(0, page - 1))}
           >
-            Actualiser l'historique
-          </button>{' '}
-          <a className="btn sm" href={urlExportBase(slug, filtres)} download>
-            Exporter en CSV
-          </a>
+            Précédent
+          </button>
+          <span className="small muted">
+            {entier(page * PAR_PAGE + 1)}–{entier(Math.min(etat.total, (page + 1) * PAR_PAGE))} sur{' '}
+            {entier(etat.total)}
+          </span>
+          <button
+            className="btn sm"
+            disabled={(page + 1) * PAR_PAGE >= etat.total}
+            onClick={() => onPage(page + 1)}
+          >
+            Suivant
+          </button>
         </div>
-      </div>
-      <div className="panel-b">
-        <div className="chips">
-          {ZONES.map(([z, libelle]) => (
-            <button
-              key={libelle}
-              className={`chip ${filtres.zone === z ? 'on' : ''}`}
-              onClick={() => filtrer({ zone: z })}
-            >
-              {libelle}
-            </button>
-          ))}
-        </div>
-        <div className="chips">
+      )}
+
+      {selection.size > 0 && (
+        <div className="bv-selection" role="region" aria-label="Actions sur la sélection">
+          <strong>
+            {selection.size} sélectionnée{selection.size > 1 ? 's' : ''}
+          </strong>
+          <button
+            className="btn sm"
+            disabled={occupe}
+            onClick={() => void conformite([...selection], 'opposition')}
+          >
+            Ne plus contacter
+          </button>
           <select
             className="input"
-            style={{ maxWidth: 190 }}
-            aria-label="Filtrer par statut"
-            value={filtres.statut ?? ''}
-            onChange={(e) =>
-              filtrer({
-                statut: (e.target.value || undefined) as StatutProspectionBase | undefined,
-              })
-            }
+            aria-label="Exclure la sélection comme"
+            value=""
+            disabled={occupe}
+            onChange={(e) => e.target.value && void conformite([...selection], e.target.value)}
           >
-            {STATUTS.map(([v, libelle]) => (
-              <option key={libelle} value={v ?? ''}>
-                {libelle}
-              </option>
-            ))}
+            <option value="">Exclure comme…</option>
+            <option value="exclusion:client">Client</option>
+            <option value="exclusion:partenaire">Partenaire</option>
+            <option value="exclusion:concurrent">Concurrent</option>
           </select>
-          <select
-            className="input"
-            style={{ maxWidth: 260 }}
-            aria-label="Filtrer par alerte"
-            value={filtres.alerte ?? ''}
-            onChange={(e) =>
-              filtrer({ alerte: (e.target.value || undefined) as AlerteBase | undefined })
-            }
+          <button
+            className="bv-fermer clair"
+            aria-label="Désélectionner"
+            onClick={() => setSelection(new Set())}
           >
-            {ALERTES.map(([v, libelle]) => (
-              <option key={libelle} value={v ?? ''}>
-                {libelle}
-              </option>
-            ))}
-          </select>
-          <select
-            className="input"
-            style={{ maxWidth: 190 }}
-            aria-label="Filtrer par source"
-            value={filtres.provenance ?? ''}
-            onChange={(e) => filtrer({ provenance: e.target.value || undefined })}
-          >
-            <option value="">Toutes sources</option>
-            {etat.provenances.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-          <input
-            className="input"
-            style={{ maxWidth: 260 }}
-            aria-label="Rechercher dans la base"
-            placeholder="Entreprise, nom, email…"
-            value={filtres.q ?? ''}
-            onChange={(e) => filtrer({ q: e.target.value })}
-          />
+            ×
+          </button>
         </div>
-        {info && <div className="small muted">{info}</div>}
-        {error && (
-          <div className="alert amber">
-            <Icon name="info" />
-            <div>{error}</div>
-          </div>
-        )}
-        {etat.fiches.length === 0 ? (
-          <div className="empty">
-            {total === 0
-              ? 'La base est vide : importez une première liste.'
-              : 'Aucune fiche ne correspond.'}
-          </div>
-        ) : (
-          <div className="mapping-scroll">
-            <table className="tbl small">
-              <thead>
-                <tr>
-                  <th>Entreprise</th>
-                  <th>Contact</th>
-                  <th>Fonction</th>
-                  <th>Email</th>
-                  <th>Téléphone</th>
-                  <th>Zone</th>
-                  <th>Dernier contact</th>
-                  <th>Alertes</th>
-                  <th>Conformité</th>
-                  <th>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {etat.fiches.map((f) => (
-                  <tr key={f.id}>
-                    <td>{f.entreprise}</td>
-                    <td>{[f.prenom, f.nom].filter(Boolean).join(' ')}</td>
-                    <td>{f.fonction ?? '—'}</td>
-                    <td>{f.email ?? '—'}</td>
-                    <td>{f.telephone ?? '—'}</td>
-                    <td>{libelleZone(f.zone)}</td>
-                    <td>
-                      {LIBELLE_STATUT[f.statutProspection]}
-                      <div className="small muted">
-                        {moisAnnee(f.dernierContactLe)}
-                        {f.dernierContactCanal ? ` · ${f.dernierContactCanal}` : ''}
-                        {f.resultat ? ` · ${LIBELLE_RESULTAT[f.resultat] ?? f.resultat}` : ''}
-                        {f.nbContacts > 0
-                          ? ` · ${f.nbContacts} contact${f.nbContacts > 1 ? 's' : ''}`
-                          : ''}
-                        {f.mandatContacteur ? ` · ${f.mandatContacteur}` : ''}
-                      </div>
-                    </td>
-                    <td>
-                      {f.alertes.length === 0 && <span className="muted">—</span>}
-                      {f.alertes.map((a) => (
-                        <div key={a.code}>
-                          <span className={`badge ${a.bloquante ? 'red' : 'amber'}`}>
-                            {a.libelle}
-                          </span>
-                        </div>
-                      ))}
-                    </td>
-                    <td>
-                      <Conformite f={f} onChange={(v) => void conformite(f, v)} />
-                    </td>
-                    <td>
-                      {f.provenance}
-                      {f.mandat && <div className="small muted">{f.mandat}</div>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {etat.total > PAR_PAGE && (
-          <div className="chips">
-            <button
-              className="btn sm"
-              disabled={page === 0}
-              onClick={() => onPage(Math.max(0, page - 1))}
-            >
-              Précédent
-            </button>
-            <span className="small muted">
-              {entier(page * PAR_PAGE + 1)}–{entier(Math.min(etat.total, (page + 1) * PAR_PAGE))}{' '}
-              sur {entier(etat.total)}
-            </span>
-            <button
-              className="btn sm"
-              disabled={(page + 1) * PAR_PAGE >= etat.total}
-              onClick={() => onPage(page + 1)}
-            >
-              Suivant
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+
+      {fiche && (
+        <FicheTiroir
+          f={fiche}
+          onFermer={() => setOuverte(null)}
+          onConformite={(v) => void conformite([fiche.id], v)}
+        />
+      )}
+    </section>
   );
 }
