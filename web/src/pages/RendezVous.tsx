@@ -4,6 +4,7 @@ import {
   fetchContacts,
   fetchEntreprises,
   fetchPreparation,
+  creerRdvOs,
   fetchRendezVous,
   lierRendezVous,
   lierRdv,
@@ -13,6 +14,7 @@ import {
   type RendezVousReponse,
   type StatutRdv,
 } from '../api.js';
+import { Fenetre } from './Fenetre.js';
 import { Lien } from './taches/Edition.js';
 
 type Choix = { id: string; nom: string } | null;
@@ -198,11 +200,109 @@ const jour = (iso: string) =>
     timeZone: 'Europe/Paris',
   });
 
+const DUREES = [15, 30, 45, 60, 90, 120];
+
+// A meeting that does not come from Google: title, moment, length, place. The links to contacts,
+// companies and deals are added on its sheet, like for any meeting.
+function NouveauRdv({ slug, onFermer }: { slug: string; onFermer: () => void }) {
+  const [titre, setTitre] = useState('');
+  const [date, setDate] = useState('');
+  const [heure, setHeure] = useState('');
+  const [duree, setDuree] = useState(60);
+  const [lieu, setLieu] = useState('');
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+  const pret = titre.trim() !== '' && date !== '' && heure !== '';
+  const creer = () => {
+    setEnvoi(true);
+    creerRdvOs(slug, {
+      titre: titre.trim(),
+      debut: new Date(`${date}T${heure}`).toISOString(),
+      dureeMinutes: duree,
+      lieu: lieu.trim() || null,
+    }).then(
+      (r) => {
+        location.hash = `#/${slug}/fiche/rdv/${encodeURIComponent(r.id)}`;
+      },
+      (e: unknown) => {
+        setErreur(e instanceof Error ? e.message : String(e));
+        setEnvoi(false);
+      },
+    );
+  };
+  return (
+    <Fenetre
+      titre="Nouveau rendez-vous"
+      sousTitre="Créé dans l’OS : il n’apparaît pas dans Google Agenda."
+      onFermer={onFermer}
+      pied={
+        <>
+          <button className="btn" onClick={onFermer}>
+            Annuler
+          </button>
+          <button className="btn primary" disabled={!pret || envoi} onClick={creer}>
+            Créer
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <label>
+          Titre
+          <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} />
+        </label>
+        <div className="grid g2">
+          <label>
+            Date
+            <input
+              className="input"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </label>
+          <label>
+            Heure
+            <input
+              className="input"
+              type="time"
+              value={heure}
+              onChange={(e) => setHeure(e.target.value)}
+            />
+          </label>
+        </div>
+        <div className="grid g2">
+          <label>
+            Durée
+            <select
+              className="input"
+              value={duree}
+              onChange={(e) => setDuree(Number(e.target.value))}
+            >
+              {DUREES.map((d) => (
+                <option key={d} value={d}>
+                  {d} min
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Lieu
+            <input className="input" value={lieu} onChange={(e) => setLieu(e.target.value)} />
+          </label>
+        </div>
+        {erreur && <p style={{ color: 'var(--red)' }}>{erreur}</p>}
+      </div>
+    </Fenetre>
+  );
+}
+
 export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) {
   const [data, setData] = useState<RendezVousReponse | null>(null);
   const [onglet, setOnglet] = useState<Onglet>('a_trier');
   const [ouvert, setOuvert] = useState<{ id: string; vue: 'prep' | 'cr' | 'lien' } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creation, setCreation] = useState(false);
   // The first read picks the tab: the blocks to sort when there are some, else the meetings.
   const premiere = useRef(true);
   const load = useCallback(() => {
@@ -247,193 +347,220 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
 
   if (error) return <div className="empty">{error}</div>;
   if (!data) return null;
-  if (data.etat === 'non_configure') {
-    return (
-      <div className="empty">
-        Agenda non branché : connectez le compte Google du mandat dans Paramètres &gt; Connexions.
+  // Google's state goes next to the list: meetings created in the OS show whatever it says.
+  const bandeau =
+    data.etat === 'non_configure'
+      ? 'Agenda non branché : connectez le compte Google du mandat dans Paramètres > Connexions.'
+      : data.etat === 'erreur'
+        ? (data.erreur ?? 'Agenda illisible.')
+        : null;
+  const creerBloc = (
+    <>
+      <div className="rdv-actions">
+        <button className="btn primary" onClick={() => setCreation(true)}>
+          + Nouveau rendez-vous
+        </button>
       </div>
+      {creation && <NouveauRdv slug={slug} onFermer={() => setCreation(false)} />}
+    </>
+  );
+  if (bandeau && data.rdv.length === 0) {
+    return (
+      <>
+        {creerBloc}
+        <div className="empty">{bandeau}</div>
+      </>
     );
   }
-  if (data.etat === 'erreur') return <div className="empty">{data.erreur}</div>;
   const maintenant = Date.now();
   const visibles = data.rdv.filter((r) => dansOnglet(r, onglet, maintenant));
   const introuvable = ouvrir && !data.rdv.some((r) => r.id === ouvrir);
   return (
-    <div className="panel">
-      <div className="vq-filter rdv-onglets" role="tablist">
-        {ONGLETS.map(([id, label]) => {
-          const n = data.rdv.filter((r) => dansOnglet(r, id, maintenant)).length;
-          return (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={onglet === id}
-              className={`chip ${onglet === id ? 'on' : ''} ${id === 'a_trier' && n > 0 ? 'alerte' : ''}`}
-              onClick={() => setOnglet(id)}
-            >
-              {label} ({n})
-            </button>
-          );
-        })}
-      </div>
-      {introuvable && (
-        <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
-          Ce rendez-vous est en dehors de la période affichée ici (semaine passée et deux
-          prochaines).
-        </p>
-      )}
-      {data.agendasIgnores && data.agendasIgnores.length > 0 && (
-        <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
-          Agenda non lu : {data.agendasIgnores.join(', ')}. Décochez-le dans Paramètres &gt;
-          Connexions.
-        </p>
-      )}
-      {visibles.length ? (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Rendez-vous</th>
-              <th>Liens</th>
-              <th>Lieu</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {visibles.map((r, i) => {
-              const passe = new Date(r.debut).getTime() <= maintenant;
-              const statut = statutDe(r);
-              const precedent = visibles[i - 1];
-              return [
-                (!precedent || jour(precedent.debut) !== jour(r.debut)) && (
-                  <tr key={`${r.id}-jour`} className="rdv-jour">
-                    <td colSpan={5}>{jour(r.debut)}</td>
-                  </tr>
-                ),
-                <tr key={r.id} id={`rdv-${r.id}`} className={r.id === ouvrir ? 'cible' : ''}>
-                  <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                    {quand(r.debut)}
-                  </td>
-                  <td>
-                    <a href={`#/${slug}/fiche/rdv/${encodeURIComponent(r.id)}`}>
-                      <b>{r.titre}</b>
-                    </a>
-                    {r.opportunite && <div className="small muted">{r.opportunite.titre}</div>}
-                    {r.compteRendu && (
-                      <div className="small" style={{ color: 'var(--green)' }}>
-                        Compte rendu fait
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    {r.contact || r.entreprise ? (
-                      <div className="rdv-puces">
-                        {r.entreprise && (
-                          <a
-                            className="fi-puce"
-                            href={`#/${slug}/fiche/entreprise/${r.entreprise.id}`}
-                          >
-                            {r.entreprise.nom}
-                          </a>
-                        )}
-                        {r.contact && (
-                          <a className="fi-puce" href={`#/${slug}/fiche/contact/${r.contact.id}`}>
-                            {r.contact.nom}
-                          </a>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="muted">Hors CRM</span>
-                    )}
-                    {statut !== 'ignore' && (
-                      <div>
-                        <button
-                          className="lien"
-                          onClick={() => setOuvert({ id: r.id, vue: 'lien' })}
-                          aria-label={`Lier « ${r.titre} » à un contact ou une entreprise`}
-                        >
-                          {r.contact || r.entreprise ? 'Changer le lien' : 'Lier'}
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                  <td>{r.lieu ?? <span className="muted">—</span>}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    {statut === 'ignore' ? (
-                      <button className="btn sm" onClick={() => trier(r, 'a_trier')}>
-                        Remettre à trier
-                      </button>
-                    ) : statut === 'a_trier' ? (
-                      <>
-                        <button
-                          className="btn go sm"
-                          title={r.contact && !r.lienManuel ? `Lier à ${r.contact.nom}` : undefined}
-                          onClick={() =>
-                            r.contact && !r.lienManuel ? validerSuggestion(r) : trier(r, 'rdv')
-                          }
-                        >
-                          C’est un RDV
-                        </button>{' '}
-                        <button className="btn sm" onClick={() => trier(r, 'ignore')}>
-                          Pas un RDV
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className="btn sm"
-                          onClick={() => setOuvert({ id: r.id, vue: 'prep' })}
-                        >
-                          Préparer
-                        </button>{' '}
-                        {passe && !r.compteRendu && (
-                          <button
-                            className="btn go sm"
-                            onClick={() => setOuvert({ id: r.id, vue: 'cr' })}
-                          >
-                            Compte rendu
-                          </button>
-                        )}{' '}
-                        <button className="btn ghost sm" onClick={() => trier(r, 'ignore')}>
-                          Pas un RDV
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>,
-                ouvert?.id === r.id && (
-                  <tr key={`${r.id}-detail`}>
-                    <td colSpan={5}>
-                      {ouvert.vue === 'lien' ? (
-                        <LienRdv
-                          slug={slug}
-                          rdv={r}
-                          onDone={() => {
-                            setOuvert(null);
-                            load();
-                          }}
-                        />
-                      ) : ouvert.vue === 'prep' ? (
-                        <PreparationPanel slug={slug} rdv={r} />
-                      ) : (
-                        <CompteRendu slug={slug} rdv={r} onDone={load} />
+    <>
+      {creerBloc}
+      <div className="panel">
+        {bandeau && (
+          <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
+            {bandeau}
+          </p>
+        )}
+        <div className="vq-filter rdv-onglets" role="tablist">
+          {ONGLETS.map(([id, label]) => {
+            const n = data.rdv.filter((r) => dansOnglet(r, id, maintenant)).length;
+            return (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={onglet === id}
+                className={`chip ${onglet === id ? 'on' : ''} ${id === 'a_trier' && n > 0 ? 'alerte' : ''}`}
+                onClick={() => setOnglet(id)}
+              >
+                {label} ({n})
+              </button>
+            );
+          })}
+        </div>
+        {introuvable && (
+          <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
+            Ce rendez-vous est en dehors de la période affichée ici (semaine passée et deux
+            prochaines).
+          </p>
+        )}
+        {data.agendasIgnores && data.agendasIgnores.length > 0 && (
+          <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
+            Agenda non lu : {data.agendasIgnores.join(', ')}. Décochez-le dans Paramètres &gt;
+            Connexions.
+          </p>
+        )}
+        {visibles.length ? (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Rendez-vous</th>
+                <th>Liens</th>
+                <th>Lieu</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {visibles.map((r, i) => {
+                const passe = new Date(r.debut).getTime() <= maintenant;
+                const statut = statutDe(r);
+                const precedent = visibles[i - 1];
+                return [
+                  (!precedent || jour(precedent.debut) !== jour(r.debut)) && (
+                    <tr key={`${r.id}-jour`} className="rdv-jour">
+                      <td colSpan={5}>{jour(r.debut)}</td>
+                    </tr>
+                  ),
+                  <tr key={r.id} id={`rdv-${r.id}`} className={r.id === ouvrir ? 'cible' : ''}>
+                    <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                      {quand(r.debut)}
+                    </td>
+                    <td>
+                      <a href={`#/${slug}/fiche/rdv/${encodeURIComponent(r.id)}`}>
+                        <b>{r.titre}</b>
+                      </a>
+                      {r.opportunite && <div className="small muted">{r.opportunite.titre}</div>}
+                      {r.compteRendu && (
+                        <div className="small" style={{ color: 'var(--green)' }}>
+                          Compte rendu fait
+                        </div>
                       )}
                     </td>
-                  </tr>
-                ),
-              ];
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <div className="empty">
-          {onglet === 'a_trier'
-            ? 'Rien à trier : tous les blocs de l’agenda ont été classés.'
-            : onglet === 'ignore'
-              ? 'Aucun bloc écarté.'
-              : 'Aucun rendez-vous ici entre la semaine passée et les deux prochaines.'}
-        </div>
-      )}
-    </div>
+                    <td>
+                      {r.contact || r.entreprise ? (
+                        <div className="rdv-puces">
+                          {r.entreprise && (
+                            <a
+                              className="fi-puce"
+                              href={`#/${slug}/fiche/entreprise/${r.entreprise.id}`}
+                            >
+                              {r.entreprise.nom}
+                            </a>
+                          )}
+                          {r.contact && (
+                            <a className="fi-puce" href={`#/${slug}/fiche/contact/${r.contact.id}`}>
+                              {r.contact.nom}
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="muted">Hors CRM</span>
+                      )}
+                      {statut !== 'ignore' && (
+                        <div>
+                          <button
+                            className="lien"
+                            onClick={() => setOuvert({ id: r.id, vue: 'lien' })}
+                            aria-label={`Lier « ${r.titre} » à un contact ou une entreprise`}
+                          >
+                            {r.contact || r.entreprise ? 'Changer le lien' : 'Lier'}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td>{r.lieu ?? <span className="muted">—</span>}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {statut === 'ignore' ? (
+                        <button className="btn sm" onClick={() => trier(r, 'a_trier')}>
+                          Remettre à trier
+                        </button>
+                      ) : statut === 'a_trier' ? (
+                        <>
+                          <button
+                            className="btn go sm"
+                            title={
+                              r.contact && !r.lienManuel ? `Lier à ${r.contact.nom}` : undefined
+                            }
+                            onClick={() =>
+                              r.contact && !r.lienManuel ? validerSuggestion(r) : trier(r, 'rdv')
+                            }
+                          >
+                            C’est un RDV
+                          </button>{' '}
+                          <button className="btn sm" onClick={() => trier(r, 'ignore')}>
+                            Pas un RDV
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="btn sm"
+                            onClick={() => setOuvert({ id: r.id, vue: 'prep' })}
+                          >
+                            Préparer
+                          </button>{' '}
+                          {passe && !r.compteRendu && (
+                            <button
+                              className="btn go sm"
+                              onClick={() => setOuvert({ id: r.id, vue: 'cr' })}
+                            >
+                              Compte rendu
+                            </button>
+                          )}{' '}
+                          <button className="btn ghost sm" onClick={() => trier(r, 'ignore')}>
+                            Pas un RDV
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>,
+                  ouvert?.id === r.id && (
+                    <tr key={`${r.id}-detail`}>
+                      <td colSpan={5}>
+                        {ouvert.vue === 'lien' ? (
+                          <LienRdv
+                            slug={slug}
+                            rdv={r}
+                            onDone={() => {
+                              setOuvert(null);
+                              load();
+                            }}
+                          />
+                        ) : ouvert.vue === 'prep' ? (
+                          <PreparationPanel slug={slug} rdv={r} />
+                        ) : (
+                          <CompteRendu slug={slug} rdv={r} onDone={load} />
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                ];
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div className="empty">
+            {onglet === 'a_trier'
+              ? 'Rien à trier : tous les blocs de l’agenda ont été classés.'
+              : onglet === 'ignore'
+                ? 'Aucun bloc écarté.'
+                : 'Aucun rendez-vous ici entre la semaine passée et les deux prochaines.'}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

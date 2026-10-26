@@ -1,4 +1,5 @@
-import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, eq, gte, inArray, isNull, like, lt, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import {
@@ -67,10 +68,14 @@ export async function listerRendezVous(
       .from(connexions)
       .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'agenda'))),
   );
-  if (agenda?.fournisseur !== 'google-agenda' || agenda.etat === 'non_configuree') {
-    return { etat: 'non_configure' as const, rdv: [] };
-  }
   const jour = jourDe(maintenant, FUSEAU);
+  const du = zoned(decaler(jour, -7), '00:00', FUSEAU);
+  const au = zoned(decaler(jour, 15), '00:00', FUSEAU);
+  // Meetings created in the OS need no Google: they show whatever happens to the agenda.
+  const os = await rdvOs(db, instance, du, au);
+  if (agenda?.fournisseur !== 'google-agenda' || agenda.etat === 'non_configuree') {
+    return { etat: 'non_configure' as const, rdv: await relier(db, instance, os) };
+  }
   const calendriers = Array.isArray(agenda.reglages.calendriers)
     ? (agenda.reglages.calendriers as string[])
     : ['primary'];
@@ -81,15 +86,7 @@ export async function listerRendezVous(
     const secrets = await loadInstanceSecrets(deps.secretsDir, instance.slug);
     for (const id of calendriers) {
       try {
-        liste.push(
-          ...(await evenements(
-            { instance, secrets },
-            zoned(decaler(jour, -7), '00:00', FUSEAU),
-            zoned(decaler(jour, 15), '00:00', FUSEAU),
-            [id],
-            options,
-          )),
-        );
+        liste.push(...(await evenements({ instance, secrets }, du, au, [id], options)));
       } catch (error) {
         // An agenda that cannot be read (unknown id, access withdrawn) is left out: the others still show.
         ignores.push(id);
@@ -100,11 +97,11 @@ export async function listerRendezVous(
     return {
       etat: 'erreur' as const,
       erreur: error instanceof Error ? error.message : String(error),
-      rdv: [],
+      rdv: await relier(db, instance, os),
     };
   }
   if (ignores.length === calendriers.length) {
-    return { etat: 'erreur' as const, erreur: derniereErreur, rdv: [] };
+    return { etat: 'erreur' as const, erreur: derniereErreur, rdv: await relier(db, instance, os) };
   }
   return {
     etat: 'ok' as const,
@@ -113,10 +110,85 @@ export async function listerRendezVous(
       db,
       instance,
       // Slots of more than two hours are bookings, not meetings to prepare.
-      liste.filter((e) => !estCreneau(e)).sort((a, b) => a.debut.getTime() - b.debut.getTime()),
+      [...liste.filter((e) => !estCreneau(e)), ...os].sort(
+        (a, b) => a.debut.getTime() - b.debut.getTime(),
+      ),
     ),
     agendasIgnores: ignores,
   };
+}
+
+// Meetings created in the OS (event id `os:…`) inside a time window, shaped like agenda events.
+async function rdvOs(db: Executor, instance: Instance, du: Date, au: Date): Promise<Evenement[]> {
+  const lignes = await withInstance(db, instance.id, (tx) =>
+    tx
+      .select()
+      .from(rendezVous)
+      .where(
+        and(
+          eq(rendezVous.instanceId, currentInstance),
+          like(rendezVous.eventId, 'os:%'),
+          gte(rendezVous.debut, du),
+          lt(rendezVous.debut, au),
+        ),
+      ),
+  );
+  return lignes.flatMap((r) =>
+    r.debut
+      ? [
+          {
+            id: r.eventId,
+            debut: r.debut,
+            fin: r.fin ?? r.debut,
+            titre: r.titre,
+            lieu: r.lieu,
+            participants: r.participants,
+            journee: false,
+            agenda: 'os',
+            couleur: null,
+            lien: null,
+          },
+        ]
+      : [],
+  );
+}
+
+export const rdvOsSchema = z
+  .object({
+    titre: z.string().trim().min(1).max(300),
+    debut: z.iso.datetime(),
+    dureeMinutes: z.number().int().min(5).max(1440).default(60),
+    lieu: z.string().trim().max(300).nullish(),
+  })
+  .strict();
+
+// A meeting that never was in Google: its id starts with `os:` so no agenda read can touch it.
+export async function creerRendezVousOs(
+  db: Executor,
+  instance: Instance,
+  saisie: z.infer<typeof rdvOsSchema>,
+): Promise<string> {
+  const debut = new Date(saisie.debut);
+  const eventId = `os:${randomUUID()}`;
+  await withInstance(db, instance.id, async (tx) => {
+    await tx.insert(rendezVous).values({
+      instanceId: currentInstance,
+      eventId,
+      titre: saisie.titre,
+      debut,
+      fin: new Date(debut.getTime() + saisie.dureeMinutes * 60_000),
+      lieu: saisie.lieu || null,
+      participants: [],
+      statut: 'rdv',
+    });
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: 'Rendez-vous créé dans l’OS',
+      niveau: 'L1',
+      details: { eventId },
+    });
+  });
+  return eventId;
 }
 
 // The calendars the instance's Google account can see, to choose which ones the agenda reads.

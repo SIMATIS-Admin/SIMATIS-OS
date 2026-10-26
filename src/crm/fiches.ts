@@ -143,6 +143,7 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
     .select({ id: taches.id, titre: taches.titre, faitAt: taches.faitAt, source: taches.source })
     .from(taches)
     .where(and(eq(taches.instanceId, currentInstance), isNotNull(taches.faitAt), lie(p, taches)));
+  const rdvs = await rendezVousDe(tx, kind, id);
   const historique: Evenement[] = [
     ...notes.map((n) => ({
       id: n.id,
@@ -160,6 +161,21 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
       at: t.faitAt?.toISOString() ?? '',
       origine: origine(t.source),
     })),
+    // A meeting created in the OS is an activity of its contacts once it has taken place.
+    ...rdvs.flatMap((r) =>
+      r.id.startsWith('os:') && r.debut && r.debut <= maintenant
+        ? [
+            {
+              id: `rdv-${r.id}`,
+              type: 'reunion' as const,
+              titre: r.titre,
+              texte: null,
+              at: r.debut.toISOString(),
+              origine: 'os' as const,
+            },
+          ]
+        : [],
+    ),
   ];
 
   const fiche = { ...row, origine: origine(row.source) } as Fiche['fiche'];
@@ -227,7 +243,7 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
     fiche,
     liens,
     aVenir: await listTachesOuvertes(tx, lie(p, taches)),
-    rendezVous: await rendezVousDe(tx, kind, id),
+    rendezVous: rdvs,
     historique,
     ...(etapes ? { etapes } : {}),
     ecrit: row.source !== 'hubspot' || reglages?.sens === 'deux_sens',

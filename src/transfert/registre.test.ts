@@ -38,3 +38,13 @@ describe('REGISTRE', () => {
     expect(REGISTRE.contact.obligatoires).not.toContain('entreprise');
   });
 });
+
+describe('estMiroir', () => {
+  it('traite un rendez-vous créé dans l’OS ou déjà détaché comme un objet de l’OS', async () => {
+    const { estMiroir } = await import('./registre.js');
+    const ligne = (eventId: string) => ({ id: 'x', instanceId: 'i', source: 'natif', eventId });
+    expect(estMiroir('rdv', ligne('os:abc'))).toBe(false);
+    expect(estMiroir('rdv', ligne('copie:abc'))).toBe(false);
+    expect(estMiroir('rdv', ligne('evenement-google'))).toBe(true);
+  });
+});

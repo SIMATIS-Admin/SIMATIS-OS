@@ -694,6 +694,11 @@ export type AgendasReponse =
 export const fetchAgendas = (slug: string) => getJson<AgendasReponse>(inst(slug, 'agendas'));
 export const fetchRendezVous = (slug: string) =>
   getJson<RendezVousReponse>(inst(slug, 'rendez-vous'));
+// A meeting created in the OS, without Google: its id starts with `os:`.
+export const creerRdvOs = (
+  slug: string,
+  saisie: { titre: string; debut: string; dureeMinutes: number; lieu: string | null },
+) => sendJson<{ id: string }>('POST', inst(slug, 'rendez-vous'), saisie);
 export const fetchPreparation = (slug: string, opportuniteId: string) =>
   getJson<Preparation>(inst(slug, `opportunites/${encodeURIComponent(opportuniteId)}/preparation`));
 export const lierRendezVous = (

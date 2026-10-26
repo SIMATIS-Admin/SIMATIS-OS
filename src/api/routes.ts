@@ -148,6 +148,7 @@ import {
 import {
   compteRenduSchema,
   compterATrier,
+  creerRendezVousOs,
   decrireRdv,
   enregistrerCompteRendu,
   getRendezVous,
@@ -158,6 +159,7 @@ import {
   listerRendezVous,
   preparer,
   RdvIndisponible,
+  rdvOsSchema,
 } from '../conversion/rdv.js';
 import { funnelSchema, simulerFunnel } from '../pilotage/funnel.js';
 import { funnelOf, getTableau } from '../pilotage/tableau.js';
@@ -1312,6 +1314,18 @@ export function registerApi(
         if (error instanceof RdvIndisponible) return reply.code(404).send({ error: error.message });
         throw error;
       }
+    }),
+  );
+  app.post<SlugParams>(
+    '/api/i/:slug/rendez-vous',
+    onInstance<SlugParams>(async (i, request, reply) => {
+      const parsed = rdvOsSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: parsed.error.issues[0]?.message ?? 'Requête invalide' });
+      }
+      return reply.code(201).send({ id: await creerRendezVousOs(db, i, parsed.data) });
     }),
   );
   const statutRdvSchema = z.object({ statut: z.enum(['a_trier', 'rdv', 'ignore']) }).strict();
