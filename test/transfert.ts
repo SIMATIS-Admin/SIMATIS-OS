@@ -1,3 +1,5 @@
+import { getTableColumns, getTableName } from 'drizzle-orm';
+import { REGISTRE } from '../src/transfert/registre.js';
 import type { TestApp } from './database.js';
 import type { Instance } from '../src/instances/schema.js';
 import { createInstance } from '../src/instances/service.js';
@@ -81,4 +83,36 @@ export function fabrique(t: TestApp) {
         )
       ).rows[0]?.instance_id ?? null,
   };
+}
+
+// No row may point at a row of another instance, whatever the link.
+export async function liensCroises(t: TestApp): Promise<number> {
+  let total = 0;
+  const requete = async (table: string, col: string, cible: string) => {
+    const r = await t.owner.pool.query<{ n: string }>(
+      `select count(*) n from ${table} a join ${cible} b on a.${col} = b.id where a.instance_id <> b.instance_id`,
+    );
+    total += Number(r.rows[0]?.n);
+  };
+  for (const entree of Object.values(REGISTRE)) {
+    const nom = getTableName(entree.table);
+    for (const l of entree.liens) {
+      const colonne = getTableColumns(entree.table)[l.colonne]?.name as string;
+      await requete(nom, colonne, getTableName(REGISTRE[l.vers].table));
+    }
+    for (const l of entree.liaisons) {
+      const cols = getTableColumns(l.table);
+      await requete(
+        getTableName(l.table),
+        cols[l.colProprietaire]?.name as string,
+        getTableName(entree.table),
+      );
+      await requete(
+        getTableName(l.table),
+        cols[l.colCible]?.name as string,
+        getTableName(REGISTRE[l.cible].table),
+      );
+    }
+  }
+  return total;
 }

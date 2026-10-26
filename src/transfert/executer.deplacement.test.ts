@@ -1,9 +1,7 @@
-import { getTableColumns, getTableName } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
-import { creerMonde, fabrique, type Monde } from '../../test/transfert.js';
+import { creerMonde, fabrique, liensCroises, type Monde } from '../../test/transfert.js';
 import { executerTransfert } from './executer.js';
-import { REGISTRE } from './registre.js';
 import type { TypeObjet } from './types.js';
 
 describe('executerTransfert : déplacement', () => {
@@ -30,38 +28,6 @@ describe('executerTransfert : déplacement', () => {
       exclusions,
     });
 
-  // No row may point at a row of another instance, whatever the link.
-  const liensCroises = async () => {
-    let total = 0;
-    const requete = async (table: string, col: string, cible: string) => {
-      const r = await t.owner.pool.query<{ n: string }>(
-        `select count(*) n from ${table} a join ${cible} b on a.${col} = b.id where a.instance_id <> b.instance_id`,
-      );
-      total += Number(r.rows[0]?.n);
-    };
-    for (const entree of Object.values(REGISTRE)) {
-      const nom = getTableName(entree.table);
-      for (const l of entree.liens) {
-        const colonne = getTableColumns(entree.table)[l.colonne]?.name as string;
-        await requete(nom, colonne, getTableName(REGISTRE[l.vers].table));
-      }
-      for (const l of entree.liaisons) {
-        const cols = getTableColumns(l.table);
-        await requete(
-          getTableName(l.table),
-          cols[l.colProprietaire]?.name as string,
-          getTableName(entree.table),
-        );
-        await requete(
-          getTableName(l.table),
-          cols[l.colCible]?.name as string,
-          getTableName(REGISTRE[l.cible].table),
-        );
-      }
-    }
-    return total;
-  };
-
   it('déplace une affaire native avec sa tâche et son contact proposé', async () => {
     const contact = await f.contact(m.siege, 'Contact Fictif');
     const affaire = await f.affaire(m.siege, 'Affaire Fictive');
@@ -74,7 +40,7 @@ describe('executerTransfert : déplacement', () => {
     expect(await f.instanceDe('opportunites', affaire)).toBe(m.a.id);
     expect(await f.instanceDe('taches', tache)).toBe(m.a.id);
     expect(await f.instanceDe('contacts', contact)).toBe(m.a.id);
-    expect(await liensCroises()).toBe(0);
+    expect(await liensCroises(t)).toBe(0);
   });
 
   it('garde la liaison et le lien principal de l’affaire', async () => {
@@ -144,6 +110,6 @@ describe('executerTransfert : déplacement', () => {
       [reste],
     );
     expect(s.rows[0]).toEqual({ contact_id: null, instance_id: m.siege.id });
-    expect(await liensCroises()).toBe(0);
+    expect(await liensCroises(t)).toBe(0);
   });
 });
