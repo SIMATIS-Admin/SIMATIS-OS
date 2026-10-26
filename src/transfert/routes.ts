@@ -1,5 +1,7 @@
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { rendezVous } from '../crm/schema.js';
 import type { Database } from '../db.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { CopieDejaFaite, executerTransfert } from './executer.js';
@@ -9,7 +11,10 @@ import { planifierTransfert, RacineIntrouvable, TransfertRefuse } from './plan.j
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TYPE = z.enum(['sujet', 'tache', 'affaire', 'contact', 'entreprise', 'rdv']);
 const REF = z.object({ type: TYPE, id: z.string().regex(UUID) });
-const corpsSchema = REF.extend({
+// A meeting's page is addressed by its Google event id, not by the row's uuid.
+const corpsSchema = z.object({
+  type: TYPE,
+  id: z.string().min(1).max(300),
   instanceOrigine: z.string().min(1),
   instanceCible: z.string().min(1),
   exclusions: z.array(REF).default([]),
@@ -49,10 +54,22 @@ export function registerTransfertRoutes(
       const origine = await getInstanceBySlug(db, instanceOrigine);
       const cible = await getInstanceBySlug(db, instanceCible);
       if (!origine || !cible) return reply.code(404).send({ error: 'Instance inconnue' });
+      let racineId = reste.id;
+      if (!UUID.test(racineId)) {
+        if (reste.type !== 'rdv') return reply.code(400).send({ error: 'Identifiant invalide' });
+        const [ligne] = await transfertDb
+          .select({ id: rendezVous.id })
+          .from(rendezVous)
+          .where(and(eq(rendezVous.instanceId, origine.id), eq(rendezVous.eventId, reste.id)));
+        if (!ligne) {
+          return reply.code(404).send({ error: "Objet introuvable dans l'instance d'origine." });
+        }
+        racineId = ligne.id;
+      }
       const demande = {
         instanceOrigine: origine.id,
         cible: cible.id,
-        racine: { type: reste.type, id: reste.id },
+        racine: { type: reste.type, id: racineId },
         exclusions: reste.exclusions,
       };
       try {

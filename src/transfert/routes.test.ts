@@ -87,6 +87,19 @@ describe('Routes de transfert', () => {
     expect((await post('siege', '', corps(id, { copierQuandMeme: true }))).statusCode).toBe(200);
   });
 
+  it('accepte l’identifiant Google d’un rendez-vous, tel que l’affiche sa page', async () => {
+    await f.rdv(m.siege, 'Route');
+    const r = await post('siege', '/apercu', { ...corps('ev-Route'), type: 'rdv' });
+    expect(r.statusCode).toBe(200);
+    expect(r.json<{ racine: { type: string; mode: string } }>().racine).toMatchObject({
+      type: 'rdv',
+      mode: 'copie',
+    });
+    expect(
+      (await post('siege', '/apercu', { ...corps('ev-inconnu'), type: 'rdv' })).statusCode,
+    ).toBe(404);
+  });
+
   it('400 pour un corps invalide ou une cible identique, 404 pour une instance inconnue', async () => {
     const id = await f.contact(m.siege, 'Corps Fictif');
     expect((await post('siege', '', { ...corps(id), type: 'bidon' })).statusCode).toBe(400);
