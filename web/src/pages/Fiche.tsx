@@ -18,6 +18,7 @@ import { eur } from '../crm.js';
 import type { InstanceSummary } from '../nav.js';
 import { Icon } from '../icons.js';
 import { ActionsFiche } from './liens/ActionsFiche.js';
+import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { CarteLiens, type LigneLien } from './liens/CarteLiens.js';
 import { Cloture } from './Pipeline.js';
 import { ACTIVITES } from './taches/commun.js';
@@ -390,6 +391,14 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
               </a>
             )}
             <span className={`badge ${hubspot ? 'blue' : ''}`}>{hubspot ? 'HubSpot' : 'OS'}</span>
+            <PastilleInstance
+              slug={slug}
+              instance={{ slug }}
+              objet={{ type: kind, id }}
+              onTransfere={(cible, racine) => {
+                location.hash = `#/${cible}/fiche/${racine.type}/${racine.id}`;
+              }}
+            />
           </div>
         </div>
         <ActionsFiche

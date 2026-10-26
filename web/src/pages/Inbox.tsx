@@ -24,6 +24,7 @@ import {
   type TypeSujet,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { PropositionDetail } from './inbox/Proposition.js';
 import { EditionTache } from './taches/Edition.js';
 
@@ -297,25 +298,35 @@ function EnvoiLivreBlanc({
 }
 
 function Detail({
+  slug,
   s,
   onTraite,
   onRemettre,
   onTache,
   onModifier,
   onLivreBlanc,
+  onTransfere,
 }: {
+  slug: string;
   s: SujetVue;
   onTraite: () => void;
   onRemettre: () => void;
   onTache: () => void;
   onModifier: (modif: { echeance?: string | null; priorite?: number }) => void;
   onLivreBlanc: (numero: 1 | 2) => void;
+  onTransfere: (cibleSlug: string) => void;
 }) {
   return (
     <div className="panel inbox-detail">
       <div className="panel-h">
         <h2>{s.titre}</h2>
         <span className="badge">{TYPES[s.type][1]}</span>
+        <PastilleInstance
+          slug={slug}
+          instance={s.instance}
+          objet={{ type: 'sujet', id: s.id }}
+          onTransfere={(cible) => onTransfere(cible)}
+        />
       </div>
       <div className="panel-b">
         <div className="meta-row" style={{ marginBottom: 12 }}>
@@ -831,7 +842,9 @@ export function Inbox({
     }
     return (
       <Detail
+        slug={slug}
         s={s}
+        onTransfere={(cible) => apres(`Entrée transférée vers ${cible}.`)}
         onTraite={() => void agir(marquerSujetTraite(s.instance.slug, s.id), 'Traité.')}
         onRemettre={() => void agir(remettreSujet(s.instance.slug, s.id), 'Remis à traiter.')}
         onTache={() => setEdition(s)}

@@ -10,6 +10,7 @@ import {
   type StatutRdv,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { LierExistant } from './liens/CarteLiens.js';
 import { quand } from './RendezVous.js';
 
@@ -275,6 +276,14 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
           </a>
           <h1>{rdv.titre || 'Rendez-vous'}</h1>
           <div className="small muted fi-sous">
+            <PastilleInstance
+              slug={slug}
+              instance={{ slug }}
+              objet={{ type: 'rdv', id }}
+              onTransfere={(cible) => {
+                location.hash = `#/${cible}/rendez-vous`;
+              }}
+            />
             {rdv.debut && <span>{quand(rdv.debut)}</span>}
             {rdv.lieu && <span>{rdv.lieu}</span>}
             {rdv.compteRendu ? (

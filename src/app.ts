@@ -9,11 +9,14 @@ import { registerHealth } from './health.js';
 import { registerMcp } from './mcp/server.js';
 import { registerRunnerApi } from './routines/runner-api.js';
 import { registerVmaRoutes } from './vma/routes.js';
+import { registerTransfertRoutes } from './transfert/routes.js';
 import { registerWeb } from './web.js';
 
 export type AppDeps = {
   pool: pg.Pool;
   db: Database;
+  // Owner connection of the transfer routes (see registerTransfertRoutes); absent = no transfer.
+  transfertDb?: Database;
   version: string;
   backupStatusFile?: string;
   lectureRole?: string;
@@ -29,6 +32,7 @@ export type AppDeps = {
 export function buildApp({
   pool,
   db,
+  transfertDb,
   version,
   backupStatusFile = './backup-status/last.json',
   lectureRole = 'simatis_app_lecture',
@@ -43,6 +47,7 @@ export function buildApp({
   registerHealth(app, { pool, version, backupStatusFile });
   registerApi(app, { db, secretsDir, realWrites, googleFetch, imapServeur });
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
+  if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db });

@@ -4564,3 +4564,51 @@ tr.sel {
     grid-template-columns: 1fr;
   }
 }
+
+/* Instance pastille: same family as the HubSpot/OS badge, clickable only in the own instance. */
+.pastille-instance-zone {
+  position: relative;
+  display: inline-block;
+}
+.pastille-instance {
+  border: 1px solid var(--line);
+  background: none;
+  cursor: pointer;
+}
+.pastille-menu {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  margin-top: 4px;
+  padding: 4px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(12, 37, 63, 0.18);
+}
+.pastille-menu button {
+  padding: 6px 10px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.pastille-menu button:hover {
+  background: var(--line-2);
+}
+.transfert-apercu fieldset {
+  margin: 12px 0;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+}
+.transfert-ligne {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+}
