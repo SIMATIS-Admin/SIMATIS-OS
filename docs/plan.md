@@ -35,7 +35,7 @@ Statuts possibles : à relire, validée, en cours, livrée.
 - **Mandat prospect** : une instance de démonstration aux données fictives, pour présenter le modèle et le CRM. Marc la montre lui-même ou en partage une copie isolée (sans connexion, durée limitée, révocable). Quand le prospect signe, elle devient un mandat en cours : données fictives retirées, outils du client à brancher.
 - Les vrais noms des mandats ne figurent jamais dans le dépôt : ils vivent dans la configuration de l'instance, hors git.
 
-Chaque instance a sa configuration et ses accès. Aucune ne lit les données d'une autre, SIMATIS compris. Seul le portefeuille croise les instances, et uniquement par des compteurs.
+Chaque instance a sa configuration et ses accès. Aucune ne lit les données d'une autre, avec une exception : SIMATIS lit ses mandats actifs en lecture seule, pour le super-administrateur seulement (Inbox agrégée, recherche dans les mandats), chaque mandat dans sa propre transaction isolée. Le portefeuille croise les instances par des compteurs.
 
 ### Données : une copie de travail
 
