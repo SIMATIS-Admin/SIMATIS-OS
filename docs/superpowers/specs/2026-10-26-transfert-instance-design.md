@@ -11,7 +11,8 @@ Exemples : une entrée Inbox, une tâche, une affaire, un contact.
 1. **Objet natif** (`source = 'natif'`, créé dans l'OS) : il est **déplacé**, avec ses objets liés.
 2. **Objet miroir d'un outil tiers** (`source` ≠ `natif`, ex. HubSpot, Google) : il est **copié**. L'original reste dans son instance et continue d'être synchronisé. La copie est **détachée** de l'outil (`source = 'natif'`, `source_id` vide) : c'est un objet propre de l'OS.
 3. **Les objets liés suivent** (déplacés ou copiés selon la règle 1 ou 2 pour chacun), après un **aperçu** que Marc valide.
-4. **Historique de la copie** : chaque objet copié reçoit une activité « Créé depuis l'instance *X* » (nom de l'instance d'origine, type et titre de l'objet d'origine). Chaque objet déplacé reçoit « Déplacé depuis l'instance *X* ».
+4. **Historique** : un contact, une entreprise ou une affaire copié reçoit une activité « Créé depuis l'instance *X* » (type et titre de l'objet d'origine) ; déplacé, « Déplacé depuis l'instance *X* ». Une tâche, une entrée Inbox ou un rendez-vous n'a pas d'historique propre : son origine est dans le journal de l'instance cible (règle 6).
+6. **Trace** : le journal de l'instance cible garde, pour chaque copie, le type, l'identifiant d'origine, l'instance d'origine et l'identifiant de la copie ; c'est aussi ce qui détecte une copie déjà faite.
 5. **Droits** : il faut deux conditions réunies : (a) l'utilisateur est **super-administrateur** (droit valable dans toute instance, aujourd'hui Marc seul ; un futur utilisateur ne l'a que si Marc le lui donne) ; (b) l'instance courante est de type `propre`. Un helper unique `peutTransferer(utilisateur, instance)` porte la règle, pour l'API comme pour l'interface. L'instance d'origine ou la cible peut être un mandat ; la cible ne peut pas être archivée.
 
 ## Livraisons
@@ -23,7 +24,7 @@ Le reste de ce document décrit la livraison 1 ; le moteur est écrit pour que l
 
 ## Périmètre de la première version
 
-Objets : entrée Inbox (`sujets`), tâche, affaire (`opportunites`), contact, entreprise, rendez-vous (`rendez_vous`), activité.
+Objets déplaçables : entrée Inbox (`sujets`), tâche, affaire (`opportunites`), contact, entreprise, rendez-vous (`rendez_vous`). Les activités les accompagnent.
 
 Hors périmètre : connexions, routines, propositions, autonomie (réglages d'instance) ; devis (brique propre à SIMATIS) ; base vivante (module à part) ; conversations d'ajout (`echanges_ajout`, éphémères).
 
@@ -39,7 +40,10 @@ Le sous-graphe est calculé à partir de l'objet choisi ; un lien ne peut jamais
 | Tâche | ses activités | affaire, contact, entreprise visés |
 | Entrée Inbox | — | contact, entreprise, tâche visés |
 | Rendez-vous | liens vers contacts, entreprises, affaires | ces contacts, entreprises, affaires |
-| Activité | — | l'objet auquel elle est rattachée |
+
+**Le mode du sous-graphe suit celui de la racine.** Racine native : ses enfants natifs sont déplacés, ses liés miroirs sont copiés (les liens des objets déplacés sont réécrits vers les copies). Racine miroir (copie) : tous les enfants sont copiés, même natifs, pour ne pas retirer de l'instance d'origine des objets créés dans l'OS sous un miroir qui y reste.
+
+L'**activité** n'est jamais une racine : elle voyage avec l'objet auquel elle est rattachée.
 
 Si Marc décoche un objet « proposé » qui est référencé par un objet qui bouge, le lien est **retiré** sur l'objet transféré (colonne mise à `null`, ligne de liaison non reprise). Il n'y a jamais de lien entre instances.
 
@@ -61,7 +65,7 @@ Principe : aucun blocage silencieux. Tout ce qui change ou se perd est écrit da
 
 - **Entrée Inbox, clé déjà prise dans la cible** : `source_id` est la clé stable donnée par la routine, unique par instance (elle empêche une routine de redéposer deux fois le même sujet). Si la clé existe déjà dans la cible, le transfert passe et la clé reçoit le suffixe `:transfert-<id>` ; l'aperçu le signale.
 - **Collision d'unicité `(instance, source, source_id)`** : ne peut pas se produire pour un objet natif (pas d'identifiant d'origine) ni pour une copie (détachée). Un refus de sécurité subsiste, transaction annulée, rien d'écrit ; il ne doit jamais se déclencher.
-- **Copier deux fois le même miroir** : l'aperçu détecte une copie existante (retrouvée par l'activité d'origine) et propose « Ouvrir la copie existante » (par défaut) ou « Copier quand même ».
+- **Copier deux fois le même miroir** : l'aperçu détecte une copie existante (retrouvée dans le journal de la cible) et propose « Ouvrir la copie existante » (par défaut) ou « Copier quand même ».
 - **Rendez-vous copié** : `event_id` est unique par instance ; la copie reçoit `copie:<nouvel id>`, donc son lien avec l'événement Google est coupé (voulu, règle 2). Le compte rendu, les participants et les liens vers les contacts sont conservés. L'aperçu écrit « ne sera plus lié à l'agenda ». Un rendez-vous natif sans conflit est déplacé tel quel.
 - **Entrée liée à une proposition** (`proposition_id`) : le lien est retiré (les propositions restent dans leur instance) ; l'aperçu le dit.
 
