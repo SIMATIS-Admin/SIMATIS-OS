@@ -42,8 +42,9 @@ export type RechercheMandat = ResultatsRecherche & {
 const nonVide = (r: ResultatsRecherche) =>
   r.affaires.length + r.personnes.length + r.organisations.length > 0;
 
-// The own instance reads its active mandates (read only). Each one is read in its own isolated
-// transaction; one that fails is left out without hiding the others, and its error is not sent.
+// The own instance reads its active mandates (read only), one after the other: each read opens
+// three transactions, and N mandates at once would exhaust the connection pool. A mandate that
+// fails is reported by name (never its error) so the results are not taken for complete.
 export async function rechercherMandats(
   db: Executor,
   q: string,
@@ -52,24 +53,26 @@ export async function rechercherMandats(
     instance: Instance,
     q: string,
   ) => Promise<ResultatsRecherche> = rechercherDans,
-): Promise<RechercheMandat[]> {
-  if (q.trim().length < 2) return [];
+  surErreur: (instance: Instance, erreur: unknown) => void = () => undefined,
+): Promise<{ resultats: RechercheMandat[]; echecs: string[] }> {
+  const rien = { resultats: [], echecs: [] };
+  if (q.trim().length < 2) return rien;
   const mandats = (await listInstances(db)).filter((i) => i.type === 'mandat');
-  const lectures = await Promise.allSettled(
-    mandats.map(async (m) => ({ m, r: await lire(db, m, q) })),
-  );
-  return lectures.flatMap((l) =>
-    l.status === 'fulfilled' && nonVide(l.value.r)
-      ? [
-          {
-            instance: {
-              slug: l.value.m.slug,
-              nom: l.value.m.nom,
-              couleur: l.value.m.config.couleur ?? null,
-            },
-            ...l.value.r,
-          },
-        ]
-      : [],
-  );
+  const resultats: RechercheMandat[] = [];
+  const echecs: string[] = [];
+  for (const m of mandats) {
+    try {
+      const r = await lire(db, m, q);
+      if (nonVide(r)) {
+        resultats.push({
+          instance: { slug: m.slug, nom: m.nom, couleur: m.config.couleur ?? null },
+          ...r,
+        });
+      }
+    } catch (erreur) {
+      echecs.push(m.nom);
+      surErreur(m, erreur);
+    }
+  }
+  return { resultats, echecs };
 }

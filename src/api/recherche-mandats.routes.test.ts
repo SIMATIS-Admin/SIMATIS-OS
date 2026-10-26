@@ -98,14 +98,48 @@ describe('Recherche dans les mandats', () => {
 
   it('répond 400 à une portée inconnue et vide sous deux caractères', async () => {
     expect((await chercher('siege', 'dupont', 'tout')).statusCode).toBe(400);
-    expect((await chercher('siege', 'd')).json<Reponse>()).toEqual({ mandats: [] });
+    expect((await chercher('siege', 'd')).json<Reponse>()).toEqual({ mandats: [], echecs: [] });
   });
 
-  it('garde les résultats des autres mandats quand la lecture de l’un échoue', async () => {
-    const res = await rechercherMandats(t.app.db, 'fictif', (db, instance, q) => {
-      if (instance.slug === 'mandat-b') throw new Error('panne simulée');
-      return rechercherDans(db, instance, q);
+  it('garde les résultats des autres mandats quand l’un échoue, et le signale sans son erreur', async () => {
+    const erreurs: string[] = [];
+    const res = await rechercherMandats(
+      t.app.db,
+      'fictif',
+      (db, instance, q) => {
+        if (instance.slug === 'mandat-b') throw new Error('panne simulée');
+        return rechercherDans(db, instance, q);
+      },
+      (instance) => erreurs.push(instance.slug),
+    );
+    expect(res.resultats.map((x) => x.instance.slug)).toEqual(['mandat-a']);
+    expect(res.echecs).toEqual(['Mandat B']);
+    expect(JSON.stringify(res)).not.toContain('panne simulée');
+    expect(erreurs).toEqual(['mandat-b']);
+  });
+
+  it('lit les mandats un par un, pour ne pas épuiser les connexions', async () => {
+    let enCours = 0;
+    let max = 0;
+    await rechercherMandats(t.app.db, 'fictif', async (db, instance, q) => {
+      enCours++;
+      max = Math.max(max, enCours);
+      try {
+        return await rechercherDans(db, instance, q);
+      } finally {
+        enCours--;
+      }
     });
-    expect(res.map((x) => x.instance.slug)).toEqual(['mandat-a']);
+    expect(max).toBe(1);
+  });
+
+  it('annonce les mandats non lus dans la réponse, et accepte une recherche en double paramètre', async () => {
+    const r = await chercher('siege', 'dupont');
+    expect(r.json<{ echecs: string[] }>().echecs).toEqual([]);
+    const double = await app.inject({
+      method: 'GET',
+      url: '/api/i/siege/recherche?q=a&q=b&portee=mandats',
+    });
+    expect(double.statusCode).toBe(200);
   });
 });

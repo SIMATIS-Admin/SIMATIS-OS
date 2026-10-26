@@ -1097,14 +1097,21 @@ export function registerApi(
     '/api/i/:slug/recherche',
     onInstance<RechercheRoute>(async (i, request, reply) => {
       const { portee } = request.query;
-      if (portee === undefined) return rechercherDans(db, i, request.query.q ?? '');
+      if (portee === undefined) {
+        return rechercherDans(db, i, typeof request.query.q === 'string' ? request.query.q : '');
+      }
       if (portee !== 'mandats') return reply.code(400).send({ error: 'Portée inconnue' });
       if (!peutTransferer(UTILISATEUR_PILOTE, i)) {
         return reply
           .code(403)
           .send({ error: 'Recherche dans les mandats réservée à l’instance SIMATIS.' });
       }
-      return { mandats: await rechercherMandats(db, request.query.q ?? '') };
+      // `?q=a&q=b` arrives as an array: only a text is a search.
+      const q = typeof request.query.q === 'string' ? request.query.q : '';
+      const { resultats, echecs } = await rechercherMandats(db, q, undefined, (m, err) =>
+        request.log.warn({ err, mandat: m.slug }, 'recherche : mandat non lu'),
+      );
+      return { mandats: resultats, echecs };
     }),
   );
   app.get<RechercheRoute>(
