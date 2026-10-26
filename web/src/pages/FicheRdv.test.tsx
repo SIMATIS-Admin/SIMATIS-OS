@@ -32,6 +32,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.includes('/entreprises?q='))
     return json([{ id: 'e2', nom: 'Entreprise Trouvée', ville: null }]);
   if (url.endsWith('/contacts')) return json({ id: 'c9' });
+  if (url.endsWith('/entreprises') && method === 'POST') return json({ id: 'e9' });
   if (method !== 'GET') return json({ ok: true });
   return json(rdv());
 }
@@ -111,6 +112,53 @@ describe('FicheRdv', () => {
       entrepriseId: 'e1',
     });
     expect(envoi('/rendez-vous/evt-1/liens', 'POST')?.body).toEqual({ kind: 'contact', id: 'c9' });
+  });
+
+  it('crée un contact depuis la fiche du RDV, dans une fenêtre, et le lie sans changer de page', async () => {
+    render(<FicheRdv slug="simatis" id="evt-1" />);
+    await screen.findByRole('heading', { name: 'Point de cadrage' });
+    const carte = screen.getByRole('heading', { name: 'Contacts' }).closest('section')!;
+    fireEvent.click(within(carte).getByRole('button', { name: '+ Ajouter' }));
+    fireEvent.click(within(carte).getByRole('button', { name: 'Créer un contact' }));
+    const fenetre = await screen.findByRole('dialog', { name: 'Nouveau contact' });
+    fireEvent.change(within(fenetre).getByLabelText('Nom'), { target: { value: 'Paul Fictif' } });
+    fireEvent.change(within(fenetre).getByLabelText('Email'), {
+      target: { value: 'paul@exemple.test' },
+    });
+    fireEvent.click(within(fenetre).getByRole('button', { name: 'Créer' }));
+    await waitFor(() => expect(envoi('/rendez-vous/evt-1/liens', 'POST')).toBeTruthy());
+    expect(envoi('/contacts', 'POST')?.body).toMatchObject({
+      nom: 'Paul Fictif',
+      email: 'paul@exemple.test',
+    });
+    expect(envoi('/rendez-vous/evt-1/liens', 'POST')?.body).toEqual({ kind: 'contact', id: 'c9' });
+    expect(location.hash).toBe('');
+  });
+
+  it('crée une organisation depuis la fiche du RDV et la lie', async () => {
+    render(<FicheRdv slug="simatis" id="evt-1" />);
+    await screen.findByRole('heading', { name: 'Point de cadrage' });
+    const carte = screen.getByRole('heading', { name: 'Organisation' }).closest('section')!;
+    fireEvent.click(within(carte).getByRole('button', { name: '+ Ajouter' }));
+    fireEvent.click(within(carte).getByRole('button', { name: 'Créer une organisation' }));
+    const fenetre = await screen.findByRole('dialog', { name: 'Nouvelle entreprise' });
+    fireEvent.change(within(fenetre).getByLabelText('Nom'), {
+      target: { value: 'Atelier Fictif' },
+    });
+    fireEvent.click(within(fenetre).getByRole('button', { name: 'Créer' }));
+    await waitFor(() => expect(envoi('/rendez-vous/evt-1/liens', 'POST')).toBeTruthy());
+    expect(envoi('/rendez-vous/evt-1/liens', 'POST')?.body).toEqual({
+      kind: 'entreprise',
+      id: 'e9',
+    });
+  });
+
+  it('n’offre pas de création pour une affaire', async () => {
+    render(<FicheRdv slug="simatis" id="evt-1" />);
+    await screen.findByRole('heading', { name: 'Point de cadrage' });
+    const carte = screen.getByRole('heading', { name: 'Affaire' }).closest('section')!;
+    fireEvent.click(within(carte).getByRole('button', { name: '+ Ajouter' }));
+    expect(within(carte).queryByRole('button', { name: /^Créer/ })).toBeNull();
   });
 
   it('saves the compte rendu, with the task and the second brain checked by default', async () => {

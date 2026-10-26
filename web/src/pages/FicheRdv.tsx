@@ -11,6 +11,8 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { PastilleInstance } from './transfert/PastilleInstance.js';
+import { NouveauContact } from './Contacts.js';
+import { NouvelleEntreprise } from './Entreprises.js';
 import { LierExistant } from './liens/CarteLiens.js';
 import { quand } from './RendezVous.js';
 
@@ -43,6 +45,21 @@ function Groupe({
   onMessage: (m: string | null) => void;
 }) {
   const [ajout, setAjout] = useState(false);
+  const [creation, setCreation] = useState(false);
+  // The person is created without leaving the meeting, then linked to it at once. No id: the
+  // creation was only simulated, nothing to link.
+  const apresCreation = (id: string, message?: string) => {
+    setCreation(false);
+    if (!id) return onMessage(message ?? null);
+    void lierRdv(slug, rdvId, { kind: groupe.kind, id }, false).then(
+      () => {
+        setAjout(false);
+        onMessage(message ?? null);
+        onChange();
+      },
+      (e: unknown) => onMessage(erreurDe(e)),
+    );
+  };
   const agir = (id: string, retirer: boolean) =>
     lierRdv(slug, rdvId, { kind: groupe.kind, id }, retirer).then(
       () => {
@@ -61,11 +78,30 @@ function Groupe({
         </button>
       </div>
       {ajout && (
-        <LierExistant
+        <>
+          {groupe.kind !== 'affaire' && (
+            <div className="fi-menu">
+              <button className="btn ghost sm" onClick={() => setCreation(true)}>
+                {groupe.kind === 'contact' ? 'Créer un contact' : 'Créer une organisation'}
+              </button>
+            </div>
+          )}
+          <LierExistant
+            slug={slug}
+            kind={groupe.kind}
+            exclus={lignes.map((l) => l.id)}
+            onChoix={(id) => void agir(id, false)}
+          />
+        </>
+      )}
+      {creation && groupe.kind === 'contact' && (
+        <NouveauContact slug={slug} onClose={() => setCreation(false)} onCreated={apresCreation} />
+      )}
+      {creation && groupe.kind === 'entreprise' && (
+        <NouvelleEntreprise
           slug={slug}
-          kind={groupe.kind}
-          exclus={lignes.map((l) => l.id)}
-          onChoix={(id) => void agir(id, false)}
+          onClose={() => setCreation(false)}
+          onCreated={apresCreation}
         />
       )}
       <ul className="panel-b fi-liste">
