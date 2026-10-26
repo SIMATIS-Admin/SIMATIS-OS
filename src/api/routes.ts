@@ -110,7 +110,8 @@ import { TYPES_ACTIVITE } from '../crm/type-tache.js';
 import { ajouterEmail, definirEmailPrincipal, retirerEmail } from '../crm/emails.js';
 import { fusionnerFiches } from '../crm/fusion.js';
 import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../crm/liens.js';
-import { rechercherDans } from '../crm/recherche.js';
+import { rechercherDans, rechercherMandats } from '../crm/recherche.js';
+import { peutTransferer, UTILISATEUR_PILOTE } from '../transfert/droits.js';
 import { supprimerFiche } from '../crm/suppression.js';
 import {
   ajouterNote,
@@ -1090,11 +1091,21 @@ export function registerApi(
     }),
   );
 
-  type RechercheRoute = SlugParams & { Querystring: { q?: string } };
+  type RechercheRoute = SlugParams & { Querystring: { q?: string; portee?: string } };
   // Global search (Pipedrive top bar): a few deals, people and organisations at once.
   app.get<RechercheRoute>(
     '/api/i/:slug/recherche',
-    onInstance<RechercheRoute>((i, request) => rechercherDans(db, i, request.query.q ?? '')),
+    onInstance<RechercheRoute>(async (i, request, reply) => {
+      const { portee } = request.query;
+      if (portee === undefined) return rechercherDans(db, i, request.query.q ?? '');
+      if (portee !== 'mandats') return reply.code(400).send({ error: 'Portée inconnue' });
+      if (!peutTransferer(UTILISATEUR_PILOTE, i)) {
+        return reply
+          .code(403)
+          .send({ error: 'Recherche dans les mandats réservée à l’instance SIMATIS.' });
+      }
+      return { mandats: await rechercherMandats(db, request.query.q ?? '') };
+    }),
   );
   app.get<RechercheRoute>(
     '/api/i/:slug/opportunites/recherche',

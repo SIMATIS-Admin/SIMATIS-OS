@@ -1,5 +1,6 @@
 import type { Executor } from '../db.js';
 import type { Instance } from '../instances/schema.js';
+import { listInstances } from '../instances/service.js';
 import { rechercherOpportunites } from './pipeline.js';
 import { searchContacts, searchEntreprises } from './service.js';
 
@@ -32,4 +33,43 @@ export async function rechercherDans(
       .map((p) => ({ id: p.id, nom: p.nom, entreprise: p.entreprise })),
     organisations: organisations.slice(0, 5).map((o) => ({ id: o.id, nom: o.nom, ville: o.ville })),
   };
+}
+
+export type RechercheMandat = ResultatsRecherche & {
+  instance: { slug: string; nom: string; couleur: string | null };
+};
+
+const nonVide = (r: ResultatsRecherche) =>
+  r.affaires.length + r.personnes.length + r.organisations.length > 0;
+
+// The own instance reads its active mandates (read only). Each one is read in its own isolated
+// transaction; one that fails is left out without hiding the others, and its error is not sent.
+export async function rechercherMandats(
+  db: Executor,
+  q: string,
+  lire: (
+    db: Executor,
+    instance: Instance,
+    q: string,
+  ) => Promise<ResultatsRecherche> = rechercherDans,
+): Promise<RechercheMandat[]> {
+  if (q.trim().length < 2) return [];
+  const mandats = (await listInstances(db)).filter((i) => i.type === 'mandat');
+  const lectures = await Promise.allSettled(
+    mandats.map(async (m) => ({ m, r: await lire(db, m, q) })),
+  );
+  return lectures.flatMap((l) =>
+    l.status === 'fulfilled' && nonVide(l.value.r)
+      ? [
+          {
+            instance: {
+              slug: l.value.m.slug,
+              nom: l.value.m.nom,
+              couleur: l.value.m.config.couleur ?? null,
+            },
+            ...l.value.r,
+          },
+        ]
+      : [],
+  );
 }
