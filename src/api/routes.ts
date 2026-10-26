@@ -110,6 +110,7 @@ import { TYPES_ACTIVITE } from '../crm/type-tache.js';
 import { ajouterEmail, definirEmailPrincipal, retirerEmail } from '../crm/emails.js';
 import { fusionnerFiches } from '../crm/fusion.js';
 import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../crm/liens.js';
+import { rechercherDans } from '../crm/recherche.js';
 import { supprimerFiche } from '../crm/suppression.js';
 import {
   ajouterNote,
@@ -1093,24 +1094,7 @@ export function registerApi(
   // Global search (Pipedrive top bar): a few deals, people and organisations at once.
   app.get<RechercheRoute>(
     '/api/i/:slug/recherche',
-    onInstance<RechercheRoute>(async (i, request) => {
-      const q = (request.query.q ?? '').trim().slice(0, 100);
-      if (q.length < 2) return { affaires: [], personnes: [], organisations: [] };
-      const [affaires, personnes, organisations] = await Promise.all([
-        rechercherOpportunites(db, i, q),
-        searchContacts(db, i.id, q),
-        searchEntreprises(db, i.id, q),
-      ]);
-      return {
-        affaires: affaires.slice(0, 5),
-        personnes: personnes
-          .slice(0, 5)
-          .map((p) => ({ id: p.id, nom: p.nom, entreprise: p.entreprise })),
-        organisations: organisations
-          .slice(0, 5)
-          .map((o) => ({ id: o.id, nom: o.nom, ville: o.ville })),
-      };
-    }),
+    onInstance<RechercheRoute>((i, request) => rechercherDans(db, i, request.query.q ?? '')),
   );
   app.get<RechercheRoute>(
     '/api/i/:slug/opportunites/recherche',
