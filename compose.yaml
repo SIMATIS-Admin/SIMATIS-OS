@@ -40,6 +40,7 @@ services:
       VMA_OS_TOKEN: ${VMA_OS_TOKEN:-}
       # Grille de scoring du diagnostic : copie dans secrets/ (le conteneur ne voit pas le second cerveau).
       DIAGNOSTIC_GRILLE: /app/secrets/diagnostic/grille-scoring.json
+      DIAGNOSTIC_CORRESPONDANCE: /app/secrets/diagnostic/correspondance-rapport.json
     volumes:
       # Writable: Paramètres > Connexions saves the instances' tokens here.
       - ./secrets:/app/secrets
