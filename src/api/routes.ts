@@ -110,6 +110,8 @@ import { TYPES_ACTIVITE } from '../crm/type-tache.js';
 import { ajouterEmail, definirEmailPrincipal, retirerEmail } from '../crm/emails.js';
 import { fusionnerFiches } from '../crm/fusion.js';
 import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../crm/liens.js';
+import { rechercherDans, rechercherMandats } from '../crm/recherche.js';
+import { peutTransferer, UTILISATEUR_PILOTE } from '../transfert/droits.js';
 import { supprimerFiche } from '../crm/suppression.js';
 import {
   ajouterNote,
@@ -1089,27 +1091,27 @@ export function registerApi(
     }),
   );
 
-  type RechercheRoute = SlugParams & { Querystring: { q?: string } };
+  type RechercheRoute = SlugParams & { Querystring: { q?: string; portee?: string } };
   // Global search (Pipedrive top bar): a few deals, people and organisations at once.
   app.get<RechercheRoute>(
     '/api/i/:slug/recherche',
-    onInstance<RechercheRoute>(async (i, request) => {
-      const q = (request.query.q ?? '').trim().slice(0, 100);
-      if (q.length < 2) return { affaires: [], personnes: [], organisations: [] };
-      const [affaires, personnes, organisations] = await Promise.all([
-        rechercherOpportunites(db, i, q),
-        searchContacts(db, i.id, q),
-        searchEntreprises(db, i.id, q),
-      ]);
-      return {
-        affaires: affaires.slice(0, 5),
-        personnes: personnes
-          .slice(0, 5)
-          .map((p) => ({ id: p.id, nom: p.nom, entreprise: p.entreprise })),
-        organisations: organisations
-          .slice(0, 5)
-          .map((o) => ({ id: o.id, nom: o.nom, ville: o.ville })),
-      };
+    onInstance<RechercheRoute>(async (i, request, reply) => {
+      const { portee } = request.query;
+      if (portee === undefined) {
+        return rechercherDans(db, i, typeof request.query.q === 'string' ? request.query.q : '');
+      }
+      if (portee !== 'mandats') return reply.code(400).send({ error: 'Portée inconnue' });
+      if (!peutTransferer(UTILISATEUR_PILOTE, i)) {
+        return reply
+          .code(403)
+          .send({ error: 'Recherche dans les mandats réservée à l’instance SIMATIS.' });
+      }
+      // `?q=a&q=b` arrives as an array: only a text is a search.
+      const q = typeof request.query.q === 'string' ? request.query.q : '';
+      const { resultats, echecs } = await rechercherMandats(db, q, undefined, (m, err) =>
+        request.log.warn({ err, mandat: m.slug }, 'recherche : mandat non lu'),
+      );
+      return { mandats: resultats, echecs };
     }),
   );
   app.get<RechercheRoute>(

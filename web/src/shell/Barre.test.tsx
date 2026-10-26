@@ -5,11 +5,53 @@ import { Barre } from './Barre.js';
 
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
+let droit = false;
+let echecs: string[] = [];
+let rechercheSimatisOk = true;
 
 function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+  if (url.endsWith('/transfert/droit')) return json({ autorise: droit });
+  if (url === '/api/instances')
+    return json([
+      { slug: 'simatis', nom: 'SIMATIS', type: 'propre', phase: null },
+      { slug: 'mandat-a', nom: 'Mandat A', type: 'mandat', phase: 'en_cours' },
+      { slug: 'mandat-b', nom: 'Mandat B', type: 'mandat', phase: 'en_cours' },
+    ]);
+  if (method === 'POST' && url.endsWith('/transfert'))
+    return json({ deplaces: 0, copies: 1, racine: { type: 'contact', id: 'c9', instance: 'x' } });
+  if (url.endsWith('/transfert/apercu')) {
+    const noeud = {
+      type: 'contact',
+      id: 'c7',
+      libelle: 'Paul Dupont',
+      mode: 'copie',
+      obligatoire: true,
+    };
+    return json({
+      racine: noeud,
+      noeuds: [noeud],
+      liensRetires: [],
+      avertissements: [],
+      copieExistante: null,
+    });
+  }
+  if (url.includes('portee=mandats'))
+    return json({
+      echecs,
+      mandats: [
+        {
+          instance: { slug: 'mandat-a', nom: 'Mandat A', couleur: null },
+          affaires: [],
+          personnes: [{ id: 'c7', nom: 'Paul Dupont', entreprise: null }],
+          organisations: [],
+        },
+      ],
+    });
+  if (url.includes('/recherche?q=') && !rechercheSimatisOk)
+    return Promise.resolve(new Response('{}', { status: 500 }));
   if (url.includes('/recherche?q='))
     return json({
       affaires: [{ id: 'o1', titre: 'Structuration', entreprise: 'Fonderie Vallière', clos: null }],
@@ -25,6 +67,9 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
 describe('Barre (recherche globale et ajout rapide)', () => {
   beforeEach(() => {
     calls = [];
+    droit = false;
+    echecs = [];
+    rechercheSimatisOk = true;
     location.hash = '';
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
@@ -77,5 +122,118 @@ describe('Barre (recherche globale et ajout rapide)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ajout rapide' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Organisation' }));
     expect(await screen.findByRole('dialog', { name: 'Nouvelle entreprise' })).toBeTruthy();
+  });
+
+  describe('dans les mandats', () => {
+    const chercher = async () => {
+      fireEvent.change(screen.getByLabelText('Recherche globale'), { target: { value: 'dupont' } });
+      return screen.findByRole('listbox');
+    };
+
+    it('n’offre pas la case sans le droit de transférer', async () => {
+      render(<Barre slug="simatis" />);
+      await chercher();
+      expect(screen.queryByLabelText('Inclure les mandats')).toBeNull();
+    });
+
+    it('offre la case, décochée : aucune requête vers les mandats', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      await chercher();
+      const case_ = await screen.findByLabelText('Inclure les mandats');
+      expect((case_ as HTMLInputElement).checked).toBe(false);
+      expect(calls.some((c) => c.url.includes('portee=mandats'))).toBe(false);
+    });
+
+    it('cochée, groupe les résultats par mandat avec leur pastille', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      const liste = await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      expect(await within(liste).findByRole('option', { name: /Paul Dupont/ })).toBeTruthy();
+      expect(await within(liste).findByRole('button', { name: 'Mandat A' })).toBeTruthy();
+      expect(calls.map((c) => c.url)).toContain('/api/i/simatis/recherche?q=dupont&portee=mandats');
+    });
+
+    it('ouvre la fiche dans le mandat au clic sur le résultat', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      const liste = await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      fireEvent.click(await within(liste).findByRole('option', { name: /Paul Dupont/ }));
+      expect(location.hash).toBe('#/mandat-a/fiche/contact/c7');
+    });
+
+    it('la pastille ouvre le transfert depuis le mandat, sans ouvrir la fiche ni fermer la liste', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      const liste = await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      fireEvent.click(await within(liste).findByRole('button', { name: 'Mandat A' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Mandat B' }));
+      await screen.findByRole('dialog');
+      const apercu = calls.find((c) => c.url.endsWith('/transfert/apercu'));
+      expect(apercu?.body).toMatchObject({
+        type: 'contact',
+        id: 'c7',
+        instanceOrigine: 'mandat-a',
+        instanceCible: 'mandat-b',
+      });
+      expect(location.hash).toBe('');
+      expect(screen.getByRole('listbox')).toBeTruthy();
+    });
+
+    it('relance la recherche après un transfert', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      const liste = await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      fireEvent.click(await within(liste).findByRole('button', { name: 'Mandat A' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Mandat B' }));
+      await screen.findByRole('dialog');
+      const avant = calls.filter((c) => c.url.includes('portee=mandats')).length;
+      fireEvent.click(await screen.findByRole('button', { name: 'Confirmer' }));
+      await waitFor(() =>
+        expect(calls.filter((c) => c.url.includes('portee=mandats')).length).toBeGreaterThan(avant),
+      );
+    });
+
+    it('ne recharge ni le droit ni les instances pour chaque ligne de résultat', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      const liste = await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      await within(liste).findByRole('button', { name: 'Mandat A' });
+      expect(calls.filter((c) => c.url.endsWith('/transfert/droit'))).toHaveLength(1);
+      expect(calls.some((c) => c.url === '/api/instances')).toBe(false);
+    });
+
+    it('signale les mandats qui n’ont pas pu être lus', async () => {
+      droit = true;
+      echecs = ['Mandat B'];
+      render(<Barre slug="simatis" />);
+      await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      expect(await screen.findByText(/Mandat B/, { selector: '.barre-echecs' })).toBeTruthy();
+    });
+
+    it('garde la liste et les mandats quand la recherche de SIMATIS échoue', async () => {
+      droit = true;
+      rechercheSimatisOk = false;
+      render(<Barre slug="simatis" />);
+      fireEvent.change(screen.getByLabelText('Recherche globale'), { target: { value: 'dupont' } });
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      expect(await screen.findByRole('option', { name: /Paul Dupont/ })).toBeTruthy();
+    });
+
+    it('retire aussitôt les résultats périmés des mandats quand le texte change', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      const liste = await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      await within(liste).findByRole('option', { name: /Paul Dupont/ });
+      fireEvent.change(screen.getByLabelText('Recherche globale'), { target: { value: 'martin' } });
+      expect(screen.queryByRole('option', { name: /Paul Dupont/ })).toBeNull();
+    });
   });
 });

@@ -10,19 +10,23 @@ export function PastilleInstance({
   instance,
   objet,
   onTransfere,
+  autorise: autoriseConnu,
 }: {
   slug: string;
   instance: { slug: string; nom?: string; couleur?: string | null };
   objet: RefTransfert;
   // The object now at the destination: the same one after a move, its copy after a copy.
   onTransfere: (cibleSlug: string, racine: RefTransfert) => void;
+  // A page showing many pastilles already knows the right: no request per pastille.
+  autorise?: boolean;
 }) {
-  const [autorise, setAutorise] = useState(false);
+  const [autorise, setAutorise] = useState(autoriseConnu ?? false);
   const [liste, setListe] = useState<InstanceSummary[]>([]);
   const [menu, setMenu] = useState<InstanceSummary[] | null>(null);
   const [cible, setCible] = useState<InstanceSummary | null>(null);
 
   useEffect(() => {
+    if (autoriseConnu !== undefined) return setAutorise(autoriseConnu);
     let vivant = true;
     fetchDroitTransfert(slug).then(
       (d) => vivant && setAutorise(d.autorise),
@@ -31,10 +35,11 @@ export function PastilleInstance({
     return () => {
       vivant = false;
     };
-  }, [slug]);
+  }, [slug, autoriseConnu]);
 
   useEffect(() => {
-    if (!autorise) return;
+    // The name and colour are only fetched when the caller did not give them.
+    if (!autorise || instance.nom !== undefined) return;
     let vivant = true;
     fetchInstances().then(
       (l) => vivant && setListe(l),
@@ -43,7 +48,7 @@ export function PastilleInstance({
     return () => {
       vivant = false;
     };
-  }, [autorise]);
+  }, [autorise, instance.nom]);
 
   if (!autorise) return null;
 
