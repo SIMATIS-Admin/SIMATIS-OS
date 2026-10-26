@@ -1338,3 +1338,31 @@ export const entrerRepondantsBase = (slug: string) =>
     inst(slug, 'base/crm/repondants'),
     {},
   );
+
+// Transfert d'objets entre instances (src/transfert) : déplacement, ou copie pour un miroir d'outil.
+export type TypeTransfert = 'sujet' | 'tache' | 'affaire' | 'contact' | 'entreprise' | 'rdv';
+export type RefTransfert = { type: TypeTransfert; id: string };
+export type NoeudTransfert = RefTransfert & {
+  libelle: string;
+  mode: 'deplace' | 'copie';
+  obligatoire: boolean;
+};
+export type ApercuTransfert = {
+  racine: NoeudTransfert;
+  noeuds: NoeudTransfert[];
+  liensRetires: string[];
+  avertissements: string[];
+  copieExistante: RefTransfert | null;
+};
+export type DemandeTransfert = RefTransfert & {
+  instanceOrigine: string;
+  instanceCible: string;
+  exclusions: RefTransfert[];
+  copierQuandMeme?: boolean;
+};
+export const fetchDroitTransfert = (slug: string) =>
+  getJson<{ autorise: boolean }>(inst(slug, 'transfert/droit'));
+export const apercuTransfert = (slug: string, demande: DemandeTransfert) =>
+  sendJson<ApercuTransfert>('POST', inst(slug, 'transfert/apercu'), demande);
+export const lancerTransfert = (slug: string, demande: DemandeTransfert) =>
+  sendJson<{ deplaces: number; copies: number }>('POST', inst(slug, 'transfert'), demande);
