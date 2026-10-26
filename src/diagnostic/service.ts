@@ -1,9 +1,10 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
-import type { Executor } from '../db.js';
+import type { Executor, Tx } from '../db.js';
+import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { profilDe, type Profil } from './profil.js';
-import { entreprises } from '../crm/schema.js';
+import { contacts, entreprises } from '../crm/schema.js';
 import { genererRapportWord, nomFichier } from './rapport-word.js';
 import { diagnosticProjets, type Projet } from './schema.js';
 
@@ -13,6 +14,11 @@ export class ProjetIntrouvable extends Error {}
 export class EntrepriseIntrouvable extends Error {
   constructor() {
     super('Entreprise introuvable dans cet espace');
+  }
+}
+export class ContactIntrouvable extends Error {
+  constructor() {
+    super('Contact introuvable dans cet espace');
   }
 }
 
@@ -29,6 +35,8 @@ export type ProjetPatch = Partial<
     Projet,
     | 'nom'
     | 'activite'
+    | 'entrepriseId'
+    | 'contactId'
     | 'contexte'
     | 'etape'
     | 'dims'
@@ -75,21 +83,40 @@ export async function listProjets(db: Executor, instance: Instance): Promise<Pro
   });
 }
 
+// Une fiche d'une autre instance est invisible ici (RLS) : elle n'est donc pas trouvée.
+async function verifierLiens(
+  tx: Tx,
+  { entrepriseId, contactId }: { entrepriseId?: string | null; contactId?: string | null },
+) {
+  if (entrepriseId) {
+    const [trouvee] = await tx
+      .select({ id: entreprises.id })
+      .from(entreprises)
+      .where(and(eq(entreprises.instanceId, currentInstance), eq(entreprises.id, entrepriseId)));
+    if (!trouvee) throw new EntrepriseIntrouvable();
+  }
+  if (contactId) {
+    const [trouve] = await tx
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.instanceId, currentInstance), eq(contacts.id, contactId)));
+    if (!trouve) throw new ContactIntrouvable();
+  }
+}
+
 export async function createProjet(
   db: Executor,
   instance: Instance,
-  input: { nom: string; activite: string; entrepriseId?: string | null },
+  input: {
+    nom: string;
+    activite: string;
+    entrepriseId?: string | null;
+    contactId?: string | null;
+  },
 ): Promise<ProjetVue> {
   verifierEspace(instance);
   return withInstance(db, instance.id, async (tx) => {
-    // Une entreprise d'une autre instance est invisible ici (RLS) : elle n'est donc pas trouvée.
-    if (input.entrepriseId) {
-      const [trouvee] = await tx
-        .select({ id: entreprises.id })
-        .from(entreprises)
-        .where(eq(entreprises.id, input.entrepriseId));
-      if (!trouvee) throw new EntrepriseIntrouvable();
-    }
+    await verifierLiens(tx, input);
     const [row] = await tx
       .insert(diagnosticProjets)
       .values({
@@ -97,6 +124,7 @@ export async function createProjet(
         nom: input.nom.trim(),
         activite: input.activite,
         entrepriseId: input.entrepriseId ?? null,
+        contactId: input.contactId ?? null,
       })
       .returning();
     return vue(row!);
@@ -113,6 +141,7 @@ export async function updateProjet(
   const colonnesLogo =
     logo === undefined ? {} : { logo: logo?.base64 ?? null, logoNom: logo?.nom ?? null };
   return withInstance(db, instance.id, async (tx) => {
+    await verifierLiens(tx, patch);
     const [row] = await tx
       .update(diagnosticProjets)
       .set({

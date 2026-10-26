@@ -175,7 +175,13 @@ export function App() {
       case 'devis':
         return <Devis key={current.slug} slug={current.slug} />;
       case 'diagnostics':
-        return <Diagnostics key={current.slug} slug={current.slug} />;
+        return (
+          <Diagnostics
+            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            slug={current.slug}
+            ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+          />
+        );
       case 'bases':
         return <Bases key={current.slug} slug={current.slug} />;
       case 'siteweb':

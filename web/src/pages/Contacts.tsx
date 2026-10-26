@@ -21,17 +21,19 @@ export function NouveauContact({
   onClose,
   onCreated,
   lierA,
+  entrepriseParDefaut,
 }: {
   slug: string;
   onClose: () => void;
   onCreated: (id: string, message?: string) => void;
   // Record the person is added from: the new one is linked to it.
   lierA?: RefFiche;
+  entrepriseParDefaut?: string;
 }) {
   const [nom, setNom] = useState('');
   const [fonction, setFonction] = useState('');
   const [email, setEmail] = useState('');
-  const [entrepriseId, setEntrepriseId] = useState('');
+  const [entrepriseId, setEntrepriseId] = useState(entrepriseParDefaut ?? '');
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
   const [error, setError] = useState<string | null>(null);
 

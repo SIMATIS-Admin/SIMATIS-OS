@@ -18,6 +18,7 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { etapeEnCours, etatsEtapes } from './etapes.js';
+import { ChoixFiche } from './liens/ChoixFiche.js';
 
 // Libellés des activités et des modèles : les valeurs sont celles que le serveur accepte.
 export const ACTIVITES = [
@@ -164,13 +165,23 @@ function ListeProjets({
   const [creation, setCreation] = useState(false);
   const [nom, setNom] = useState('');
   const [activite, setActivite] = useState<string>(ACTIVITES[0][0]);
+  const [entrepriseId, setEntrepriseId] = useState<string | null>(null);
+  const [contactId, setContactId] = useState<string | null>(null);
   const [manque, setManque] = useState<string | null>(null);
 
   const creer = async (e: FormEvent) => {
     e.preventDefault();
     if (!nom.trim()) return setManque('Donnez un nom à l’entreprise.');
     try {
-      onCree(await creerProjetDiag(slug, nom, activite));
+      onCree(
+        await creerProjetDiag(
+          slug,
+          nom,
+          activite,
+          entrepriseId ?? undefined,
+          contactId ?? undefined,
+        ),
+      );
     } catch (err) {
       onErreur(messageErreur(err));
     }
@@ -202,6 +213,24 @@ function ListeProjets({
               <span>Nom de l’entreprise</span>
               <input value={nom} onChange={(e) => setNom(e.target.value)} autoFocus />
             </label>
+            <ChoixFiche
+              slug={slug}
+              kind="entreprise"
+              label="Organisation"
+              id={entrepriseId}
+              onChange={(id, n) => {
+                setEntrepriseId(id);
+                if (n && !nom.trim()) setNom(n);
+              }}
+            />
+            <ChoixFiche
+              slug={slug}
+              kind="contact"
+              label="Contact"
+              id={contactId}
+              entrepriseId={entrepriseId}
+              onChange={setContactId}
+            />
             <label className="field">
               <span>Activité</span>
               <select value={activite} onChange={(e) => setActivite(e.target.value)}>
@@ -351,7 +380,7 @@ export function ProjetVue({
               Étape {projet.etape} : {etatAffiche.ok ? 'OK' : 'à faire'} · {etatAffiche.libelle}
             </p>
           )}
-          {projet.etape === 1 && <Preparation projet={projet} onSauver={sauver} />}
+          {projet.etape === 1 && <Preparation slug={slug} projet={projet} onSauver={sauver} />}
           {projet.etape === 1 && (
             <Support
               slug={slug}
@@ -394,7 +423,15 @@ export function ProjetVue({
 
 type Sauver = (patch: ProjetDiagPatch) => Promise<void>;
 
-function Preparation({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
+function Preparation({
+  slug,
+  projet,
+  onSauver,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onSauver: Sauver;
+}) {
   const [nom, setNom] = useState(projet.nom);
   const [contexte, setContexte] = useState(projet.contexte);
   useEffect(() => setNom(projet.nom), [projet.nom]);
@@ -414,6 +451,21 @@ function Preparation({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauve
             onBlur={() => nom.trim() && nom !== projet.nom && void onSauver({ nom: nom.trim() })}
           />
         </label>
+        <ChoixFiche
+          slug={slug}
+          kind="entreprise"
+          label="Organisation"
+          id={projet.entrepriseId ?? null}
+          onChange={(id) => void onSauver({ entrepriseId: id })}
+        />
+        <ChoixFiche
+          slug={slug}
+          kind="contact"
+          label="Contact"
+          id={projet.contactId ?? null}
+          entrepriseId={projet.entrepriseId}
+          onChange={(id) => void onSauver({ contactId: id })}
+        />
         <label className="field">
           <span>Activité</span>
           <select

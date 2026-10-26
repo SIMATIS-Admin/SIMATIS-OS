@@ -858,6 +858,14 @@ export type FicheDetail = {
   };
   aVenir: TacheVue[];
   rendezVous: RdvLie[];
+  // Espace SIMATIS, organisation ou contact seulement.
+  diagnostics?: {
+    id: string;
+    nom: string;
+    etape: number;
+    statut: string | null;
+    date: string | null;
+  }[];
   historique: Evenement[];
   etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
   ecrit: boolean;
@@ -983,6 +991,7 @@ export type ProjetDiag = {
   activite: string;
   // Facultatif tant que le projet n'est pas rattaché (voir diagnostic:rattacher).
   entrepriseId?: string | null;
+  contactId?: string | null;
   contexte: string;
   etape: number;
   etapeMax: number;
@@ -1030,6 +1039,8 @@ export type ProjetDiagPatch = Partial<
     ProjetDiag,
     | 'nom'
     | 'activite'
+    | 'entrepriseId'
+    | 'contactId'
     | 'contexte'
     | 'etape'
     | 'dims'
@@ -1052,11 +1063,13 @@ export const creerProjetDiag = (
   nom: string,
   activite: string,
   entrepriseId?: string,
+  contactId?: string,
 ) =>
   sendJson<ProjetDiag>('POST', inst(slug, 'diagnostic/projets'), {
     nom,
     activite,
     ...(entrepriseId ? { entrepriseId } : {}),
+    ...(contactId ? { contactId } : {}),
   });
 export const majProjetDiag = (slug: string, id: string, patch: ProjetDiagPatch) =>
   sendJson<ProjetDiag>('PATCH', inst(slug, `diagnostic/projets/${encodeURIComponent(id)}`), patch);

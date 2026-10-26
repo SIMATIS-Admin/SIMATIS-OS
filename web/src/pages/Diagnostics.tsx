@@ -46,14 +46,15 @@ const listeEffacee = (projetIds: string[], testIds: string[]) =>
 // Une ligne sans entreprise (diagnostic orphelin) a un identifiant null : on la distingue par son nom de projet.
 const cleDe = (l: LigneEntreprise) => l.id ?? `projet-${l.diag?.id ?? l.nom}`;
 
-export function Diagnostics({ slug }: { slug: string }) {
+// `ouvrir` : identifiant d'un projet à ouvrir directement (lien depuis une fiche).
+export function Diagnostics({ slug, ouvrir }: { slug: string; ouvrir?: string }) {
   const [entreprises, setEntreprises] = useState<Entreprise[] | null>(null);
   const [projets, setProjets] = useState<ProjetDiag[]>([]);
   const [tests, setTests] = useState<TestVma[]>([]);
   const [recherche, setRecherche] = useState('');
   const [page, setPage] = useState(1);
   const [ouvertes, setOuvertes] = useState<Set<string>>(new Set());
-  const [projetOuvert, setProjetOuvert] = useState<string | null>(null);
+  const [projetOuvert, setProjetOuvert] = useState<string | null>(ouvrir ?? null);
   const [testOuvert, setTestOuvert] = useState<string | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [modale, setModale] = useState<{ type: 'diag' | 'vma'; preselect?: string } | null>(null);

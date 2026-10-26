@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjetDiag } from '../api.js';
 import { Diagnostic, entreesRevue, modifierRevue } from './Diagnostic.js';
 
 const api = vi.hoisted(() => ({
   fetchProjetsDiag: vi.fn(),
+  fetchEntreprise: vi.fn(),
+  fetchEntreprises: vi.fn(),
+  fetchContact: vi.fn(),
+  fetchContacts: vi.fn(),
+  createContact: vi.fn(),
+  createEntreprise: vi.fn(),
   creerProjetDiag: vi.fn(),
   majProjetDiag: vi.fn(),
   envoyerMessageDiag: vi.fn(),
@@ -94,8 +100,85 @@ describe('Diagnostic', () => {
     fireEvent.change(screen.getByLabelText('Activité'), { target: { value: 'services' } });
     fireEvent.click(screen.getByRole('button', { name: 'Créer et préparer' }));
     await waitFor(() =>
-      expect(api.creerProjetDiag).toHaveBeenCalledWith('simatis', 'Bureau Fictif', 'services'),
+      expect(api.creerProjetDiag).toHaveBeenCalledWith(
+        'simatis',
+        'Bureau Fictif',
+        'services',
+        undefined,
+        undefined,
+      ),
     );
+  });
+
+  it('crée un projet lié à une organisation choisie et à un contact créé en fenêtre', async () => {
+    api.fetchEntreprise.mockResolvedValue({ id: 'e1', nom: 'Société Fictive' });
+    api.fetchEntreprises.mockImplementation((_s: string, q: string) =>
+      Promise.resolve(
+        q ? [{ id: 'e1', nom: 'Société Fictive' }] : [{ id: 'e1', nom: 'Société Fictive' }],
+      ),
+    );
+    api.fetchContact.mockResolvedValue({ id: 'c1', nom: 'Dirigeant Fictif' });
+    api.createContact.mockResolvedValue({ id: 'c1' });
+    api.creerProjetDiag.mockResolvedValue(projet({ id: 'p3', nom: 'Société Fictive' }));
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nouveau projet' }));
+
+    const organisation = screen.getByLabelText('Organisation');
+    fireEvent.click(within(organisation).getByRole('button', { name: 'Choisir' }));
+    fireEvent.change(within(organisation).getByLabelText('Rechercher à lier'), {
+      target: { value: 'Soc' },
+    });
+    fireEvent.click(await within(organisation).findByRole('button', { name: 'Société Fictive' }));
+    // Le nom du projet reprend celui de l'organisation tant qu'il est vide.
+    await waitFor(() =>
+      expect(screen.getByLabelText<HTMLInputElement>('Nom de l’entreprise').value).toBe(
+        'Société Fictive',
+      ),
+    );
+
+    fireEvent.click(
+      within(screen.getByLabelText('Contact')).getByRole('button', { name: 'Créer un contact' }),
+    );
+    const fenetre = await screen.findByRole('dialog', { name: 'Nouveau contact' });
+    fireEvent.change(within(fenetre).getByLabelText('Nom'), {
+      target: { value: 'Dirigeant Fictif' },
+    });
+    fireEvent.click(within(fenetre).getByRole('button', { name: 'Créer' }));
+    expect(
+      await within(screen.getByLabelText('Contact')).findByText('Dirigeant Fictif'),
+    ).toBeTruthy();
+    // La fenêtre de création ne valide pas le formulaire du projet.
+    expect(api.creerProjetDiag).not.toHaveBeenCalled();
+    expect(api.createContact.mock.calls[0]?.[1]).toMatchObject({
+      nom: 'Dirigeant Fictif',
+      entrepriseId: 'e1',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Créer et préparer' }));
+    await waitFor(() =>
+      expect(api.creerProjetDiag).toHaveBeenCalledWith(
+        'simatis',
+        'Société Fictive',
+        expect.any(String),
+        'e1',
+        'c1',
+      ),
+    );
+  });
+
+  it('rattache un projet existant à une organisation depuis la préparation', async () => {
+    api.fetchEntreprise.mockResolvedValue({ id: 'e1', nom: 'Société Fictive' });
+    api.fetchEntreprises.mockResolvedValue([{ id: 'e1', nom: 'Société Fictive' }]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const organisation = await screen.findByLabelText('Organisation');
+    fireEvent.click(within(organisation).getByRole('button', { name: 'Choisir' }));
+    fireEvent.change(within(organisation).getByLabelText('Rechercher à lier'), {
+      target: { value: 'Soc' },
+    });
+    fireEvent.click(await within(organisation).findByRole('button', { name: 'Société Fictive' }));
+    await waitFor(() => expect(api.majProjetDiag).toHaveBeenCalled());
+    expect(api.majProjetDiag.mock.calls[0]?.[2]).toEqual({ entrepriseId: 'e1' });
   });
 
   it('calcule le profil après la saisie du résultat à l étape 2', async () => {

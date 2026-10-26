@@ -4,8 +4,10 @@ import { createInstance } from '../instances/service.js';
 import { entreprises } from '../crm/schema.js';
 import type { Instance } from '../instances/schema.js';
 import {
+  ContactIntrouvable,
   createProjet,
   DiagnosticIndisponible,
+  EntrepriseIntrouvable,
   listProjets,
   ProjetIntrouvable,
   updateProjet,
@@ -153,5 +155,49 @@ describe('Diagnostic : colonnes de l entretien', () => {
     });
     const relu = (await listProjets(t.app.db, simatis)).find((x) => x.id === p.id)!;
     expect(relu.entrepriseId).toBe(e!.id);
+  });
+
+  it('lie le projet à une organisation et à un contact, changeables ensuite', async () => {
+    const ids = async (i: Instance) => {
+      const e = await t.owner.pool.query<{ id: string }>(
+        "insert into entreprises (instance_id, nom) values ($1, 'Atelier Lié') returning id",
+        [i.id],
+      );
+      const c = await t.owner.pool.query<{ id: string }>(
+        "insert into contacts (instance_id, nom) values ($1, 'Dirigeant Lié') returning id",
+        [i.id],
+      );
+      return { entrepriseId: e.rows[0]!.id, contactId: c.rows[0]!.id };
+    };
+    const liens = await ids(simatis);
+    const p = await createProjet(t.app.db, simatis, { nom: 'Lié', activite: 'usinage', ...liens });
+    expect(p).toMatchObject(liens);
+    const delie = await updateProjet(t.app.db, simatis, p.id, { contactId: null });
+    expect(delie).toMatchObject({ entrepriseId: liens.entrepriseId, contactId: null });
+    const autres = await ids(simatis);
+    expect(await updateProjet(t.app.db, simatis, p.id, autres)).toMatchObject(autres);
+  });
+
+  it('refuse une organisation ou un contact inconnu ou d’une autre instance', async () => {
+    const inconnu = '00000000-0000-4000-8000-000000000000';
+    await expect(
+      createProjet(t.app.db, simatis, { nom: 'X', activite: 'usinage', entrepriseId: inconnu }),
+    ).rejects.toBeInstanceOf(EntrepriseIntrouvable);
+    await expect(
+      createProjet(t.app.db, simatis, { nom: 'X', activite: 'usinage', contactId: inconnu }),
+    ).rejects.toBeInstanceOf(ContactIntrouvable);
+    const autre = await createInstance(t.owner.db, {
+      slug: 'diag-autre-lien',
+      nom: 'Autre',
+      type: 'propre',
+    });
+    const c = await t.owner.pool.query<{ id: string }>(
+      "insert into contacts (instance_id, nom) values ($1, 'Ailleurs') returning id",
+      [autre.id],
+    );
+    const p = await createProjet(t.app.db, simatis, { nom: 'Y', activite: 'usinage' });
+    await expect(
+      updateProjet(t.app.db, simatis, p.id, { contactId: c.rows[0]!.id }),
+    ).rejects.toBeInstanceOf(ContactIntrouvable);
   });
 });
