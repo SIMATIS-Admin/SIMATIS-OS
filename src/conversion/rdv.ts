@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, gte, inArray, isNull, like, lt, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, like, lt, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import {
@@ -72,7 +72,7 @@ export async function listerRendezVous(
   const du = zoned(decaler(jour, -7), '00:00', FUSEAU);
   const au = zoned(decaler(jour, 15), '00:00', FUSEAU);
   // Meetings created in the OS need no Google: they show whatever happens to the agenda.
-  const os = await rdvOs(db, instance, du, au);
+  const os = await rdvOs(db, instance, du);
   if (agenda?.fournisseur !== 'google-agenda' || agenda.etat === 'non_configuree') {
     return { etat: 'non_configure' as const, rdv: await relier(db, instance, os) };
   }
@@ -118,8 +118,11 @@ export async function listerRendezVous(
   };
 }
 
-// Meetings created in the OS (event id `os:…`) inside a time window, shaped like agenda events.
-async function rdvOs(db: Executor, instance: Instance, du: Date, au: Date): Promise<Evenement[]> {
+// Meetings created in the OS (event id `os:…`), shaped like agenda events: from the start of the
+// window on with no end (one planned in three months shows up as soon as it exists), and the older
+// ones that still lack their compte rendu (to catch up). The Google calendar needs a window, these
+// do not.
+async function rdvOs(db: Executor, instance: Instance, du: Date): Promise<Evenement[]> {
   const lignes = await withInstance(db, instance.id, (tx) =>
     tx
       .select()
@@ -128,8 +131,10 @@ async function rdvOs(db: Executor, instance: Instance, du: Date, au: Date): Prom
         and(
           eq(rendezVous.instanceId, currentInstance),
           like(rendezVous.eventId, 'os:%'),
-          gte(rendezVous.debut, du),
-          lt(rendezVous.debut, au),
+          or(
+            gte(rendezVous.debut, du),
+            and(lt(rendezVous.debut, du), isNull(rendezVous.compteRendu)),
+          ),
         ),
       ),
   );
@@ -156,7 +161,10 @@ async function rdvOs(db: Executor, instance: Instance, du: Date, au: Date): Prom
 export const rdvOsSchema = z
   .object({
     titre: z.string().trim().min(1).max(300),
-    debut: z.iso.datetime(),
+    // Absurd years are typos: a meeting is within a few years of today.
+    debut: z.iso
+      .datetime()
+      .refine((d) => d >= '2000-01-01' && d < '2100-01-01', 'Date hors limites'),
     dureeMinutes: z.number().int().min(5).max(1440).default(60),
     lieu: z.string().trim().max(300).nullish(),
   })
@@ -445,6 +453,15 @@ export type CibleRdv = keyof typeof cibles;
 // The meeting's row, created on the spot when the calendar block was never listed (a link from the
 // Agenda, a compte rendu): its title and times come with the next read of the agenda.
 async function assurerRdv(tx: Tx, eventId: string) {
+  // An `os:` id only exists once created: an invented one must not make a ghost meeting.
+  if (eventId.startsWith('os:')) {
+    const [existe] = await tx
+      .select({ id: rendezVous.id })
+      .from(rendezVous)
+      .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.eventId, eventId)));
+    if (!existe) throw new RdvIndisponible('Rendez-vous introuvable');
+    return existe.id;
+  }
   const [row] = await tx
     .insert(rendezVous)
     .values({ instanceId: currentInstance, eventId })
@@ -630,6 +647,8 @@ export async function getRendezVous(
     });
   const trouve = await lire();
   if (trouve) return trouve;
+  // An `os:` meeting is never in Google: no agenda read can find it.
+  if (eventId.startsWith('os:')) throw new RdvIndisponible('Rendez-vous introuvable');
   // Never listed: one read of the agenda records it.
   await listerRendezVous(db, instance, deps, new Date(), options);
   const apres = await lire();

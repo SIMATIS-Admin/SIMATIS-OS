@@ -75,7 +75,7 @@ describe('Rendez-vous créé dans l’OS', () => {
     expect((await creer('rdv-seul', { ...valide, dureeMinutes: 99999 })).statusCode).toBe(400);
   });
 
-  it('s’affiche dans la liste même sans agenda configuré, dans la fenêtre de temps seulement', async () => {
+  it('s’affiche dans la liste même sans agenda configuré', async () => {
     const dedans = (await creer('rdv-seul', { ...valide, titre: 'Dans la fenêtre' })).json<{
       id: string;
     }>().id;
@@ -83,7 +83,7 @@ describe('Rendez-vous créé dans l’OS', () => {
     const liste = await listerRendezVous(t.app.db, seul, deps(), maintenant);
     expect(liste.etat).toBe('non_configure');
     expect(liste.rdv.map((r) => r.id)).toContain(dedans);
-    expect(liste.rdv.map((r) => r.titre)).not.toContain('Trop loin');
+    expect(liste.rdv.map((r) => r.titre)).toContain('Trop loin');
   });
 
   it('s’affiche aussi quand Google refuse, avec l’erreur à côté', async () => {
@@ -159,5 +159,51 @@ describe('Rendez-vous créé dans l’OS', () => {
     expect(j.rendezVous.map((r) => r.titre)).toEqual(
       expect.arrayContaining(['Déjà passé', 'À venir fictif']),
     );
+  });
+
+  it('liste un rendez-vous lointain et un ancien sans compte rendu, pas un ancien avec compte rendu', async () => {
+    const lointain = (
+      await creer('rdv-seul', {
+        ...valide,
+        titre: 'Dans des mois',
+        debut: '2027-03-01T08:00:00.000Z',
+      })
+    ).json<{ id: string }>().id;
+    const ancien = (
+      await creer('rdv-seul', { ...valide, titre: 'Rattrapage', debut: '2026-08-01T08:00:00.000Z' })
+    ).json<{ id: string }>().id;
+    const clos = (
+      await creer('rdv-seul', {
+        ...valide,
+        titre: 'Déjà compte-rendu',
+        debut: '2026-08-02T08:00:00.000Z',
+      })
+    ).json<{ id: string }>().id;
+    await t.owner.pool.query("update rendez_vous set compte_rendu = 'fait' where event_id = $1", [
+      clos,
+    ]);
+    const ids = (await listerRendezVous(t.app.db, seul, deps(), maintenant)).rdv.map((r) => r.id);
+    expect(ids).toContain(lointain);
+    expect(ids).toContain(ancien);
+    expect(ids).not.toContain(clos);
+  });
+
+  it('refuse une date absurde', async () => {
+    expect(
+      (await creer('rdv-seul', { ...valide, debut: '1970-01-01T00:00:00.000Z' })).statusCode,
+    ).toBe(400);
+    expect(
+      (await creer('rdv-seul', { ...valide, debut: '2150-01-01T00:00:00.000Z' })).statusCode,
+    ).toBe(400);
+  });
+
+  it('ne fabrique pas de rendez-vous fantôme à partir d’un identifiant os: inventé', async () => {
+    const url = `/api/i/rdv-seul/rendez-vous/${encodeURIComponent('os:invente')}`;
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(404);
+    expect(
+      (await app.inject({ method: 'PATCH', url, payload: { statut: 'ignore' } })).statusCode,
+    ).toBe(404);
+    const n = await t.owner.pool.query("select 1 from rendez_vous where event_id = 'os:invente'");
+    expect(n.rowCount).toBe(0);
   });
 });

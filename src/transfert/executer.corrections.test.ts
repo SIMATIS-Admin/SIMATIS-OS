@@ -160,4 +160,22 @@ describe('transfert : corrections de la revue', () => {
     );
     expect(r[0]?.reporte_at).toBeNull();
   });
+
+  it('garde le préfixe os: à la copie d’un rendez-vous de l’OS, sans l’avertissement d’agenda', async () => {
+    const contact = await f.contact(m.siege, 'Contact Miroir Rdv', 'hubspot', 'h-r1');
+    const rdv = await f.insere(m.siege, 'rendez_vous', 'event_id, titre', [
+      'os:modele-1',
+      'Rdv de l’OS',
+    ]);
+    await f.lierRdvContact(m.siege, rdv, contact);
+    const apercu = await planifierTransfert(t.owner.db, demande('contact', contact));
+    expect(apercu.avertissements.join(' ')).not.toContain('agenda');
+    await lancer('contact', contact);
+    const copie = await lignes(
+      "select event_id from rendez_vous where instance_id = $1 and titre = 'Rdv de l’OS'",
+      [m.a.id],
+    );
+    expect(copie[0]?.event_id?.startsWith('os:')).toBe(true);
+    expect(copie[0]?.event_id).not.toBe('os:modele-1');
+  });
 });

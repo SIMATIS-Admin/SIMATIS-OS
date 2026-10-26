@@ -1334,7 +1334,12 @@ export function registerApi(
     onInstance<CrRoute>(async (i, request, reply) => {
       const parsed = statutRdvSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Statut invalide' });
-      return decrireRdv(db, i, request.params.id.slice(0, 300), parsed.data.statut);
+      try {
+        return await decrireRdv(db, i, request.params.id.slice(0, 300), parsed.data.statut);
+      } catch (error) {
+        if (error instanceof RdvIndisponible) return reply.code(404).send({ error: error.message });
+        throw error;
+      }
     }),
   );
   const cibleRdvSchema = z

@@ -86,7 +86,11 @@ export async function executerTransfert(db: Executor, p: DemandeExecution): Prom
         neuve.noteCerveauAt = null;
       }
       // `event_id` is unique per instance and the copy no longer follows the calendar event.
-      if (n.type === 'rdv') neuve.eventId = `copie:${destination.get(cle(n))}`;
+      if (n.type === 'rdv') {
+        const ancien = typeof ligne.eventId === 'string' ? ligne.eventId : '';
+        // A meeting born in the OS stays one (the lists look for `os:`); only a Google block is cut loose.
+        neuve.eventId = `${ancien.startsWith('os:') ? 'os' : 'copie'}:${destination.get(cle(n))}`;
+      }
       await tx.insert(entree.table).values(neuve as never);
     }
 

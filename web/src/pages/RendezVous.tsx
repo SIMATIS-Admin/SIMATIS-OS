@@ -214,10 +214,13 @@ function NouveauRdv({ slug, onFermer }: { slug: string; onFermer: () => void }) 
   const [envoi, setEnvoi] = useState(false);
   const pret = titre.trim() !== '' && date !== '' && heure !== '';
   const creer = () => {
+    const debut = new Date(`${date}T${heure}`);
+    if (Number.isNaN(debut.getTime())) return setErreur('Date ou heure invalide.');
+    setErreur(null);
     setEnvoi(true);
     creerRdvOs(slug, {
       titre: titre.trim(),
-      debut: new Date(`${date}T${heure}`).toISOString(),
+      debut: debut.toISOString(),
       dureeMinutes: duree,
       lieu: lieu.trim() || null,
     }).then(
