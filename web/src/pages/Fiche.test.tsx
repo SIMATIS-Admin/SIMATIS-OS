@@ -7,6 +7,7 @@ type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 // Present (null or a mandate) only for a deal of the own activity.
 let mandat: { slug: string; nom: string } | null | undefined;
+let droitTransfert = false;
 
 const affaire = () => ({
   kind: 'affaire',
@@ -101,6 +102,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       personnes: [{ id: 'c2', nom: 'Agathe Vallière (doublon)', entreprise: null }],
       organisations: [],
     });
+  if (url.endsWith('/transfert/droit')) return json({ autorise: droitTransfert });
   if (url.includes('/fiches/contact/')) return json(contact());
   if (url.endsWith('/mandat') || url.endsWith('/mandat/lier'))
     return json({ slug: 'beta', nom: 'Beta', type: 'mandat', phase: 'closing' });
@@ -119,10 +121,36 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
 
 const patch = (fin: string) => calls.find((c) => c.method === 'PATCH' && c.url.endsWith(fin));
 
+describe('Fiche page : pastille d’instance', () => {
+  beforeEach(() => {
+    calls = [];
+    mandat = undefined;
+    droitTransfert = false;
+    vi.stubGlobal('fetch', vi.fn(fakeFetch));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('montre la pastille au super-administrateur dans l’instance propre', async () => {
+    droitTransfert = true;
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    expect(await screen.findByRole('button', { name: 'SIMATIS' })).toBeTruthy();
+  });
+
+  it('ne la montre pas sans le droit de transférer', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    await screen.findAllByText('Structuration commerciale');
+    expect(screen.queryByRole('button', { name: 'SIMATIS' })).toBeNull();
+  });
+});
+
 describe('Fiche page', () => {
   beforeEach(() => {
     calls = [];
     mandat = undefined;
+    droitTransfert = false;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {

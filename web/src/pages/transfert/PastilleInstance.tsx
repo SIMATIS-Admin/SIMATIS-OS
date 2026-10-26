@@ -12,11 +12,13 @@ export function PastilleInstance({
   onTransfere,
 }: {
   slug: string;
-  instance: { slug: string; nom: string; couleur: string | null };
+  instance: { slug: string; nom?: string; couleur?: string | null };
   objet: RefTransfert;
-  onTransfere: (cibleSlug: string) => void;
+  // The object now at the destination: the same one after a move, its copy after a copy.
+  onTransfere: (cibleSlug: string, racine: RefTransfert) => void;
 }) {
   const [autorise, setAutorise] = useState(false);
+  const [liste, setListe] = useState<InstanceSummary[]>([]);
   const [menu, setMenu] = useState<InstanceSummary[] | null>(null);
   const [cible, setCible] = useState<InstanceSummary | null>(null);
 
@@ -31,26 +33,45 @@ export function PastilleInstance({
     };
   }, [slug]);
 
+  useEffect(() => {
+    if (!autorise) return;
+    let vivant = true;
+    fetchInstances().then(
+      (l) => vivant && setListe(l),
+      () => undefined,
+    );
+    return () => {
+      vivant = false;
+    };
+  }, [autorise]);
+
   if (!autorise) return null;
 
-  const ouvrir = () =>
-    menu
-      ? setMenu(null)
-      : void fetchInstances().then(
-          (liste) => setMenu(liste.filter((i) => i.slug !== instance.slug)),
-          () => setMenu([]),
-        );
+  const propre = liste.find((i) => i.slug === instance.slug);
+  const nom = instance.nom ?? propre?.nom ?? instance.slug;
+  const couleur = instance.couleur ?? propre?.couleur ?? undefined;
+  const ouvrir = () => {
+    if (menu) return setMenu(null);
+    // Fetched again on click: the list may have changed (a mandate created) since the page opened.
+    void fetchInstances().then(
+      (l) => {
+        setListe(l);
+        setMenu(l.filter((i) => i.slug !== instance.slug && i.type !== 'prospect'));
+      },
+      () => setMenu([]),
+    );
+  };
 
   return (
     <span className="pastille-instance-zone">
       <button
         type="button"
         className="badge pastille-instance"
-        style={{ borderColor: instance.couleur ?? undefined }}
+        style={{ borderColor: couleur }}
         title="Changer l’instance de cet objet"
         onClick={ouvrir}
       >
-        {instance.nom}
+        {nom}
       </button>
       {menu && !cible && (
         <div className="pastille-menu" role="menu">
@@ -76,9 +97,9 @@ export function PastilleInstance({
           instanceOrigine={instance.slug}
           cible={cible}
           onFermer={() => setCible(null)}
-          onFait={(c) => {
+          onFait={(c, racine) => {
             setCible(null);
-            onTransfere(c);
+            onTransfere(c, racine);
           }}
         />
       )}

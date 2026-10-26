@@ -74,6 +74,10 @@ export async function planifierTransfert(db: Executor, p: DemandeTransfert): Pro
   const [cible] = await db.select().from(instances).where(eq(instances.id, p.cible));
   if (!cible) throw new TransfertRefuse('Instance cible inconnue.');
   if (cible.statut !== 'actif') throw new TransfertRefuse('Instance cible archivée.');
+  // A demo holds fictive data only and is wiped on reset: no real data in, no fictive data out.
+  if (origine.type === 'prospect' || cible.type === 'prospect') {
+    throw new TransfertRefuse('Une démonstration ne reçoit ni ne donne de données réelles.');
+  }
   if (cible.id === origine.id) throw new TransfertRefuse("L'objet est déjà dans cette instance.");
 
   const racine = await lire(db, p.racine.type, origine.id, p.racine.id);

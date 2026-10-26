@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { creerMonde, fabrique, type Monde } from '../../test/transfert.js';
 import { instances } from '../instances/schema.js';
+import { createInstance } from '../instances/service.js';
 import { planifierTransfert, RacineIntrouvable, TransfertRefuse } from './plan.js';
 import type { Exclusions, Ref } from './types.js';
 
@@ -107,6 +108,28 @@ describe('planifierTransfert', () => {
     await expect(
       planifierTransfert(t.owner.db, { ...base, instanceOrigine: m.a.id, cible: m.siege.id }),
     ).rejects.toBeInstanceOf(RacineIntrouvable);
+  });
+
+  it('refuse une démonstration comme origine ou comme cible', async () => {
+    const demo = await createInstance(t.owner.db, {
+      slug: 'demo-x',
+      nom: 'Démo X',
+      type: 'prospect',
+    });
+    const contact = await f.contact(m.siege, 'Démo Fictif');
+    const base = { racine: { type: 'contact' as const, id: contact }, exclusions: [] };
+    await expect(
+      planifierTransfert(t.owner.db, { ...base, instanceOrigine: m.siege.id, cible: demo.id }),
+    ).rejects.toBeInstanceOf(TransfertRefuse);
+    const dedans = await f.contact(demo, 'Fictif de démo');
+    await expect(
+      planifierTransfert(t.owner.db, {
+        instanceOrigine: demo.id,
+        cible: m.a.id,
+        racine: { type: 'contact', id: dedans },
+        exclusions: [],
+      }),
+    ).rejects.toBeInstanceOf(TransfertRefuse);
   });
 
   it('avertit : rendez-vous copié et clé d’entrée déjà prise dans la cible', async () => {

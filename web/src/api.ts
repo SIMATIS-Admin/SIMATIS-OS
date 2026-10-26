@@ -1365,4 +1365,8 @@ export const fetchDroitTransfert = (slug: string) =>
 export const apercuTransfert = (slug: string, demande: DemandeTransfert) =>
   sendJson<ApercuTransfert>('POST', inst(slug, 'transfert/apercu'), demande);
 export const lancerTransfert = (slug: string, demande: DemandeTransfert) =>
-  sendJson<{ deplaces: number; copies: number }>('POST', inst(slug, 'transfert'), demande);
+  sendJson<{ deplaces: number; copies: number; racine: RefTransfert & { instance: string } }>(
+    'POST',
+    inst(slug, 'transfert'),
+    demande,
+  );

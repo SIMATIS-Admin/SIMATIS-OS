@@ -107,6 +107,7 @@ const echange = (statut: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+let droitTransfert = false;
 let routineActive = true;
 let derniereRoutine: unknown = null;
 // Statuts returned by successive polls of the Inbox routine execution.
@@ -128,6 +129,12 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
+  if (url.endsWith('/transfert/droit')) return json({ autorise: droitTransfert });
+  if (url === '/api/instances')
+    return json([
+      { slug: 'simatis', nom: 'SIMATIS', type: 'propre', phase: null },
+      { slug: 'helioval', nom: 'Helioval', type: 'mandat', phase: 'en_cours' },
+    ]);
   if (url.includes('/contacts?q=')) return json([]);
   if (url.includes('/echanges')) {
     if (url.endsWith('/ajouter')) return json({ echange: echange('ajoute'), sujet: sujet('n2') });
@@ -176,6 +183,7 @@ describe('Inbox screen', () => {
   beforeEach(() => {
     calls = [];
     simulation = false;
+    droitTransfert = false;
     routineActive = true;
     derniereRoutine = null;
     statutsExecution = [];
@@ -475,6 +483,24 @@ describe('Inbox screen', () => {
     await waitFor(() => expect(posts()[0]?.url).toBe('/api/i/simatis/sujets/s1/traite'));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(calls.filter((c) => c.url.includes('/inbox?')).length).toBeGreaterThan(1);
+  });
+
+  it('lets the super administrator change the instance of an entry from its own instance', async () => {
+    droitTransfert = true;
+    render(<AvecEntete slug="simatis" />);
+    fireEvent.click((await screen.findAllByText('Devis Fonderie'))[0] as HTMLElement);
+    const detail = document.querySelector('.inbox-detail') as HTMLElement;
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Helioval' }));
+    expect(await screen.findByRole('menuitem', { name: 'SIMATIS' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Helioval' })).toBeNull();
+  });
+
+  it('shows no instance pastille without the right to transfer', async () => {
+    render(<AvecEntete slug="simatis" />);
+    fireEvent.click((await screen.findAllByText('Devis Fonderie'))[0] as HTMLElement);
+    const detail = document.querySelector('.inbox-detail') as HTMLElement;
+    await within(detail).findByRole('button', { name: 'Marquer comme traité' });
+    expect(within(detail).queryByRole('button', { name: 'Helioval' })).toBeNull();
   });
 
   it('sends the action to the subject instance slug in the overview', async () => {

@@ -41,7 +41,7 @@ export function FenetreTransfert({
   instanceOrigine: string;
   cible: { slug: string; nom: string };
   onFermer: () => void;
-  onFait: (cibleSlug: string) => void;
+  onFait: (cibleSlug: string, racine: RefTransfert) => void;
 }) {
   const [apercu, setApercu] = useState<ApercuTransfert | null>(null);
   const [exclusions, setExclusions] = useState<RefTransfert[]>([]);
@@ -81,7 +81,7 @@ export function FenetreTransfert({
   const confirmer = (copierQuandMeme?: boolean) => {
     setEnvoi(true);
     lancerTransfert(slug, demande(copierQuandMeme)).then(
-      () => onFait(cible.slug),
+      (r) => onFait(cible.slug, { type: r.racine.type, id: r.racine.id }),
       (e: unknown) => {
         setErreur(e instanceof Error ? e.message : String(e));
         setEnvoi(false);

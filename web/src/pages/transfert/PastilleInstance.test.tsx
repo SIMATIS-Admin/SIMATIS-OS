@@ -39,7 +39,8 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
+      const body =
+        typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : null;
       calls.push({ url, method: init?.method ?? 'GET', body });
       if (url.endsWith('/transfert/droit')) return Promise.resolve(reponse({ autorise: droit }));
       if (url === '/api/instances')
@@ -47,6 +48,7 @@ beforeEach(() => {
           reponse([
             { slug: 'siege', nom: 'Siège', type: 'propre', phase: null },
             { slug: 'mandat-a', nom: 'Mandat A', type: 'mandat', phase: 'en_cours' },
+            { slug: 'demo', nom: 'Démo X', type: 'prospect', phase: null },
           ]),
         );
       if (url.endsWith('/transfert/apercu'))
@@ -94,6 +96,7 @@ describe('PastilleInstance', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Siège/ }));
     expect(await screen.findByRole('menuitem', { name: /Mandat A/ })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /Siège/ })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /Démo X/ })).toBeNull();
   });
 
   it('résume ce qui sera déplacé et ce qui sera copié', async () => {
@@ -118,7 +121,9 @@ describe('PastilleInstance', () => {
     await ouvrirAperçu();
     await screen.findByText(/seront déplacés/);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
-    await waitFor(() => expect(onTransfere).toHaveBeenCalledWith('mandat-a'));
+    await waitFor(() =>
+      expect(onTransfere).toHaveBeenCalledWith('mandat-a', { type: 'affaire', id: 'a1' }),
+    );
     const envoi = calls.find((c) => c.method === 'POST' && c.url.endsWith('/transfert'));
     expect(envoi?.body).toMatchObject({
       type: 'affaire',
