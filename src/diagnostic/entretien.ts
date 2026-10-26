@@ -5,6 +5,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { ChatIndisponible, envoyerMessage } from './chat.js';
 import { chargerGrille, cleQuestion, GrilleInvalide, LETTRES, type Grille } from './grille.js';
+import { chargerCorrespondance, lireRapport, LectureImpossible } from './lecture-pdf.js';
 import type { Decision } from './support.js';
 import { diagnosticProjets } from './schema.js';
 import { scorer, ScoreIncomplet, type ReponseQuestion } from './score.js';
@@ -21,6 +22,19 @@ export function grilleCourante(): Grille {
   if (!chemin)
     throw new GrilleInvalide("DIAGNOSTIC_GRILLE non défini : l'import du PDF est indisponible.");
   return chargerGrille(chemin);
+}
+
+// Lecture directe du PDF, sans Claude. Null quand elle n'est pas possible (correspondance non
+// configurée, PDF d'une autre forme) : l'import retombe alors sur la lecture par Claude.
+async function lireSansClaude(octets: Buffer, grille: Grille): Promise<ReponseQuestion[] | null> {
+  const chemin = process.env.DIAGNOSTIC_CORRESPONDANCE;
+  if (!chemin) return null;
+  try {
+    return await lireRapport(octets, chargerCorrespondance(chemin), grille);
+  } catch (erreur) {
+    if (erreur instanceof LectureImpossible) return null;
+    throw erreur;
+  }
 }
 
 export const reponsesSchema = z
@@ -47,18 +61,62 @@ export async function importerEntretien(
   if (octets.length > PDF_MAX) throw new ChatIndisponible('PDF trop lourd (10 Mo au plus).');
   if (!octets.subarray(0, 4).equals(Buffer.from('%PDF')))
     throw new ChatIndisponible("Ce fichier n'est pas un PDF.");
+  let grille: Grille;
   try {
-    grilleCourante();
+    grille = grilleCourante();
   } catch (erreur) {
     if (erreur instanceof GrilleInvalide) throw new ChatIndisponible(erreur.message);
     throw erreur;
   }
+  const lues = await lireSansClaude(octets, grille);
+  if (lues) return enregistrerLecture(db, instance, id, pdf, lues, grille);
   // Le PDF part avec la demande, dans la même écriture : un import ne remplace jamais un PDF en lecture.
   return envoyerMessage(db, instance, id, 'Lis le PDF de l’entretien et enregistre les réponses.', {
     type: 'entretien',
     etape: 2,
     verifier: () => undefined,
     maj: { pdfEntretien: pdf.base64, pdfEntretienNom: pdf.nom },
+  });
+}
+
+// Le PDF est lu en code : les réponses et le profil sont enregistrés tout de suite, sans demande à Claude.
+async function enregistrerLecture(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  pdf: { nom: string; base64: string },
+  reponses: ReponseQuestion[],
+  grille: Grille,
+): Promise<ProjetVue> {
+  let dims;
+  try {
+    dims = scorer(reponses, grille).dims;
+  } catch (erreur) {
+    if (erreur instanceof ScoreIncomplet) throw new ChatIndisponible(erreur.message);
+    throw erreur;
+  }
+  return withInstance(db, instance.id, async (tx) => {
+    const [projet] = await tx
+      .select()
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
+    if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    if (projet.statutChat !== 'repos')
+      throw new ChatIndisponible('Claude répond déjà à ce projet : attendez sa réponse.');
+    const [row] = await tx
+      .update(diagnosticProjets)
+      .set({
+        pdfEntretien: pdf.base64,
+        pdfEntretienNom: pdf.nom,
+        reponsesEntretien: reponses,
+        dims,
+        // Un nouveau PDF repart de ses propres lettres : les corrections de l'ancien ne s'y appliquent plus.
+        historiqueReponses: [],
+        updatedAt: new Date(),
+      })
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
+      .returning();
+    return vue(row!);
   });
 }
 
