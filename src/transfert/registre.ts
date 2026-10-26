@@ -36,7 +36,10 @@ export type Entree = {
   coupes: string[];
 };
 
-const texte = (cle: string) => (l: Record<string, unknown>) => String(l[cle] ?? '');
+const texte = (cle: string) => (l: Record<string, unknown>) => {
+  const v = l[cle];
+  return typeof v === 'string' ? v : '';
+};
 
 export const REGISTRE: Record<TypeObjet, Entree> = {
   sujet: {
