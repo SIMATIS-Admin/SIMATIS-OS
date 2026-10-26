@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import {
@@ -22,6 +22,7 @@ import {
   type Qualification,
 } from '../crm/schema.js';
 import type { Executor, Tx } from '../db.js';
+import { contactsParEmails } from '../crm/emails.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
@@ -244,35 +245,37 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
       tx,
       lignes.map((l) => l.id),
     );
-    const contactsChoisis = [...manuels.contacts.values()].flat().map((c) => c.id);
-    const lies =
-      emails.length || contactsChoisis.length
-        ? await tx
-            .select({
-              id: contacts.id,
-              nom: contacts.nom,
-              email: contacts.email,
-              entrepriseId: contacts.entrepriseId,
-              entreprise: entreprises.nom,
-            })
-            .from(contacts)
-            .leftJoin(
-              entreprises,
-              and(
-                eq(entreprises.id, contacts.entrepriseId),
-                eq(entreprises.instanceId, currentInstance),
-              ),
-            )
-            .where(
-              and(
-                eq(contacts.instanceId, currentInstance),
-                or(
-                  emails.length ? inArray(sql`lower(${contacts.email})`, emails) : undefined,
-                  contactsChoisis.length ? inArray(contacts.id, contactsChoisis) : undefined,
-                ),
-              ),
-            )
-        : [];
+    // Guests are matched on every address of a contact, not only its primary one.
+    const parEmail = await contactsParEmails(tx, emails);
+    const contactsChoisis = [
+      ...new Set(
+        [...manuels.contacts.values()]
+          .flat()
+          .map((c) => c.id)
+          .concat([...parEmail.values()]),
+      ),
+    ];
+    const lies = contactsChoisis.length
+      ? await tx
+          .select({
+            id: contacts.id,
+            nom: contacts.nom,
+            email: contacts.email,
+            entrepriseId: contacts.entrepriseId,
+            entreprise: entreprises.nom,
+          })
+          .from(contacts)
+          .leftJoin(
+            entreprises,
+            and(
+              eq(entreprises.id, contacts.entrepriseId),
+              eq(entreprises.instanceId, currentInstance),
+            ),
+          )
+          .where(
+            and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, contactsChoisis)),
+          )
+      : [];
     const ouvertes =
       lignes.length > 0
         ? await tx
@@ -310,7 +313,7 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
       const manuel = mContacts.length + mEntreprises.length + mAffaires.length > 0;
       const contact = manuel
         ? lies.find((c) => c.id === mContacts[0]?.id)
-        : lies.find((c) => c.email && e.participants.includes(c.email.toLowerCase()));
+        : lies.find((c) => e.participants.some((p) => parEmail.get(p.toLowerCase()) === c.id));
       const entreprise =
         mEntreprises[0] ??
         (contact?.entrepriseId && contact.entreprise
@@ -521,14 +524,15 @@ export async function getRendezVous(
               and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, contactsLies)),
             )
         : [];
-      const connus = r.participants.length
+      const parEmail = await contactsParEmails(tx, r.participants);
+      const connus = parEmail.size
         ? await tx
             .select({ id: contacts.id, nom: contacts.nom, email: contacts.email })
             .from(contacts)
             .where(
               and(
                 eq(contacts.instanceId, currentInstance),
-                inArray(sql`lower(${contacts.email})`, r.participants),
+                inArray(contacts.id, [...new Set(parEmail.values())]),
               ),
             )
         : [];
@@ -547,7 +551,7 @@ export async function getRendezVous(
         affaires: liens.affaires.get(r.id) ?? [],
         participants: r.participants.map((email) => ({
           email,
-          contact: connus.find((c) => c.email?.toLowerCase() === email) ?? null,
+          contact: connus.find((c) => c.id === parEmail.get(email.toLowerCase())) ?? null,
         })),
         compteRendu: r.compteRendu ? { texte: r.compteRendu, at: r.compteRenduAt } : null,
       };

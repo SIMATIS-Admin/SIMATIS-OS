@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { compteAgenda, evenements } from '../connecteurs/google/google.js';
 import { messagerieDe } from '../connecteurs/messagerie.js';
-import { contacts, entreprises } from '../crm/schema.js';
+import { contactEmails, contacts, entreprises } from '../crm/schema.js';
 import { currentInstance } from '../db/columns.js';
 import { registerTool, type ToolCtx } from '../mcp/tools.js';
 import { connexion, google } from '../routines/outils-mcp.js';
@@ -124,11 +124,21 @@ registerTool({
 
 // The instance's people, to keep only mails and meetings with someone the CRM knows.
 async function annuaire(ctx: ToolCtx): Promise<Annuaire> {
+  const principaux = await ctx.tx
+    .select({ id: contacts.id, email: contacts.email, entrepriseId: contacts.entrepriseId })
+    .from(contacts)
+    .where(eq(contacts.instanceId, currentInstance));
+  // A mail from a secondary address still comes from a known person.
+  const secondaires = await ctx.tx
+    .select({ id: contactEmails.contactId, email: contactEmails.email })
+    .from(contactEmails)
+    .where(and(eq(contactEmails.instanceId, currentInstance), eq(contactEmails.principal, false)));
+  const entrepriseDe = new Map(principaux.map((c) => [c.id, c.entrepriseId]));
   return {
-    contacts: await ctx.tx
-      .select({ id: contacts.id, email: contacts.email, entrepriseId: contacts.entrepriseId })
-      .from(contacts)
-      .where(eq(contacts.instanceId, currentInstance)),
+    contacts: [
+      ...principaux,
+      ...secondaires.map((c) => ({ ...c, entrepriseId: entrepriseDe.get(c.id) ?? null })),
+    ],
     entreprises: await ctx.tx
       .select({ id: entreprises.id, domaine: entreprises.domaine })
       .from(entreprises)

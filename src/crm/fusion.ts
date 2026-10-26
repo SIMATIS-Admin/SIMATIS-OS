@@ -84,6 +84,14 @@ export async function fusionnerFiches(
         sql`update ${sql.raw(`"${r.table}"`)} set ${sql.raw(`"${r.colonne}"`)} = ${gardeId} where ${sql.raw(`"${r.colonne}"`)} = ${absorbeId} and instance_id = ${currentInstance}`,
       );
     }
+    if (kind === 'contact')
+      // The kept contact gains the other addresses, never a second primary one.
+      await tx.execute(
+        sql`insert into "contact_emails" (instance_id, contact_id, email, principal)
+          select instance_id, ${gardeId}, email, false from "contact_emails"
+          where contact_id = ${absorbeId} and instance_id = ${currentInstance}
+          on conflict do nothing`,
+      );
     await transfererLiens(tx, kind, absorbeId, gardeId);
     await transfererRendezVous(tx, kind, absorbeId, gardeId);
     await supprimerLocalement(tx, { kind, id: absorbeId });
