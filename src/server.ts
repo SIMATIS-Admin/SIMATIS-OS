@@ -23,9 +23,12 @@ try {
 const { db, pool } = createDb(
   appDatabaseUrl(config.databaseUrl, config.appDbRole, config.appDbPassword),
 );
+// Transfers move rows between instances, which the restricted role cannot do under Row-Level Security.
+const transfert = createDb(config.databaseUrl);
 const app = buildApp({
   pool,
   db,
+  transfertDb: transfert.db,
   version: readVersion(),
   backupStatusFile: config.backupStatusFile,
   lectureRole: lectureRoleOf(config.appDbRole),
@@ -37,6 +40,7 @@ const app = buildApp({
 
 // An idle client losing its connection (database restart) must not crash the process.
 pool.on('error', (err) => app.log.warn({ err }, 'idle database client error'));
+transfert.pool.on('error', (err) => app.log.warn({ err }, 'idle database client error'));
 
 async function prepareDatabase(): Promise<void> {
   const owner = createDb(config.databaseUrl);
@@ -87,6 +91,7 @@ try {
 } catch (err) {
   app.log.fatal({ err }, 'startup failed');
   await pool.end();
+  await transfert.pool.end();
   process.exit(1);
 }
 
@@ -100,6 +105,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     void app
       .close()
       .then(() => pool.end())
+      .then(() => transfert.pool.end())
       .then(() => process.exit(0));
   });
 }
