@@ -8,10 +8,11 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
+import { emailsDuContact, normaliserEmail } from './emails.js';
 import { assurerLiensPrincipaux, lireLiens, type LienFiche } from './liens.js';
 import { pipelineSource } from './pipeline.js';
 import { rendezVousDe, type RdvLie } from './rdv-liens.js';
-import { activites, contacts, entreprises, opportunites, taches } from './schema.js';
+import { activites, contactEmails, contacts, entreprises, opportunites, taches } from './schema.js';
 import { CrmIndisponible } from './service.js';
 import { listTachesOuvertes, type TacheVue } from './taches.js';
 
@@ -195,6 +196,7 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
     const multiples = await lireLiens(tx, kind, id);
     if (kind === 'contact') {
       const c = row as typeof contacts.$inferSelect;
+      fiche.emails = await emailsDuContact(tx, id);
       liens.entreprise = await lien(tx, 'entreprise', c.entrepriseId);
       liens.entreprises = multiples.entreprises;
     } else {
@@ -343,6 +345,19 @@ export async function updateFiche(
     }
 
     const t = table[kind];
+    // Typing another address in the email field replaces the primary one (a typo must not linger as
+    // a second address); the contact_emails trigger then records the new primary.
+    if (kind === 'contact' && champs.email !== undefined)
+      await tx
+        .delete(contactEmails)
+        .where(
+          and(
+            eq(contactEmails.instanceId, currentInstance),
+            eq(contactEmails.contactId, id),
+            eq(contactEmails.principal, true),
+            sql`${contactEmails.email} <> ${normaliserEmail(champs.email ?? '')}`,
+          ),
+        );
     await tx
       .update(t)
       .set({ ...champs, updatedAt: new Date() })

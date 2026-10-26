@@ -106,6 +106,7 @@ import {
   updateTache,
 } from '../crm/taches.js';
 import { TYPES_ACTIVITE } from '../crm/type-tache.js';
+import { ajouterEmail, definirEmailPrincipal, retirerEmail } from '../crm/emails.js';
 import { fusionnerFiches } from '../crm/fusion.js';
 import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../crm/liens.js';
 import { supprimerFiche } from '../crm/suppression.js';
@@ -748,6 +749,35 @@ export function registerApi(
   app.put<FicheRoute>(
     '/api/i/:slug/fiches/:kind/:id/liens/principal',
     surLien((i, de, avec) => definirPrincipal(db, i, de, avec)),
+  );
+  // Addresses of a contact: the first one is the primary, which is also written in contacts.email.
+  const emailSchema = z.object({ email: z.string().trim().max(300) }).strict();
+  const surEmail = (
+    action: (i: Instance, contactId: string, email: string) => ReturnType<typeof ajouterEmail>,
+  ) =>
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      if (request.params.kind !== 'contact' || !UUID.test(request.params.id))
+        return reply.code(404).send({ error: 'Fiche introuvable' });
+      const parsed = emailSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Adresse invalide' });
+      try {
+        const emails = await action(i, request.params.id, parsed.data.email);
+        return emails ? { emails } : reply.code(404).send({ error: 'Fiche introuvable' });
+      } catch (error) {
+        return ficheErreur(error, reply);
+      }
+    });
+  app.post<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/emails',
+    surEmail((i, id, email) => ajouterEmail(db, i, id, email)),
+  );
+  app.delete<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/emails',
+    surEmail((i, id, email) => retirerEmail(db, i, id, email)),
+  );
+  app.put<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/emails/principal',
+    surEmail((i, id, email) => definirEmailPrincipal(db, i, id, email)),
   );
   // Deleting and merging records: HubSpot first when the record lives there (archive / merge), then
   // the OS. Real writes off: simulation, nothing changes.

@@ -335,6 +335,15 @@ describe('Rendez-vous and Devis', () => {
       [guestEmail.toLowerCase(), guest.rows[0]?.id],
     ]);
 
+    // A secondary address of a contact recognises the guest too.
+    await t.owner.pool.query(
+      "insert into contact_emails (instance_id, contact_id, email) values ($1, $2, 'inconnu.fictif@example.test')",
+      [instance.id, guest.rows[0]?.id],
+    );
+    const apres = (await send('GET', '/api/i/helioval/rendez-vous/evt-3')).body
+      .participants as typeof invites;
+    expect(apres.map((p) => p.contact?.id ?? null)).toEqual([guest.rows[0]?.id, guest.rows[0]?.id]);
+
     // The records show the meeting in their own card.
     const ficheEntreprise = await getFiche(t.app.db, instance, 'entreprise', ent1.id);
     expect(ficheEntreprise?.rendezVous.map((r) => r.id)).toEqual(['evt-3']);

@@ -10,6 +10,7 @@ import {
   patchFiche,
   updateTache,
   type Changement,
+  type EmailContact,
   type Evenement,
   type FicheDetail,
   type KindFiche,
@@ -19,6 +20,7 @@ import type { InstanceSummary } from '../nav.js';
 import { Icon } from '../icons.js';
 import { ActionsFiche } from './liens/ActionsFiche.js';
 import { PastilleInstance } from './transfert/PastilleInstance.js';
+import { AdressesEmail } from './liens/AdressesEmail.js';
 import { CarteLiens, type LigneLien } from './liens/CarteLiens.js';
 import { Cloture } from './Pipeline.js';
 import { ACTIVITES } from './taches/commun.js';
@@ -496,6 +498,16 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                     onSave={(v) => v !== (f[c.cle] ?? null) && modifier({ [c.cle]: v })}
                   />
                 ))}
+              {kind === 'contact' && (
+                <AdressesEmail
+                  slug={slug}
+                  contactId={id}
+                  emails={Array.isArray(f.emails) ? (f.emails as EmailContact[]) : []}
+                  modifiable
+                  hubspot={hubspot}
+                  onChange={load}
+                />
+              )}
             </div>
           </section>
           {kind === 'affaire' && data.mandat !== undefined && (

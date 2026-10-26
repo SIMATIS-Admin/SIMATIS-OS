@@ -880,6 +880,14 @@ export const noteFiche = (
   id: string,
   note: { corps: string; hubspot: boolean },
 ) => sendJson<FicheDetail | SimulationTache>('POST', `${fiche(slug, kind, id)}/notes`, note);
+export type EmailContact = { email: string; principal: boolean };
+const emailsDe = (slug: string, id: string) => `${fiche(slug, 'contact', id)}/emails`;
+export const ajouterEmailContact = (slug: string, id: string, email: string) =>
+  sendJson<{ emails: EmailContact[] }>('POST', emailsDe(slug, id), { email });
+export const retirerEmailContact = (slug: string, id: string, email: string) =>
+  sendJson<{ emails: EmailContact[] }>('DELETE', emailsDe(slug, id), { email });
+export const definirEmailPrincipal = (slug: string, id: string, email: string) =>
+  sendJson<{ emails: EmailContact[] }>('PUT', `${emailsDe(slug, id)}/principal`, { email });
 const liensDe = (slug: string, de: RefFiche) => `${fiche(slug, de.kind, de.id)}/liens`;
 type ResultatLien = { ok: true } | SimulationTache;
 export const lierFiche = (slug: string, de: RefFiche, avec: RefFiche) =>

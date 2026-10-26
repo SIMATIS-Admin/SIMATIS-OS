@@ -79,7 +79,16 @@ const affaire = () => ({
 
 const contact = () => ({
   kind: 'contact',
-  fiche: { id: 'c1', nom: 'Agathe Vallière', email: 'a@fonderie.example', origine: 'os' },
+  fiche: {
+    id: 'c1',
+    nom: 'Agathe Vallière',
+    email: 'a@fonderie.example',
+    emails: [
+      { email: 'a@fonderie.example', principal: true },
+      { email: 'agathe@perso.example', principal: false },
+    ],
+    origine: 'os',
+  },
   liens: {
     entreprise: { id: 'e1', nom: 'Fonderie Vallière' },
     affaires: [{ id: 'o1', titre: 'Structuration', etape: 'q', clos: null, montant: 14000 }],
@@ -103,6 +112,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       organisations: [],
     });
   if (url.endsWith('/transfert/droit')) return json({ autorise: droitTransfert });
+  if (url.includes('/emails')) return json({ emails: [] });
   if (url.includes('/fiches/contact/')) return json(contact());
   if (url.endsWith('/mandat') || url.endsWith('/mandat/lier'))
     return json({ slug: 'beta', nom: 'Beta', type: 'mandat', phase: 'closing' });
@@ -282,6 +292,40 @@ describe('Fiche page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Appels' }));
     expect(screen.queryByText('Budget validé')).toBeNull();
     expect(screen.getByText('Appel découverte')).toBeTruthy();
+  });
+
+  it('contact : liste les adresses, en ajoute, en retire et change la principale', async () => {
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    expect(await screen.findByText('agathe@perso.example')).toBeTruthy();
+    expect(screen.getByText('Principale')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Ajouter une adresse'), {
+      target: { value: 'nouvelle@exemple.test' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/c1/emails'))?.body).toEqual({
+        email: 'nouvelle@exemple.test',
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rendre principale' }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === 'PUT' && c.url.endsWith('/emails/principal'))?.body,
+      ).toEqual({
+        email: 'agathe@perso.example',
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retirer agathe@perso.example' }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === 'DELETE' && c.url.endsWith('/c1/emails'))?.body,
+      ).toEqual({
+        email: 'agathe@perso.example',
+      }),
+    );
   });
 
   it('shows a contact with its company and deals as links', async () => {

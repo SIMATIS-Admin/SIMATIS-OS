@@ -6,7 +6,7 @@ import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import { logEvent } from '../journal/service.js';
-import { contacts, entreprises, opportunites, taches } from './schema.js';
+import { contactEmails, contacts, entreprises, opportunites, taches } from './schema.js';
 import { assurerLiensPrincipaux } from './liens.js';
 
 export const likePattern = (q: string) => `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -97,6 +97,8 @@ export async function searchContacts(db: Executor, instanceId: string, q = '') {
                 ilike(contacts.nom, p),
                 ilike(contacts.fonction, p),
                 ilike(contacts.email, p),
+                sql`exists (select 1 from ${contactEmails} ce where ce.contact_id = ${contacts.id}
+                  and ce.instance_id = ${currentInstance} and ce.email ilike ${p})`,
                 ilike(entreprises.nom, p),
               )
             : undefined,

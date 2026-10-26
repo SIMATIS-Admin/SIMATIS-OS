@@ -122,6 +122,22 @@ describe('Fusion de fiches', () => {
     expect(await existe('entreprises', a)).toBe(false);
   });
 
+  it('contacts : la gardée reçoit les adresses de l’absorbée, sans second principal', async () => {
+    const g = await insere(natif, 'contacts', 'nom, email', ['Gardé', 'garde@exemple.test']);
+    const a = await insere(natif, 'contacts', 'nom, email', ['Absorbé', 'absorbe@exemple.test']);
+    await insere(natif, 'contact_emails', 'contact_id, email', [a, 'autre@exemple.test']);
+    await fusion(natif, 'contact', g, a);
+    const { rows } = await t.owner.pool.query(
+      'select email, principal from contact_emails where contact_id = $1 order by email',
+      [g],
+    );
+    expect(rows).toEqual([
+      { email: 'absorbe@exemple.test', principal: false },
+      { email: 'autre@exemple.test', principal: false },
+      { email: 'garde@exemple.test', principal: true },
+    ]);
+  });
+
   it('repointe tâches, activités et sujets vers la fiche gardée', async () => {
     const g = await contact(natif, 'Contact gardé');
     const a = await contact(natif, 'Contact absorbé');

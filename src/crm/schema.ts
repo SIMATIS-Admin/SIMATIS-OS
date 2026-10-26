@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   date,
@@ -185,6 +186,29 @@ export const contactEntreprises = pgTable(
     uniqueIndex('contact_entreprises_paire_idx').on(t.instanceId, t.contactId, t.entrepriseId),
     index('contact_entreprises_entreprise_idx').on(t.entrepriseId),
     instanceIsolation('contact_entreprises'),
+  ],
+);
+
+// Every address of a contact. `contacts.email` stays the primary one (HubSpot and the readers of
+// that column keep working); the other addresses live in the OS only.
+export const contactEmails = pgTable(
+  'contact_emails',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    contactId: uuid('contact_id')
+      .notNull()
+      .references(() => contacts.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    principal: boolean('principal').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('contact_emails_paire_idx').on(t.instanceId, t.contactId, t.email),
+    uniqueIndex('contact_emails_principal_idx')
+      .on(t.contactId)
+      .where(sql`${t.principal}`),
+    index('contact_emails_email_idx').on(t.instanceId, t.email),
+    instanceIsolation('contact_emails'),
   ],
 );
 
