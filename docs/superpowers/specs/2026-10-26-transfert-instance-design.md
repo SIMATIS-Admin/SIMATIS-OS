@@ -57,11 +57,13 @@ Les tables de liaison (`affaire_contacts`, `affaire_entreprises`, `contact_entre
 
 ### Cas limites
 
-- **Rendez-vous** : `event_id` est unique par instance. Une copie reçoit `copie:<nouvel id>` ; le lien avec l'événement Google d'origine est donc coupé (règle 2). Un rendez-vous natif sans conflit est déplacé tel quel.
-- **Entrée Inbox** : `source_id` est la clé stable donnée par la routine, unique par instance. Si la clé d'une entrée déplacée existe déjà dans la cible, le transfert est **refusé** avec un message clair (pas de renommage silencieux).
-- **Collision d'unicité** sur `(instance, source, source_id)` dans la cible : refus avec message, rien n'est écrit (transaction annulée).
-- **Doublon de copie** : copier deux fois le même miroir crée deux copies ; l'aperçu l'indique si une copie issue du même objet existe déjà (retrouvée par l'activité d'origine).
-- **Sujet lié à une proposition** (`proposition_id`) : le lien est retiré (les propositions restent dans leur instance).
+Principe : aucun blocage silencieux. Tout ce qui change ou se perd est écrit dans l'aperçu avant la confirmation ; seuls les cas réellement impossibles sont refusés (cible archivée, droits).
+
+- **Entrée Inbox, clé déjà prise dans la cible** : `source_id` est la clé stable donnée par la routine, unique par instance (elle empêche une routine de redéposer deux fois le même sujet). Si la clé existe déjà dans la cible, le transfert passe et la clé reçoit le suffixe `:transfert-<id>` ; l'aperçu le signale.
+- **Collision d'unicité `(instance, source, source_id)`** : ne peut pas se produire pour un objet natif (pas d'identifiant d'origine) ni pour une copie (détachée). Un refus de sécurité subsiste, transaction annulée, rien d'écrit ; il ne doit jamais se déclencher.
+- **Copier deux fois le même miroir** : l'aperçu détecte une copie existante (retrouvée par l'activité d'origine) et propose « Ouvrir la copie existante » (par défaut) ou « Copier quand même ».
+- **Rendez-vous copié** : `event_id` est unique par instance ; la copie reçoit `copie:<nouvel id>`, donc son lien avec l'événement Google est coupé (voulu, règle 2). Le compte rendu, les participants et les liens vers les contacts sont conservés. L'aperçu écrit « ne sera plus lié à l'agenda ». Un rendez-vous natif sans conflit est déplacé tel quel.
+- **Entrée liée à une proposition** (`proposition_id`) : le lien est retiré (les propositions restent dans leur instance) ; l'aperçu le dit.
 
 ### Journal
 
