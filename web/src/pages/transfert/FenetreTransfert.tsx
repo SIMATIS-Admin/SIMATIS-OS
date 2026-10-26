@@ -59,7 +59,8 @@ export function FenetreTransfert({
   useEffect(() => {
     let vivant = true;
     apercuTransfert(slug, {
-      ...objet,
+      type: objet.type,
+      id: objet.id,
       instanceOrigine,
       instanceCible: cible.slug,
       exclusions,
@@ -70,7 +71,7 @@ export function FenetreTransfert({
     return () => {
       vivant = false;
     };
-  }, [slug, objet, instanceOrigine, cible.slug, exclusions]);
+  }, [slug, objet.type, objet.id, instanceOrigine, cible.slug, exclusions]);
 
   const basculer = (n: NoeudTransfert) =>
     setExclusions((x) =>

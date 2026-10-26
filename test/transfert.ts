@@ -1,4 +1,4 @@
-import { getTableColumns, getTableName } from 'drizzle-orm';
+import { getTableName } from 'drizzle-orm';
 import { REGISTRE } from '../src/transfert/registre.js';
 import type { TestApp } from './database.js';
 import type { Instance } from '../src/instances/schema.js';
@@ -50,20 +50,31 @@ export function fabrique(t: TestApp) {
     sujet: (
       i: Instance,
       titre: string,
-      opts: { contact?: string; sourceId?: string; source?: string } = {},
+      opts: { contact?: string; sourceId?: string; source?: string; reporte?: boolean } = {},
     ) =>
-      insere(i, 'sujets', 'type, titre, origine, contact_id, source, source_id', [
+      insere(i, 'sujets', 'type, titre, origine, contact_id, source, source_id, reporte_at', [
         'autre',
         titre,
         'os',
         opts.contact ?? null,
-        opts.source ?? 'natif',
+        // Real entries come from a routine, the OS or the site: never 'natif', never a mirror.
+        opts.source ?? 'routine',
         opts.sourceId ?? null,
+        opts.reporte ? new Date().toISOString() : null,
       ]),
-    rdv: (i: Instance, titre: string, source = 'natif') =>
-      insere(i, 'rendez_vous', 'event_id, titre, source', [`ev-${titre}`, titre, source]),
-    lierAffaireContact: (i: Instance, affaire: string, contact: string) =>
-      insere(i, 'affaire_contacts', 'opportunite_id, contact_id', [affaire, contact]),
+    // A Google calendar block (mirror), or a block already detached from its event (`copie:`).
+    rdv: (i: Instance, titre: string, detache = false) =>
+      insere(i, 'rendez_vous', 'event_id, titre', [`${detache ? 'copie:' : 'ev-'}${titre}`, titre]),
+    devis: (i: Instance, affaire: string, numero = 'D-1') =>
+      insere(i, 'devis', 'opportunite_id, numero', [affaire, numero]),
+    rdvLien: (i: Instance, contact: string, eventId = 'ev-lien') =>
+      insere(i, 'rdv_liens', 'event_id, contact_id', [eventId, contact]),
+    lierAffaireContact: (i: Instance, affaire: string, contact: string, source = 'natif') =>
+      insere(i, 'affaire_contacts', 'opportunite_id, contact_id, source', [
+        affaire,
+        contact,
+        source,
+      ]),
     lierRdvContact: (i: Instance, rdv: string, contact: string) =>
       insere(i, 'rdv_contacts', 'rendez_vous_id, contact_id', [rdv, contact]),
     activite: (i: Instance, opts: { contact?: string; affaire?: string; entreprise?: string }) =>
@@ -85,34 +96,29 @@ export function fabrique(t: TestApp) {
   };
 }
 
-// No row may point at a row of another instance, whatever the link.
+// No row may point at a row of another instance, through ANY foreign key of the schema (not only
+// the ones the registry knows): a new table that links to an object shows up here.
 export async function liensCroises(t: TestApp): Promise<number> {
+  const tables = Object.values(REGISTRE).map((e) => getTableName(e.table));
+  const fk = await t.owner.pool.query<{ t: string; col: string; r: string }>(
+    `select c.conrelid::regclass::text t, a.attname col, c.confrelid::regclass::text r
+       from pg_constraint c
+       join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+      where c.contype = 'f' and array_length(c.conkey, 1) = 1
+        and c.confrelid::regclass::text = any($1)`,
+    [tables],
+  );
   let total = 0;
-  const requete = async (table: string, col: string, cible: string) => {
-    const r = await t.owner.pool.query<{ n: string }>(
-      `select count(*) n from ${table} a join ${cible} b on a.${col} = b.id where a.instance_id <> b.instance_id`,
+  for (const { t: table, col, r } of fk.rows) {
+    const aInstance = await t.owner.pool.query(
+      `select 1 from information_schema.columns where table_name = $1 and column_name = 'instance_id'`,
+      [table],
     );
-    total += Number(r.rows[0]?.n);
-  };
-  for (const entree of Object.values(REGISTRE)) {
-    const nom = getTableName(entree.table);
-    for (const l of entree.liens) {
-      const colonne = getTableColumns(entree.table)[l.colonne]?.name as string;
-      await requete(nom, colonne, getTableName(REGISTRE[l.vers].table));
-    }
-    for (const l of entree.liaisons) {
-      const cols = getTableColumns(l.table);
-      await requete(
-        getTableName(l.table),
-        cols[l.colProprietaire]?.name as string,
-        getTableName(entree.table),
-      );
-      await requete(
-        getTableName(l.table),
-        cols[l.colCible]?.name as string,
-        getTableName(REGISTRE[l.cible].table),
-      );
-    }
+    if (!aInstance.rowCount) continue;
+    const res = await t.owner.pool.query<{ n: string }>(
+      `select count(*) n from ${table} a join ${r} b on a.${col} = b.id where a.instance_id <> b.instance_id`,
+    );
+    total += Number(res.rows[0]?.n);
   }
   return total;
 }

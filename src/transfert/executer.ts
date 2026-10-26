@@ -10,7 +10,7 @@ import { instances } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { cle, col, lignesOu, lire } from './acces.js';
 import { planifierTransfert, type DemandeTransfert } from './plan.js';
-import { ACTIVITES_DE, REGISTRE } from './registre.js';
+import { ACTIVITES_DE, EXTERNES, REGISTRE } from './registre.js';
 import type { Noeud, Ref, TypeObjet } from './types.js';
 
 export type Resume = { deplaces: number; copies: number; racine: Ref & { instance: string } };
@@ -42,8 +42,9 @@ const maj = (tx: Tx, table: PgTable, valeurs: Record<string, unknown>, where: SQ
 
 export async function executerTransfert(db: Executor, p: DemandeExecution): Promise<Resume> {
   return db.transaction(async (tx) => {
-    // Two transfers of the same root wait for each other: the second then finds the root gone.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`transfert:${p.racine.id}`}))`);
+    // One transfer at a time: two roots can share objects (a deal and its contact), so a lock per
+    // root would let them cross. Volume is tiny, the wait is short.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('transfert'))`);
     const apercu = await planifierTransfert(tx, p);
     if (apercu.copieExistante && !p.copierQuandMeme)
       throw new CopieDejaFaite(apercu.copieExistante);
@@ -79,6 +80,11 @@ export async function executerTransfert(db: Executor, p: DemandeExecution): Prom
       };
       for (const l of entree.liens) neuve[l.colonne] = null;
       for (const c of entree.coupes) neuve[c] = null;
+      // Handled in the target's own Inbox routine, not the origin's: nothing was reported yet.
+      if (n.type === 'sujet') {
+        neuve.reporteAt = null;
+        neuve.noteCerveauAt = null;
+      }
       // `event_id` is unique per instance and the copy no longer follows the calendar event.
       if (n.type === 'rdv') neuve.eventId = `copie:${destination.get(cle(n))}`;
       await tx.insert(entree.table).values(neuve as never);
@@ -95,7 +101,8 @@ export async function executerTransfert(db: Executor, p: DemandeExecution): Prom
         const v = ligne[l.colonne];
         if (typeof v !== 'string') continue;
         const nouveau = versCible(l.vers, v);
-        if (nouveau !== v) valeurs[l.colonne] = nouveau;
+        // A copy starts with its links empty: it needs its destination even if it is the same id.
+        if (n.mode === 'copie' ? nouveau !== null : nouveau !== v) valeurs[l.colonne] = nouveau;
       }
       if (n.mode === 'deplace') for (const c of entree.coupes) valeurs[c] = null;
       if (Object.keys(valeurs).length) {
@@ -110,10 +117,23 @@ export async function executerTransfert(db: Executor, p: DemandeExecution): Prom
         for (const l of REGISTRE[u].liens.filter((x) => x.vers === n.type)) {
           const table = REGISTRE[u].table;
           for (const r of await lignesOu(tx, table, origine.id, l.colonne, n.id)) {
-            if (apercu.noeuds.some((x) => x.type === u && x.id === r.id)) continue;
+            // The original of a copied object stays here: it must let go of a moved row too.
+            if (deplaces.some((x) => x.type === u && x.id === r.id)) continue;
             await maj(tx, table, { [l.colonne]: null }, eq(col(table, 'id'), r.id as string));
           }
         }
+      }
+    }
+
+    // 3b. Rows of tables outside the registry that point at a moved object lose that link.
+    for (const n of deplaces) {
+      for (const e of EXTERNES.filter((x) => x.vers === n.type && x.nullable)) {
+        await maj(
+          tx,
+          e.table,
+          { [e.colonne]: null },
+          and(eq(col(e.table, 'instanceId'), origine.id), eq(col(e.table, e.colonne), n.id)),
+        );
       }
     }
 
@@ -149,6 +169,8 @@ export async function executerTransfert(db: Executor, p: DemandeExecution): Prom
               ...r,
               id: randomUUID(),
               instanceId: cible.id,
+              source: 'natif',
+              sourceId: null,
               [l.colProprietaire]: destination.get(cle(proprio)),
               [l.colCible]: destination.get(cle(autre)),
               createdAt: new Date(),
@@ -219,7 +241,13 @@ export async function executerTransfert(db: Executor, p: DemandeExecution): Prom
       const ids = idsDe(type);
       if (!ids.length) continue;
       const table = REGISTRE[type].table;
-      await maj(tx, table, { instanceId: cible.id }, inArray(col(table, 'id'), ids));
+      const partis = await tx
+        .update(table)
+        .set({ instanceId: cible.id, updatedAt: new Date() })
+        .where(and(eq(col(table, 'instanceId'), origine.id), inArray(col(table, 'id'), ids)))
+        .returning({ id: col(table, 'id') });
+      // An object that is no longer in the origin was moved by something else meanwhile.
+      if (partis.length !== ids.length) throw new Error('Un objet a changé pendant le transfert.');
     }
 
     // 8. Where the object came from, then primary links.

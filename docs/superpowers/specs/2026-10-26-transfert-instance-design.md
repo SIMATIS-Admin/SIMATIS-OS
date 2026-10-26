@@ -8,8 +8,8 @@ Exemples : une entrée Inbox, une tâche, une affaire, un contact.
 
 ## Règles décidées
 
-1. **Objet natif** (`source = 'natif'`, créé dans l'OS) : il est **déplacé**, avec ses objets liés.
-2. **Objet miroir d'un outil tiers** (`source` ≠ `natif`, ex. HubSpot, Google) : il est **copié**. L'original reste dans son instance et continue d'être synchronisé. La copie est **détachée** de l'outil (`source = 'natif'`, `source_id` vide) : c'est un objet propre de l'OS.
+1. **Objet natif** (né dans l'OS : `source` = `natif`, `routine`, `os`, `site`, `simatis`…) : il est **déplacé**, avec ses objets liés.
+2. **Objet miroir d'un outil tiers** (`source` = `hubspot`, ou rendez-vous dont `event_id` ne commence pas par `copie:`, c'est-à-dire un bloc Google) : il est **copié**. L'original reste dans son instance et continue d'être synchronisé. La copie est **détachée** de l'outil (`source = 'natif'`, `source_id` vide) : c'est un objet propre de l'OS.
 3. **Les objets liés suivent** (déplacés ou copiés selon la règle 1 ou 2 pour chacun), après un **aperçu** que Marc valide.
 4. **Historique** : un contact, une entreprise ou une affaire copié reçoit une activité « Créé depuis l'instance *X* » (type et titre de l'objet d'origine) ; déplacé, « Déplacé depuis l'instance *X* ». Une tâche, une entrée Inbox ou un rendez-vous n'a pas d'historique propre : son origine est dans le journal de l'instance cible (règle 6).
 6. **Trace** : le journal de l'instance cible garde, pour chaque copie, le type, l'identifiant d'origine, l'instance d'origine et l'identifiant de la copie ; c'est aussi ce qui détecte une copie déjà faite.
@@ -41,6 +41,8 @@ Le sous-graphe est calculé à partir de l'objet choisi ; un lien ne peut jamais
 | Entrée Inbox | — | contact, entreprise, tâche visés |
 | Rendez-vous | liens vers contacts, entreprises, affaires | ces contacts, entreprises, affaires |
 
+**Un objet proposé emmène ses propres objets obligatoires** (un contact proposé emmène ses tâches, rendez-vous et entrées), mais pas ses autres objets proposés : ceux-là restent sur place et le lien est coupé, en le disant dans l'aperçu. Décocher n'a d'effet que sur un objet proposé ; un objet obligatoire ne se décoche pas.
+
 **Le mode du sous-graphe suit celui de la racine.** Racine native : ses enfants natifs sont déplacés, ses liés miroirs sont copiés (les liens des objets déplacés sont réécrits vers les copies). Racine miroir (copie) : tous les enfants sont copiés, même natifs, pour ne pas retirer de l'instance d'origine des objets créés dans l'OS sous un miroir qui y reste.
 
 L'**activité** n'est jamais une racine : elle voyage avec l'objet auquel elle est rattachée.
@@ -66,8 +68,20 @@ Principe : aucun blocage silencieux. Tout ce qui change ou se perd est écrit da
 - **Entrée Inbox, clé déjà prise dans la cible** : `source_id` est la clé stable donnée par la routine, unique par instance (elle empêche une routine de redéposer deux fois le même sujet). Si la clé existe déjà dans la cible, le transfert passe et la clé reçoit le suffixe `:transfert-<id>` ; l'aperçu le signale.
 - **Collision d'unicité `(instance, source, source_id)`** : ne peut pas se produire pour un objet natif (pas d'identifiant d'origine) ni pour une copie (détachée). Un refus de sécurité subsiste, transaction annulée, rien d'écrit ; il ne doit jamais se déclencher.
 - **Copier deux fois le même miroir** : l'aperçu détecte une copie existante (retrouvée dans le journal de la cible) et propose « Ouvrir la copie existante » (par défaut) ou « Copier quand même ».
-- **Rendez-vous copié** : `event_id` est unique par instance ; la copie reçoit `copie:<nouvel id>`, donc son lien avec l'événement Google est coupé (voulu, règle 2). Le compte rendu, les participants et les liens vers les contacts sont conservés. L'aperçu écrit « ne sera plus lié à l'agenda ». Un rendez-vous natif sans conflit est déplacé tel quel.
+- **Rendez-vous copié** : `event_id` est unique par instance ; la copie reçoit `copie:<nouvel id>`, donc son lien avec l'événement Google est coupé (voulu, règle 2). Le compte rendu, les participants et les liens vers les contacts sont conservés. L'aperçu écrit « ne sera plus lié à l'agenda ». Un rendez-vous déjà détaché (`copie:`) est déplacé tel quel.
 - **Entrée liée à une proposition** (`proposition_id`) : le lien est retiré (les propositions restent dans leur instance) ; l'aperçu le dit.
+
+### Liens depuis des tables hors registre
+
+Certaines tables (projets de diagnostic, tests de VMA, rendez-vous liés, conversations d'ajout, base vivante) pointent vers un objet transféré. Si le lien est facultatif, il est coupé sur place et l'aperçu le dit. Un **devis** est lié à son affaire sans pouvoir s'en détacher : le déplacement d'une affaire qui a un devis est **refusé**. Un test parcourt toutes les clés étrangères du schéma pour qu'une nouvelle table liée ne puisse pas créer un lien entre instances sans que cela se voie.
+
+### Instances de démonstration
+
+Une instance de démonstration ne reçoit ni ne donne de données réelles : refusé comme origine et comme cible.
+
+### Concurrence
+
+Un seul transfert à la fois (verrou consultatif unique) : deux racines peuvent partager des objets, un verrou par racine les laisserait se croiser. Chaque déplacement vérifie que toutes les lignes visées étaient bien encore dans l'origine.
 
 ### Journal
 

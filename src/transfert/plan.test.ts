@@ -133,7 +133,7 @@ describe('planifierTransfert', () => {
   });
 
   it('avertit : rendez-vous copié et clé d’entrée déjà prise dans la cible', async () => {
-    const rdv = await f.rdv(m.siege, 'Rdv Fictif', 'google');
+    const rdv = await f.rdv(m.siege, 'Rdv Fictif');
     const a1 = await plan({ type: 'rdv', id: rdv });
     expect(a1.avertissements.join(' ')).toContain('agenda');
 
@@ -160,15 +160,18 @@ describe('planifierTransfert', () => {
     expect(a.copieExistante).toEqual({ type: 'contact', id: 'x-1' });
   });
 
-  it('prévient quand un objet resté sur place perd son lien vers un objet déplacé', async () => {
+  it('prévient quand un objet proposé perd un lien vers un objet laissé sur place', async () => {
+    const entreprise = await f.entreprise(m.siege, 'Société Laissée');
     const contact = await f.contact(m.siege, 'Partagé Fictif');
-    const autre = await f.tache(m.siege, 'Reste sur place', { contact });
+    await t.owner.pool.query('update contacts set entreprise_id = $1 where id = $2', [
+      entreprise,
+      contact,
+    ]);
     const aff = await f.affaire(m.siege, 'Affaire déplacée');
     await f.lierAffaireContact(m.siege, aff, contact);
     const a = await plan({ type: 'affaire', id: aff }, []);
-    // the contact is offered and moved, so its other referrers left behind are reported
     expect(a.noeuds.some((n) => n.id === contact)).toBe(true);
-    expect(a.noeuds.some((n) => n.id === autre)).toBe(false);
-    expect(a.liensRetires.join(' ')).toContain('Reste sur place');
+    expect(a.noeuds.some((n) => n.id === entreprise)).toBe(false);
+    expect(a.liensRetires.join(' ')).toContain('Partagé Fictif');
   });
 });

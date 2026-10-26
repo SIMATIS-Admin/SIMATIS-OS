@@ -89,7 +89,7 @@ describe('executerTransfert : copie des miroirs', () => {
   });
 
   it('copie un rendez-vous : lien agenda coupé, compte rendu et liens conservés', async () => {
-    const rdv = await f.rdv(m.siege, 'Rdv Miroir', 'google');
+    const rdv = await f.rdv(m.siege, 'Rdv Miroir');
     await t.owner.pool.query(
       "update rendez_vous set compte_rendu = 'Compte rendu fictif' where id = $1",
       [rdv],

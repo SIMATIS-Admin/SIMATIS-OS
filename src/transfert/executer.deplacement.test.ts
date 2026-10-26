@@ -90,7 +90,7 @@ describe('executerTransfert : déplacement', () => {
     });
   });
 
-  it('retire les liens vers un objet exclu et vers les objets restés sur place', async () => {
+  it('retire le lien vers un objet exclu ; un contact proposé emmène ses tâches', async () => {
     const contact = await f.contact(m.siege, 'Exclu Fictif');
     const tache = await f.tache(m.siege, 'Tâche liée', { contact });
     await deplacer('tache', tache, [{ type: 'contact', id: contact }]);
@@ -100,16 +100,17 @@ describe('executerTransfert : déplacement', () => {
     );
     expect(r.rows[0]).toEqual({ contact_id: null, instance_id: m.a.id });
 
+    // An offered contact brings its own tasks, so nothing is left pointing across instances.
     const partage = await f.contact(m.siege, 'Partagé Fictif');
-    const reste = await f.tache(m.siege, 'Reste sur place', { contact: partage });
+    const suit = await f.tache(m.siege, 'Suit le contact', { contact: partage });
     const aff = await f.affaire(m.siege, 'Affaire emporte contact');
     await f.lierAffaireContact(m.siege, aff, partage);
     await deplacer('affaire', aff);
     const s = await t.owner.pool.query<{ contact_id: string | null; instance_id: string }>(
       'select contact_id, instance_id from taches where id = $1',
-      [reste],
+      [suit],
     );
-    expect(s.rows[0]).toEqual({ contact_id: null, instance_id: m.siege.id });
+    expect(s.rows[0]).toEqual({ contact_id: partage, instance_id: m.a.id });
     expect(await liensCroises(t)).toBe(0);
   });
 });

@@ -4,7 +4,7 @@ import { instances } from '../instances/schema.js';
 import { journal } from '../journal/schema.js';
 import { sujets } from '../inbox/schema.js';
 import { cle, libelleDe, lignesOu, lire, type Ligne } from './acces.js';
-import { REGISTRE } from './registre.js';
+import { estMiroir, EXTERNES, REGISTRE } from './registre.js';
 import type { Apercu, Exclusions, Mode, Noeud, Ref, TypeObjet } from './types.js';
 
 export class TransfertRefuse extends Error {}
@@ -84,10 +84,14 @@ export async function planifierTransfert(db: Executor, p: DemandeTransfert): Pro
   if (!racine) throw new RacineIntrouvable("Objet introuvable dans l'instance d'origine.");
 
   const exclus = new Set(p.exclusions.map(cle));
-  const racineNative = racine.source === 'natif';
-  const modeDe = (l: Ligne): Mode => (racineNative && l.source === 'natif' ? 'deplace' : 'copie');
+  const racineNative = !estMiroir(p.racine.type, racine);
+  // A mirror root brings everything as copies; a native one moves its native objects.
+  const modeDe = (type: TypeObjet, l: Ligne): Mode =>
+    racineNative && !estMiroir(type, l) ? 'deplace' : 'copie';
 
   type Item = { noeud: Noeud; ligne: Ligne; voisins: Voisin[] };
+  // An offered object only brings the objects that follow it without a choice.
+  const restreint = (i: Item) => !i.noeud.obligatoire;
   const items = new Map<string, Item>();
   const lignes = new Map<string, Ligne | null>();
   const charger = async (r: Ref) => {
@@ -100,7 +104,7 @@ export async function planifierTransfert(db: Executor, p: DemandeTransfert): Pro
     const ligne = await charger(r);
     if (!ligne) return null;
     const item: Item = {
-      noeud: { ...r, libelle: libelleDe(r.type, ligne), mode: modeDe(ligne), obligatoire },
+      noeud: { ...r, libelle: libelleDe(r.type, ligne), mode: modeDe(r.type, ligne), obligatoire },
       ligne,
       voisins: await voisinsDe(db, origine.id, r.type, ligne),
     };
@@ -110,15 +114,18 @@ export async function planifierTransfert(db: Executor, p: DemandeTransfert): Pro
 
   const premier = await ajouter(p.racine, true);
   const file: Item[] = premier ? [premier] : [];
-  // Only the root and the objects that follow without a choice bring their own neighbours;
-  // an offered object is a leaf, so the sub-graph never swallows a whole connected component.
+  // The root and the objects that follow without a choice bring all their neighbours; an offered
+  // one brings only its own obligatory ones, so the sub-graph never swallows a whole connected
+  // component. Unticking only works on offered objects.
   while (file.length) {
     const item = file.shift() as Item;
     for (const v of item.voisins) {
       const k = cle(v);
-      if (items.has(k) || exclus.has(k)) continue;
+      if (items.has(k)) continue;
+      if (exclus.has(k) && !v.obligatoire) continue;
+      if (restreint(item) && !v.obligatoire) continue;
       const nouveau = await ajouter(v, v.obligatoire);
-      if (nouveau && nouveau.noeud.obligatoire) file.push(nouveau);
+      if (nouveau) file.push(nouveau);
     }
   }
 
@@ -137,6 +144,23 @@ export async function planifierTransfert(db: Executor, p: DemandeTransfert): Pro
       } else {
         retires.add(`« ${moi.libelle} » perd son lien vers « ${nomAutre} »`);
       }
+    }
+  }
+
+  // Tables outside the registry that point at an object about to leave.
+  for (const { noeud } of items.values()) {
+    if (noeud.mode !== 'deplace') continue;
+    for (const e of EXTERNES.filter((x) => x.vers === noeud.type)) {
+      const lignes = await lignesOu(db, e.table, origine.id, e.colonne, noeud.id);
+      if (!lignes.length) continue;
+      if (!e.nullable) {
+        throw new TransfertRefuse(
+          `« ${noeud.libelle} » a un ${e.nom} lié : il ne peut pas être transféré.`,
+        );
+      }
+      retires.add(
+        `${lignes.length} ${e.nom} (reste sur place) perd son lien vers « ${noeud.libelle} »`,
+      );
     }
   }
 
