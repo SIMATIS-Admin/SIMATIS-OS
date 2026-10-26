@@ -8,6 +8,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
+import { diagnosticProjets } from '../diagnostic/schema.js';
 import { emailsDuContact, normaliserEmail } from './emails.js';
 import { assurerLiensPrincipaux, lireLiens, type LienFiche } from './liens.js';
 import { pipelineSource } from './pipeline.js';
@@ -50,9 +51,18 @@ export type Fiche = {
   };
   aVenir: TacheVue[];
   rendezVous: RdvLie[];
+  // Diagnostics d'endurance commerciale rattachés à l'organisation ou au contact (espace SIMATIS).
+  diagnostics?: DiagnosticLie[];
   historique: Evenement[];
   etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
   ecrit: boolean;
+};
+export type DiagnosticLie = {
+  id: string;
+  nom: string;
+  etape: number;
+  statut: string | null;
+  date: string | null;
 };
 export type SimulationFiche = { simulation: true; message: string };
 export class FicheInvalide extends Error {}
@@ -231,7 +241,23 @@ export async function getFiche(
   id: string,
   maintenant = new Date(),
 ): Promise<Fiche | null> {
-  return withInstance(db, instance.id, (tx) => lire(tx, kind, id, maintenant));
+  return withInstance(db, instance.id, async (tx) => {
+    const fiche = await lire(tx, kind, id, maintenant);
+    if (!fiche || kind === 'affaire' || instance.type !== 'propre') return fiche;
+    const lien = kind === 'contact' ? diagnosticProjets.contactId : diagnosticProjets.entrepriseId;
+    const projets = await tx
+      .select({
+        id: diagnosticProjets.id,
+        nom: diagnosticProjets.nom,
+        etape: diagnosticProjets.etapeMax,
+        statut: diagnosticProjets.statutDiagnostic,
+        date: diagnosticProjets.dateDiagnostic,
+      })
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.instanceId, currentInstance), eq(lien, id)))
+      .orderBy(desc(diagnosticProjets.updatedAt));
+    return { ...fiche, diagnostics: projets };
+  });
 }
 
 export type PatchFiche = {

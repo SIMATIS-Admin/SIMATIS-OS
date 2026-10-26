@@ -66,6 +66,7 @@ export function LierExistant({
         autoFocus
         value={q}
         onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
       />
       {resultats.map((r) => (
         <button key={r.id} className="lien fi-resultat" onClick={() => onChoix(r.id)}>

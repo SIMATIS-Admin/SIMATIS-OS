@@ -89,6 +89,7 @@ const contact = () => ({
     ],
     origine: 'os',
   },
+  diagnostics: [{ id: 'd1', nom: 'Fonderie Vallière', etape: 3, statut: null, date: null }],
   liens: {
     entreprise: { id: 'e1', nom: 'Fonderie Vallière' },
     affaires: [{ id: 'o1', titre: 'Structuration', etape: 'q', clos: null, montant: 14000 }],
@@ -326,6 +327,21 @@ describe('Fiche page', () => {
         email: 'agathe@perso.example',
       }),
     );
+  });
+
+  it('contact : montre ses diagnostics, chacun ouvrant le projet', async () => {
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    expect(await screen.findByRole('heading', { name: 'Diagnostics (1)' })).toBeTruthy();
+    const liens = screen.getAllByRole('link', { name: 'Fonderie Vallière' });
+    expect(liens.some((l) => l.getAttribute('href') === '#/simatis/diagnostics/ouvrir/d1')).toBe(
+      true,
+    );
+  });
+
+  it('affaire : pas de bloc Diagnostics', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    await screen.findAllByText('Structuration commerciale');
+    expect(screen.queryByRole('heading', { name: /^Diagnostics/ })).toBeNull();
   });
 
   it('shows a contact with its company and deals as links', async () => {

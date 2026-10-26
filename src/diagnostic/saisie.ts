@@ -21,12 +21,15 @@ export const creationSchema = z.object({
   nom: z.string().trim().min(1, 'Nom requis').max(200),
   activite,
   entrepriseId: z.string().uuid().nullish(),
+  contactId: z.string().uuid().nullish(),
 });
 
 export const projetSchema = z
   .object({
     nom: z.string().trim().min(1).max(200).optional(),
     activite: activite.optional(),
+    entrepriseId: z.string().uuid().nullable().optional(),
+    contactId: z.string().uuid().nullable().optional(),
     contexte: z.string().max(5000).optional(),
     etape: z.number().int().min(1).max(5).optional(),
     dims: z.object({ outils: note, strategie: note, polyvalence: note }).nullable().optional(),

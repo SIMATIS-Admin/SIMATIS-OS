@@ -513,6 +513,32 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
           {kind === 'affaire' && data.mandat !== undefined && (
             <Mandat slug={slug} id={id} mandat={data.mandat} onChange={load} />
           )}
+          {data.diagnostics && (
+            <section className="panel">
+              <div className="panel-h">
+                <h2>Diagnostics ({data.diagnostics.length})</h2>
+              </div>
+              <ul className="panel-b fi-liste">
+                {data.diagnostics.length === 0 && (
+                  <li className="muted small">Aucun diagnostic lié.</li>
+                )}
+                {data.diagnostics.map((d) => (
+                  <li key={d.id} className="fi-ligne">
+                    <span className="fi-ident">
+                      <span>
+                        <a href={`#/${slug}/diagnostics/ouvrir/${d.id}`}>{d.nom}</a>
+                        <span className="small muted">
+                          {' '}
+                          Étape {d.etape}
+                          {d.statut ? `, ${d.statut}` : ''}
+                        </span>
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section className="panel">
             <div className="panel-h">
               <h2>Rendez-vous ({data.rendezVous.length})</h2>

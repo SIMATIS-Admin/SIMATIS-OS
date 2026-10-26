@@ -6,6 +6,7 @@ import {
   deleteProjet,
   DiagnosticIndisponible,
   listProjets,
+  ContactIntrouvable,
   EntrepriseIntrouvable,
   ProjetIntrouvable,
   rapportDe,
@@ -411,7 +412,7 @@ export function registerApi(
     if (error instanceof DiagnosticIndisponible)
       return reply.code(403).send({ error: error.message });
     if (error instanceof ProjetIntrouvable) return reply.code(404).send({ error: error.message });
-    if (error instanceof EntrepriseIntrouvable)
+    if (error instanceof EntrepriseIntrouvable || error instanceof ContactIntrouvable)
       return reply.code(400).send({ error: error.message });
     throw error;
   };

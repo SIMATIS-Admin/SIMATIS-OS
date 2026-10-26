@@ -9,7 +9,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { entreprises } from '../crm/schema.js';
+import { contacts, entreprises } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Dimensions } from './profil.js';
 import type { ContenuRapport } from './rapport-word.js';
@@ -120,10 +120,13 @@ export const diagnosticProjets = pgTable(
     supportFinalLe: timestamp('support_final_le', { withTimezone: true }),
     // Facultatif : les projets créés avant la fusion Diagnostics n'ont pas encore d'entreprise.
     entrepriseId: uuid('entreprise_id').references(() => entreprises.id, { onDelete: 'set null' }),
+    // Le dirigeant (ou l'interlocuteur) du diagnostic : un seul contact.
+    contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
   },
   (t) => [
     index('diagnostic_projets_instance_idx').on(t.instanceId),
     index('diagnostic_projets_entreprise_idx').on(t.entrepriseId),
+    index('diagnostic_projets_contact_idx').on(t.contactId),
     instanceIsolation('diagnostic_projets'),
   ],
 );

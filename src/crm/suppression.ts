@@ -36,6 +36,7 @@ export const REFERENCES: { table: string; colonne: string; kind: Kind; bloquant?
   { table: 'sujets', colonne: 'contact_id', kind: 'contact' },
   { table: 'vma_tests', colonne: 'entreprise_id', kind: 'entreprise' },
   { table: 'diagnostic_projets', colonne: 'entreprise_id', kind: 'entreprise' },
+  { table: 'diagnostic_projets', colonne: 'contact_id', kind: 'contact' },
   { table: 'devis', colonne: 'opportunite_id', kind: 'affaire', bloquant: true },
 ];
 
