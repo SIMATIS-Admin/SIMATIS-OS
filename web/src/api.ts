@@ -938,7 +938,7 @@ export type RechercheMandat = Omit<Recherche, 'mandats'> & {
 export const fetchRecherche = (slug: string, q: string) =>
   getJson<Recherche>(inst(slug, `recherche?q=${encodeURIComponent(q)}`));
 export const fetchRechercheMandats = (slug: string, q: string) =>
-  getJson<{ mandats: RechercheMandat[] }>(
+  getJson<{ mandats: RechercheMandat[]; echecs?: string[] }>(
     inst(slug, `recherche?q=${encodeURIComponent(q)}&portee=mandats`),
   );
 

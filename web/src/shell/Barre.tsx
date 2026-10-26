@@ -70,6 +70,8 @@ export function Barre({ slug }: { slug: string }) {
   const [droit, setDroit] = useState(false);
   const [mandats, setMandats] = useState(false);
   const [parMandat, setParMandat] = useState<RechercheMandat[]>([]);
+  const [nonLus, setNonLus] = useState<string[]>([]);
+  const [panne, setPanne] = useState(false);
   const [relance, setRelance] = useState(0);
 
   useEffect(() => {
@@ -84,11 +86,18 @@ export function Barre({ slug }: { slug: string }) {
   }, [slug]);
 
   useEffect(() => {
-    if (!droit || !mandats || q.trim().length < 2) return setParMandat([]);
+    // Results of the previous text must not stay next to the new one.
+    setParMandat([]);
+    setNonLus([]);
+    if (!droit || !mandats || q.trim().length < 2) return;
     let vivant = true;
     const minuteur = window.setTimeout(() => {
       void fetchRechercheMandats(slug, q.trim()).then(
-        (r) => vivant && setParMandat(r.mandats ?? []),
+        (r) => {
+          if (!vivant) return;
+          setParMandat(r.mandats ?? []);
+          setNonLus(r.echecs ?? []);
+        },
         () => vivant && setParMandat([]),
       );
     }, 150);
@@ -103,8 +112,17 @@ export function Barre({ slug }: { slug: string }) {
     let vivant = true;
     const minuteur = window.setTimeout(() => {
       void fetchRecherche(slug, q.trim()).then(
-        (r) => vivant && setGroupes(aplatir(r)),
-        () => vivant && setGroupes(null),
+        (r) => {
+          if (!vivant) return;
+          setPanne(false);
+          setGroupes(aplatir(r));
+        },
+        () => {
+          // The panel stays, so the mandates can still be searched.
+          if (!vivant) return;
+          setPanne(true);
+          setGroupes([]);
+        },
       );
     }, 150);
     return () => {
@@ -167,7 +185,15 @@ export function Barre({ slug }: { slug: string }) {
                 Inclure les mandats
               </label>
             )}
-            {vides && parMandat.length === 0 && <p className="small muted">Aucun résultat.</p>}
+            {panne && <p className="small muted">La recherche dans cette instance a échoué.</p>}
+            {vides && !panne && parMandat.length === 0 && (
+              <p className="small muted">Aucun résultat.</p>
+            )}
+            {nonLus.length > 0 && (
+              <p className="small barre-echecs" role="status">
+                Mandats non lus : {nonLus.join(', ')}.
+              </p>
+            )}
             {groupes.map(([titre, liste]) =>
               liste.length ? (
                 <div key={titre}>
@@ -207,6 +233,7 @@ export function Barre({ slug }: { slug: string }) {
                       <PastilleInstance
                         slug={slug}
                         instance={m.instance}
+                        autorise
                         objet={{ type: r.kind, id: r.id }}
                         onTransfere={() => setRelance((n) => n + 1)}
                       />

@@ -6,6 +6,8 @@ import { Barre } from './Barre.js';
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let droit = false;
+let echecs: string[] = [];
+let rechercheSimatisOk = true;
 
 function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
@@ -38,6 +40,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   }
   if (url.includes('portee=mandats'))
     return json({
+      echecs,
       mandats: [
         {
           instance: { slug: 'mandat-a', nom: 'Mandat A', couleur: null },
@@ -47,6 +50,8 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
         },
       ],
     });
+  if (url.includes('/recherche?q=') && !rechercheSimatisOk)
+    return Promise.resolve(new Response('{}', { status: 500 }));
   if (url.includes('/recherche?q='))
     return json({
       affaires: [{ id: 'o1', titre: 'Structuration', entreprise: 'Fonderie Vallière', clos: null }],
@@ -63,6 +68,8 @@ describe('Barre (recherche globale et ajout rapide)', () => {
   beforeEach(() => {
     calls = [];
     droit = false;
+    echecs = [];
+    rechercheSimatisOk = true;
     location.hash = '';
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
@@ -189,6 +196,44 @@ describe('Barre (recherche globale et ajout rapide)', () => {
       await waitFor(() =>
         expect(calls.filter((c) => c.url.includes('portee=mandats')).length).toBeGreaterThan(avant),
       );
+    });
+
+    it('ne recharge ni le droit ni les instances pour chaque ligne de résultat', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      const liste = await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      await within(liste).findByRole('button', { name: 'Mandat A' });
+      expect(calls.filter((c) => c.url.endsWith('/transfert/droit'))).toHaveLength(1);
+      expect(calls.some((c) => c.url === '/api/instances')).toBe(false);
+    });
+
+    it('signale les mandats qui n’ont pas pu être lus', async () => {
+      droit = true;
+      echecs = ['Mandat B'];
+      render(<Barre slug="simatis" />);
+      await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      expect(await screen.findByText(/Mandat B/, { selector: '.barre-echecs' })).toBeTruthy();
+    });
+
+    it('garde la liste et les mandats quand la recherche de SIMATIS échoue', async () => {
+      droit = true;
+      rechercheSimatisOk = false;
+      render(<Barre slug="simatis" />);
+      fireEvent.change(screen.getByLabelText('Recherche globale'), { target: { value: 'dupont' } });
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      expect(await screen.findByRole('option', { name: /Paul Dupont/ })).toBeTruthy();
+    });
+
+    it('retire aussitôt les résultats périmés des mandats quand le texte change', async () => {
+      droit = true;
+      render(<Barre slug="simatis" />);
+      const liste = await chercher();
+      fireEvent.click(await screen.findByLabelText('Inclure les mandats'));
+      await within(liste).findByRole('option', { name: /Paul Dupont/ });
+      fireEvent.change(screen.getByLabelText('Recherche globale'), { target: { value: 'martin' } });
+      expect(screen.queryByRole('option', { name: /Paul Dupont/ })).toBeNull();
     });
   });
 });

@@ -20,7 +20,8 @@ Depuis l'instance SIMATIS, Marc retrouve un contact, une entreprise ou une affai
 
 - `GET /api/i/:slug/recherche?q=…&portee=mandats` (la route existante, un paramètre de plus).
   - `portee=mandats` sans le droit → **403** `Recherche dans les mandats réservée à l'instance SIMATIS.` Valeur inconnue de `portee` → 400.
-  - Réponse : `{ mandats: [{ instance: { slug, nom, couleur }, affaires, personnes, organisations }] }`. Seuls les mandats ayant au moins un résultat figurent dans la liste ; 5 résultats au plus par type et par mandat, comme la recherche de l'instance courante. Même seuil de 2 caractères.
+  - Réponse : `{ mandats: [{ instance: { slug, nom, couleur }, affaires, personnes, organisations }], echecs: string[] }`. Seuls les mandats ayant au moins un résultat figurent dans la liste ; 5 résultats au plus par type et par mandat, comme la recherche de l'instance courante. Même seuil de 2 caractères.
+  - Les mandats sont lus **un par un** (une lecture ouvre trois transactions : tous à la fois épuiseraient le pool de connexions). Un mandat qui échoue est omis, journalisé côté serveur, et son nom est renvoyé dans `echecs`.
   - Chaque mandat est lu **dans sa propre transaction isolée** (`withInstance`, rôle restreint de l'application), comme l'Inbox agrégée (`perimetre`). Aucune connexion propriétaire, aucune Row-Level Security contournée.
 - La recherche d'une instance (`rechercherOpportunites`, `searchContacts`, `searchEntreprises`) est extraite de la route dans une fonction `rechercherDans(db, instance, q)` (`src/crm/recherche.ts`) utilisée par les deux modes : la route existante garde le même résultat.
 
@@ -29,8 +30,9 @@ Depuis l'instance SIMATIS, Marc retrouve un contact, une entreprise ou une affai
 - Dans SIMATIS avec le droit : une case « Inclure les mandats » dans la liste de résultats, décochée à chaque nouvelle session.
 - Cochée : les résultats des mandats s'ajoutent sous ceux de SIMATIS, groupés par mandat (titre = nom du mandat) ; chaque ligne porte la pastille de l'instance, **cliquable** pour copier ou déplacer (flux existant : choix de l'instance cible, aperçu, confirmation, avec `instanceOrigine` = le mandat).
 - Cliquer le nom d'un résultat ouvre `#/<slug du mandat>/fiche/<type>/<id>`.
-- La liste de résultats reste ouverte tant que la fenêtre de transfert est ouverte, et se ferme après le transfert.
-- Après un transfert réussi, la recherche est relancée.
+- La liste de résultats reste ouverte pendant la fenêtre de transfert ; après un transfert réussi, la recherche est relancée (l'objet apparaît ou disparaît des résultats).
+- Un mandat qui n'a pas pu être lu est signalé par son nom (« Mandats non lus : … »), jamais par son message d'erreur ; la recherche de SIMATIS qui échoue laisse la liste et la case ouvertes.
+- Les pastilles reçoivent le droit de la barre et n'envoient aucune requête chacune.
 
 ### Documentation
 
