@@ -111,3 +111,78 @@ describe('RendezVous list', () => {
     expect(lienEntreprise.getAttribute('href')).toBe('#/simatis/fiche/entreprise/e1');
   });
 });
+
+describe('RendezVous : création dans l’OS', () => {
+  let etat: 'ok' | 'erreur' | 'non_configure' = 'erreur';
+  let liste: ReturnType<typeof bloc>[] = [];
+
+  beforeEach(() => {
+    calls = [];
+    location.hash = '';
+    etat = 'erreur';
+    liste = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string; body?: string }) => {
+        const method = init?.method ?? 'GET';
+        calls.push({
+          url,
+          method,
+          body: init?.body ? (JSON.parse(init.body) as unknown) : undefined,
+        });
+        const json = (body: unknown, status = 201) =>
+          Promise.resolve(new Response(JSON.stringify(body), { status }));
+        if (method === 'POST' && url.endsWith('/rendez-vous')) return json({ id: 'os:abc' });
+        return json(
+          { etat, erreur: 'Google a refusé l’autorisation (400 : invalid_grant)', rdv: liste },
+          200,
+        );
+      }),
+    );
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('offre le bouton même quand Google refuse et que la liste est vide', async () => {
+    render(<RendezVous slug="simatis" />);
+    expect(await screen.findByText(/invalid_grant/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Nouveau rendez-vous/ })).toBeTruthy();
+  });
+
+  it('offre le bouton aussi sans agenda branché', async () => {
+    etat = 'non_configure';
+    render(<RendezVous slug="simatis" />);
+    expect(await screen.findByText(/Agenda non branché/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Nouveau rendez-vous/ })).toBeTruthy();
+  });
+
+  it('montre la liste et l’erreur Google ensemble quand il y a des rendez-vous de l’OS', async () => {
+    liste = [bloc('os:1', 'Rendez-vous de l’OS', 'rdv')];
+    render(<RendezVous slug="simatis" />);
+    expect(await screen.findByText('Rendez-vous de l’OS')).toBeTruthy();
+    expect(screen.getByText(/invalid_grant/)).toBeTruthy();
+  });
+
+  it('crée le rendez-vous puis ouvre sa fiche', async () => {
+    render(<RendezVous slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Nouveau rendez-vous/ }));
+    const fenetre = await screen.findByRole('dialog');
+    const creer = within(fenetre).getByRole('button', { name: 'Créer' });
+    expect((creer as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(fenetre).getByLabelText('Titre'), {
+      target: { value: 'Point fictif' },
+    });
+    fireEvent.change(within(fenetre).getByLabelText('Date'), { target: { value: '2026-10-12' } });
+    fireEvent.change(within(fenetre).getByLabelText('Heure'), { target: { value: '10:30' } });
+    fireEvent.change(within(fenetre).getByLabelText('Lieu'), { target: { value: 'Bureau' } });
+    fireEvent.click(creer);
+    await waitFor(() => expect(location.hash).toBe('#/simatis/fiche/rdv/os%3Aabc'));
+    const envoi = calls.find((c) => c.method === 'POST');
+    expect(envoi?.body).toMatchObject({ titre: 'Point fictif', dureeMinutes: 60, lieu: 'Bureau' });
+    expect(Date.parse((envoi?.body as { debut: string }).debut)).toBe(
+      new Date('2026-10-12T10:30').getTime(),
+    );
+  });
+});

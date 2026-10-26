@@ -4637,3 +4637,9 @@ tr.sel {
   flex: 1;
   min-width: 0;
 }
+
+.rdv-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}

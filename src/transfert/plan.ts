@@ -166,7 +166,8 @@ export async function planifierTransfert(db: Executor, p: DemandeTransfert): Pro
 
   const avertissements: string[] = [];
   for (const { noeud, ligne } of items.values()) {
-    if (noeud.type === 'rdv' && noeud.mode === 'copie') {
+    const deLOs = typeof ligne.eventId === 'string' && ligne.eventId.startsWith('os:');
+    if (noeud.type === 'rdv' && noeud.mode === 'copie' && !deLOs) {
       avertissements.push(`Le rendez-vous « ${noeud.libelle} » ne sera plus lié à l'agenda.`);
     }
     if (noeud.type === 'sujet') {

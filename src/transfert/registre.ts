@@ -165,11 +165,12 @@ export const ACTIVITES_DE = {
 // ('routine', 'os', 'site', 'simatis'…) is data born in the OS.
 const SOURCES_OUTIL = ['hubspot', 'fake'];
 
-// A Google calendar block is a mirror whatever its `source`; once copied (`copie:`) it is the OS's.
+// A Google calendar block is a mirror whatever its `source`; one created in the OS (`os:`) or
+// already detached (`copie:`) is the OS's.
 export function estMiroir(type: TypeObjet, ligne: Ligne): boolean {
   if (type === 'rdv') {
     const ev = ligne.eventId;
-    return !(typeof ev === 'string' && ev.startsWith('copie:'));
+    return !(typeof ev === 'string' && (ev.startsWith('copie:') || ev.startsWith('os:')));
   }
   return SOURCES_OUTIL.includes(ligne.source);
 }
