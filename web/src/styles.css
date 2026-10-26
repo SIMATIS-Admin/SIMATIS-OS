@@ -4619,8 +4619,19 @@ tr.sel {
 }
 .barre-resultat-ligne {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+/* The results list scrolls and would clip a floating menu: it opens below the row instead. */
+.barre-resultats .pastille-instance-zone {
+  display: contents;
+}
+.barre-resultats .pastille-menu {
+  position: static;
+  flex-basis: 100%;
+  margin: 0 0 6px;
+  box-shadow: none;
 }
 .barre-resultat-ligne .barre-resultat {
   flex: 1;
