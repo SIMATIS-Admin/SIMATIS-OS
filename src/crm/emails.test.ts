@@ -11,6 +11,7 @@ import {
   retirerEmail,
 } from './emails.js';
 import { FicheInvalide } from './fiches.js';
+import { searchContacts } from './service.js';
 
 describe('Adresses email d’un contact', () => {
   let t: TestApp;
@@ -117,6 +118,13 @@ describe('Adresses email d’un contact', () => {
     expect(trouves.get('s@exemple.test')).toBe(id);
     expect(trouves.size).toBe(1);
     expect(autre).not.toBe(id);
+  });
+
+  it('la recherche de contacts trouve une adresse secondaire', async () => {
+    const id = await contact(a, 'Cherché', 'principale@exemple.test');
+    await ajouterEmail(t.app.db, a, id, 'rare-secondaire@exemple.test');
+    const trouves = await searchContacts(t.app.db, a.id, 'rare-secondaire');
+    expect(trouves.map((c) => c.id)).toEqual([id]);
   });
 
   it('renvoie null pour un contact d’une autre instance', async () => {
