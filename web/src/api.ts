@@ -931,8 +931,16 @@ export type Recherche = {
   personnes: { id: string; nom: string; entreprise: string | null }[];
   organisations: { id: string; nom: string; ville: string | null }[];
 };
+// Seen from the own instance with « Inclure les mandats »: the mandates' results, read only.
+export type RechercheMandat = Omit<Recherche, 'mandats'> & {
+  instance: { slug: string; nom: string; couleur: string | null };
+};
 export const fetchRecherche = (slug: string, q: string) =>
   getJson<Recherche>(inst(slug, `recherche?q=${encodeURIComponent(q)}`));
+export const fetchRechercheMandats = (slug: string, q: string) =>
+  getJson<{ mandats: RechercheMandat[] }>(
+    inst(slug, `recherche?q=${encodeURIComponent(q)}&portee=mandats`),
+  );
 
 // Site web (module site-web): the website's Google Analytics audience.
 export type EtatSiteWeb = {

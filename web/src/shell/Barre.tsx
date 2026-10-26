@@ -3,13 +3,17 @@ import {
   createOpportunite,
   createTache,
   fetchPipeline,
+  fetchDroitTransfert,
   fetchRecherche,
+  fetchRechercheMandats,
   type Recherche,
+  type RechercheMandat,
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { NouveauContact } from '../pages/Contacts.js';
 import { NouvelleEntreprise } from '../pages/Entreprises.js';
 import { NouvelleAffaire } from '../pages/Pipeline.js';
+import { PastilleInstance } from '../pages/transfert/PastilleInstance.js';
 import { EditionTache } from '../pages/taches/Edition.js';
 
 // Pipedrive top bar: one search over deals, people and organisations, and a « + » quick add.
@@ -28,7 +32,9 @@ const AJOUTS: [Ajout, string][] = [
   ['activite', 'Activité'],
 ];
 
-const aplatir = (r: Recherche): [string, Resultat[]][] => [
+const aplatir = (
+  r: Pick<Recherche, 'affaires' | 'personnes' | 'organisations'>,
+): [string, Resultat[]][] => [
   [
     'Affaires',
     r.affaires.map((a) => ({
@@ -60,6 +66,37 @@ export function Barre({ slug }: { slug: string }) {
   const [ajout, setAjout] = useState<Ajout | null>(null);
   const [premiereEtape, setPremiereEtape] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Own instance only: the mandates are searched when asked, read only.
+  const [droit, setDroit] = useState(false);
+  const [mandats, setMandats] = useState(false);
+  const [parMandat, setParMandat] = useState<RechercheMandat[]>([]);
+  const [relance, setRelance] = useState(0);
+
+  useEffect(() => {
+    let vivant = true;
+    fetchDroitTransfert(slug).then(
+      (d) => vivant && setDroit(d.autorise === true),
+      () => vivant && setDroit(false),
+    );
+    return () => {
+      vivant = false;
+    };
+  }, [slug]);
+
+  useEffect(() => {
+    if (!droit || !mandats || q.trim().length < 2) return setParMandat([]);
+    let vivant = true;
+    const minuteur = window.setTimeout(() => {
+      void fetchRechercheMandats(slug, q.trim()).then(
+        (r) => vivant && setParMandat(r.mandats ?? []),
+        () => vivant && setParMandat([]),
+      );
+    }, 150);
+    return () => {
+      vivant = false;
+      window.clearTimeout(minuteur);
+    };
+  }, [slug, q, droit, mandats, relance]);
 
   useEffect(() => {
     if (q.trim().length < 2) return setGroupes(null);
@@ -74,12 +111,12 @@ export function Barre({ slug }: { slug: string }) {
       vivant = false;
       window.clearTimeout(minuteur);
     };
-  }, [slug, q]);
+  }, [slug, q, relance]);
 
-  const ouvrir = (r: Resultat) => {
+  const ouvrir = (r: Resultat, instance = slug) => {
     setQ('');
     setGroupes(null);
-    location.hash = `#/${slug}/fiche/${r.kind}/${r.id}`;
+    location.hash = `#/${instance}/fiche/${r.kind}/${r.id}`;
   };
   const touche = (e: KeyboardEvent) => {
     if (e.key === 'Escape') setQ('');
@@ -120,7 +157,17 @@ export function Barre({ slug }: { slug: string }) {
         />
         {groupes && (
           <div className="barre-resultats" role="listbox">
-            {vides && <p className="small muted">Aucun résultat.</p>}
+            {droit && (
+              <label className="barre-mandats small">
+                <input
+                  type="checkbox"
+                  checked={mandats}
+                  onChange={(e) => setMandats(e.target.checked)}
+                />{' '}
+                Inclure les mandats
+              </label>
+            )}
+            {vides && parMandat.length === 0 && <p className="small muted">Aucun résultat.</p>}
             {groupes.map(([titre, liste]) =>
               liste.length ? (
                 <div key={titre}>
@@ -139,6 +186,34 @@ export function Barre({ slug }: { slug: string }) {
                 </div>
               ) : null,
             )}
+            {parMandat.map((m) => (
+              <div key={m.instance.slug}>
+                <h4>{m.instance.nom}</h4>
+                {aplatir(m)
+                  .flatMap(([, liste]) => liste)
+                  .map((r) => (
+                    <div
+                      key={`${m.instance.slug}-${r.kind}-${r.id}`}
+                      className="barre-resultat-ligne"
+                    >
+                      <button
+                        role="option"
+                        aria-selected={false}
+                        className="barre-resultat"
+                        onClick={() => ouvrir(r, m.instance.slug)}
+                      >
+                        <b>{r.titre}</b> {r.sous && <span className="small muted">{r.sous}</span>}
+                      </button>
+                      <PastilleInstance
+                        slug={slug}
+                        instance={m.instance}
+                        objet={{ type: r.kind, id: r.id }}
+                        onTransfere={() => setRelance((n) => n + 1)}
+                      />
+                    </div>
+                  ))}
+              </div>
+            ))}
           </div>
         )}
       </div>

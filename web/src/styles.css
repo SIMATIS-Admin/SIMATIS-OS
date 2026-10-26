@@ -4612,3 +4612,17 @@ tr.sel {
   align-items: center;
   padding: 3px 0;
 }
+
+.barre-mandats {
+  display: block;
+  padding: 4px 0;
+}
+.barre-resultat-ligne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.barre-resultat-ligne .barre-resultat {
+  flex: 1;
+  min-width: 0;
+}
