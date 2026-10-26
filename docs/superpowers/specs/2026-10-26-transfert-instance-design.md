@@ -2,7 +2,7 @@
 
 ## But
 
-Depuis l'instance SIMATIS (instance « propre »), Marc choisit pour chaque objet l'instance à laquelle il appartient. Dans une instance de mandat, l'objet est retrouvé mais son appartenance est en lecture seule : seule l'instance SIMATIS peut la modifier.
+Depuis l'instance SIMATIS (instance « propre »), Marc choisit pour chaque objet l'instance à laquelle il appartient, grâce à une **pastille d'instance** cliquable. La pastille n'existe que dans SIMATIS : dans un mandat, elle n'apparaît pas et rien ne s'y modifie. L'objet transféré est retrouvé dans l'instance cible.
 
 Exemples : une entrée Inbox, une tâche, une affaire, un contact.
 
@@ -12,7 +12,14 @@ Exemples : une entrée Inbox, une tâche, une affaire, un contact.
 2. **Objet miroir d'un outil tiers** (`source` ≠ `natif`, ex. HubSpot, Google) : il est **copié**. L'original reste dans son instance et continue d'être synchronisé. La copie est **détachée** de l'outil (`source = 'natif'`, `source_id` vide) : c'est un objet propre de l'OS.
 3. **Les objets liés suivent** (déplacés ou copiés selon la règle 1 ou 2 pour chacun), après un **aperçu** que Marc valide.
 4. **Historique de la copie** : chaque objet copié reçoit une activité « Créé depuis l'instance *X* » (nom de l'instance d'origine, type et titre de l'objet d'origine). Chaque objet déplacé reçoit « Déplacé depuis l'instance *X* ».
-5. **Droits** : seul un appel fait depuis l'instance de type `propre` peut transférer. L'instance d'origine ou la cible peut être un mandat ; la cible ne peut pas être archivée.
+5. **Droits** : il faut deux conditions réunies : (a) l'utilisateur est **super-administrateur** (droit valable dans toute instance, aujourd'hui Marc seul ; un futur utilisateur ne l'a que si Marc le lui donne) ; (b) l'instance courante est de type `propre`. Un helper unique `peutTransferer(utilisateur, instance)` porte la règle, pour l'API comme pour l'interface. L'instance d'origine ou la cible peut être un mandat ; la cible ne peut pas être archivée.
+
+## Livraisons
+
+1. **Livraison 1** : moteur de transfert, pastille d'instance, droits. Elle agit sur ce que SIMATIS voit déjà : ses propres objets et l'Inbox agrégée (qui lit chaque mandat dans sa propre transaction isolée, `listInbox`).
+2. **Livraison 2 : vue transversale.** SIMATIS lit en lecture seule les contacts, affaires et tâches des mandats (filtre « Tous les mandats » dans les listes et la recherche), pour pouvoir y agir depuis la pastille (ex. réutiliser le contact d'un mandat dans un autre). Elle déroge à la règle de `docs/plan.md` (« aucune instance ne lit les données d'une autre, SIMATIS compris ») : `docs/plan.md` est mis à jour dans cette livraison, et chaque lecture passe par `withInstance` instance par instance, sans contourner la Row-Level Security. Elle aura sa propre spec.
+
+Le reste de ce document décrit la livraison 1 ; le moteur est écrit pour que la livraison 2 n'y change rien.
 
 ## Périmètre de la première version
 
@@ -62,19 +69,20 @@ Une ligne dans le journal de **chaque** instance concernée (origine et cible) :
 
 ### API
 
-- `POST /api/transfert/apercu` : `{ type, id, instanceCible, exclusions }` → aperçu.
+- `POST /api/transfert/apercu` : `{ type, id, instanceOrigine, instanceCible, exclusions }` → aperçu.
 - `POST /api/transfert` : mêmes paramètres → exécute et renvoie le résumé.
-- Les deux répondent **403** si l'instance courante n'est pas de type `propre`, **404** si l'objet n'existe pas dans l'instance courante, **409** sur collision.
+- Les deux répondent **403** si `peutTransferer` est faux (pas super-administrateur, ou instance courante qui n'est pas SIMATIS), **404** si l'objet n'existe pas dans `instanceOrigine`, **409** sur collision.
+- Une entrée de l'Inbox agrégée appartient à son instance d'origine : le transfert la lit et l'écrit via l'instance d'origine indiquée, jamais via l'instance courante.
 
 Outils MCP : hors première version (le transfert reste une action de Marc dans l'interface).
 
 ### Interface
 
-- Sur chaque fiche (affaire, contact, entreprise, tâche, entrée Inbox, rendez-vous) : un champ **Instance**.
-  - Dans SIMATIS : modifiable ; la liste propose les instances actives (mandats et SIMATIS elle-même). Choisir une autre instance ouvre la fenêtre d'aperçu : texte « 1 affaire, 2 contacts… seront déplacés », « 1 contact sera copié (détaché de HubSpot) », liens retirés, cases à cocher pour les objets proposés, bouton **Confirmer**.
-  - Dans un mandat : lecture seule, avec le nom de l'instance.
+- Une **pastille d'instance** (nom et couleur de l'instance) sous le titre des fiches, à côté de la pastille d'origine existante (« HubSpot » / « OS », `Fiche.tsx`), et sur les lignes des listes dont l'objet n'est pas de l'instance affichée (comme le badge déjà présent dans l'Inbox).
+  - Dans SIMATIS, pour un super-administrateur : un clic ouvre la liste des instances actives (mandats et SIMATIS elle-même). Choisir une autre instance ouvre la fenêtre d'aperçu : texte « 1 affaire, 2 contacts… seront déplacés », « 1 contact sera copié (détaché de HubSpot) », liens retirés, cases à cocher pour les objets proposés, bouton **Confirmer**.
+  - Dans un mandat, ou sans le droit : **pas de pastille**.
 - Après confirmation : message de résultat avec le lien vers l'objet dans l'instance cible.
-- Les fiches existent déjà (`web/src/pages/Fiche.tsx` et pages d'entrée Inbox, tâche, rendez-vous) ; le champ est un composant partagé.
+- Les fiches existent déjà (`web/src/pages/Fiche.tsx` et pages d'entrée Inbox, tâche, rendez-vous) ; la pastille est un composant partagé.
 
 ## Tests
 
@@ -82,10 +90,10 @@ Outils MCP : hors première version (le transfert reste une action de Marc dans 
 - **Copie** : l'original reste intact et synchronisable ; la copie a `source = 'natif'`, `source_id` vide, une activité d'origine ; les liens de la copie pointent vers des copies, pas vers l'original.
 - **Mélange natif et miroir** dans un même sous-graphe.
 - **Exclusions** : un objet décoché n'est pas transféré et le lien est retiré.
-- **Droits** : refus (403) depuis un mandat et depuis une instance de démonstration ; refus si la cible est archivée ou identique à l'origine.
+- **Droits** : refus (403) depuis un mandat, depuis une instance de démonstration et pour un utilisateur non super-administrateur ; refus si la cible est archivée ou identique à l'origine.
 - **Collisions** et **atomicité** : un échec en cours de route ne laisse rien d'écrit.
 - **Journal** des deux côtés ; concurrence (deux transferts simultanés de la même racine).
-- **Interface** : champ modifiable dans SIMATIS, en lecture seule dans un mandat ; fenêtre d'aperçu ; vérification dans le navigateur.
+- **Interface** : pastille cliquable dans SIMATIS pour un super-administrateur, absente dans un mandat ; fenêtre d'aperçu ; vérification dans le navigateur.
 - Données de test **uniquement fictives**.
 
 ## Confidentialité
