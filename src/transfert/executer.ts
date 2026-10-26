@@ -245,22 +245,39 @@ export async function executerTransfert(db: Executor, p: DemandeExecution): Prom
       }
     }
 
-    // 9. The target's journal remembers each copy: it is what spots a copy made twice.
-    if (copies.length) {
-      await withInstance(tx, cible.id, (itx) =>
-        logEvent(itx, {
-          acteur: 'pilote',
-          action: 'transfert.copie',
-          details: {
-            copies: copies.map((n) => ({
-              type: n.type,
-              origineInstance: origine.id,
-              origineId: n.id,
-              copieId: destination.get(cle(n)),
-            })),
-          },
-        }),
-      );
+    // 9. Each instance's journal tells what left or arrived. The target's one also remembers each
+    // copy: it is what spots a copy made twice.
+    const compteurs = (noeuds: Noeud[]) => {
+      const c: Record<string, number> = {};
+      for (const n of noeuds) c[n.type] = (c[n.type] ?? 0) + 1;
+      return c;
+    };
+    const evenements = [
+      { action: 'transfert.deplace', noeuds: deplaces },
+      { action: 'transfert.copie', noeuds: copies },
+    ].filter((e) => e.noeuds.length);
+    for (const e of evenements) {
+      const details = {
+        racine: { type: p.racine.type, id: p.racine.id },
+        origine: origine.id,
+        cible: cible.id,
+        compteurs: compteurs(e.noeuds),
+        ...(e.action === 'transfert.copie'
+          ? {
+              copies: e.noeuds.map((n) => ({
+                type: n.type,
+                origineInstance: origine.id,
+                origineId: n.id,
+                copieId: destination.get(cle(n)),
+              })),
+            }
+          : {}),
+      };
+      for (const instance of [origine.id, cible.id]) {
+        await withInstance(tx, instance, (itx) =>
+          logEvent(itx, { acteur: 'pilote', action: e.action, details }),
+        );
+      }
     }
 
     return {
