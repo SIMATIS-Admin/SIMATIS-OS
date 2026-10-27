@@ -19,16 +19,27 @@ export const funnelOf = (instance: Instance): Funnel => {
 export async function getTableau(db: Executor, instance: Instance) {
   const ouvertes = await withInstance(db, instance.id, (tx) =>
     tx
-      .select({ montant: opportunites.montant, qualification: opportunites.qualification })
+      .select({
+        montant: opportunites.montant,
+        mode: opportunites.modeFacturation,
+        duree: opportunites.dureeEngagementMois,
+        qualification: opportunites.qualification,
+      })
       .from(opportunites)
       .where(and(eq(opportunites.instanceId, currentInstance), isNull(opportunites.clos))),
   );
-  const somme = (rows: typeof ouvertes) => rows.reduce((a, o) => a + (o.montant ?? 0), 0);
+  // One-off amounts and monthly ones are never added together: `montant` is euros once for a spot
+  // deal, euros per month for a recurring one (`engage` = that over the commitment period).
+  const somme = (rows: typeof ouvertes) => ({
+    montant: rows.reduce((a, o) => a + (o.mode === 'spot' ? (o.montant ?? 0) : 0), 0),
+    mensuel: rows.reduce((a, o) => a + (o.mode === 'recurrent' ? (o.montant ?? 0) : 0), 0),
+    engage: rows.reduce((a, o) => a + (o.mode === 'recurrent' ? (o.montant ?? 0) * o.duree : 0), 0),
+  });
   const chaudes = ouvertes.filter((o) => score(o.qualification) >= SEUIL_CHAUDE);
   const funnel = funnelOf(instance);
   return {
-    pipeline: { montant: somme(ouvertes), nombre: ouvertes.length },
-    chaudes: { montant: somme(chaudes), nombre: chaudes.length },
+    pipeline: { ...somme(ouvertes), nombre: ouvertes.length },
+    chaudes: { ...somme(chaudes), nombre: chaudes.length },
     // Campaigns arrive with the prospecting lot (M4).
     derniereCampagne: null,
     funnel,

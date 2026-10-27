@@ -12,7 +12,7 @@ import {
   type PipelineOpp,
   type Qualification,
 } from '../api.js';
-import { eur } from '../crm.js';
+import { montantEur, sommeEur, sommes } from '../crm.js';
 import { Icon } from '../icons.js';
 import { fusionnerDeux, supprimerEnLot } from './listes/lots.js';
 import { Tableau } from './listes/Tableau.js';
@@ -136,7 +136,7 @@ function Card({
       <div className="ft">
         <Score q={o.qualification} />
         <span className="small">
-          {o.montant ? eur(o.montant) : <span className="muted">à estimer</span>}
+          {o.montant ? montantEur(o) : <span className="muted">à estimer</span>}
         </span>
       </div>
     </div>
@@ -187,11 +187,12 @@ export function Cloture({
   );
 }
 
-const somme = (os: PipelineOpp[]) => os.reduce((a, o) => a + (o.montant ?? 0), 0);
-
 type SaisieAffaire = {
   titre: string;
   montant: number | null;
+  modeFacturation: 'spot' | 'recurrent';
+  dureeEngagementMois: number;
+  taciteReconduction: boolean;
   echeance: string | null;
   entrepriseId: string | null;
   contactId: string | null;
@@ -211,6 +212,9 @@ export function NouvelleAffaire({
 }) {
   const [titre, setTitre] = useState('');
   const [montant, setMontant] = useState('');
+  const [mode, setMode] = useState<'spot' | 'recurrent'>('spot');
+  const [duree, setDuree] = useState('12');
+  const [tacite, setTacite] = useState(true);
   const [echeance, setEcheance] = useState('');
   const [org, setOrg] = useState<{ id: string; nom: string } | null>(null);
   const [pers, setPers] = useState<{ id: string; nom: string } | null>(null);
@@ -222,9 +226,39 @@ export function NouvelleAffaire({
         <span>Titre</span>
         <input className="input" value={titre} onChange={(e) => setTitre(e.target.value)} />
       </label>
+      <label className="field">
+        <span>Facturation</span>
+        <select
+          className="input"
+          value={mode}
+          onChange={(e) => setMode(e.target.value === 'recurrent' ? 'recurrent' : 'spot')}
+        >
+          <option value="spot">Spot (montant unique)</option>
+          <option value="recurrent">Récurrent (abonnement mensuel)</option>
+        </select>
+      </label>
+      {mode === 'recurrent' && (
+        <div className="grid g2">
+          <label className="field">
+            <span>Engagement (mois)</span>
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={120}
+              value={duree}
+              onChange={(e) => setDuree(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Tacite reconduction</span>
+            <input type="checkbox" checked={tacite} onChange={(e) => setTacite(e.target.checked)} />
+          </label>
+        </div>
+      )}
       <div className="grid g2">
         <label className="field">
-          <span>Valeur (€)</span>
+          <span>{mode === 'recurrent' ? 'Valeur (€ par mois)' : 'Valeur (€)'}</span>
           <input
             className="input"
             type="number"
@@ -258,6 +292,9 @@ export function NouvelleAffaire({
             void onSave({
               titre: titre.trim(),
               montant: montant ? Math.round(Number(montant)) : null,
+              modeFacturation: mode,
+              dureeEngagementMois: Math.min(120, Math.max(1, Math.round(Number(duree)) || 12)),
+              taciteReconduction: tacite,
               echeance: echeance || null,
               entrepriseId: org?.id ?? null,
               contactId: pers?.id ?? null,
@@ -394,9 +431,9 @@ export function Pipeline({ slug }: { slug: string }) {
           {nom} <span className="muted">{os.length}</span>
         </b>
         <span>
-          {eur(somme(os))}
+          {sommeEur(sommes(os))}
           {prob != null && (
-            <small className="muted"> · pondéré {eur(Math.round((somme(os) * prob) / 100))}</small>
+            <small className="muted"> · pondéré {sommeEur(sommes(os, () => prob / 100))}</small>
           )}
         </span>
         {!cls && data.ecrit && (
@@ -449,9 +486,7 @@ export function Pipeline({ slug }: { slug: string }) {
   // Pipedrive header: total and weighted value of the open deals (stage probability).
   const probas = new Map(data.etapes.map((e) => [e.id, e.probabilite ?? null]));
   const pondere = [...probas.values()].some((p) => p !== null)
-    ? Math.round(
-        ouvertes.reduce((a, o) => a + ((o.montant ?? 0) * (probas.get(o.etape) ?? 0)) / 100, 0),
-      )
+    ? sommes(ouvertes, (o) => (probas.get(o.etape) ?? 0) / 100)
     : null;
   // Pipedrive: a card opens the deal page.
   const ouvrir = (id: string) => (location.hash = `#/${slug}/fiche/affaire/${id}`);
@@ -524,11 +559,11 @@ export function Pipeline({ slug }: { slug: string }) {
         <>
           <div className="pipe-totaux">
             <span>
-              Total <b className="num">{eur(somme(ouvertes))}</b>
+              Total <b className="num">{sommeEur(sommes(ouvertes))}</b>
             </span>
             {pondere !== null && (
               <span>
-                Pondéré <b className="num">{eur(pondere)}</b>
+                Pondéré <b className="num">{sommeEur(pondere)}</b>
               </span>
             )}
             <span className="muted">
@@ -588,7 +623,7 @@ export function Pipeline({ slug }: { slug: string }) {
               cle: 'montant',
               label: 'Montant',
               valeur: (o) => o.montant,
-              affiche: (o) => (o.montant ? eur(o.montant) : ''),
+              affiche: (o) => montantEur(o),
             },
             { cle: 'echeance', label: 'Échéance', valeur: (o) => o.echeance },
           ]}

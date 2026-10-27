@@ -39,6 +39,29 @@ describe('dashboard API', () => {
     });
   });
 
+  it('keeps one-off and monthly amounts apart in the open pipeline', async () => {
+    const base = (await app.inject({ method: 'GET', url: '/api/i/simatis/tableau' })).json<{
+      pipeline: { montant: number; mensuel: number; engage: number };
+    }>().pipeline;
+    expect(base.mensuel).toBe(0);
+    const cree = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/opportunites',
+      payload: {
+        titre: 'Abonnement test',
+        etape: 'qualification',
+        montant: 1000,
+        modeFacturation: 'recurrent',
+        dureeEngagementMois: 12,
+      },
+    });
+    expect(cree.statusCode).toBe(200);
+    const apres = (await app.inject({ method: 'GET', url: '/api/i/simatis/tableau' })).json<{
+      pipeline: { montant: number; mensuel: number; engage: number };
+    }>().pipeline;
+    expect(apres).toMatchObject({ montant: base.montant, mensuel: 1000, engage: 12000 });
+  });
+
   it('saves a slider within bounds and refuses one outside', async () => {
     const bad = await app.inject({
       method: 'PATCH',

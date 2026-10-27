@@ -39,7 +39,10 @@ export async function searchEntreprises(db: Executor, instanceId: string, q = ''
           and o.clos is null)::int`,
         montantOuvert: sql<number>`(select coalesce(sum(o.montant), 0) from ${opportunites} o
           where o.entreprise_id = ${outerId} and o.instance_id = ${currentInstance}
-          and o.clos is null)::int`,
+          and o.clos is null and o.mode_facturation = 'spot')::int`,
+        montantMensuelOuvert: sql<number>`(select coalesce(sum(o.montant), 0) from ${opportunites} o
+          where o.entreprise_id = ${outerId} and o.instance_id = ${currentInstance}
+          and o.clos is null and o.mode_facturation = 'recurrent')::int`,
         // Earliest open activity of the company's contacts and deals (Pipedrive list column).
         prochaineActivite: sql<string | null>`(select min(t.echeance) from ${taches} t
           where t.instance_id = ${currentInstance} and t.fait_at is null and (

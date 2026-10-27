@@ -68,6 +68,13 @@ export const opportunites = pgTable(
     contactId: uuid('contact_id').references(() => contacts.id),
     titre: text('titre').notNull(),
     etape: text('etape').notNull(),
+    // Recurring deal: `montant` is then per month, over `dureeEngagementMois`. OS-only, HubSpot
+    // knows nothing of it and the sync leaves it alone.
+    modeFacturation: text('mode_facturation', { enum: ['spot', 'recurrent'] })
+      .notNull()
+      .default('spot'),
+    dureeEngagementMois: integer('duree_engagement_mois').notNull().default(12),
+    taciteReconduction: boolean('tacite_reconduction').notNull().default(true),
     montant: integer('montant'),
     echeance: date('echeance'),
     clos: text('clos', { enum: ['gagne', 'perdu'] }),

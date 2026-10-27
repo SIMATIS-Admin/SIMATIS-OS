@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchTableau, saveFunnel, type Funnel, type TableauReponse } from '../api.js';
-import { eur } from '../crm.js';
+import { eur, sommeEur } from '../crm.js';
 
 type Cle = keyof Funnel;
 const CURSEURS: { cle: Cle; libelle: string; min: number; max: number; step: number }[] = [
@@ -70,13 +70,20 @@ export function Tableau({ slug }: { slug: string }) {
       <div className="grid g3">
         <div className="panel kpi">
           <span className="l">Pipeline ouvert</span>
-          <span className="v">{eur(data.pipeline.montant)}</span>
-          <span className="small muted">{data.pipeline.nombre} opportunités</span>
+          <span className="v">
+            {sommeEur({ spot: data.pipeline.montant, mensuel: data.pipeline.mensuel })}
+          </span>
+          <span className="small muted">
+            {data.pipeline.nombre} opportunités
+            {data.pipeline.engage > 0 && ` · ${eur(data.pipeline.engage)} engagés en récurrent`}
+          </span>
         </div>
         <div className="panel kpi">
           <span className="l">Opportunités chaudes (12 et plus)</span>
           <span className="v">{data.chaudes.nombre}</span>
-          <span className="small muted">{eur(data.chaudes.montant)}</span>
+          <span className="small muted">
+            {sommeEur({ spot: data.chaudes.montant, mensuel: data.chaudes.mensuel })}
+          </span>
         </div>
         <div className="panel kpi">
           <span className="l">Taux de réponse, dernière campagne</span>
