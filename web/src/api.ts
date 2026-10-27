@@ -375,6 +375,7 @@ export type PipelineOpp = {
   clos: 'gagne' | 'perdu' | null;
   motif: string | null;
   montant: number | null;
+  probabilite: number | null;
   modeFacturation: 'spot' | 'recurrent';
   dureeEngagementMois: number;
   taciteReconduction: boolean;

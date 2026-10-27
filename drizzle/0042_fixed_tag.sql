@@ -1,0 +1,1 @@
+ALTER TABLE "opportunites" ADD COLUMN "probabilite" integer;

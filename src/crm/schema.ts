@@ -76,6 +76,8 @@ export const opportunites = pgTable(
     dureeEngagementMois: integer('duree_engagement_mois').notNull().default(12),
     taciteReconduction: boolean('tacite_reconduction').notNull().default(true),
     montant: integer('montant'),
+    // Chance of winning set by hand on the deal; null = the stage's probability applies.
+    probabilite: integer('probabilite'),
     echeance: date('echeance'),
     clos: text('clos', { enum: ['gagne', 'perdu'] }),
     motif: text('motif'),
