@@ -295,6 +295,57 @@ describe('pipeline API', () => {
     expect(refus.status).toBe(400);
   });
 
+  it('creates a spot deal by default and a recurring one with its commitment, and patches it', async () => {
+    const spot = await req('POST', '/api/i/simatis/opportunites', {
+      titre: 'Mission ponctuelle',
+      montant: 5000,
+      etape: 'prospection',
+    });
+    expect(spot.body).toMatchObject({
+      modeFacturation: 'spot',
+      dureeEngagementMois: 12,
+      taciteReconduction: true,
+    });
+    const abo = await req('POST', '/api/i/simatis/opportunites', {
+      titre: 'Accompagnement mensuel',
+      montant: 1200,
+      etape: 'prospection',
+      modeFacturation: 'recurrent',
+      dureeEngagementMois: 6,
+      taciteReconduction: false,
+    });
+    expect(abo.status).toBe(200);
+    expect(abo.body).toMatchObject({
+      modeFacturation: 'recurrent',
+      dureeEngagementMois: 6,
+      taciteReconduction: false,
+    });
+    const id = (abo.body as { id: string }).id;
+    const bascule = await req('PATCH', `/api/i/simatis/fiches/affaire/${id}`, {
+      modeFacturation: 'spot',
+    });
+    expect(bascule.body).toMatchObject({ fiche: { modeFacturation: 'spot' } });
+    const pipe = (await req('GET', '/api/i/simatis/pipeline')).body.opportunites as {
+      id: string;
+      modeFacturation: string;
+    }[];
+    expect(pipe.find((o) => o.id === id)?.modeFacturation).toBe('spot');
+    for (const mauvais of [
+      { modeFacturation: 'trimestriel' },
+      { dureeEngagementMois: 0 },
+      { dureeEngagementMois: 121 },
+    ])
+      expect(
+        (
+          await req('POST', '/api/i/simatis/opportunites', {
+            titre: 'X',
+            etape: 'prospection',
+            ...mauvais,
+          })
+        ).status,
+      ).toBe(400);
+  });
+
   it('creates a HubSpot deal in HubSpot first, then its copy, and exposes stage probabilities', async () => {
     // An earlier test leaves the mirror read-only.
     await t.owner.pool.query(

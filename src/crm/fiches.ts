@@ -279,6 +279,9 @@ export async function getFiche(
 export type PatchFiche = {
   titre?: string;
   montant?: number | null;
+  modeFacturation?: 'spot' | 'recurrent';
+  dureeEngagementMois?: number;
+  taciteReconduction?: boolean;
   echeance?: string | null;
   nom?: string;
   fonction?: string | null;
@@ -293,10 +296,27 @@ export type PatchFiche = {
 };
 
 const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
-  affaire: ['titre', 'montant', 'echeance', 'contactId', 'entrepriseId'],
+  affaire: [
+    'titre',
+    'montant',
+    'modeFacturation',
+    'dureeEngagementMois',
+    'taciteReconduction',
+    'echeance',
+    'contactId',
+    'entrepriseId',
+  ],
   contact: ['nom', 'fonction', 'email', 'telephone', 'entrepriseId'],
   entreprise: ['nom', 'ville', 'domaine', 'taille', 'secteur'],
 };
+
+// Billing terms exist only in the OS: they are never sent to HubSpot, and stay editable when the
+// CRM is read-only.
+const CHAMPS_LOCAUX: (keyof PatchFiche)[] = [
+  'modeFacturation',
+  'dureeEngagementMois',
+  'taciteReconduction',
+];
 
 async function verifierLiens(tx: Tx, patch: PatchFiche) {
   for (const [kind, id, nom] of [
@@ -345,7 +365,11 @@ export async function updateFiche(
     if (!row) return null;
     await verifierLiens(tx, champs);
 
-    if (row.source === 'hubspot') {
+    const distants = Object.fromEntries(
+      Object.entries(champs).filter(([k]) => !CHAMPS_LOCAUX.includes(k as keyof PatchFiche)),
+    ) as PatchFiche;
+    const versHubspot = row.source === 'hubspot' && Object.keys(distants).length > 0;
+    if (versHubspot) {
       if ((await crm(tx))?.sens !== 'deux_sens') {
         throw new CrmIndisponible(
           'CRM en lecture seule : modifiez la fiche dans HubSpot, elle remontera à la prochaine synchronisation.',
@@ -356,7 +380,7 @@ export async function updateFiche(
       }
       let simulation = false;
       if (kind === 'affaire') {
-        const { contactId, entrepriseId, ...valeurs } = champs;
+        const { contactId, entrepriseId, ...valeurs } = distants;
         if (Object.keys(valeurs).length)
           simulation = await ecrireHubspot(
             tx,

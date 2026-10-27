@@ -10,6 +10,7 @@ export type Entreprise = {
   nbContacts: number;
   oppsOuvertes: number;
   montantOuvert: number;
+  montantMensuelOuvert: number;
   prochaineActivite: string | null;
 };
 
@@ -374,6 +375,9 @@ export type PipelineOpp = {
   clos: 'gagne' | 'perdu' | null;
   motif: string | null;
   montant: number | null;
+  modeFacturation: 'spot' | 'recurrent';
+  dureeEngagementMois: number;
+  taciteReconduction: boolean;
   echeance: string | null;
   qualification: Qualification | null;
   potentiel: string | null;
@@ -401,6 +405,9 @@ export const createOpportunite = (
     titre: string;
     etape: string;
     montant: number | null;
+    modeFacturation: 'spot' | 'recurrent';
+    dureeEngagementMois: number;
+    taciteReconduction: boolean;
     echeance: string | null;
     entrepriseId: string | null;
     contactId: string | null;
@@ -632,8 +639,8 @@ export type Simulation = {
   objectifTenu: boolean;
 };
 export type TableauReponse = {
-  pipeline: { montant: number; nombre: number };
-  chaudes: { montant: number; nombre: number };
+  pipeline: { montant: number; mensuel: number; engage: number; nombre: number };
+  chaudes: { montant: number; mensuel: number; engage: number; nombre: number };
   derniereCampagne: { reponses: number; brouillons: number; rdv: number } | null;
   funnel: Funnel;
   simulation: Simulation;

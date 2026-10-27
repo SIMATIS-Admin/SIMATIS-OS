@@ -15,7 +15,7 @@ import {
   type FicheDetail,
   type KindFiche,
 } from '../api.js';
-import { eur } from '../crm.js';
+import { engagement, eur, montantEur } from '../crm.js';
 import type { InstanceSummary } from '../nav.js';
 import { Icon } from '../icons.js';
 import { ActionsFiche } from './liens/ActionsFiche.js';
@@ -357,6 +357,8 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
   const f = data.fiche;
   const cartes = cartesDe(kind, data.liens, f.origine === 'hubspot');
   const hubspot = f.origine === 'hubspot';
+  const mode = f.modeFacturation === 'recurrent' ? 'recurrent' : 'spot';
+  const mensuel = mode === 'recurrent';
   const titre = enTexte(f.titre) || enTexte(f.nom);
   const shown = data.historique.filter((e) => {
     const types = FILTRES.find(([k]) => k === filtre)?.[2] ?? [];
@@ -378,7 +380,9 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
           <h1>{titre}</h1>
           <div className="small muted fi-sous">
             {kind === 'affaire' && f.montant ? (
-              <b className="num fi-montant">{eur(Number(f.montant))}</b>
+              <b className="num fi-montant">
+                {montantEur({ montant: Number(f.montant), modeFacturation: mode })}
+              </b>
             ) : null}
             {data.liens.entreprise && (
               <a className="fi-puce" href={lien(slug, 'entreprise', data.liens.entreprise.id)}>
@@ -490,7 +494,16 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                 .map((c) => (
                   <ChampEditable
                     key={c.cle}
-                    champ={c}
+                    champ={
+                      kind === 'affaire' && c.cle === 'montant'
+                        ? {
+                            ...c,
+                            label: mensuel ? 'Valeur par mois' : c.label,
+                            affiche: (v) =>
+                              montantEur({ montant: Number(v), modeFacturation: mode }),
+                          }
+                        : c
+                    }
                     valeur={f[c.cle]}
                     modifiable={
                       data.ecrit && !(kind === 'entreprise' && c.cle === 'secteur' && hubspot)
@@ -498,6 +511,61 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                     onSave={(v) => v !== (f[c.cle] ?? null) && modifier({ [c.cle]: v })}
                   />
                 ))}
+              {kind === 'affaire' && (
+                <div className="fi-champ">
+                  <span className="muted small">Facturation</span>
+                  <span className="fi-valeur">
+                    <select
+                      className="input"
+                      aria-label="Mode de facturation"
+                      value={mode}
+                      onChange={(e) => modifier({ modeFacturation: e.target.value })}
+                    >
+                      <option value="spot">Spot (montant unique)</option>
+                      <option value="recurrent">Récurrent (abonnement mensuel)</option>
+                    </select>
+                  </span>
+                </div>
+              )}
+              {kind === 'affaire' && mensuel && (
+                <>
+                  <ChampEditable
+                    champ={{
+                      cle: 'dureeEngagementMois',
+                      label: 'Engagement (mois)',
+                      type: 'number',
+                    }}
+                    valeur={f.dureeEngagementMois}
+                    modifiable
+                    onSave={(v) =>
+                      typeof v === 'number' && v >= 1 && modifier({ dureeEngagementMois: v })
+                    }
+                  />
+                  <div className="fi-champ">
+                    <span className="muted small">Tacite reconduction</span>
+                    <span className="fi-valeur">
+                      <input
+                        type="checkbox"
+                        aria-label="Tacite reconduction"
+                        checked={f.taciteReconduction !== false}
+                        onChange={(e) => modifier({ taciteReconduction: e.target.checked })}
+                      />
+                    </span>
+                  </div>
+                  {f.montant ? (
+                    <p className="small muted">
+                      {engagement({
+                        montant: Number(f.montant),
+                        modeFacturation: mode,
+                        dureeEngagementMois: Number(f.dureeEngagementMois ?? 12),
+                        taciteReconduction: f.taciteReconduction !== false,
+                      })}
+                      {' : '}
+                      {eur(Number(f.montant) * Number(f.dureeEngagementMois ?? 12))} engagés
+                    </p>
+                  ) : null}
+                </>
+              )}
               {kind === 'contact' && (
                 <AdressesEmail
                   slug={slug}

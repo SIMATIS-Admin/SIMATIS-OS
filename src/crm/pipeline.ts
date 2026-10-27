@@ -87,6 +87,9 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         clos: opportunites.clos,
         motif: opportunites.motif,
         montant: opportunites.montant,
+        modeFacturation: opportunites.modeFacturation,
+        dureeEngagementMois: opportunites.dureeEngagementMois,
+        taciteReconduction: opportunites.taciteReconduction,
         echeance: opportunites.echeance,
         qualification: opportunites.qualification,
         potentiel: opportunites.potentiel,
@@ -261,6 +264,9 @@ export async function createOpportunite(
     titre: string;
     etape: string;
     montant?: number | null;
+    modeFacturation?: 'spot' | 'recurrent';
+    dureeEngagementMois?: number;
+    taciteReconduction?: boolean;
     echeance?: string | null;
     contactId?: string | null;
     entrepriseId?: string | null;
@@ -291,6 +297,9 @@ export async function createOpportunite(
         titre: input.titre.trim(),
         etape: input.etape,
         montant: input.montant ?? null,
+        modeFacturation: input.modeFacturation ?? 'spot',
+        dureeEngagementMois: input.dureeEngagementMois ?? 12,
+        taciteReconduction: input.taciteReconduction ?? true,
         echeance: input.echeance ?? null,
         contactId: input.contactId ?? null,
         entrepriseId: input.entrepriseId ?? null,

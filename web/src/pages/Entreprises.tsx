@@ -6,7 +6,7 @@ import {
   type Entreprise,
   type RefFiche,
 } from '../api.js';
-import { eur } from '../crm.js';
+import { sommeEur } from '../crm.js';
 import { Modal } from './Overlay.js';
 import { fusionnerDeux, supprimerEnLot } from './listes/lots.js';
 import { jour, Tableau } from './listes/Tableau.js';
@@ -157,7 +157,10 @@ export function Entreprises({ slug }: { slug: string }) {
                 cle: 'valeur',
                 label: 'Valeur ouverte',
                 valeur: (e) => e.montantOuvert,
-                affiche: (e) => (e.montantOuvert ? eur(e.montantOuvert) : ''),
+                affiche: (e) =>
+                  e.montantOuvert || e.montantMensuelOuvert
+                    ? sommeEur({ spot: e.montantOuvert, mensuel: e.montantMensuelOuvert })
+                    : '',
               },
               {
                 cle: 'prochaine',
