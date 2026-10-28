@@ -4,6 +4,7 @@ import {
   creerTestVma,
   fetchTestsVma,
   revoquerTestVma,
+  type FreinVma,
   type NouveauTestVma,
   type TestVma,
   type TestVmaCree,
@@ -245,6 +246,109 @@ export function TestsVma({ slug }: { slug: string }) {
   );
 }
 
+type ResultatVma = NonNullable<TestVma['resultat']>;
+
+// Un frein comme le mail le présente : titre, phrase, puis enjeu, réponse, pratique visée, actions et signe.
+function FreinVu({ f, textes }: { f: FreinVma; textes: Record<string, string> }) {
+  return (
+    <li>
+      <strong>{f.titre}</strong> : {f.phrase}
+      {typeof f.enjeu === 'number' && f.enjeu > 0 && (
+        <div className="small">
+          {textes.libelleEnjeu ?? 'Enjeu estimé'} : environ +{fmtEur(f.enjeu)} par mois*
+        </div>
+      )}
+      {f.reponse && (
+        <div className="small">
+          {textes.libelleReponse ?? 'Votre réponse'} : « {f.reponse} »
+        </div>
+      )}
+      {f.cible && f.cible !== f.reponse && (
+        <div className="small">
+          {textes.libelleCible ?? 'Les plus avancés'} : « {f.cible} »
+        </div>
+      )}
+      {f.debut && f.debut.length > 0 && (
+        <div className="small">
+          <strong>{textes.libelleDebut ?? 'Par où commencer'}</strong>
+          <ul>
+            {f.debut.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {f.signe && (
+        <div className="small">
+          {textes.libelleSigne ?? 'Signe que c’est en place'} : {f.signe}
+        </div>
+      )}
+    </li>
+  );
+}
+
+// Les freins tels que le dirigeant les a reçus par mail : en mode portefeuille, deux listes (conquête
+// et portefeuille) avec l'écart de chacune ; sinon une seule liste.
+function FreinsVus({ r }: { r: ResultatVma }) {
+  const textes = r.textes ?? {};
+  const note = r.freins.some((f) => typeof f.enjeu === 'number' && f.enjeu > 0) && textes.noteEnjeu;
+  const echeance = `${r.echeance} an${r.echeance < 2 ? '' : 's'}`;
+  const ecart = (nom: string, cible: number, lancee: number, ecartV: number) =>
+    ecartV > 0
+      ? `${nom} : votre cible est de ${fmtEur(cible)} par mois ; sur votre lancée, ${fmtEur(lancee)} dans ${echeance}, soit ${fmtEur(ecartV)} par mois d’écart.`
+      : `${nom} : votre cible de ${fmtEur(cible)} par mois est couverte sur votre lancée (${fmtEur(lancee)} dans ${echeance}).`;
+  const section = (titre: string, phrase: string, liste: FreinVma[]) => (
+    <div key={titre}>
+      <div className="small muted">{titre}</div>
+      {phrase && <p className="small">{phrase}</p>}
+      <ol>
+        {liste.map((f) => (
+          <FreinVu key={f.n} f={f} textes={textes} />
+        ))}
+      </ol>
+    </div>
+  );
+  const portefeuille = r.modePortefeuille === true && (r.recurrent ?? 0) > 0;
+  return (
+    <>
+      {portefeuille ? (
+        <>
+          {section(
+            textes.titreConquete ?? 'Conquête',
+            ecart(
+              textes.libelleNouvellesAffaires ?? 'Nouvelles affaires',
+              r.spotCible ?? 0,
+              r.spotEcheance ?? 0,
+              r.ecartSpot ?? 0,
+            ),
+            r.freinsConquete ?? [],
+          )}
+          {section(
+            textes.titrePortefeuille ?? 'Portefeuille',
+            ecart(
+              textes.libelleSocleRecurrent ?? 'Socle récurrent',
+              r.recurrentCible ?? 0,
+              r.socleEcheance ?? 0,
+              r.ecartRecurrent ?? 0,
+            ) +
+              (r.partRecVisee != null && r.partRecActuelle != null
+                ? ` Part visée : ${pct(r.partRecVisee)} (aujourd’hui ${pct(r.partRecActuelle)}).`
+                : ''),
+            r.freinsPortefeuille ?? [],
+          )}
+        </>
+      ) : (
+        <ol>
+          {r.freins.map((f) => (
+            <FreinVu key={f.n} f={f} textes={textes} />
+          ))}
+        </ol>
+      )}
+      {note && <p className="small muted">* {textes.noteEnjeu}</p>}
+    </>
+  );
+}
+
 // Fiche de résultat : ce que le dirigeant a vu, puis le détail réservé à Marc (gains, blocs).
 function FicheResultat({ t }: { t: TestVma }) {
   const r = t.resultat;
@@ -284,13 +388,7 @@ function FicheResultat({ t }: { t: TestVma }) {
         </p>
         <p className="small muted">{r.niveau.phrase}</p>
         <div className="small muted">Ce que le dirigeant a vu</div>
-        <ol>
-          {r.freins.map((f) => (
-            <li key={f.n}>
-              <strong>{f.titre}</strong> : {f.phrase}
-            </li>
-          ))}
-        </ol>
+        <FreinsVus r={r} />
 
         <div className="small muted">Pour Marc uniquement</div>
         {c?.potentiel !== undefined && (

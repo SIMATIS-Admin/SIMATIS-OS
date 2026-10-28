@@ -160,6 +160,68 @@ describe('Tests VMA : écran', () => {
     expect(screen.getByText(/\+1,2.k€ \/ mois/)).toBeTruthy();
   });
 
+  it('v2.2 : montre comme le mail les deux listes de freins du mode portefeuille, avec leur détail', async () => {
+    const frein = (n: number, titre: string, extra = {}) => ({
+      n,
+      titre,
+      phrase: `Phrase ${titre}.`,
+      enjeu: 5000,
+      reponse: `Réponse ${titre}`,
+      cible: `Cible ${titre}`,
+      debut: [`Action ${titre}`],
+      signe: `Signe ${titre}`,
+      ...extra,
+    });
+    api.fetchTestsVma.mockResolvedValue([
+      test({
+        statut: 'utilisee',
+        recueLe: '2026-10-22T09:00:00.000Z',
+        resultat: {
+          entreprise: 'Atelier Fictif',
+          vma: 14000,
+          mesurable: true,
+          statut: 'prouvée',
+          tenue: 'en dents de scie',
+          recurrent: 80000,
+          allureActuelle: 94000,
+          trajectoire: 107000,
+          socleEcheance: 107000,
+          allureVisee: 125000,
+          echeance: 2,
+          niveau: { cle: 'real', label: 'Réaliste', phrase: 'Phrase fictive.' },
+          ecart: 18000,
+          modePortefeuille: true,
+          spotCible: 18600,
+          spotEcheance: 0,
+          ecartSpot: 18600,
+          recurrentCible: 106400,
+          ecartRecurrent: -600,
+          freins: [frein(1, 'Frein A'), frein(9, 'Frein B')],
+          freinsConquete: [frein(1, 'Frein A')],
+          freinsPortefeuille: [frein(9, 'Frein B')],
+          textes: {
+            titreConquete: 'Conquête fictive',
+            titrePortefeuille: 'Portefeuille fictif',
+            noteEnjeu: 'Estimation moyenne fictive.',
+          },
+        },
+      }),
+    ]);
+    render(<TestsVma slug="mandat-fictif" />);
+
+    await waitFor(() => expect(screen.getByText('Atelier Fictif')).toBeTruthy());
+    screen.getByRole('button', { name: 'Voir le résultat' }).click();
+    await waitFor(() => expect(screen.getByText('Conquête fictive')).toBeTruthy());
+    expect(screen.getByText('Portefeuille fictif')).toBeTruthy();
+    expect(screen.getByText(/Nouvelles affaires : votre cible est de 18,6.k€/)).toBeTruthy();
+    expect(screen.getByText(/Action Frein B/)).toBeTruthy();
+    expect(screen.getByText(/Signe Frein A/)).toBeTruthy();
+    expect(screen.getAllByText(/environ \+5.k€ par mois\*/)).toHaveLength(2);
+    expect(screen.getByText(/\* Estimation moyenne fictive\./)).toBeTruthy();
+    // Chaque frein n'apparaît qu'une fois : la liste à plat n'est plus montrée en plus des deux sections.
+    expect(screen.getAllByText('Frein A')).toHaveLength(1);
+  });
+
   it("demande confirmation à l'alerte du semestre, puis crée si Marc confirme", async () => {
     api.fetchTestsVma.mockResolvedValue([]);
     api.creerTestVma

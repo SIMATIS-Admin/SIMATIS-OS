@@ -125,6 +125,17 @@ const inst = (slug: string, path: string) => `/api/i/${encodeURIComponent(slug)}
 // Test de VMA : invitations envoyées par le site, résultats relevés (voir src/vma).
 export type TestVmaType = 'premier' | 'essai';
 export type TestVmaStatut = 'envoyee' | 'utilisee' | 'revoquee';
+export type FreinVma = {
+  n: number;
+  titre: string;
+  phrase: string;
+  // v2.1 : estimation moyenne, réponse du dirigeant, pratique la plus avancée, par où commencer.
+  enjeu?: number;
+  reponse?: string;
+  cible?: string;
+  debut?: string[];
+  signe?: string;
+};
 export type TestVma = {
   id: string;
   entrepriseId: string | null;
@@ -161,17 +172,18 @@ export type TestVma = {
     indicatif?: boolean;
     parcours?: string;
     ecartPct?: number | null;
-    freins: {
-      n: number;
-      titre: string;
-      phrase: string;
-      // v2.1 : estimation moyenne, réponse du dirigeant, pratique la plus avancée, par où commencer.
-      enjeu?: number;
-      reponse?: string;
-      cible?: string;
-      debut?: string[];
-      signe?: string;
-    }[];
+    freins: FreinVma[];
+    // v2.2 (mode portefeuille) : le dirigeant lit deux listes, conquête et portefeuille, avec l'écart de chacune.
+    modePortefeuille?: boolean;
+    freinsConquete?: FreinVma[];
+    freinsPortefeuille?: FreinVma[];
+    spotCible?: number | null;
+    spotEcheance?: number | null;
+    ecartSpot?: number | null;
+    recurrentCible?: number | null;
+    ecartRecurrent?: number | null;
+    partRecActuelle?: number | null;
+    partRecVisee?: number | null;
     // Libellés et définitions tels que le dirigeant les a lus (absents des résultats anciens).
     textes?: Record<string, string>;
   } | null;
