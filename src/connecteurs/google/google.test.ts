@@ -301,6 +301,15 @@ describe('Gmail and Calendar', () => {
     expect(scopeAccorde(undefined, DRIVE_SCOPE)).toBe(false);
   });
 
+  it('asks exactly the scopes declared for Google verification', () => {
+    expect(SCOPES).toEqual([
+      'https://www.googleapis.com/auth/gmail.compose',
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/drive.file',
+    ]);
+  });
+
   it('creates the folder and the Google Doc, and nothing at all in simulation', async () => {
     const simuleDossier = await ctx(false, (c) =>
       creerDossier(c, 'Diagnostic fictif', undefined, google),
