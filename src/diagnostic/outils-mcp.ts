@@ -78,7 +78,7 @@ registerTool({
 registerTool({
   name: 'enregistrer_rapport',
   description:
-    "Enregistre le rapport rédigé d'un projet de diagnostic : son contenu structuré (essentiel, contexte, résultats, préconisations, plan d'action, conclusion). L'OS le met en page en fichier Word, sans que tu aies à produire de fichier.",
+    "Enregistre le rapport rédigé d'un projet de diagnostic : son contenu structuré (essentiel, contexte, résultats, préconisations, plan d'action, conclusion, annexes ; blocs facultatifs : potentiel des préconisations, quand et résultat attendu des actions, conditions de réussite, blocs de conclusion). L'OS le met en page en fichier Word, sans que tu aies à produire de fichier.",
   input: z.object({
     projetId: z.uuid(),
     contenu: contenuRapportSchema,
