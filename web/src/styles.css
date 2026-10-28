@@ -5071,6 +5071,7 @@ label.btn.off {
 .at-kpi b {
   display: block;
   font-size: 22px;
+  white-space: nowrap;
 }
 .at-kpi span {
   font-size: 12px;
