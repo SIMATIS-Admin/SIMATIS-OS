@@ -7,6 +7,7 @@ import {
   urlPptxRestitutionDiag,
   viderConversationDiag,
   importerEntretienDiag,
+  importerRapportDiag,
   demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
@@ -78,6 +79,9 @@ const DIMENSIONS: [keyof Dimensions, string][] = [
   ['polyvalence', 'Polyvalence'],
 ];
 const SEUIL = 6;
+// Places du chat : moitié-moitié quand la conversation est l'outil de l'étape (1, 2 et 5), sous le
+// rapport à l'étape 4, étroit à la revue (3) où le formulaire prime.
+const MISE_EN_PAGE: Record<number, string> = { 1: 'moitie', 2: 'moitie', 4: 'empile', 5: 'moitie' };
 const STATUTS_SUPPORT: Record<ProjetDiag['supportStatut'], string> = {
   aucun: 'Pas encore préparé',
   preparation: 'Claude prépare le deck…',
@@ -376,7 +380,7 @@ export function ProjetVue({
           </p>
         </div>
       </div>
-      <div className="diag-layout">
+      <div className={`diag-layout ${MISE_EN_PAGE[projet.etape] ?? ''}`}>
         <div className="diag-main">
           {etatAffiche && (
             <p className={`diag-statut ${etatAffiche.ok ? 'ok' : 'attente'}`} role="status">
@@ -406,6 +410,10 @@ export function ProjetVue({
           {projet.etape === 4 && (
             <Rapport slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
           )}
+          {/* Étape 4 : la conversation modifie l'historique du rapport, elle se lit sous lui. */}
+          {projet.etape === 4 && (
+            <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
+          )}
           {projet.etape === 5 && (
             <RestitutionDeck
               slug={slug}
@@ -418,7 +426,9 @@ export function ProjetVue({
           {projet.etape === 5 && <Restitution projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
         </div>
-        <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
+        {projet.etape !== 4 && (
+          <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
+        )}
       </div>
     </div>
   );
@@ -648,29 +658,13 @@ function Support({
             l’archive.
           </div>
         )}
-        {statut === 'final' && projet.supportTexte && (
-          <div className="stack">
-            <div className="small muted">
-              Archivé le{' '}
-              {projet.supportFinalLe
-                ? new Date(projet.supportFinalLe).toLocaleDateString('fr-FR')
-                : '—'}{' '}
-              : texte affiché et notes d’orateur.
-            </div>
-            {projet.supportTexte.map((d, i) => (
-              <details key={i} className="diag-diapo">
-                <summary>
-                  {i + 1}. {d.titre}
-                </summary>
-                <p className="diag-texte">{d.texte}</p>
-                {d.notes && (
-                  <>
-                    <div className="small muted">Notes d’orateur</div>
-                    <p className="diag-texte">{d.notes}</p>
-                  </>
-                )}
-              </details>
-            ))}
+        {statut === 'final' && (
+          <div className="small muted">
+            Archivé le{' '}
+            {projet.supportFinalLe
+              ? new Date(projet.supportFinalLe).toLocaleDateString('fr-FR')
+              : '—'}
+            .
           </div>
         )}
       </div>
@@ -693,17 +687,9 @@ function Resultat({
   onChange: (p: ProjetDiag) => void;
   onErreur: (m: string) => void;
 }) {
-  const [dims, setDims] = useState<Dimensions>(
-    projet.dims ?? { outils: 0, strategie: 0, polyvalence: 0 },
-  );
-  const [statut, setStatut] = useState<ProjetDiag['statutDiagnostic']>(projet.statutDiagnostic);
   const [date, setDate] = useState(projet.dateDiagnostic ?? '');
   const [message, setMessage] = useState<string | null>(null);
-  useEffect(() => {
-    setDims(projet.dims ?? { outils: 0, strategie: 0, polyvalence: 0 });
-    setStatut(projet.statutDiagnostic);
-    setDate(projet.dateDiagnostic ?? '');
-  }, [projet]);
+  useEffect(() => setDate(projet.dateDiagnostic ?? ''), [projet.dateDiagnostic]);
 
   const importer = async (fichier: File | undefined) => {
     if (!fichier) return;
@@ -716,14 +702,15 @@ function Resultat({
     }
   };
 
+  // Enregistrer vaut « l'entretien est fait et ses résultats sont calculés » : le statut passe à
+  // « Rapport à rédiger » (sauf s'il est déjà « Restitué »), les notes viennent du PDF.
   const enregistrer = async () => {
     setMessage(null);
     await onSauver({
-      dims,
-      statutDiagnostic: statut,
+      statutDiagnostic: projet.statutDiagnostic ?? 'Rapport à rédiger',
       dateDiagnostic: date || null,
     });
-    setMessage('Résultat enregistré.');
+    setMessage('Résultat enregistré. Vous pouvez passer à la revue des préconisations.');
   };
 
   return (
@@ -733,69 +720,46 @@ function Resultat({
         {projet.profil && <span className="badge green">Profil : {projet.profil}</span>}
       </div>
       <div className="panel-b stack">
-        <div className="stack">
-          <label className="small">
-            Importer le PDF de l’outil (10 Mo au plus) :{' '}
-            <input
-              type="file"
-              accept="application/pdf"
-              aria-label="Importer le PDF de l'outil"
-              onChange={(e) => void importer(e.target.files?.[0])}
-            />
-          </label>
-          {projet.pdfEntretienNom && (
-            <p className="small muted" style={{ margin: 0 }}>
-              PDF importé : {projet.pdfEntretienNom}
-            </p>
-          )}
-          {projet.demande === 'entretien' && (
-            <p className="small muted" style={{ margin: 0 }}>
-              Claude lit le PDF… Les réponses apparaîtront ici.
-            </p>
-          )}
-        </div>
-        <p className="small muted" style={{ margin: 0 }}>
-          Saisie manuelle (secours) : saisissez les trois notes sur 10 fournies par l’outil. Le
-          profil se calcule en cascade : une dimension ne compte que si la précédente atteint{' '}
-          {SEUIL}.
-        </p>
-        <div className="diag-champs">
-          {DIMENSIONS.map(([id, label]) => (
-            <label key={id} className="field">
-              <span>{label} (sur 10)</span>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                step={0.1}
-                value={dims[id]}
-                onChange={(e) => setDims({ ...dims, [id]: Number(e.target.value) })}
-              />
-            </label>
-          ))}
-        </div>
-        <div className="diag-champs">
-          <label className="field">
-            <span>Statut</span>
-            <select
-              value={statut ?? ''}
-              onChange={(e) =>
-                setStatut((e.target.value || null) as ProjetDiag['statutDiagnostic'])
-              }
-            >
-              <option value="">À préciser</option>
-              <option value="Rapport à rédiger">Rapport à rédiger</option>
-              <option value="Restitué">Restitué</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Date de l’entretien</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-        </div>
+        <label className="diag-depot">
+          <span>Importer le PDF de l’outil (10 Mo au plus)</span>
+          <input
+            type="file"
+            accept="application/pdf"
+            aria-label="Importer le PDF de l'outil"
+            onChange={(e) => void importer(e.target.files?.[0])}
+          />
+        </label>
+        {projet.pdfEntretienNom && (
+          <p className="small muted" style={{ margin: 0 }}>
+            PDF importé : {projet.pdfEntretienNom}
+          </p>
+        )}
+        {projet.demande === 'entretien' && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Claude lit le PDF… Les réponses apparaîtront ici.
+          </p>
+        )}
+        {projet.dims ? (
+          <div className="diag-notes" aria-label="Notes calculées">
+            {DIMENSIONS.map(([id, label]) => (
+              <div key={id} className={`diag-note ${projet.dims![id] >= SEUIL ? 'haute' : ''}`}>
+                <span className="small muted">{label}</span>
+                <b>{projet.dims![id].toFixed(1)} / 10</b>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="small muted" style={{ margin: 0 }}>
+            Les notes et le profil se calculent à partir du PDF : rien à saisir à la main.
+          </p>
+        )}
+        <label className="field diag-date">
+          <span>Date de l’entretien</span>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
         {message && <div className="ok-note">{message}</div>}
-        <div className="row">
-          <button className="btn go" onClick={() => void enregistrer()}>
+        <div className="diag-actions">
+          <button className="btn go" disabled={!projet.dims} onClick={() => void enregistrer()}>
             Enregistrer le résultat
           </button>
         </div>
@@ -862,6 +826,11 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
 
 // Pré-requis du rapport, repris de l'OS (le serveur reste l'autorité et refuse sinon) : le résultat de
 // l'étape 2 suffit, la revue de l'étape 3 enrichit le rapport quand elle existe.
+const WORD_MAX_OCTETS = 10 * 1024 * 1024;
+const versionDuNom = (nom: string | null) => {
+  const lu = nom ? /\bv(\d{1,3})\.docx$/i.exec(nom.trim()) : null;
+  return lu ? Number(lu[1]) : 1;
+};
 const raisonRapport = (projet: ProjetDiag) =>
   projet.dims ? null : "Saisissez d'abord le résultat à l'étape 2.";
 
@@ -878,9 +847,29 @@ function Rapport({
 }) {
   const enCours = projet.rapportLienStatut === 'en_cours';
   const raison = raisonRapport(projet);
-  // Un Word importé compte pour la version 1.
+  // Le numéro se lit dans le nom du Word (« … - v3.docx ») ; sans numéro, un Word importé est la v1.
   const prochaine =
-    Math.max(projet.rapportVersions.at(-1)?.version ?? 0, projet.aRapport ? 1 : 0) + 1;
+    Math.max(
+      projet.rapportVersions.at(-1)?.version ?? 0,
+      projet.aRapport ? versionDuNom(projet.rapportNom) : 0,
+    ) + 1;
+  const importer = async (fichier: File | undefined) => {
+    if (!fichier) return;
+    if (fichier.size > WORD_MAX_OCTETS) return onErreur('Word trop lourd (10 Mo au plus).');
+    if (
+      projet.aRapport &&
+      !window.confirm(
+        'Votre version remplace le Word affiché. Les versions rédigées par Claude restent téléchargeables. Continuer ?',
+      )
+    )
+      return;
+    try {
+      const base64 = await lireBase64(fichier);
+      onChange(await importerRapportDiag(slug, projet.id, { nom: fichier.name, base64 }));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const demander = async () => {
     if (
       projet.aRapport &&
@@ -905,34 +894,30 @@ function Rapport({
       </div>
       <div className="panel-b stack">
         {projet.aRapport && (
-          <div className="row">
-            <a className="btn" href={urlRapportDiag(slug, projet.id)}>
-              Télécharger le rapport ({projet.rapportNom})
-            </a>
+          <div className="diag-fichier">
+            <span className="small muted">Rapport enregistré</span>
+            <a href={urlRapportDiag(slug, projet.id)}>{projet.rapportNom}</a>
           </div>
         )}
-        {projet.aRapport && !enCours && (
-          <p className="small muted" style={{ margin: 0 }}>
-            Le rapport est enregistré ici, version par version. Donnez vos modifications dans le
-            chat à droite, puis produisez la nouvelle version.
-          </p>
-        )}
-        {enCours ? (
+        <p className="small muted" style={{ margin: 0 }}>
+          Le rapport est enregistré ici, version par version. Discutez des modifications avec Claude
+          dans la conversation ci-dessous, puis produisez la nouvelle version. Si vous avez
+          retravaillé le Word de votre côté, importez-le : il remplace le Word affiché, et la
+          production suivante part de son numéro.
+        </p>
+        {enCours && (
           <p className="small muted" style={{ margin: 0 }}>
             Claude rédige le rapport… La page se mettra à jour dès qu’il sera prêt.
           </p>
-        ) : (
-          projet.rapportLien && (
-            <div className="row">
-              <a className="btn go" href={projet.rapportLien} target="_blank" rel="noreferrer">
-                Ouvrir le rapport
-              </a>
-            </div>
-          )
         )}
-        <div className="row">
+        <div className="diag-actions">
+          {!enCours && projet.rapportLien && (
+            <a className="btn go" href={projet.rapportLien} target="_blank" rel="noreferrer">
+              Ouvrir le rapport
+            </a>
+          )}
           <button
-            className="btn"
+            className="btn go"
             disabled={enCours || raison !== null}
             onClick={() => void demander()}
           >
@@ -940,6 +925,20 @@ function Rapport({
               ? `Produire la version ${prochaine}`
               : 'Produire le rapport'}
           </button>
+          <label className={`btn ${enCours ? 'off' : ''}`}>
+            Importer ma version (.docx)
+            <input
+              type="file"
+              hidden
+              disabled={enCours}
+              accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              aria-label="Importer ma version du rapport"
+              onChange={(e) => {
+                void importer(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+          </label>
         </div>
         {!enCours && raison && (
           <p className="small muted" style={{ margin: 0 }}>
@@ -1219,20 +1218,17 @@ function RestitutionDeck({
           en PDF depuis claude.ai. Si vous changez un tarif là-bas, changez-le aussi ici : cette
           proposition est la source du futur devis.
         </p>
-        {enCours ? (
+        {enCours && (
           <p className="small muted" style={{ margin: 0 }}>
             Claude crée le deck… La page se mettra à jour dès qu’il sera prêt.
           </p>
-        ) : (
-          projet.restitutionLien && (
-            <div className="row">
-              <a className="btn go" href={projet.restitutionLien} target="_blank" rel="noreferrer">
-                Ouvrir le deck de restitution
-              </a>
-            </div>
-          )
         )}
-        <div className="row">
+        <div className="diag-actions">
+          {!enCours && projet.restitutionLien && (
+            <a className="btn go" href={projet.restitutionLien} target="_blank" rel="noreferrer">
+              Ouvrir le deck de restitution
+            </a>
+          )}
           <button
             className="btn"
             disabled={enCours || raison !== null}
@@ -1242,8 +1238,6 @@ function RestitutionDeck({
               ? 'Produire un nouveau deck'
               : 'Produire le deck de restitution'}
           </button>
-        </div>
-        <div className="row" style={{ gap: 12, alignItems: 'center' }}>
           <button
             className="btn"
             disabled={enCours || exportEnCours || !projet.restitutionLien}
@@ -1251,24 +1245,25 @@ function RestitutionDeck({
           >
             Exporter en PowerPoint
           </button>
-          {exportEnCours ? (
-            <span className="small muted">
-              Export PowerPoint en cours… Claude relit le deck publié.
-            </span>
-          ) : (
-            projet.aPptx &&
-            projet.restitutionExportLe && (
-              <>
-                <a className="btn go" href={urlPptxRestitutionDiag(slug, projet.id)} download>
-                  Télécharger le PowerPoint
-                </a>
-                <span className="small muted">
-                  exporté le {new Date(projet.restitutionExportLe).toLocaleDateString('fr-FR')}
-                </span>
-              </>
-            )
+          {!exportEnCours && projet.aPptx && projet.restitutionExportLe && (
+            <a className="btn go" href={urlPptxRestitutionDiag(slug, projet.id)} download>
+              Télécharger le PowerPoint
+            </a>
           )}
         </div>
+        {exportEnCours ? (
+          <p className="small muted" style={{ margin: 0 }}>
+            Export PowerPoint en cours… Claude relit le deck publié.
+          </p>
+        ) : (
+          projet.aPptx &&
+          projet.restitutionExportLe && (
+            <p className="small muted" style={{ margin: 0 }}>
+              PowerPoint exporté le{' '}
+              {new Date(projet.restitutionExportLe).toLocaleDateString('fr-FR')}.
+            </p>
+          )
+        )}
         <p className="small muted" style={{ margin: 0 }}>
           Exportez quand le deck vous convient : le PowerPoint reprend le texte et les notes du deck
           tel qu’il est à cet instant, avec la charte SIMATIS. Après une retouche, exportez à
@@ -1592,17 +1587,20 @@ function Assistant({
   };
 
   return (
-    <aside className="panel diag-chat" aria-label={`Assistant Claude, étape ${etape}`}>
-      <div className="panel-h">
+    <aside
+      className={`panel diag-chat diag-chat-e${etape}`}
+      aria-label={`Assistant Claude, étape ${etape}`}
+    >
+      <div className="panel-h diag-chat-h">
+        <Icon name="brain" />
         <div>
           <h2>{CHAT_TITRE[etape] ?? `Assistant · ${ETAPES[etape - 1]}`}</h2>
           <div className="small muted">
             {CHAT_AIDE[etape] ?? 'Claude répond ici, par le runner de ce poste'}
           </div>
         </div>
-        <Icon name="brain" />
         <button
-          className="btn"
+          className="btn diag-vider"
           disabled={enAttente || messages.length === 0}
           onClick={() => void vider()}
         >

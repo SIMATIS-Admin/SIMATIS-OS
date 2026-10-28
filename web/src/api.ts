@@ -1148,6 +1148,17 @@ export const importerEntretienDiag = (
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/entretien`),
     pdf,
   );
+// Word du rapport retravaillé hors de l'OS : il remplace le Word affiché (étape 4).
+export const importerRapportDiag = (
+  slug: string,
+  id: string,
+  word: { nom: string; base64: string },
+) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/importer`),
+    word,
+  );
 // Correction d'une réponse lue : le profil se recalcule côté OS.
 export const corrigerReponseDiag = (
   slug: string,

@@ -3330,6 +3330,96 @@ tr.sel {
   gap: 14px;
   align-items: start;
 }
+/* Le chat est l'outil de l'étape : moitié-moitié avec le formulaire, ou sous le rapport. */
+.diag-layout.moitie {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.diag-layout.empile {
+  grid-template-columns: minmax(0, 1fr);
+}
+.diag-layout.moitie .diag-log,
+.diag-chat-e4 .diag-log {
+  max-height: 58vh;
+  min-height: 160px;
+}
+.diag-chat-e4 {
+  position: static;
+}
+/* En-tête du chat : l'icône, le titre, puis le bouton, qui passe dessous quand la place manque. */
+.diag-chat-h {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.diag-chat-h > div {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.diag-chat-h h2 {
+  overflow-wrap: anywhere;
+}
+.diag-vider {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.diag-depot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px dashed var(--teal);
+  border-radius: var(--r-m);
+  background: color-mix(in srgb, var(--teal) 6%, var(--white));
+  font-size: 14px;
+  font-weight: 600;
+}
+.diag-fichier {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--r-m);
+  background: var(--white);
+}
+.diag-fichier a {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.diag-notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.diag-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--line-2);
+}
+.diag-note.haute {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 10%, var(--white));
+}
+.diag-note b {
+  font: 600 18px var(--f-num);
+}
+.diag-date {
+  max-width: 260px;
+}
+label.btn {
+  cursor: pointer;
+}
+label.btn.off {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .diag-main {
   min-width: 0;
   display: flex;
@@ -3362,10 +3452,13 @@ tr.sel {
 .diag-pied {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  border-top: 1px solid var(--line-2);
-  padding-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--white);
 }
 .diag-cfg {
   display: grid;
@@ -3402,7 +3495,10 @@ tr.sel {
 .diag-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-2);
 }
 .diag-logo {
   display: flex;
@@ -3522,6 +3618,22 @@ tr.sel {
   font-size: 11px;
   color: var(--amber);
   font-weight: 600;
+}
+.diag-main > .panel > .panel-h,
+.diag-chat > .panel-h {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--teal) 7%, var(--white)),
+    var(--white)
+  );
+  border-radius: var(--r-m) var(--r-m) 0 0;
+}
+.diag-etape {
+  box-shadow: 0 1px 2px rgb(12 55 107 / 6%);
+  transition: border-color 0.15s;
+}
+.diag-etape:hover {
+  border-color: var(--teal);
 }
 .diag-statut {
   margin: 0;

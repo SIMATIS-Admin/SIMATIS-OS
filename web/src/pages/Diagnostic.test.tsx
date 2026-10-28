@@ -22,6 +22,7 @@ const api = vi.hoisted(() => ({
   urlPptxRestitutionDiag: (slug: string, id: string) =>
     `/api/i/${slug}/diagnostic/projets/${id}/restitution/pptx`,
   importerEntretienDiag: vi.fn(),
+  importerRapportDiag: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
   urlRapportDiag: (slug: string, id: string, version?: number) =>
@@ -187,25 +188,53 @@ describe('Diagnostic', () => {
     expect(api.majProjetDiag.mock.calls[0]?.[2]).toEqual({ entrepriseId: 'e1' });
   });
 
-  it('calcule le profil après la saisie du résultat à l étape 2', async () => {
-    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2 })]);
+  it('étape 2 : plus de saisie à la main, enregistrer marque l entretien fait', async () => {
+    const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2, dims, profil: 'Joggeur' })]);
     api.majProjetDiag.mockResolvedValue(
-      projet({
-        etape: 2,
-        dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
-        profil: 'Joggeur',
-      }),
+      projet({ etape: 2, dims, profil: 'Joggeur', statutDiagnostic: 'Rapport à rédiger' }),
     );
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    fireEvent.change(await screen.findByLabelText('Outils et méthode (sur 10)'), {
-      target: { value: '2.5' },
+    expect(screen.queryByLabelText('Outils et méthode (sur 10)')).toBeNull();
+    expect(screen.queryByLabelText('Statut')).toBeNull();
+    expect(await screen.findByText('2.5 / 10')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Date de l’entretien'), {
+      target: { value: '2026-10-06' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le résultat' }));
-    await waitFor(() => expect(api.majProjetDiag).toHaveBeenCalled());
-    const patch = api.majProjetDiag.mock.calls[0]?.[2] as Partial<ProjetDiag>;
-    expect(patch.dims?.outils).toBe(2.5);
-    expect(await screen.findByText('Profil : Joggeur')).toBeTruthy();
+    await waitFor(() =>
+      expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', {
+        statutDiagnostic: 'Rapport à rédiger',
+        dateDiagnostic: '2026-10-06',
+      }),
+    );
+    expect(await screen.findByText(/revue des préconisations/)).toBeTruthy();
+  });
+
+  it('étape 2 : enregistrer reste impossible tant que le PDF n a pas donné de notes', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2 })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const bouton = await screen.findByRole('button', { name: 'Enregistrer le résultat' });
+    expect((bouton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('étape 2 : un statut Restitué n est pas écrasé', async () => {
+    const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 2, dims, profil: 'Joggeur', statutDiagnostic: 'Restitué' }),
+    ]);
+    api.majProjetDiag.mockResolvedValue(projet({ etape: 2, dims }));
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer le résultat' }));
+    await waitFor(() =>
+      expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', {
+        statutDiagnostic: 'Restitué',
+        dateDiagnostic: null,
+      }),
+    );
   });
 
   it('refuse un lien qui ne pointe pas vers claude.ai et garde le lien valide', async () => {
@@ -404,7 +433,7 @@ describe('Assistant de l étape', () => {
     );
   });
 
-  it('un support final montre son texte et peut être rouvert', async () => {
+  it('un support final n affiche plus le texte des diapositives et peut être rouvert', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
       projet({
         supportStatut: 'final',
@@ -417,7 +446,9 @@ describe('Assistant de l étape', () => {
     ]);
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    expect(await screen.findByText(/Couverture fictive/)).toBeTruthy();
+    expect(await screen.findByText(/Archivé le/)).toBeTruthy();
+    expect(screen.queryByText(/Couverture fictive/)).toBeNull();
+    expect(screen.queryByText('Notes d’orateur')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Préparer le support' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Modifier le support' }));
     await waitFor(() =>
@@ -482,11 +513,87 @@ describe('Rapport à l étape 4', () => {
     const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    expect(await screen.findByText(/Donnez vos modifications dans le chat/)).toBeTruthy();
+    expect(await screen.findByText(/Discutez des modifications avec Claude/)).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Produire la version 2' }));
     expect(confirmation).toHaveBeenCalled();
     expect(api.demandeRapportDiag).not.toHaveBeenCalled();
     confirmation.mockRestore();
+  });
+
+  it('annonce la version suivante d après le numéro du Word (v3 → version 4)', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        profil: 'Joggeur',
+        aRapport: true,
+        rapportNom: 'Rapport Diagnostic Endurance - Atelier Fictif Nord - v3.docx',
+        rapportLienStatut: 'pret',
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByRole('button', { name: 'Produire la version 4' })).toBeTruthy();
+  });
+
+  it('importe la version retravaillée en externe, après confirmation', async () => {
+    const p = projet({
+      etape: 4,
+      etapeMax: 4,
+      dims,
+      profil: 'Joggeur',
+      aRapport: true,
+      rapportNom: 'rapport - v3.docx',
+      rapportLienStatut: 'pret',
+    });
+    api.fetchProjetsDiag.mockResolvedValue([p]);
+    api.importerRapportDiag.mockResolvedValue({ ...p, rapportNom: 'rapport - v4.docx' });
+    const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const champ = await screen.findByLabelText('Importer ma version du rapport');
+    const fichier = new File(['PK'], 'rapport - v4.docx');
+    fireEvent.change(champ, { target: { files: [fichier] } });
+    await waitFor(() => expect(api.importerRapportDiag).toHaveBeenCalled());
+    expect(api.importerRapportDiag.mock.calls[0]?.slice(0, 2)).toEqual(['simatis', 'p1']);
+    expect((api.importerRapportDiag.mock.calls[0]?.[2] as { nom: string }).nom).toBe(
+      'rapport - v4.docx',
+    );
+    expect(confirmation).toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'Produire la version 5' })).toBeTruthy();
+    confirmation.mockRestore();
+  });
+
+  it('place la conversation sous le rapport, pas à côté', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 4, etapeMax: 4, dims })]);
+    const { container } = render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    await screen.findByText('Rapport remis au dirigeant');
+    const mise = container.querySelector('.diag-layout')!;
+    expect(mise.classList.contains('empile')).toBe(true);
+    const principal = container.querySelector('.diag-main')!;
+    expect(principal.querySelector('.diag-chat')).not.toBeNull();
+    expect(mise.querySelectorAll('.diag-chat')).toHaveLength(1);
+  });
+});
+
+describe('Mise en page des étapes', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+
+  it.each([
+    [1, 'moitie'],
+    [2, 'moitie'],
+    [3, ''],
+    [5, 'moitie'],
+  ])('étape %i : classe « %s »', async (etape, classe) => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape, etapeMax: etape })]);
+    const { container } = render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    await screen.findByLabelText(/Assistant Claude/);
+    const mise = container.querySelector('.diag-layout')!;
+    expect(mise.classList.contains('moitie')).toBe(classe === 'moitie');
+    expect(mise.classList.contains('empile')).toBe(false);
   });
 
   it('ouvre le rapport rédigé dans un nouvel onglet', async () => {

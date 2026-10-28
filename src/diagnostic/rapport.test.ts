@@ -5,7 +5,13 @@ import { createInstance } from '../instances/service.js';
 import { ChatIndisponible, demarrerAttente, finirAttente } from './chat.js';
 import { createProjet, listProjets, rapportDe, updateProjet } from './service.js';
 import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
-import { demanderRapport, enregistrerRapport, rapportPret } from './rapport.js';
+import {
+  demanderRapport,
+  enregistrerRapport,
+  importerRapport,
+  rapportPret,
+  versionDuNom,
+} from './rapport.js';
 import { sql } from 'drizzle-orm';
 import { SupportInvalide } from './support.js';
 import { withInstance } from '../db/context.js';
@@ -192,5 +198,58 @@ describe('Enregistrement du rapport', () => {
     });
     const envoye = await demanderRapport(t.app.db, simatis, p.id);
     expect(envoye.conversation.at(-1)?.texte).toBe('Produire le rapport version 1.');
+  });
+
+  it('lit le numéro de version dans le nom du Word', () => {
+    expect(versionDuNom(null)).toBe(0);
+    expect(versionDuNom('importe.docx')).toBe(1);
+    expect(versionDuNom('Rapport Diagnostic Endurance - Atelier Fictif - v3.docx')).toBe(3);
+    expect(versionDuNom('Rapport - V12.DOCX')).toBe(12);
+  });
+
+  it('un Word v3 importé annonce la version 4, pas la 2', async () => {
+    const id = await enCours('Rapport Fictif L');
+    await t.owner.db.execute(
+      sql`update diagnostic_projets set rapport = 'UEs=', rapport_nom = 'Rapport Fictif - v3.docx', rapport_lien_statut = 'aucun', demande = null, statut_chat = 'repos' where id = ${id}`,
+    );
+    const envoye = await demanderRapport(t.app.db, simatis, id);
+    expect(envoye.conversation.at(-1)?.texte).toBe('Produire le rapport version 4.');
+  });
+
+  const projetAvecResultat = async (nom: string) => {
+    const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+    return updateProjet(t.app.db, simatis, p.id, { dims });
+  };
+
+  it('importe un Word retravaillé : il remplace le Word affiché et devient téléchargeable', async () => {
+    const p = await projetAvecResultat('Rapport Fictif M');
+    const word = Buffer.from('PK\u0003\u0004contenu fictif').toString('base64');
+    const vue = await importerRapport(t.app.db, simatis, p.id, {
+      nom: 'Rapport Fictif M - v4.docx',
+      base64: word,
+    });
+    expect(vue.rapportNom).toBe('Rapport Fictif M - v4.docx');
+    expect(vue.aRapport).toBe(true);
+    expect(vue.rapportLienStatut).toBe('pret');
+    const telecharge = await rapportDe(t.app.db, simatis, p.id);
+    expect(telecharge.nom).toBe('Rapport Fictif M - v4.docx');
+    expect(telecharge.contenu.subarray(0, 2).toString()).toBe('PK');
+  });
+
+  it('refuse un fichier qui n est pas un Word et n écrit rien', async () => {
+    const p = await projetAvecResultat('Rapport Fictif N');
+    await expect(
+      importerRapport(t.app.db, simatis, p.id, {
+        nom: 'notes.docx',
+        base64: Buffer.from('pas un zip').toString('base64'),
+      }),
+    ).rejects.toThrow(ChatIndisponible);
+    await expect(
+      importerRapport(t.app.db, simatis, p.id, {
+        nom: 'rapport.pdf',
+        base64: Buffer.from('PKxx').toString('base64'),
+      }),
+    ).rejects.toThrow('Word');
+    expect((await relire(p.id)).aRapport).toBe(false);
   });
 });

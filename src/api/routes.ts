@@ -14,7 +14,7 @@ import {
 } from '../diagnostic/service.js';
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
-import { demanderRapport } from '../diagnostic/rapport.js';
+import { demanderRapport, importerRapport } from '../diagnostic/rapport.js';
 import {
   demanderExportRestitution,
   demanderRestitution,
@@ -502,6 +502,26 @@ export function registerApi(
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
       try {
         return await demanderRapport(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Rapport retravaillé hors de l'OS : le Word importé remplace le Word affiché.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/importer',
+    { bodyLimit: 14_000_000 },
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z
+        .object({ nom: z.string().trim().min(1).max(200), base64: z.string().min(1) })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Word attendu : nom et contenu' });
+      try {
+        return await importerRapport(db, i, id, corps.data);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
