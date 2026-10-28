@@ -38,19 +38,39 @@ export function AtelierVue({
   const courant = useRef(etatInitial);
   const modifie = useRef(false);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enVol = useRef(false);
+  const rejouer = useRef(false);
   const enregistre = !essai && atelier !== null;
 
-  const envoyer = () => {
+  // Un seul envoi à la fois : sinon deux requêtes parallèles pourraient arriver dans le désordre et
+  // laisser en base un état plus ancien que celui de l'écran. La modification arrivée entre-temps
+  // part dès que l'envoi en cours est terminé. À la fermeture de l'onglet, on envoie sans attendre.
+  const envoyer = (fermeture = false) => {
     if (minuteur.current) clearTimeout(minuteur.current);
     minuteur.current = null;
     if (!enregistre || !modifie.current) return;
+    if (enVol.current && !fermeture) {
+      rejouer.current = true;
+      return;
+    }
     modifie.current = false;
-    majAtelier(slug, atelier.id, {
-      etat: courant.current,
-    }).then(
-      () => setStatut('ok'),
+    enVol.current = true;
+    const patch = { etat: courant.current };
+    (fermeture
+      ? majAtelier(slug, atelier.id, patch, { keepalive: true })
+      : majAtelier(slug, atelier.id, patch)
+    ).then(
+      () => {
+        enVol.current = false;
+        if (modifie.current && rejouer.current) {
+          rejouer.current = false;
+          envoyer();
+        } else setStatut(modifie.current ? 'attente' : 'ok');
+      },
       (e: unknown) => {
+        enVol.current = false;
         modifie.current = true;
+        rejouer.current = false;
         setStatut('erreur');
         setErreur(messageErreur(e));
       },
@@ -69,7 +89,14 @@ export function AtelierVue({
   };
 
   // À la sortie de l'écran, la dernière modification part tout de suite.
-  useEffect(() => envoyer, []);
+  useEffect(() => {
+    const fermeture = () => envoyer(true);
+    window.addEventListener('pagehide', fermeture);
+    return () => {
+      window.removeEventListener('pagehide', fermeture);
+      envoyer();
+    };
+  }, []);
 
   const changer = (patch: Partial<EtatAtelier>) => maj((e) => ({ ...e, ...patch }));
   const contenu = () => {

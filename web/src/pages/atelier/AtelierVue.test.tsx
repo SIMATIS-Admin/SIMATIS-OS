@@ -173,4 +173,44 @@ describe('Atelier ouvert', () => {
       '#/demo/fiche/entreprise/e1',
     );
   });
+
+  it('n’envoie pas un deuxième enregistrement tant que le premier n’est pas terminé', async () => {
+    let finPremier: (v: unknown) => void = () => undefined;
+    api.majAtelier.mockReturnValueOnce(new Promise((r) => (finPremier = r)));
+    monte();
+    const ca = screen.getByLabelText('Chiffre d’affaires visé (€)');
+    fireEvent.change(ca, { target: { value: '111' } });
+    act(() => {
+      vi.advanceTimersByTime(800);
+    });
+    expect(api.majAtelier).toHaveBeenCalledTimes(1);
+    fireEvent.change(ca, { target: { value: '222' } });
+    act(() => {
+      vi.advanceTimersByTime(800);
+    });
+    expect(api.majAtelier).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finPremier({});
+      await Promise.resolve();
+    });
+    expect(api.majAtelier).toHaveBeenCalledTimes(2);
+    expect(api.majAtelier).toHaveBeenLastCalledWith('demo', 'a1', {
+      etat: contient({ obj: contient({ ca: '222' }) }),
+    });
+  });
+
+  it('envoie la dernière modification à la fermeture de l’onglet, sans attendre le délai', () => {
+    monte();
+    fireEvent.change(screen.getByLabelText('Chiffre d’affaires visé (€)'), {
+      target: { value: '333' },
+    });
+    window.dispatchEvent(new Event('pagehide'));
+    expect(api.majAtelier).toHaveBeenCalledTimes(1);
+    expect(api.majAtelier).toHaveBeenCalledWith(
+      'demo',
+      'a1',
+      { etat: contient({ obj: contient({ ca: '333' }) }) },
+      { keepalive: true },
+    );
+  });
 });

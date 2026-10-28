@@ -149,15 +149,155 @@ export function etatVide(): EtatAtelier {
   };
 }
 
-// Complète une sauvegarde ancienne ou partielle avec les valeurs de l'état vide (fusion
-// superficielle, comme l'outil d'origine), sans jamais lire autre chose qu'un objet.
+const objet = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+const texte = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
+const texteOuNombre = (v: unknown, d: number | string) =>
+  typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v)) ? v : d;
+const nature = (v: unknown): Nature =>
+  typeof v === 'string' && v in NATURES ? (v as Nature) : 'hyp';
+const entier = (v: unknown, min: number, max: number, d: number) =>
+  typeof v === 'number' && Number.isInteger(v) ? Math.min(max, Math.max(min, v)) : d;
+// Indice dans une liste : hors bornes (ou pas un entier), la valeur par défaut.
+const indice = (v: unknown, taille: number, d: number) =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < taille
+    ? v
+    : Math.min(d, taille - 1);
+// Liste d'objets : tout élément qui n'en est pas un est écarté ; sans liste valide, le repli.
+const liste = <T>(v: unknown, vers: (o: Record<string, unknown>) => T, repli: T[]): T[] =>
+  Array.isArray(v)
+    ? v
+        .filter((x) => x && typeof x === 'object' && !Array.isArray(x))
+        .map((x) => vers(x as Record<string, unknown>))
+    : repli;
+const textes = (v: unknown, n: number) =>
+  Array.from({ length: n }, (_, i) => texte(Array.isArray(v) ? (v as unknown[])[i] : ''));
+
+// Complète une sauvegarde ancienne ou partielle avec les valeurs de l'état vide, et ramène chaque
+// champ à sa forme : un fichier importé peut porter n'importe quoi, l'écran ne doit pas en tomber.
+// Les clés inconnues sont gardées telles quelles.
 export function completer(brut: unknown): EtatAtelier {
   const base = etatVide();
-  if (!brut || typeof brut !== 'object' || Array.isArray(brut)) return base;
-  const recu = brut as Partial<EtatAtelier>;
+  const r = objet(brut);
+  if (Object.keys(r).length === 0) return base;
+  const obj = objet(r.obj);
+  const icps = liste(
+    r.icps,
+    (x): Icp => ({
+      code: texte(x.code),
+      name: texte(x.name),
+      offer: texte(x.offer),
+      icp: textes(x.icp, 7),
+      persona: textes(x.persona, 7),
+    }),
+    base.icps,
+  );
+  const scenarios = liste(
+    r.scenarios,
+    (x): Scenario => ({
+      name: texte(x.name),
+      ca: texteOuNombre(x.ca, ''),
+      pros: texte(x.pros),
+      cons: texte(x.cons),
+    }),
+    base.scenarios,
+  );
+  const motors = liste(
+    r.motors,
+    (x): Moteur => ({ name: texte(x.name), desc: texte(x.desc) }),
+    base.motors,
+  );
+  const lesIcps = icps.length > 0 ? icps : base.icps;
+  const lesScenarios = scenarios.length > 0 ? scenarios : base.scenarios;
+  const lesMoteurs = motors.length > 0 ? motors : base.motors;
+  const item = (x: Record<string, unknown>) => ({ v: texte(x.v), tag: nature(x.tag) });
   return {
-    ...base,
-    ...recu,
-    obj: { ...base.obj, ...(recu.obj ?? {}) },
+    ...r,
+    v: 1,
+    step: entier(r.step, 0, 5, 0),
+    date: typeof r.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : base.date,
+    notes: textes(r.notes, 6),
+    diag: r.diag === 'a-faire' || r.diag === 'fait' ? r.diag : 'non-prevu',
+    diagNote: texte(r.diagNote),
+    vma: r.vma === 'passe' ? 'passe' : 'a-passer',
+    vmaNote: texte(r.vmaNote),
+    facts: liste(
+      r.facts,
+      (x): Fait => ({
+        k: texte(x.k),
+        v: texte(x.v),
+        tag: nature(x.tag),
+        src: texte(x.src),
+        ...(x.prive === true ? { prive: true } : {}),
+      }),
+      [],
+    ),
+    identity: {
+      effectif: texte(objet(r.identity).effectif),
+      ca: texte(objet(r.identity).ca),
+      clients: texte(objet(r.identity).clients),
+    },
+    ambition: {
+      ca: texte(objet(r.ambition).ca),
+      echeance: texte(objet(r.ambition).echeance),
+      niveau: texte(objet(r.ambition).niveau),
+      freins: texte(objet(r.ambition).freins),
+    },
+    swot:
+      Array.isArray(r.swot) && r.swot.length > 0
+        ? liste(
+            r.swot,
+            (q): Quadrant => ({ t: texte(q.t), items: liste(q.items, item, []) }),
+            base.swot,
+          )
+        : base.swot,
+    vision: { annee: texte(objet(r.vision).annee), phrase: texte(objet(r.vision).phrase) },
+    scenarios: lesScenarios,
+    scen: indice(r.scen, lesScenarios.length, 1),
+    motors: lesMoteurs,
+    motor: indice(r.motor, lesMoteurs.length, 0),
+    save: liste(
+      r.save,
+      (x): CaseSave => ({ t: texte(x.t), q: texte(x.q), v: texte(x.v) }),
+      base.save,
+    ),
+    modeleNote: texte(r.modeleNote),
+    obj: {
+      ca: texteOuNombre(obj.ca, base.obj.ca),
+      part: texteOuNombre(obj.part, base.obj.part),
+      panier: texteOuNombre(obj.panier, base.obj.panier),
+      abo: texteOuNombre(obj.abo, base.obj.abo),
+      mois: texteOuNombre(obj.mois, base.obj.mois),
+      tx1: texteOuNombre(obj.tx1, base.obj.tx1),
+      tx2: texteOuNombre(obj.tx2, base.obj.tx2),
+      taux: texteOuNombre(obj.taux, base.obj.taux),
+      ...(typeof obj.exemple === 'boolean' ? { exemple: obj.exemple } : {}),
+    },
+    icps: lesIcps,
+    icp: indice(r.icp, lesIcps.length, 0),
+    cab: { c: texte(objet(r.cab).c), a: texte(objet(r.cab).a), b: texte(objet(r.cab).b) },
+    pistes: liste(
+      r.pistes,
+      (x): Piste => ({
+        name: texte(x.name),
+        origin: texte(x.origin),
+        desc: texte(x.desc),
+        on: x.on === true,
+        note: texte(x.note),
+      }),
+      base.pistes,
+    ),
+    actions: liste(
+      r.actions,
+      (x): Action => ({
+        q: entier(x.q, 0, 3, 0),
+        bloc: texte(x.bloc),
+        title: texte(x.title),
+        owner: texte(x.owner),
+        metric: texte(x.metric),
+        on: x.on !== false,
+      }),
+      [],
+    ),
   };
 }
