@@ -1519,15 +1519,18 @@ export const importerAtelier = (
     titre,
     sauvegarde,
   });
+// `keepalive` : la requête survit à la fermeture de l'onglet (le navigateur la limite à 64 Ko).
 export const majAtelier = (
   slug: string,
   id: string,
-  patch: { titre?: string; etat?: Record<string, unknown> },
+  patch: { titre?: string; etat?: object },
+  options?: { keepalive?: boolean },
 ) =>
-  sendJson<AtelierDetail>(
-    'PATCH',
-    inst(slug, `ateliers-strategie/${encodeURIComponent(id)}`),
-    patch,
-  );
+  request<AtelierDetail>(inst(slug, `ateliers-strategie/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+    ...(options?.keepalive ? { keepalive: true } : {}),
+  });
 export const supprimerAtelier = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `ateliers-strategie/${encodeURIComponent(id)}`), {});
