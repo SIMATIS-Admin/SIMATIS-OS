@@ -4,7 +4,11 @@ import { repondreClaude } from './chat.js';
 import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
 import { enregistrerRapport } from './rapport.js';
 import { contenuRapportSchema } from './rapport-word.js';
-import { autoriserSiRestitution, enregistrerRestitution } from './restitution.js';
+import {
+  autoriserSiRestitution,
+  enregistrerDiapositivesRestitution,
+  enregistrerRestitution,
+} from './restitution.js';
 import { autoriserOutil, enregistrerSupport, LIEN_ARTIFACT } from './support.js';
 
 // Outil du chat de diagnostic : Claude y répond au pilote (un seul appel par message).
@@ -86,18 +90,35 @@ registerTool({
   },
 });
 
-// Outil de la restitution : Claude rend le lien du deck créé pour présenter le rapport.
+// Outil de la restitution : Claude rend le lien du deck créé pour présenter le rapport, puis, sur
+// demande d'export PowerPoint seulement, les diapositives relues dans le deck publié.
 registerTool({
   name: 'enregistrer_restitution',
   description:
-    "Enregistre le deck de restitution d'un projet de diagnostic : le lien claude.ai de l'artifact, dès sa création puis une fois publié et relu.",
-  input: z.object({
-    projetId: z.uuid(),
-    lien: z.string().regex(LIEN_ARTIFACT, 'Lien d’artifact claude.ai attendu'),
-  }),
+    "Enregistre le deck de restitution d'un projet de diagnostic : le lien claude.ai de l'artifact, dès sa création puis une fois publié et relu. Sur demande « export PowerPoint » seulement, après relecture du deck publié : diapositives (titre, texte affiché, notes d'orateur), dans l'ordre du deck, sans lien.",
+  input: z
+    .object({
+      projetId: z.uuid(),
+      lien: z.string().regex(LIEN_ARTIFACT, 'Lien d’artifact claude.ai attendu').optional(),
+      diapositives: z
+        .array(
+          z.object({
+            titre: z.string().trim().min(1).max(300),
+            texte: z.string().max(8000),
+            notes: z.string().max(8000),
+          }),
+        )
+        .min(1)
+        .max(40)
+        .optional(),
+    })
+    .refine((v) => (v.lien === undefined) !== (v.diapositives === undefined), {
+      message: 'Donner le lien du deck, ou ses diapositives, pas les deux',
+    }),
   scope: 'instance',
-  handler: async ({ tx }, { projetId, lien }) => {
-    await enregistrerRestitution(tx, projetId, lien);
+  handler: async ({ tx }, { projetId, lien, diapositives }) => {
+    if (diapositives) await enregistrerDiapositivesRestitution(tx, projetId, diapositives);
+    else await enregistrerRestitution(tx, projetId, lien!);
     return { ok: true };
   },
 });

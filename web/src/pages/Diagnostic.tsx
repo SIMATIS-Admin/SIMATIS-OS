@@ -3,6 +3,8 @@ import {
   creerProjetDiag,
   demandeRapportDiag,
   demandeRestitutionDiag,
+  exporterRestitutionDiag,
+  urlPptxRestitutionDiag,
   viderConversationDiag,
   importerEntretienDiag,
   demandeSupportDiag,
@@ -1181,6 +1183,14 @@ function RestitutionDeck({
       onErreur(messageErreur(err));
     }
   };
+  const exportEnCours = projet.demande === 'restitution_export' && projet.statutChat !== 'repos';
+  const exporter = async () => {
+    try {
+      onChange(await exporterRestitutionDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const precedents = projet.restitutionLiens.slice(1);
   return (
     <div className="panel">
@@ -1233,6 +1243,37 @@ function RestitutionDeck({
               : 'Produire le deck de restitution'}
           </button>
         </div>
+        <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+          <button
+            className="btn"
+            disabled={enCours || exportEnCours || !projet.restitutionLien}
+            onClick={() => void exporter()}
+          >
+            Exporter en PowerPoint
+          </button>
+          {exportEnCours ? (
+            <span className="small muted">
+              Export PowerPoint en cours… Claude relit le deck publié.
+            </span>
+          ) : (
+            projet.aPptx &&
+            projet.restitutionExportLe && (
+              <>
+                <a className="btn go" href={urlPptxRestitutionDiag(slug, projet.id)} download>
+                  Télécharger le PowerPoint
+                </a>
+                <span className="small muted">
+                  exporté le {new Date(projet.restitutionExportLe).toLocaleDateString('fr-FR')}
+                </span>
+              </>
+            )
+          )}
+        </div>
+        <p className="small muted" style={{ margin: 0 }}>
+          Exportez quand le deck vous convient : le PowerPoint reprend le texte et les notes du deck
+          tel qu’il est à cet instant, avec la charte SIMATIS. Après une retouche, exportez à
+          nouveau.
+        </p>
         {!enCours && raison && (
           <p className="small muted" style={{ margin: 0 }}>
             {raison}

@@ -6,11 +6,13 @@ import {
   depuisDerniereProduction,
   outilsEntretien,
   outilsRapport,
+  outilsExportRestitution,
   outilsRestitution,
   outilsSupport,
   promptDiagnostic,
   promptEntretien,
   promptRapport,
+  promptExportRestitution,
   promptRestitution,
   promptSupport,
   skillsDe,
@@ -460,6 +462,63 @@ describe('Production par le runner : modifications et deck', () => {
     });
     expect(lance).toBe(false);
     expect((appels.at(-1)?.body as { erreur?: string }).erreur).toContain(SKILL_RESTITUTION);
+  });
+
+  it('l export PowerPoint relit le deck publié et rend ses diapositives, sans rien publier', () => {
+    const texte = promptExportRestitution({
+      ...restitution,
+      demande: 'restitution_export',
+      restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
+    });
+    expect(texte).toContain('https://claude.ai/artifact/RestitutionFictive01');
+    expect(texte).toContain('action read');
+    expect(texte).toContain('enregistrer_restitution');
+    expect(texte).toContain('diapositives');
+    expect(texte).toContain("notes d'orateur");
+    expect(texte).toContain('ne publies rien');
+    expect(texte).toContain(`projetId ${restitution.id}`);
+    expect(texte).not.toContain('quickstart');
+  });
+
+  it('les outils de l export sont la lecture du deck et l enregistrement, sans Skill', () => {
+    const outils = outilsExportRestitution(['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_restitution');
+    expect(outils).toContain('Artifact');
+    expect(outils).toContain('Edit(//travail/**)');
+    expect(outils).not.toContain('Skill');
+  });
+
+  it('un export PowerPoint se lance sans la skill de restitution, sans création de deck', async () => {
+    let args: string[] = [];
+    await tourDiagnostic({
+      base: 'http://os.test',
+      token: 'r',
+      claude: 'claude',
+      fetch: ((url: string) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(
+              url.endsWith('/attentes')
+                ? [
+                    {
+                      ...restitution,
+                      demande: 'restitution_export',
+                      restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
+                    },
+                  ]
+                : { ok: true },
+            ),
+            { status: 200 },
+          ),
+        )) as typeof fetch,
+      poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [] }),
+      lancer: (_c, a) => {
+        args = a;
+        return Promise.resolve(0);
+      },
+    });
+    expect(args.find((x) => x.startsWith('Exporte'))).toBeDefined();
+    expect(args.join(' ')).not.toContain(SKILL_RESTITUTION);
   });
 
   it('les outils du deck sont ceux de la restitution seulement', () => {

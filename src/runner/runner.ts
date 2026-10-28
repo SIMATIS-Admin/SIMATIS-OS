@@ -303,7 +303,14 @@ export type AttenteDiag = {
   etapeMessage: number;
   modele: string | null;
   effort: string | null;
-  demande: 'preparer_support' | 'support_final' | 'rapport' | 'restitution' | 'entretien' | null;
+  demande:
+    | 'preparer_support'
+    | 'support_final'
+    | 'rapport'
+    | 'restitution'
+    | 'restitution_export'
+    | 'entretien'
+    | null;
   // PDF de l'outil externe, donné seulement pour la lecture de l'entretien.
   pdf: { nom: string; base64: string } | null;
   dateDiagnostic: string | null;
@@ -565,6 +572,26 @@ export const promptRestitution = (
   ].join('\n');
 };
 
+// Export PowerPoint : Claude relit le deck publié et en rend les diapositives ; l'OS fait le fichier.
+export const promptExportRestitution = (a: AttenteDiag) =>
+  [
+    `Exporte en PowerPoint le deck de restitution du Diagnostic d'Endurance Commerciale du projet « ${a.nom} » (${a.activite}). Tu ne crées ni ne modifies aucun deck : tu ne publies rien.`,
+    `Deck à exporter : ${a.restitutionLien ?? 'aucun'}.`,
+    "Lis ce deck publié (jamais une copie de mémoire, le pilote a pu le corriger dans l'éditeur) avec Artifact action read, en enregistrant ses fichiers dans le dossier de travail : project/deck.json pour l'ordre, puis chaque project/slides/<id>.html.",
+    `Appelle une seule fois enregistrer_restitution avec projetId ${a.id} et diapositives : pour chaque diapositive, dans l'ordre du deck, son titre, le texte affiché (une ligne par élément : puce, paragraphe, chiffre ; ni balise, ni image) et ses notes d'orateur (vides s'il n'y en a pas). Ne passe pas de lien.`,
+    `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : le nombre de diapositives exportées, ce qui n'a pas pu l'être (images, schémas), et le rappel que le PowerPoint reprend le deck tel qu'il est maintenant (le pilote relance l'export après une retouche). Puis arrête-toi. Vouvoie le pilote, en français.`,
+  ].join('\n');
+
+export const outilsExportRestitution = (travail: string[]) =>
+  [
+    'mcp__simatis__repondre_diagnostic',
+    'mcp__simatis__enregistrer_restitution',
+    'Artifact',
+    'Glob',
+    'Grep',
+    ...travail.flatMap((d) => [`Read(/${d}/**)`, `Edit(/${d}/**)`]),
+  ].join(',');
+
 export const outilsRestitution = (cerveau: string | null, travail: string[]) =>
   [
     'mcp__simatis__repondre_diagnostic',
@@ -635,6 +662,7 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
       const entretien = a.demande === 'entretien';
       const rapport = a.demande === 'rapport';
       const restitution = a.demande === 'restitution';
+      const exportRestitution = a.demande === 'restitution_export';
       const support = a.etapeMessage === 1 && poste.skills.includes(SKILL_SUPPORT);
       if (rapport && !poste.skills.includes(SKILL_RAPPORT)) {
         erreur = `Skill « ${SKILL_RAPPORT} » absente de ce poste : le rapport n'a pas été rédigé.`;
@@ -644,7 +672,7 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
         erreur = `Skill « ${SKILL_RESTITUTION} » absente de ce poste : le deck de restitution n'a pas été créé.`;
         continue;
       }
-      if (a.demande && !support && !rapport && !restitution && !entretien) {
+      if (a.demande && !support && !rapport && !restitution && !exportRestitution && !entretien) {
         erreur = `Skill « ${SKILL_SUPPORT} » absente de ce poste : le support n'a pas été préparé.`;
         continue;
       }
@@ -687,6 +715,19 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
           ...(cerveau ? ['--add-dir', cerveau] : []),
         ];
         cwd = dossier;
+      } else if (exportRestitution) {
+        args = [
+          '-p',
+          promptExportRestitution(a),
+          ...modele,
+          ...OPTIONS_SUPPORT,
+          '--permission-prompt-tool',
+          'mcp__simatis__autoriser_outil',
+          ...mcp,
+          outilsExportRestitution([dossier, brouillonClaude()]),
+        ];
+        cwd = dossier;
+        env = ENV_SUPPORT;
       } else if (restitution) {
         const cerveau = await dossierOuNull(opts.cerveau);
         args = [

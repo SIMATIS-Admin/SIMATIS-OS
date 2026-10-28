@@ -8,11 +8,14 @@ import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
 import { demanderRapport, enregistrerRapport } from './rapport.js';
 import {
   autoriserSiRestitution,
+  demanderExportRestitution,
   demanderRestitution,
+  enregistrerDiapositivesRestitution,
   enregistrerRestitution,
+  pptxRestitutionDe,
   restitutionPrete,
 } from './restitution.js';
-import { createProjet, listProjets, updateProjet } from './service.js';
+import { createProjet, listProjets, ProjetIntrouvable, updateProjet } from './service.js';
 import { SupportInvalide } from './support.js';
 
 const LIEN_1 = 'https://claude.ai/artifact/RestitutionFictive01';
@@ -186,5 +189,111 @@ describe('Deck de restitution', () => {
       autoriserSiRestitution(tx, 'Artifact', { action: 'publish' }),
     );
     expect(decision).toBeNull();
+  });
+  describe('export PowerPoint', () => {
+    const DIAPOS = [
+      { titre: 'Couverture fictive', texte: 'Sous-titre fictif', notes: 'Accueil, 5 min' },
+      { titre: 'Résultats fictifs', texte: 'Ligne 1\nLigne 2', notes: '15 min' },
+    ];
+    // Deck prêt : lien enregistré, Claude a fini.
+    const deckPret = async (nom: string) => {
+      const id = await enCours(nom);
+      await enregistrer(id, LIEN_1);
+      await finirAttente(t.app.db, simatis, id);
+      return id;
+    };
+    const enregistrerDiapos = (id: string) =>
+      withInstance(t.app.db, simatis.id, (tx) =>
+        enregistrerDiapositivesRestitution(tx, id, DIAPOS),
+      );
+
+    it('refuse l export sans deck enregistré', async () => {
+      const id = await avecRapport('Export Fictif A');
+      await expect(demanderExportRestitution(t.app.db, simatis, id)).rejects.toThrow(
+        /Aucun deck de restitution/,
+      );
+      expect((await relire(id)).demande).toBeNull();
+    });
+
+    it('pose la demande sans toucher au statut du deck', async () => {
+      const id = await deckPret('Export Fictif B');
+      const envoye = await demanderExportRestitution(t.app.db, simatis, id);
+      expect(envoye).toMatchObject({ demande: 'restitution_export', restitutionStatut: 'pret' });
+      expect(envoye.conversation.at(-1)).toMatchObject({ etape: 5, de: 'pilote' });
+    });
+
+    it('refuse l export pendant la création du deck', async () => {
+      const id = await enCours('Export Fictif C');
+      await enregistrer(id, LIEN_1);
+      await expect(demanderExportRestitution(t.app.db, simatis, id)).rejects.toBeInstanceOf(
+        ChatIndisponible,
+      );
+    });
+
+    it('refuse des diapositives sans demande d export', async () => {
+      const id = await deckPret('Export Fictif D');
+      await expect(enregistrerDiapos(id)).rejects.toBeInstanceOf(SupportInvalide);
+      expect((await relire(id)).aPptx).toBe(false);
+    });
+
+    it('n a pas de PowerPoint avant un export', async () => {
+      const id = await deckPret('Export Fictif E');
+      await expect(pptxRestitutionDe(t.app.db, simatis, id)).rejects.toBeInstanceOf(
+        ProjetIntrouvable,
+      );
+    });
+
+    it('enregistre les diapositives lues, puis le PowerPoint se télécharge', async () => {
+      const id = await deckPret('Export Fictif F');
+      await demanderExportRestitution(t.app.db, simatis, id);
+      await demarrerAttente(t.app.db, simatis, id);
+      await enregistrerDiapos(id);
+      await finirAttente(t.app.db, simatis, id);
+      const relu = await relire(id);
+      expect(relu.aPptx).toBe(true);
+      expect(relu.restitutionExportLe).not.toBeNull();
+      expect(relu).not.toHaveProperty('restitutionDiapos');
+      const { nom, contenu } = await pptxRestitutionDe(t.app.db, simatis, id);
+      expect(nom).toBe('Restitution - Export Fictif F.pptx');
+      expect(Array.from(contenu.subarray(0, 2))).toEqual([0x50, 0x4b]);
+    });
+
+    it('pendant l export, seule la lecture du deck est permise', async () => {
+      const instance = await createInstance(t.owner.db, {
+        slug: 'simatis-restitution-export',
+        nom: 'SIMATIS',
+        type: 'propre',
+      });
+      const p = await createProjet(t.app.db, instance, {
+        nom: 'Export Fictif G',
+        activite: 'services',
+      });
+      await updateProjet(t.app.db, instance, p.id, { dims });
+      await demanderRapport(t.app.db, instance, p.id);
+      await demarrerAttente(t.app.db, instance, p.id);
+      await withInstance(t.app.db, instance.id, (tx) =>
+        enregistrerRapport(tx, p.id, contenuRapportFictif),
+      );
+      await finirAttente(t.app.db, instance, p.id);
+      await demanderRestitution(t.app.db, instance, p.id);
+      await demarrerAttente(t.app.db, instance, p.id);
+      await withInstance(t.app.db, instance.id, (tx) => enregistrerRestitution(tx, p.id, LIEN_1));
+      await finirAttente(t.app.db, instance, p.id);
+      await demanderExportRestitution(t.app.db, instance, p.id);
+      await demarrerAttente(t.app.db, instance, p.id);
+      const decider = (outil: string, input: Record<string, unknown>) =>
+        withInstance(t.app.db, instance.id, (tx) => autoriserSiRestitution(tx, outil, input));
+      expect(await decider('Artifact', { action: 'read', url: LIEN_1 })).toMatchObject({
+        behavior: 'allow',
+      });
+      for (const input of [
+        { action: 'publish', url: LIEN_1 },
+        { action: 'publish' },
+        { action: 'quickstart', intent: 'slides' },
+        { action: 'delete', url: LIEN_1 },
+      ])
+        expect(await decider('Artifact', input)).toMatchObject({ behavior: 'deny' });
+      expect(await decider('Bash', {})).toMatchObject({ behavior: 'deny' });
+    });
   });
 });
