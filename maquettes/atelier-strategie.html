@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette : Atelier stratégique dans Outils et diagnostics</title>
+<style>
+  :root {
+    --fond: #f4f6fa; --carte: #ffffff; --bord: #dfe4ee; --texte: #13233f; --doux: #6b7a90;
+    --marine: #0f2f5c; --vert: #3fa08a; --vert-doux: #e3f4ef; --gris: #e9eef5; --ambre: #b7791f; --ambre-doux: #fdf3e1; --rouge: #a33a3a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond: #0e1726; --carte: #162238; --bord: #26354f; --texte: #e6ecf5; --doux: #8fa0b8; --marine: #3d6fb5; --vert-doux: #17372f; --gris: #1d2b43; --ambre-doux: #3a2c12; --rouge: #e08080; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 20px 16px 12px; max-width: 980px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 26px; }
+  main { padding: 0 16px 40px; max-width: 980px; margin: 0 auto; }
+  .bandeau { margin: 0 auto 16px; max-width: 948px; padding: 10px 14px; background: var(--ambre-doux); border-radius: 10px; font-size: 13px; }
+  .intro { color: var(--doux); font-size: 14px; margin: 0 0 12px; }
+  .recherche { min-width: 200px; padding: 9px 12px; border: 1px solid var(--bord); border-radius: 8px; background: var(--carte); color: var(--texte); }
+  .barre-outils { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .menu { position: relative; }
+  .btn { background: var(--marine); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .btn-doux { background: var(--carte); color: var(--texte); border: 1px solid var(--bord); border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
+  .btn-doux:disabled { opacity: .5; cursor: default; }
+  .liste-menu { position: absolute; right: 0; top: calc(100% + 6px); background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 300px; padding: 6px; display: none; z-index: 5; }
+  .menu.ouvert .liste-menu { display: block; }
+  .liste-menu button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 10px; border-radius: 8px; color: var(--texte); cursor: pointer; font-size: 14px; }
+  .liste-menu button:hover { background: var(--gris); }
+  .liste-menu small { display: block; color: var(--doux); }
+
+  .beta { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ambre); background: var(--ambre-doux); border: 1px solid var(--ambre); border-radius: 999px; padding: 1px 8px; vertical-align: middle; margin-left: 6px; }
+
+  .entreprise { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .entreprise > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr) auto; gap: 12px; align-items: center; padding: 14px 16px; }
+  .entreprise > summary::-webkit-details-marker { display: none; }
+  .entreprise > summary::after { content: "Détail ▾"; justify-self: end; color: var(--marine); font-size: 13px; font-weight: 600; border: 1px solid var(--bord); border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
+  .entreprise[open] > summary::after { content: "Réduire ▴"; }
+  .nom { font-weight: 700; font-size: 16px; }
+  .sous { color: var(--doux); font-size: 13px; }
+  .cellule-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--doux); }
+  .cellule-val { font-size: 14px; font-weight: 600; }
+  .detail { border-top: 1px solid var(--bord); padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .bloc { border: 1px solid var(--bord); border-radius: 10px; padding: 14px; min-width: 0; }
+  .bloc.large { grid-column: 1 / -1; }
+  .bloc h3 { margin: 0 0 6px; font-size: 15px; display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .bloc p { margin: 4px 0; font-size: 13px; color: var(--doux); }
+  .etapes { display: flex; gap: 4px; margin: 10px 0 4px; }
+  .etapes span { flex: 1; height: 6px; border-radius: 3px; background: var(--gris); }
+  .etapes span.fait { background: var(--vert); }
+  .etapes span.en-cours { background: var(--ambre); }
+  .outils { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .ateliers { display: grid; gap: 8px; margin-top: 10px; }
+  .atelier-ligne { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--bord); border-radius: 10px; }
+  .atelier-ligne b { font-size: 14px; }
+  .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--gris); white-space: nowrap; }
+  .pill.vert { background: var(--vert-doux); }
+  .vide { color: var(--doux); font-size: 13px; font-style: italic; margin: 8px 0; }
+  .note-maquette { max-width: 948px; margin: 0 auto 14px; font-size: 12px; color: var(--doux); }
+
+  /* Atelier ouvert */
+  .retour { background: none; border: 0; color: var(--marine); font-weight: 600; cursor: pointer; padding: 0; margin-bottom: 10px; font-size: 14px; }
+  .tete-atelier { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .tete-atelier h2 { margin: 0; font-size: 22px; }
+  .partage { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--bord); border-radius: 999px; padding: 5px 12px; font-size: 13px; background: var(--carte); cursor: pointer; }
+  .partage i { width: 10px; height: 10px; border-radius: 50%; background: var(--vert); }
+  .partage.off i { background: var(--ambre); }
+  .parcours { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 14px; }
+  .parcours button { border: 1px solid var(--bord); background: var(--carte); color: var(--texte); border-radius: 10px; padding: 8px 6px; font-size: 12px; cursor: pointer; text-align: center; }
+  .parcours button b { display: block; font-size: 11px; color: var(--doux); font-weight: 600; }
+  .parcours button.actif { border-color: var(--marine); box-shadow: inset 0 0 0 1px var(--marine); }
+  .parcours button.fait b { color: var(--vert); }
+  .grille { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 16px; }
+  .carte h3 { margin: 0 0 4px; font-size: 16px; }
+  .carte .q { color: var(--doux); font-size: 13px; margin: 0 0 12px; }
+  .champ { display: block; font-size: 12px; color: var(--doux); margin: 8px 0 3px; }
+  .champ input { width: 100%; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); color: var(--texte); font-size: 14px; }
+  .champs-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .kpi { background: var(--fond); border-radius: 10px; padding: 10px 12px; }
+  .kpi b { display: block; font-size: 22px; }
+  .kpi span { font-size: 12px; color: var(--doux); }
+  .prive { border-style: dashed; border-color: var(--ambre); background: var(--ambre-doux); }
+  .prive h3::after { content: "Privé"; margin-left: 8px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ambre); border: 1px solid var(--ambre); border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
+  body.mode-partage .prive { display: none; }
+  .nav-etapes { display: flex; justify-content: space-between; margin-top: 14px; }
+  .exports { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .vue { display: none; }
+  .vue.visible { display: block; }
+
+  dialog { border: 1px solid var(--bord); border-radius: 14px; background: var(--carte); color: var(--texte); padding: 22px; width: min(440px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(10,20,35,.45); }
+  dialog h2 { margin: 0 0 14px; font-size: 19px; }
+  dialog label { display: block; font-size: 13px; color: var(--doux); margin: 10px 0 4px; }
+  dialog select, dialog input[type=text] { width: 100%; padding: 9px 10px; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); color: var(--texte); }
+  dialog .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+  @media (max-width: 760px) {
+    .entreprise > summary { grid-template-columns: 1fr; }
+    .entreprise > summary::after { justify-self: start; }
+    .detail, .grille { grid-template-columns: 1fr; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .parcours { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="bandeau">Maquette : données fictives. Menu Stratégie → « Outils et diagnostics » ; l'atelier est un troisième bloc de la fiche entreprise, avec la pastille Bêta. Les boutons de la maquette fonctionnent : « + Nouveau », « Détail », « Ouvrir l'atelier », le mode écran partagé.</div>
+
+<!-- ===== Vue 1 : liste ===== -->
+<section class="vue visible" id="vue-liste">
+  <header>
+    <div>
+      <h1>Outils et diagnostics</h1>
+      <p class="intro" style="margin:4px 0 0">Chaque entreprise avec son diagnostic, ses tests VMA et son atelier stratégique.</p>
+    </div>
+    <div class="barre-outils">
+      <button class="btn-doux" type="button">Test VMA : mode testeur</button>
+      <div class="menu" id="menu">
+        <button class="btn" type="button" id="btn-nouveau">+ Nouveau</button>
+        <div class="liste-menu">
+          <button type="button" data-nouveau="diag">Nouveau diagnostic<small>Diagnostic d'endurance commerciale</small></button>
+          <button type="button" data-nouveau="vma">Nouveau test VMA<small>Invitation envoyée au dirigeant</small></button>
+          <button type="button" data-nouveau="atelier">Nouvel atelier stratégique <span class="beta">Bêta</span><small>Stratégie, objectifs, ICP et feuille de route</small></button>
+          <button type="button" data-nouveau="import">Importer un atelier <span class="beta">Bêta</span><small>Reprendre une sauvegarde existante</small></button>
+        </div>
+      </div>
+      <input class="recherche" type="search" placeholder="Recherche" aria-label="Rechercher une entreprise">
+    </div>
+  </header>
+  <main>
+    <details class="entreprise" id="ent1" open>
+      <summary>
+        <div><div class="nom">Entreprise Exemple SAS</div><div class="sous">Entreprise</div></div>
+        <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Étape 3 sur 5</div></div>
+        <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">2 tests · 1 reçu</div></div>
+        <div><div class="cellule-label">Atelier stratégique <span class="beta">Bêta</span></div><div class="cellule-val">Étape 4 sur 6</div></div>
+      </summary>
+      <div class="detail">
+        <section class="bloc">
+          <h3>Diagnostic d'endurance commerciale</h3>
+          <div class="etapes"><span class="fait"></span><span class="fait"></span><span class="en-cours"></span><span></span><span></span></div>
+          <p>Étape 3 · Entretien</p>
+          <div class="outils"><button class="btn-doux" type="button">Ouvrir le diagnostic</button></div>
+        </section>
+        <section class="bloc">
+          <h3>Tests VMA</h3>
+          <p>Dernier résultat reçu le 12/10/2026.</p>
+          <div class="outils"><button class="btn-doux" type="button">Résultat complet</button></div>
+        </section>
+        <section class="bloc large">
+          <h3>Atelier stratégique <span class="beta">Bêta</span>
+            <button class="btn-doux" type="button" data-nouveau="atelier">+ Nouvel atelier</button></h3>
+          <p>Stratégie commerciale, modèle, objectifs, ICP et personas, feuille de route. Un atelier peut être repris à tout moment.</p>
+          <div class="ateliers">
+            <div class="atelier-ligne">
+              <div><b>Atelier de lancement 2026</b><div class="sous">Modifié le 27/10/2026 · 14 actions</div></div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <span class="pill vert">Étape 4 sur 6</span>
+                <button class="btn-doux" type="button" id="ouvrir-atelier">Ouvrir l'atelier</button>
+                <button class="btn-doux" type="button" disabled title="Prévu plus tard">Partager avec le client</button>
+              </div>
+            </div>
+            <div class="atelier-ligne">
+              <div><b>Revue de mi-année 2027</b><div class="sous">Pas encore commencé</div></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="pill">Brouillon</span>
+                <button class="btn-doux" type="button" id="ouvrir-atelier-2">Ouvrir l'atelier</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </details>
+
+    <details class="entreprise">
+      <summary>
+        <div><div class="nom">Société Démo Industrie</div><div class="sous">Entreprise</div></div>
+        <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Pas encore lancé</div></div>
+        <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">Aucun</div></div>
+        <div><div class="cellule-label">Atelier stratégique <span class="beta">Bêta</span></div><div class="cellule-val">Pas encore lancé</div></div>
+      </summary>
+      <div class="detail">
+        <section class="bloc large">
+          <h3>Atelier stratégique <span class="beta">Bêta</span></h3>
+          <p class="vide">Pas encore lancé.</p>
+          <div class="outils"><button class="btn" type="button" data-nouveau="atelier">Lancer un atelier</button></div>
+        </section>
+      </div>
+    </details>
+  </main>
+</section>
+
+<!-- ===== Vue 2 : atelier ouvert ===== -->
+<section class="vue" id="vue-atelier">
+  <header>
+    <div>
+      <button class="retour" type="button" id="retour">← Outils et diagnostics</button>
+      <div class="tete-atelier" style="margin:0">
+        <h2>Atelier de lancement 2026 <span class="beta">Bêta</span></h2>
+      </div>
+      <div class="sous">Entreprise Exemple SAS · enregistré à l'instant</div>
+    </div>
+    <div class="barre-outils">
+      <button class="partage" type="button" id="bascule-partage" aria-pressed="true"><i></i><span id="libelle-partage">Écran partagé : infos privées masquées</span></button>
+    </div>
+  </header>
+  <main>
+    <div class="parcours" id="parcours"></div>
+
+    <div id="etape-3" style="display:none"></div>
+
+    <div id="contenu">
+      <div class="grille">
+        <div class="carte">
+          <h3>Objectif de l'année</h3>
+          <p class="q">Combien de chiffre d'affaires, et quelle part en abonnement ?</p>
+          <label class="champ">Chiffre d'affaires visé (€)<input id="o-ca" type="number" value="120000"></label>
+          <div class="champs-2">
+            <label class="champ">Part en abonnement (%)<input id="o-part" type="number" value="40"></label>
+            <label class="champ">Panier moyen ponctuel (€)<input id="o-panier" type="number" value="3000"></label>
+            <label class="champ">Abonnement mensuel (€)<input id="o-abo" type="number" value="300"></label>
+            <label class="champ">Mois facturés par abonné<input id="o-mois" type="number" value="6"></label>
+            <label class="champ">Rendez-vous → vente (%)<input id="o-tx1" type="number" value="25"></label>
+            <label class="champ">Contact → rendez-vous (%)<input id="o-tx2" type="number" value="15"></label>
+          </div>
+        </div>
+        <div class="carte">
+          <h3>Ce que ça demande</h3>
+          <p class="q">Calculé à partir des champs de gauche. Valeurs d'exemple.</p>
+          <div class="kpis">
+            <div class="kpi"><b id="k-ventes">24</b><span>ventes ponctuelles</span></div>
+            <div class="kpi"><b id="k-abonnes">27</b><span>nouveaux abonnés</span></div>
+            <div class="kpi"><b id="k-mrr">8 100 €</b><span>récurrent mensuel en fin d'année</span></div>
+            <div class="kpi"><b id="k-rdv">204</b><span>rendez-vous</span></div>
+            <div class="kpi"><b id="k-contacts">1 360</b><span>contacts à toucher</span></div>
+          </div>
+        </div>
+        <div class="carte prive" style="grid-column:1/-1">
+          <h3>Pour Marc</h3>
+          <p class="q">Visible seulement hors écran partagé. Même taux sur le récurrent tant que l'affaire court.</p>
+          <div class="kpis">
+            <div class="kpi"><b>12 000 €</b><span>commission sur 12 mois</span></div>
+            <div class="kpi"><b>9 720 €</b><span>commission annuelle sur les abonnements en cours</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-etapes">
+      <button class="btn-doux" type="button">← Étape précédente</button>
+      <button class="btn" type="button">Étape suivante →</button>
+    </div>
+    <div class="exports">
+      <button class="btn-doux" type="button">Télécharger la feuille de route (JSON)</button>
+      <button class="btn-doux" type="button">Télécharger la fiche de cadrage (Markdown)</button>
+      <button class="btn-doux" type="button">Copier la fiche</button>
+    </div>
+  </main>
+</section>
+
+<dialog id="dlg-atelier">
+  <h2>Nouvel atelier stratégique <span class="beta">Bêta</span></h2>
+  <label for="ent">Entreprise</label>
+  <select id="ent"><option>Entreprise Exemple SAS</option><option>Société Démo Industrie</option></select>
+  <label for="titre">Nom de l'atelier</label>
+  <input id="titre" type="text" value="Atelier de lancement 2027">
+  <label for="depart">Point de départ</label>
+  <select id="depart"><option>Atelier vide</option><option>Copie de « Atelier de lancement 2026 »</option></select>
+  <div class="actions"><button class="btn-doux" type="button" data-fermer>Annuler</button><button class="btn" type="button" data-fermer data-ouvrir>Créer et ouvrir</button></div>
+</dialog>
+
+<dialog id="dlg-import">
+  <h2>Importer un atelier <span class="beta">Bêta</span></h2>
+  <label for="ent2">Entreprise</label>
+  <select id="ent2"><option>Entreprise Exemple SAS</option><option>Société Démo Industrie</option></select>
+  <label for="fichier">Fichier de sauvegarde (.json)</label>
+  <input id="fichier" type="text" value="atelier-sauvegarde.json" readonly>
+  <p class="sous" style="margin-top:10px">Le contenu est enregistré dans la base de l'OS. Il n'est jamais envoyé sur GitHub.</p>
+  <div class="actions"><button class="btn-doux" type="button" data-fermer>Annuler</button><button class="btn" type="button" data-fermer data-ouvrir>Importer et ouvrir</button></div>
+</dialog>
+
+<script>
+(function () {
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+  // menu « + Nouveau »
+  var menu = $('#menu');
+  $('#btn-nouveau').addEventListener('click', function (e) { e.stopPropagation(); menu.classList.toggle('ouvert'); });
+  document.addEventListener('click', function () { menu.classList.remove('ouvert'); });
+
+  function vue(id) { $$('.vue').forEach(function (v) { v.classList.toggle('visible', v.id === id); }); window.scrollTo(0, 0); }
+
+  // création / import
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-nouveau]');
+    if (!b) return;
+    menu.classList.remove('ouvert');
+    var t = b.getAttribute('data-nouveau');
+    if (t === 'atelier') $('#dlg-atelier').showModal();
+    else if (t === 'import') $('#dlg-import').showModal();
+  });
+  $$('dialog').forEach(function (d) {
+    d.addEventListener('click', function (e) {
+      if (e.target.closest('[data-fermer]')) {
+        d.close();
+        if (e.target.closest('[data-ouvrir]')) vue('vue-atelier');
+      }
+    });
+  });
+
+  $('#ouvrir-atelier').addEventListener('click', function () { vue('vue-atelier'); });
+  $('#ouvrir-atelier-2').addEventListener('click', function () { vue('vue-atelier'); });
+  $('#retour').addEventListener('click', function () { vue('vue-liste'); });
+
+  // parcours en 6 étapes
+  var etapes = ['Cadrage', 'Diagnostic', 'Modèle', 'Objectifs', 'Ciblage', 'Feuille de route'];
+  var courante = 3;
+  var p = $('#parcours');
+  etapes.forEach(function (n, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = i < courante ? 'fait' : i === courante ? 'actif' : '';
+    b.innerHTML = '<b>Étape ' + (i + 1) + '</b>' + n;
+    p.appendChild(b);
+  });
+
+  // mode écran partagé
+  var partage = true;
+  $('#bascule-partage').addEventListener('click', function () {
+    partage = !partage;
+    document.body.classList.toggle('mode-partage', partage);
+    this.classList.toggle('off', !partage);
+    this.setAttribute('aria-pressed', String(partage));
+    $('#libelle-partage').textContent = partage ? 'Écran partagé : infos privées masquées' : 'Infos privées visibles';
+  });
+  document.body.classList.add('mode-partage');
+
+  // calcul des objectifs
+  function n(id, d) { var v = parseFloat($('#' + id).value); return isFinite(v) && v > 0 ? v : d; }
+  function fmt(x) { return Math.round(x).toLocaleString('fr-FR'); }
+  function calc() {
+    var ca = n('o-ca', 1), panier = n('o-panier', 1), t1 = Math.min(100, n('o-tx1', 1)), t2 = Math.min(100, n('o-tx2', 1));
+    var part = Math.min(100, Math.max(0, parseFloat($('#o-part').value) || 0)), abo = n('o-abo', 1), mois = Math.min(12, n('o-mois', 1));
+    var rec = ca * part / 100, pon = ca - rec;
+    var ventes = pon > 0 ? Math.ceil(pon / panier) : 0, abonnes = rec > 0 ? Math.ceil(rec / (abo * mois)) : 0;
+    var rdv = Math.ceil((ventes + abonnes) / (t1 / 100)), contacts = Math.ceil(rdv / (t2 / 100));
+    $('#k-ventes').textContent = fmt(ventes); $('#k-abonnes').textContent = fmt(abonnes);
+    $('#k-mrr').textContent = fmt(abonnes * abo) + ' €'; $('#k-rdv').textContent = fmt(rdv); $('#k-contacts').textContent = fmt(contacts);
+  }
+  $$('#contenu input').forEach(function (i) { i.addEventListener('input', calc); });
+})();
+</script>
+</body>
+</html>
