@@ -4,13 +4,16 @@ import { z } from 'zod';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import {
   agendasDisponibles,
+  creerEvenement,
   evenements,
   type AgendaDisponible,
   type Evenement,
   type GoogleOptions,
 } from '../connecteurs/google/google.js';
+import { CALENDAR_EVENTS_SCOPE, scopeAccorde } from '../connecteurs/google/oauth.js';
 import { connexions } from '../connexions/schema.js';
 import type { ConnexionDeps } from '../connexions/service.js';
+import type { SyncCtx } from '../connexions/types.js';
 import {
   activites,
   contacts,
@@ -30,7 +33,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { decaler, estCreneau, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
-import { propose, PropositionRefusee } from '../propositions/service.js';
+import { canWriteReal, propose, PropositionRefusee } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 
 const FUSEAU = 'Europe/Paris';
@@ -170,21 +173,34 @@ export const rdvOsSchema = z
   })
   .strict();
 
-// A meeting that never was in Google: its id starts with `os:` so no agenda read can touch it.
+// 'indisponible': Google or its agenda access is not connected (the meeting stays in the OS only).
+// 'simulation': real writes are off. 'erreur': Google refused, the meeting is kept in the OS.
+export type CopieAgenda = 'ok' | 'simulation' | 'indisponible' | 'erreur';
+
+// A meeting created in the OS keeps an `os:` id, so no agenda read can mistake it for a Google
+// one. When Google is connected with the agenda scope, a copy goes to the main agenda (tagged
+// with that id, so it is not listed twice); a Google failure never loses the meeting.
 export async function creerRendezVousOs(
   db: Executor,
   instance: Instance,
   saisie: z.infer<typeof rdvOsSchema>,
-): Promise<string> {
+  deps?: ConnexionDeps & GoogleOptions,
+): Promise<{ id: string; google: CopieAgenda }> {
   const debut = new Date(saisie.debut);
+  const fin = new Date(debut.getTime() + saisie.dureeMinutes * 60_000);
   const eventId = `os:${randomUUID()}`;
-  await withInstance(db, instance.id, async (tx) => {
+  const secrets = deps ? await loadInstanceSecrets(deps.secretsDir, instance.slug) : {};
+  const branche =
+    !!deps &&
+    !!secrets.GOOGLE_REFRESH_TOKEN &&
+    scopeAccorde(secrets.GOOGLE_SCOPE, CALENDAR_EVENTS_SCOPE);
+  const google = await withInstance(db, instance.id, async (tx): Promise<CopieAgenda> => {
     await tx.insert(rendezVous).values({
       instanceId: currentInstance,
       eventId,
       titre: saisie.titre,
       debut,
-      fin: new Date(debut.getTime() + saisie.dureeMinutes * 60_000),
+      fin,
       lieu: saisie.lieu || null,
       participants: [],
       statut: 'rdv',
@@ -195,8 +211,33 @@ export async function creerRendezVousOs(
       niveau: 'L1',
       details: { eventId },
     });
+    if (!branche || !deps) return 'indisponible';
+    const ctx: SyncCtx = {
+      instance,
+      tx,
+      secrets,
+      reglages: {},
+      connexionId: '',
+      derniereSynchro: null,
+      reel: canWriteReal(instance, deps.realWrites),
+    };
+    try {
+      const copie = await creerEvenement(
+        ctx,
+        { osId: eventId, titre: saisie.titre, debut, fin, lieu: saisie.lieu },
+        deps.fetch ? { fetch: deps.fetch } : {},
+      );
+      return copie.simulation ? 'simulation' : 'ok';
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await logEvent(tx, {
+        acteur: 'os',
+        action: `Rendez-vous non copié dans Google Agenda (${saisie.titre}) : ${message}`,
+      });
+      return 'erreur';
+    }
   });
-  return eventId;
+  return { id: eventId, google };
 }
 
 // The calendars the instance's Google account can see, to choose which ones the agenda reads.
