@@ -1442,7 +1442,7 @@ export function registerApi(
           .code(400)
           .send({ error: parsed.error.issues[0]?.message ?? 'Requête invalide' });
       }
-      return reply.code(201).send({ id: await creerRendezVousOs(db, i, parsed.data) });
+      return reply.code(201).send(await creerRendezVousOs(db, i, parsed.data, driveDeps));
     }),
   );
   const statutRdvSchema = z.object({ statut: z.enum(['a_trier', 'rdv', 'ignore']) }).strict();

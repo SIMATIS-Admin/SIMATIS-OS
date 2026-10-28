@@ -19,6 +19,7 @@ import {
   agendasDisponibles,
   copierFichier,
   creerDossier,
+  creerEvenement,
   createDraft,
   envoyerEnDoc,
   evenements,
@@ -125,11 +126,22 @@ function fakeGoogle() {
         },
       });
     }
+    if (url.includes('/calendars/primary/events') && init.method === 'POST') {
+      return json({ id: 'ev-os-1', htmlLink: 'https://calendar.google.com/event?eid=ev-os-1' });
+    }
     if (url.includes('/events?')) {
       // Two pages: the second one is only reached through nextPageToken.
       if (new URL(url).searchParams.get('pageToken') === 'p2') {
         return json({
           items: [
+            // Written by the OS (it also lives in the OS under its os: id): not listed twice.
+            {
+              id: 'ev-os-1',
+              summary: 'Copie du rendez-vous créé dans l’OS',
+              extendedProperties: { private: { simatisOs: 'os:abc' } },
+              start: { dateTime: '2026-10-12T09:00:00Z' },
+              end: { dateTime: '2026-10-12T10:00:00Z' },
+            },
             {
               id: 'e2',
               summary: 'Séminaire',
@@ -306,6 +318,7 @@ describe('Gmail and Calendar', () => {
       'https://www.googleapis.com/auth/gmail.compose',
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/calendar.events',
       'https://www.googleapis.com/auth/drive.file',
     ]);
   });
@@ -480,6 +493,37 @@ describe('Gmail and Calendar', () => {
       expect.objectContaining({ id: 'e2', titre: 'Séminaire', journee: true, couleur: null }),
     ]);
     expect(google.calls.filter((c) => c.url.includes('/events?'))).toHaveLength(2);
+  });
+
+  it('creates a meeting in the agenda, tagged with its OS id, and nothing at all in simulation', async () => {
+    const google = fakeGoogle();
+    const rdv = {
+      osId: 'os:abc',
+      titre: 'Point fictif',
+      debut: new Date('2026-10-20T08:00:00Z'),
+      fin: new Date('2026-10-20T09:00:00Z'),
+      lieu: 'Annecy',
+    };
+    expect(await ctx(false, (c) => creerEvenement(c, rdv, google))).toEqual({
+      evenement: null,
+      simulation: true,
+    });
+    expect(google.calls.filter((c) => c.url.includes('/calendars/'))).toHaveLength(0);
+
+    const cree = await ctx(true, (c) => creerEvenement(c, rdv, google));
+    expect(cree).toEqual({
+      evenement: { id: 'ev-os-1', lien: 'https://calendar.google.com/event?eid=ev-os-1' },
+      simulation: false,
+    });
+    const appel = google.calls.find((c) => c.url.includes('/calendars/primary/events'));
+    expect(appel?.method).toBe('POST');
+    expect(JSON.parse(appel?.body ?? '{}')).toMatchObject({
+      summary: 'Point fictif',
+      location: 'Annecy',
+      start: { dateTime: '2026-10-20T08:00:00.000Z' },
+      end: { dateTime: '2026-10-20T09:00:00.000Z' },
+      extendedProperties: { private: { simatisOs: 'os:abc' } },
+    });
   });
 
   it('lists every calendar the Google account can see, shared or subscribed ones included', async () => {

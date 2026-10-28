@@ -9,10 +9,10 @@ import { configureConnexion } from '../connexions/service.js';
 import { withInstance } from '../db/context.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import { getInstanceBySlug } from '../instances/service.js';
-import { writeGoogleAppSecret } from '../secrets.js';
+import { writeGoogleAppSecret, writeGoogleToken } from '../secrets.js';
 import { getFiche } from '../crm/fiches.js';
 import { transfererRendezVous } from '../crm/rdv-liens.js';
-import { compterATrier, listerRendezVous } from './rdv.js';
+import { compterATrier, creerRendezVousOs, listerRendezVous } from './rdv.js';
 
 type Row = Record<string, unknown>;
 
@@ -434,6 +434,103 @@ describe('Rendez-vous and Devis', () => {
     expect((await send('GET', '/api/i/aquaterra/rendez-vous')).body).toMatchObject({
       etat: 'non_configure',
       rdv: [],
+    });
+  });
+
+  describe('copy of an OS meeting into Google Agenda', () => {
+    const saisie = { titre: 'Point fictif', debut: '2026-11-03T09:00:00.000Z', dureeMinutes: 45 };
+    const fakeAgenda = () => {
+      const posts: string[] = [];
+      const fetch = (url: string, init: RequestInit) => {
+        if (url.includes('oauth2')) return Promise.resolve(new Response('{"access_token":"a"}'));
+        if (init.method === 'POST') {
+          posts.push(init.body as string);
+          return Promise.resolve(
+            new Response('{"id":"ev-1","htmlLink":"https://example.test/ev"}'),
+          );
+        }
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      };
+      return { fetch, posts };
+    };
+    const reel = async () => {
+      const instance = await getInstanceBySlug(t.app.db, 'simatis');
+      if (!instance) throw new Error('no instance');
+      return { ...instance, config: { ...instance.config, ecrituresReelles: true } };
+    };
+
+    it('keeps the meeting in the OS alone when Google is not connected or lacks the agenda scope', async () => {
+      const instance = await reel();
+      const google = fakeAgenda();
+      await writeGoogleAppSecret(secretsDir, 'GOCSPX-fictif');
+      await rm(path.join(secretsDir, 'simatis.google.json'), { force: true });
+      const sans = await creerRendezVousOs(t.app.db, instance, saisie, {
+        secretsDir,
+        realWrites: true,
+        fetch: google.fetch,
+      });
+      expect(sans).toMatchObject({ google: 'indisponible' });
+      expect(sans.id.startsWith('os:')).toBe(true);
+
+      await writeGoogleToken(secretsDir, 'simatis', { refresh_token: 'r', scope: 'gmail.compose' });
+      expect(
+        (
+          await creerRendezVousOs(t.app.db, instance, saisie, {
+            secretsDir,
+            realWrites: true,
+            fetch: google.fetch,
+          })
+        ).google,
+      ).toBe('indisponible');
+      expect(google.posts).toHaveLength(0);
+    });
+
+    it('writes nothing to Google while real writes are off, and a copy once both locks are on', async () => {
+      const instance = await reel();
+      const google = fakeAgenda();
+      await writeGoogleToken(secretsDir, 'simatis', {
+        refresh_token: 'r',
+        scope: 'https://www.googleapis.com/auth/calendar.events',
+      });
+      const simule = await creerRendezVousOs(t.app.db, instance, saisie, {
+        secretsDir,
+        realWrites: false,
+        fetch: google.fetch,
+      });
+      expect(simule.google).toBe('simulation');
+      expect(google.posts).toHaveLength(0);
+
+      const cree = await creerRendezVousOs(t.app.db, instance, saisie, {
+        secretsDir,
+        realWrites: true,
+        fetch: google.fetch,
+      });
+      expect(cree.google).toBe('ok');
+      expect(JSON.parse(google.posts[0] ?? '{}')).toMatchObject({
+        summary: 'Point fictif',
+        end: { dateTime: '2026-11-03T09:45:00.000Z' },
+        extendedProperties: { private: { simatisOs: cree.id } },
+      });
+    });
+
+    it('keeps the meeting when Google refuses the copy', async () => {
+      const instance = await reel();
+      const fetch = (url: string) =>
+        Promise.resolve(
+          url.includes('oauth2')
+            ? new Response('{"access_token":"a"}')
+            : new Response('{"error":{"message":"Forbidden"}}', { status: 403 }),
+        );
+      const refuse = await creerRendezVousOs(t.app.db, instance, saisie, {
+        secretsDir,
+        realWrites: true,
+        fetch,
+      });
+      expect(refuse.google).toBe('erreur');
+      const { rows } = await t.owner.pool.query('select 1 from rendez_vous where event_id = $1', [
+        refuse.id,
+      ]);
+      expect(rows).toHaveLength(1);
     });
   });
 });

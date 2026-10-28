@@ -6,6 +6,9 @@ import type { AddressInfo } from 'node:net';
 // the rest of the Drive. Docs edits on those files are covered by the same scope.
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
+// Creating a meeting in the connected agenda, never editing or deleting an existing one.
+export const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+
 // Must match the scopes declared for Google's verification of the app (Google Auth Platform >
 // Data access): Google rejects a scope the demo video cannot show in use. Adding one later means
 // a new verification and a reconnection of every mailbox.
@@ -13,6 +16,7 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/calendar.readonly',
+  CALENDAR_EVENTS_SCOPE,
   DRIVE_SCOPE,
 ];
 

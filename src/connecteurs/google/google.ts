@@ -414,6 +414,47 @@ const COULEURS_EVENEMENT: Record<string, string> = {
   '11': '#d50000',
 };
 
+// Marks the Google copy of a meeting created in the OS, so reading the agenda can skip it.
+const CLE_RDV_OS = 'simatisOs';
+
+export type EcritureAgenda = {
+  evenement: { id: string; lien: string | null } | null;
+  simulation: boolean;
+};
+
+// Copy of a meeting created in the OS into the instance's main agenda. Same guard as a draft:
+// without real writes the agenda stays untouched. It only creates; no existing event is touched.
+export async function creerEvenement(
+  ctx: SyncCtx,
+  rdv: { osId: string; titre: string; debut: Date; fin: Date; lieu?: string | null },
+  options: GoogleOptions = {},
+): Promise<EcritureAgenda> {
+  if (!ctx.reel) {
+    await logEvent(ctx.tx, {
+      acteur: 'os',
+      action: `Simulation : rendez-vous non créé dans Google Agenda (${rdv.titre})`,
+    });
+    return { evenement: null, simulation: true };
+  }
+  const created = await googleApi(ctx, options).request<{ id: string; htmlLink?: string }>(
+    'POST',
+    `${CALENDAR}/calendars/primary/events`,
+    {
+      summary: rdv.titre,
+      ...(rdv.lieu ? { location: rdv.lieu } : {}),
+      start: { dateTime: rdv.debut.toISOString() },
+      end: { dateTime: rdv.fin.toISOString() },
+      extendedProperties: { private: { [CLE_RDV_OS]: rdv.osId } },
+    },
+  );
+  await logEvent(ctx.tx, {
+    acteur: 'os',
+    action: `Rendez-vous créé dans Google Agenda : ${rdv.titre}`,
+    niveau: 'L1',
+  });
+  return { evenement: { id: created.id, lien: created.htmlLink ?? null }, simulation: false };
+}
+
 // Meetings between two dates (brief, Rendez-vous screen).
 export async function evenements(
   ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
@@ -436,6 +477,7 @@ export async function evenements(
           location?: string;
           htmlLink?: string;
           colorId?: string;
+          extendedProperties?: { private?: Record<string, string> };
           attendees?: { email?: string; self?: boolean }[];
           start?: { dateTime?: string; date?: string };
           end?: { dateTime?: string; date?: string };
@@ -452,6 +494,8 @@ export async function evenements(
         }).toString()}`,
       );
       for (const e of page.items ?? []) {
+        // The copy of a meeting created in the OS: the OS already lists it under its own id.
+        if (e.extendedProperties?.private?.[CLE_RDV_OS]) continue;
         const start = e.start?.dateTime ?? e.start?.date;
         const end = e.end?.dateTime ?? e.end?.date;
         if (!start || !end) continue;
