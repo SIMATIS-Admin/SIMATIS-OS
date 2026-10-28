@@ -17,16 +17,22 @@ import { createInstance } from '../../instances/service.js';
 import { loadInstanceSecrets } from '../../secrets.js';
 import {
   agendasDisponibles,
+  copierFichier,
+  creerDossier,
   createDraft,
+  envoyerEnDoc,
   evenements,
+  exporterDocx,
   freeBusy,
   historique,
+  lireDoc,
   mimeBrut,
+  modifierDoc,
   sansSignature,
   sendMessage,
 } from './google.js';
 import { gmailConnector } from './index.js';
-import { connectGoogle } from './oauth.js';
+import { connectGoogle, DRIVE_SCOPE, SCOPES, scopeAccorde } from './oauth.js';
 
 type Call = { url: string; method: string; body: string | undefined };
 
@@ -39,7 +45,9 @@ function fakeGoogle() {
     calls.push({
       url,
       method: init.method ?? 'GET',
-      body: typeof init.body === 'string' ? init.body : undefined,
+      body: Buffer.isBuffer(init.body)
+        ? init.body.toString('utf8')
+        : (init.body as string | undefined),
     });
     if (url === 'https://oauth2.googleapis.com/token') {
       const params = new URLSearchParams(typeof init.body === 'string' ? init.body : '');
@@ -50,6 +58,37 @@ function fakeGoogle() {
         ? json({ access_token: 'at-fictif' })
         : json({ error: 'invalid_grant' }, 400);
     }
+    const doc = (id: string, name: string) =>
+      json({ id, name, webViewLink: `https://docs.google.com/document/d/${id}/edit` });
+    if (url.includes('/upload/drive/v3/files')) return doc('doc-1', 'Rapport fictif v1');
+    if (url.includes('/drive/v3/files/doc-1/copy')) return doc('doc-2', 'Rapport fictif v2');
+    if (url.includes('/drive/v3/files/doc-1/export')) {
+      return Promise.resolve(new Response(Buffer.from('PK-export-fictif')));
+    }
+    if (url.includes('/drive/v3/files?')) return doc('dossier-1', 'Diagnostic fictif');
+    if (url === 'https://docs.googleapis.com/v1/documents/doc-1') {
+      return json({
+        title: 'Rapport fictif v1',
+        body: {
+          content: [
+            { paragraph: { elements: [{ textRun: { content: 'Synthèse\n' } }] } },
+            {
+              table: {
+                tableRows: [
+                  {
+                    tableCells: [
+                      { content: [{ paragraph: { elements: [{ textRun: { content: 'A\n' } }] } }] },
+                      { content: [{ paragraph: { elements: [{ textRun: { content: 'B\n' } }] } }] },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+    }
+    if (url.endsWith(':batchUpdate')) return json({ documentId: 'doc-1' });
     if (url.endsWith('/drafts')) return json({ id: 'draft-42' });
     if (url.endsWith('/messages/send')) return json({ id: 'sent-7', labelIds: ['SENT'] });
     if (url.includes('/messages?')) return json({ messages: [{ id: 'm1' }] });
@@ -251,6 +290,90 @@ describe('Gmail and Calendar', () => {
     expect(appel?.method).toBe('POST');
     const corps = JSON.parse(appel?.body ?? '{}') as { raw?: unknown };
     expect(typeof corps.raw).toBe('string');
+  });
+
+  it('knows whether the stored token has the Drive scope', async () => {
+    const secrets = await loadInstanceSecrets(secretsDir, 'mandat-google');
+    // The fictive token above was granted before Drive existed: the screen must ask to reconnect.
+    expect(secrets.GOOGLE_SCOPE).toBe('gmail.compose');
+    expect(scopeAccorde(secrets.GOOGLE_SCOPE, DRIVE_SCOPE)).toBe(false);
+    expect(scopeAccorde(SCOPES.join(' '), DRIVE_SCOPE)).toBe(true);
+    expect(scopeAccorde(undefined, DRIVE_SCOPE)).toBe(false);
+  });
+
+  it('creates the folder and the Google Doc, and nothing at all in simulation', async () => {
+    const simuleDossier = await ctx(false, (c) =>
+      creerDossier(c, 'Diagnostic fictif', undefined, google),
+    );
+    expect(simuleDossier).toEqual({ fichier: null, simulation: true });
+    const simuleDoc = await ctx(false, (c) =>
+      envoyerEnDoc(c, { nom: 'Rapport fictif v1', docx: Buffer.from('PK') }, google),
+    );
+    expect(simuleDoc).toEqual({ fichier: null, simulation: true });
+    expect(google.calls.filter((c) => c.url.includes('/drive/'))).toHaveLength(0);
+
+    const dossier = await ctx(true, (c) => creerDossier(c, 'Diagnostic fictif', undefined, google));
+    expect(dossier.fichier?.id).toBe('dossier-1');
+    const dossierCall = google.calls.find((c) => c.url.includes('/drive/v3/files?'));
+    expect(JSON.parse(dossierCall?.body ?? '{}')).toMatchObject({
+      name: 'Diagnostic fictif',
+      mimeType: 'application/vnd.google-apps.folder',
+    });
+
+    const cree = await ctx(true, (c) =>
+      envoyerEnDoc(
+        c,
+        { nom: 'Rapport fictif v1', docx: Buffer.from('PK-docx-fictif'), dossierId: 'dossier-1' },
+        google,
+      ),
+    );
+    expect(cree.fichier).toEqual({
+      id: 'doc-1',
+      nom: 'Rapport fictif v1',
+      lien: 'https://docs.google.com/document/d/doc-1/edit',
+    });
+    const upload = google.calls.find((c) => c.url.includes('/upload/drive/v3/files'));
+    expect(upload?.url).toContain('uploadType=multipart');
+    // Metadata asks for a Google Doc inside the folder; the Word bytes follow.
+    expect(upload?.body).toContain('"mimeType":"application/vnd.google-apps.document"');
+    expect(upload?.body).toContain('"parents":["dossier-1"]');
+    expect(upload?.body).toContain('PK-docx-fictif');
+  });
+
+  it('copies a Doc as a new version, exports it as Word and reads its text', async () => {
+    expect(await ctx(false, (c) => copierFichier(c, 'doc-1', 'Rapport fictif v2', google))).toEqual(
+      {
+        fichier: null,
+        simulation: true,
+      },
+    );
+    const copie = await ctx(true, (c) => copierFichier(c, 'doc-1', 'Rapport fictif v2', google));
+    expect(copie.fichier?.id).toBe('doc-2');
+
+    const docx = await ctx(true, (c) => exporterDocx(c, 'doc-1', google));
+    expect(docx.toString()).toBe('PK-export-fictif');
+    expect(google.calls.find((c) => c.url.includes('/export'))?.url).toContain(
+      'mimeType=application%2Fvnd.openxmlformats',
+    );
+
+    const lu = await ctx(true, (c) => lireDoc(c, 'doc-1', google));
+    expect(lu).toEqual({ titre: 'Rapport fictif v1', texte: 'Synthèse\nA\tB' });
+  });
+
+  it('edits the Doc in place, and not at all in simulation', async () => {
+    const requests = [
+      { replaceAllText: { containsText: { text: 'ancien' }, replaceText: 'nouveau' } },
+    ];
+    expect(await ctx(false, (c) => modifierDoc(c, 'doc-1', requests, google))).toEqual({
+      simulation: true,
+    });
+    expect(google.calls.filter((c) => c.url.endsWith(':batchUpdate'))).toHaveLength(0);
+
+    expect(await ctx(true, (c) => modifierDoc(c, 'doc-1', requests, google))).toEqual({
+      simulation: false,
+    });
+    const appel = google.calls.find((c) => c.url.endsWith(':batchUpdate'));
+    expect(JSON.parse(appel?.body ?? '{}')).toEqual({ requests });
   });
 
   it('creates a draft without signature, and nothing at all in simulation', async () => {

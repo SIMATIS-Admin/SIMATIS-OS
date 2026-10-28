@@ -2,6 +2,10 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+// Drive limited to the files the OS creates itself (reports, diagnostic folders): it never sees
+// the rest of the Drive. Docs edits on those files are covered by the same scope.
+export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
 export const SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose',
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -9,7 +13,13 @@ export const SCOPES = [
   // Granted now so that creating meetings later never forces every mailbox to reconnect;
   // unused until a write is added, and then behind the real-write locks.
   'https://www.googleapis.com/auth/calendar.events',
+  DRIVE_SCOPE,
 ];
+
+// Scopes are space-separated in the token answer. A token granted before a scope was added to
+// SCOPES does not have it, and nothing else tells: Google answers 403 at the first call.
+export const scopeAccorde = (accordes: string | undefined, scope: string): boolean =>
+  (accordes ?? '').split(/\s+/).includes(scope);
 
 // Website audience (Site web screen): a consent of its own, because the account that owns the
 // Analytics property is not always the mailbox connected for the instance.

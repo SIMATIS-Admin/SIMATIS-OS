@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { SyncCtx } from '../../connexions/types.js';
 import { logEvent } from '../../journal/service.js';
 import type { Intervalle } from './creneaux.js';
@@ -17,6 +18,9 @@ export type Message = {
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const CALENDAR = 'https://www.googleapis.com/calendar/v3';
+const DRIVE = 'https://www.googleapis.com/drive/v3';
+const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
+const DOCS = 'https://docs.googleapis.com/v1/documents';
 
 function credentials(ctx: Pick<SyncCtx, 'secrets' | 'instance'>) {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN } = ctx.secrets;
@@ -44,11 +48,17 @@ export function googleApi(ctx: Pick<SyncCtx, 'secrets' | 'instance'>, options: G
   let token: Promise<string> | undefined;
   const bearer = () => (token ??= accessToken(credentials(ctx), doFetch));
 
-  async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  // The raw answer, for what is not JSON (an exported file) or not sent as JSON (an upload).
+  async function raw(
+    method: string,
+    url: string,
+    headers: Record<string, string>,
+    body?: string | Buffer,
+  ): Promise<Response> {
     const response = await doFetch(url, {
       method,
-      headers: { authorization: `Bearer ${await bearer()}`, 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: { authorization: `Bearer ${await bearer()}`, ...headers },
+      body,
     });
     if (!response.ok) {
       const detail = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
@@ -57,9 +67,19 @@ export function googleApi(ctx: Pick<SyncCtx, 'secrets' | 'instance'>, options: G
         response.status,
       );
     }
+    return response;
+  }
+
+  async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+    const response = await raw(
+      method,
+      url,
+      { 'content-type': 'application/json' },
+      body === undefined ? undefined : JSON.stringify(body),
+    );
     return (await response.json()) as T;
   }
-  return { request, check: bearer };
+  return { request, raw, check: bearer };
 }
 
 // A signature delimiter ("-- " line) and everything after it: Gmail adds Marc's own signature.
@@ -140,6 +160,154 @@ export async function sendMessage(
   await logEvent(ctx.tx, {
     acteur: 'os',
     action: `Mail envoyé : ${message.subject}`,
+    niveau: 'L1',
+  });
+  return { simulation: false };
+}
+
+export const MIME_DOC = 'application/vnd.google-apps.document';
+export const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const MIME_DOSSIER = 'application/vnd.google-apps.folder';
+
+export type FichierDrive = { id: string; nom: string; lien: string | null };
+export type EcritureDrive = { fichier: FichierDrive | null; simulation: boolean };
+
+type FichierBrut = { id: string; name?: string; webViewLink?: string };
+const CHAMPS_FICHIER = 'id,name,webViewLink';
+const fichierDe = (f: FichierBrut, repli: string): FichierDrive => ({
+  id: f.id,
+  nom: f.name ?? repli,
+  lien: f.webViewLink ?? null,
+});
+
+// Same guard as a draft: without real writes the Drive stays untouched and the journal says so.
+async function simulerDrive(ctx: SyncCtx, action: string): Promise<EcritureDrive> {
+  await logEvent(ctx.tx, { acteur: 'os', action: `Simulation : ${action}` });
+  return { fichier: null, simulation: true };
+}
+
+export async function creerDossier(
+  ctx: SyncCtx,
+  nom: string,
+  parentId?: string,
+  options: GoogleOptions = {},
+): Promise<EcritureDrive> {
+  if (!ctx.reel) return simulerDrive(ctx, `dossier Drive non créé (${nom})`);
+  const created = await googleApi(ctx, options).request<FichierBrut>(
+    'POST',
+    `${DRIVE}/files?${new URLSearchParams({ fields: CHAMPS_FICHIER }).toString()}`,
+    { name: nom, mimeType: MIME_DOSSIER, ...(parentId ? { parents: [parentId] } : {}) },
+  );
+  await logEvent(ctx.tx, { acteur: 'os', action: `Dossier Drive créé : ${nom}`, niveau: 'L1' });
+  return { fichier: fichierDe(created, nom), simulation: false };
+}
+
+// Uploads a Word file and lets Drive convert it to a Google Doc (multipart: metadata, then bytes).
+export async function envoyerEnDoc(
+  ctx: SyncCtx,
+  { nom, docx, dossierId }: { nom: string; docx: Buffer; dossierId?: string },
+  options: GoogleOptions = {},
+): Promise<EcritureDrive> {
+  if (!ctx.reel) return simulerDrive(ctx, `Google Doc non créé (${nom})`);
+  const boundary = `simatis-${randomUUID()}`;
+  const body = Buffer.concat([
+    Buffer.from(
+      `--${boundary}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({
+        name: nom,
+        mimeType: MIME_DOC,
+        ...(dossierId ? { parents: [dossierId] } : {}),
+      })}\r\n--${boundary}\r\ncontent-type: ${MIME_DOCX}\r\n\r\n`,
+    ),
+    docx,
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+  const response = await googleApi(ctx, options).raw(
+    'POST',
+    `${DRIVE_UPLOAD}/files?${new URLSearchParams({ uploadType: 'multipart', fields: CHAMPS_FICHIER }).toString()}`,
+    { 'content-type': `multipart/related; boundary=${boundary}` },
+    body,
+  );
+  await logEvent(ctx.tx, { acteur: 'os', action: `Google Doc créé : ${nom}`, niveau: 'L1' });
+  return { fichier: fichierDe((await response.json()) as FichierBrut, nom), simulation: false };
+}
+
+// A copy keeps the previous version intact: each report version is its own Doc.
+export async function copierFichier(
+  ctx: SyncCtx,
+  id: string,
+  nom: string,
+  options: GoogleOptions = {},
+): Promise<EcritureDrive> {
+  if (!ctx.reel) return simulerDrive(ctx, `copie Drive non créée (${nom})`);
+  const copy = await googleApi(ctx, options).request<FichierBrut>(
+    'POST',
+    `${DRIVE}/files/${encodeURIComponent(id)}/copy?${new URLSearchParams({ fields: CHAMPS_FICHIER }).toString()}`,
+    { name: nom },
+  );
+  await logEvent(ctx.tx, { acteur: 'os', action: `Copie Drive créée : ${nom}`, niveau: 'L1' });
+  return { fichier: fichierDe(copy, nom), simulation: false };
+}
+
+// A Google Doc as a Word file. Read only, so no write lock.
+export async function exporterDocx(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  id: string,
+  options: GoogleOptions = {},
+): Promise<Buffer> {
+  const response = await googleApi(ctx, options).raw(
+    'GET',
+    `${DRIVE}/files/${encodeURIComponent(id)}/export?${new URLSearchParams({ mimeType: MIME_DOCX }).toString()}`,
+    {},
+  );
+  return Buffer.from(await response.arrayBuffer());
+}
+
+type ElementDoc = {
+  paragraph?: { elements?: { textRun?: { content?: string } }[] };
+  table?: { tableRows?: { tableCells?: { content?: ElementDoc[] }[] }[] };
+};
+
+// Tables are read cell by cell, a tab between cells, so a retouch sees the whole report text.
+const texteDe = (elements: ElementDoc[] | undefined): string =>
+  (elements ?? [])
+    .map((e) =>
+      e.table
+        ? (e.table.tableRows ?? [])
+            .map((row) => (row.tableCells ?? []).map((c) => texteDe(c.content).trim()).join('\t'))
+            .join('\n')
+        : (e.paragraph?.elements ?? []).map((p) => p.textRun?.content ?? '').join(''),
+    )
+    .join('');
+
+export async function lireDoc(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  id: string,
+  options: GoogleOptions = {},
+): Promise<{ titre: string; texte: string }> {
+  const doc = await googleApi(ctx, options).request<{
+    title?: string;
+    body?: { content?: ElementDoc[] };
+  }>('GET', `${DOCS}/${encodeURIComponent(id)}`);
+  return { titre: doc.title ?? '', texte: texteDe(doc.body?.content) };
+}
+
+// Targeted edits (replace, insert, delete) sent as Docs API requests, without rewriting the Doc.
+export async function modifierDoc(
+  ctx: SyncCtx,
+  id: string,
+  requests: object[],
+  options: GoogleOptions = {},
+): Promise<{ simulation: boolean }> {
+  if (!ctx.reel) {
+    await simulerDrive(ctx, `Google Doc non modifié (${requests.length} modification(s))`);
+    return { simulation: true };
+  }
+  await googleApi(ctx, options).request('POST', `${DOCS}/${encodeURIComponent(id)}:batchUpdate`, {
+    requests,
+  });
+  await logEvent(ctx.tx, {
+    acteur: 'os',
+    action: `Google Doc modifié (${requests.length} modification(s))`,
     niveau: 'L1',
   });
   return { simulation: false };

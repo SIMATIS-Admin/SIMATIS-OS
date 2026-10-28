@@ -97,7 +97,7 @@ import {
   brancherInfomaniak,
   googleWebFlow,
 } from '../connexions/brancher.js';
-import type { FetchLike } from '../connecteurs/google/oauth.js';
+import { DRIVE_SCOPE, scopeAccorde, type FetchLike } from '../connecteurs/google/oauth.js';
 import { MESSAGERIES, messagerieDe } from '../connecteurs/messagerie.js';
 import { loadInstanceSecrets, type CompteImap } from '../secrets.js';
 import { siteWebActif, siteWebService, SiteWebIndisponible } from '../site/analytics.js';
@@ -1697,6 +1697,9 @@ export function registerApi(
         })),
         options: { objets: OBJETS, champs: CHAMPS_EXCLUABLES },
         googleClientDisponible: await google.clientDisponible(i.slug),
+        // Connected before Drive was asked for: the token lacks the scope until Marc reconnects.
+        googleDriveManquant:
+          !!secrets.GOOGLE_REFRESH_TOKEN && !scopeAccorde(secrets.GOOGLE_SCOPE, DRIVE_SCOPE),
         ecrituresReelles: realWrites && i.config.ecrituresReelles === true,
       };
     }),

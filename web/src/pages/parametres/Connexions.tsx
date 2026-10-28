@@ -761,6 +761,21 @@ export function Connexions({ slug }: { slug: string }) {
           <div>Compte Google connecté : Gmail et Agenda sont branchés.</div>
         </div>
       )}
+      {data.googleDriveManquant && (
+        <div className="panel">
+          <div className="panel-b stack">
+            <p style={{ margin: 0 }}>
+              Google Drive n’est pas encore activé : reconnectez le compte Google pour que l’OS
+              range les rapports du Diagnostic dans votre Drive.
+            </p>
+            <ConnecterGoogle
+              slug={slug}
+              clientDisponible={data.googleClientDisponible}
+              onChange={load}
+            />
+          </div>
+        </div>
+      )}
       {!data.ecrituresReelles && (
         <div className="alert blue">
           <Icon name="lock" />

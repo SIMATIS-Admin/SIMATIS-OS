@@ -316,6 +316,7 @@ export type ConnexionsReponse = {
   connexions: ConnexionInfo[];
   options: { objets: string[]; champs: { cle: string; libelle: string }[] };
   googleClientDisponible: boolean;
+  googleDriveManquant: boolean;
   ecrituresReelles: boolean;
 };
 

@@ -80,8 +80,9 @@ export async function loadInstanceSecrets(
   const secrets = env ? (parseEnv(env) as Record<string, string>) : {};
   const google = await readOptional(googleTokenPath(dir, slug), slug);
   if (google) {
-    const token = (JSON.parse(google) as { refresh_token?: string }).refresh_token;
-    if (token) secrets.GOOGLE_REFRESH_TOKEN = token;
+    const parsed = JSON.parse(google) as { refresh_token?: string; scope?: string };
+    if (parsed.refresh_token) secrets.GOOGLE_REFRESH_TOKEN = parsed.refresh_token;
+    if (parsed.scope) secrets.GOOGLE_SCOPE = parsed.scope;
   }
   const analytics = await readOptional(googleTokenPath(dir, slug, 'analytics'), slug);
   if (analytics) {
