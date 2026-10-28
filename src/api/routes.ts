@@ -15,7 +15,11 @@ import {
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
 import { demanderRapport } from '../diagnostic/rapport.js';
-import { demanderRestitution } from '../diagnostic/restitution.js';
+import {
+  demanderExportRestitution,
+  demanderRestitution,
+  pptxRestitutionDe,
+} from '../diagnostic/restitution.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
 import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
 import { demanderSupport, logoDe, rouvrirSupport } from '../diagnostic/support.js';
@@ -516,6 +520,38 @@ export function registerApi(
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Export PowerPoint du deck de restitution : Claude relit le deck, puis le fichier se télécharge.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/exporter',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderExportRestitution(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.get<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/pptx',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        const { nom, contenu } = await pptxRestitutionDe(db, i, request.params.id);
+        reply.header(
+          'content-type',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        );
+        reply.header('content-disposition', `attachment; filename="${nom.replace(/"/g, '')}"`);
+        return reply.send(contenu);
+      } catch (error) {
         return diagnosticErreur(error, reply);
       }
     }),

@@ -39,6 +39,7 @@ export const DEMANDES = [
   'support_final',
   'rapport',
   'restitution',
+  'restitution_export',
   'entretien',
 ] as const;
 // Rapport remis au dirigeant, rédigé par Claude : 'en_cours' tant que le runner le rédige, 'pret'
@@ -95,6 +96,10 @@ export const diagnosticProjets = pgTable(
       .notNull()
       .default([]),
     restitutionAvecProposition: boolean('restitution_avec_proposition').notNull().default(true),
+    // Dernier export du deck : Claude relit le deck publié et en rend les diapositives, l'OS en
+    // fait le fichier PowerPoint. Le texte du deck n'est lu qu'à la demande du pilote.
+    restitutionDiapos: jsonb('restitution_diapos').$type<Diapositive[]>(),
+    restitutionExportLe: timestamp('restitution_export_le', { withTimezone: true }),
     // Formule d'abonnement et options de la proposition, saisies par le pilote : source unique du
     // deck et du futur devis.
     proposition: jsonb('proposition').$type<Proposition>(),

@@ -30,6 +30,7 @@
     "fflate": "^0.8.3",
     "imapflow": "^2.4.0",
     "pg": "^8.23.1",
+    "pptxgenjs": "^4.0.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "read-excel-file": "^9.3.12",

@@ -22,12 +22,17 @@ export class ContactIntrouvable extends Error {
   }
 }
 
-export type ProjetVue = Omit<Projet, 'rapport' | 'logo' | 'pdfEntretien' | 'rapportVersions'> & {
+export type ProjetVue = Omit<
+  Projet,
+  'rapport' | 'logo' | 'pdfEntretien' | 'rapportVersions' | 'restitutionDiapos'
+> & {
   profil: Profil | null;
   // Versions du rapport (sans contenu) : chacune se télécharge à part.
   rapportVersions: { version: number; le: string }[];
   aRapport: boolean;
   aLogo: boolean;
+  // Un PowerPoint de la restitution a été exporté : il se télécharge à part.
+  aPptx: boolean;
   aPdfEntretien: boolean;
 };
 export type ProjetPatch = Partial<
@@ -62,6 +67,7 @@ export const vue = ({
   logo,
   pdfEntretien,
   rapportVersions,
+  restitutionDiapos,
   ...projet
 }: Projet): ProjetVue => ({
   ...projet,
@@ -69,6 +75,7 @@ export const vue = ({
   profil: projet.dims ? profilDe(projet.dims) : null,
   aRapport: rapport !== null,
   aLogo: logo !== null,
+  aPptx: restitutionDiapos !== null,
   aPdfEntretien: pdfEntretien !== null,
 });
 

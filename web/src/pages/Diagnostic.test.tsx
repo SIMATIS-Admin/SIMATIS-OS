@@ -18,6 +18,9 @@ const api = vi.hoisted(() => ({
   demandeSupportDiag: vi.fn(),
   demandeRapportDiag: vi.fn(),
   demandeRestitutionDiag: vi.fn(),
+  exporterRestitutionDiag: vi.fn(),
+  urlPptxRestitutionDiag: (slug: string, id: string) =>
+    `/api/i/${slug}/diagnostic/projets/${id}/restitution/pptx`,
   importerEntretienDiag: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
@@ -60,6 +63,8 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   restitutionLien: null,
   restitutionLiens: [],
   restitutionAvecProposition: true,
+  aPptx: false,
+  restitutionExportLe: null,
   proposition: null,
   aPdfEntretien: false,
   pdfEntretienNom: null,
@@ -788,6 +793,78 @@ describe('Deck de restitution à l étape 5', () => {
         },
       }),
     );
+  });
+
+  describe('export PowerPoint', () => {
+    const deckPret = (extra: Partial<ProjetDiag> = {}) =>
+      projet({
+        etape: 5,
+        etapeMax: 5,
+        dims,
+        aRapport: true,
+        restitutionStatut: 'pret',
+        restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
+        restitutionLiens: [
+          {
+            lien: 'https://claude.ai/artifact/RestitutionFictive01',
+            le: '2026-10-28T09:00:00.000Z',
+          },
+        ],
+        ...extra,
+      });
+    const ouvrir = async () => {
+      render(<Diagnostic slug="simatis" />);
+      fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    };
+
+    it('exporte le deck en PowerPoint quand il convient, puis indique que l export est en cours', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([deckPret()]);
+      api.exporterRestitutionDiag.mockResolvedValue(
+        deckPret({ demande: 'restitution_export', statutChat: 'attente_claude' }),
+      );
+      await ouvrir();
+      fireEvent.click(await screen.findByRole('button', { name: 'Exporter en PowerPoint' }));
+      await waitFor(() =>
+        expect(api.exporterRestitutionDiag).toHaveBeenCalledWith('simatis', 'p1'),
+      );
+      expect(await screen.findByText(/Export PowerPoint en cours/)).toBeTruthy();
+      const bouton = screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Exporter en PowerPoint',
+      });
+      expect(bouton.disabled).toBe(true);
+    });
+
+    it('n exporte pas tant qu aucun deck n existe', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([
+        projet({ etape: 5, etapeMax: 5, dims, aRapport: true }),
+      ]);
+      await ouvrir();
+      const bouton = await screen.findByRole<HTMLButtonElement>('button', {
+        name: 'Exporter en PowerPoint',
+      });
+      expect(bouton.disabled).toBe(true);
+    });
+
+    it('propose le téléchargement du PowerPoint exporté, avec sa date', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([
+        deckPret({ aPptx: true, restitutionExportLe: '2026-10-28T10:30:00.000Z' }),
+      ]);
+      await ouvrir();
+      const lien = await screen.findByRole<HTMLAnchorElement>('link', {
+        name: /Télécharger le PowerPoint/,
+      });
+      expect(lien.getAttribute('href')).toBe(
+        '/api/i/simatis/diagnostic/projets/p1/restitution/pptx',
+      );
+      expect(screen.getByText(/exporté le 28\/10\/2026/)).toBeTruthy();
+    });
+
+    it('sans export, aucun lien de téléchargement', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([deckPret()]);
+      await ouvrir();
+      await screen.findByRole('button', { name: 'Exporter en PowerPoint' });
+      expect(screen.queryByRole('link', { name: /Télécharger le PowerPoint/ })).toBeNull();
+    });
   });
 
   it('ouvre le deck de restitution créé', async () => {

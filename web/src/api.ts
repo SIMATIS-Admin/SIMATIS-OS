@@ -1045,7 +1045,14 @@ export type ProjetDiag = {
     erreur?: boolean;
   }[];
   statutChat: 'repos' | 'attente_claude' | 'en_cours';
-  demande: 'preparer_support' | 'support_final' | 'rapport' | 'restitution' | 'entretien' | null;
+  demande:
+    | 'preparer_support'
+    | 'support_final'
+    | 'rapport'
+    | 'restitution'
+    | 'restitution_export'
+    | 'entretien'
+    | null;
   aPdfEntretien: boolean;
   pdfEntretienNom: string | null;
   reponsesEntretien: { section: string; numero: number; reponse: LettreReponse }[];
@@ -1068,6 +1075,9 @@ export type ProjetDiag = {
   restitutionLien: string | null;
   restitutionLiens: { lien: string; le: string }[];
   restitutionAvecProposition: boolean;
+  // PowerPoint exporté depuis le deck : disponible au téléchargement, avec la date de l'export.
+  aPptx: boolean;
+  restitutionExportLe: string | null;
   proposition: Proposition | null;
   updatedAt: string;
 };
@@ -1170,6 +1180,15 @@ export const demandeRestitutionDiag = (slug: string, id: string) =>
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/produire`),
     {},
   );
+// Demande l'export PowerPoint du deck de restitution (Claude relit le deck publié).
+export const exporterRestitutionDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/exporter`),
+    {},
+  );
+export const urlPptxRestitutionDiag = (slug: string, id: string) =>
+  inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/pptx`);
 export const urlRapportDiag = (slug: string, id: string, version?: number) =>
   inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport`) +
   (version === undefined ? '' : `?version=${version}`);
