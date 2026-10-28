@@ -4954,3 +4954,46 @@ label.btn.off {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+.presentation-diag {
+  display: grid;
+  gap: 24px;
+  max-width: 980px;
+}
+.presentation-diag h2 {
+  margin: 0 0 12px;
+}
+.presentation-diag p {
+  margin: 4px 0 0;
+}
+.pd-profils {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+.pd-etapes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.pd-etapes li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.pd-etapes .diag-num {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--teal);
+  color: var(--white);
+  font: 600 13px var(--f-num);
+}
