@@ -1,5 +1,12 @@
 // Menu copied from the mockup (maquettes/os-commercial/js/core.js, NAV).
-export type NavItem = { id: string; label: string; icon: string; module?: string };
+export type NavItem = {
+  id: string;
+  label: string;
+  icon: string;
+  module?: string;
+  // Écran en bêta : une pastille s'affiche à côté du nom.
+  beta?: boolean;
+};
 export type NavGroup = { title: string; later?: boolean; items: NavItem[] };
 
 const item = (id: string, label: string, icon: string, module?: string): NavItem => ({
@@ -26,6 +33,8 @@ export const NAV: NavGroup[] = [
       // Diagnostic et tests VMA réunis par entreprise (spec du 21 octobre 2026) ; la section s'appelle
       // « Outils et diagnostics » pour accueillir d'autres outils que le diagnostic.
       item('diagnostics', 'Outils et diagnostics', 'radar', 'diagnostic'),
+      // Atelier de lancement d'un mandat : stratégie, objectifs, ICP, feuille de route (spec du 28 octobre 2026).
+      { ...item('atelier', 'Atelier stratégique', 'map', 'atelier'), beta: true },
       item(
         'presentation-diagnostic',
         "Diagnostic d'endurance commerciale : présentation",
@@ -82,6 +91,7 @@ export const BUILT = new Set([
   'rendez-vous',
   'devis',
   'diagnostics',
+  'atelier',
   'presentation-diagnostic',
   'routines',
   'siteweb',

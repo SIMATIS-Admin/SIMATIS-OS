@@ -35,6 +35,7 @@ import { Portefeuille } from './pages/Portefeuille.js';
 import { Tableau } from './pages/Tableau.js';
 import { Routines } from './pages/Routines.js';
 import { Devis } from './pages/Devis.js';
+import { Atelier } from './pages/Atelier.js';
 import { Diagnostics } from './pages/Diagnostics.js';
 import { PresentationDiagnostic } from './pages/PresentationDiagnostic.js';
 import { SiteWeb } from './pages/SiteWeb.js';
@@ -186,6 +187,15 @@ export function App() {
             onTitre={setTitreOutil}
           />
         );
+      case 'atelier':
+        return (
+          <Atelier
+            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            slug={current.slug}
+            ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+            onTitre={setTitreOutil}
+          />
+        );
       case 'presentation-diagnostic':
         return <PresentationDiagnostic />;
       case 'bases':
@@ -245,7 +255,9 @@ export function App() {
               <Icon name="menu" />
             </button>
             {view === 'inbox' && <span className="entete-slot" ref={setEnteteGauche} />}
-            <h1>{view === 'diagnostics' && titreOutil ? titreOutil : title}</h1>
+            <h1>
+              {(view === 'diagnostics' || view === 'atelier') && titreOutil ? titreOutil : title}
+            </h1>
             {view === 'inbox' && (
               <button
                 className="btn carre"

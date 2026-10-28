@@ -8,6 +8,8 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
+import { ateliersStrategie } from '../atelier/schema.js';
+import { atelierActif } from '../atelier/service.js';
 import { diagnosticProjets } from '../diagnostic/schema.js';
 import { emailsDuContact, normaliserEmail } from './emails.js';
 import { assurerLiensPrincipaux, lireLiens, type LienFiche } from './liens.js';
@@ -53,6 +55,8 @@ export type Fiche = {
   rendezVous: RdvLie[];
   // Diagnostics d'endurance commerciale rattachés à l'organisation ou au contact (espace SIMATIS).
   diagnostics?: DiagnosticLie[];
+  // Ateliers stratégiques de l'entreprise (ceux de l'entreprise d'un contact), si le module est activé.
+  ateliers?: AtelierLie[];
   historique: Evenement[];
   etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
   ecrit: boolean;
@@ -64,6 +68,7 @@ export type DiagnosticLie = {
   statut: string | null;
   date: string | null;
 };
+export type AtelierLie = { id: string; titre: string; etape: number; date: string };
 export type SimulationFiche = { simulation: true; message: string };
 export class FicheInvalide extends Error {}
 
@@ -272,7 +277,28 @@ export async function getFiche(
       .from(diagnosticProjets)
       .where(and(eq(diagnosticProjets.instanceId, currentInstance), eq(lien, id)))
       .orderBy(desc(diagnosticProjets.updatedAt));
-    return { ...fiche, diagnostics: projets };
+    if (!atelierActif(instance)) return { ...fiche, diagnostics: projets };
+    const entrepriseId = kind === 'entreprise' ? id : fiche.liens.entreprise?.id;
+    const ateliers = entrepriseId
+      ? (
+          await tx
+            .select({
+              id: ateliersStrategie.id,
+              titre: ateliersStrategie.titre,
+              etape: ateliersStrategie.etapeMax,
+              date: ateliersStrategie.updatedAt,
+            })
+            .from(ateliersStrategie)
+            .where(
+              and(
+                eq(ateliersStrategie.instanceId, currentInstance),
+                eq(ateliersStrategie.entrepriseId, entrepriseId),
+              ),
+            )
+            .orderBy(desc(ateliersStrategie.updatedAt))
+        ).map((a) => ({ ...a, date: a.date.toISOString() }))
+      : [];
+    return { ...fiche, diagnostics: projets, ateliers };
   });
 }
 

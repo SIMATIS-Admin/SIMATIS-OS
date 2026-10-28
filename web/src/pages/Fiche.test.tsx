@@ -90,6 +90,7 @@ const contact = () => ({
     origine: 'os',
   },
   diagnostics: [{ id: 'd1', nom: 'Fonderie Vallière', etape: 3, statut: null, date: null }],
+  ateliers: [{ id: 'a1', titre: 'Atelier de lancement', etape: 4, date: '2026-10-27' }],
   liens: {
     entreprise: { id: 'e1', nom: 'Fonderie Vallière' },
     affaires: [{ id: 'o1', titre: 'Structuration', etape: 'q', clos: null, montant: 14000 }],
@@ -336,6 +337,20 @@ describe('Fiche page', () => {
     expect(liens.some((l) => l.getAttribute('href') === '#/simatis/diagnostics/ouvrir/d1')).toBe(
       true,
     );
+  });
+
+  it('contact : montre les ateliers de son entreprise, chacun ouvrant l’atelier', async () => {
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    expect(await screen.findByRole('heading', { name: 'Ateliers stratégiques (1)' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Atelier de lancement' }).getAttribute('href')).toBe(
+      '#/simatis/atelier/ouvrir/a1',
+    );
+  });
+
+  it('affaire : pas de bloc Ateliers stratégiques', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    await screen.findAllByText('Structuration commerciale');
+    expect(screen.queryByRole('heading', { name: /^Ateliers stratégiques/ })).toBeNull();
   });
 
   it('affaire : pas de bloc Diagnostics', async () => {

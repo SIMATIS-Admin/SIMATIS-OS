@@ -607,6 +607,26 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
               </ul>
             </section>
           )}
+          {data.ateliers && (
+            <section className="panel">
+              <div className="panel-h">
+                <h2>Ateliers stratégiques ({data.ateliers.length})</h2>
+              </div>
+              <ul className="panel-b fi-liste">
+                {data.ateliers.length === 0 && <li className="muted small">Aucun atelier lié.</li>}
+                {data.ateliers.map((a) => (
+                  <li key={a.id} className="fi-ligne">
+                    <span className="fi-ident">
+                      <span>
+                        <a href={`#/${slug}/atelier/ouvrir/${a.id}`}>{a.titre}</a>
+                        <span className="small muted"> Étape {a.etape} sur 6</span>
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section className="panel">
             <div className="panel-h">
               <h2>Rendez-vous ({data.rendezVous.length})</h2>

@@ -198,6 +198,19 @@ describe('Suppression de fiches', () => {
     expect(await existe('opportunites', a)).toBe(true);
   });
 
+  it('refuse de supprimer une entreprise qui a un atelier stratégique', async () => {
+    const e = await entreprise(natif, 'Entreprise avec atelier');
+    await insere(natif, 'ateliers_strategie', 'entreprise_id, titre, etat', [
+      e,
+      'Atelier fictif',
+      JSON.stringify({ v: 1, step: 0 }),
+    ]);
+    await expect(
+      supprimerFiche(t.app.db, natif, { kind: 'entreprise', id: e }, off()),
+    ).rejects.toThrow(/atelier/);
+    expect(await existe('entreprises', e)).toBe(true);
+  });
+
   it('ignore une fiche d’une autre instance', async () => {
     const e = await entreprise(autre, 'Organisation ailleurs');
     await expect(

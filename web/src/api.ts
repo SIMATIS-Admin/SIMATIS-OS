@@ -895,6 +895,8 @@ export type FicheDetail = {
     statut: string | null;
     date: string | null;
   }[];
+  // Espace SIMATIS avec le module atelier : ateliers de l'entreprise (ou de celle du contact).
+  ateliers?: { id: string; titre: string; etape: number; date: string }[];
   historique: Evenement[];
   etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
   ecrit: boolean;
@@ -1486,3 +1488,49 @@ export const lancerTransfert = (slug: string, demande: DemandeTransfert) =>
     inst(slug, 'transfert'),
     demande,
   );
+
+// Atelier stratégique (bêta) : stratégie, objectifs, ICP et feuille de route d'une entreprise.
+export type AtelierListe = {
+  id: string;
+  entrepriseId: string;
+  titre: string;
+  etape: number;
+  etapeMax: number;
+  nbActions: number;
+  createdAt: string;
+  updatedAt: string;
+};
+export type AtelierDetail = Omit<AtelierListe, 'nbActions'> & { etat: Record<string, unknown> };
+
+export const fetchAteliers = (slug: string) =>
+  getJson<AtelierListe[]>(inst(slug, 'ateliers-strategie'));
+export const fetchAtelier = (slug: string, id: string) =>
+  getJson<AtelierDetail>(inst(slug, `ateliers-strategie/${encodeURIComponent(id)}`));
+export const creerAtelier = (slug: string, entrepriseId: string, titre: string) =>
+  sendJson<AtelierDetail>('POST', inst(slug, 'ateliers-strategie'), { entrepriseId, titre });
+export const importerAtelier = (
+  slug: string,
+  entrepriseId: string,
+  titre: string,
+  sauvegarde: unknown,
+) =>
+  sendJson<AtelierDetail>('POST', inst(slug, 'ateliers-strategie/import'), {
+    entrepriseId,
+    titre,
+    sauvegarde,
+  });
+// `keepalive` : la requête survit à la fermeture de l'onglet (le navigateur la limite à 64 Ko).
+export const majAtelier = (
+  slug: string,
+  id: string,
+  patch: { titre?: string; etat?: object },
+  options?: { keepalive?: boolean },
+) =>
+  request<AtelierDetail>(inst(slug, `ateliers-strategie/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+    ...(options?.keepalive ? { keepalive: true } : {}),
+  });
+export const supprimerAtelier = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `ateliers-strategie/${encodeURIComponent(id)}`), {});
