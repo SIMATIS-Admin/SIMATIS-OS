@@ -10,6 +10,7 @@ let avecGoogle = false;
 let clientDisponible = true;
 let avecInfomaniak = false;
 let degrade = false;
+let driveManquant = false;
 
 const reponse = () => ({
   connexions: [
@@ -58,6 +59,7 @@ const reponse = () => ({
     ],
   },
   googleClientDisponible: clientDisponible,
+  googleDriveManquant: driveManquant,
   ecrituresReelles: false,
 });
 
@@ -107,6 +109,7 @@ describe('Paramètres > Connexions', () => {
     clientDisponible = true;
     avecInfomaniak = false;
     degrade = false;
+    driveManquant = false;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -202,6 +205,18 @@ describe('Paramètres > Connexions', () => {
     expect(calls.find((c) => c.url.endsWith('/connexions/messagerie'))?.body).toEqual({
       historiqueMois: 24,
     });
+  });
+
+  it('asks to reconnect Google only when the token lacks the Drive scope', async () => {
+    const { unmount } = render(<Connexions slug="helioval" />);
+    await screen.findAllByText('HubSpot');
+    expect(screen.queryByText(/Google Drive n’est pas encore activé/)).toBeNull();
+    unmount();
+
+    driveManquant = true;
+    render(<Connexions slug="helioval" />);
+    expect(await screen.findByText(/Google Drive n’est pas encore activé/)).toBeTruthy();
+    expect(screen.getAllByText('Connecter le compte Google').length).toBeGreaterThan(0);
   });
 
   it('sends the pilot to Google consent from the button', async () => {
