@@ -2,17 +2,17 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-// Full Drive, read and write: the OS works on the whole Drive, not only the files it created.
-// Tokens granted with the former drive.file scope lack it until the mailbox reconnects.
-export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+// Drive limited to the files the OS creates itself (reports, diagnostic folders): it never sees
+// the rest of the Drive. Docs edits on those files are covered by the same scope.
+export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
+// Must match the scopes declared for Google's verification of the app (Google Auth Platform >
+// Data access): Google rejects a scope the demo video cannot show in use. Adding one later means
+// a new verification and a reconnection of every mailbox.
 export const SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/calendar.readonly',
-  // Granted now so that creating meetings later never forces every mailbox to reconnect;
-  // unused until a write is added, and then behind the real-write locks.
-  'https://www.googleapis.com/auth/calendar.events',
   DRIVE_SCOPE,
 ];
 
