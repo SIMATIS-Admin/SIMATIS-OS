@@ -145,4 +145,20 @@ describe('Atelier ouvert', () => {
       etat: contient({ notes: ['note fictive', '', '', '', '', ''] }),
     });
   });
+
+  it('le module d’essai n’écrit rien non plus quand on exporte la fiche', async () => {
+    const ecrire = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: ecrire },
+      configurable: true,
+    });
+    const { unmount } = monte({ atelier: null, essai: true, etatInitial: reference(5) });
+    fireEvent.click(screen.getByRole('button', { name: 'Copier la fiche' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(ecrire).toHaveBeenCalled();
+    unmount();
+    expect(api.majAtelier).not.toHaveBeenCalled();
+  });
 });

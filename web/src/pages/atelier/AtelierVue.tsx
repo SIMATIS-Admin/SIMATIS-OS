@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { majAtelier } from '../../api.js';
 import { Cadrage } from './Cadrage.js';
+import { Ciblage } from './Ciblage.js';
 import { Zone } from './champs.js';
 import { EtapeDiagnostic } from './EtapeDiagnostic.js';
+import { FeuilleDeRoute } from './FeuilleDeRoute.js';
 import { ETAPES, type EtatAtelier } from './etat.js';
 import { Modele } from './Modele.js';
 import { Objectifs } from './Objectifs.js';
@@ -87,8 +89,12 @@ export function AtelierVue({
             onChange={(obj) => maj((e) => ({ ...e, obj: { ...e.obj, ...obj } }))}
           />
         );
+      case 4:
+        return <Ciblage {...props} />;
       default:
-        return <p className="muted">Cette étape arrive dans la prochaine livraison.</p>;
+        return (
+          <FeuilleDeRoute {...props} entreprise={atelier?.entrepriseNom ?? 'Atelier d’essai'} />
+        );
     }
   };
 
