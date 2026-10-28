@@ -170,7 +170,7 @@ export function Diagnostics({ slug, ouvrir }: { slug: string; ouvrir?: string })
       <div className="panel dg-titre">
         <div className="panel-h">
           <div>
-            <h2>Diagnostics</h2>
+            <h2>Outils</h2>
             <div className="small muted">
               Une ligne par entreprise : son diagnostic et ses tests VMA.
             </div>

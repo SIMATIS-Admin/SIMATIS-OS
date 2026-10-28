@@ -43,7 +43,7 @@ describe('nav', () => {
     expect(vueCanonique('rendez-vous')).toBe('rendez-vous');
   });
 
-  it('garde une seule entrée Diagnostics et redirige les anciennes adresses', () => {
+  it('garde une seule entrée (Outils) et redirige les anciennes adresses', () => {
     const entrees = allItems().filter((i) =>
       ['diagnostic', 'diagnostics', 'tests-vma'].includes(i.id),
     );
