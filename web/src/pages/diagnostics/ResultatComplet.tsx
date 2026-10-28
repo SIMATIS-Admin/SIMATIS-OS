@@ -1,4 +1,4 @@
-import type { TestVma } from '../../api.js';
+import type { FreinVma, TestVma } from '../../api.js';
 import { fmtEur } from '../TestsVma.js';
 
 const NB = ' ';
@@ -31,7 +31,65 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
   const rec = socle ? (e.recurrent as number) : 0;
   const ecart = e.ecart;
   const ecartPct = e.ecartPct !== null && e.ecartPct !== undefined ? ` (+${pct(e.ecartPct)})` : '';
+  // Même règle que le mail : le mode portefeuille exige un socle récurrent.
+  const portefeuille = e.modePortefeuille === true && rec > 0;
   const avecEnjeu = e.freins.some((f) => (f.enjeu ?? 0) > 0);
+
+  const listeFreins = (liste: FreinVma[]) => (
+    <ol className="rc-freins">
+      {liste.map((f, i) => (
+        <li key={f.n}>
+          <span className="rang">{i + 1}</span>
+          <span className="corps">
+            <span className="ft">{f.titre}</span>
+            {(f.enjeu ?? 0) > 0 && (
+              <span className="enjeu">
+                {t.libelleEnjeu ?? 'Enjeu estimé'} : environ +{fmtEur(f.enjeu)} par mois*
+              </span>
+            )}
+            <span>{f.phrase}</span>
+            {f.reponse && (
+              <span className="fd">
+                <strong>{t.libelleReponse ?? 'Votre réponse'} : </strong>« {f.reponse} »
+              </span>
+            )}
+            {f.cible && f.cible !== f.reponse && (
+              <span className="fd">
+                <strong>{t.libelleCible ?? 'Les plus avancés'} : </strong>« {f.cible} »
+              </span>
+            )}
+            {f.debut && f.debut.length > 0 && (
+              <>
+                <strong className="fd">{t.libelleDebut ?? 'Par où commencer'}</strong>
+                <ul>
+                  {f.debut.map((a) => (
+                    <li key={a}>{a}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {f.signe && (
+              <span className="fd">
+                <strong>{t.libelleSigne ?? 'Signe que c’est en place'} : </strong>
+                {f.signe}
+              </span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+  const ecartCible = (nom: string, cible: number, vers: number, ecartV: number) =>
+    ecartV > 0
+      ? `${nom} : votre cible est de ${fmtEur(cible)} par mois ; sur votre lancée, ${fmtEur(vers)} dans ${ans(e.echeance)}, soit ${fmtEur(ecartV)} par mois d’écart.`
+      : `${nom} : votre cible de ${fmtEur(cible)} par mois est couverte sur votre lancée (${fmtEur(vers)} dans ${ans(e.echeance)}).`;
+  const sectionFreins = (titre: string, phrase: string, liste: FreinVma[]) => (
+    <div key={titre}>
+      <div className="rc-eyebrow">{titre}</div>
+      <p>{phrase}</p>
+      {listeFreins(liste)}
+    </div>
+  );
 
   return (
     <div className="stack rc">
@@ -55,18 +113,33 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
 
       <div className="panel rc-carte">
         <div className="rc-eyebrow">
-          {previsionnel
-            ? (t.libelleVmaPrev ?? 'Votre VMA prévisionnelle')
-            : 'Votre VMA commerciale'}
+          {portefeuille
+            ? (t.libelleAllureTotale ?? 'Votre allure commerciale')
+            : previsionnel
+              ? (t.libelleVmaPrev ?? 'Votre VMA prévisionnelle')
+              : 'Votre VMA commerciale'}
         </div>
         <div className="rc-grand">
-          {e.mesurable ? fmtEur(e.vma) : '—'}
+          {portefeuille ? fmtEur(allure) : e.mesurable ? fmtEur(e.vma) : '—'}
           <small>
-            de CA commandé par mois {previsionnel ? 'attendu ' : ''}sur vos nouvelles affaires
-            {e.mesurable && e.vma !== null ? `, soit ${fmtEur(e.vma * 12)} par an` : ''}
+            {portefeuille
+              ? `de CA commandé par mois, soit ${fmtEur(allure * 12)} par an`
+              : `de CA commandé par mois ${previsionnel ? 'attendu ' : ''}sur vos nouvelles affaires${
+                  e.mesurable && e.vma !== null ? `, soit ${fmtEur(e.vma * 12)} par an` : ''
+                }`}
           </small>
         </div>
-        {socle && (
+        {portefeuille && (
+          <>
+            <p>
+              {t.libelleSocleRecurrent ?? 'Socle récurrent'} : {fmtEur(e.recurrent)} par mois
+            </p>
+            <p>
+              {t.libelleNouvellesAffaires ?? 'Nouvelles affaires'} : {fmtEur(allure - rec)} par mois
+            </p>
+          </>
+        )}
+        {socle && !portefeuille && (
           <>
             <p>+ socle récurrent : {fmtEur(e.recurrent)} par mois</p>
             <p>
@@ -164,49 +237,34 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
         <div className="rc-eyebrow">
           {socle ? 'Où se perd votre allure' : 'Où se perd votre VMA'}
         </div>
-        {e.freins.length ? (
-          <ol className="rc-freins">
-            {e.freins.map((f, i) => (
-              <li key={f.n}>
-                <span className="rang">{i + 1}</span>
-                <span className="corps">
-                  <span className="ft">{f.titre}</span>
-                  {(f.enjeu ?? 0) > 0 && (
-                    <span className="enjeu">
-                      {t.libelleEnjeu ?? 'Enjeu estimé'} : environ +{fmtEur(f.enjeu)} par mois*
-                    </span>
-                  )}
-                  <span>{f.phrase}</span>
-                  {f.reponse && (
-                    <span className="fd">
-                      <strong>{t.libelleReponse ?? 'Votre réponse'} : </strong>« {f.reponse} »
-                    </span>
-                  )}
-                  {f.cible && f.cible !== f.reponse && (
-                    <span className="fd">
-                      <strong>{t.libelleCible ?? 'Les plus avancés'} : </strong>« {f.cible} »
-                    </span>
-                  )}
-                  {f.debut && f.debut.length > 0 && (
-                    <>
-                      <strong className="fd">{t.libelleDebut ?? 'Par où commencer'}</strong>
-                      <ul>
-                        {f.debut.map((a) => (
-                          <li key={a}>{a}</li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {f.signe && (
-                    <span className="fd">
-                      <strong>{t.libelleSigne ?? 'Signe que c’est en place'} : </strong>
-                      {f.signe}
-                    </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ol>
+        {portefeuille ? (
+          <>
+            {sectionFreins(
+              t.titreConquete ?? 'Conquête',
+              ecartCible(
+                t.libelleNouvellesAffaires ?? 'Nouvelles affaires',
+                e.spotCible ?? 0,
+                e.spotEcheance ?? 0,
+                e.ecartSpot ?? 0,
+              ),
+              e.freinsConquete ?? [],
+            )}
+            {sectionFreins(
+              t.titrePortefeuille ?? 'Portefeuille',
+              ecartCible(
+                t.libelleSocleRecurrent ?? 'Socle récurrent',
+                e.recurrentCible ?? 0,
+                e.socleEcheance ?? 0,
+                e.ecartRecurrent ?? 0,
+              ) +
+                (e.partRecVisee != null && e.partRecActuelle != null
+                  ? ` Part visée : ${pct(e.partRecVisee)} (aujourd’hui ${pct(e.partRecActuelle)}).`
+                  : ''),
+              e.freinsPortefeuille ?? [],
+            )}
+          </>
+        ) : e.freins.length ? (
+          listeFreins(e.freins)
         ) : (
           <p>{t.aucunFrein ?? 'Aucun frein majeur identifié.'}</p>
         )}
