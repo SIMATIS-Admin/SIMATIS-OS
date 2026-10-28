@@ -6,7 +6,13 @@ import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import './fake.js';
 import type { Reglages } from './schema.js';
-import { configureConnexion, getConnector, runSchedulerTick, syncConnexion } from './service.js';
+import {
+  configureConnexion,
+  getConnector,
+  isDue,
+  runSchedulerTick,
+  syncConnexion,
+} from './service.js';
 
 const deps = { secretsDir: '/nonexistent', realWrites: false };
 const HOUR = 60 * 60_000;
@@ -82,6 +88,19 @@ describe('connections framework', () => {
     // a crm (15 min) and b crm (15 min) are both due once; a messagerie is manual.
     expect(first).toBe(2);
     expect(second).toBe(0);
+  });
+
+  it('never syncs the CRM more than once every 3 hours, whatever the saved frequency', () => {
+    const now = new Date('2026-01-01T12:00:00Z');
+    const conn = (frequence: '15min' | '3h', ilYaMin: number) =>
+      ({
+        etat: 'ok',
+        reglages: { frequence },
+        derniereTentative: new Date(now.getTime() - ilYaMin * 60_000),
+      }) as unknown as Parameters<typeof isDue>[0];
+    expect(isDue(conn('15min', 30), now)).toBe(false);
+    expect(isDue(conn('15min', 181), now)).toBe(true);
+    expect(isDue(conn('3h', 179), now)).toBe(false);
   });
 
   it('keeps the local copy and records the error when a sync fails, then recovers', async () => {

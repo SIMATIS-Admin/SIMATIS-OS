@@ -1911,7 +1911,7 @@ export function registerApi(
     }),
   );
 
-  const frequence = z.enum(['5min', '15min', '1h', '1j', 'manuel']);
+  const frequence = z.enum(['5min', '15min', '1h', '3h', '1j', 'manuel']);
   const reglagesGoogle = {
     messagerie: z
       .object({

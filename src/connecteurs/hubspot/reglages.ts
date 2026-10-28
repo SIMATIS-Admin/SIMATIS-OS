@@ -28,7 +28,7 @@ export type Etape = {
 };
 
 export const reglagesSchema = z.object({
-  frequence: z.enum(['5min', '15min', '1h', '1j', 'manuel']).default('15min'),
+  frequence: z.enum(['5min', '15min', '1h', '3h', '1j', 'manuel']).default('3h'),
   // Read-only first: the first full pass is checked by the pilot before writing to the client's CRM.
   sens: z.enum(['deux_sens', 'lecture']).default('lecture'),
   objets: z.array(z.enum(OBJETS)).default([...OBJETS]),

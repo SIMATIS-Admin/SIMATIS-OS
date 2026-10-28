@@ -294,7 +294,7 @@ export const createContact = (
   );
 
 export type ReglagesCrm = {
-  frequence?: '5min' | '15min' | '1h' | '1j' | 'manuel';
+  frequence?: '5min' | '15min' | '1h' | '3h' | '1j' | 'manuel';
   sens?: 'deux_sens' | 'lecture';
   objets?: string[];
   champsExclus?: string[];

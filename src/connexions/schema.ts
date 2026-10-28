@@ -2,7 +2,7 @@ import { jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
 export type Kind = 'crm' | 'messagerie' | 'agenda';
-export type Frequence = '5min' | '15min' | '1h' | '1j' | 'manuel';
+export type Frequence = '5min' | '15min' | '1h' | '3h' | '1j' | 'manuel';
 export type Reglages = { frequence?: Frequence } & Record<string, unknown>;
 
 export const connexions = pgTable(
