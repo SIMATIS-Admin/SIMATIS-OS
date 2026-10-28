@@ -118,6 +118,28 @@ describe('Diagnostics : résumé des tests VMA', () => {
     expect(r.dernier?.type).toBe('essai');
   });
 
+  it('mode portefeuille : le dernier résultat porte l’allure totale, comme le mail', () => {
+    const r = resumerVma([
+      test({
+        id: 'a',
+        type: 'essai',
+        recueLe: '2026-10-22T10:00:00Z',
+        resultat: {
+          ...resultat(14000)!,
+          modePortefeuille: true,
+          recurrent: 80000,
+          allureActuelle: 94000,
+        },
+      }),
+    ]);
+    expect(r.dernier?.allure).toBe(94000);
+    expect(r.dernier?.vma).toBe(14000);
+    expect(
+      resumerVma([test({ id: 'b', recueLe: '2026-10-22T10:00:00Z', resultat: resultat(14000) })])
+        .dernier?.allure,
+    ).toBeNull();
+  });
+
   it('sans résultat reçu : pas de dernier résultat ni d’évolution', () => {
     expect(resumerVma([test({ id: 'x', statut: 'envoyee' })])).toEqual({
       dernier: null,

@@ -340,9 +340,11 @@ export function Diagnostics({
                     {resume.dernier && (
                       <div className="dg-resultat">
                         <div className="dg-grand">
-                          {resume.dernier.vma != null
-                            ? fmtEur(resume.dernier.vma)
-                            : 'Non mesurable'}
+                          {resume.dernier.allure != null
+                            ? fmtEur(resume.dernier.allure)
+                            : resume.dernier.vma != null
+                              ? fmtEur(resume.dernier.vma)
+                              : 'Non mesurable'}
                           <small> de CA commandé par mois</small>
                         </div>
                         <p className="small muted">
