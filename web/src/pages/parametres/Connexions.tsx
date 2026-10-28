@@ -237,10 +237,12 @@ function ConnecterGoogle({
   slug,
   clientDisponible,
   onChange,
+  libelle = 'Connecter le compte Google',
 }: {
   slug: string;
   clientDisponible: boolean;
   onChange: () => void;
+  libelle?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -260,7 +262,7 @@ function ConnecterGoogle({
     <div className="stack" style={{ gap: 8 }}>
       <div>
         <button className="btn primary" disabled={busy} onClick={go}>
-          Connecter le compte Google
+          {libelle}
         </button>
       </div>
       {error && (
@@ -776,6 +778,25 @@ export function Connexions({ slug }: { slug: string }) {
           </div>
         </div>
       )}
+      {!data.googleDriveManquant &&
+        data.connexions.some(
+          (x) => x.fournisseur === 'gmail' || x.fournisseur === 'google-agenda',
+        ) && (
+          <div className="panel">
+            <div className="panel-b stack">
+              <p style={{ margin: 0 }}>
+                Le compte Google ne répond plus ou doit changer ? Reconnectez-le : la nouvelle
+                autorisation remplace l'ancienne pour Gmail, Agenda et Drive.
+              </p>
+              <ConnecterGoogle
+                slug={slug}
+                clientDisponible={data.googleClientDisponible}
+                onChange={load}
+                libelle="Reconnecter le compte Google"
+              />
+            </div>
+          </div>
+        )}
       {!data.ecrituresReelles && (
         <div className="alert blue">
           <Icon name="lock" />

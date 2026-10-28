@@ -219,6 +219,12 @@ describe('Paramètres > Connexions', () => {
     expect(screen.getAllByText('Connecter le compte Google').length).toBeGreaterThan(0);
   });
 
+  it('offers to reconnect Google when the account is already connected', async () => {
+    avecGoogle = true;
+    render(<Connexions slug="helioval" />);
+    expect(await screen.findByText('Reconnecter le compte Google')).toBeTruthy();
+  });
+
   it('sends the pilot to Google consent from the button', async () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, hash: '', assign });
