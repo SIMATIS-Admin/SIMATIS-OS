@@ -97,6 +97,16 @@ describe('Diagnostics : écran fusionné', () => {
     expect(screen.queryByRole('heading', { name: /Outils/ })).toBeNull();
   });
 
+  it('propose la présentation du diagnostic dans la barre', async () => {
+    charger([entreprise(1)], [diagPour(1)]);
+    render(<Diagnostics slug="demo" />);
+    await screen.findByText('Entreprise Fictive A');
+    const lien = screen.getByRole('link', {
+      name: /Diagnostic d’endurance commerciale : présentation/,
+    });
+    expect(lien.getAttribute('href')).toBe('#/demo/presentation-diagnostic');
+  });
+
   describe("module d'essai du test VMA", () => {
     const fenetre = { location: { href: '' }, close: vi.fn() };
     beforeEach(() => {
