@@ -11,7 +11,12 @@ import { writeGoogleToken } from '../secrets.js';
 import { demarrerAttente, finirAttente } from './chat.js';
 import { exporterRapportDrive, type DriveDeps } from './drive.js';
 import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
-import { demanderRapport, enregistrerRapport, importerRapport } from './rapport.js';
+import {
+  demanderRapport,
+  enregistrerRapport,
+  importerRapport,
+  renvoyerRapportSurDrive,
+} from './rapport.js';
 import { createProjet, listProjets, updateProjet } from './service.js';
 
 type Call = { url: string; method: string };
@@ -229,5 +234,57 @@ describe('Rapport sur Google Docs', () => {
     expect(vue.rapportLien).toBe('https://docs.google.com/document/d/doc-1/edit');
     expect(vue.rapportLiens).toEqual([expect.objectContaining({ version: 3 })]);
     expect(vue.rapportNom).toBe('Rapport Drive G - v3.docx');
+  });
+
+  it('renvoie sur Drive le Word resté dans l OS, sous un nom sans « (1) »', async () => {
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Rapport Drive H',
+      activite: 'services',
+    });
+    const word = {
+      nom: 'Rapport Drive H - v3 (1).docx',
+      base64: Buffer.from('PK\u0003\u0004fictif').toString('base64'),
+    };
+    // Drive refuse d'abord (API pas encore activée) : le Word reste dans l'OS.
+    google = fakeGoogle({ upload: 403 });
+    const garde = await importerRapport(t.app.db, simatis, p.id, word, deps(true));
+    expect(garde.rapportLien).toBeNull();
+
+    google = fakeGoogle();
+    const vue = await renvoyerRapportSurDrive(t.app.db, simatis, p.id, deps(true));
+    expect(vue.rapportLien).toBe('https://docs.google.com/document/d/doc-1/edit');
+    expect(vue.rapportLiens).toEqual([expect.objectContaining({ version: 3 })]);
+    const upload = google.calls.find((c) => c.url.includes('/upload/drive/v3/files'));
+    expect(upload).toBeDefined();
+
+    // Déjà sur Drive : pas de second Doc.
+    await expect(renvoyerRapportSurDrive(t.app.db, simatis, p.id, deps(true))).rejects.toThrow(
+      'déjà sur Drive',
+    );
+  });
+
+  it('dit pourquoi l envoi n a pas eu lieu, sans rien perdre', async () => {
+    await expect(
+      renvoyerRapportSurDrive(
+        t.app.db,
+        simatis,
+        (await createProjet(t.app.db, simatis, { nom: 'Rapport Drive I', activite: 'services' }))
+          .id,
+        deps(true),
+      ),
+    ).rejects.toThrow('Aucun rapport');
+
+    const p = await createProjet(t.app.db, simulation, {
+      nom: 'Rapport Drive J',
+      activite: 'services',
+    });
+    await importerRapport(t.app.db, simulation, p.id, {
+      nom: 'Rapport Drive J - v1.docx',
+      base64: Buffer.from('PK\u0003\u0004fictif').toString('base64'),
+    });
+    await expect(renvoyerRapportSurDrive(t.app.db, simulation, p.id, deps(true))).rejects.toThrow(
+      'Écritures réelles désactivées',
+    );
+    expect((await relire(simulation, p.id)).aRapport).toBe(true);
   });
 });

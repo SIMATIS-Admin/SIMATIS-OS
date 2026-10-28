@@ -204,6 +204,8 @@ describe('Enregistrement du rapport', () => {
     expect(versionDuNom(null)).toBe(0);
     expect(versionDuNom('importe.docx')).toBe(1);
     expect(versionDuNom('Rapport Diagnostic Endurance - Atelier Fictif - v3.docx')).toBe(3);
+    // Le « (1) » que le navigateur ajoute à un fichier enregistré deux fois ne cache pas le numéro.
+    expect(versionDuNom('Rapport_-_Atelier_Fictif_-_v3 (1).docx')).toBe(3);
     expect(versionDuNom('Rapport - V12.DOCX')).toBe(12);
   });
 

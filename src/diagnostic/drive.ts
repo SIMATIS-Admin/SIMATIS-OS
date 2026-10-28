@@ -49,7 +49,8 @@ export async function envoyerRapportSurDrive(
     reel: canWriteReal(instance, deps.realWrites),
   };
   const options = { ...(deps.fetch ? { fetch: deps.fetch } : {}) };
-  const nom = nomWord.replace(/\.docx$/i, '');
+  // The browser's « (1) » (a file saved twice) has no place in the Doc's name.
+  const nom = nomWord.replace(/\.docx$/i, '').replace(/\s*\(\d+\)$/, '');
   try {
     let dossierId = projet.driveDossierId ?? undefined;
     // Without real writes nothing is created: the Doc upload alone logs the simulation.

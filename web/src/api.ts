@@ -1162,6 +1162,12 @@ export const importerEntretienDiag = (
     pdf,
   );
 // Word du rapport retravaillé hors de l'OS : il remplace le Word affiché (étape 4).
+export const envoyerRapportDriveDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/drive`),
+    {},
+  );
 export const importerRapportDiag = (
   slug: string,
   id: string,

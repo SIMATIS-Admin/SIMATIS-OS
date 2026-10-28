@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
     `/api/i/${slug}/diagnostic/projets/${id}/restitution/pptx`,
   importerEntretienDiag: vi.fn(),
   importerRapportDiag: vi.fn(),
+  envoyerRapportDriveDiag: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
   urlExportRapportDiag: (slug: string, id: string) =>
@@ -651,6 +652,69 @@ describe('Mise en page des étapes', () => {
     expect(doc.getAttribute('href')).toBe('https://docs.google.com/document/d/doc-2/edit');
     const exporter = screen.getByRole('link', { name: 'Exporter en .docx' });
     expect(exporter.getAttribute('href')).toContain('/diagnostic/projets/p1/rapport/export');
+  });
+});
+
+describe('Rapport : envoi sur Drive', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+
+  it('lit la version dans un nom de fichier du navigateur (« _v3 (1).docx »)', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        profil: 'Joggeur',
+        aRapport: true,
+        rapportNom: 'Rapport_Atelier_-_v3 (1).docx',
+        rapportLienStatut: 'pret',
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByRole('button', { name: 'Produire la version 4' })).toBeTruthy();
+  });
+
+  it('propose d envoyer le Word affiché sur Drive, puis montre le Google Doc', async () => {
+    const p = projet({
+      etape: 4,
+      etapeMax: 4,
+      dims,
+      profil: 'Joggeur',
+      aRapport: true,
+      rapportNom: 'rapport - v3.docx',
+      rapportLienStatut: 'pret',
+    });
+    api.fetchProjetsDiag.mockResolvedValue([p]);
+    api.envoyerRapportDriveDiag.mockResolvedValue({
+      ...p,
+      rapportLien: 'https://docs.google.com/document/d/doc-3/edit',
+    });
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Envoyer sur Drive' }));
+    await waitFor(() => expect(api.envoyerRapportDriveDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    expect(await screen.findByRole('link', { name: 'Ouvrir dans Google Docs' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Envoyer sur Drive' })).toBeNull();
+  });
+
+  it('n offre pas l envoi quand le rapport est déjà un Google Doc', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        profil: 'Joggeur',
+        aRapport: true,
+        rapportNom: 'rapport - v3.docx',
+        rapportLienStatut: 'pret',
+        rapportLien: 'https://docs.google.com/document/d/doc-3/edit',
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    await screen.findByRole('link', { name: 'Ouvrir dans Google Docs' });
+    expect(screen.queryByRole('button', { name: 'Envoyer sur Drive' })).toBeNull();
   });
 });
 
