@@ -20,7 +20,12 @@ import { contacts, entreprises, opportunites } from './schema.js';
 // detached from these (column emptied); a merged one is replaced in them. `bloquant`: the owner
 // cannot lose its record (not-null column), so deletion is refused while rows remain.
 // The test of suppression.test.ts compares this list with the database foreign keys.
-export const REFERENCES: { table: string; colonne: string; kind: Kind; bloquant?: true }[] = [
+export const REFERENCES: {
+  table: string;
+  colonne: string;
+  kind: Kind;
+  bloquant?: { message: string };
+}[] = [
   { table: 'taches', colonne: 'entreprise_id', kind: 'entreprise' },
   { table: 'taches', colonne: 'contact_id', kind: 'contact' },
   { table: 'taches', colonne: 'opportunite_id', kind: 'affaire' },
@@ -37,7 +42,23 @@ export const REFERENCES: { table: string; colonne: string; kind: Kind; bloquant?
   { table: 'vma_tests', colonne: 'entreprise_id', kind: 'entreprise' },
   { table: 'diagnostic_projets', colonne: 'entreprise_id', kind: 'entreprise' },
   { table: 'diagnostic_projets', colonne: 'contact_id', kind: 'contact' },
-  { table: 'devis', colonne: 'opportunite_id', kind: 'affaire', bloquant: true },
+  {
+    table: 'devis',
+    colonne: 'opportunite_id',
+    kind: 'affaire',
+    bloquant: {
+      message: 'Cette affaire a un devis : supprimez-le d’abord, ou fusionnez l’affaire.',
+    },
+  },
+  {
+    table: 'ateliers_strategie',
+    colonne: 'entreprise_id',
+    kind: 'entreprise',
+    bloquant: {
+      message:
+        'Cette entreprise a un atelier stratégique : supprimez-le d’abord, ou fusionnez l’entreprise.',
+    },
+  },
 ];
 
 const tables = { affaire: opportunites, contact: contacts, entreprise: entreprises } as const;
@@ -61,10 +82,7 @@ async function verifierSansBloquant(tx: Tx, ref: Ref) {
     const { rows } = await tx.execute<{ n: number }>(
       sql`select count(*)::int as n from ${colonne(r.table)} where ${colonne(r.colonne)} = ${ref.id} and instance_id = ${currentInstance}`,
     );
-    if ((rows[0]?.n ?? 0) > 0)
-      throw new FicheInvalide(
-        'Cette affaire a un devis : supprimez-le d’abord, ou fusionnez l’affaire.',
-      );
+    if ((rows[0]?.n ?? 0) > 0) throw new FicheInvalide(r.bloquant!.message);
   }
 }
 
