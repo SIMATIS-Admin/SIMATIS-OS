@@ -279,6 +279,7 @@ export async function getFiche(
 export type PatchFiche = {
   titre?: string;
   montant?: number | null;
+  probabilite?: number | null;
   modeFacturation?: 'spot' | 'recurrent';
   dureeEngagementMois?: number;
   taciteReconduction?: boolean;
@@ -299,6 +300,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
   affaire: [
     'titre',
     'montant',
+    'probabilite',
     'modeFacturation',
     'dureeEngagementMois',
     'taciteReconduction',
@@ -313,6 +315,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
 // Billing terms exist only in the OS: they are never sent to HubSpot, and stay editable when the
 // CRM is read-only.
 const CHAMPS_LOCAUX: (keyof PatchFiche)[] = [
+  'probabilite',
   'modeFacturation',
   'dureeEngagementMois',
   'taciteReconduction',

@@ -676,6 +676,7 @@ export function registerApi(
       titre: texteCourt.min(1),
       nom: texteCourt.min(1),
       montant: z.number().int().min(0).nullable(),
+      probabilite: z.number().int().min(0).max(100).nullable(),
       modeFacturation: z.enum(['spot', 'recurrent']),
       dureeEngagementMois: z.number().int().min(1).max(120),
       taciteReconduction: z.boolean(),

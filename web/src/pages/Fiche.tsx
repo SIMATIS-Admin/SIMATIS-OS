@@ -467,11 +467,29 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                   <span className="muted small">Étape</span>
                   <span>{etapeCourante?.label ?? enTexte(f.etape)}</span>
                 </div>
-                {etapeCourante?.probabilite != null && (
-                  <div className="fi-champ">
-                    <span className="muted small">Probabilité</span>
-                    <span>{etapeCourante.probabilite} %</span>
-                  </div>
+                <ChampEditable
+                  champ={{
+                    cle: 'probabilite',
+                    label: 'Probabilité (0 à 100)',
+                    type: 'number',
+                    affiche: (v) => (typeof v === 'number' ? `${v} %` : ''),
+                  }}
+                  valeur={f.probabilite ?? etapeCourante?.probabilite ?? null}
+                  modifiable
+                  onSave={(v) =>
+                    v !== (f.probabilite ?? etapeCourante?.probabilite ?? null) &&
+                    (v === null || (typeof v === 'number' && v >= 0 && v <= 100)) &&
+                    modifier({ probabilite: v })
+                  }
+                />
+                {f.probabilite != null && (
+                  <p className="small muted">
+                    Fixée à la main
+                    {etapeCourante?.probabilite != null
+                      ? `, l’étape indique ${etapeCourante.probabilite} %`
+                      : ''}
+                    . Vider le champ revient à la probabilité de l’étape.
+                  </p>
                 )}
                 {typeof f.prochaineEtape === 'string' && f.prochaineEtape && (
                   <div className="fi-champ">

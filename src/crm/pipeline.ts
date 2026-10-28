@@ -87,6 +87,7 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         clos: opportunites.clos,
         motif: opportunites.motif,
         montant: opportunites.montant,
+        probabilite: opportunites.probabilite,
         modeFacturation: opportunites.modeFacturation,
         dureeEngagementMois: opportunites.dureeEngagementMois,
         taciteReconduction: opportunites.taciteReconduction,

@@ -295,6 +295,13 @@
       "when": 1793108424318,
       "tag": "0041_perpetual_terror",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793109335108,
+      "tag": "0042_fixed_tag",
+      "breakpoints": true
     }
   ]
 }

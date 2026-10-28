@@ -432,8 +432,11 @@ export function Pipeline({ slug }: { slug: string }) {
         </b>
         <span>
           {sommeEur(sommes(os))}
-          {prob != null && (
-            <small className="muted"> · pondéré {sommeEur(sommes(os, () => prob / 100))}</small>
+          {(prob != null || os.some((o) => o.probabilite != null)) && (
+            <small className="muted">
+              {' '}
+              · pondéré {sommeEur(sommes(os, (o) => (o.probabilite ?? prob ?? 0) / 100))}
+            </small>
           )}
         </span>
         {!cls && data.ecrit && (
@@ -485,9 +488,10 @@ export function Pipeline({ slug }: { slug: string }) {
   const closing = cloture ? find(cloture.id) : undefined;
   // Pipedrive header: total and weighted value of the open deals (stage probability).
   const probas = new Map(data.etapes.map((e) => [e.id, e.probabilite ?? null]));
-  const pondere = [...probas.values()].some((p) => p !== null)
-    ? sommes(ouvertes, (o) => (probas.get(o.etape) ?? 0) / 100)
-    : null;
+  const pondere =
+    [...probas.values()].some((p) => p !== null) || ouvertes.some((o) => o.probabilite != null)
+      ? sommes(ouvertes, (o) => (o.probabilite ?? probas.get(o.etape) ?? 0) / 100)
+      : null;
   // Pipedrive: a card opens the deal page.
   const ouvrir = (id: string) => (location.hash = `#/${slug}/fiche/affaire/${id}`);
   return (

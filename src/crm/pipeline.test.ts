@@ -346,6 +346,29 @@ describe('pipeline API', () => {
       ).toBe(400);
   });
 
+  it('sets a deal probability by hand, resets it, and refuses out-of-range values', async () => {
+    const cree = await req('POST', '/api/i/simatis/opportunites', {
+      titre: 'Probabilité manuelle',
+      etape: 'prospection',
+    });
+    const id = (cree.body as { id: string }).id;
+    expect(cree.body).toMatchObject({ probabilite: null });
+    const url = `/api/i/simatis/fiches/affaire/${id}`;
+    expect((await req('PATCH', url, { probabilite: 65 })).body).toMatchObject({
+      fiche: { probabilite: 65 },
+    });
+    const pipe = (await req('GET', '/api/i/simatis/pipeline')).body.opportunites as {
+      id: string;
+      probabilite: number | null;
+    }[];
+    expect(pipe.find((o) => o.id === id)?.probabilite).toBe(65);
+    expect((await req('PATCH', url, { probabilite: null })).body).toMatchObject({
+      fiche: { probabilite: null },
+    });
+    for (const mauvais of [-1, 101, 12.5])
+      expect((await req('PATCH', url, { probabilite: mauvais })).status).toBe(400);
+  });
+
   it('creates a HubSpot deal in HubSpot first, then its copy, and exposes stage probabilities', async () => {
     // An earlier test leaves the mirror read-only.
     await t.owner.pool.query(
