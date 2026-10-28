@@ -79,9 +79,11 @@ export const diagnosticProjets = pgTable(
       .default('aucun'),
     rapportLien: text('rapport_lien'),
     rapportLiens: jsonb('rapport_liens')
-      .$type<{ lien: string; le: string }[]>()
+      .$type<{ lien: string; le: string; version?: number }[]>()
       .notNull()
       .default([]),
+    // Dossier Drive du diagnostic (Google Docs du rapport) : créé à la première version envoyée.
+    driveDossierId: text('drive_dossier_id'),
     // Versions du rapport rédigées par Claude (la dernière est le Word affiché). Un Word importé
     // compte pour la version 1 sans contenu : la première version rédigée porte alors le numéro 2.
     rapportVersions: jsonb('rapport_versions').$type<VersionRapport[]>().notNull().default([]),

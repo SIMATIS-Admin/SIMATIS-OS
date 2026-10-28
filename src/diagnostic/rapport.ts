@@ -3,6 +3,7 @@ import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { ChatIndisponible, envoyerMessage } from './chat.js';
+import { envoyerRapportSurDrive, type DriveDeps, type EnvoiDrive } from './drive.js';
 import { diagnosticProjets, type Projet } from './schema.js';
 import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
 import {
@@ -61,12 +62,14 @@ export function demanderRapport(db: Executor, instance: Instance, id: string): P
 
 // Claude rend le contenu du rapport : l'OS le met en page en Word et le garde dans le projet, d'où
 // le pilote le télécharge pour le relire ou le modifier. Chaque production crée une nouvelle version ;
-// les précédentes restent téléchargeables.
+// les précédentes restent téléchargeables. Avec Drive branché, la version est aussi envoyée en
+// Google Doc, dont le lien devient celui du rapport.
 export async function enregistrerRapport(
   tx: Tx,
   id: string,
   contenu: ContenuRapport,
-): Promise<void> {
+  drive?: { instance: Instance; deps: DriveDeps },
+): Promise<EnvoiDrive> {
   const [projet] = await tx.select().from(diagnosticProjets).where(eq(diagnosticProjets.id, id));
   if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
   if (projet.demande !== 'rapport')
@@ -75,11 +78,12 @@ export async function enregistrerRapport(
   if (!lu.success) throw new SupportInvalide('Contenu du rapport invalide.');
   const version = prochaineVersion(projet);
   const fichier = genererRapportWord(lu.data);
+  const nomWord = nomFichier(lu.data.entreprise, version);
   await tx
     .update(diagnosticProjets)
     .set({
       rapport: Buffer.from(fichier).toString('base64'),
-      rapportNom: nomFichier(lu.data.entreprise, version),
+      rapportNom: nomWord,
       rapportVersions: [
         ...projet.rapportVersions,
         { version, le: new Date().toISOString(), contenu: lu.data },
@@ -88,6 +92,14 @@ export async function enregistrerRapport(
       updatedAt: new Date(),
     })
     .where(eq(diagnosticProjets.id, id));
+  if (!drive) return { statut: 'indisponible' };
+  return envoyerRapportSurDrive(
+    tx,
+    drive.instance,
+    projet,
+    { version, nomWord, docx: Buffer.from(fichier) },
+    drive.deps,
+  );
 }
 
 const WORD_MAX = 10 * 1024 * 1024;
@@ -99,6 +111,7 @@ export async function importerRapport(
   instance: Instance,
   id: string,
   word: { nom: string; base64: string },
+  deps?: DriveDeps,
 ): Promise<ProjetVue> {
   verifierEspace(instance);
   const octets = Buffer.from(word.base64, 'base64');
@@ -124,6 +137,18 @@ export async function importerRapport(
       })
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
       .returning();
+    // Sa version devient un Google Doc comme les autres : le lien du rapport pointe dessus.
+    if (deps) {
+      await envoyerRapportSurDrive(
+        tx,
+        instance,
+        row!,
+        { version: versionDuNom(word.nom), nomWord: row!.rapportNom ?? word.nom, docx: octets },
+        deps,
+      );
+      const [apres] = await tx.select().from(diagnosticProjets).where(eq(diagnosticProjets.id, id));
+      return vue(apres!);
+    }
     return vue(row!);
   });
 }

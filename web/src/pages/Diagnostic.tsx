@@ -13,6 +13,7 @@ import {
   fetchProjetsDiag,
   majProjetDiag,
   urlLogoDiag,
+  urlExportRapportDiag,
   urlRapportDiag,
   type ChatEtape,
   type Dimensions,
@@ -884,6 +885,7 @@ function Rapport({
       onErreur(messageErreur(err));
     }
   };
+  const docGoogle = /docs\.google\.com\/document\//.test(projet.rapportLien ?? '');
   const precedents = projet.rapportLiens.slice(1);
   const versionsPrecedentes = projet.rapportVersions.slice(0, -1).reverse();
   return (
@@ -895,7 +897,9 @@ function Rapport({
       <div className="panel-b stack">
         {projet.aRapport && (
           <div className="diag-fichier">
-            <span className="small muted">Rapport enregistré</span>
+            <span className="small muted">
+              {docGoogle ? 'Copie Word de l’OS (version produite)' : 'Rapport enregistré'}
+            </span>
             <a href={urlRapportDiag(slug, projet.id)}>{projet.rapportNom}</a>
           </div>
         )}
@@ -913,7 +917,12 @@ function Rapport({
         <div className="diag-actions">
           {!enCours && projet.rapportLien && (
             <a className="btn go" href={projet.rapportLien} target="_blank" rel="noreferrer">
-              Ouvrir le rapport
+              {docGoogle ? 'Ouvrir dans Google Docs' : 'Ouvrir le rapport'}
+            </a>
+          )}
+          {!enCours && docGoogle && (
+            <a className="btn" href={urlExportRapportDiag(slug, projet.id)}>
+              Exporter en .docx
             </a>
           )}
           <button

@@ -14,6 +14,7 @@ import {
 } from '../diagnostic/service.js';
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
+import { exporterRapportDrive } from '../diagnostic/drive.js';
 import { demanderRapport, importerRapport } from '../diagnostic/rapport.js';
 import {
   demanderExportRestitution,
@@ -97,7 +98,12 @@ import {
   brancherInfomaniak,
   googleWebFlow,
 } from '../connexions/brancher.js';
-import { DRIVE_SCOPE, scopeAccorde, type FetchLike } from '../connecteurs/google/oauth.js';
+import {
+  DRIVE_SCOPE,
+  GoogleError,
+  scopeAccorde,
+  type FetchLike,
+} from '../connecteurs/google/oauth.js';
 import { MESSAGERIES, messagerieDe } from '../connecteurs/messagerie.js';
 import { loadInstanceSecrets, type CompteImap } from '../secrets.js';
 import { siteWebActif, siteWebService, SiteWebIndisponible } from '../site/analytics.js';
@@ -233,6 +239,7 @@ export function registerApi(
   { db, secretsDir, realWrites, googleFetch, imapServeur }: ApiDeps,
 ): void {
   const connexionDeps = { secretsDir, realWrites };
+  const driveDeps = { secretsDir, realWrites, ...(googleFetch ? { fetch: googleFetch } : {}) };
   const google = googleWebFlow({
     secretsDir,
     ...(googleFetch ? { fetch: googleFetch } : {}),
@@ -521,7 +528,7 @@ export function registerApi(
         .safeParse(request.body);
       if (!corps.success) return reply.code(400).send({ error: 'Word attendu : nom et contenu' });
       try {
-        return await importerRapport(db, i, id, corps.data);
+        return await importerRapport(db, i, id, corps.data, driveDeps);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
@@ -640,6 +647,35 @@ export function registerApi(
         reply.header('content-disposition', `attachment; filename="${nom.replace(/"/g, '')}"`);
         return reply.send(contenu);
       } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // The report as a Word file, exported by Drive from its Google Doc: it carries the hand edits.
+  app.get<ProjetRoute & { Querystring: { version?: string } }>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/export',
+    onInstance<ProjetRoute & { Querystring: { version?: string } }>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const version =
+        request.query.version === undefined ? undefined : Number(request.query.version);
+      if (version !== undefined && !Number.isInteger(version))
+        return reply.code(400).send({ error: 'Version invalide' });
+      try {
+        const { nom, contenu } = await exporterRapportDrive(
+          db,
+          i,
+          request.params.id,
+          driveDeps,
+          version,
+        );
+        reply.header(
+          'content-type',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        );
+        reply.header('content-disposition', `attachment; filename="${nom.replace(/"/g, '')}"`);
+        return reply.send(contenu);
+      } catch (error) {
+        if (error instanceof GoogleError) return reply.code(502).send({ error: error.message });
         return diagnosticErreur(error, reply);
       }
     }),

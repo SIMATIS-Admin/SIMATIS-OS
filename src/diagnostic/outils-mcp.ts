@@ -84,9 +84,13 @@ registerTool({
     contenu: contenuRapportSchema,
   }),
   scope: 'instance',
-  handler: async ({ tx }, { projetId, contenu }) => {
-    await enregistrerRapport(tx, projetId, contenu);
-    return { ok: true };
+  handler: async ({ tx, instance, deps }, { projetId, contenu }) => {
+    const drive = await enregistrerRapport(tx, projetId, contenu, {
+      instance,
+      deps: { secretsDir: deps.secretsDir, realWrites: deps.realWrites },
+    });
+    // Claude en tient compte dans sa réponse : le lien Google Doc, ou pourquoi il n'y en a pas.
+    return { ok: true, drive };
   },
 });
 
