@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Maquette : Atelier stratégique dans Outils et diagnostics</title>
+<title>Maquette : section Atelier stratégique</title>
 <style>
   :root {
     --fond: #f4f6fa; --carte: #ffffff; --bord: #dfe4ee; --texte: #13233f; --doux: #6b7a90;
@@ -58,6 +58,9 @@
   .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--gris); white-space: nowrap; }
   .pill.vert { background: var(--vert-doux); }
   .vide { color: var(--doux); font-size: 13px; font-style: italic; margin: 8px 0; }
+  .nav-maquette { max-width: 948px; margin: 0 auto 6px; padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: var(--doux); background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; }
+  .nav-maquette b { color: var(--texte); text-transform: uppercase; font-size: 11px; letter-spacing: .06em; }
+  .nav-maquette .actif { color: var(--marine); font-weight: 700; }
   .note-maquette { max-width: 948px; margin: 0 auto 14px; font-size: 12px; color: var(--doux); }
 
   /* Atelier ouvert */
@@ -109,24 +112,29 @@
 </head>
 <body>
 
-<div class="bandeau">Maquette : données fictives. Menu Stratégie → « Outils et diagnostics » ; l'atelier est un troisième bloc de la fiche entreprise, avec la pastille Bêta. Les boutons de la maquette fonctionnent : « + Nouveau », « Détail », « Ouvrir l'atelier », le mode écran partagé.</div>
+<div class="bandeau">Maquette : données fictives. Menu Stratégie → nouvelle entrée « Atelier stratégique » avec la pastille Bêta, à côté de « Démarrage du mandat » et « Outils et diagnostics ». L'écran d'accueil reprend le principe de ces écrans : une ligne par entreprise, « Détail », « + Nouveau », recherche. Les boutons fonctionnent.</div>
 
-<!-- ===== Vue 1 : liste ===== -->
+<div class="nav-maquette" aria-label="Menu Stratégie (extrait)">
+  <b>Stratégie</b>
+  <span>Démarrage du mandat</span>
+  <span>Outils et diagnostics</span>
+  <span class="actif">Atelier stratégique <span class="beta">Bêta</span></span>
+</div>
+
+<!-- ===== Vue 1 : accueil de la section ===== -->
 <section class="vue visible" id="vue-liste">
   <header>
     <div>
-      <h1>Outils et diagnostics</h1>
-      <p class="intro" style="margin:4px 0 0">Chaque entreprise avec son diagnostic, ses tests VMA et son atelier stratégique.</p>
+      <h1>Atelier stratégique <span class="beta">Bêta</span></h1>
+      <p class="intro" style="margin:4px 0 0">Chaque entreprise avec son diagnostic, ses tests VMA et ses ateliers : le point de départ d'une stratégie commerciale.</p>
     </div>
     <div class="barre-outils">
-      <button class="btn-doux" type="button">Test VMA : mode testeur</button>
+      <button class="btn-doux" type="button" id="btn-essai">Atelier : module d'essai</button>
       <div class="menu" id="menu">
         <button class="btn" type="button" id="btn-nouveau">+ Nouveau</button>
         <div class="liste-menu">
-          <button type="button" data-nouveau="diag">Nouveau diagnostic<small>Diagnostic d'endurance commerciale</small></button>
-          <button type="button" data-nouveau="vma">Nouveau test VMA<small>Invitation envoyée au dirigeant</small></button>
-          <button type="button" data-nouveau="atelier">Nouvel atelier stratégique <span class="beta">Bêta</span><small>Stratégie, objectifs, ICP et feuille de route</small></button>
-          <button type="button" data-nouveau="import">Importer un atelier <span class="beta">Bêta</span><small>Reprendre une sauvegarde existante</small></button>
+          <button type="button" data-nouveau="atelier">Nouvel atelier stratégique<small>Pour une entreprise de la liste</small></button>
+          <button type="button" data-nouveau="import">Importer un atelier<small>Reprendre une sauvegarde existante</small></button>
         </div>
       </div>
       <input class="recherche" type="search" placeholder="Recherche" aria-label="Rechercher une entreprise">
@@ -138,57 +146,34 @@
         <div><div class="nom">Entreprise Exemple SAS</div><div class="sous">Entreprise</div></div>
         <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Étape 3 sur 5</div></div>
         <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">2 tests · 1 reçu</div></div>
-        <div><div class="cellule-label">Atelier stratégique <span class="beta">Bêta</span></div><div class="cellule-val">Étape 4 sur 6</div></div>
+        <div><div class="cellule-label">Ateliers</div><div class="cellule-val">1 · étape 4 sur 6</div></div>
       </summary>
       <div class="detail">
         <section class="bloc">
           <h3>Diagnostic d'endurance commerciale</h3>
           <div class="etapes"><span class="fait"></span><span class="fait"></span><span class="en-cours"></span><span></span><span></span></div>
-          <p>Étape 3 · Entretien</p>
-          <div class="outils"><button class="btn-doux" type="button">Ouvrir le diagnostic</button></div>
+          <p>Étape 3 · Entretien. Sert de point de départ à l'atelier.</p>
+          <div class="outils"><button class="btn-doux" type="button">Ouvrir dans Outils et diagnostics ↗</button></div>
         </section>
         <section class="bloc">
           <h3>Tests VMA</h3>
-          <p>Dernier résultat reçu le 12/10/2026.</p>
-          <div class="outils"><button class="btn-doux" type="button">Résultat complet</button></div>
+          <p>Dernier résultat reçu le 12/10/2026. Sert de point de départ à l'atelier.</p>
+          <div class="outils"><button class="btn-doux" type="button">Ouvrir dans Outils et diagnostics ↗</button></div>
         </section>
         <section class="bloc large">
-          <h3>Atelier stratégique <span class="beta">Bêta</span>
+          <h3>Ateliers stratégiques
             <button class="btn-doux" type="button" data-nouveau="atelier">+ Nouvel atelier</button></h3>
-          <p>Stratégie commerciale, modèle, objectifs, ICP et personas, feuille de route. Un atelier peut être repris à tout moment.</p>
+          <p>Contact : Prénom Nom (fictif) · <a href="#" onclick="return false">Fiche entreprise</a> · <a href="#" onclick="return false">Fiche contact</a></p>
           <div class="ateliers">
             <div class="atelier-ligne">
-              <div><b>Atelier de lancement 2026</b><div class="sous">Modifié le 27/10/2026 · 14 actions</div></div>
+              <div><b>Atelier de lancement 2026</b><div class="sous">Historique repris par import · modifié le 27/10/2026 · 14 actions</div></div>
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                 <span class="pill vert">Étape 4 sur 6</span>
-                <button class="btn-doux" type="button" id="ouvrir-atelier">Ouvrir l'atelier</button>
+                <button class="btn-doux" type="button" id="ouvrir-atelier">Reprendre l'atelier</button>
                 <button class="btn-doux" type="button" disabled title="Prévu plus tard">Partager avec le client</button>
               </div>
             </div>
-            <div class="atelier-ligne">
-              <div><b>Revue de mi-année 2027</b><div class="sous">Pas encore commencé</div></div>
-              <div style="display:flex;gap:8px;align-items:center">
-                <span class="pill">Brouillon</span>
-                <button class="btn-doux" type="button" id="ouvrir-atelier-2">Ouvrir l'atelier</button>
-              </div>
-            </div>
           </div>
-        </section>
-      </div>
-    </details>
-
-    <details class="entreprise">
-      <summary>
-        <div><div class="nom">Société Démo Industrie</div><div class="sous">Entreprise</div></div>
-        <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Pas encore lancé</div></div>
-        <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">Aucun</div></div>
-        <div><div class="cellule-label">Atelier stratégique <span class="beta">Bêta</span></div><div class="cellule-val">Pas encore lancé</div></div>
-      </summary>
-      <div class="detail">
-        <section class="bloc large">
-          <h3>Atelier stratégique <span class="beta">Bêta</span></h3>
-          <p class="vide">Pas encore lancé.</p>
-          <div class="outils"><button class="btn" type="button" data-nouveau="atelier">Lancer un atelier</button></div>
         </section>
       </div>
     </details>
@@ -203,13 +188,14 @@
       <div class="tete-atelier" style="margin:0">
         <h2>Atelier de lancement 2026 <span class="beta">Bêta</span></h2>
       </div>
-      <div class="sous">Entreprise Exemple SAS · enregistré à l'instant</div>
+      <div class="sous">Entreprise Exemple SAS · contact : Prénom Nom (fictif) · <a href="#" onclick="return false">Fiche entreprise</a> · enregistré à l'instant</div>
     </div>
     <div class="barre-outils">
       <button class="partage" type="button" id="bascule-partage" aria-pressed="true"><i></i><span id="libelle-partage">Écran partagé : infos privées masquées</span></button>
     </div>
   </header>
   <main>
+    <div class="bandeau" id="essai-bandeau" style="display:none;max-width:none">Module d'essai : l'atelier est vide et rien n'est enregistré dans l'OS. Il disparaît quand tu quittes l'écran.</div>
     <div class="parcours" id="parcours"></div>
 
     <div id="etape-3" style="display:none"></div>
@@ -266,7 +252,7 @@
 <dialog id="dlg-atelier">
   <h2>Nouvel atelier stratégique <span class="beta">Bêta</span></h2>
   <label for="ent">Entreprise</label>
-  <select id="ent"><option>Entreprise Exemple SAS</option><option>Société Démo Industrie</option></select>
+  <select id="ent"><option>Entreprise Exemple SAS</option></select>
   <label for="titre">Nom de l'atelier</label>
   <input id="titre" type="text" value="Atelier de lancement 2027">
   <label for="depart">Point de départ</label>
@@ -277,7 +263,7 @@
 <dialog id="dlg-import">
   <h2>Importer un atelier <span class="beta">Bêta</span></h2>
   <label for="ent2">Entreprise</label>
-  <select id="ent2"><option>Entreprise Exemple SAS</option><option>Société Démo Industrie</option></select>
+  <select id="ent2"><option>Entreprise Exemple SAS</option></select>
   <label for="fichier">Fichier de sauvegarde (.json)</label>
   <input id="fichier" type="text" value="atelier-sauvegarde.json" readonly>
   <p class="sous" style="margin-top:10px">Le contenu est enregistré dans la base de l'OS. Il n'est jamais envoyé sur GitHub.</p>
@@ -315,8 +301,8 @@
   });
 
   $('#ouvrir-atelier').addEventListener('click', function () { vue('vue-atelier'); });
-  $('#ouvrir-atelier-2').addEventListener('click', function () { vue('vue-atelier'); });
-  $('#retour').addEventListener('click', function () { vue('vue-liste'); });
+  $('#btn-essai').addEventListener('click', function () { document.body.classList.add('essai'); $('#essai-bandeau').style.display = 'block'; vue('vue-atelier'); });
+  $('#retour').addEventListener('click', function () { document.body.classList.remove('essai'); $('#essai-bandeau').style.display = 'none'; vue('vue-liste'); });
 
   // parcours en 6 étapes
   var etapes = ['Cadrage', 'Diagnostic', 'Modèle', 'Objectifs', 'Ciblage', 'Feuille de route'];
