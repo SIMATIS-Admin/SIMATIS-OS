@@ -15,7 +15,11 @@ import {
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
 import { exporterRapportDrive } from '../diagnostic/drive.js';
-import { demanderRapport, importerRapport } from '../diagnostic/rapport.js';
+import {
+  demanderRapport,
+  importerRapport,
+  renvoyerRapportSurDrive,
+} from '../diagnostic/rapport.js';
 import {
   demanderExportRestitution,
   demanderRestitution,
@@ -529,6 +533,21 @@ export function registerApi(
       if (!corps.success) return reply.code(400).send({ error: 'Word attendu : nom et contenu' });
       try {
         return await importerRapport(db, i, id, corps.data, driveDeps);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Le Word affiché part sur Drive s'il n'y est pas déjà (envoi manqué à l'import ou à la production).
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/drive',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await renvoyerRapportSurDrive(db, i, id, driveDeps);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });

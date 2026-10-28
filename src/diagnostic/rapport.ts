@@ -27,7 +27,9 @@ export function rapportPret(
 // garde le numéro que Marc lui a donné. Sans numéro dans le nom, un Word importé compte pour la 1.
 export const versionDuNom = (nom: string | null): number => {
   if (!nom) return 0;
-  const lu = /\bv(\d{1,3})\.docx$/i.exec(nom.trim());
+  // « … - v3 (1).docx » : le navigateur ajoute « (1) » quand le fichier existe déjà. Pas de \b
+  // devant le « v » : l'underscore est un caractère de mot (« …_-_v3 »).
+  const lu = /(?<![A-Za-z0-9])v(\d{1,3})(?:\s*\(\d+\))?\.docx$/i.exec(nom.trim());
   return lu ? Number(lu[1]) : 1;
 };
 
@@ -100,6 +102,51 @@ export async function enregistrerRapport(
     { version, nomWord, docx: Buffer.from(fichier) },
     drive.deps,
   );
+}
+
+// Envoie sur Drive le Word affiché, resté dans l'OS parce que Drive n'était pas prêt à l'import (API
+// non activée, compte non reconnecté, écritures réelles désactivées) : il devient un Google Doc.
+export async function renvoyerRapportSurDrive(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  deps: DriveDeps,
+): Promise<ProjetVue> {
+  verifierEspace(instance);
+  return withInstance(db, instance.id, async (tx) => {
+    const [projet] = await tx
+      .select()
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
+    if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    if (!projet.rapport || !projet.rapportNom)
+      throw new ChatIndisponible('Aucun rapport à envoyer sur Drive.');
+    if (projet.rapportLienStatut === 'en_cours')
+      throw new ChatIndisponible('Un rapport est en cours de rédaction : attendez sa fin.');
+    const version = Math.max(
+      projet.rapportVersions.at(-1)?.version ?? 0,
+      versionDuNom(projet.rapportNom),
+    );
+    if (projet.rapportLiens.some((l) => l.version === version))
+      throw new ChatIndisponible(`La version ${version} est déjà sur Drive.`);
+    const envoi = await envoyerRapportSurDrive(
+      tx,
+      instance,
+      projet,
+      { version, nomWord: projet.rapportNom, docx: Buffer.from(projet.rapport, 'base64') },
+      deps,
+    );
+    if (envoi.statut === 'indisponible')
+      throw new ChatIndisponible(
+        'Drive n’est pas connecté : reconnectez le compte Google dans Paramètres > Connexions.',
+      );
+    if (envoi.statut === 'simulation')
+      throw new ChatIndisponible('Écritures réelles désactivées : rien n’a été envoyé sur Drive.');
+    if (envoi.statut === 'erreur')
+      throw new ChatIndisponible(`Drive a refusé l’envoi : ${envoi.message ?? 'erreur inconnue'}`);
+    const [apres] = await tx.select().from(diagnosticProjets).where(eq(diagnosticProjets.id, id));
+    return vue(apres!);
+  });
 }
 
 const WORD_MAX = 10 * 1024 * 1024;

@@ -7,6 +7,7 @@ import {
   urlPptxRestitutionDiag,
   viderConversationDiag,
   importerEntretienDiag,
+  envoyerRapportDriveDiag,
   importerRapportDiag,
   demandeSupportDiag,
   envoyerMessageDiag,
@@ -829,7 +830,7 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
 // l'étape 2 suffit, la revue de l'étape 3 enrichit le rapport quand elle existe.
 const WORD_MAX_OCTETS = 10 * 1024 * 1024;
 const versionDuNom = (nom: string | null) => {
-  const lu = nom ? /\bv(\d{1,3})\.docx$/i.exec(nom.trim()) : null;
+  const lu = nom ? /(?<![A-Za-z0-9])v(\d{1,3})(?:\s*\(\d+\))?\.docx$/i.exec(nom.trim()) : null;
   return lu ? Number(lu[1]) : 1;
 };
 const raisonRapport = (projet: ProjetDiag) =>
@@ -867,6 +868,13 @@ function Rapport({
     try {
       const base64 = await lireBase64(fichier);
       onChange(await importerRapportDiag(slug, projet.id, { nom: fichier.name, base64 }));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const envoyerSurDrive = async () => {
+    try {
+      onChange(await envoyerRapportDriveDiag(slug, projet.id));
     } catch (err) {
       onErreur(messageErreur(err));
     }
@@ -924,6 +932,11 @@ function Rapport({
             <a className="btn" href={urlExportRapportDiag(slug, projet.id)}>
               Exporter en .docx
             </a>
+          )}
+          {!enCours && projet.aRapport && !docGoogle && (
+            <button className="btn" onClick={() => void envoyerSurDrive()}>
+              Envoyer sur Drive
+            </button>
           )}
           <button
             className="btn go"
