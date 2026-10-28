@@ -24,8 +24,8 @@ export const NAV: NavGroup[] = [
     items: [
       item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage'),
       // Diagnostic et tests VMA réunis par entreprise (spec du 21 octobre 2026) ; la section s'appelle
-      // « Outils » pour accueillir d'autres outils que le diagnostic.
-      item('diagnostics', 'Outils', 'radar', 'diagnostic'),
+      // « Outils et diagnostics » pour accueillir d'autres outils que le diagnostic.
+      item('diagnostics', 'Outils et diagnostics', 'radar', 'diagnostic'),
     ],
   },
   {

@@ -13,6 +13,13 @@ const api = vi.hoisted(() => ({
   supprimerProjetDiag: vi.fn(),
 }));
 vi.mock('../api.js', () => api);
+// La vue détaillée d'un diagnostic a ses propres tests : ici seul compte le retour à la liste.
+vi.mock('./Diagnostic.js', async (original) => ({
+  ...(await original<typeof import('./Diagnostic.js')>()),
+  ProjetVue: ({ onRetour }: { onRetour: () => void }) => (
+    <button onClick={onRetour}>← Tous les projets</button>
+  ),
+}));
 
 const entreprise = (n: number, extra: Partial<Entreprise> = {}): Entreprise =>
   ({
@@ -80,6 +87,26 @@ describe('Diagnostics : écran fusionné', () => {
     await screen.findByText('Entreprise Fictive A');
     expect(lignes()).toHaveLength(5);
     expect(screen.getByText(/Entreprises 1 à 5 sur 6/)).toBeTruthy();
+  });
+
+  it('ne répète pas le titre de la section dans le bloc bleu', async () => {
+    charger([entreprise(1)], [diagPour(1)]);
+    render(<Diagnostics slug="demo" />);
+    await screen.findByText('Entreprise Fictive A');
+    expect(screen.queryByRole('heading', { name: /Outils/ })).toBeNull();
+  });
+
+  it('donne le nom du diagnostic à l’en-tête quand il est ouvert, puis le rend', async () => {
+    charger([entreprise(1)], [diagPour(1)]);
+    const onTitre = vi.fn();
+    render(<Diagnostics slug="demo" onTitre={onTitre} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le diagnostic' }));
+    await waitFor(() =>
+      expect(onTitre).toHaveBeenLastCalledWith('Diagnostic d’endurance commerciale'),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Tous les projets/ }));
+    await waitFor(() => expect(onTitre).toHaveBeenLastCalledWith(null));
   });
 
   it('ouvre une ligne au clic sur « Détail » et la referme sur « Réduire »', async () => {

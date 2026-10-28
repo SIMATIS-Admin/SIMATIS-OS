@@ -68,6 +68,8 @@ const TITRES_FICHE: Record<string, string> = {
 export function App() {
   const [instances, setInstances] = useState<InstanceSummary[] | null>(null);
   const [favoris, setFavoris] = useState<string[]>([]);
+  // Un outil ouvert (diagnostic, test) donne son nom à l'en-tête à la place de celui de la section.
+  const [titreOutil, setTitreOutil] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [route, setRoute] = useState(readHash);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -180,6 +182,7 @@ export function App() {
             key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
             slug={current.slug}
             ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+            onTitre={setTitreOutil}
           />
         );
       case 'bases':
@@ -239,7 +242,7 @@ export function App() {
               <Icon name="menu" />
             </button>
             {view === 'inbox' && <span className="entete-slot" ref={setEnteteGauche} />}
-            <h1>{title}</h1>
+            <h1>{view === 'diagnostics' && titreOutil ? titreOutil : title}</h1>
             {view === 'inbox' && (
               <button
                 className="btn carre"

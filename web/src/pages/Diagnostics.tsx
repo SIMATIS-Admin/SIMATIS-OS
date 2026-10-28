@@ -47,7 +47,16 @@ const listeEffacee = (projetIds: string[], testIds: string[]) =>
 const cleDe = (l: LigneEntreprise) => l.id ?? `projet-${l.diag?.id ?? l.nom}`;
 
 // `ouvrir` : identifiant d'un projet à ouvrir directement (lien depuis une fiche).
-export function Diagnostics({ slug, ouvrir }: { slug: string; ouvrir?: string }) {
+export function Diagnostics({
+  slug,
+  ouvrir,
+  onTitre,
+}: {
+  slug: string;
+  ouvrir?: string;
+  // Titre de l'en-tête de l'application : celui de l'outil ouvert, pour ne pas répéter celui de la section.
+  onTitre?: (titre: string | null) => void;
+}) {
   const [entreprises, setEntreprises] = useState<Entreprise[] | null>(null);
   const [projets, setProjets] = useState<ProjetDiag[]>([]);
   const [tests, setTests] = useState<TestVma[]>([]);
@@ -76,6 +85,16 @@ export function Diagnostics({ slug, ouvrir }: { slug: string; ouvrir?: string })
       setErreur(messageErreur(err));
     }
   };
+
+  const titreOuvert = projetOuvert
+    ? 'Diagnostic d’endurance commerciale'
+    : testOuvert
+      ? 'Test de VMA'
+      : null;
+  useEffect(() => {
+    onTitre?.(titreOuvert);
+    return () => onTitre?.(null);
+  }, [titreOuvert]);
 
   // Recharge quand on change d'instance.
   useEffect(() => {
@@ -169,12 +188,7 @@ export function Diagnostics({ slug, ouvrir }: { slug: string; ouvrir?: string })
       {alerte}
       <div className="panel dg-titre">
         <div className="panel-h">
-          <div>
-            <h2>Outils</h2>
-            <div className="small muted">
-              Une ligne par entreprise : son diagnostic et ses tests VMA.
-            </div>
-          </div>
+          <p className="dg-intro">Chaque entreprise avec son diagnostic et ses tests VMA.</p>
           <div className="dg-menu">
             <button
               className="btn go"
