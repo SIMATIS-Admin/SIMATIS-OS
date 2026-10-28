@@ -54,6 +54,15 @@ describe('nav', () => {
     expect(vueCanonique('tests-vma')).toBe('diagnostics');
   });
 
+  it('a une entrée Atelier stratégique dans Stratégie, bêta, liée au module atelier', () => {
+    const strategie = NAV.find((g) => g.title === 'Stratégie');
+    const entree = strategie?.items.find((i) => i.id === 'atelier');
+    expect(entree).toMatchObject({ label: 'Atelier stratégique', beta: true, module: 'atelier' });
+    expect(isBuilt('atelier')).toBe(true);
+    expect(allowed(entree!, [])).toBe(false);
+    expect(allowed(entree!, ['atelier'])).toBe(true);
+  });
+
   it('groups instances by type and keeps their order', () => {
     const groups = groupInstances([
       inst('b', 'mandat'),

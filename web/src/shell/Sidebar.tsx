@@ -104,6 +104,7 @@ export function Sidebar({
       >
         <Icon name={it.icon} />
         <span className="lbl">{it.label}</span>
+        {it.beta && <span className="beta">Bêta</span>}
         {(compteurs[it.id] ?? 0) > 0 && <span className="pastille">{compteurs[it.id]}</span>}
         {!isBuilt(it.id) && <span className="soon-tag">Bientôt</span>}
         <span

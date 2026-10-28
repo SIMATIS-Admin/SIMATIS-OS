@@ -4954,3 +4954,30 @@ label.btn.off {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Atelier stratégique : pastille bêta et ligne d'entreprise à quatre colonnes. */
+.beta {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9a6a12;
+  background: #fdf3e1;
+  border: 1px solid #d9a441;
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.dg-entete.dg-entete-4 {
+  grid-template-columns: minmax(150px, 1.2fr) repeat(3, minmax(120px, 1fr)) auto;
+}
+.dg-bloc.dg-bloc-large {
+  grid-column: 1 / -1;
+}
+@media (max-width: 760px) {
+  .dg-entete.dg-entete-4 {
+    grid-template-columns: 1fr;
+  }
+}
