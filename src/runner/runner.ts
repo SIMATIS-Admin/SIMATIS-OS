@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chargerGrille, type Grille } from '../diagnostic/grille.js';
 import { DEBUT_MESSAGE_RAPPORT } from '../diagnostic/rapport.js';
+import { consignesProposition, type Proposition } from '../diagnostic/proposition.js';
 import { DEBUT_MESSAGE_RESTITUTION } from '../diagnostic/restitution.js';
 
 // Local runner (npm run runner, started by launchd on the workstation): picks the routine runs the
@@ -318,6 +319,7 @@ export type AttenteDiag = {
   rapportNom: string | null;
   restitutionLien: string | null;
   restitutionAvecProposition: boolean;
+  proposition: Proposition | null;
   logo: { nom: string; base64: string } | null;
 };
 
@@ -543,9 +545,11 @@ export const promptRestitution = (a: AttenteDiag, maintenant = new Date()) => {
     `- Revue des préconisations : ${a.revue ? JSON.stringify(a.revue).slice(0, 20_000) : 'aucune'}`,
     `Deck de restitution actuel : ${a.restitutionLien ?? 'pas encore créé'}.`,
     "Contenu du deck, dans cet ordre : le score (les trois dimensions sur 10, le seuil de 6 et le profil) ; une explication simple du modèle et de ce que ce profil veut dire ; l'essentiel des préconisations ; le plan d'action en trois horizons.",
-    "Durée : la restitution dure moins d'une heure. Vise une douzaine de diapositives, aérées, avec le message principal en titre de chacune.",
+    "Durée : la séance dure 60 minutes, pas plus. Le rapport a été envoyé au dirigeant avant la séance : le deck le restitue (il ne le relit pas) et sert la discussion. Suis ce déroulé, en notant dans les notes de présentation de chaque diapositive sa durée en minutes : accueil et cadre de la séance (5 min) ; le modèle (5) ; résultats et profil (15) ; préconisations clés (15) ; plan d'action en trois horizons (10) ; proposition d'accompagnement (7) ; options (3, seulement s'il y en a) ; questions et prochaines étapes (le reste). Le total ne dépasse pas 60 minutes : une douzaine de diapositives aérées, avec le message principal en titre de chacune.",
     a.restitutionAvecProposition
-      ? `Dernière diapositive : la proposition de collaboration de Marc Tabouret (direction commerciale à temps partagé), rédigée uniquement d'après ces éléments du pilote, sans rien inventer (tarifs, durée, mode de fonctionnement). Un élément absent se laisse de côté et se signale au pilote :\n${elements.length > 0 ? elements.join('\n') : '(aucun élément donné : ne rédige pas de tarif ; propose une diapositive à compléter et dis-le au pilote)'}`
+      ? a.proposition
+        ? `Proposition de collaboration de Marc Tabouret (direction commerciale à temps partagé), après le plan d'action, rédigée uniquement d'après ces éléments saisis par le pilote, sans rien inventer ni modifier (montants, durée, prestations) ; tout montant « sur devis » reste sans chiffre :\n${consignesProposition(a.proposition).join('\n')}`
+        : `Dernière diapositive : la proposition de collaboration de Marc Tabouret (direction commerciale à temps partagé), rédigée uniquement d'après ces éléments du pilote, sans rien inventer (tarifs, durée, mode de fonctionnement). Un élément absent se laisse de côté et se signale au pilote :\n${elements.length > 0 ? elements.join('\n') : '(aucun élément donné : ne rédige pas de tarif ; propose une diapositive à compléter et dis-le au pilote)'}`
       : "Le pilote n'inclut pas sa proposition de collaboration : le deck se termine sur le plan d'action et une diapositive de conclusion, sans aucune offre ni tarif.",
     `Tâche : ${a.restitutionLien ? `révise le deck existant (${a.restitutionLien}) sans en créer un autre` : 'commence par Artifact action quickstart avec intent « slides », puis crée un nouvel artifact de type Slides aux couleurs SIMATIS (bleu marine, menthe), sans url'}. Dès sa création, appelle enregistrer_restitution avec projetId ${a.id} et son lien, puis publie le contenu.`,
     `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : ce que contient le deck en quelques phrases et ce qui reste à compléter, puis arrête-toi. Vouvoie le pilote, en français.`,

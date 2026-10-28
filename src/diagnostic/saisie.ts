@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { activiteValide } from './activites.js';
+import { propositionSchema } from './proposition.js';
 import { typeLogo } from './support.js';
 
 // Modèles et efforts proposés pour l'assistant de chaque étape (le chat tourne sur claude.ai).
@@ -63,6 +64,7 @@ export const projetSchema = z
     revue: z.record(z.string(), z.unknown()).nullable().optional(),
     // Étape 5 : inclure ou non la proposition de collaboration dans le deck de restitution.
     restitutionAvecProposition: z.boolean().optional(),
+    proposition: propositionSchema.nullable().optional(),
     chats: z
       .record(
         z.string().regex(/^[1-5]$/),

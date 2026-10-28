@@ -12,6 +12,7 @@ import {
 import { contacts, entreprises } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Dimensions } from './profil.js';
+import type { Proposition } from './proposition.js';
 import type { ContenuRapport } from './rapport-word.js';
 import type { ReponseQuestion } from './score.js';
 
@@ -94,6 +95,9 @@ export const diagnosticProjets = pgTable(
       .notNull()
       .default([]),
     restitutionAvecProposition: boolean('restitution_avec_proposition').notNull().default(true),
+    // Formule d'abonnement et options de la proposition, saisies par le pilote : source unique du
+    // deck et du futur devis.
+    proposition: jsonb('proposition').$type<Proposition>(),
     // Entretien : PDF de l'outil externe (base64) et ses réponses lues par Claude, par question.
     pdfEntretien: text('pdf_entretien'),
     pdfEntretienNom: text('pdf_entretien_nom'),

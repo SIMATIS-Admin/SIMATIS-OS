@@ -203,6 +203,7 @@ export async function attentesClaude(db: Executor) {
         rapportNom: p.rapportNom,
         restitutionLien: p.restitutionLien,
         restitutionAvecProposition: p.restitutionAvecProposition,
+        proposition: p.proposition,
         // Le PDF de l'entretien ne voyage que pour sa lecture.
         pdf:
           p.demande === 'entretien' && p.pdfEntretien && p.pdfEntretienNom
