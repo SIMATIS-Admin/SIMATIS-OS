@@ -97,7 +97,7 @@ describe('Diagnostics : écran fusionné', () => {
     expect(screen.queryByRole('heading', { name: /Outils/ })).toBeNull();
   });
 
-  describe('mode testeur du test VMA', () => {
+  describe("module d'essai du test VMA", () => {
     const fenetre = { location: { href: '' }, close: vi.fn() };
     beforeEach(() => {
       fenetre.location.href = '';
@@ -112,7 +112,7 @@ describe('Diagnostics : écran fusionné', () => {
         expireLe: '2030-01-01T00:00:00Z',
       });
       render(<Diagnostics slug="demo" />);
-      fireEvent.click(await screen.findByRole('button', { name: /Test VMA.*testeur/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /module d'essai/ }));
       await waitFor(() =>
         expect(fenetre.location.href).toBe('https://site.test/test-vma/testeur?t=abc'),
       );
@@ -123,7 +123,7 @@ describe('Diagnostics : écran fusionné', () => {
       charger([entreprise(1)], [diagPour(1)]);
       api.ouvrirEspaceTesteurVma.mockRejectedValue(new Error('Test de VMA non configuré'));
       render(<Diagnostics slug="demo" />);
-      fireEvent.click(await screen.findByRole('button', { name: /Test VMA.*testeur/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /module d'essai/ }));
       expect(await screen.findByText(/non configuré/)).toBeTruthy();
       expect(fenetre.close).toHaveBeenCalled();
     });
