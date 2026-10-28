@@ -2,9 +2,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-// Drive limited to the files the OS creates itself (reports, diagnostic folders): it never sees
-// the rest of the Drive. Docs edits on those files are covered by the same scope.
-export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+// Full Drive, read and write: the OS works on the whole Drive, not only the files it created.
+// Tokens granted with the former drive.file scope lack it until the mailbox reconnects.
+export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 
 export const SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose',
