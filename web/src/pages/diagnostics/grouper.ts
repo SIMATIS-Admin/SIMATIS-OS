@@ -73,7 +73,14 @@ export function paginer<T>(
 }
 
 export type ResumeVma = {
-  dernier: { id: string; type: TestVma['type']; date: string; vma: number | null } | null;
+  dernier: {
+    id: string;
+    type: TestVma['type'];
+    date: string;
+    vma: number | null;
+    // Mode portefeuille : le mail met l'allure totale (socle récurrent compris) en avant, pas la VMA seule.
+    allure: number | null;
+  } | null;
   // Premiers tests seulement, en ordre chronologique ; une VMA non mesurable n'y entre pas.
   evolution: { date: string; vma: number }[];
   // Écart entre le premier et le dernier premier test de l'évolution ; null sous deux points.
@@ -107,6 +114,12 @@ export function resumerVma(tests: TestVma[]): ResumeVma {
           type: dernier.type,
           date: dernier.recueLe,
           vma: typeof dernier.resultat?.vma === 'number' ? dernier.resultat.vma : null,
+          allure:
+            dernier.resultat?.modePortefeuille === true &&
+            (dernier.resultat.recurrent ?? 0) > 0 &&
+            typeof dernier.resultat.allureActuelle === 'number'
+              ? dernier.resultat.allureActuelle
+              : null,
         }
       : null,
     evolution,
