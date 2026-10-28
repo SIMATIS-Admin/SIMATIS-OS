@@ -48,6 +48,7 @@ describe('nav', () => {
       ['diagnostic', 'diagnostics', 'tests-vma'].includes(i.id),
     );
     expect(entrees.map((i) => i.id)).toEqual(['diagnostics']);
+    expect(entrees[0]?.label).toBe('Outils et diagnostics');
     expect(isBuilt('diagnostics')).toBe(true);
     expect(vueCanonique('diagnostic')).toBe('diagnostics');
     expect(vueCanonique('tests-vma')).toBe('diagnostics');

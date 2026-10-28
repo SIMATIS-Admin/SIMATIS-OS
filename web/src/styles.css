@@ -4755,3 +4755,194 @@ label.btn.off {
   justify-content: flex-end;
   margin-bottom: 10px;
 }
+
+/* Outils et diagnostics : en-têtes marine, parcours en étapes lisible d'un coup d'œil. */
+.dg-titre {
+  background:
+    radial-gradient(circle at 92% -40%, rgb(159 247 232 / 38%) 0%, transparent 55%),
+    linear-gradient(120deg, var(--navy-2) 0%, var(--navy-3) 100%);
+  box-shadow: 0 6px 18px rgb(12 55 107 / 18%);
+}
+.dg-titre .panel-h {
+  border-bottom: 0;
+  padding: 18px 22px;
+}
+.dg-intro {
+  margin: 0;
+  flex: 1 1 220px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--white);
+}
+.dg-ligne {
+  transition:
+    box-shadow 0.15s,
+    border-left-color 0.15s;
+}
+.dg-ligne:hover {
+  box-shadow: 0 4px 14px rgb(12 55 107 / 12%);
+  border-left-color: var(--navy-3);
+}
+.dg-bloc h3 {
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--mint);
+}
+
+.diag-tete {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  overflow: hidden;
+  border-color: var(--navy);
+  background: linear-gradient(120deg, var(--navy-2) 0%, var(--navy-3) 100%);
+  box-shadow: 0 6px 18px rgb(12 55 107 / 18%);
+}
+.diag-tete .panel-h {
+  border-bottom: 0;
+  padding-bottom: 6px;
+  background: none;
+}
+.diag-tete h2,
+.diag-tete .muted,
+.diag-tete .panel-b > p {
+  color: var(--white);
+}
+.diag-tete .muted {
+  opacity: 0.8;
+}
+.diag-tete .panel-b {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+.diag-tete .diag-etapes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.diag-tete .diag-etape {
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
+  border-radius: var(--r-m);
+  border: 1px solid rgb(255 255 255 / 25%);
+  background: rgb(255 255 255 / 10%);
+  color: var(--white);
+  box-shadow: none;
+  text-align: left;
+  padding: 8px 10px 8px 8px;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.diag-tete .diag-etape:hover {
+  background: rgb(255 255 255 / 20%);
+  border-color: var(--mint);
+}
+.diag-tete .diag-etape .diag-num {
+  flex: none;
+  background: rgb(255 255 255 / 22%);
+  color: var(--white);
+  outline: 0;
+}
+.diag-tete .diag-etape.fait .diag-num {
+  background: var(--teal-mid);
+  color: var(--navy);
+}
+.diag-tete .diag-etape.on {
+  background: var(--white);
+  color: var(--navy);
+  border-color: var(--mint);
+  box-shadow: 0 0 0 2px var(--mint);
+}
+.diag-tete .diag-etape.on .diag-num {
+  background: var(--navy);
+  color: var(--mint);
+}
+.diag-tete .diag-etape.encours:not(.on) {
+  border-color: #ffd37a;
+}
+.diag-tete .diag-etape .diag-ok {
+  margin-left: auto;
+  color: var(--teal-mid);
+}
+.diag-tete .diag-etape.on .diag-ok {
+  color: var(--teal);
+}
+.diag-tete .diag-etape .diag-tag {
+  margin-left: auto;
+  color: #ffd37a;
+}
+.diag-tete .diag-etape.on .diag-tag {
+  color: var(--amber);
+}
+@media (max-width: 900px) {
+  .diag-tete {
+    position: static;
+  }
+  .diag-tete .diag-etapes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.diag-main > .panel {
+  border-top: 3px solid var(--teal);
+}
+.diag-statut {
+  padding: 8px 12px;
+  border-radius: var(--r-s);
+  background: var(--line-2);
+}
+.diag-statut.ok {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.diag-statut.attente {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+/* Actions secondaires regroupées derrière « Plus d'actions ». */
+.diag-plus {
+  position: relative;
+}
+.diag-plus summary {
+  list-style: none;
+  cursor: pointer;
+}
+.diag-plus summary::-webkit-details-marker {
+  display: none;
+}
+.diag-plus summary::after {
+  content: ' ▾';
+}
+.diag-plus-liste {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  box-shadow: 0 8px 24px rgb(12 55 107 / 18%);
+  padding: 4px;
+}
+.diag-plus-liste button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: var(--r-s);
+  font-size: 14px;
+}
+.diag-plus-liste button:hover:not(:disabled),
+.diag-plus-liste button:focus-visible {
+  background: var(--blue-bg);
+}
+.diag-plus-liste button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

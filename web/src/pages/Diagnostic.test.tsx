@@ -946,10 +946,8 @@ describe('Deck de restitution à l étape 5', () => {
         projet({ etape: 5, etapeMax: 5, dims, aRapport: true }),
       ]);
       await ouvrir();
-      const bouton = await screen.findByRole<HTMLButtonElement>('button', {
-        name: 'Exporter en PowerPoint',
-      });
-      expect(bouton.disabled).toBe(true);
+      await screen.findByRole('button', { name: 'Produire le deck de restitution' });
+      expect(screen.queryByRole('button', { name: 'Exporter en PowerPoint' })).toBeNull();
     });
 
     it('propose le téléchargement du PowerPoint exporté, avec sa date', async () => {

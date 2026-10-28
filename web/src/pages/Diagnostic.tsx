@@ -342,7 +342,7 @@ export function ProjetVue({
 
   return (
     <div className="stack">
-      <div className="panel">
+      <div className="panel diag-tete">
         <div className="panel-h">
           <div>
             <h2>{projet.nom}</h2>
@@ -1213,61 +1213,60 @@ function RestitutionDeck({
         {projet.restitutionAvecProposition && (
           <PropositionForm proposition={projet.proposition} onSauver={onSauver} />
         )}
-        <p className="small muted" style={{ margin: 0 }}>
-          Le deck est un brouillon : retouchez-le sur claude.ai, puis exportez-le en PowerPoint ou
-          en PDF depuis claude.ai. Si vous changez un tarif là-bas, changez-le aussi ici : cette
-          proposition est la source du futur devis.
-        </p>
         {enCours && (
           <p className="small muted" style={{ margin: 0 }}>
             Claude crée le deck… La page se mettra à jour dès qu’il sera prêt.
           </p>
         )}
-        <div className="diag-actions">
-          {!enCours && projet.restitutionLien && (
-            <a className="btn go" href={projet.restitutionLien} target="_blank" rel="noreferrer">
-              Ouvrir le deck de restitution
-            </a>
-          )}
-          <button
-            className="btn"
-            disabled={enCours || raison !== null}
-            onClick={() => void demander()}
-          >
-            {projet.restitutionLien
-              ? 'Produire un nouveau deck'
-              : 'Produire le deck de restitution'}
-          </button>
-          <button
-            className="btn"
-            disabled={enCours || exportEnCours || !projet.restitutionLien}
-            onClick={() => void exporter()}
-          >
-            Exporter en PowerPoint
-          </button>
-          {!exportEnCours && projet.aPptx && projet.restitutionExportLe && (
-            <a className="btn go" href={urlPptxRestitutionDiag(slug, projet.id)} download>
-              Télécharger le PowerPoint
-            </a>
-          )}
-        </div>
-        {exportEnCours ? (
+        {exportEnCours && (
           <p className="small muted" style={{ margin: 0 }}>
             Export PowerPoint en cours… Claude relit le deck publié.
           </p>
-        ) : (
-          projet.aPptx &&
-          projet.restitutionExportLe && (
-            <p className="small muted" style={{ margin: 0 }}>
-              PowerPoint exporté le{' '}
-              {new Date(projet.restitutionExportLe).toLocaleDateString('fr-FR')}.
-            </p>
-          )
         )}
+        <div className="diag-actions">
+          {!enCours && projet.restitutionLien ? (
+            <a className="btn go" href={projet.restitutionLien} target="_blank" rel="noreferrer">
+              Ouvrir le deck de restitution
+            </a>
+          ) : (
+            !projet.restitutionLien && (
+              <button
+                className="btn go"
+                disabled={enCours || raison !== null}
+                onClick={() => void demander()}
+              >
+                Produire le deck de restitution
+              </button>
+            )
+          )}
+          {!exportEnCours && projet.aPptx && projet.restitutionExportLe && (
+            <a className="btn" href={urlPptxRestitutionDiag(slug, projet.id)} download>
+              Télécharger le PowerPoint
+            </a>
+          )}
+          {projet.restitutionLien && (
+            <details className="diag-plus">
+              <summary className="btn">Plus d’actions</summary>
+              <div className="diag-plus-liste">
+                <button disabled={enCours || raison !== null} onClick={() => void demander()}>
+                  Produire un nouveau deck
+                </button>
+                <button disabled={enCours || exportEnCours} onClick={() => void exporter()}>
+                  Exporter en PowerPoint
+                </button>
+              </div>
+            </details>
+          )}
+        </div>
         <p className="small muted" style={{ margin: 0 }}>
-          Exportez quand le deck vous convient : le PowerPoint reprend le texte et les notes du deck
-          tel qu’il est à cet instant, avec la charte SIMATIS. Après une retouche, exportez à
-          nouveau.
+          Le deck est un brouillon : retouchez-le sur claude.ai, puis exportez-le en PowerPoint
+          quand il vous convient (le PowerPoint reprend le texte et les notes à cet instant, avec la
+          charte SIMATIS ; après une retouche, exportez à nouveau).
+          {projet.aPptx && projet.restitutionExportLe
+            ? ` PowerPoint exporté le ${new Date(projet.restitutionExportLe).toLocaleDateString('fr-FR')}.`
+            : ''}{' '}
+          Si vous changez un tarif sur claude.ai, changez-le aussi ici : cette proposition est la
+          source du futur devis.
         </p>
         {!enCours && raison && (
           <p className="small muted" style={{ margin: 0 }}>
