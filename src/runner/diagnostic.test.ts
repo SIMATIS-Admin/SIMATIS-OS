@@ -15,6 +15,7 @@ import {
   promptSupport,
   skillsDe,
   SKILL_RAPPORT,
+  SKILL_RESTITUTION,
   SKILL_SUPPORT,
   tourDiagnostic,
   type AttenteDiag,
@@ -148,7 +149,11 @@ describe('Support d ouverture par le runner', () => {
       claude: 'claude',
       fetch: fauxOs(a, []),
       poste: () =>
-        Promise.resolve({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT, SKILL_RAPPORT] }),
+        Promise.resolve({
+          nom: 'poste',
+          claude: '1',
+          skills: [SKILL_SUPPORT, SKILL_RAPPORT, SKILL_RESTITUTION],
+        }),
       lancer: (_c, a2) => {
         args = a2;
         return Promise.resolve(0);
@@ -418,8 +423,47 @@ describe('Production par le runner : modifications et deck', () => {
     expect(texte).toContain('révise le deck existant');
   });
 
+  it('demande la skill de restitution et permet de la lire, avec le second cerveau en lecture', () => {
+    const texte = promptRestitution(
+      restitution,
+      new Date('2026-10-25T08:00:00Z'),
+      '/cerveau-fictif',
+    );
+    expect(texte).toContain(SKILL_RESTITUTION);
+    expect(texte).toContain('Second cerveau : /cerveau-fictif');
+    expect(texte).toContain("n'y écris rien");
+    const outils = outilsRestitution('/cerveau-fictif', ['/travail']);
+    expect(outils).toContain('Skill');
+    expect(outils).toContain('Read(//cerveau-fictif/**)');
+    expect(outils).not.toContain('Edit(//cerveau-fictif');
+    expect(outilsRestitution(null, ['/travail'])).not.toContain('cerveau');
+  });
+
+  it('sans la skill de restitution sur le poste, le deck n est pas lancé et l erreur le dit', async () => {
+    const appels: { url: string; body: unknown }[] = [];
+    let lance = false;
+    await tourDiagnostic({
+      base: 'http://os.test',
+      token: 'r',
+      claude: 'claude',
+      fetch: ((url: string, init?: RequestInit) => {
+        const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+        appels.push({ url, body });
+        const reponse = url.endsWith('/attentes') ? [restitution] : { ok: true };
+        return Promise.resolve(new Response(JSON.stringify(reponse), { status: 200 }));
+      }) as typeof fetch,
+      poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [SKILL_SUPPORT] }),
+      lancer: () => {
+        lance = true;
+        return Promise.resolve(0);
+      },
+    });
+    expect(lance).toBe(false);
+    expect((appels.at(-1)?.body as { erreur?: string }).erreur).toContain(SKILL_RESTITUTION);
+  });
+
   it('les outils du deck sont ceux de la restitution seulement', () => {
-    const outils = outilsRestitution(['/travail']);
+    const outils = outilsRestitution(null, ['/travail']);
     expect(outils).toContain('mcp__simatis__enregistrer_restitution');
     expect(outils).toContain('Artifact');
     expect(outils).not.toContain('enregistrer_rapport');
