@@ -9,6 +9,7 @@ import {
   creerInvitation,
   envoyerInvitation,
   InvitationImpossible,
+  ouvrirEspaceTesteur,
   revoquerInvitation,
   SemestreAConfirmer,
   supprimerTest,
@@ -124,6 +125,20 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
       }
     },
   );
+
+  app.post<{ Params: { slug: string } }>('/api/i/:slug/vma/testeur', async (request, reply) => {
+    const instance = await getInstanceBySlug(db, request.params.slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    const avecSite = invitations();
+    if (!avecSite) {
+      return reply.code(503).send({ error: 'Test de VMA non configuré (VMA_OS_TOKEN)' });
+    }
+    try {
+      return await ouvrirEspaceTesteur(avecSite);
+    } catch (error) {
+      return erreur(error, reply);
+    }
+  });
 
   app.post<{ Params: { slug: string; id: string } }>(
     '/api/i/:slug/vma/tests/:id/revoquer',

@@ -238,6 +238,10 @@ export const creerTestVma = (slug: string, nouveau: NouveauTestVma) =>
 export const revoquerTestVma = (slug: string, id: string) =>
   sendJson<TestVma>('POST', inst(slug, `vma/tests/${encodeURIComponent(id)}/revoquer`), {});
 
+// Espace testeur du Test de VMA : le site ouvre une session de 12 h, rien n'est gardé dans l'OS.
+export const ouvrirEspaceTesteurVma = (slug: string) =>
+  sendJson<{ lien: string; expireLe: string }>('POST', inst(slug, 'vma/testeur'), {});
+
 export const supprimerTestVma = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `vma/tests/${encodeURIComponent(id)}`), {});
 

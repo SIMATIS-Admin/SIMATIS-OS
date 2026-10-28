@@ -264,3 +264,19 @@ export async function supprimerTest(
       .where(and(eq(vmaTests.instanceId, p.instanceId), eq(vmaTests.id, p.testId))),
   );
 }
+
+// Espace testeur : le site ouvre une session temporaire (12 h) pour Marc. Rien n'est gardé dans
+// l'OS, ni invitation ni résultat : les essais restent dans le navigateur de Marc.
+export async function ouvrirEspaceTesteur(
+  deps: InvitationDeps,
+): Promise<{ lien: string; expireLe: string }> {
+  const http = deps.fetch ?? fetch;
+  const res = await http(`${base(deps.url)}/api/test-vma/testeur/acces`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${deps.token}`, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  if (!res.ok) throw new InvitationImpossible(`Site : accès testeur refusé (${res.status})`);
+  const { id, expireLe } = (await res.json()) as { id: string; expireLe: string };
+  return { lien: `${base(deps.url)}/test-vma/testeur?t=${id}`, expireLe };
+}

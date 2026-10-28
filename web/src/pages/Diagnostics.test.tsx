@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   fetchTestsVma: vi.fn(),
   revoquerTestVma: vi.fn(),
   supprimerTestVma: vi.fn(),
+  ouvrirEspaceTesteurVma: vi.fn(),
   supprimerProjetDiag: vi.fn(),
 }));
 vi.mock('../api.js', () => api);
@@ -94,6 +95,38 @@ describe('Diagnostics : écran fusionné', () => {
     render(<Diagnostics slug="demo" />);
     await screen.findByText('Entreprise Fictive A');
     expect(screen.queryByRole('heading', { name: /Outils/ })).toBeNull();
+  });
+
+  describe('mode testeur du test VMA', () => {
+    const fenetre = { location: { href: '' }, close: vi.fn() };
+    beforeEach(() => {
+      fenetre.location.href = '';
+      vi.spyOn(window, 'open').mockReturnValue(fenetre as unknown as Window);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it('ouvre l’espace testeur dans un nouvel onglet, sans créer de lien à envoyer', async () => {
+      charger([entreprise(1)], [diagPour(1)]);
+      api.ouvrirEspaceTesteurVma.mockResolvedValue({
+        lien: 'https://site.test/test-vma/testeur?t=abc',
+        expireLe: '2030-01-01T00:00:00Z',
+      });
+      render(<Diagnostics slug="demo" />);
+      fireEvent.click(await screen.findByRole('button', { name: /Test VMA.*testeur/ }));
+      await waitFor(() =>
+        expect(fenetre.location.href).toBe('https://site.test/test-vma/testeur?t=abc'),
+      );
+      expect(api.ouvrirEspaceTesteurVma).toHaveBeenCalledWith('demo');
+    });
+
+    it('referme l’onglet et affiche la raison quand le site refuse', async () => {
+      charger([entreprise(1)], [diagPour(1)]);
+      api.ouvrirEspaceTesteurVma.mockRejectedValue(new Error('Test de VMA non configuré'));
+      render(<Diagnostics slug="demo" />);
+      fireEvent.click(await screen.findByRole('button', { name: /Test VMA.*testeur/ }));
+      expect(await screen.findByText(/non configuré/)).toBeTruthy();
+      expect(fenetre.close).toHaveBeenCalled();
+    });
   });
 
   it('donne le nom du diagnostic à l’en-tête quand il est ouvert, puis le rend', async () => {
