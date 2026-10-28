@@ -43,7 +43,7 @@ export const USAGE = `Commandes :
   token:create --nom <nom> (--instance <slug> | --portefeuille | --runner)
   token:list
   token:revoke --id <id>
-  connexion:set --slug <slug> --kind crm|messagerie|agenda --fournisseur <f> [--frequence 5min|15min|1h|1j|manuel]
+  connexion:set --slug <slug> --kind crm|messagerie|agenda --fournisseur <f> [--frequence 5min|15min|1h|3h|1j|manuel]
   connexion:list --slug <slug>
   connexion:sync --slug <slug> --kind crm|messagerie|agenda
   google:connect --slug <slug>   (sur l'ordinateur de l'OS, avec un navigateur)`;
@@ -236,7 +236,7 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
         return 0;
       case 'connexion:set': {
         const instance = await requireActive(db, need('slug'));
-        const frequence = (values.frequence ?? '15min') as Frequence;
+        const frequence = (values.frequence ?? '3h') as Frequence;
         if (!(frequence in FREQUENCES)) throw new Error(`Fréquence invalide : ${frequence}`);
         await withInstance(db, instance.id, (tx) =>
           configureConnexion(tx, {

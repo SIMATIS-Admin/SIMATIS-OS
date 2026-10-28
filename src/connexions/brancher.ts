@@ -72,7 +72,7 @@ export async function brancherHubspot(
     configureConnexion(tx, {
       kind: 'crm',
       fournisseur: 'hubspot',
-      reglages: { frequence: '15min', sens: 'lecture' },
+      reglages: { frequence: '3h', sens: 'lecture' },
     }),
   );
 }

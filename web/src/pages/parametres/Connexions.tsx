@@ -20,9 +20,7 @@ import { Icon } from '../../icons.js';
 import { Tip } from '../widgets.js';
 
 const FREQUENCES = [
-  ['5min', 'Toutes les 5 minutes'],
-  ['15min', 'Toutes les 15 minutes'],
-  ['1h', 'Toutes les heures'],
+  ['3h', 'Toutes les 3 heures'],
   ['1j', 'Une fois par jour'],
   ['manuel', 'À la demande seulement'],
 ] as const;
@@ -385,7 +383,7 @@ function CrmHubspot({
           <span>Fréquence de synchronisation</span>
           <select
             className="input"
-            value={r.frequence ?? '15min'}
+            value={r.frequence && ['1j', 'manuel'].includes(r.frequence) ? r.frequence : '3h'}
             onChange={(e) => void save({ frequence: e.target.value as ReglagesCrm['frequence'] })}
           >
             {FREQUENCES.map(([v, l]) => (

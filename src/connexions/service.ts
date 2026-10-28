@@ -21,10 +21,14 @@ export function registerConnector(connector: Connector): void {
 export const registeredConnector = (fournisseur: string): Connector | undefined =>
   connectors.get(fournisseur);
 
+// Plancher : le CRM n'est jamais interrogé plus d'une fois toutes les 3 h (les anciens réglages 5/15 min y sont ramenés) ; le bouton manuel reste libre.
+const INTERVALLE_MIN_MS = 3 * 60 * 60_000;
+
 export const FREQUENCES: Record<Frequence, number | null> = {
   '5min': 5 * 60_000,
   '15min': 15 * 60_000,
   '1h': 60 * 60_000,
+  '3h': 3 * 60 * 60_000,
   '1j': 24 * 60 * 60_000,
   manuel: null,
 };
@@ -74,10 +78,10 @@ export async function configureConnexion(
 
 export function isDue(connexion: Connexion, now: Date): boolean {
   if (connexion.etat === 'non_configuree') return false;
-  const every = FREQUENCES[connexion.reglages.frequence ?? '15min'];
+  const every = FREQUENCES[connexion.reglages.frequence ?? '3h'];
   if (every === null) return false;
   const last = connexion.derniereTentative?.getTime();
-  return last === undefined || now.getTime() - last >= every;
+  return last === undefined || now.getTime() - last >= Math.max(every, INTERVALLE_MIN_MS);
 }
 
 // One synchronization in its own transaction: if it fails, none of its writes are kept and the
