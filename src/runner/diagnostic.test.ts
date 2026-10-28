@@ -51,6 +51,7 @@ const attente: AttenteDiag = {
   rapportNom: null,
   restitutionLien: null,
   restitutionAvecProposition: true,
+  proposition: null,
   pdf: null,
   logo: null,
 };
@@ -344,9 +345,10 @@ describe('Production par le runner : modifications et deck', () => {
     ],
   };
 
-  it('le deck de restitution reprend le rapport, dure moins d une heure et finit sur la proposition', () => {
+  it('le deck de restitution reprend le rapport, suit un plan de 60 minutes et finit sur la proposition', () => {
     const texte = promptRestitution(restitution, new Date('2026-10-25T08:00:00Z'));
-    expect(texte).toContain("moins d'une heure");
+    expect(texte).toContain('60 minutes');
+    expect(texte).toContain('envoyé au dirigeant avant la séance');
     expect(texte).toContain('le score');
     expect(texte).toContain('Atelier Fictif Nord');
     expect(texte).toContain('Dernière diapositive : la proposition de collaboration');
@@ -355,9 +357,51 @@ describe('Production par le runner : modifications et deck', () => {
     expect(texte).toContain('enregistrer_restitution');
   });
 
+  it('la proposition saisie remplace les éléments du chat et inclut les options', () => {
+    const texte = promptRestitution({
+      ...restitution,
+      proposition: {
+        formule: {
+          libelle: 'Accompagnement fictif',
+          mensualite: 1500,
+          engagementMois: 12,
+          tacite: true,
+          prestations: ['Un point hebdomadaire'],
+        },
+        options: [
+          {
+            id: 'o1',
+            libelle: 'Outil sur mesure fictif',
+            description: '',
+            tarif: { mode: 'forfait', montant: null },
+          },
+        ],
+      },
+    });
+    expect(texte).toContain('Accompagnement fictif');
+    expect(texte).toContain('engagement de 12 mois');
+    expect(texte).toContain('Outil sur mesure fictif');
+    expect(texte).toContain('sur devis');
+    expect(texte).not.toContain('forfait fictif de 1 000 euros');
+  });
+
   it('sans proposition, le deck ne contient ni offre ni tarif', () => {
-    const texte = promptRestitution({ ...restitution, restitutionAvecProposition: false });
+    const texte = promptRestitution({
+      ...restitution,
+      restitutionAvecProposition: false,
+      proposition: {
+        formule: {
+          libelle: 'Accompagnement fictif',
+          mensualite: 1500,
+          engagementMois: 12,
+          tacite: true,
+          prestations: [],
+        },
+        options: [],
+      },
+    });
     expect(texte).toContain('sans aucune offre ni tarif');
+    expect(texte).not.toContain('Accompagnement fictif');
     expect(texte).not.toContain('forfait fictif');
   });
 

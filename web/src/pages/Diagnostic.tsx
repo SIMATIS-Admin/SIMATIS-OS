@@ -13,6 +13,7 @@ import {
   urlRapportDiag,
   type ChatEtape,
   type Dimensions,
+  type Proposition,
   type ProjetDiag,
   type ProjetDiagPatch,
 } from '../api.js';
@@ -976,6 +977,185 @@ function Rapport({
   );
 }
 
+type OptionForm = {
+  id: string;
+  libelle: string;
+  description: string;
+  mode: 'forfait' | 'mensuel';
+  montant: string;
+};
+
+const montantDe = (v: string) => {
+  const n = Number(v.trim().replace(',', '.'));
+  return v.trim() === '' || Number.isNaN(n) ? null : n;
+};
+
+// Formule d'abonnement et options de la proposition : saisies ici, elles alimentent le deck (et le
+// devis). Un montant laissé vide s'affiche « sur devis » : l'OS ne propose jamais de prix.
+function PropositionForm({
+  proposition,
+  onSauver,
+}: {
+  proposition: Proposition | null;
+  onSauver: Sauver;
+}) {
+  const [libelle, setLibelle] = useState('');
+  const [mensualite, setMensualite] = useState('');
+  const [engagement, setEngagement] = useState('12');
+  const [tacite, setTacite] = useState(true);
+  const [prestations, setPrestations] = useState('');
+  const [options, setOptions] = useState<OptionForm[]>([]);
+  useEffect(() => {
+    setLibelle(proposition?.formule.libelle ?? '');
+    setMensualite(proposition?.formule.mensualite?.toString() ?? '');
+    setEngagement(String(proposition?.formule.engagementMois ?? 12));
+    setTacite(proposition?.formule.tacite ?? true);
+    setPrestations(proposition?.formule.prestations.join('\n') ?? '');
+    setOptions(
+      (proposition?.options ?? []).map((o) => ({
+        id: o.id,
+        libelle: o.libelle,
+        description: o.description,
+        mode: o.tarif.mode,
+        montant: o.tarif.montant?.toString() ?? '',
+      })),
+    );
+  }, [proposition]);
+  const majOption = (i: number, patch: Partial<OptionForm>) =>
+    setOptions((os) => os.map((o, j) => (j === i ? { ...o, ...patch } : o)));
+  const enregistrer = () =>
+    onSauver({
+      proposition: {
+        formule: {
+          libelle: libelle.trim(),
+          mensualite: montantDe(mensualite),
+          engagementMois: Number(engagement) || 12,
+          tacite,
+          prestations: prestations
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean),
+        },
+        options: options
+          .filter((o) => o.libelle.trim() !== '')
+          .map((o) => ({
+            id: o.id,
+            libelle: o.libelle.trim(),
+            description: o.description.trim(),
+            tarif: { mode: o.mode, montant: montantDe(o.montant) },
+          })),
+      },
+    });
+  return (
+    <div className="stack">
+      <label className="field">
+        <span>Formule d’abonnement</span>
+        <input value={libelle} onChange={(e) => setLibelle(e.target.value)} />
+      </label>
+      <div className="row" style={{ gap: 12 }}>
+        <label className="field">
+          <span>Mensualité (€)</span>
+          <input
+            inputMode="decimal"
+            placeholder="vide = sur devis"
+            value={mensualite}
+            onChange={(e) => setMensualite(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Engagement (mois)</span>
+          <input
+            inputMode="numeric"
+            value={engagement}
+            onChange={(e) => setEngagement(e.target.value)}
+          />
+        </label>
+      </div>
+      <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+        <input type="checkbox" checked={tacite} onChange={(e) => setTacite(e.target.checked)} />
+        <span>Reconduction tacite</span>
+      </label>
+      <label className="field">
+        <span>Prestations incluses (une par ligne)</span>
+        <textarea rows={3} value={prestations} onChange={(e) => setPrestations(e.target.value)} />
+      </label>
+      {options.map((o, i) => (
+        <div key={o.id} className="stack">
+          <label className="field">
+            <span>Libellé de l’option {i + 1}</span>
+            <input value={o.libelle} onChange={(e) => majOption(i, { libelle: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Description de l’option {i + 1}</span>
+            <input
+              value={o.description}
+              onChange={(e) => majOption(i, { description: e.target.value })}
+            />
+          </label>
+          <div className="row" style={{ gap: 12 }}>
+            <label className="field">
+              <span>Tarif de l’option {i + 1}</span>
+              <select
+                value={o.mode}
+                onChange={(e) => majOption(i, { mode: e.target.value as 'forfait' | 'mensuel' })}
+              >
+                <option value="forfait">Forfait</option>
+                <option value="mensuel">Par mois</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Montant de l’option {i + 1} (€)</span>
+              <input
+                inputMode="decimal"
+                placeholder="vide = sur devis"
+                value={o.montant}
+                onChange={(e) => majOption(i, { montant: e.target.value })}
+              />
+            </label>
+            <button
+              className="btn"
+              onClick={() => setOptions((os) => os.filter((_, j) => j !== i))}
+            >
+              Retirer l’option {i + 1}
+            </button>
+          </div>
+        </div>
+      ))}
+      <div className="row">
+        <button
+          className="btn"
+          onClick={() =>
+            setOptions((os) => [
+              ...os,
+              {
+                id: `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+                libelle: '',
+                description: '',
+                mode: 'forfait',
+                montant: '',
+              },
+            ])
+          }
+        >
+          Ajouter une option
+        </button>
+        <button
+          className="btn go"
+          disabled={libelle.trim() === ''}
+          onClick={() => void enregistrer()}
+        >
+          Enregistrer la proposition
+        </button>
+        {proposition && (
+          <button className="btn" onClick={() => void onSauver({ proposition: null })}>
+            Retirer la proposition
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Deck de restitution (étape 5) : présente le rapport en moins d'une heure ; la dernière diapositive
 // est la proposition de collaboration, que le pilote peut exclure. Ses éléments (tarifs, mode de
 // fonctionnement) se donnent dans le chat de l'étape.
@@ -1011,7 +1191,7 @@ function RestitutionDeck({
       <div className="panel-b stack">
         <p className="small muted" style={{ margin: 0 }}>
           Le deck présente le score, son explication, l’essentiel des préconisations et le plan
-          d’action, pour une restitution de moins d’une heure.
+          d’action, selon un déroulé de 60 minutes.
         </p>
         <label className="row" style={{ gap: 8, alignItems: 'center' }}>
           <input
@@ -1019,11 +1199,16 @@ function RestitutionDeck({
             checked={projet.restitutionAvecProposition}
             onChange={(e) => void onSauver({ restitutionAvecProposition: e.target.checked })}
           />
-          <span>
-            Terminer par ma proposition de collaboration (tarifs et mode de fonctionnement, à donner
-            dans le chat)
-          </span>
+          <span>Terminer par ma proposition de collaboration (formule et options ci-dessous)</span>
         </label>
+        {projet.restitutionAvecProposition && (
+          <PropositionForm proposition={projet.proposition} onSauver={onSauver} />
+        )}
+        <p className="small muted" style={{ margin: 0 }}>
+          Le deck est un brouillon : retouchez-le sur claude.ai, puis exportez-le en PowerPoint ou
+          en PDF depuis claude.ai. Si vous changez un tarif là-bas, changez-le aussi ici : cette
+          proposition est la source du futur devis.
+        </p>
         {enCours ? (
           <p className="small muted" style={{ margin: 0 }}>
             Claude crée le deck… La page se mettra à jour dès qu’il sera prêt.

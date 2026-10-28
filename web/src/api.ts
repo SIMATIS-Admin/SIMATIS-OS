@@ -1003,6 +1003,22 @@ export const connecterAnalytics = (slug: string) =>
 export type Dimensions = { outils: number; strategie: number; polyvalence: number };
 export type Profil = 'Joggeur' | 'Sprinteur' | 'Marathonien' | 'Ultra-endurant';
 export type ChatEtape = { modele: string; effort: string; lien: string };
+// Formule d'abonnement et options de la proposition (montants null = sur devis).
+export type Proposition = {
+  formule: {
+    libelle: string;
+    mensualite: number | null;
+    engagementMois: number;
+    tacite: boolean;
+    prestations: string[];
+  };
+  options: {
+    id: string;
+    libelle: string;
+    description: string;
+    tarif: { mode: 'forfait' | 'mensuel'; montant: number | null };
+  }[];
+};
 export type Diapositive = { titre: string; texte: string; notes: string };
 export type LettreReponse = 'A' | 'B' | 'C' | 'D' | 'E' | 'N/A';
 export type ProjetDiag = {
@@ -1052,6 +1068,7 @@ export type ProjetDiag = {
   restitutionLien: string | null;
   restitutionLiens: { lien: string; le: string }[];
   restitutionAvecProposition: boolean;
+  proposition: Proposition | null;
   updatedAt: string;
 };
 export type ProjetDiagPatch = Partial<
@@ -1071,6 +1088,7 @@ export type ProjetDiagPatch = Partial<
     | 'ditParDirigeant'
     | 'hypotheses'
     | 'restitutionAvecProposition'
+    | 'proposition'
   >
 > & { logo?: { nom: string; base64: string } | null };
 

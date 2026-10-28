@@ -60,6 +60,7 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   restitutionLien: null,
   restitutionLiens: [],
   restitutionAvecProposition: true,
+  proposition: null,
   aPdfEntretien: false,
   pdfEntretienNom: null,
   reponsesEntretien: [],
@@ -743,6 +744,48 @@ describe('Deck de restitution à l étape 5', () => {
     await waitFor(() =>
       expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', {
         restitutionAvecProposition: false,
+      }),
+    );
+  });
+
+  it('enregistre la formule d abonnement et une option sans montant', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 5, etapeMax: 5, dims, aRapport: true, rapportNom: 'r.docx' }),
+    ]);
+    api.majProjetDiag.mockResolvedValue(projet({ etape: 5, dims, aRapport: true }));
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.change(await screen.findByLabelText('Formule d’abonnement'), {
+      target: { value: 'Accompagnement fictif' },
+    });
+    fireEvent.change(screen.getByLabelText('Mensualité (€)'), { target: { value: '1500' } });
+    fireEvent.change(screen.getByLabelText('Prestations incluses (une par ligne)'), {
+      target: { value: 'Point hebdomadaire\nTableau de bord' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une option' }));
+    fireEvent.change(screen.getByLabelText('Libellé de l’option 1'), {
+      target: { value: 'Outil sur mesure fictif' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la proposition' }));
+    await waitFor(() =>
+      expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', {
+        proposition: {
+          formule: {
+            libelle: 'Accompagnement fictif',
+            mensualite: 1500,
+            engagementMois: 12,
+            tacite: true,
+            prestations: ['Point hebdomadaire', 'Tableau de bord'],
+          },
+          options: [
+            {
+              id: expect.any(String) as string,
+              libelle: 'Outil sur mesure fictif',
+              description: '',
+              tarif: { mode: 'forfait', montant: null },
+            },
+          ],
+        },
       }),
     );
   });

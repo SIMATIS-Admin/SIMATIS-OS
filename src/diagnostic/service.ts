@@ -47,6 +47,7 @@ export type ProjetPatch = Partial<
     | 'ditParDirigeant'
     | 'hypotheses'
     | 'restitutionAvecProposition'
+    | 'proposition'
   >
 > & { logo?: { nom: string; base64: string } | null };
 
