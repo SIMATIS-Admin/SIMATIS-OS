@@ -37,6 +37,7 @@ import { Routines } from './pages/Routines.js';
 import { Devis } from './pages/Devis.js';
 import { Atelier } from './pages/Atelier.js';
 import { Diagnostics } from './pages/Diagnostics.js';
+import { PresentationDiagnostic } from './pages/PresentationDiagnostic.js';
 import { SiteWeb } from './pages/SiteWeb.js';
 import { Sidebar } from './shell/Sidebar.js';
 
@@ -195,6 +196,8 @@ export function App() {
             onTitre={setTitreOutil}
           />
         );
+      case 'presentation-diagnostic':
+        return <PresentationDiagnostic />;
       case 'bases':
         return <Bases key={current.slug} slug={current.slug} />;
       case 'siteweb':

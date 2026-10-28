@@ -204,7 +204,7 @@ export function Diagnostics({
         <div className="panel-h">
           <p className="dg-intro">Chaque entreprise avec son diagnostic et ses tests VMA.</p>
           <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
-            Test VMA : mode testeur
+            Test VMA: module d'essai
           </button>
           <div className="dg-menu">
             <button
