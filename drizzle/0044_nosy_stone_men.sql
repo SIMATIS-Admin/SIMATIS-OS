@@ -1,0 +1,1 @@
+ALTER TABLE "diagnostic_projets" ADD COLUMN "drive_dossier_id" text;

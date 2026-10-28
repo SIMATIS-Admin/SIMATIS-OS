@@ -25,6 +25,8 @@ const api = vi.hoisted(() => ({
   importerRapportDiag: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
+  urlExportRapportDiag: (slug: string, id: string) =>
+    `/api/i/${slug}/diagnostic/projets/${id}/rapport/export`,
   urlRapportDiag: (slug: string, id: string, version?: number) =>
     `/api/i/${slug}/diagnostic/projets/${id}/rapport${version === undefined ? '' : `?version=${version}`}`,
 }));
@@ -615,6 +617,40 @@ describe('Mise en page des étapes', () => {
     const lien = await screen.findByRole('link', { name: 'Ouvrir le rapport' });
     expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/RapportFictif0004');
     expect(lien.getAttribute('target')).toBe('_blank');
+    expect(screen.queryByRole('link', { name: 'Exporter en .docx' })).toBeNull();
+  });
+
+  it('ouvre le Google Doc du rapport et exporte le Word depuis Drive', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        profil: 'Joggeur',
+        aRapport: true,
+        rapportNom: 'Rapport - v2.docx',
+        rapportLienStatut: 'pret',
+        rapportLien: 'https://docs.google.com/document/d/doc-2/edit',
+        rapportLiens: [
+          {
+            lien: 'https://docs.google.com/document/d/doc-2/edit',
+            le: '2026-10-28T08:00:00.000Z',
+            version: 2,
+          },
+          {
+            lien: 'https://docs.google.com/document/d/doc-1/edit',
+            le: '2026-10-27T08:00:00.000Z',
+            version: 1,
+          },
+        ],
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const doc = await screen.findByRole('link', { name: 'Ouvrir dans Google Docs' });
+    expect(doc.getAttribute('href')).toBe('https://docs.google.com/document/d/doc-2/edit');
+    const exporter = screen.getByRole('link', { name: 'Exporter en .docx' });
+    expect(exporter.getAttribute('href')).toContain('/diagnostic/projets/p1/rapport/export');
   });
 });
 

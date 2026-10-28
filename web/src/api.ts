@@ -1082,7 +1082,7 @@ export type ProjetDiag = {
   rapportNom: string | null;
   rapportLienStatut: 'aucun' | 'en_cours' | 'pret';
   rapportLien: string | null;
-  rapportLiens: { lien: string; le: string }[];
+  rapportLiens: { lien: string; le: string; version?: number }[];
   rapportVersions: { version: number; le: string }[];
   restitutionStatut: 'aucun' | 'en_cours' | 'pret';
   restitutionLien: string | null;
@@ -1215,6 +1215,10 @@ export const urlPptxRestitutionDiag = (slug: string, id: string) =>
   inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/pptx`);
 export const urlRapportDiag = (slug: string, id: string, version?: number) =>
   inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport`) +
+  (version === undefined ? '' : `?version=${version}`);
+// Word exported from the report's Google Doc (carries the edits made in Google Docs).
+export const urlExportRapportDiag = (slug: string, id: string, version?: number) =>
+  inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/export`) +
   (version === undefined ? '' : `?version=${version}`);
 export const urlLogoDiag = (slug: string, id: string) =>
   inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/logo`);
