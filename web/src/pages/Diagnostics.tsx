@@ -206,6 +206,10 @@ export function Diagnostics({
           <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
             Test VMA: module d'essai
           </button>
+          {/* Hors du menu latéral : la présentation s'ouvre depuis cette barre. */}
+          <a className="btn" href={`#/${slug}/presentation-diagnostic`}>
+            Diagnostic d’endurance commerciale : présentation
+          </a>
           <div className="dg-menu">
             <button
               className="btn go"

@@ -35,12 +35,6 @@ export const NAV: NavGroup[] = [
       item('diagnostics', 'Outils et diagnostics', 'radar', 'diagnostic'),
       // Atelier de lancement d'un mandat : stratégie, objectifs, ICP, feuille de route (spec du 28 octobre 2026).
       { ...item('atelier', 'Atelier stratégique', 'map', 'atelier'), beta: true },
-      item(
-        'presentation-diagnostic',
-        "Diagnostic d'endurance commerciale : présentation",
-        'file',
-        'diagnostic',
-      ),
     ],
   },
   {
@@ -92,7 +86,6 @@ export const BUILT = new Set([
   'devis',
   'diagnostics',
   'atelier',
-  'presentation-diagnostic',
   'routines',
   'siteweb',
   'bases',

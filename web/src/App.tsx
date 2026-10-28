@@ -139,7 +139,9 @@ export function App() {
       ? 'Portefeuille'
       : view === 'fiche'
         ? (TITRES_FICHE[route.kind ?? ''] ?? 'Fiche')
-        : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+        : view === 'presentation-diagnostic'
+          ? 'Diagnostic d’endurance commerciale : présentation'
+          : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
