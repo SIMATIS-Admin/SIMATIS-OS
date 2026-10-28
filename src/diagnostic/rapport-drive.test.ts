@@ -195,6 +195,20 @@ describe('Rapport sur Google Docs', () => {
     });
   });
 
+  it('demande une reconnexion au jeton qui n a que l ancien scope drive.file', async () => {
+    await writeGoogleToken(secretsDir, simatis.slug, {
+      refresh_token: 'rt-fictif',
+      scope: 'gmail.compose https://www.googleapis.com/auth/drive.file',
+    });
+    const id = await enCours(simatis, 'Rapport Drive E2');
+    expect(await enregistrer(simatis, id, true)).toEqual({ statut: 'indisponible' });
+    expect(google.calls).toHaveLength(0);
+    await writeGoogleToken(secretsDir, simatis.slug, {
+      refresh_token: 'rt-fictif',
+      scope: `gmail.compose ${DRIVE_SCOPE}`,
+    });
+  });
+
   it('exporte en Word le Doc courant, ou celui d une version', async () => {
     const id = await enCours(simatis, 'Rapport Drive F');
     await enregistrer(simatis, id, true);
