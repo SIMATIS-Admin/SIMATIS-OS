@@ -26,6 +26,12 @@ export const NAV: NavGroup[] = [
       // Diagnostic et tests VMA réunis par entreprise (spec du 21 octobre 2026) ; la section s'appelle
       // « Outils et diagnostics » pour accueillir d'autres outils que le diagnostic.
       item('diagnostics', 'Outils et diagnostics', 'radar', 'diagnostic'),
+      item(
+        'presentation-diagnostic',
+        "Diagnostic d'endurance commerciale : présentation",
+        'file',
+        'diagnostic',
+      ),
     ],
   },
   {
@@ -76,6 +82,7 @@ export const BUILT = new Set([
   'rendez-vous',
   'devis',
   'diagnostics',
+  'presentation-diagnostic',
   'routines',
   'siteweb',
   'bases',
