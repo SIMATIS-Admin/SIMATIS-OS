@@ -3681,6 +3681,14 @@ label.btn.off {
   border-color: var(--mint);
   color: var(--navy);
 }
+.dg-titre .btn:not(.go) {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.55);
+  color: var(--white);
+}
+.dg-titre .btn:not(.go):hover {
+  background: rgba(255, 255, 255, 0.14);
+}
 .dg-titre .btn.go:hover {
   background: var(--white);
   border-color: var(--white);

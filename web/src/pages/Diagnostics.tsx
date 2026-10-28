@@ -3,6 +3,7 @@ import {
   fetchEntreprises,
   fetchProjetsDiag,
   fetchTestsVma,
+  ouvrirEspaceTesteurVma,
   revoquerTestVma,
   supprimerProjetDiag,
   supprimerTestVma,
@@ -70,6 +71,19 @@ export function Diagnostics({
   const [erreur, setErreur] = useState<string | null>(null);
   const [suppression, setSuppression] = useState<Suppression | null>(null);
   const [enCours, setEnCours] = useState(false);
+
+  // L'onglet s'ouvre tout de suite, pendant le clic : après une attente, le navigateur le bloquerait.
+  const ouvrirTesteur = async () => {
+    const onglet = window.open('', '_blank');
+    try {
+      const { lien } = await ouvrirEspaceTesteurVma(slug);
+      if (onglet) onglet.location.href = lien;
+      else window.location.href = lien;
+    } catch (e) {
+      onglet?.close();
+      setErreur(e instanceof Error ? e.message : 'Espace testeur indisponible');
+    }
+  };
 
   const charger = async () => {
     try {
@@ -189,6 +203,9 @@ export function Diagnostics({
       <div className="panel dg-titre">
         <div className="panel-h">
           <p className="dg-intro">Chaque entreprise avec son diagnostic et ses tests VMA.</p>
+          <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
+            Test VMA : mode testeur
+          </button>
           <div className="dg-menu">
             <button
               className="btn go"
