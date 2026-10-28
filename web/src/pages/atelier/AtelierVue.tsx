@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { majAtelier } from '../../api.js';
+import { Cadrage } from './Cadrage.js';
+import { Zone } from './champs.js';
+import { EtapeDiagnostic } from './EtapeDiagnostic.js';
 import { ETAPES, type EtatAtelier } from './etat.js';
+import { Modele } from './Modele.js';
 import { Objectifs } from './Objectifs.js';
 
 const DELAI_ENREGISTREMENT = 800;
@@ -65,6 +69,29 @@ export function AtelierVue({
   // À la sortie de l'écran, la dernière modification part tout de suite.
   useEffect(() => envoyer, []);
 
+  const changer = (patch: Partial<EtatAtelier>) => maj((e) => ({ ...e, ...patch }));
+  const contenu = () => {
+    const props = { etat, partage, onChange: changer };
+    switch (etat.step) {
+      case 0:
+        return <Cadrage {...props} />;
+      case 1:
+        return <EtapeDiagnostic {...props} />;
+      case 2:
+        return <Modele {...props} />;
+      case 3:
+        return (
+          <Objectifs
+            etat={etat}
+            partage={partage}
+            onChange={(obj) => maj((e) => ({ ...e, obj: { ...e.obj, ...obj } }))}
+          />
+        );
+      default:
+        return <p className="muted">Cette étape arrive dans la prochaine livraison.</p>;
+    }
+  };
+
   const aller = (n: number) => maj((e) => ({ ...e, step: Math.min(5, Math.max(0, n)) }));
 
   return (
@@ -122,14 +149,20 @@ export function AtelierVue({
       </div>
 
       <div className="at-contenu">
-        {etat.step === 3 ? (
-          <Objectifs
-            etat={etat}
-            partage={partage}
-            onChange={(obj) => maj((e) => ({ ...e, obj: { ...e.obj, ...obj } }))}
-          />
-        ) : (
-          <p className="muted">Cette étape arrive dans la prochaine livraison.</p>
+        {contenu()}
+        {!partage && (
+          <div className="at-carte at-prive">
+            <h3>Notes réservées</h3>
+            <p className="muted small">Notes de cette étape, invisibles en écran partagé.</p>
+            <Zone
+              valeur={etat.notes[etat.step] ?? ''}
+              lignes={3}
+              etiquette="Notes réservées"
+              onChange={(v) =>
+                maj((e) => ({ ...e, notes: e.notes.map((n, i) => (i === e.step ? v : n)) }))
+              }
+            />
+          </div>
         )}
       </div>
 

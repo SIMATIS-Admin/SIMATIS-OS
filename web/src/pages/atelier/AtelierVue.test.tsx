@@ -123,4 +123,26 @@ describe('Atelier ouvert', () => {
     expect(screen.getByTestId('k-abonnes').textContent).toBe('0');
     expect(screen.getByTestId('k-ventes').textContent).toBe('40');
   });
+
+  it('affiche le contenu de chacune des trois premières étapes', () => {
+    monte({ etatInitial: reference(0) });
+    expect(screen.getByRole('button', { name: 'Ajouter une information' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Étape suivante →' }));
+    expect(screen.getByLabelText('Diagnostic d’endurance')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Étape suivante →' }));
+    expect(screen.getByRole('heading', { name: 'Vision' })).toBeTruthy();
+  });
+
+  it('les notes réservées n’existent qu’hors écran partagé et s’enregistrent', () => {
+    const { unmount } = monte({ etatInitial: reference(0) });
+    expect(screen.queryByLabelText('Notes réservées')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Écran partagé/ }));
+    fireEvent.change(screen.getByLabelText('Notes réservées'), {
+      target: { value: 'note fictive' },
+    });
+    unmount();
+    expect(api.majAtelier).toHaveBeenCalledWith('demo', 'a1', {
+      etat: contient({ notes: ['note fictive', '', '', '', '', ''] }),
+    });
+  });
 });
