@@ -27,7 +27,7 @@ const Beta = () => <span className="beta">Bêta</span>;
 
 // L'atelier ouvert : `null` pour le module d'essai (rien n'est enregistré).
 type Ouvert = {
-  atelier: { id: string; titre: string; entrepriseNom: string } | null;
+  atelier: { id: string; titre: string; entrepriseNom: string; entrepriseId: string } | null;
   etat: EtatAtelier;
 };
 
@@ -81,7 +81,12 @@ export function Atelier({
     try {
       const a = await fetchAtelier(slug, id);
       setOuvert({
-        atelier: { id: a.id, titre: a.titre, entrepriseNom: nomDe(a.entrepriseId) },
+        atelier: {
+          id: a.id,
+          titre: a.titre,
+          entrepriseNom: nomDe(a.entrepriseId),
+          entrepriseId: a.entrepriseId,
+        },
         etat: completer(a.etat),
       });
     } catch (err) {

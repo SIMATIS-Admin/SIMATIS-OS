@@ -895,6 +895,8 @@ export type FicheDetail = {
     statut: string | null;
     date: string | null;
   }[];
+  // Espace SIMATIS avec le module atelier : ateliers de l'entreprise (ou de celle du contact).
+  ateliers?: { id: string; titre: string; etape: number; date: string }[];
   historique: Evenement[];
   etapes?: { id: string; label: string; probabilite: number | null; jours: number | null }[];
   ecrit: boolean;

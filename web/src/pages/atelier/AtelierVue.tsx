@@ -24,7 +24,7 @@ export function AtelierVue({
   onRetour,
 }: {
   slug: string;
-  atelier: { id: string; titre: string; entrepriseNom: string } | null;
+  atelier: { id: string; titre: string; entrepriseNom: string; entrepriseId: string } | null;
   etatInitial: EtatAtelier;
   essai: boolean;
   onRetour: () => void;
@@ -124,7 +124,14 @@ export function AtelierVue({
           <div className="at-titre">
             <b>{atelier ? atelier.titre : 'Atelier d’essai'}</b>
             <span className="small muted">
-              {atelier ? atelier.entrepriseNom : 'Aucune entreprise'}
+              {atelier ? (
+                <a href={`#/${slug}/fiche/entreprise/${atelier.entrepriseId}`}>
+                  Fiche de l’entreprise
+                </a>
+              ) : (
+                'Aucune entreprise'
+              )}
+              {atelier && ` · ${atelier.entrepriseNom}`}
               {enregistre &&
                 ` · ${statut === 'attente' ? 'enregistrement…' : statut === 'erreur' ? 'non enregistré' : 'enregistré'}`}
             </span>

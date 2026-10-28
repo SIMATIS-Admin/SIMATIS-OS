@@ -14,7 +14,12 @@ const reference = (step = 3): EtatAtelier => ({
 });
 // Les assertions partielles de Vitest sont typées `any` : on les range derrière `unknown`.
 const contient = (o: object): unknown => expect.objectContaining(o);
-const atelier = { id: 'a1', titre: 'Atelier fictif', entrepriseNom: 'Entreprise Fictive' };
+const atelier = {
+  id: 'a1',
+  titre: 'Atelier fictif',
+  entrepriseNom: 'Entreprise Fictive',
+  entrepriseId: 'e1',
+};
 const monte = (props: Partial<Parameters<typeof AtelierVue>[0]> = {}) =>
   render(
     <AtelierVue
@@ -160,5 +165,12 @@ describe('Atelier ouvert', () => {
     expect(ecrire).toHaveBeenCalled();
     unmount();
     expect(api.majAtelier).not.toHaveBeenCalled();
+  });
+
+  it('renvoie vers la fiche de l’entreprise', () => {
+    monte();
+    expect(screen.getByRole('link', { name: 'Fiche de l’entreprise' }).getAttribute('href')).toBe(
+      '#/demo/fiche/entreprise/e1',
+    );
   });
 });
