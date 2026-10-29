@@ -36,12 +36,21 @@ async function liste(tx: Tx, instanceId: string, id: string): Promise<RdvCapital
     .select({
       entrepriseId: diagnosticProjets.entrepriseId,
       contactId: diagnosticProjets.contactId,
+      opportuniteId: diagnosticProjets.opportuniteId,
     })
     .from(diagnosticProjets)
     .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instanceId)));
   if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
-  const { entrepriseId, contactId } = projet;
+  const { entrepriseId, contactId, opportuniteId } = projet;
   const liens = [
+    opportuniteId &&
+      inArray(
+        rendezVous.id,
+        tx
+          .select({ r: rdvAffaires.rendezVousId })
+          .from(rdvAffaires)
+          .where(eq(rdvAffaires.opportuniteId, opportuniteId)),
+      ),
     entrepriseId &&
       inArray(
         rendezVous.id,

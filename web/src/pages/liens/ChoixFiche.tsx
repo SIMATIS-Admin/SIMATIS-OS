@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { fetchContact, fetchEntreprise } from '../../api.js';
+import { fetchContact, fetchEntreprise, fetchFiche } from '../../api.js';
 import { NouveauContact } from '../Contacts.js';
 import { NouvelleEntreprise } from '../Entreprises.js';
 import { LierExistant } from './CarteLiens.js';
 
 // Picks the organisation or the contact a record belongs to: search an existing one or create it in
 // a window (in a portal: the picker may sit inside a form), without leaving the page. The name is only known to the parent through onChange.
-const nomDe = (slug: string, kind: 'entreprise' | 'contact', id: string) =>
-  (kind === 'contact' ? fetchContact(slug, id) : fetchEntreprise(slug, id)).then((f) => f.nom);
+// An « affaire » is only searched, never created from here.
+const nomDe = (slug: string, kind: 'entreprise' | 'contact' | 'affaire', id: string) =>
+  kind === 'affaire'
+    ? fetchFiche(slug, 'affaire', id).then((f) =>
+        typeof f.fiche.titre === 'string' ? f.fiche.titre : 'Affaire',
+      )
+    : (kind === 'contact' ? fetchContact(slug, id) : fetchEntreprise(slug, id)).then((f) => f.nom);
 
 export function ChoixFiche({
   slug,
@@ -19,7 +24,7 @@ export function ChoixFiche({
   onChange,
 }: {
   slug: string;
-  kind: 'entreprise' | 'contact';
+  kind: 'entreprise' | 'contact' | 'affaire';
   id: string | null;
   label: string;
   // Organisation chosen for the same record: a new contact starts in it.
@@ -76,9 +81,11 @@ export function ChoixFiche({
         <button type="button" className="btn ghost sm" onClick={() => setMode('chercher')}>
           {id ? 'Changer' : 'Choisir'}
         </button>{' '}
-        <button type="button" className="btn ghost sm" onClick={() => setMode('creer')}>
-          {kind === 'contact' ? 'Créer un contact' : 'Créer une organisation'}
-        </button>
+        {kind !== 'affaire' && (
+          <button type="button" className="btn ghost sm" onClick={() => setMode('creer')}>
+            {kind === 'contact' ? 'Créer un contact' : 'Créer une organisation'}
+          </button>
+        )}
       </span>
       {mode === 'chercher' && (
         <LierExistant slug={slug} kind={kind} exclus={id ? [id] : []} onChoix={choisir} />

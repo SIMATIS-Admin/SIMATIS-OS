@@ -265,8 +265,13 @@ export async function getFiche(
 ): Promise<Fiche | null> {
   return withInstance(db, instance.id, async (tx) => {
     const fiche = await lire(tx, kind, id, maintenant);
-    if (!fiche || kind === 'affaire' || instance.type !== 'propre') return fiche;
-    const lien = kind === 'contact' ? diagnosticProjets.contactId : diagnosticProjets.entrepriseId;
+    if (!fiche || instance.type !== 'propre') return fiche;
+    const lien =
+      kind === 'contact'
+        ? diagnosticProjets.contactId
+        : kind === 'affaire'
+          ? diagnosticProjets.opportuniteId
+          : diagnosticProjets.entrepriseId;
     const projets = await tx
       .select({
         id: diagnosticProjets.id,
@@ -278,7 +283,7 @@ export async function getFiche(
       .from(diagnosticProjets)
       .where(and(eq(diagnosticProjets.instanceId, currentInstance), eq(lien, id)))
       .orderBy(desc(diagnosticProjets.updatedAt));
-    if (!atelierActif(instance)) return { ...fiche, diagnostics: projets };
+    if (kind === 'affaire' || !atelierActif(instance)) return { ...fiche, diagnostics: projets };
     const entrepriseId = kind === 'entreprise' ? id : fiche.liens.entreprise?.id;
     const ateliers = entrepriseId
       ? (

@@ -4,6 +4,7 @@ import { createInstance } from '../instances/service.js';
 import { entreprises } from '../crm/schema.js';
 import type { Instance } from '../instances/schema.js';
 import {
+  AffaireIntrouvable,
   ContactIntrouvable,
   createProjet,
   DiagnosticIndisponible,
@@ -210,5 +211,54 @@ describe('Diagnostic : colonnes de l entretien', () => {
     await expect(
       updateProjet(t.app.db, simatis, p.id, { contactId: c.rows[0]!.id }),
     ).rejects.toBeInstanceOf(ContactIntrouvable);
+  });
+  it('lie le projet à une affaire, changeable ensuite, et la délie si l’affaire disparaît', async () => {
+    const affaire = async (i: Instance) =>
+      (
+        await t.owner.pool.query<{ id: string }>(
+          "insert into opportunites (instance_id, titre, etape) values ($1, 'Affaire Liée', 'detection') returning id",
+          [i.id],
+        )
+      ).rows[0]!.id;
+    const a1 = await affaire(simatis);
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Lié Affaire',
+      activite: 'usinage',
+      opportuniteId: a1,
+    });
+    expect(p.opportuniteId).toBe(a1);
+    const a2 = await affaire(simatis);
+    expect((await updateProjet(t.app.db, simatis, p.id, { opportuniteId: a2 })).opportuniteId).toBe(
+      a2,
+    );
+    await t.owner.pool.query('delete from opportunites where id = $1', [a2]);
+    const relu = (await listProjets(t.app.db, simatis)).find((x) => x.id === p.id)!;
+    expect(relu.opportuniteId).toBeNull();
+    expect((await updateProjet(t.app.db, simatis, p.id, { opportuniteId: a1 })).opportuniteId).toBe(
+      a1,
+    );
+    expect(
+      (await updateProjet(t.app.db, simatis, p.id, { opportuniteId: null })).opportuniteId,
+    ).toBeNull();
+  });
+
+  it('refuse une affaire inconnue ou d’une autre instance', async () => {
+    const inconnu = '00000000-0000-4000-8000-000000000000';
+    await expect(
+      createProjet(t.app.db, simatis, { nom: 'X', activite: 'usinage', opportuniteId: inconnu }),
+    ).rejects.toBeInstanceOf(AffaireIntrouvable);
+    const autre = await createInstance(t.owner.db, {
+      slug: 'diag-autre-affaire',
+      nom: 'Autre',
+      type: 'propre',
+    });
+    const o = await t.owner.pool.query<{ id: string }>(
+      "insert into opportunites (instance_id, titre, etape) values ($1, 'Ailleurs', 'detection') returning id",
+      [autre.id],
+    );
+    const p = await createProjet(t.app.db, simatis, { nom: 'Y', activite: 'usinage' });
+    await expect(
+      updateProjet(t.app.db, simatis, p.id, { opportuniteId: o.rows[0]!.id }),
+    ).rejects.toBeInstanceOf(AffaireIntrouvable);
   });
 });

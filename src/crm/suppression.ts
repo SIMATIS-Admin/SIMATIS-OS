@@ -42,6 +42,7 @@ export const REFERENCES: {
   { table: 'vma_tests', colonne: 'entreprise_id', kind: 'entreprise' },
   { table: 'diagnostic_projets', colonne: 'entreprise_id', kind: 'entreprise' },
   { table: 'diagnostic_projets', colonne: 'contact_id', kind: 'contact' },
+  { table: 'diagnostic_projets', colonne: 'opportunite_id', kind: 'affaire' },
   {
     table: 'devis',
     colonne: 'opportunite_id',

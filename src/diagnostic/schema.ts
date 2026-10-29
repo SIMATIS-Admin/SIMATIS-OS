@@ -9,7 +9,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { contacts, entreprises, rendezVous } from '../crm/schema.js';
+import { contacts, entreprises, opportunites, rendezVous } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Dimensions } from './profil.js';
 import type { Proposition } from './proposition.js';
@@ -149,11 +149,16 @@ export const diagnosticProjets = pgTable(
     entrepriseId: uuid('entreprise_id').references(() => entreprises.id, { onDelete: 'set null' }),
     // Le dirigeant (ou l'interlocuteur) du diagnostic : un seul contact.
     contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+    // L'affaire dont ce diagnostic fait partie (facultatif) : elle porte les rendez-vous et comptes rendus.
+    opportuniteId: uuid('opportunite_id').references(() => opportunites.id, {
+      onDelete: 'set null',
+    }),
   },
   (t) => [
     index('diagnostic_projets_instance_idx').on(t.instanceId),
     index('diagnostic_projets_entreprise_idx').on(t.entrepriseId),
     index('diagnostic_projets_contact_idx').on(t.contactId),
+    index('diagnostic_projets_opportunite_idx').on(t.opportuniteId),
     instanceIsolation('diagnostic_projets'),
   ],
 );
