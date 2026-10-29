@@ -4,7 +4,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { profilDe, type Profil } from './profil.js';
-import { contacts, entreprises } from '../crm/schema.js';
+import { contacts, entreprises, opportunites } from '../crm/schema.js';
 import { genererRapportWord, nomFichier } from './rapport-word.js';
 import { diagnosticProjets, type Projet } from './schema.js';
 
@@ -14,6 +14,11 @@ export class ProjetIntrouvable extends Error {}
 export class EntrepriseIntrouvable extends Error {
   constructor() {
     super('Entreprise introuvable dans cet espace');
+  }
+}
+export class AffaireIntrouvable extends Error {
+  constructor() {
+    super('Affaire introuvable dans cet espace');
   }
 }
 export class ContactIntrouvable extends Error {
@@ -42,6 +47,7 @@ export type ProjetPatch = Partial<
     | 'activite'
     | 'entrepriseId'
     | 'contactId'
+    | 'opportuniteId'
     | 'contexte'
     | 'etape'
     | 'dims'
@@ -94,7 +100,11 @@ export async function listProjets(db: Executor, instance: Instance): Promise<Pro
 // Une fiche d'une autre instance est invisible ici (RLS) : elle n'est donc pas trouvée.
 async function verifierLiens(
   tx: Tx,
-  { entrepriseId, contactId }: { entrepriseId?: string | null; contactId?: string | null },
+  {
+    entrepriseId,
+    contactId,
+    opportuniteId,
+  }: { entrepriseId?: string | null; contactId?: string | null; opportuniteId?: string | null },
 ) {
   if (entrepriseId) {
     const [trouvee] = await tx
@@ -110,6 +120,13 @@ async function verifierLiens(
       .where(and(eq(contacts.instanceId, currentInstance), eq(contacts.id, contactId)));
     if (!trouve) throw new ContactIntrouvable();
   }
+  if (opportuniteId) {
+    const [trouvee] = await tx
+      .select({ id: opportunites.id })
+      .from(opportunites)
+      .where(and(eq(opportunites.instanceId, currentInstance), eq(opportunites.id, opportuniteId)));
+    if (!trouvee) throw new AffaireIntrouvable();
+  }
 }
 
 export async function createProjet(
@@ -120,6 +137,7 @@ export async function createProjet(
     activite: string;
     entrepriseId?: string | null;
     contactId?: string | null;
+    opportuniteId?: string | null;
   },
 ): Promise<ProjetVue> {
   verifierEspace(instance);
@@ -133,6 +151,7 @@ export async function createProjet(
         activite: input.activite,
         entrepriseId: input.entrepriseId ?? null,
         contactId: input.contactId ?? null,
+        opportuniteId: input.opportuniteId ?? null,
       })
       .returning();
     return vue(row!);

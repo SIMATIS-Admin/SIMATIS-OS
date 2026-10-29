@@ -23,6 +23,7 @@ export const creationSchema = z.object({
   activite,
   entrepriseId: z.string().uuid().nullish(),
   contactId: z.string().uuid().nullish(),
+  opportuniteId: z.string().uuid().nullish(),
 });
 
 export const projetSchema = z
@@ -31,6 +32,7 @@ export const projetSchema = z
     activite: activite.optional(),
     entrepriseId: z.string().uuid().nullable().optional(),
     contactId: z.string().uuid().nullable().optional(),
+    opportuniteId: z.string().uuid().nullable().optional(),
     contexte: z.string().max(5000).optional(),
     etape: z.number().int().min(1).max(5).optional(),
     dims: z.object({ outils: note, strategie: note, polyvalence: note }).nullable().optional(),

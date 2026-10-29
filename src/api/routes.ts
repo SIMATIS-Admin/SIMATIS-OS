@@ -6,6 +6,7 @@ import {
   deleteProjet,
   DiagnosticIndisponible,
   listProjets,
+  AffaireIntrouvable,
   ContactIntrouvable,
   EntrepriseIntrouvable,
   ProjetIntrouvable,
@@ -443,7 +444,11 @@ export function registerApi(
     if (error instanceof DiagnosticIndisponible)
       return reply.code(403).send({ error: error.message });
     if (error instanceof ProjetIntrouvable) return reply.code(404).send({ error: error.message });
-    if (error instanceof EntrepriseIntrouvable || error instanceof ContactIntrouvable)
+    if (
+      error instanceof EntrepriseIntrouvable ||
+      error instanceof ContactIntrouvable ||
+      error instanceof AffaireIntrouvable
+    )
       return reply.code(400).send({ error: error.message });
     throw error;
   };
