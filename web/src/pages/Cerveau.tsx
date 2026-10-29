@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchCarteCerveau } from '../api.js';
+import { NoteCerveau, IdeeCerveau } from './NoteCerveau.js';
 import { categorieInfo, disposer, voisins, type CarteCerveau } from '../cerveau.js';
 
 const TAILLE = 1000;
@@ -19,6 +20,8 @@ export function Cerveau({ slug }: { slug: string }) {
   const [masquees, setMasquees] = useState<Set<string>>(new Set());
   const [choisie, setChoisie] = useState<string | null>(null);
   const [recherche, setRecherche] = useState('');
+  const [ouverte, setOuverte] = useState<string | null>(null);
+  const [rechargement, setRechargement] = useState(0);
   const [vue, setVue] = useState({ x: -TAILLE / 2, y: -TAILLE / 2, l: TAILLE });
   const glisse = useRef<{ x: number; y: number } | null>(null);
 
@@ -31,7 +34,7 @@ export function Cerveau({ slug }: { slug: string }) {
     return () => {
       vivant = false;
     };
-  }, [slug]);
+  }, [slug, rechargement]);
 
   const positions = useMemo(
     () =>
@@ -156,6 +159,14 @@ export function Cerveau({ slug }: { slug: string }) {
       </div>
 
       <div className="cerveau-cote">
+        <IdeeCerveau
+          slug={slug}
+          onAjoutee={(chemin) => {
+            setOuverte(chemin);
+            // La carte est redéposée par l'exécuteur juste après l'écriture.
+            setTimeout(() => setRechargement((n) => n + 1), 3000);
+          }}
+        />
         <div className="panel">
           <div className="panel-b">
             <input
@@ -213,6 +224,9 @@ export function Cerveau({ slug }: { slug: string }) {
                   <br />
                   <code>{note.id}</code>
                 </p>
+                <button className="btn" onClick={() => setOuverte(note.id)}>
+                  Ouvrir et modifier
+                </button>
                 {(
                   [
                     ['Renvoie vers', lies.sortants],
@@ -241,6 +255,17 @@ export function Cerveau({ slug }: { slug: string }) {
           </div>
         </div>
       </div>
+      {ouverte && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <NoteCerveau
+            key={ouverte}
+            slug={slug}
+            chemin={ouverte}
+            onFerme={() => setOuverte(null)}
+            onEnregistre={() => setTimeout(() => setRechargement((n) => n + 1), 3000)}
+          />
+        </div>
+      )}
     </div>
   );
 }

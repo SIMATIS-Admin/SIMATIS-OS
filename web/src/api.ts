@@ -248,6 +248,17 @@ export const supprimerTestVma = (slug: string, id: string) =>
 export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug, 'journal'));
 export const fetchCarteCerveau = (slug: string) =>
   getJson<import('./cerveau.js').CarteCerveau | null>(inst(slug, 'cerveau/carte'));
+export type OperationCerveau =
+  | { type: 'lire'; chemin: string }
+  | { type: 'ecrire'; chemin: string; contenu: string; empreinte: string }
+  | { type: 'ajouter'; titre: string; texte: string };
+// Lire, enregistrer une note ou ajouter une idée : exécuté sur le dossier du second cerveau (Drive).
+export const operationCerveau = (slug: string, operation: OperationCerveau) =>
+  sendJson<{ chemin?: string; contenu?: string; empreinte?: string }>(
+    'POST',
+    inst(slug, 'cerveau/operations'),
+    operation,
+  );
 export const fetchConsole = (slug: string) => getJson<ConsoleOS>(inst(slug, 'console'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>

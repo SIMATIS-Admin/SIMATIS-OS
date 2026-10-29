@@ -8,6 +8,7 @@ import { DEBUT_MESSAGE_RAPPORT } from '../diagnostic/rapport.js';
 import { consignesProposition, type Proposition } from '../diagnostic/proposition.js';
 import { DEBUT_MESSAGE_RESTITUTION } from '../diagnostic/restitution.js';
 import { construireCarte } from '../cerveau/carte.js';
+import { executer, type Operation } from '../cerveau/file.js';
 import { consigneCerveau } from './cerveau.js';
 
 // Local runner (npm run runner, started by launchd on the workstation): picks the routine runs the
@@ -174,6 +175,30 @@ async function deposerCarte(
   } catch (err) {
     console.error('carte du second cerveau :', err instanceof Error ? err.message : err);
   }
+}
+
+// Demandes de l'OS sur le second cerveau (ouvrir, enregistrer une note, ajouter une idée) : exécutées
+// ici, sur le dossier du Drive. Après une écriture, la carte est redéposée.
+export async function tourCerveau(opts: RunnerOptions): Promise<number> {
+  const api = clientOs(opts);
+  const demandes = await api<{ id: string; operation: Operation }[]>(
+    '/api/runner/cerveau/operations',
+  );
+  const cerveau = await dossierOuNull(opts.cerveau);
+  for (const { id, operation } of demandes) {
+    const resultat = cerveau
+      ? await executer(cerveau, operation).catch((err: unknown) => ({
+          ok: false as const,
+          erreur: err instanceof Error ? err.message : String(err),
+        }))
+      : {
+          ok: false as const,
+          erreur: "Le dossier du second cerveau n'est pas accessible sur ce poste.",
+        };
+    await api(`/api/runner/cerveau/operations/${id}`, resultat);
+    if (resultat.ok && operation.type !== 'lire') await deposerCarte(api, cerveau ?? undefined);
+  }
+  return demandes.length;
 }
 
 export async function tour(opts: RunnerOptions): Promise<number> {
@@ -855,6 +880,19 @@ function main() {
   };
   passeEchange();
   setInterval(passeEchange, 5_000);
+
+  // L'éditeur du second cerveau attend la réponse à l'écran : on relève ses demandes plus souvent.
+  let occupeCerveau = false;
+  const passeCerveau = () => {
+    if (occupeCerveau) return;
+    occupeCerveau = true;
+    tourCerveau(opts)
+      .catch((err: unknown) => console.error('runner :', err instanceof Error ? err.message : err))
+      .finally(() => {
+        occupeCerveau = false;
+      });
+  };
+  setInterval(passeCerveau, 1_500);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main();
