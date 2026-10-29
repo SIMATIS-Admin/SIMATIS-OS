@@ -57,6 +57,18 @@ describe('Second cerveau : carte', () => {
     expect(res.json<{ misAJour: string }>().misAJour).toEqual(expect.any(String));
   });
 
+  it('conserve le champ concerne des nœuds', async () => {
+    const avec = {
+      ...carte,
+      noeuds: [
+        { id: 'i.md', titre: 'I', categorie: 'idees-en-vrac', statut: 'draft', concerne: 'os' },
+      ],
+    };
+    expect((await poster(runner, avec)).statusCode).toBe(200);
+    const res = await app().inject({ method: 'GET', url: '/api/i/cv-ok/cerveau/carte' });
+    expect(res.json()).toMatchObject({ noeuds: [{ id: 'i.md', concerne: 'os' }] });
+  });
+
   it('sans carte déposée, la lecture répond null', async () => {
     const res = await app().inject({ method: 'GET', url: '/api/i/cv-ok/cerveau/carte' });
     expect(res.statusCode).toBe(200);

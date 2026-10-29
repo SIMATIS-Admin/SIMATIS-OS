@@ -17,6 +17,7 @@ const carteSchema = z.object({
         titre: z.string().max(500),
         categorie: z.string().max(100),
         statut: z.string().max(50).nullable(),
+        concerne: z.string().max(50).nullable().optional(),
       }),
     )
     .max(10_000),

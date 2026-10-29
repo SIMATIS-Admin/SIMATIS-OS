@@ -7,6 +7,8 @@ export type Noeud = {
   titre: string;
   categorie: string;
   statut: string | null;
+  // Sujet auquel une idée se rapporte (« os » : le développement de l'OS), lu dans l'en-tête.
+  concerne?: string | null | undefined;
 };
 export type Lien = { de: string; vers: string };
 export type Carte = {
@@ -43,10 +45,11 @@ const categorieDe = (id: string) => {
 
 const sansCode = (texte: string) => texte.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
 
-const statutDe = (texte: string) => {
+const champDe = (texte: string, champ: string) => {
   const entete = /^---\n([\s\S]*?)\n---/.exec(texte)?.[1];
-  return entete ? (/^statut:\s*(\S+)/m.exec(entete)?.[1] ?? null) : null;
+  return entete ? (new RegExp(`^${champ}:\\s*(\\S+)`, 'm').exec(entete)?.[1] ?? null) : null;
 };
+const statutDe = (texte: string) => champDe(texte, 'statut');
 
 // Titre : premier titre « # », sinon le « sujet » de l'en-tête (messages de l'espace partagé), sinon le nom.
 const titreDe = (texte: string, id: string) => {
@@ -87,6 +90,7 @@ export function carteDepuisNotes(
       titre: titreDe(texte, id),
       categorie: categorieDe(id),
       statut: statutDe(texte),
+      concerne: champDe(texte, 'concerne'),
     });
     const corps = sansCode(texte);
     for (const m of corps.matchAll(/\[\[([^\]|#]+)[^\]]*\]\]/g)) {

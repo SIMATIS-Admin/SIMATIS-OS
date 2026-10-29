@@ -3,6 +3,7 @@ export type NoeudCerveau = {
   titre: string;
   categorie: string;
   statut: string | null;
+  concerne?: string | null;
 };
 export type CarteCerveau = {
   noeuds: NoeudCerveau[];
@@ -21,6 +22,7 @@ export const CATEGORIES: Record<string, { libelle: string; couleur: string }> = 
   methodes: { libelle: 'Méthodes', couleur: '#7a4fb5' },
   outils: { libelle: 'Outils et sources', couleur: '#2f7fc1' },
   inbox: { libelle: 'Inbox', couleur: '#c0442e' },
+  'idees-en-vrac': { libelle: 'Idées en vrac', couleur: '#e0a526' },
   archives: { libelle: 'Archives', couleur: '#7d8ba0' },
   skills: { libelle: 'Skills', couleur: '#2f8f5b' },
   modeles: { libelle: 'Modèles', couleur: '#d6619a' },
