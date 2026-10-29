@@ -60,6 +60,20 @@ describe('Cerveau', () => {
     expect(screen.getByTestId('noeud-index.md')).toBeTruthy();
   });
 
+  it('« Réinitialiser la vue » remet légende, recherche et sélection à zéro', async () => {
+    render(<Cerveau slug="x" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Clients/ }));
+    fireEvent.click(screen.getByTestId('noeud-index.md'));
+    fireEvent.change(screen.getByLabelText('Chercher une note'), { target: { value: 'projet' } });
+    expect(screen.queryByTestId('noeud-brain/clients/acme.md')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Réinitialiser la vue' }));
+
+    expect(screen.getByTestId('noeud-brain/clients/acme.md')).toBeTruthy();
+    expect(screen.getByLabelText<HTMLInputElement>('Chercher une note').value).toBe('');
+    expect(screen.getByText(/Cliquez sur une note de la carte/)).toBeTruthy();
+  });
+
   it('explique quand la carte n’est pas encore arrivée', async () => {
     repondre(null);
     render(<Cerveau slug="x" />);
