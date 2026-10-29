@@ -3,6 +3,10 @@ import {
   creerProjetDiag,
   demandeRapportDiag,
   demandeRestitutionDiag,
+  enregistrerCapitalisationDiag,
+  proposerCapitalisationDiag,
+  rendezVousCapitalisationDiag,
+  type RdvCapitalisation,
   exporterRestitutionDiag,
   urlPptxRestitutionDiag,
   viderConversationDiag,
@@ -421,6 +425,14 @@ export function ProjetVue({
               slug={slug}
               projet={projet}
               onSauver={sauver}
+              onChange={onChange}
+              onErreur={onErreur}
+            />
+          )}
+          {projet.etape === 5 && (
+            <CapitalisationRestitution
+              slug={slug}
+              projet={projet}
               onChange={onChange}
               onErreur={onErreur}
             />
@@ -1309,6 +1321,115 @@ function RestitutionDeck({
             </ul>
           </details>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Capitalisation de la restitution (étape 5) : Claude relit le compte rendu écrit sur le rendez-vous
+// de la restitution et propose, dans la conversation, ce qu'il retient pour le second cerveau ; il
+// ne l'écrit qu'une fois le pilote d'accord.
+function CapitalisationRestitution({
+  slug,
+  projet,
+  onChange,
+  onErreur,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onChange: (p: ProjetDiag) => void;
+  onErreur: (m: string) => void;
+}) {
+  const [rdvs, setRdvs] = useState<RdvCapitalisation[]>([]);
+  const [choix, setChoix] = useState('');
+  useEffect(() => {
+    let actif = true;
+    void rendezVousCapitalisationDiag(slug, projet.id)
+      .then((liste) => {
+        if (!actif) return;
+        setRdvs(liste ?? []);
+        // Le plus récent d'abord : c'est la restitution qui vient d'avoir lieu.
+        setChoix((courant) => courant || (liste?.[0]?.id ?? ''));
+      })
+      .catch((err) => actif && onErreur(messageErreur(err)));
+    return () => {
+      actif = false;
+    };
+    // Recharger quand le statut change : un compte rendu peut avoir été écrit entre-temps.
+  }, [slug, projet.id, projet.capitalisationStatut]);
+  const occupe =
+    projet.capitalisationStatut === 'en_cours' ||
+    (projet.demande === 'capitalisation_enregistrer' && projet.statutChat !== 'repos');
+  const lancer = async (appel: () => Promise<ProjetDiag>) => {
+    try {
+      onChange(await appel());
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <h2>Capitaliser la restitution</h2>
+      </div>
+      <div className="panel-b stack">
+        <p className="small muted" style={{ margin: 0 }}>
+          Claude relit le compte rendu que vous avez écrit sur le rendez-vous de la restitution et
+          propose, dans la conversation, ce qu’il retient pour les diagnostics suivants. Rien n’est
+          écrit dans le second cerveau avant votre accord.
+        </p>
+        {rdvs.length === 0 ? (
+          <p className="small muted" style={{ margin: 0 }}>
+            Aucun compte rendu trouvé pour cette entreprise. Écrivez-le sur le rendez-vous de la
+            restitution (Inbox ou fiche), puis revenez ici.
+          </p>
+        ) : (
+          <label className="stack" style={{ gap: 4 }}>
+            <span className="small">Rendez-vous de la restitution</span>
+            <select value={choix} onChange={(e) => setChoix(e.target.value)} disabled={occupe}>
+              {rdvs.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.titre}
+                  {r.debut ? ` — ${new Date(r.debut).toLocaleDateString('fr-FR')}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {projet.capitalisationStatut === 'en_cours' && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Analyse du compte rendu en cours… Claude répondra dans la conversation.
+          </p>
+        )}
+        {projet.capitalisationStatut === 'propose' && !occupe && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Claude a fait sa proposition dans la conversation. Ajustez-la si besoin, puis
+            enregistrez.
+          </p>
+        )}
+        {projet.capitalisationStatut === 'enregistre' && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Capitalisation enregistrée dans le second cerveau.
+          </p>
+        )}
+        <div className="diag-actions">
+          <button
+            className="btn go"
+            disabled={occupe || !choix}
+            onClick={() => void lancer(() => proposerCapitalisationDiag(slug, projet.id, choix))}
+          >
+            Capitaliser la restitution
+          </button>
+          {projet.capitalisationStatut === 'propose' && (
+            <button
+              className="btn go"
+              disabled={occupe}
+              onClick={() => void lancer(() => enregistrerCapitalisationDiag(slug, projet.id))}
+            >
+              Enregistrer dans le second cerveau
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1125,6 +1125,8 @@ export type ProjetDiag = {
     | 'rapport'
     | 'restitution'
     | 'restitution_export'
+    | 'capitalisation_proposer'
+    | 'capitalisation_enregistrer'
     | 'entretien'
     | null;
   aPdfEntretien: boolean;
@@ -1152,6 +1154,11 @@ export type ProjetDiag = {
   // PowerPoint exporté depuis le deck : disponible au téléchargement, avec la date de l'export.
   aPptx: boolean;
   restitutionExportLe: string | null;
+  // Capitalisation de la restitution : 'propose' quand Claude a répondu dans le chat, 'enregistre'
+  // une fois écrite dans le second cerveau.
+  capitalisationStatut: 'aucun' | 'en_cours' | 'propose' | 'enregistre';
+  capitalisationRdvId: string | null;
+  capitalisationCompteRenduAt: string | null;
   proposition: Proposition | null;
   updatedAt: string;
 };
@@ -1269,6 +1276,31 @@ export const demandeRestitutionDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/produire`),
+    {},
+  );
+// Rendez-vous de l'entreprise du projet qui ont un compte rendu, le plus récent d'abord.
+export type RdvCapitalisation = {
+  id: string;
+  titre: string;
+  debut: string | null;
+  compteRenduAt: string;
+};
+export const rendezVousCapitalisationDiag = (slug: string, id: string) =>
+  getJson<RdvCapitalisation[]>(
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/capitalisation/rendez-vous`),
+  );
+// Temps 1 : Claude relit le compte rendu et propose ce qu'il retient (rien n'est écrit).
+export const proposerCapitalisationDiag = (slug: string, id: string, rdvId: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/capitalisation/proposer`),
+    { rdvId },
+  );
+// Temps 2 : le pilote est d'accord, Claude écrit dans le second cerveau.
+export const enregistrerCapitalisationDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/capitalisation/enregistrer`),
     {},
   );
 // Demande l'export PowerPoint du deck de restitution (Claude relit le deck publié).
