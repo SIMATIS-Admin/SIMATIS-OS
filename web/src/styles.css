@@ -5336,3 +5336,29 @@ label.btn.off {
     grid-template-columns: 1fr;
   }
 }
+
+.cerveau-editeur textarea,
+.cerveau-idee textarea {
+  width: 100%;
+  font-family: var(--f-num);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  box-sizing: border-box;
+}
+.cerveau-idee {
+  display: grid;
+  gap: 8px;
+}
+.cerveau-idee input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+}
+.cerveau-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
