@@ -68,7 +68,21 @@ describe('Fusion de fiches', () => {
     secretsDir = await mkdtemp(path.join(tmpdir(), 'simatis-fus-'));
     for (const slug of ['fus-hub', 'fus-lecture'])
       await writeFile(path.join(secretsDir, `${slug}.env`), `HUBSPOT_TOKEN=${TOKEN}\n`);
-    registerConnector(hubspotConnector({ fetch: portal.fetch, sleep: () => Promise.resolve() }));
+    // Fake HubSpot answer for a record already merged elsewhere (a redirection, not a live record).
+    const dejaFusionnee = (url: string, init?: RequestInit) =>
+      url.endsWith('/merge') &&
+      typeof init?.body === 'string' &&
+      init.body.includes('"objectIdToMerge":"206"')
+        ? Promise.resolve(
+            new Response(
+              JSON.stringify({
+                message: 'Cannot merge 206 because it has a forward reference to 207',
+              }),
+              { status: 400, headers: { 'content-type': 'application/json' } },
+            ),
+          )
+        : portal.fetch(url, init ?? {});
+    registerConnector(hubspotConnector({ fetch: dejaFusionnee, sleep: () => Promise.resolve() }));
     for (const [i, sens] of [
       [hub, 'deux_sens'],
       [lecture, 'lecture'],
@@ -227,6 +241,15 @@ describe('Fusion de fiches', () => {
       ],
     ]);
     expect(await existe('contacts', a)).toBe(false);
+  });
+
+  it('HubSpot : une absorbée déjà fusionnée côté HubSpot est fusionnée localement', async () => {
+    const g = await contact(hub, 'Gardé redirigé fictif', 'hubspot', '207');
+    const a = await contact(hub, 'Absorbé redirigé fictif', 'hubspot', '206');
+    const armed = { ...hub, config: { ecrituresReelles: true } };
+    expect(await fusion(armed, 'contact', g, a, on())).toEqual({ ok: true });
+    expect(await existe('contacts', a)).toBe(false);
+    expect(await existe('contacts', g)).toBe(true);
   });
 
   it('simulation : base et HubSpot inchangés', async () => {

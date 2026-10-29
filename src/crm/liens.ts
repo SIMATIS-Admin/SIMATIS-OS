@@ -135,6 +135,10 @@ export async function ecrireHubspot(
   try {
     return (await writeVia(tx, instance, 'crm', { op, data }, deps)).simulation;
   } catch (error) {
+    // The absorbed record was already merged on HubSpot's side (its id is only a redirection): the
+    // OS copy is stale, so the local merge goes on instead of being blocked.
+    if (op === 'record.merge' && error instanceof Error && /forward reference/i.test(error.message))
+      return false;
     throw new CrmIndisponible(
       `Refusé par HubSpot : ${error instanceof Error ? error.message : String(error)}`,
     );
