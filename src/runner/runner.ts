@@ -7,6 +7,7 @@ import { chargerGrille, type Grille } from '../diagnostic/grille.js';
 import { DEBUT_MESSAGE_RAPPORT } from '../diagnostic/rapport.js';
 import { consignesProposition, type Proposition } from '../diagnostic/proposition.js';
 import { DEBUT_MESSAGE_RESTITUTION } from '../diagnostic/restitution.js';
+import { consigneCerveau } from './cerveau.js';
 
 // Local runner (npm run runner, started by launchd on the workstation): picks the routine runs the
 // OS requested and runs each one with Claude Code, connected to the OS's MCP server through a
@@ -141,7 +142,7 @@ export async function argumentsClaude(
     'Glob',
     'Grep',
   ].join(',');
-  const texte = `${prompt(d)}\nSecond cerveau : ${cerveau}. Ajoute seulement : ne supprime ni ne réécris jamais une note existante, et n'écris nulle part ailleurs.`;
+  const texte = `${prompt(d)}\n${consigneCerveau(cerveau, 'ajout')}`;
   return { args: ['-p', texte, ...base, outils, '--add-dir', cerveau], cwd: cerveau };
 }
 
@@ -468,7 +469,7 @@ export const promptSupport = (
     `- Logo : ${logo ? `fichier ${logo} du dossier courant` : 'aucun fourni'}`,
     `Deck de ce projet : ${a.supportLien ?? 'pas encore créé'}.`,
     cerveau
-      ? `Second cerveau : ${cerveau}. Ajoute seulement : ne supprime ni ne réécris jamais une note existante, et n'écris nulle part ailleurs.`
+      ? consigneCerveau(cerveau, 'ajout')
       : 'Second cerveau non accessible sur ce poste : saute ce qui en a besoin et dis-le au pilote.',
     a.demande === 'preparer_support'
       ? TACHES_SUPPORT.preparer(a)
@@ -532,7 +533,7 @@ export const promptRapport = (a: AttenteDiag, cerveau: string | null, maintenant
         ]
       : []),
     cerveau
-      ? `Second cerveau : ${cerveau}. Lecture seule : n'y écris rien.`
+      ? consigneCerveau(cerveau, 'lecture')
       : 'Second cerveau non accessible sur ce poste : saute ce qui en a besoin et dis-le au pilote.',
     'Format de sortie pour cette demande : ni formulaire, ni artifact, ni fichier. Les étapes de la skill qui en parlent ne s’appliquent pas ici.',
     `Tâche : rédige le rapport complet, puis appelle une seule fois enregistrer_rapport avec projetId ${a.id} et le contenu structuré (dimensions notées sur 10, profil de la cascade, trois horizons de plan d'action sur la trame en sept blocs). Rien n'est inventé : un fait absent des données se laisse de côté.`,
@@ -583,7 +584,7 @@ export const promptRestitution = (
       : "Le pilote n'inclut pas sa proposition de collaboration : le deck se termine sur le plan d'action et une diapositive de conclusion, sans aucune offre ni tarif.",
     `Tâche : ${a.restitutionLien ? `révise le deck existant (${a.restitutionLien}) sans en créer un autre` : 'commence par Artifact action quickstart avec intent « slides », puis crée un nouvel artifact de type Slides aux couleurs SIMATIS (bleu marine, menthe), sans url'}. Dès sa création, appelle enregistrer_restitution avec projetId ${a.id} et son lien, puis publie le contenu.`,
     cerveau
-      ? `Second cerveau : ${cerveau}. Lecture seule : n'y écris rien.`
+      ? consigneCerveau(cerveau, 'lecture')
       : 'Second cerveau non accessible sur ce poste : saute ce qui en a besoin et dis-le au pilote.',
     `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : ce que contient le deck en quelques phrases et ce qui reste à compléter, puis arrête-toi. Vouvoie le pilote, en français.`,
   ].join('\n');
