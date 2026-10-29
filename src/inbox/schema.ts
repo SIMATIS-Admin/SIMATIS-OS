@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   jsonb,
@@ -22,6 +23,7 @@ export const TYPES_SUJET = [
   'autre',
 ] as const;
 // `site`: a request left on the public website's contact form. `test-vma`: a result of the VMA test.
+// `wispr`: a meeting note read in Wispr Flow by the Inbox routine.
 export const ORIGINES_SUJET = [
   'messagerie',
   'agenda',
@@ -29,6 +31,7 @@ export const ORIGINES_SUJET = [
   'os',
   'site',
   'test-vma',
+  'wispr',
 ] as const;
 export const STATUTS_SUJET = ['a_traiter', 'tache', 'traite'] as const;
 export const PRIORITE_MIN = 1;
@@ -77,6 +80,34 @@ export const sujets = pgTable(
 );
 
 export type Sujet = typeof sujets.$inferSelect;
+
+// Meeting read in Wispr Flow, one per Wispr id. The full transcript is kept only for a critical
+// meeting; unticking « critique » deletes it.
+export const reunionsWispr = pgTable(
+  'reunions_wispr',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    wisprId: text('wispr_id').notNull(),
+    sujetId: uuid('sujet_id')
+      .notNull()
+      .references(() => sujets.id),
+    titre: text('titre').notNull(),
+    debutAt: timestamp('debut_at', { withTimezone: true }).notNull(),
+    participants: jsonb('participants').$type<string[]>().notNull().default([]),
+    resume: text('resume'),
+    critique: boolean('critique').notNull().default(false),
+    transcript: text('transcript'),
+    transcriptAt: timestamp('transcript_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('reunions_wispr_wispr_idx').on(t.instanceId, t.wisprId),
+    index('reunions_wispr_sujet_idx').on(t.sujetId),
+    instanceIsolation('reunions_wispr'),
+  ],
+);
+
+export type ReunionWispr = typeof reunionsWispr.$inferSelect;
 
 // Entry prepared by Claude in an add conversation, shown to the pilot before it is added.
 export type BrouillonSujet = {

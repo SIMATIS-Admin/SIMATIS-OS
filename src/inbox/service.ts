@@ -18,7 +18,9 @@ import {
   type DestinataireLivreBlanc,
   type NumeroLivreBlanc,
 } from './livre-blanc.js';
+import { attribuerReunion } from './reunions.js';
 import {
+  reunionsWispr,
   SOURCE_MANUELLE,
   sujets,
   type OrigineSujet,
@@ -69,6 +71,14 @@ export type SujetVue = {
   proposition: PropositionVue | null;
   // Pour une demande de livre blanc dont l'adresse est lisible : à qui l'envoyer.
   livreBlanc: DestinataireLivreBlanc | null;
+  // Réunion Wispr Flow de l'entrée ; dejaRelie = elle s'est reliée à un compte rendu déjà à faire.
+  reunion: {
+    critique: boolean;
+    transcriptStocke: boolean;
+    participants: string[];
+    resume: string | null;
+    dejaRelie: boolean;
+  } | null;
 };
 
 export class SujetRefuse extends Error {}
@@ -116,6 +126,20 @@ async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise
           .where(and(eq(propositions.instanceId, currentInstance), inArray(propositions.id, ids))),
       )
     : [];
+  const reunions = rows.length
+    ? await tx
+        .select()
+        .from(reunionsWispr)
+        .where(
+          and(
+            eq(reunionsWispr.instanceId, currentInstance),
+            inArray(
+              reunionsWispr.sujetId,
+              rows.map((r) => r.sujet.id),
+            ),
+          ),
+        )
+    : [];
   return rows.map(({ sujet: s, contactNom, entrepriseNom }) => ({
     id: s.id,
     type: s.type,
@@ -134,6 +158,18 @@ async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise
     instance: { slug: instance.slug, nom: instance.nom, couleur: instance.config.couleur ?? null },
     proposition: liees.find((p) => p.id === s.propositionId) ?? null,
     livreBlanc: destinataireLivreBlanc(s.titre, s.resume),
+    reunion: (() => {
+      const r = reunions.find((x) => x.sujetId === s.id);
+      return r
+        ? {
+            critique: r.critique,
+            transcriptStocke: r.transcript !== null,
+            participants: r.participants,
+            resume: r.resume,
+            dejaRelie: s.origine !== 'wispr',
+          }
+        : null;
+    })(),
   }));
 }
 
@@ -226,6 +262,25 @@ export async function ajouterSujet(
   saisie: SujetSaisi,
 ): Promise<SujetVue> {
   return withInstance(db, instance.id, (tx) => ajouterSujetTx(tx, instance, saisie));
+}
+
+// Marc attribue une réunion Wispr Flow : null si l'entrée n'existe pas ici ou n'est pas une réunion.
+export async function attribuerReunionSujet(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  a: { contactId: string | null; entrepriseId: string | null; critique: boolean },
+): Promise<SujetVue | null> {
+  return withInstance(db, instance.id, async (tx) => {
+    if (!(await charger(tx, id))) return null;
+    const [reunion] = await tx
+      .select({ id: reunionsWispr.id })
+      .from(reunionsWispr)
+      .where(and(eq(reunionsWispr.instanceId, currentInstance), eq(reunionsWispr.sujetId, id)));
+    if (!reunion) return null;
+    await attribuerReunion(tx, id, a);
+    return vue(tx, instance, id);
+  });
 }
 
 export async function marquerTraite(

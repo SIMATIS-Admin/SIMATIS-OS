@@ -3,11 +3,14 @@ import { createPortal } from 'react-dom';
 import {
   ajouterDepuisEchange,
   ajouterSujet,
+  attribuerReunionSujet,
   modifierSujet,
   annulerEchange,
   decider,
   envoyerLivreBlanc,
+  fetchContacts,
   fetchEchange,
+  fetchEntreprises,
   fetchExecution,
   fetchInbox,
   fetchRoutines,
@@ -297,6 +300,113 @@ function EnvoiLivreBlanc({
   );
 }
 
+function AttributionReunion({
+  slug,
+  s,
+  onAttribuer,
+  onClore,
+}: {
+  slug: string;
+  s: SujetVue;
+  onAttribuer: (corps: {
+    contactId: string | null;
+    entrepriseId: string | null;
+    critique: boolean;
+  }) => void;
+  onClore: () => void;
+}) {
+  const reunion = s.reunion;
+  const [q, setQ] = useState('');
+  const [trouves, setTrouves] = useState<{ cle: string; libelle: string }[]>([]);
+  const [choix, setChoix] = useState(
+    s.contact ? `contact:${s.contact.id}` : s.entreprise ? `entreprise:${s.entreprise.id}` : '',
+  );
+  const [critique, setCritique] = useState(reunion?.critique ?? false);
+  useEffect(() => {
+    const terme = q.trim();
+    if (terme.length < 2) return;
+    let actuel = true;
+    void Promise.all([fetchContacts(slug, terme), fetchEntreprises(slug, terme)]).then(
+      ([contacts, entreprises]) => {
+        if (!actuel) return;
+        setTrouves([
+          ...contacts.map((c) => ({ cle: `contact:${c.id}`, libelle: `Contact : ${c.nom}` })),
+          ...entreprises.map((e) => ({
+            cle: `entreprise:${e.id}`,
+            libelle: `Entreprise : ${e.nom}`,
+          })),
+        ]);
+      },
+      () => undefined,
+    );
+    return () => {
+      actuel = false;
+    };
+  }, [q, slug]);
+  if (!reunion) return null;
+  const actuel = s.contact
+    ? [{ cle: `contact:${s.contact.id}`, libelle: `Contact : ${s.contact.nom}` }]
+    : s.entreprise
+      ? [{ cle: `entreprise:${s.entreprise.id}`, libelle: `Entreprise : ${s.entreprise.nom}` }]
+      : [];
+  const options = [...actuel, ...trouves.filter((t) => !actuel.some((a) => a.cle === t.cle))];
+  const valider = () => {
+    const [genre, id] = choix.split(':');
+    onAttribuer({
+      contactId: genre === 'contact' && id ? id : null,
+      entrepriseId: genre === 'entreprise' && id ? id : null,
+      critique,
+    });
+  };
+  return (
+    <div className="stack" style={{ marginBottom: 12 }}>
+      {reunion.dejaRelie && (
+        <div className="alert">
+          Compte rendu trouvé dans Wispr Flow : cette entrée n’est peut-être plus nécessaire.{' '}
+          <button className="btn" onClick={onClore}>
+            Clore
+          </button>
+        </div>
+      )}
+      {reunion.participants.length > 0 && (
+        <div className="small muted">Participants : {reunion.participants.join(', ')}</div>
+      )}
+      <div className="decision">
+        <input
+          className="input"
+          aria-label="Rechercher un contact ou une entreprise"
+          placeholder="Rechercher un contact ou une entreprise"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <select
+          className="input"
+          aria-label="Rattacher à"
+          value={choix}
+          onChange={(e) => setChoix(e.target.value)}
+        >
+          <option value="">Aucun rattachement</option>
+          {options.map((o) => (
+            <option key={o.cle} value={o.cle}>
+              {o.libelle}
+            </option>
+          ))}
+        </select>
+      </div>
+      <label className="small">
+        <input type="checkbox" checked={critique} onChange={(e) => setCritique(e.target.checked)} />{' '}
+        Réunion critique : garder le transcript complet
+        {reunion.transcriptStocke && ' (déjà conservé)'}
+      </label>
+      <div>
+        <button className="btn go" onClick={valider}>
+          Enregistrer le rattachement
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Detail({
   slug,
   s,
@@ -306,9 +416,15 @@ function Detail({
   onModifier,
   onLivreBlanc,
   onTransfere,
+  onReunion,
 }: {
   slug: string;
   s: SujetVue;
+  onReunion: (corps: {
+    contactId: string | null;
+    entrepriseId: string | null;
+    critique: boolean;
+  }) => void;
   onTraite: () => void;
   onRemettre: () => void;
   onTache: () => void;
@@ -345,11 +461,24 @@ function Detail({
           </span>
         </div>
         {s.resume && <p style={{ whiteSpace: 'pre-line' }}>{s.resume}</p>}
+        {s.statut === 'a_traiter' && s.reunion && (
+          <AttributionReunion
+            key={`reunion-${s.id}`}
+            slug={s.instance.slug}
+            s={s}
+            onAttribuer={onReunion}
+            onClore={onTraite}
+          />
+        )}
         {s.statut === 'a_traiter' && s.type !== 'a_valider' && (
-          <Reglages key={s.id} s={s} onModifier={onModifier} />
+          <Reglages key={`reglages-${s.id}`} s={s} onModifier={onModifier} />
         )}
         {s.statut === 'a_traiter' && s.livreBlanc && (
-          <EnvoiLivreBlanc key={s.id} destinataire={s.livreBlanc.email} onEnvoyer={onLivreBlanc} />
+          <EnvoiLivreBlanc
+            key={`livre-blanc-${s.id}`}
+            destinataire={s.livreBlanc.email}
+            onEnvoyer={onLivreBlanc}
+          />
         )}
         <div className="decision">
           {lienWeb(s.lien) && (
@@ -861,6 +990,9 @@ export function Inbox({
         }
         onModifier={(modif) =>
           void agir(modifierSujet(s.instance.slug, s.id, modif), 'Entrée modifiée.')
+        }
+        onReunion={(corps) =>
+          void agir(attribuerReunionSujet(s.instance.slug, s.id, corps), 'Réunion rattachée.')
         }
       />
     );

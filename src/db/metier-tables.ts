@@ -10,7 +10,7 @@ import {
   baseLignesBrutes,
   baseVivante,
 } from '../base-vivante/schema.js';
-import { echangesAjout, sujets } from '../inbox/schema.js';
+import { echangesAjout, reunionsWispr, sujets } from '../inbox/schema.js';
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
@@ -20,6 +20,7 @@ export const METIER_TABLES = [
   baseImports,
   baseCorrespondances,
   echangesAjout,
+  reunionsWispr,
   sujets,
   connexions,
   executions,

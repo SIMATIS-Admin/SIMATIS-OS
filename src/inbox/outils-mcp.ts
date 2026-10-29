@@ -10,11 +10,19 @@ import {
   brouillonsAnciens,
   domaineDe,
   mailsARepondre,
+  rattacher,
   rendezVousExternes,
   type Annuaire,
 } from './lecture.js';
 import { deposerSujet } from './depot.js';
 import { brouillonSchema, repondreClaude } from './echanges.js';
+import {
+  comptesRendusEnAttente,
+  deposerReunion,
+  enregistrerTranscript,
+  reunionsATranscrire,
+  TRANSCRIPT_MAX,
+} from './reunions.js';
 import { marquerNoteCerveau, marquerReporte, sujetsAjoutes, sujetsTraites } from './report.js';
 
 // Tools of the Inbox routine. Like every instance tool, they only see the token's instance.
@@ -206,5 +214,79 @@ registerTool({
       await annuaire(ctx),
       maintenant,
     );
+  },
+});
+
+registerTool({
+  name: 'deposer_reunion_wispr',
+  description:
+    "Dépose dans l'Inbox une réunion lue dans Wispr Flow (titre, date, participants, résumé). Une réunion déjà déposée n'est jamais recréée (« existant »). Dans un mandat, une réunion sans aucun participant connu du CRM est ignorée (« ignore ») : ce n'est pas une erreur, la réunion appartient à un autre mandat. Si une entrée « compte rendu » en attente correspond à la même réunion (voir comptes_rendus_en_attente), passe son id en sujetExistantId : la réunion s'y relie au lieu de créer une autre entrée.",
+  input: z.object({
+    wisprId: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .describe('Identifiant de la réunion dans Wispr Flow'),
+    titre: z.string().trim().min(1).max(300),
+    debutAt: z.iso.datetime({ offset: true }),
+    participants: z.array(z.string().trim().min(1).max(300)).max(100).default([]),
+    resume: z.string().max(5000).optional().describe('Résumé de Wispr Flow, texte brut'),
+    contactId: z.uuid().optional(),
+    entrepriseId: z.uuid().optional(),
+    sujetExistantId: z.uuid().optional(),
+    executionId: execution,
+  }),
+  scope: 'instance',
+  handler: async (ctx, input) => {
+    // Wispr Flow est le même pour tous les mandats : un mandat ne reçoit que les réunions où
+    // figure quelqu'un qu'il connaît ; Mon activité (instance propre) reçoit tout.
+    const a = await annuaire(ctx);
+    const lien = input.participants.map((p) => rattacher(p.toLowerCase(), a)).find(Boolean) ?? null;
+    if (!lien && ctx.instance.type !== 'propre') return { statut: 'ignore' as const };
+    return deposerReunion(ctx.tx, {
+      wisprId: input.wisprId,
+      titre: input.titre,
+      debutAt: new Date(input.debutAt),
+      participants: input.participants,
+      resume: input.resume ?? null,
+      contactId: input.contactId ?? lien?.contactId ?? null,
+      entrepriseId: input.entrepriseId ?? lien?.entrepriseId ?? null,
+      sujetExistantId: input.sujetExistantId ?? null,
+    });
+  },
+});
+
+registerTool({
+  name: 'comptes_rendus_en_attente',
+  description:
+    "Entrées « compte rendu » encore à faire dans l'Inbox et sans réunion reliée. Sert à repérer le doublon d'une réunion Wispr Flow (même personne, même jour). Lecture seule.",
+  input: z.object({ executionId: execution }),
+  scope: 'instance',
+  handler: ({ tx }) => comptesRendusEnAttente(tx),
+});
+
+registerTool({
+  name: 'reunions_a_transcrire',
+  description:
+    "Réunions que le pilote a cochées « critique » et dont le transcript complet n'est pas encore conservé. Pour chacune, lis le transcript dans Wispr Flow puis appelle enregistrer_transcript.",
+  input: z.object({ executionId: execution }),
+  scope: 'instance',
+  handler: ({ tx }) => reunionsATranscrire(tx),
+});
+
+registerTool({
+  name: 'enregistrer_transcript',
+  description:
+    "Conserve le transcript complet d'une réunion critique. Refusé si la réunion n'est pas cochée « critique ».",
+  input: z.object({
+    wisprId: z.string().trim().min(1).max(300),
+    transcript: z.string().min(1).max(TRANSCRIPT_MAX),
+    executionId: execution,
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { wisprId, transcript }) => {
+    await enregistrerTranscript(tx, wisprId, transcript);
+    return { statut: 'enregistre' };
   },
 });

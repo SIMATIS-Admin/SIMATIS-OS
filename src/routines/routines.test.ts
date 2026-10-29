@@ -12,7 +12,7 @@ import { withInstance } from '../db/context.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import { createInstance, getInstanceBySlug } from '../instances/service.js';
 import { createToken, resolveToken } from '../mcp/tokens.js';
-import { tour } from '../runner/runner.js';
+import { tour, WISPR_OUTILS_LECTURE } from '../runner/runner.js';
 import { executions } from './schema.js';
 import { heurePrevue, planifier } from './planification.js';
 import {
@@ -361,7 +361,7 @@ describe('Routines Claude', () => {
         expect.arrayContaining([
           '--add-dir',
           dossier,
-          `mcp__simatis__*,Read(/${dossier}/**),Edit(/${dossier}/**),Write(/${dossier}/**),Glob,Grep`,
+          `mcp__simatis__*,${WISPR_OUTILS_LECTURE.join(',')},Read(/${dossier}/**),Edit(/${dossier}/**),Write(/${dossier}/**),Glob,Grep`,
         ]),
       );
       expect(i.args.join(' ')).toContain(`Second cerveau : ${dossier}`);
