@@ -45,7 +45,7 @@ Avant de déposer, la routine cherche une entrée `compte_rendu` en attente qui 
 
 ### 5. Connexion
 
-Paramètres > Connexions affiche l'état de Wispr Flow et la marche à suivre : connexion unique dans le navigateur avec le compte Wispr Flow de Marc. Les jetons restent dans le magasin de Claude Code du poste, jamais dans la base ni dans git.
+Rien à connecter dans l'OS : Wispr Flow est lu par le connecteur claude.ai du compte de Marc, que le CLI du poste utilise déjà. Aucun jeton dans la base ni dans git. Si le connecteur est déconnecté, la routine le signale dans son rapport et ne dépose rien.
 
 ## Faisabilité vérifiée (2026-10-29)
 
@@ -58,7 +58,7 @@ Conséquence : pas d'OAuth à écrire dans l'OS. L'exécuteur doit retirer `--st
 
 ## Données
 
-Pas de nouvelle table prévue au départ : l'entrée d'Inbox porte résumé et rattachement. Le transcript d'une réunion critique a besoin d'un stockage rattaché à la fiche (colonne ou table dédiée) : à trancher dans le plan, avec la migration.
+Une table `reunions_wispr` (une ligne par réunion, liée à son entrée d'Inbox) porte résumé, participants, case « critique » et transcript. Le transcript est récupéré au passage suivant de la routine, une fois la réunion cochée « critique », et supprimé si Marc la décoche. Le rattachement se fait à un contact ou à une entreprise de l'instance de l'Inbox, pas à un autre mandat.
 
 ## Tests
 
