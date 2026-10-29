@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
-import { entreprises } from '../crm/schema.js';
+import { contacts, entreprises } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
@@ -94,6 +94,66 @@ describe('Diagnostic : capitalisation de la restitution', () => {
     const p = await projet('Capi Liste');
     const liste = await rendezVousCapitalisables(t.app.db, simatis, p.id);
     expect(liste.map((r) => r.titre)).toEqual(['Restitution l-recent', 'Restitution l-ancien']);
+  });
+
+  it('trouve aussi le rendez-vous relié seulement au contact du projet, ou à une affaire de l’entreprise', async () => {
+    const [c, autreC] = await t.owner.db
+      .insert(contacts)
+      .values([
+        { instanceId: simatis.id, nom: 'Contact Fictif Capi' },
+        { instanceId: simatis.id, nom: 'Autre Contact Fictif Capi' },
+      ])
+      .returning({ id: contacts.id });
+    const [e] = await t.owner.db
+      .insert(entreprises)
+      .values({ instanceId: simatis.id, nom: 'Entreprise Fictive Capi C' })
+      .returning({ id: entreprises.id });
+    const lierContact = async (rdvId: string, contactId: string) =>
+      t.owner.pool.query(
+        'insert into rdv_contacts (instance_id, rendez_vous_id, contact_id) values ($1, $2, $3)',
+        [simatis.id, rdvId, contactId],
+      );
+    const affaire = async (entrepriseId: string) => {
+      const { rows } = await t.owner.pool.query<{ id: string }>(
+        `insert into opportunites (instance_id, titre, etape) values ($1, 'Affaire fictive', 'detection') returning id`,
+        [simatis.id],
+      );
+      await t.owner.pool.query(
+        'insert into affaire_entreprises (instance_id, opportunite_id, entreprise_id) values ($1, $2, $3)',
+        [simatis.id, rows[0]!.id, entrepriseId],
+      );
+      return rows[0]!.id;
+    };
+    const lierAffaire = (rdvId: string, opportuniteId: string) =>
+      t.owner.pool.query(
+        'insert into rdv_affaires (instance_id, rendez_vous_id, opportunite_id) values ($1, $2, $3)',
+        [simatis.id, rdvId, opportuniteId],
+      );
+    const parContact = await rdv('x-contact', e!.id, 'Compte rendu par le contact');
+    await t.owner.pool.query('delete from rdv_entreprises where rendez_vous_id = $1', [parContact]);
+    await lierContact(parContact, c!.id);
+    const parAffaire = await rdv('x-affaire', e!.id, 'Compte rendu par l’affaire');
+    await t.owner.pool.query('delete from rdv_entreprises where rendez_vous_id = $1', [parAffaire]);
+    await lierAffaire(parAffaire, await affaire(e!.id));
+    const autreAffaire = await rdv('x-autre-affaire', e!.id, 'Affaire d’une autre entreprise');
+    await t.owner.pool.query('delete from rdv_entreprises where rendez_vous_id = $1', [
+      autreAffaire,
+    ]);
+    await lierAffaire(autreAffaire, await affaire(autreEntrepriseId));
+    const autreContact = await rdv('x-autre-contact', e!.id, 'Contact d’un autre dossier');
+    await t.owner.pool.query('delete from rdv_entreprises where rendez_vous_id = $1', [
+      autreContact,
+    ]);
+    await lierContact(autreContact, autreC!.id);
+
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Capi Liens',
+      activite: 'services',
+      entrepriseId: e!.id,
+      contactId: c!.id,
+    });
+    const liste = await rendezVousCapitalisables(t.app.db, simatis, p.id);
+    expect(liste.map((r) => r.id).sort()).toEqual([parContact, parAffaire].sort());
   });
 
   it('renvoie une liste vide pour un projet sans entreprise', async () => {
