@@ -78,6 +78,10 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
     await createInstance(t.owner.db, { slug: 'op-ok', nom: 'A', type: 'propre' });
     await setModule(t.owner.db, 'op-ok', 'cerveau', true);
     await createInstance(t.owner.db, { slug: 'op-sans', nom: 'B', type: 'propre' });
+    await createInstance(t.owner.db, { slug: 'op-mandat', nom: 'M', type: 'mandat' });
+    await setModule(t.owner.db, 'op-mandat', 'cerveau', true);
+    await createInstance(t.owner.db, { slug: 'op-demo', nom: 'D', type: 'prospect' });
+    await setModule(t.owner.db, 'op-demo', 'cerveau', true);
     runner = (await createToken(t.owner.db, { nom: 'runner', portee: 'runner' })).token;
   });
   afterAll(async () => {
@@ -169,6 +173,29 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
     expect(
       (await app.inject({ method: 'GET', url: '/api/runner/cerveau/operations' })).statusCode,
     ).toBe(401);
+  });
+
+  it('réserve les notes de la feuille de route à Mon activité', async () => {
+    await mkdir(path.join(dossier, 'brain/outils'), { recursive: true });
+    for (const nom of ['structure', 'feuille-de-route'])
+      await writeFile(path.join(dossier, `brain/outils/simatis-os-${nom}.md`), `# ${nom} fictive`);
+    for (const slug of ['op-mandat', 'op-demo'])
+      for (const nom of ['structure', 'feuille-de-route']) {
+        const chemin = `brain/outils/simatis-os-${nom}.md`;
+        const corps = [
+          { type: 'lire', chemin },
+          { type: 'ecrire', chemin, contenu: 'x', empreinte: 'e' },
+        ];
+        for (const payload of corps)
+          expect((await app.inject({ method: 'POST', url: url(slug), payload })).statusCode).toBe(
+            403,
+          );
+      }
+    const lue = await demander('op-ok', {
+      type: 'lire',
+      chemin: 'brain/outils/simatis-os-feuille-de-route.md',
+    });
+    expect(lue.statusCode).toBe(200);
   });
 
   describe('espace partagé', () => {
