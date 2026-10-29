@@ -119,7 +119,8 @@ export async function argumentsClaude(
 ): Promise<{ args: string[]; cwd?: string }> {
   // Le connecteur Wispr Flow vient du compte claude.ai, que le mode strict masque. En mode non
   // interactif tout outil non listé est refusé : les autres connecteurs claude.ai restent inutilisables.
-  const wispr = d.skill === 'alimenter-inbox';
+  // Jamais pour une démo (`cerveau` faux) : elle lirait de vraies réunions pour des données fictives.
+  const wispr = d.skill === 'alimenter-inbox' && d.cerveau === true;
   const base = [
     '--mcp-config',
     config,

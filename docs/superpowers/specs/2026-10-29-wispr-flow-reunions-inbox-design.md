@@ -24,6 +24,8 @@ Serveur MCP distant en lecture seule : `https://api.wisprflow.ai/connect/mcp`. I
 
 La routine Inbox (skill `alimenter-inbox`) lit les réunions Wispr Flow récentes depuis son dernier passage, via le serveur MCP Wispr Flow ajouté à la configuration de l'exécuteur.
 
+Garde-fous : jamais pour une instance de démo, et l'OS refuse (« ignore ») de déposer dans un mandat une réunion dont aucun participant n'est un contact ou une entreprise de ce mandat. Wispr Flow est le même pour tous les mandats ; sans ce filtre, chaque mandat verrait les réunions des autres. Mon activité reçoit toutes les réunions.
+
 ### 2. Entrée « Réunion à attribuer »
 
 Pour chaque réunion non encore vue, elle dépose une entrée d'Inbox de type `compte_rendu`, origine `wispr`, clé stable = identifiant de la réunion Wispr Flow (une entrée par réunion, pour toujours, comme les autres dépôts). Elle porte : titre, date, participants, résumé.

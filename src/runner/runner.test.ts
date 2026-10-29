@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { argumentsClaude, WISPR_OUTILS_LECTURE, type Demande } from './runner.js';
 
-const demande = (skill: string, cerveau = false): Demande => ({
+const demande = (skill: string, cerveau = true): Demande => ({
   id: '00000000-0000-4000-8000-000000000001',
   instance: 'fictif',
   nom: 'Atelier Fictif',
@@ -19,6 +19,16 @@ describe('argumentsClaude', () => {
     expect(outils.split(',')).toEqual(['mcp__simatis__*', ...WISPR_OUTILS_LECTURE]);
     expect(WISPR_OUTILS_LECTURE).toHaveLength(3);
     expect(outils).not.toMatch(/Gmail|HubSpot|Google_Drive|Calendar/);
+  });
+
+  it('démo (pas de second cerveau) : mode strict et aucun outil Wispr, même pour la routine Inbox', async () => {
+    const { args } = await argumentsClaude(
+      demande('alimenter-inbox', false),
+      'config.json',
+      undefined,
+    );
+    expect(args).toContain('--strict-mcp-config');
+    expect(args.join(' ')).not.toMatch(/Wispr/);
   });
 
   it('autre routine : mode strict conservé, aucun outil Wispr', async () => {

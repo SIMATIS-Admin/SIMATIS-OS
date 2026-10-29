@@ -2,6 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { contacts } from '../crm/schema.js';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
 import { withInstance } from '../db/context.js';
@@ -204,6 +205,47 @@ describe('Inbox : outils MCP', () => {
       participants: ['dupont.fictif@exemple.fr'],
       resume: 'Résumé fictif',
       ...extra,
+    });
+
+    beforeAll(async () => {
+      await t.owner.db.insert(contacts).values({
+        instanceId: helioval.id,
+        nom: 'Dupont Fictif',
+        email: 'dupont.fictif@exemple.fr',
+      });
+    });
+
+    it('mandat : ignore une réunion sans participant connu du CRM, rien n’est déposé', async () => {
+      const r = await call(
+        'deposer_reunion_wispr',
+        reunion('mcp-w-inconnu', { participants: ['inconnu@autre-societe.fr'] }),
+      );
+      expect(r.json()).toEqual({ statut: 'ignore' });
+      const { rows } = await t.owner.pool.query(
+        'select 1 from reunions_wispr where wispr_id = $1',
+        ['mcp-w-inconnu'],
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('mandat : un participant connu rattache la réunion à son contact', async () => {
+      const r = await call('deposer_reunion_wispr', reunion('mcp-w-connu'));
+      const { sujetId } = r.json<{ sujetId: string }>();
+      const { rows } = await t.owner.pool.query<{ contact_id: string | null }>(
+        'select contact_id from sujets where id = $1',
+        [sujetId],
+      );
+      expect(rows[0]?.contact_id).not.toBeNull();
+    });
+
+    it('Mon activité (propre) : dépose aussi une réunion sans participant connu', async () => {
+      const propre = await clientDe('simatis');
+      const r = await call(
+        'deposer_reunion_wispr',
+        reunion('mcp-w-propre', { participants: ['inconnu@autre-societe.fr'] }),
+        propre,
+      );
+      expect(r.json<{ statut: string }>().statut).toBe('cree');
     });
 
     it('dépose une réunion, puis répond existant ; refuse une date sans fuseau', async () => {

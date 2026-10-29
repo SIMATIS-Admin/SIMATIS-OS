@@ -10,6 +10,7 @@ import {
   brouillonsAnciens,
   domaineDe,
   mailsARepondre,
+  rattacher,
   rendezVousExternes,
   type Annuaire,
 } from './lecture.js';
@@ -219,7 +220,7 @@ registerTool({
 registerTool({
   name: 'deposer_reunion_wispr',
   description:
-    "Dépose dans l'Inbox une réunion lue dans Wispr Flow (titre, date, participants, résumé). Une réunion déjà déposée n'est jamais recréée (« existant »). Si une entrée « compte rendu » en attente correspond à la même réunion (voir comptes_rendus_en_attente), passe son id en sujetExistantId : la réunion s'y relie au lieu de créer une autre entrée.",
+    "Dépose dans l'Inbox une réunion lue dans Wispr Flow (titre, date, participants, résumé). Une réunion déjà déposée n'est jamais recréée (« existant »). Dans un mandat, une réunion sans aucun participant connu du CRM est ignorée (« ignore ») : ce n'est pas une erreur, la réunion appartient à un autre mandat. Si une entrée « compte rendu » en attente correspond à la même réunion (voir comptes_rendus_en_attente), passe son id en sujetExistantId : la réunion s'y relie au lieu de créer une autre entrée.",
   input: z.object({
     wisprId: z
       .string()
@@ -237,17 +238,23 @@ registerTool({
     executionId: execution,
   }),
   scope: 'instance',
-  handler: ({ tx }, input) =>
-    deposerReunion(tx, {
+  handler: async (ctx, input) => {
+    // Wispr Flow est le même pour tous les mandats : un mandat ne reçoit que les réunions où
+    // figure quelqu'un qu'il connaît ; Mon activité (instance propre) reçoit tout.
+    const a = await annuaire(ctx);
+    const lien = input.participants.map((p) => rattacher(p.toLowerCase(), a)).find(Boolean) ?? null;
+    if (!lien && ctx.instance.type !== 'propre') return { statut: 'ignore' as const };
+    return deposerReunion(ctx.tx, {
       wisprId: input.wisprId,
       titre: input.titre,
       debutAt: new Date(input.debutAt),
       participants: input.participants,
       resume: input.resume ?? null,
-      contactId: input.contactId ?? null,
-      entrepriseId: input.entrepriseId ?? null,
+      contactId: input.contactId ?? lien?.contactId ?? null,
+      entrepriseId: input.entrepriseId ?? lien?.entrepriseId ?? null,
       sujetExistantId: input.sujetExistantId ?? null,
-    }),
+    });
+  },
 });
 
 registerTool({
