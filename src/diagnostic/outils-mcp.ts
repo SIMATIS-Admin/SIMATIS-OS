@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { registerTool } from '../mcp/tools.js';
+import { enregistrerCapitalisation } from './capitalisation.js';
 import { repondreClaude } from './chat.js';
 import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
 import { enregistrerRapport } from './rapport.js';
@@ -139,6 +140,20 @@ registerTool({
   scope: 'instance',
   handler: async ({ tx }, { projetId, reponses }) => {
     await enregistrerReponses(tx, projetId, reponses);
+    return { ok: true };
+  },
+});
+
+// Outil de la capitalisation de la restitution : Claude confirme avoir écrit dans le second cerveau
+// ce que le pilote avait validé dans le chat.
+registerTool({
+  name: 'enregistrer_capitalisation',
+  description:
+    "Confirme que la capitalisation de la restitution d'un projet de diagnostic a été écrite dans le second cerveau, après validation du pilote dans le chat. À appeler une seule fois, une fois l'écriture faite.",
+  input: z.object({ projetId: z.uuid() }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId }) => {
+    await enregistrerCapitalisation(tx, projetId);
     return { ok: true };
   },
 });

@@ -19,6 +19,9 @@ const api = vi.hoisted(() => ({
   demandeRapportDiag: vi.fn(),
   demandeRestitutionDiag: vi.fn(),
   exporterRestitutionDiag: vi.fn(),
+  rendezVousCapitalisationDiag: vi.fn(),
+  proposerCapitalisationDiag: vi.fn(),
+  enregistrerCapitalisationDiag: vi.fn(),
   urlPptxRestitutionDiag: (slug: string, id: string) =>
     `/api/i/${slug}/diagnostic/projets/${id}/restitution/pptx`,
   importerEntretienDiag: vi.fn(),
@@ -69,6 +72,9 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   restitutionAvecProposition: true,
   aPptx: false,
   restitutionExportLe: null,
+  capitalisationStatut: 'aucun',
+  capitalisationRdvId: null,
+  capitalisationCompteRenduAt: null,
   proposition: null,
   aPdfEntretien: false,
   pdfEntretienNom: null,
@@ -80,6 +86,7 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
 
 beforeEach(() => {
   api.fetchProjetsDiag.mockResolvedValue([projet()]);
+  api.rendezVousCapitalisationDiag.mockResolvedValue([]);
   api.majProjetDiag.mockImplementation((_slug: string, _id: string, patch: Partial<ProjetDiag>) =>
     Promise.resolve(projet({ ...patch, id: 'p1' })),
   );
@@ -1110,5 +1117,87 @@ describe('Deck de restitution à l étape 5', () => {
     const lien = await screen.findByRole('link', { name: 'Ouvrir le deck de restitution' });
     expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/RestitutionFictive01');
     expect(lien.getAttribute('target')).toBe('_blank');
+  });
+});
+
+describe('Capitalisation de la restitution à l étape 5', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const rdvs = [
+    {
+      id: 'r-recent',
+      titre: 'Restitution fictive',
+      debut: '2026-10-29T14:00:00Z',
+      compteRenduAt: '2026-10-29T16:00:00Z',
+    },
+    {
+      id: 'r-ancien',
+      titre: 'Point fictif',
+      debut: '2026-10-01T09:00:00Z',
+      compteRenduAt: '2026-10-01T10:00:00Z',
+    },
+  ];
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 5, etapeMax: 5, dims, aRapport: true, rapportNom: 'r.docx', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+
+  it('dit qu aucun compte rendu n est trouvé et désactive le bouton', async () => {
+    await ouvrir();
+    expect(await screen.findByText(/Aucun compte rendu trouvé pour cette entreprise/)).toBeTruthy();
+    const bouton = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Capitaliser la restitution',
+    });
+    expect(bouton.disabled).toBe(true);
+  });
+
+  it('présélectionne le rendez-vous le plus récent et envoie son identifiant', async () => {
+    api.rendezVousCapitalisationDiag.mockResolvedValue(rdvs);
+    api.proposerCapitalisationDiag.mockResolvedValue(
+      projet({ etape: 5, dims, capitalisationStatut: 'en_cours' }),
+    );
+    await ouvrir();
+    const bouton = await screen.findByRole<HTMLButtonElement>('button', {
+      name: 'Capitaliser la restitution',
+    });
+    await waitFor(() => expect(bouton.disabled).toBe(false));
+    fireEvent.click(bouton);
+    await waitFor(() =>
+      expect(api.proposerCapitalisationDiag).toHaveBeenCalledWith('simatis', 'p1', 'r-recent'),
+    );
+    expect(await screen.findByText(/Analyse du compte rendu en cours/)).toBeTruthy();
+  });
+
+  it('ne propose d enregistrer qu une fois la proposition faite', async () => {
+    api.rendezVousCapitalisationDiag.mockResolvedValue(rdvs);
+    await ouvrir();
+    await screen.findByRole('button', { name: 'Capitaliser la restitution' });
+    expect(screen.queryByRole('button', { name: 'Enregistrer dans le second cerveau' })).toBeNull();
+    cleanup();
+    api.enregistrerCapitalisationDiag.mockResolvedValue(
+      projet({
+        etape: 5,
+        dims,
+        capitalisationStatut: 'propose',
+        demande: 'capitalisation_enregistrer',
+      }),
+    );
+    await ouvrir({ capitalisationStatut: 'propose' });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Enregistrer dans le second cerveau' }),
+    );
+    await waitFor(() =>
+      expect(api.enregistrerCapitalisationDiag).toHaveBeenCalledWith('simatis', 'p1'),
+    );
+  });
+
+  it('affiche l état enregistré', async () => {
+    api.rendezVousCapitalisationDiag.mockResolvedValue(rdvs);
+    await ouvrir({ capitalisationStatut: 'enregistre' });
+    expect(
+      await screen.findByText(/Capitalisation enregistrée dans le second cerveau/),
+    ).toBeTruthy();
   });
 });

@@ -143,6 +143,17 @@ describe('Diagnostic : colonnes de l entretien', () => {
     expect(relu.pdfEntretienNom).toBeNull();
   });
 
+  it('un projet neuf n a pas de capitalisation de la restitution', async () => {
+    const p = await createProjet(t.app.db, simatis, {
+      nom: 'Capitalisation Fictive A',
+      activite: 'services',
+    });
+    const relu = (await listProjets(t.app.db, simatis)).find((x) => x.id === p.id)!;
+    expect(relu.capitalisationStatut).toBe('aucun');
+    expect(relu.capitalisationRdvId).toBeNull();
+    expect(relu.capitalisationCompteRenduAt).toBeNull();
+  });
+
   it('rattache un projet à une entreprise et la garde à la relecture', async () => {
     const [e] = await t.owner.db
       .insert(entreprises)

@@ -21,6 +21,11 @@ import {
   renvoyerRapportSurDrive,
 } from '../diagnostic/rapport.js';
 import {
+  demanderEnregistrement,
+  demanderProposition,
+  rendezVousCapitalisables,
+} from '../diagnostic/capitalisation.js';
+import {
   demanderExportRestitution,
   demanderRestitution,
   pptxRestitutionDe,
@@ -570,6 +575,50 @@ export function registerApi(
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
       try {
         return await demanderRestitution(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Capitalisation de la restitution (étape 5) : rendez-vous avec compte rendu, proposition de Claude,
+  // puis enregistrement dans le second cerveau une fois le pilote d'accord.
+  app.get<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/capitalisation/rendez-vous',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await rendezVousCapitalisables(db, i, id);
+      } catch (error) {
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.post<ProjetRoute & { Body: unknown }>(
+    '/api/i/:slug/diagnostic/projets/:id/capitalisation/proposer',
+    onInstance<ProjetRoute & { Body: unknown }>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z.object({ rdvId: z.uuid() }).safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Rendez-vous invalide' });
+      try {
+        return await demanderProposition(db, i, id, corps.data.rdvId);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/capitalisation/enregistrer',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderEnregistrement(db, i, id);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
