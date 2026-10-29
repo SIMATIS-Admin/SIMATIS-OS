@@ -155,6 +155,16 @@ export function Cerveau({ slug }: { slug: string }) {
           <button onClick={() => setVue({ x: -TAILLE / 2, y: -TAILLE / 2, l: TAILLE })}>
             Recentrer
           </button>
+          <button
+            onClick={() => {
+              setVue({ x: -TAILLE / 2, y: -TAILLE / 2, l: TAILLE });
+              setMasquees(new Set());
+              setChoisie(null);
+              setRecherche('');
+            }}
+          >
+            Réinitialiser la vue
+          </button>
         </div>
       </div>
 
