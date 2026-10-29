@@ -55,6 +55,7 @@ import {
   setPhase,
 } from '../instances/service.js';
 import {
+  attribuerReunionSujet,
   compterInbox,
   FILTRES_INBOX,
   listInbox,
@@ -67,6 +68,7 @@ import {
   envoyerLivreBlanc,
 } from '../inbox/service.js';
 import { estNumeroLivreBlanc } from '../inbox/livre-blanc.js';
+import { ReunionInvalide } from '../inbox/reunions.js';
 import { PRIORITE_MAX, PRIORITE_MIN } from '../inbox/schema.js';
 import {
   ajouterDepuisEchange,
@@ -1058,6 +1060,26 @@ export function registerApi(
   app.post<SujetRoute>(
     '/api/i/:slug/sujets/:id/traite',
     surSujet((i, id) => marquerTraite(db, i, id)),
+  );
+  const reunionSchema = z
+    .object({
+      contactId: z.uuid().nullable(),
+      entrepriseId: z.uuid().nullable(),
+      critique: z.boolean(),
+    })
+    .strict();
+  app.post<SujetRoute>(
+    '/api/i/:slug/sujets/:id/reunion',
+    surSujet(async (i, id, request, reply) => {
+      const corps = reunionSchema.safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Réunion invalide' });
+      try {
+        return await attribuerReunionSujet(db, i, id, corps.data);
+      } catch (error) {
+        if (error instanceof ReunionInvalide) return reply.code(400).send({ error: error.message });
+        throw error;
+      }
+    }),
   );
   app.post<SujetRoute>(
     '/api/i/:slug/sujets/:id/a-traiter',

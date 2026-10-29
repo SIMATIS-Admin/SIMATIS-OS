@@ -10,6 +10,7 @@ import { archiveInstance, listInstances } from '../instances/service.js';
 import { propose } from '../propositions/service.js';
 import '../pilotage/types-propositions.js';
 import { deposerSujet } from './depot.js';
+import { deposerReunion } from './reunions.js';
 
 type Sujet = { id: string; titre: string; instance: { slug: string }; proposition: unknown };
 
@@ -190,5 +191,78 @@ describe('Inbox : API', () => {
       400,
     );
     expect((await req('POST', '/api/i/helioval/sujets/pas-un-id/traite')).status).toBe(404);
+  });
+  describe('réunions Wispr Flow', () => {
+    type Vue = { id: string; reunion: { critique: boolean; dejaRelie: boolean } | null };
+    const reunion = async (slug: string, wisprId: string) => {
+      const i = await instance(slug);
+      return withInstance(t.app.db, i.id, (tx) =>
+        deposerReunion(tx, {
+          wisprId,
+          titre: 'Point fictif',
+          debutAt: new Date('2026-10-28T09:00:00Z'),
+          participants: [],
+          resume: 'Résumé fictif',
+        }),
+      );
+    };
+
+    it('renvoie reunion pour une entrée wispr et null pour les autres', async () => {
+      const { sujetId } = await reunion('helioval', 'api-w-1');
+      const liste = (await req('GET', '/api/i/helioval/inbox')).body as Vue[];
+      expect(liste.find((s) => s.id === sujetId)?.reunion).toMatchObject({
+        critique: false,
+        dejaRelie: false,
+      });
+      const autre = liste.find((s) => s.reunion === null);
+      expect(autre).toBeDefined();
+    });
+
+    it('attribue la réunion : critique et rattachement', async () => {
+      const { sujetId } = await reunion('helioval', 'api-w-2');
+      const r = await req('POST', `/api/i/helioval/sujets/${sujetId}/reunion`, {
+        contactId: null,
+        entrepriseId: null,
+        critique: true,
+      });
+      expect(r.status).toBe(200);
+      expect((r.body as Vue).reunion?.critique).toBe(true);
+    });
+
+    it('refuse un corps avec un champ inconnu (400) et un sujet d’une autre instance (404)', async () => {
+      const { sujetId } = await reunion('helioval', 'api-w-3');
+      expect(
+        (
+          await req('POST', `/api/i/helioval/sujets/${sujetId}/reunion`, {
+            contactId: null,
+            entrepriseId: null,
+            critique: false,
+            pirate: 1,
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await req('POST', `/api/i/aquaterra/sujets/${sujetId}/reunion`, {
+            contactId: null,
+            entrepriseId: null,
+            critique: false,
+          })
+        ).status,
+      ).toBe(404);
+    });
+
+    it('404 pour une entrée qui n’est pas une réunion', async () => {
+      const { id } = await deposer('helioval', 'api-w-pas-reunion');
+      expect(
+        (
+          await req('POST', `/api/i/helioval/sujets/${id}/reunion`, {
+            contactId: null,
+            entrepriseId: null,
+            critique: false,
+          })
+        ).status,
+      ).toBe(404);
+    });
   });
 });
