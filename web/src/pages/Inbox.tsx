@@ -4,6 +4,7 @@ import {
   ajouterDepuisEchange,
   ajouterSujet,
   attribuerReunionSujet,
+  compteRenduSujet,
   modifierSujet,
   annulerEchange,
   decider,
@@ -29,6 +30,7 @@ import {
 import { Icon } from '../icons.js';
 import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { PropositionDetail } from './inbox/Proposition.js';
+import { CompteRendu } from './inbox/CompteRendu.js';
 import { EditionTache } from './taches/Edition.js';
 
 // Priority of a new entry, from 1 (low) to 5 (high); mirrors the server default.
@@ -417,9 +419,11 @@ function Detail({
   onLivreBlanc,
   onTransfere,
   onReunion,
+  onCompteRendu,
 }: {
   slug: string;
   s: SujetVue;
+  onCompteRendu: (corps: { eventId?: string; texte: string }) => void;
   onReunion: (corps: {
     contactId: string | null;
     entrepriseId: string | null;
@@ -468,6 +472,14 @@ function Detail({
             s={s}
             onAttribuer={onReunion}
             onClore={onTraite}
+          />
+        )}
+        {s.statut === 'a_traiter' && s.type === 'compte_rendu' && (
+          <CompteRendu
+            key={`compte-rendu-${s.id}`}
+            slug={s.instance.slug}
+            s={s}
+            onEnregistrer={onCompteRendu}
           />
         )}
         {s.statut === 'a_traiter' && s.type !== 'a_valider' && (
@@ -990,6 +1002,12 @@ export function Inbox({
         }
         onModifier={(modif) =>
           void agir(modifierSujet(s.instance.slug, s.id, modif), 'Entrée modifiée.')
+        }
+        onCompteRendu={(corps) =>
+          void agir(
+            compteRenduSujet(s.instance.slug, s.id, corps),
+            'Compte rendu enregistré dans le rendez-vous.',
+          )
         }
         onReunion={(corps) =>
           void agir(attribuerReunionSujet(s.instance.slug, s.id, corps), 'Réunion rattachée.')

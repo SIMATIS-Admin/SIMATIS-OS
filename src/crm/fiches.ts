@@ -166,9 +166,10 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
       at: t.faitAt?.toISOString() ?? '',
       origine: origine(t.source),
     })),
-    // A meeting created in the OS is an activity of its contacts once it has taken place.
+    // A meeting created in the OS is an activity of its contacts once it has taken place; with a
+    // compte rendu, that activity already stands for it (never two lines for one meeting).
     ...rdvs.flatMap((r) =>
-      r.id.startsWith('os:') && r.debut && r.debut <= maintenant
+      r.id.startsWith('os:') && !r.compteRendu && r.debut && r.debut <= maintenant
         ? [
             {
               id: `rdv-${r.id}`,
