@@ -337,6 +337,13 @@
       "when": 1793271716395,
       "tag": "0047_last_randall",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793288767515,
+      "tag": "0048_shiny_colonel_america",
+      "breakpoints": true
     }
   ]
 }

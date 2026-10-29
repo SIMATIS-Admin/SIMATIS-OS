@@ -9,7 +9,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { contacts, entreprises } from '../crm/schema.js';
+import { contacts, entreprises, rendezVous } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Dimensions } from './profil.js';
 import type { Proposition } from './proposition.js';
@@ -41,7 +41,12 @@ export const DEMANDES = [
   'restitution',
   'restitution_export',
   'entretien',
+  'capitalisation_proposer',
+  'capitalisation_enregistrer',
 ] as const;
+// Capitalisation de la restitution (étape 5) : 'en_cours' tant que Claude propose, 'propose' une fois
+// sa proposition dans le chat, 'enregistre' quand le pilote l'a validée et que Claude l'a écrite.
+export const STATUTS_CAPITALISATION = ['aucun', 'en_cours', 'propose', 'enregistre'] as const;
 // Rapport remis au dirigeant, rédigé par Claude : 'en_cours' tant que le runner le rédige, 'pret'
 // une fois son lien enregistré.
 export const STATUTS_RAPPORT = ['aucun', 'en_cours', 'pret'] as const;
@@ -105,6 +110,17 @@ export const diagnosticProjets = pgTable(
     // Formule d'abonnement et options de la proposition, saisies par le pilote : source unique du
     // deck et du futur devis.
     proposition: jsonb('proposition').$type<Proposition>(),
+    // Compte rendu de la restitution à capitaliser : le rendez-vous choisi et, une fois enregistré,
+    // la date de son compte rendu (un compte rendu modifié depuis permet de recapitaliser).
+    capitalisationStatut: text('capitalisation_statut', { enum: STATUTS_CAPITALISATION })
+      .notNull()
+      .default('aucun'),
+    capitalisationRdvId: uuid('capitalisation_rdv_id').references(() => rendezVous.id, {
+      onDelete: 'set null',
+    }),
+    capitalisationCompteRenduAt: timestamp('capitalisation_compte_rendu_at', {
+      withTimezone: true,
+    }),
     // Entretien : PDF de l'outil externe (base64) et ses réponses lues par Claude, par question.
     pdfEntretien: text('pdf_entretien'),
     pdfEntretienNom: text('pdf_entretien_nom'),
