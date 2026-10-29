@@ -28,6 +28,7 @@ import { Bases } from './pages/Bases.js';
 import { RendezVous } from './pages/RendezVous.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
+import { Cerveau } from './pages/Cerveau.js';
 import { Journal } from './pages/Journal.js';
 import { Parametres } from './pages/Parametres.js';
 import { Pipeline } from './pages/Pipeline.js';
@@ -206,6 +207,8 @@ export function App() {
         return <SiteWeb key={current.slug} slug={current.slug} />;
       case 'tableau':
         return <Tableau key={current.slug} slug={current.slug} />;
+      case 'cerveau':
+        return <Cerveau key={current.slug} slug={current.slug} />;
       case 'journal':
         return <Journal key={current.slug} slug={current.slug} />;
       case 'parametres':

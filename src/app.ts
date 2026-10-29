@@ -7,6 +7,7 @@ import type { Database } from './db.js';
 import type { CompteImap } from './secrets.js';
 import { registerHealth } from './health.js';
 import { registerMcp } from './mcp/server.js';
+import { registerCerveauRoutes } from './cerveau/routes.js';
 import { registerRunnerApi } from './routines/runner-api.js';
 import { registerAtelierRoutes } from './atelier/routes.js';
 import { registerVmaRoutes } from './vma/routes.js';
@@ -53,6 +54,7 @@ export function buildApp({
   registerAtelierRoutes(app, { db });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db });
+  registerCerveauRoutes(app, { db });
   registerWeb(app);
   return app;
 }

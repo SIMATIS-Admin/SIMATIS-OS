@@ -24,6 +24,7 @@ export const NAV: NavGroup[] = [
       item('brief', 'Brief du jour', 'sun'),
       item('inbox', 'Inbox', 'inbox'),
       item('tableau', 'Tableau de bord', 'chart'),
+      item('cerveau', 'Second cerveau', 'brain', 'cerveau'),
     ],
   },
   {
@@ -66,7 +67,6 @@ export const NAV: NavGroup[] = [
       item('detection', 'Détection', 'pulse'),
       item('autonomie', 'Autonomie', 'sliders'),
       item('journal', "Journal d'audit", 'list'),
-      item('cerveau', 'Second cerveau', 'brain'),
     ],
   },
 ];
@@ -89,6 +89,7 @@ export const BUILT = new Set([
   'routines',
   'siteweb',
   'bases',
+  'cerveau',
 ]);
 
 // Where each screen comes from in docs/plans/2026-10-08-implementation-maquette.md.

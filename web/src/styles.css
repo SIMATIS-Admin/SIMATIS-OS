@@ -5239,3 +5239,100 @@ label.btn.off {
 .dg-detail.dg-detail-seul {
   grid-template-columns: 1fr;
 }
+
+/* Second cerveau : carte en réseau, légende et fiche de la note choisie. */
+.cerveau {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+.cerveau-carte {
+  position: relative;
+  overflow: hidden;
+}
+.cerveau-carte svg {
+  display: block;
+  width: 100%;
+  height: min(72vh, 760px);
+  background: var(--bg);
+  cursor: grab;
+  touch-action: none;
+}
+.cv-lien {
+  stroke: var(--ink-3);
+  stroke-opacity: 0.25;
+  stroke-width: 1;
+}
+.cv-lien.actif {
+  stroke: var(--navy);
+  stroke-opacity: 0.8;
+  stroke-width: 2;
+}
+.cv-noeud {
+  cursor: pointer;
+}
+.cerveau-zoom {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 6px;
+}
+.cerveau-legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+.cerveau-legende button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  font-size: 12px;
+}
+.cerveau-legende button.off {
+  opacity: 0.45;
+}
+.cerveau-legende .nb {
+  color: var(--ink-3);
+  font-family: var(--f-num);
+}
+.cerveau .pastille {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 50%;
+}
+.cerveau-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.cerveau-cote {
+  display: grid;
+  gap: 14px;
+}
+.cerveau-liste {
+  margin: 4px 0 10px;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.cerveau-liste button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--navy-3);
+  text-align: left;
+  cursor: pointer;
+}
+@media (max-width: 900px) {
+  .cerveau {
+    grid-template-columns: 1fr;
+  }
+}
