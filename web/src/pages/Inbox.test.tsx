@@ -148,6 +148,16 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       method === 'POST' ? 201 : 200,
     );
   }
+  if (url.endsWith('/rendez-vous'))
+    return json([
+      {
+        eventId: 'g-1',
+        titre: 'Visio fictive',
+        debut: '2026-10-28T09:00:00Z',
+        compteRendu: false,
+        propose: true,
+      },
+    ]);
   if (url.includes('/decision')) return json({ ...proposition, statut: 'appliquee' });
   if (url.endsWith('/livre-blanc'))
     return simulation
@@ -735,6 +745,31 @@ describe('Inbox screen', () => {
           contactId: 'c9',
           entrepriseId: null,
           critique: false,
+        }),
+      );
+    });
+
+    it('écrit le compte rendu sur l’événement proposé, depuis l’Inbox', async () => {
+      supplementaires = [
+        sujet('w4', {
+          type: 'compte_rendu',
+          origine: 'wispr',
+          titre: 'Compte rendu : Point fictif',
+          reunion: reunion(),
+        }),
+      ];
+      const detail = await ouvrir();
+      const choix = await within(detail).findByLabelText('Rendez-vous du compte rendu');
+      await within(detail).findByRole('option', { name: /Visio fictive/ });
+      await waitFor(() => expect((choix as HTMLSelectElement).value).toBe('g-1'));
+      fireEvent.change(within(detail).getByLabelText('Compte rendu'), {
+        target: { value: 'Décisions fictives.' },
+      });
+      fireEvent.click(within(detail).getByRole('button', { name: 'Enregistrer le compte rendu' }));
+      await waitFor(() =>
+        expect(posts().find((c) => c.url.endsWith('/sujets/w4/compte-rendu'))?.body).toEqual({
+          eventId: 'g-1',
+          texte: 'Décisions fictives.',
         }),
       );
     });

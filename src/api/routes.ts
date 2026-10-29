@@ -68,6 +68,11 @@ import {
   envoyerLivreBlanc,
 } from '../inbox/service.js';
 import { estNumeroLivreBlanc } from '../inbox/livre-blanc.js';
+import {
+  candidatsRendezVous,
+  compteRenduSujetSchema,
+  enregistrerDepuisSujet,
+} from '../inbox/compte-rendu.js';
 import { ReunionInvalide } from '../inbox/reunions.js';
 import { PRIORITE_MAX, PRIORITE_MIN } from '../inbox/schema.js';
 import {
@@ -1080,6 +1085,18 @@ export function registerApi(
         if (error instanceof ReunionInvalide) return reply.code(400).send({ error: error.message });
         throw error;
       }
+    }),
+  );
+  app.get<SujetRoute>(
+    '/api/i/:slug/sujets/:id/rendez-vous',
+    surSujet((i, id) => candidatsRendezVous(db, i, id)),
+  );
+  app.post<SujetRoute>(
+    '/api/i/:slug/sujets/:id/compte-rendu',
+    surSujet(async (i, id, request, reply) => {
+      const corps = compteRenduSujetSchema.safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Compte rendu incomplet' });
+      return enregistrerDepuisSujet(db, i, id, corps.data, connexionDeps);
     }),
   );
   app.post<SujetRoute>(

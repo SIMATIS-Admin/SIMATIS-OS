@@ -634,6 +634,20 @@ export const attribuerReunionSujet = (
   id: string,
   corps: { contactId: string | null; entrepriseId: string | null; critique: boolean },
 ) => sendJson<SujetVue>('POST', sujet(slug, id, 'reunion'), corps);
+export type CandidatRdv = {
+  eventId: string;
+  titre: string;
+  debut: string | null;
+  compteRendu: boolean;
+  propose: boolean;
+};
+export const fetchCandidatsRdv = (slug: string, id: string) =>
+  getJson<CandidatRdv[]>(sujet(slug, id, 'rendez-vous'));
+export const compteRenduSujet = (
+  slug: string,
+  id: string,
+  corps: { eventId?: string; texte: string },
+) => sendJson<SujetVue>('POST', sujet(slug, id, 'compte-rendu'), corps);
 export const marquerSujetTraite = (slug: string, id: string) =>
   sendJson<SujetVue>('POST', sujet(slug, id, 'traite'), {});
 export const remettreSujet = (slug: string, id: string) =>
