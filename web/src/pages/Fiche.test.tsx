@@ -264,6 +264,17 @@ describe('Fiche page', () => {
     expect(patch('/fiches/affaire/o1')?.body).toEqual({ montant: 18000 });
   });
 
+  it('shows the stage probability, and sets then clears a manual one', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    expect(await screen.findByText('40 % (standard de l’étape)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier Probabilité' }));
+    const champ = screen.getByLabelText('Probabilité');
+    fireEvent.change(champ, { target: { value: '85' } });
+    fireEvent.keyDown(champ, { key: 'Enter' });
+    await waitFor(() => expect(patch('/fiches/affaire/o1')).toBeTruthy());
+    expect(patch('/fiches/affaire/o1')?.body).toEqual({ probabiliteManuelle: 85 });
+  });
+
   it('adds a note, also in HubSpot by default for a HubSpot record', async () => {
     render(<Fiche slug="simatis" kind="affaire" id="o1" />);
     fireEvent.change(await screen.findByLabelText('Note'), { target: { value: 'Devis envoyé' } });

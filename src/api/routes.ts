@@ -792,6 +792,7 @@ export function registerApi(
       modeFacturation: z.enum(['spot', 'recurrent']),
       dureeEngagementMois: z.number().int().min(1).max(120),
       taciteReconduction: z.boolean(),
+      probabiliteManuelle: z.number().int().min(0).max(100).nullable(),
       echeance: z.iso.date().nullable(),
       fonction: texteCourt.nullable(),
       email: z.email().nullable(),

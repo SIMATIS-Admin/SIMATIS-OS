@@ -12,7 +12,7 @@ import {
   type PipelineOpp,
   type Qualification,
 } from '../api.js';
-import { montantEur, sommeEur, sommes } from '../crm.js';
+import { montantEur, probabiliteEffective, sommeEur, sommes } from '../crm.js';
 import { Icon } from '../icons.js';
 import { fusionnerDeux, supprimerEnLot } from './listes/lots.js';
 import { Tableau } from './listes/Tableau.js';
@@ -433,7 +433,13 @@ export function Pipeline({ slug }: { slug: string }) {
         <span>
           {sommeEur(sommes(os))}
           {prob != null && (
-            <small className="muted"> · pondéré {sommeEur(sommes(os, () => prob / 100))}</small>
+            <small className="muted">
+              {' '}
+              · pondéré{' '}
+              {sommeEur(
+                sommes(os, (o) => (probabiliteEffective(o.probabiliteManuelle, prob) ?? 0) / 100),
+              )}
+            </small>
           )}
         </span>
         {!cls && data.ecrit && (
@@ -486,7 +492,10 @@ export function Pipeline({ slug }: { slug: string }) {
   // Pipedrive header: total and weighted value of the open deals (stage probability).
   const probas = new Map(data.etapes.map((e) => [e.id, e.probabilite ?? null]));
   const pondere = [...probas.values()].some((p) => p !== null)
-    ? sommes(ouvertes, (o) => (probas.get(o.etape) ?? 0) / 100)
+    ? sommes(
+        ouvertes,
+        (o) => (probabiliteEffective(o.probabiliteManuelle, probas.get(o.etape)) ?? 0) / 100,
+      )
     : null;
   // Pipedrive: a card opens the deal page.
   const ouvrir = (id: string) => (location.hash = `#/${slug}/fiche/affaire/${id}`);

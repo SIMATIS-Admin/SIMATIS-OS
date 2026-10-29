@@ -28,6 +28,11 @@ export const montantEur = (o: Pick<Facturation, 'montant' | 'modeFacturation'>) 
   o.montant ? `${eur(o.montant)}${o.modeFacturation === 'recurrent' ? '/mois' : ''}` : '';
 export const engagement = (o: Facturation) =>
   `${o.dureeEngagementMois} mois${o.taciteReconduction ? ', tacite reconduction' : ''}`;
+// The hand-set probability of a deal wins over its stage's standard one.
+export const probabiliteEffective = (
+  manuelle: number | null | undefined,
+  etape: number | null | undefined,
+) => manuelle ?? etape ?? null;
 export const sommes = <T extends Pick<Facturation, 'montant' | 'modeFacturation'>>(
   os: T[],
   poids: (o: T) => number = () => 1,

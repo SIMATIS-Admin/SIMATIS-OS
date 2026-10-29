@@ -308,6 +308,7 @@ export type PatchFiche = {
   modeFacturation?: 'spot' | 'recurrent';
   dureeEngagementMois?: number;
   taciteReconduction?: boolean;
+  probabiliteManuelle?: number | null;
   echeance?: string | null;
   nom?: string;
   fonction?: string | null;
@@ -328,6 +329,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
     'modeFacturation',
     'dureeEngagementMois',
     'taciteReconduction',
+    'probabiliteManuelle',
     'echeance',
     'contactId',
     'entrepriseId',
@@ -336,9 +338,10 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
   entreprise: ['nom', 'ville', 'domaine', 'taille', 'secteur'],
 };
 
-// Billing terms exist only in the OS: they are never sent to HubSpot, and stay editable when the
-// CRM is read-only.
+// Billing terms and the manual probability exist only in the OS: they are never sent to HubSpot,
+// and stay editable when the CRM is read-only.
 const CHAMPS_LOCAUX: (keyof PatchFiche)[] = [
+  'probabiliteManuelle',
   'modeFacturation',
   'dureeEngagementMois',
   'taciteReconduction',
