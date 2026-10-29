@@ -7,6 +7,7 @@ import { chargerGrille, type Grille } from '../diagnostic/grille.js';
 import { DEBUT_MESSAGE_RAPPORT } from '../diagnostic/rapport.js';
 import { consignesProposition, type Proposition } from '../diagnostic/proposition.js';
 import { DEBUT_MESSAGE_RESTITUTION } from '../diagnostic/restitution.js';
+import { construireCarte } from '../cerveau/carte.js';
 import { consigneCerveau } from './cerveau.js';
 
 // Local runner (npm run runner, started by launchd on the workstation): picks the routine runs the
@@ -161,12 +162,27 @@ const clientOs = (opts: RunnerOptions) => {
   };
 };
 
+// Dépose la carte du second cerveau (titres et liens, jamais le contenu) pour la rubrique de l'OS.
+// Un échec ne doit pas empêcher les routines de partir.
+async function deposerCarte(
+  api: <T>(chemin: string, body?: unknown) => Promise<T>,
+  cerveau: string | undefined,
+) {
+  if (!cerveau || !(await dossierExiste(cerveau))) return;
+  try {
+    await api('/api/runner/cerveau/carte', await construireCarte(cerveau));
+  } catch (err) {
+    console.error('carte du second cerveau :', err instanceof Error ? err.message : err);
+  }
+}
+
 export async function tour(opts: RunnerOptions): Promise<number> {
   const lancer = opts.lancer ?? lancerProcessus;
   const api = clientOs(opts);
 
   const poste = await (opts.poste ?? (() => decrirePoste(opts.claude)))();
   await api('/api/runner/presence', poste);
+  await deposerCarte(api, opts.cerveau);
   const demandes = await api<Demande[]>('/api/runner/demandes');
   for (const d of demandes) {
     let demarre: { tokenId: string; token: string };

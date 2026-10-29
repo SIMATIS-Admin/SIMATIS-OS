@@ -246,6 +246,8 @@ export const supprimerTestVma = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `vma/tests/${encodeURIComponent(id)}`), {});
 
 export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug, 'journal'));
+export const fetchCarteCerveau = (slug: string) =>
+  getJson<import('./cerveau.js').CarteCerveau | null>(inst(slug, 'cerveau/carte'));
 export const fetchConsole = (slug: string) => getJson<ConsoleOS>(inst(slug, 'console'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>
