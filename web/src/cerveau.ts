@@ -26,6 +26,10 @@ export const CATEGORIES: Record<string, { libelle: string; couleur: string }> = 
   modeles: { libelle: 'Modèles', couleur: '#d6619a' },
   sources: { libelle: 'Sources importées', couleur: '#b8c2d1' },
   racine: { libelle: 'Racine', couleur: '#12253f' },
+  // Espace partagé AlpesIA × Simatis.
+  reference: { libelle: 'Référence (Christophe)', couleur: '#2f7fc1' },
+  prospection: { libelle: 'Prospection (Marc)', couleur: '#c98a12' },
+  echanges: { libelle: 'Échanges', couleur: '#d6619a' },
 };
 const AUTRE = { libelle: 'Autres', couleur: '#9aa6b8' };
 export const categorieInfo = (c: string) => CATEGORIES[c] ?? { ...AUTRE, libelle: c };

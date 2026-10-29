@@ -48,23 +48,29 @@ const statutDe = (texte: string) => {
   return entete ? (/^statut:\s*(\S+)/m.exec(entete)?.[1] ?? null) : null;
 };
 
+// Titre : premier titre « # », sinon le « sujet » de l'en-tête (messages de l'espace partagé), sinon le nom.
 const titreDe = (texte: string, id: string) => {
   const sans = texte.replace(/^---\n[\s\S]*?\n---\n?/, '');
-  return /^#\s+(.+)$/m.exec(sans)?.[1]?.trim() ?? path.basename(id, '.md');
+  const sujet = /^sujet:\s*(.+)$/m
+    .exec(/^---\n([\s\S]*?)\n---/.exec(texte)?.[1] ?? '')?.[1]
+    ?.trim();
+  return (
+    /^#\s+(.+)$/m.exec(sans)?.[1]?.trim() ??
+    (sujet ? sujet.replace(/^"(.*)"$/, '$1') : path.basename(id, '.md'))
+  );
 };
 
-export async function construireCarte(
-  dossier: string,
-  options: { max?: number } = {},
-): Promise<Carte> {
+// Carte à partir de notes déjà lues : le dossier du Drive et l'espace partagé s'y ramènent.
+export function carteDepuisNotes(
+  toutes: { id: string; texte: string }[],
+  options: { max?: number; autresFichiers?: number } = {},
+): Carte {
   const max = options.max ?? MAX_NOTES;
-  const fichiers = await parcourir(dossier);
-  const toutes = fichiers.filter((f) => f.endsWith('.md'));
   const notes = toutes.slice(0, max);
-  const ids = new Set(notes);
+  const ids = new Set(notes.map((n) => n.id));
   // Nom court → notes, comme Obsidian résout [[nom]] sans le chemin.
   const parNom = new Map<string, string[]>();
-  for (const id of notes) {
+  for (const { id } of notes) {
     const nom = path.basename(id, '.md').toLowerCase();
     parNom.set(nom, [...(parNom.get(nom) ?? []), id]);
   }
@@ -75,8 +81,7 @@ export async function construireCarte(
     if (vers && vers !== de && ids.has(vers)) liens.set(`${de}\0${vers}`, { de, vers });
   };
 
-  for (const id of notes) {
-    const texte = await readFile(path.join(dossier, id), 'utf8');
+  for (const { id, texte } of notes) {
     noeuds.push({
       id,
       titre: titreDe(texte, id),
@@ -108,7 +113,22 @@ export async function construireCarte(
   return {
     noeuds,
     liens: [...liens.values()],
-    autresFichiers: fichiers.length - toutes.length,
+    autresFichiers: options.autresFichiers ?? 0,
     tronquee: toutes.length > notes.length,
   };
+}
+
+export async function construireCarte(
+  dossier: string,
+  options: { max?: number } = {},
+): Promise<Carte> {
+  const fichiers = await parcourir(dossier);
+  const toutes = fichiers.filter((f) => f.endsWith('.md')).slice(0, (options.max ?? MAX_NOTES) + 1);
+  const notes = await Promise.all(
+    toutes.map(async (id) => ({ id, texte: await readFile(path.join(dossier, id), 'utf8') })),
+  );
+  return carteDepuisNotes(notes, {
+    ...options,
+    autresFichiers: fichiers.length - fichiers.filter((f) => f.endsWith('.md')).length,
+  });
 }

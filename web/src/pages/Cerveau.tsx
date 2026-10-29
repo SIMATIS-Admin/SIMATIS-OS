@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchCarteCerveau } from '../api.js';
-import { NoteCerveau, IdeeCerveau } from './NoteCerveau.js';
+import { fetchCarteCerveau, operationCerveau, type EspaceCerveau } from '../api.js';
+import { IdeeCerveau, MessagePartage, NoteCerveau } from './NoteCerveau.js';
 import { categorieInfo, disposer, voisins, type CarteCerveau } from '../cerveau.js';
 
 const TAILLE = 1000;
@@ -14,27 +14,58 @@ const dateParis = (iso: string) =>
     minute: '2-digit',
   });
 
+// Deux cerveaux : SIMATIS (le dossier du Drive) et Partagé (l'espace partagé avec Christophe), chacun
+// avec sa carte et son édition.
 export function Cerveau({ slug }: { slug: string }) {
+  const [espace, setEspace] = useState<EspaceCerveau>('simatis');
+  return (
+    <>
+      <div className="seg" style={{ marginBottom: 14 }}>
+        {(
+          [
+            ['simatis', 'SIMATIS'],
+            ['partage', 'Partagé'],
+          ] as const
+        ).map(([id, libelle]) => (
+          <button
+            key={id}
+            className={espace === id ? 'on' : ''}
+            aria-pressed={espace === id}
+            onClick={() => setEspace(id)}
+          >
+            {libelle}
+          </button>
+        ))}
+      </div>
+      <CerveauEspace key={`${slug}-${espace}`} slug={slug} espace={espace} />
+    </>
+  );
+}
+
+function CerveauEspace({ slug, espace }: { slug: string; espace: EspaceCerveau }) {
+  const partage = espace === 'partage';
   const [carte, setCarte] = useState<CarteCerveau | null | undefined>(undefined);
   const [erreur, setErreur] = useState<string | null>(null);
   const [masquees, setMasquees] = useState<Set<string>>(new Set());
   const [choisie, setChoisie] = useState<string | null>(null);
   const [recherche, setRecherche] = useState('');
   const [ouverte, setOuverte] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ enReponseA?: string } | null>(null);
+  const [actualisation, setActualisation] = useState(false);
   const [rechargement, setRechargement] = useState(0);
   const [vue, setVue] = useState({ x: -TAILLE / 2, y: -TAILLE / 2, l: TAILLE });
   const glisse = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     let vivant = true;
-    fetchCarteCerveau(slug).then(
+    fetchCarteCerveau(slug, espace).then(
       (c) => vivant && setCarte(c),
       (e: unknown) => vivant && setErreur(e instanceof Error ? e.message : String(e)),
     );
     return () => {
       vivant = false;
     };
-  }, [slug, rechargement]);
+  }, [slug, espace, rechargement]);
 
   const positions = useMemo(
     () =>
@@ -47,14 +78,43 @@ export function Cerveau({ slug }: { slug: string }) {
     return [...n.entries()].sort((a, b) => b[1] - a[1]);
   }, [carte]);
 
+  // Relit l'espace partagé sur le kDrive (une lecture par note) : lent, donc à la demande.
+  const actualiser = () => {
+    setActualisation(true);
+    operationCerveau(slug, { espace: 'partage', type: 'actualiser' }).then(
+      () => {
+        setActualisation(false);
+        setRechargement((n) => n + 1);
+      },
+      (e: unknown) => {
+        setActualisation(false);
+        setErreur(e instanceof Error ? e.message : String(e));
+      },
+    );
+  };
+
   if (erreur) return <div className="empty">{erreur}</div>;
   if (carte === undefined) return <div className="empty">Chargement…</div>;
   if (carte === null || !positions)
     return (
       <div className="empty">
-        La carte n’est pas encore arrivée. Elle est envoyée par l’exécuteur de cet ordinateur à
-        chaque passage : vérifiez qu’il tourne (Routines Claude) et que le dossier du second cerveau
-        est configuré.
+        {partage
+          ? 'La carte de l’espace partagé n’est pas encore arrivée. '
+          : 'La carte n’est pas encore arrivée. '}
+        Elle est envoyée par l’exécuteur de cet ordinateur : vérifiez qu’il tourne (Routines Claude)
+        et que{' '}
+        {partage
+          ? 'le serveur « partage » de Claude Code est installé'
+          : 'le dossier du second cerveau est configuré'}
+        .
+        {partage && (
+          <>
+            {' '}
+            <button className="btn" onClick={actualiser} disabled={actualisation}>
+              {actualisation ? 'Lecture du kDrive…' : 'Actualiser'}
+            </button>
+          </>
+        )}
       </div>
     );
 
@@ -169,8 +229,19 @@ export function Cerveau({ slug }: { slug: string }) {
       </div>
 
       <div className="cerveau-cote">
+        {partage && (
+          <div className="cerveau-actions" style={{ marginTop: 0 }}>
+            <button className="btn" onClick={() => setMessage({})}>
+              + Nouveau message
+            </button>
+            <button className="btn" onClick={actualiser} disabled={actualisation}>
+              {actualisation ? 'Lecture du kDrive…' : 'Actualiser'}
+            </button>
+          </div>
+        )}
         <IdeeCerveau
           slug={slug}
+          espace={espace}
           onAjoutee={(chemin) => {
             setOuverte(chemin);
             // La carte est redéposée par l'exécuteur juste après l'écriture.
@@ -265,11 +336,27 @@ export function Cerveau({ slug }: { slug: string }) {
           </div>
         </div>
       </div>
+      {message && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <MessagePartage
+            key={message.enReponseA ?? 'nouveau'}
+            slug={slug}
+            enReponseA={message.enReponseA}
+            onFerme={() => setMessage(null)}
+            onDepose={() => {
+              setMessage(null);
+              setTimeout(() => setRechargement((n) => n + 1), 3000);
+            }}
+          />
+        </div>
+      )}
       {ouverte && (
         <div style={{ gridColumn: '1 / -1' }}>
           <NoteCerveau
             key={ouverte}
             slug={slug}
+            espace={espace}
+            {...(partage ? { onRepondre: (c: string) => setMessage({ enReponseA: c }) } : {})}
             chemin={ouverte}
             onFerme={() => setOuverte(null)}
             onEnregistre={() => setTimeout(() => setRechargement((n) => n + 1), 3000)}

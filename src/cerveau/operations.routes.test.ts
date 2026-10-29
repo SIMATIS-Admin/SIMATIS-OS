@@ -7,13 +7,37 @@ import { setupTestApp, type TestApp } from '../../test/database.js';
 import { createInstance, setModule } from '../instances/service.js';
 import { createToken } from '../mcp/tokens.js';
 import { tourCerveau } from '../runner/runner.js';
-import { viderFile } from './file.js';
+import { viderFile, type Partage } from './file.js';
+import { viderCarte } from './store.js';
 import { registerCerveauRoutes } from './routes.js';
 
 describe('Second cerveau : opérations (OS → runner → dossier)', () => {
   let t: TestApp;
   let runner: string;
   let dossier: string;
+  // Faux espace partagé (réponses au format du serveur MCP « partage »).
+  let kdrive: Map<string, string>;
+  let partageFaux: Partage | null;
+  const fauxPartage = (): Partage => ({
+    auteur: 'marc',
+    appeler: (outil, args) => {
+      if (outil === 'lister_partage')
+        return Promise.resolve(
+          [...kdrive.keys()].map((p) => `- ${p} · 1 Ko · hier · Marc`).join('\n'),
+        );
+      if (outil === 'lire_partage') {
+        const c = kdrive.get(String(args.chemin));
+        return c === undefined
+          ? Promise.reject(new Error('échec : introuvable'))
+          : Promise.resolve(`[${String(args.chemin)} · modifié par Marc]\n\n${c}`);
+      }
+      if (outil === 'publier_document') {
+        kdrive.set(String(args.chemin), String(args.contenu));
+        return Promise.resolve('{"fait":true}');
+      }
+      return Promise.resolve('{"fait":true,"chemin":"echanges/2026-10-29-1300-marc-sujet.md"}');
+    },
+  });
   const f = () => {
     const app = Fastify();
     registerCerveauRoutes(app, { db: t.app.db });
@@ -29,6 +53,7 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
       token: runner,
       claude: 'faux',
       cerveau: dossier,
+      partage: () => Promise.resolve(partageFaux),
       fetch: (async (u: string, init?: { method?: string; body?: string }) => {
         const res = await app.inject({
           method: (init?.method ?? 'GET') as 'GET' | 'POST',
@@ -60,6 +85,12 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
   });
   beforeEach(async () => {
     viderFile();
+    viderCarte();
+    kdrive = new Map([
+      ['prospection/point.md', '# Point fictif\n'],
+      ['reference/offre.md', '# Offre fictive\n'],
+    ]);
+    partageFaux = fauxPartage();
     dossier = await mkdtemp(path.join(tmpdir(), 'cerveau-op-'));
     await mkdir(path.join(dossier, 'brain/inbox'), { recursive: true });
     await writeFile(path.join(dossier, 'log.md'), '# Journal des changements\n\n');
@@ -130,5 +161,92 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
     expect(
       (await app.inject({ method: 'GET', url: '/api/runner/cerveau/operations' })).statusCode,
     ).toBe(401);
+  });
+
+  describe('espace partagé', () => {
+    it('lit une note du dossier de Christophe en lecture seule, et la sienne modifiable', async () => {
+      const autre = await demander('op-ok', {
+        espace: 'partage',
+        type: 'lire',
+        chemin: 'reference/offre.md',
+      });
+      expect(autre.json<{ lectureSeule: string }>().lectureSeule).toMatch(/Christophe/);
+      const sienne = await demander('op-ok', {
+        espace: 'partage',
+        type: 'lire',
+        chemin: 'prospection/point.md',
+      });
+      expect(sienne.json<{ lectureSeule: unknown }>().lectureSeule).toBeNull();
+    });
+
+    it('enregistre dans prospection/, refuse reference/ et un document modifié ailleurs', async () => {
+      const lu = (
+        await demander('op-ok', { espace: 'partage', type: 'lire', chemin: 'prospection/point.md' })
+      ).json<{ empreinte: string }>();
+      const ok = await demander('op-ok', {
+        espace: 'partage',
+        type: 'ecrire',
+        chemin: 'prospection/point.md',
+        contenu: '# Point fictif\n\nNouveau.',
+        empreinte: lu.empreinte,
+      });
+      expect(ok.statusCode).toBe(200);
+      expect(kdrive.get('prospection/point.md')).toContain('Nouveau.');
+
+      const refus = await demander('op-ok', {
+        espace: 'partage',
+        type: 'ecrire',
+        chemin: 'reference/offre.md',
+        contenu: 'x',
+        empreinte: 'e',
+      });
+      expect(refus.statusCode).toBe(400);
+      expect(kdrive.get('reference/offre.md')).toBe('# Offre fictive\n');
+
+      kdrive.set('prospection/point.md', 'changé par Christophe\n');
+      const perime = await demander('op-ok', {
+        espace: 'partage',
+        type: 'ecrire',
+        chemin: 'prospection/point.md',
+        contenu: 'écrasement',
+        empreinte: lu.empreinte,
+      });
+      expect(perime.statusCode).toBe(409);
+    });
+
+    it('dépose un message, puis la carte de l’espace partagé est lisible à part', async () => {
+      const m = await demander('op-ok', {
+        espace: 'partage',
+        type: 'message',
+        genre: 'question',
+        sujet: 'Sujet',
+        corps: 'Corps',
+      });
+      expect(m.statusCode).toBe(200);
+      expect(m.json<{ chemin: string }>().chemin).toMatch(/^echanges\//);
+      const carte = await app.inject({
+        method: 'GET',
+        url: '/api/i/op-ok/cerveau/carte?espace=partage',
+      });
+      expect(carte.json<{ noeuds: unknown[] }>().noeuds).toHaveLength(2);
+      const simatis = await app.inject({ method: 'GET', url: '/api/i/op-ok/cerveau/carte' });
+      expect(simatis.json()).toBeNull();
+    });
+
+    it('explique quand le serveur « partage » est absent du poste', async () => {
+      partageFaux = null;
+      const res = await demander('op-ok', { espace: 'partage', type: 'lire', chemin: 'index.md' });
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ error: string }>().error).toMatch(/pas connecté/);
+    });
+
+    it('refuse un message mal formé', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: url('op-ok'),
+        payload: { espace: 'partage', type: 'message', genre: 'cri', sujet: 's', corps: 'c' },
+      });
+      expect(res.statusCode).toBe(400);
+    });
   });
 });
