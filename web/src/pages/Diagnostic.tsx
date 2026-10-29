@@ -1682,7 +1682,6 @@ function Assistant({
           <textarea
             rows={2}
             value={texte}
-            disabled={enAttente}
             placeholder="Votre message"
             onChange={(e) => setTexte(e.target.value)}
           />

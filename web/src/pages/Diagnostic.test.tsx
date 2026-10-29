@@ -787,6 +787,22 @@ describe('Indication pendant que Claude travaille', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     expect(await screen.findByText(/Claude répond à votre message/)).toBeTruthy();
   });
+
+  // La dictée (Wispr Flow) doit pouvoir remplir le champ pendant l'attente ; seul l'envoi est bloqué.
+  it('laisse écrire le prochain message pendant que Claude répond', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ conversation: [question], statutChat: 'en_cours' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const champ = await screen.findByPlaceholderText<HTMLTextAreaElement>('Votre message');
+    expect(champ.disabled).toBe(false);
+    fireEvent.change(champ, { target: { value: 'Message dicté pendant l’attente' } });
+    expect(champ.value).toBe('Message dicté pendant l’attente');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'En cours…' }).disabled).toBe(
+      true,
+    );
+  });
 });
 
 describe('Statut des étapes', () => {
