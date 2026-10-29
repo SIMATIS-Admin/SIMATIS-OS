@@ -83,6 +83,7 @@ Marc n'est pas développeur : l'agent gère tout git seul, sans demander de conf
 - **Une nouvelle branche par feature** (`feature/nom-court`).
 - **Feature terminée** : l'agent ouvre une PR, fait lui-même la revue de code (corrige ce qu'il trouve), vérifie que la CI est verte, puis merge dans `main`. Marc n'a pas à relire.
 - **Marc est débutant** : à chaque fin de feature, expliquer simplement, étape par étape, comment tester l'app. L'agent s'occupe de tout le reste.
+- **Second cerveau à jour** : en fin de feature, mettre à jour dans le second cerveau `brain/outils/simatis-os-structure.md` (ce qui a changé dans la structure de l'OS) et `brain/outils/simatis-os-feuille-de-route.md` (étape faite, nouvelles étapes). Écrire dans le dossier du Drive et noter la modification dans `log.md` ; ne rien en copier dans ce dépôt.
 
 ### Garde-fou confidentialité (avant chaque commit, non négociable)
 
