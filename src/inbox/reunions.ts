@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, notExists } from 'drizzle-orm';
 import { contacts, entreprises } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -147,4 +147,40 @@ export async function enregistrerTranscript(
     .update(reunionsWispr)
     .set({ transcript, transcriptAt: new Date(), updatedAt: new Date() })
     .where(eq(reunionsWispr.id, r.id));
+}
+
+// Entrées « compte rendu » encore à faire et sans réunion reliée : la routine y cherche le doublon
+// d'une réunion Wispr Flow (même personne, même jour).
+export async function comptesRendusEnAttente(tx: Tx): Promise<
+  {
+    id: string;
+    titre: string;
+    contactId: string | null;
+    entrepriseId: string | null;
+    createdAt: string;
+  }[]
+> {
+  const lignes = await tx
+    .select({
+      id: sujets.id,
+      titre: sujets.titre,
+      contactId: sujets.contactId,
+      entrepriseId: sujets.entrepriseId,
+      createdAt: sujets.createdAt,
+    })
+    .from(sujets)
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.type, 'compte_rendu'),
+        eq(sujets.statut, 'a_traiter'),
+        notExists(
+          tx
+            .select({ un: reunionsWispr.id })
+            .from(reunionsWispr)
+            .where(eq(reunionsWispr.sujetId, sujets.id)),
+        ),
+      ),
+    );
+  return lignes.map((l) => ({ ...l, createdAt: l.createdAt.toISOString() }));
 }

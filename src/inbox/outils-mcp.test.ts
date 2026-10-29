@@ -11,6 +11,7 @@ import { createInstance, getInstanceBySlug } from '../instances/service.js';
 import { createToken } from '../mcp/tokens.js';
 import { demanderExecution, getExecution } from '../routines/service.js';
 import { deposerSujet } from './depot.js';
+import { attribuerReunion, deposerReunion } from './reunions.js';
 import type { SujetTraite } from './report.js';
 import { ajouterSujet, marquerTraite } from './service.js';
 import type { SujetAjoute } from './report.js';
@@ -194,5 +195,97 @@ describe('Inbox : outils MCP', () => {
     expect(r.text).toBe('Messagerie non configurée pour Sans messagerie.');
     const apres = await withInstance(t.app.db, i.id, (tx) => getExecution(tx, execution.id));
     expect(apres.statut).toBe('demandee');
+  });
+  describe('réunions Wispr Flow', () => {
+    const reunion = (id: string, extra: Record<string, unknown> = {}) => ({
+      wisprId: id,
+      titre: 'Point fictif',
+      debutAt: '2026-10-28T09:00:00+01:00',
+      participants: ['dupont.fictif@exemple.fr'],
+      resume: 'Résumé fictif',
+      ...extra,
+    });
+
+    it('dépose une réunion, puis répond existant ; refuse une date sans fuseau', async () => {
+      const premier = await call('deposer_reunion_wispr', reunion('mcp-w-1'));
+      expect(premier.isError).toBe(false);
+      const { statut, sujetId } = premier.json<{ statut: string; sujetId: string }>();
+      expect(statut).toBe('cree');
+      expect((await call('deposer_reunion_wispr', reunion('mcp-w-1'))).json()).toEqual({
+        statut: 'existant',
+        sujetId,
+      });
+      const sans = await call(
+        'deposer_reunion_wispr',
+        reunion('mcp-w-2', { debutAt: '2026-10-28T09:00:00' }),
+      );
+      expect(sans.isError).toBe(true);
+    });
+
+    it('liste les comptes rendus à faire, sans les traités ni ceux déjà reliés', async () => {
+      const ouvert = await call(
+        'deposer_sujet',
+        sujet('cr-ouvert', { type: 'compte_rendu', origine: 'agenda' }),
+      );
+      const ferme = await call(
+        'deposer_sujet',
+        sujet('cr-ferme', { type: 'compte_rendu', origine: 'agenda' }),
+      );
+      const idFerme = ferme.json<{ id: string }>().id;
+      await marquerTraite(t.app.db, helioval, idFerme);
+      const idOuvert = ouvert.json<{ id: string }>().id;
+      let liste = (await call('comptes_rendus_en_attente')).json<{ id: string }[]>();
+      expect(liste.some((c) => c.id === idOuvert)).toBe(true);
+      expect(liste.some((c) => c.id === idFerme)).toBe(false);
+      await call('deposer_reunion_wispr', reunion('mcp-w-3', { sujetExistantId: idOuvert }));
+      liste = (await call('comptes_rendus_en_attente')).json<{ id: string }[]>();
+      expect(liste.some((c) => c.id === idOuvert)).toBe(false);
+    });
+
+    it('transcript : demandé pour une réunion critique seulement, puis enregistré', async () => {
+      const { sujetId } = (await call('deposer_reunion_wispr', reunion('mcp-w-4'))).json<{
+        sujetId: string;
+      }>();
+      expect(
+        (await call('reunions_a_transcrire')).json<{ wisprId: string }[]>(),
+      ).not.toContainEqual(expect.objectContaining({ wisprId: 'mcp-w-4' }));
+      const refuse = await call('enregistrer_transcript', {
+        wisprId: 'mcp-w-4',
+        transcript: 'Texte fictif',
+      });
+      expect(refuse.isError).toBe(true);
+      await withInstance(t.app.db, helioval.id, (tx) =>
+        attribuerReunion(tx, sujetId, { contactId: null, entrepriseId: null, critique: true }),
+      );
+      expect((await call('reunions_a_transcrire')).json<{ wisprId: string }[]>()).toContainEqual({
+        wisprId: 'mcp-w-4',
+        sujetId,
+      });
+      const ok = await call('enregistrer_transcript', {
+        wisprId: 'mcp-w-4',
+        transcript: 'Texte fictif',
+      });
+      expect(ok.isError).toBe(false);
+      expect(
+        (await call('reunions_a_transcrire')).json<{ wisprId: string }[]>(),
+      ).not.toContainEqual(expect.objectContaining({ wisprId: 'mcp-w-4' }));
+    });
+
+    it('ne voit que l’instance du jeton', async () => {
+      await withInstance(t.app.db, aquaterra.id, (tx) =>
+        deposerReunion(tx, {
+          wisprId: 'mcp-w-ailleurs',
+          titre: 'Ailleurs',
+          debutAt: new Date(),
+          participants: [],
+          resume: null,
+        }),
+      );
+      const r = await call('enregistrer_transcript', {
+        wisprId: 'mcp-w-ailleurs',
+        transcript: 'x',
+      });
+      expect(r.isError).toBe(true);
+    });
   });
 });
