@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { Executor, Tx } from '../db.js';
+import { rendezVous } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
@@ -136,10 +137,18 @@ export async function finirAttente(
       projet.demande === 'restitution' && projet.restitutionStatut === 'en_cours'
         ? { restitutionStatut: projet.restitutionLien ? ('pret' as const) : ('aucun' as const) }
         : {};
+    // Proposition de capitalisation : validée dans le chat si Claude a répondu, sinon à refaire.
+    const capitalisation =
+      projet.demande === 'capitalisation_proposer' && projet.capitalisationStatut === 'en_cours'
+        ? {
+            capitalisationStatut:
+              projet.statutChat !== 'en_cours' ? ('propose' as const) : ('aucun' as const),
+          }
+        : {};
     if (projet.statutChat !== 'en_cours') {
       await tx
         .update(diagnosticProjets)
-        .set({ ...support, ...rapport, ...restitution, demande: null })
+        .set({ ...support, ...rapport, ...restitution, ...capitalisation, demande: null })
         .where(eq(diagnosticProjets.id, id));
       return;
     }
@@ -157,6 +166,7 @@ export async function finirAttente(
         ...support,
         ...rapport,
         ...restitution,
+        ...capitalisation,
         conversation: [...projet.conversation, absence],
         statutChat: 'repos',
         demande: null,
@@ -174,7 +184,25 @@ export async function attentesClaude(db: Executor) {
     );
     for (const p of rows) {
       const dernier = [...p.conversation].reverse().find((m) => m.de === 'pilote');
+      const capitalisation = p.demande?.startsWith('capitalisation_') ?? false;
+      // Le compte rendu choisi ne voyage que pour la capitalisation ; sa proposition, que pour l'écrire.
+      const [rdv] =
+        capitalisation && p.capitalisationRdvId
+          ? await withInstance(db, instance.id, (tx) =>
+              tx
+                .select({ compteRendu: rendezVous.compteRendu })
+                .from(rendezVous)
+                .where(eq(rendezVous.id, p.capitalisationRdvId!)),
+            )
+          : [];
       sorties.push({
+        compteRendu: rdv?.compteRendu ?? null,
+        capitalisationProposition:
+          p.demande === 'capitalisation_enregistrer'
+            ? ([...p.conversation]
+                .reverse()
+                .find((m) => m.de === 'claude' && m.etape === 5 && !m.erreur)?.texte ?? null)
+            : null,
         id: p.id,
         instance: instance.slug,
         nom: p.nom,
