@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, fetchCarteCerveau, operationCerveau } from '../api.js';
 import type { NoeudCerveau } from '../cerveau.js';
 import {
@@ -23,6 +23,8 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
   const [edition, setEdition] = useState<string | null>(null);
   const [alerte, setAlerte] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
+  // Idées promues pendant cette visite : la carte relue juste après peut encore les montrer en brouillon.
+  const promues = useRef(new Set<string>());
 
   const charger = useCallback(async () => {
     const lire = (chemin: string): Promise<Note> =>
@@ -36,7 +38,7 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
       fetchCarteCerveau(slug).catch(() => null),
     ]);
     setNotes({ [NOTE_STRUCTURE]: structure, [NOTE_FEUILLE]: feuille });
-    setIdees(carte ? idéesOS(carte.noeuds) : []);
+    setIdees(carte ? idéesOS(carte.noeuds).filter((i) => !promues.current.has(i.id)) : []);
   }, [slug]);
 
   useEffect(() => {
@@ -53,12 +55,14 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
     setAlerte(null);
     try {
       const feuille = await operationCerveau(slug, { type: 'lire', chemin: NOTE_FEUILLE });
-      await operationCerveau(slug, {
-        type: 'ecrire',
-        chemin: NOTE_FEUILLE,
-        contenu: ajouterEtape(feuille.contenu ?? '', idee.titre, idee.id),
-        empreinte: feuille.empreinte ?? '',
-      });
+      // Déjà liée (promotion précédente dont l'idée n'a pas pu être marquée) : pas de doublon.
+      if (!(feuille.contenu ?? '').includes(`(../idees-en-vrac/${idee.id.split('/').pop()})`))
+        await operationCerveau(slug, {
+          type: 'ecrire',
+          chemin: NOTE_FEUILLE,
+          contenu: ajouterEtape(feuille.contenu ?? '', idee.titre, idee.id),
+          empreinte: feuille.empreinte ?? '',
+        });
     } catch (e) {
       setAlerte(
         e instanceof ApiError && e.status === 409
@@ -82,6 +86,7 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
       );
     }
     setOccupe(false);
+    promues.current.add(idee.id);
     await charger();
   };
 

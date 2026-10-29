@@ -15,4 +15,4 @@ export const ajouterEtape = (feuille: string, titre: string, cheminIdee: string)
 
 // Seul l'en-tête change : une ligne « statut: draft » dans le corps reste telle quelle.
 export const marquerPromue = (idee: string) =>
-  idee.replace(/^(---\n[\s\S]*?)^statut: draft$/m, '$1statut: promue');
+  idee.replace(/^(---\n[\s\S]*?)^statut:[ \t]*draft[ \t]*$/m, '$1statut: promue');

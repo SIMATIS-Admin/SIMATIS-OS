@@ -44,6 +44,11 @@ describe('marquerPromue', () => {
     expect(res).toBe('---\nstatut: promue\n---\n\n# T\n\nstatut: draft dans le corps');
   });
 
+  it('accepte les variantes d’espaces que la carte accepte', () => {
+    expect(marquerPromue('---\nstatut:draft \n---\n')).toBe('---\nstatut: promue\n---\n');
+    expect(marquerPromue('---\nstatut:   draft\n---\n')).toBe('---\nstatut: promue\n---\n');
+  });
+
   it('laisse inchangé un texte sans en-tête draft', () => {
     expect(marquerPromue('# T\n')).toBe('# T\n');
   });

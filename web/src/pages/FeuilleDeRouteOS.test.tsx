@@ -96,6 +96,27 @@ describe('FeuilleDeRouteOS', () => {
     expect(String(idee?.contenu)).toContain('statut: promue');
   });
 
+  it('retire l’idée de la liste dès la promotion, même si la carte est encore ancienne', async () => {
+    render(<FeuilleDeRouteOS slug="x" autorise />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir en étape' }));
+    await waitFor(() => expect(screen.queryByText('Idée fictive')).toBeNull());
+  });
+
+  it('n’ajoute pas une seconde fois une étape déjà liée à l’idée', async () => {
+    brancher((op) =>
+      op.type === 'lire' && op.chemin === FEUILLE
+        ? json({
+            contenu: '- à faire — [Idée fictive](../idees-en-vrac/2026-10-29_idee-fictive.md)\n',
+            empreinte: 'e1',
+          })
+        : undefined,
+    );
+    render(<FeuilleDeRouteOS slug="x" autorise />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir en étape' }));
+    await waitFor(() => expect(appels.filter((a) => a.type === 'ecrire')).toHaveLength(1));
+    expect(appels.find((a) => a.type === 'ecrire')).toMatchObject({ chemin: IDEE });
+  });
+
   it('en cas de conflit sur la feuille, n’écrit rien sur l’idée', async () => {
     brancher((op) =>
       op.type === 'ecrire' ? json({ error: 'La note a été modifiée ailleurs.' }, 409) : undefined,
