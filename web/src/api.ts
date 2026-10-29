@@ -1159,6 +1159,7 @@ export type ProjetDiag = {
   capitalisationStatut: 'aucun' | 'en_cours' | 'propose' | 'enregistre';
   capitalisationRdvId: string | null;
   capitalisationCompteRenduAt: string | null;
+  opportuniteId?: string | null;
   proposition: Proposition | null;
   updatedAt: string;
 };
@@ -1169,6 +1170,7 @@ export type ProjetDiagPatch = Partial<
     | 'activite'
     | 'entrepriseId'
     | 'contactId'
+    | 'opportuniteId'
     | 'contexte'
     | 'etape'
     | 'dims'

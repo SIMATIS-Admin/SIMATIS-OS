@@ -493,6 +493,13 @@ function Preparation({
           entrepriseId={projet.entrepriseId}
           onChange={(id) => void onSauver({ contactId: id })}
         />
+        <ChoixFiche
+          slug={slug}
+          kind="affaire"
+          label="Affaire"
+          id={projet.opportuniteId ?? null}
+          onChange={(id) => void onSauver({ opportuniteId: id })}
+        />
         <label className="field">
           <span>Activité</span>
           <select

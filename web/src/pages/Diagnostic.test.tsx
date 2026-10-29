@@ -10,6 +10,8 @@ const api = vi.hoisted(() => ({
   fetchEntreprises: vi.fn(),
   fetchContact: vi.fn(),
   fetchContacts: vi.fn(),
+  fetchFiche: vi.fn(),
+  fetchOpportunitesRecherche: vi.fn(),
   createContact: vi.fn(),
   createEntreprise: vi.fn(),
   creerProjetDiag: vi.fn(),
@@ -75,6 +77,7 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   capitalisationStatut: 'aucun',
   capitalisationRdvId: null,
   capitalisationCompteRenduAt: null,
+  opportuniteId: null,
   proposition: null,
   aPdfEntretien: false,
   pdfEntretienNom: null,
@@ -1199,5 +1202,26 @@ describe('Capitalisation de la restitution à l étape 5', () => {
     expect(
       await screen.findByText(/Capitalisation enregistrée dans le second cerveau/),
     ).toBeTruthy();
+  });
+});
+
+describe('Affaire du projet de diagnostic', () => {
+  it('permet de relier le projet à une affaire, puis de la retirer', async () => {
+    api.fetchOpportunitesRecherche.mockResolvedValue([{ id: 'o1', titre: 'Affaire Fictive' }]);
+    api.fetchFiche.mockResolvedValue({ fiche: { id: 'o1', titre: 'Affaire Fictive' } });
+    api.fetchProjetsDiag.mockResolvedValue([projet()]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+
+    const affaire = await screen.findByLabelText('Affaire');
+    expect(within(affaire).queryByRole('button', { name: /Créer/ })).toBeNull();
+    fireEvent.click(within(affaire).getByRole('button', { name: 'Choisir' }));
+    fireEvent.change(within(affaire).getByLabelText('Rechercher à lier'), {
+      target: { value: 'Aff' },
+    });
+    fireEvent.click(await within(affaire).findByRole('button', { name: 'Affaire Fictive' }));
+    await waitFor(() =>
+      expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', { opportuniteId: 'o1' }),
+    );
   });
 });
