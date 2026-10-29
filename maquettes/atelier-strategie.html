@@ -34,7 +34,7 @@
   .beta { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ambre); background: var(--ambre-doux); border: 1px solid var(--ambre); border-radius: 999px; padding: 1px 8px; vertical-align: middle; margin-left: 6px; }
 
   .entreprise { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
-  .entreprise > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr) auto; gap: 12px; align-items: center; padding: 14px 16px; }
+  .entreprise > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(3, minmax(110px, 1fr)) auto; gap: 12px; align-items: center; padding: 14px 16px; }
   .entreprise > summary::-webkit-details-marker { display: none; }
   .entreprise > summary::after { content: "Détail ▾"; justify-self: end; color: var(--marine); font-size: 13px; font-weight: 600; border: 1px solid var(--bord); border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
   .entreprise[open] > summary::after { content: "Réduire ▴"; }
@@ -61,6 +61,9 @@
   .nav-maquette { max-width: 948px; margin: 0 auto 6px; padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: var(--doux); background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; }
   .nav-maquette b { color: var(--texte); text-transform: uppercase; font-size: 11px; letter-spacing: .06em; }
   .nav-maquette .actif { color: var(--marine); font-weight: 700; }
+  .nowrap { white-space: nowrap; }
+  .entreprise > summary { grid-template-columns: minmax(150px, 1.4fr) repeat(3, minmax(110px, 1fr)) auto; }
+  .detail.une-colonne { grid-template-columns: 1fr; }
   .note-maquette { max-width: 948px; margin: 0 auto 14px; font-size: 12px; color: var(--doux); }
 
   /* Atelier ouvert */
@@ -112,13 +115,13 @@
 </head>
 <body>
 
-<div class="bandeau">Maquette : données fictives. Menu Stratégie → nouvelle entrée « Atelier stratégique » avec la pastille Bêta, à côté de « Démarrage du mandat » et « Outils et diagnostics ». L'écran d'accueil reprend le principe de ces écrans : une ligne par entreprise, « Détail », « + Nouveau », recherche. Les boutons fonctionnent.</div>
+<div class="bandeau">Maquette (version épurée) : données fictives. L'accueil garde la façon d'organiser « Outils et diagnostics » (une ligne par entreprise, « Détail », « + Nouveau », recherche), mais il ne montre que les entreprises qui ont un atelier : aujourd'hui une seule, celle du premier mandat (nom fictif ici). Plus de diagnostic ni de test VMA. Le libellé du menu tient sur une seule ligne.</div>
 
 <div class="nav-maquette" aria-label="Menu Stratégie (extrait)">
   <b>Stratégie</b>
   <span>Démarrage du mandat</span>
   <span>Outils et diagnostics</span>
-  <span class="actif">Atelier stratégique <span class="beta">Bêta</span></span>
+  <span class="actif nowrap">Atelier stratégique <span class="beta">Bêta</span></span>
 </div>
 
 <!-- ===== Vue 1 : accueil de la section ===== -->
@@ -126,14 +129,14 @@
   <header>
     <div>
       <h1>Atelier stratégique <span class="beta">Bêta</span></h1>
-      <p class="intro" style="margin:4px 0 0">Chaque entreprise avec son diagnostic, ses tests VMA et ses ateliers : le point de départ d'une stratégie commerciale.</p>
+      <p class="intro" style="margin:4px 0 0">Les ateliers de stratégie commerciale, entreprise par entreprise.</p>
     </div>
     <div class="barre-outils">
       <button class="btn-doux" type="button" id="btn-essai">Atelier : module d'essai</button>
       <div class="menu" id="menu">
         <button class="btn" type="button" id="btn-nouveau">+ Nouveau</button>
         <div class="liste-menu">
-          <button type="button" data-nouveau="atelier">Nouvel atelier stratégique<small>Pour une entreprise de la liste</small></button>
+          <button type="button" data-nouveau="atelier">Nouvel atelier stratégique<small>Pour une entreprise de l'annuaire</small></button>
           <button type="button" data-nouveau="import">Importer un atelier<small>Reprendre une sauvegarde existante</small></button>
         </div>
       </div>
@@ -144,29 +147,18 @@
     <details class="entreprise" id="ent1" open>
       <summary>
         <div><div class="nom">Entreprise Exemple SAS</div><div class="sous">Entreprise</div></div>
-        <div><div class="cellule-label">Diagnostic</div><div class="cellule-val">Étape 3 sur 5</div></div>
-        <div><div class="cellule-label">Tests VMA</div><div class="cellule-val">2 tests · 1 reçu</div></div>
-        <div><div class="cellule-label">Ateliers</div><div class="cellule-val">1 · étape 4 sur 6</div></div>
+        <div><div class="cellule-label">Ateliers</div><div class="cellule-val">1</div></div>
+        <div><div class="cellule-label">Dernière modification</div><div class="cellule-val">27/10/2026</div></div>
+        <div><div class="cellule-label">Avancement</div><div class="cellule-val">Étape 4 sur 6</div></div>
       </summary>
-      <div class="detail">
-        <section class="bloc">
-          <h3>Diagnostic d'endurance commerciale</h3>
-          <div class="etapes"><span class="fait"></span><span class="fait"></span><span class="en-cours"></span><span></span><span></span></div>
-          <p>Étape 3 · Entretien. Sert de point de départ à l'atelier.</p>
-          <div class="outils"><button class="btn-doux" type="button">Ouvrir dans Outils et diagnostics ↗</button></div>
-        </section>
-        <section class="bloc">
-          <h3>Tests VMA</h3>
-          <p>Dernier résultat reçu le 12/10/2026. Sert de point de départ à l'atelier.</p>
-          <div class="outils"><button class="btn-doux" type="button">Ouvrir dans Outils et diagnostics ↗</button></div>
-        </section>
+      <div class="detail une-colonne">
         <section class="bloc large">
-          <h3>Ateliers stratégiques
+          <h3>Ateliers de l'entreprise
             <button class="btn-doux" type="button" data-nouveau="atelier">+ Nouvel atelier</button></h3>
           <p>Contact : Prénom Nom (fictif) · <a href="#" onclick="return false">Fiche entreprise</a> · <a href="#" onclick="return false">Fiche contact</a></p>
           <div class="ateliers">
             <div class="atelier-ligne">
-              <div><b>Atelier de lancement 2026</b><div class="sous">Historique repris par import · modifié le 27/10/2026 · 14 actions</div></div>
+              <div><b>Atelier de lancement 2026</b><div class="sous">Repris de l'ancien outil · modifié le 27/10/2026 · 14 actions</div></div>
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                 <span class="pill vert">Étape 4 sur 6</span>
                 <button class="btn-doux" type="button" id="ouvrir-atelier">Reprendre l'atelier</button>
