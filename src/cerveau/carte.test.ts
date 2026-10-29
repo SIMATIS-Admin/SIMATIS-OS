@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { construireCarte } from './carte.js';
+import { carteDepuisNotes, construireCarte } from './carte.js';
 
 let dossier: string;
 const ecrire = async (rel: string, contenu: string) => {
@@ -82,5 +82,24 @@ describe('construireCarte', () => {
     const limite = await construireCarte(dossier, { max: 2 });
     expect(limite.noeuds).toHaveLength(2);
     expect(limite.tronquee).toBe(true);
+  });
+});
+
+describe('idées en vrac', () => {
+  it('classe brain/idees-en-vrac/ comme catégorie propre et lit concerne', () => {
+    const { noeuds } = carteDepuisNotes([
+      {
+        id: 'brain/idees-en-vrac/2026-10-29_x.md',
+        texte: '---\nstatut: draft\nconcerne: os\n---\n\n# Idée fictive',
+      },
+      { id: 'brain/clients/a.md', texte: '# A' },
+    ]);
+    expect(noeuds[0]).toMatchObject({
+      categorie: 'idees-en-vrac',
+      statut: 'draft',
+      concerne: 'os',
+      titre: 'Idée fictive',
+    });
+    expect(noeuds[1]?.concerne).toBeNull();
   });
 });

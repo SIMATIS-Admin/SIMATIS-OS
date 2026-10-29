@@ -148,25 +148,46 @@ describe('Cerveau : édition', () => {
     expect((zone as HTMLTextAreaElement).value).toBe('b');
   });
 
-  it('dépose une idée dans l’inbox puis ouvre la note créée', async () => {
+  it('dépose une idée dans les idées en vrac puis ouvre la note créée', async () => {
     brancher((op) =>
       op.type === 'ajouter'
-        ? json({ chemin: 'brain/inbox/2026-10-29_idee.md' })
+        ? json({ chemin: 'brain/idees-en-vrac/2026-10-29_idee.md' })
         : json({ contenu: '# Idée', empreinte: 'e1' }),
     );
     render(<Cerveau slug="x" />);
     fireEvent.click(await screen.findByRole('button', { name: '+ Ajouter une idée' }));
-    const deposer = screen.getByRole<HTMLButtonElement>('button', { name: 'Déposer dans l’inbox' });
+    const deposer = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Déposer dans les idées en vrac',
+    });
     expect(deposer.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Titre de l'idée"), { target: { value: 'Idée' } });
     fireEvent.change(screen.getByLabelText("Texte de l'idée"), { target: { value: 'Détail' } });
     fireEvent.click(deposer);
-    expect(await screen.findByLabelText('Texte de brain/inbox/2026-10-29_idee.md')).toBeTruthy();
+    expect(
+      await screen.findByLabelText('Texte de brain/idees-en-vrac/2026-10-29_idee.md'),
+    ).toBeTruthy();
     expect(appels.find((a) => a.body?.type === 'ajouter')?.body).toEqual({
       espace: 'simatis',
       type: 'ajouter',
       titre: 'Idée',
       texte: 'Détail',
+    });
+  });
+  it('marque l’idée comme concernant l’OS quand la case est cochée', async () => {
+    brancher((op) =>
+      op.type === 'ajouter'
+        ? json({ chemin: 'brain/idees-en-vrac/2026-10-29_idee.md' })
+        : json({ contenu: '# Idée', empreinte: 'e1' }),
+    );
+    render(<Cerveau slug="x" />);
+    fireEvent.click(await screen.findByRole('button', { name: '+ Ajouter une idée' }));
+    fireEvent.change(screen.getByLabelText("Titre de l'idée"), { target: { value: 'Idée' } });
+    fireEvent.click(screen.getByLabelText('Concerne le développement de l’OS'));
+    fireEvent.click(screen.getByRole('button', { name: 'Déposer dans les idées en vrac' }));
+    await screen.findByLabelText('Texte de brain/idees-en-vrac/2026-10-29_idee.md');
+    expect(appels.find((a) => a.body?.type === 'ajouter')?.body).toMatchObject({
+      type: 'ajouter',
+      concerne: 'os',
     });
   });
 });
@@ -288,5 +309,7 @@ describe('Cerveau : espace partagé', () => {
     expect(appels.find((a) => a.body?.type === 'ajouter')?.body).toMatchObject({
       espace: 'partage',
     });
+    expect(screen.queryByLabelText('Concerne le développement de l’OS')).toBeNull();
+    expect(appels.find((a) => a.body?.type === 'ajouter')?.body).not.toHaveProperty('concerne');
   });
 });

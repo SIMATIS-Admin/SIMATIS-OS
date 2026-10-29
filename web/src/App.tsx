@@ -29,6 +29,7 @@ import { RendezVous } from './pages/RendezVous.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
 import { Cerveau } from './pages/Cerveau.js';
+import { FeuilleDeRouteOS } from './pages/FeuilleDeRouteOS.js';
 import { Journal } from './pages/Journal.js';
 import { Parametres } from './pages/Parametres.js';
 import { Pipeline } from './pages/Pipeline.js';
@@ -142,7 +143,9 @@ export function App() {
         ? (TITRES_FICHE[route.kind ?? ''] ?? 'Fiche')
         : view === 'presentation-diagnostic'
           ? 'Diagnostic d’endurance commerciale : présentation'
-          : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+          : view === 'feuille-de-route-os'
+            ? 'Feuille de route de l’OS'
+            : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
@@ -209,6 +212,14 @@ export function App() {
         return <Tableau key={current.slug} slug={current.slug} />;
       case 'cerveau':
         return <Cerveau key={current.slug} slug={current.slug} />;
+      case 'feuille-de-route-os':
+        return (
+          <FeuilleDeRouteOS
+            key={current.slug}
+            slug={current.slug}
+            autorise={current.type === 'propre' && current.modules.includes('cerveau')}
+          />
+        );
       case 'journal':
         return <Journal key={current.slug} slug={current.slug} />;
       case 'parametres':

@@ -18,7 +18,7 @@ export type Espace = 'simatis' | 'partage';
 export type Operation =
   | { espace?: Espace; type: 'lire'; chemin: string }
   | { espace?: Espace; type: 'ecrire'; chemin: string; contenu: string; empreinte: string }
-  | { espace?: Espace; type: 'ajouter'; titre: string; texte: string }
+  | { espace?: Espace; type: 'ajouter'; titre: string; texte: string; concerne?: 'os' | undefined }
   | {
       espace: 'partage';
       type: 'message';

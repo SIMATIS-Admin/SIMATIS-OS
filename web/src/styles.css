@@ -225,6 +225,12 @@ a {
 .nav-group {
   margin-top: 14px;
 }
+/* Bouton réservé à Mon activité, collé en bas de la barre latérale. */
+.side-feuille {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid #1e4b82;
+}
 .nav-group > span {
   display: block;
   padding: 0 10px 4px;

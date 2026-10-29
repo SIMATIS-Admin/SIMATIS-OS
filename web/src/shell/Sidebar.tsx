@@ -230,6 +230,18 @@ export function Sidebar({
           );
         })}
       </nav>
+      {current.type === 'propre' && current.modules.includes('cerveau') && (
+        <div className="nav side-feuille">
+          <a
+            href={`#/${current.slug}/feuille-de-route-os`}
+            className={view === 'feuille-de-route-os' ? 'on' : ''}
+            title={reduite ? 'Feuille de route de l’OS' : undefined}
+          >
+            <Icon name="map" />
+            <span className="lbl">Feuille de route de l’OS</span>
+          </a>
+        </div>
+      )}
     </aside>
   );
 }

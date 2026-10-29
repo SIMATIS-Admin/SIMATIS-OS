@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Lecture et écriture des notes du second cerveau, sur le poste de Marc (jamais dans le conteneur).
@@ -115,11 +115,13 @@ const existe = (absolu: string) =>
     () => false,
   );
 
-// Une idée tombe dans l'inbox du second cerveau, en brouillon : c'est le tri (skill « mémoriser »)
-// qui l'intègre aux fiches.
+// Une idée tombe dans « Idées en vrac », en brouillon : l'Inbox la repère ensuite pour en faire
+// quelque chose de concret. `concerne: os` la signale comme idée pour le développement de l'OS.
+const DOSSIER_IDEES = 'brain/idees-en-vrac';
+
 export async function ajouterIdee(
   dossier: string,
-  idee: { titre: string; texte: string },
+  idee: { titre: string; texte: string; concerne?: 'os' | undefined },
   maintenant = new Date(),
 ) {
   const titre = idee.titre.trim().replace(/\s+/g, ' ');
@@ -128,24 +130,26 @@ export async function ajouterIdee(
   if (texte.length > TAILLE_MAX) throw new ErreurCerveau('Note trop volumineuse.');
   const jour = jourIso(maintenant);
   const base = `${jour}_${slug(titre) || 'idee'}`;
+  await mkdir(path.join(dossier, DOSSIER_IDEES), { recursive: true });
   let nom = `${base}.md`;
-  for (let i = 2; await existe(path.join(dossier, 'brain/inbox', nom)); i++)
+  for (let i = 2; await existe(path.join(dossier, DOSSIER_IDEES, nom)); i++)
     nom = `${base}-${i}.md`;
-  const chemin = `brain/inbox/${nom}`;
+  const chemin = `${DOSSIER_IDEES}/${nom}`;
+  const concerne = idee.concerne ? `concerne: ${idee.concerne}\n` : '';
   await writeFile(
     path.join(dossier, chemin),
-    `---\ndate: ${jour}\nsource: idée ajoutée à la main depuis l'OS\nstatut: draft\n---\n\n# ${titre}\n\n${texte}\n`,
+    `---\ndate: ${jour}\nsource: idée ajoutée à la main depuis l'OS\nstatut: draft\n${concerne}---\n\n# ${titre}\n\n${texte}\n`,
     { flag: 'wx' },
   );
-  const index = path.join(dossier, 'brain/inbox/index.md');
-  const actuel = await readFile(index, 'utf8').catch(() => '# Inbox\n');
+  const index = path.join(dossier, DOSSIER_IDEES, 'index.md');
+  const actuel = await readFile(index, 'utf8').catch(() => '# Idées en vrac\n');
   await writeFile(
     index,
     `${actuel.replace(/\n*$/, '\n')}- [${titre}](${nom}) — idée ajoutée à la main depuis l'OS le ${dateLongue(maintenant)}, statut draft.\n`,
   );
   await noterAuJournal(
     dossier,
-    `idée [${titre}](${chemin}) déposée dans l'inbox par Marc depuis l'OS, draft.`,
+    `idée [${titre}](${chemin}) déposée dans les idées en vrac par Marc depuis l'OS, draft.`,
     maintenant,
   );
   return { chemin };

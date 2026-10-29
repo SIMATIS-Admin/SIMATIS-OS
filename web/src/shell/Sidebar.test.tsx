@@ -44,6 +44,21 @@ const renderSidebar = (
 describe('Sidebar', () => {
   afterEach(cleanup);
 
+  it('shows the roadmap button last, only in Mon activité with the second brain', () => {
+    const { container, unmount } = renderSidebar({ ...simatis, modules: ['cerveau'] }, []);
+    const lien = screen.getByRole('link', { name: /Feuille de route de l’OS/ });
+    expect(lien.getAttribute('href')).toBe('#/simatis/feuille-de-route-os');
+    expect(container.querySelector('nav')?.compareDocumentPosition(lien)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    unmount();
+    renderSidebar(simatis, []);
+    expect(screen.queryByRole('link', { name: /Feuille de route de l’OS/ })).toBeNull();
+    cleanup();
+    renderSidebar({ ...mandat, modules: ['cerveau'] }, []);
+    expect(screen.queryByRole('link', { name: /Feuille de route de l’OS/ })).toBeNull();
+  });
+
   it('shows the Favourites group first, in the saved order', () => {
     const { container } = renderSidebar(simatis, ['pipeline', 'brief']);
     const groups = container.querySelectorAll('.nav-group');
