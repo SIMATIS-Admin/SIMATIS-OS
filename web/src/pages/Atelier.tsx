@@ -3,26 +3,31 @@ import {
   fetchAtelier,
   fetchAteliers,
   fetchEntreprises,
-  fetchProjetsDiag,
-  fetchTestsVma,
+  fetchFiche,
   creerAtelier,
   importerAtelier,
   supprimerAtelier,
   type AtelierListe,
   type Entreprise,
-  type ProjetDiag,
-  type TestVma,
+  type LienFiche,
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { AtelierVue } from './atelier/AtelierVue.js';
 import { completer, etatVide, type EtatAtelier } from './atelier/etat.js';
 import { Modale } from './diagnostics/Creation.js';
-import { filtrer, grouper, paginer } from './diagnostics/grouper.js';
+import { paginer } from './diagnostics/grouper.js';
 
 const PAR_PAGE = 5;
 
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR');
+// Sans accents, sans casse : « élodie » trouve « Élodie Fictive ».
+const normaliser = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 const Beta = () => <span className="beta">Bêta</span>;
 
 // L'atelier ouvert : `null` pour le module d'essai (rien n'est enregistré).
@@ -31,8 +36,8 @@ type Ouvert = {
   etat: EtatAtelier;
 };
 
-// Accueil de la section : une ligne par entreprise suivie, avec son diagnostic, ses tests VMA et ses
-// ateliers. Le diagnostic et les tests s'y lisent seulement : ils s'ouvrent dans « Outils et diagnostics ».
+// Accueil de la section : une ligne par entreprise qui a au moins un atelier. Même organisation
+// qu'« Outils et diagnostics » (ligne dépliable, « + Nouveau », recherche, pages), sans leur contenu.
 export function Atelier({
   slug,
   ouvrir,
@@ -44,8 +49,8 @@ export function Atelier({
   onTitre?: (titre: string | null) => void;
 }) {
   const [entreprises, setEntreprises] = useState<Entreprise[] | null>(null);
-  const [projets, setProjets] = useState<ProjetDiag[]>([]);
-  const [tests, setTests] = useState<TestVma[]>([]);
+  // Contacts de l'entreprise, lus à l'ouverture du détail : le contact n'est pas stocké dans l'atelier.
+  const [contacts, setContacts] = useState<Record<string, LienFiche[]>>({});
   const [ateliers, setAteliers] = useState<AtelierListe[]>([]);
   const [recherche, setRecherche] = useState('');
   const [page, setPage] = useState(1);
@@ -59,15 +64,8 @@ export function Atelier({
 
   const charger = async () => {
     try {
-      const [e, p, t, a] = await Promise.all([
-        fetchEntreprises(slug, ''),
-        fetchProjetsDiag(slug),
-        fetchTestsVma(slug),
-        fetchAteliers(slug),
-      ]);
+      const [e, a] = await Promise.all([fetchEntreprises(slug, ''), fetchAteliers(slug)]);
       setEntreprises(e);
-      setProjets(p);
-      setTests(t);
       setAteliers(a);
     } catch (err) {
       setErreur(messageErreur(err));
@@ -111,13 +109,23 @@ export function Atelier({
     return () => onTitre?.(null);
   }, [titre]);
 
-  const basculer = (cle: string) =>
+  const chargerContacts = (id: string) => {
+    if (contacts[id]) return;
+    fetchFiche(slug, 'entreprise', id).then(
+      (f) => setContacts((c) => ({ ...c, [id]: f.liens.contacts ?? [] })),
+      () => setContacts((c) => ({ ...c, [id]: [] })),
+    );
+  };
+
+  const basculer = (cle: string) => {
+    if (!ouvertes.has(cle)) chargerContacts(cle);
     setOuvertes((s) => {
       const suivant = new Set(s);
       if (suivant.has(cle)) suivant.delete(cle);
       else suivant.add(cle);
       return suivant;
     });
+  };
 
   const supprimer = async (a: AtelierListe) => {
     if (!window.confirm(`Supprimer « ${a.titre} » ? Cette action est irréversible.`)) return;
@@ -166,12 +174,9 @@ export function Atelier({
   }
 
   const parEntreprise = (id: string) => ateliers.filter((a) => a.entrepriseId === id);
-  // Seules les entreprises déjà suivies apparaissent ; un diagnostic sans entreprise n'a pas d'atelier.
-  const lignes = grouper(entreprises, projets, tests).filter(
-    (l) =>
-      l.id !== null && (l.diag !== null || l.tests.length > 0 || parEntreprise(l.id).length > 0),
-  );
-  const filtrees = filtrer(lignes, recherche);
+  // Seules les entreprises qui ont un atelier apparaissent : le reste de l'annuaire n'est pas ici.
+  const lignes = entreprises.filter((e) => parEntreprise(e.id).length > 0);
+  const filtrees = lignes.filter((e) => normaliser(e.nom).includes(normaliser(recherche)));
   const { items, page: pageCourante, pages } = paginer(filtrees, page, PAR_PAGE);
 
   return (
@@ -180,8 +185,7 @@ export function Atelier({
       <div className="panel dg-titre">
         <div className="panel-h">
           <p className="dg-intro">
-            Chaque entreprise avec son diagnostic, ses tests VMA et ses ateliers : le point de
-            départ d’une stratégie commerciale. <Beta />
+            Les ateliers de stratégie commerciale, entreprise par entreprise. <Beta />
           </p>
           <button
             className="btn"
@@ -238,15 +242,17 @@ export function Atelier({
 
       {items.length === 0 ? (
         <div className="panel empty">
-          {lignes.length === 0 ? 'Aucune entreprise suivie.' : 'Aucune entreprise ne correspond.'}
+          {lignes.length === 0
+            ? 'Aucun atelier pour l’instant.'
+            : 'Aucune entreprise ne correspond.'}
         </div>
       ) : (
-        items.map((l) => {
-          const cle = l.id!;
+        items.map((e) => {
+          const cle = e.id;
           const ouverte = ouvertes.has(cle);
           const siens = parEntreprise(cle);
-          const dernier = [...siens].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-          const nbRecus = l.tests.filter((t) => t.recueLe).length;
+          const dernier = [...siens].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!;
+          const contact = (contacts[cle] ?? []).find((c) => c.principal) ?? contacts[cle]?.[0];
           return (
             <div key={cle} className="panel dg-ligne">
               <button
@@ -256,104 +262,79 @@ export function Atelier({
                 onClick={() => basculer(cle)}
               >
                 <div>
-                  <div className="dg-nom">{l.nom}</div>
+                  <div className="dg-nom">{e.nom}</div>
                   <div className="small muted">Entreprise</div>
                 </div>
                 <div>
-                  <div className="dg-label">Diagnostic</div>
-                  <div>{l.diag ? `Étape ${l.diag.etapeMax} sur 5` : 'Pas encore lancé'}</div>
-                </div>
-                <div>
-                  <div className="dg-label">Tests VMA</div>
-                  <div>
-                    {l.tests.length === 0
-                      ? 'Aucun'
-                      : `${l.tests.length} test${l.tests.length > 1 ? 's' : ''}${nbRecus ? ` · ${nbRecus} reçu${nbRecus > 1 ? 's' : ''}` : ''}`}
-                  </div>
-                </div>
-                <div>
                   <div className="dg-label">Ateliers</div>
-                  <div>
-                    {dernier ? `${siens.length} · étape ${dernier.etapeMax} sur 6` : 'Aucun'}
-                  </div>
+                  <div>{siens.length}</div>
+                </div>
+                <div>
+                  <div className="dg-label">Dernière modification</div>
+                  <div>{date(dernier.updatedAt)}</div>
+                </div>
+                <div>
+                  <div className="dg-label">Avancement</div>
+                  <div>Étape {dernier.etapeMax} sur 6</div>
                 </div>
                 <span className="dg-bascule">{ouverte ? 'Réduire ▴' : 'Détail ▾'}</span>
               </button>
 
               {ouverte && (
-                <div className="dg-detail">
+                <div className="dg-detail dg-detail-seul">
                   <section className="dg-bloc">
-                    <h3>Diagnostic d’endurance commerciale</h3>
+                    <h3>Ateliers de l’entreprise</h3>
                     <p className="small muted">
-                      {l.diag
-                        ? `Étape ${l.diag.etapeMax} sur 5. Point de départ de l’atelier.`
-                        : 'Pas encore lancé.'}
+                      {contact ? `Contact : ${contact.nom} · ` : ''}
+                      <a href={`#/${slug}/fiche/entreprise/${cle}`}>Fiche entreprise</a>
+                      {contact && (
+                        <>
+                          {' · '}
+                          <a href={`#/${slug}/fiche/contact/${contact.id}`}>Fiche contact</a>
+                        </>
+                      )}
                     </p>
-                    <a href={`#/${slug}/diagnostics`}>Ouvrir dans Outils et diagnostics ↗</a>
-                  </section>
-                  <section className="dg-bloc">
-                    <h3>Tests VMA</h3>
-                    <p className="small muted">
-                      {l.tests.length === 0
-                        ? 'Aucun test pour l’instant.'
-                        : `${l.tests.length} test${l.tests.length > 1 ? 's' : ''}. Point de départ de l’atelier.`}
-                    </p>
-                    <a href={`#/${slug}/diagnostics`}>Ouvrir dans Outils et diagnostics ↗</a>
-                  </section>
-                  <section className="dg-bloc dg-bloc-large">
-                    <h3>
-                      Ateliers stratégiques <Beta />
-                    </h3>
-                    {siens.length === 0 ? (
-                      <p className="small muted">Pas encore lancé.</p>
-                    ) : (
-                      <ul className="dg-tests">
-                        {siens.map((a) => (
-                          <li key={a.id}>
-                            <span>
-                              <b>{a.titre}</b>
-                              <span className="small muted">
-                                {' '}
-                                · modifié le {date(a.updatedAt)} · {a.nbActions} action
-                                {a.nbActions > 1 ? 's' : ''} · étape {a.etapeMax} sur 6
-                              </span>
+                    <ul className="dg-tests">
+                      {siens.map((a) => (
+                        <li key={a.id}>
+                          <span>
+                            <b>{a.titre}</b>
+                            <span className="small muted">
+                              {' '}
+                              · modifié le {date(a.updatedAt)} · {a.nbActions} action
+                              {a.nbActions > 1 ? 's' : ''} · étape {a.etapeMax} sur 6
                             </span>
-                            <span className="dg-actions">
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={() => void ouvrirAtelier(a.id)}
-                              >
-                                Reprendre l’atelier
-                              </button>
-                              <button
-                                className="btn"
-                                type="button"
-                                disabled
-                                title="Prévu plus tard"
-                              >
-                                Partager avec le client
-                              </button>
-                              <button
-                                className="btn carre danger"
-                                type="button"
-                                aria-label="Supprimer l’atelier"
-                                title="Supprimer l’atelier"
-                                onClick={() => void supprimer(a)}
-                              >
-                                <Icon name="trash" />
-                              </button>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                          </span>
+                          <span className="dg-actions">
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => void ouvrirAtelier(a.id)}
+                            >
+                              Reprendre l’atelier
+                            </button>
+                            <button className="btn" type="button" disabled title="Prévu plus tard">
+                              Partager avec le client
+                            </button>
+                            <button
+                              className="btn carre danger"
+                              type="button"
+                              aria-label="Supprimer l’atelier"
+                              title="Supprimer l’atelier"
+                              onClick={() => void supprimer(a)}
+                            >
+                              <Icon name="trash" />
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                     <button
                       className="btn go"
                       type="button"
                       onClick={() => setModale({ type: 'creer', preselect: cle })}
                     >
-                      {siens.length === 0 ? 'Lancer un atelier' : '+ Nouvel atelier'}
+                      + Nouvel atelier
                     </button>
                   </section>
                 </div>
