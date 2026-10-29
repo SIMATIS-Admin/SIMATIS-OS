@@ -693,7 +693,7 @@ describe('Capitalisation de la restitution par le runner', () => {
   it('sans second cerveau sur le poste, ne lance rien et prévient le pilote', async () => {
     const { args, fin } = await tour([SKILL_CAPITALISATION_RESTITUTION]);
     expect(args).toBeUndefined();
-    expect(fin.erreur).toContain('second cerveau');
+    expect(fin.erreur).toContain('Second cerveau non accessible');
   });
 
   it('avec la skill et le second cerveau, lance Claude sur le second cerveau', async () => {
