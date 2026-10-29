@@ -1,7 +1,14 @@
-import { and, desc, eq, isNotNull, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
 import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
-import { rdvEntreprises, rendezVous } from '../crm/schema.js';
+import {
+  affaireContacts,
+  affaireEntreprises,
+  rdvAffaires,
+  rdvContacts,
+  rdvEntreprises,
+  rendezVous,
+} from '../crm/schema.js';
 import type { Instance } from '../instances/schema.js';
 import { ChatIndisponible, envoyerMessage } from './chat.js';
 import { diagnosticProjets } from './schema.js';
@@ -21,14 +28,59 @@ export type RdvCapitalisable = {
   compteRenduAt: Date;
 };
 
-// Rendez-vous reliés à l'entreprise du projet qui ont un compte rendu, du plus récent au plus ancien.
+// Rendez-vous qui ont un compte rendu et se rattachent au projet, du plus récent au plus ancien : par
+// son entreprise ou son contact, ou par une affaire de cette entreprise ou de ce contact (le compte
+// rendu se range souvent sur l'affaire sans que le rendez-vous soit relié à l'entreprise).
 async function liste(tx: Tx, instanceId: string, id: string): Promise<RdvCapitalisable[]> {
   const [projet] = await tx
-    .select({ entrepriseId: diagnosticProjets.entrepriseId })
+    .select({
+      entrepriseId: diagnosticProjets.entrepriseId,
+      contactId: diagnosticProjets.contactId,
+    })
     .from(diagnosticProjets)
     .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instanceId)));
   if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
-  if (!projet.entrepriseId) return [];
+  const { entrepriseId, contactId } = projet;
+  const liens = [
+    entrepriseId &&
+      inArray(
+        rendezVous.id,
+        tx
+          .select({ r: rdvEntreprises.rendezVousId })
+          .from(rdvEntreprises)
+          .where(eq(rdvEntreprises.entrepriseId, entrepriseId)),
+      ),
+    contactId &&
+      inArray(
+        rendezVous.id,
+        tx
+          .select({ r: rdvContacts.rendezVousId })
+          .from(rdvContacts)
+          .where(eq(rdvContacts.contactId, contactId)),
+      ),
+    entrepriseId &&
+      inArray(
+        rendezVous.id,
+        tx
+          .select({ r: rdvAffaires.rendezVousId })
+          .from(rdvAffaires)
+          .innerJoin(
+            affaireEntreprises,
+            eq(affaireEntreprises.opportuniteId, rdvAffaires.opportuniteId),
+          )
+          .where(eq(affaireEntreprises.entrepriseId, entrepriseId)),
+      ),
+    contactId &&
+      inArray(
+        rendezVous.id,
+        tx
+          .select({ r: rdvAffaires.rendezVousId })
+          .from(rdvAffaires)
+          .innerJoin(affaireContacts, eq(affaireContacts.opportuniteId, rdvAffaires.opportuniteId))
+          .where(eq(affaireContacts.contactId, contactId)),
+      ),
+  ].filter((c) => !!c);
+  if (liens.length === 0) return [];
   const rows = await tx
     .select({
       id: rendezVous.id,
@@ -37,14 +89,13 @@ async function liste(tx: Tx, instanceId: string, id: string): Promise<RdvCapital
       compteRendu: rendezVous.compteRendu,
       compteRenduAt: rendezVous.compteRenduAt,
     })
-    .from(rdvEntreprises)
-    .innerJoin(rendezVous, eq(rendezVous.id, rdvEntreprises.rendezVousId))
+    .from(rendezVous)
     .where(
       and(
-        eq(rdvEntreprises.instanceId, instanceId),
-        eq(rdvEntreprises.entrepriseId, projet.entrepriseId),
+        eq(rendezVous.instanceId, instanceId),
         isNotNull(rendezVous.compteRendu),
         ne(rendezVous.statut, 'ignore'),
+        or(...liens),
       ),
     )
     .orderBy(desc(rendezVous.debut));
