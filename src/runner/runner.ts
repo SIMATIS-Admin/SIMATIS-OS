@@ -103,6 +103,13 @@ const dossierExiste = (dossier: string) =>
     () => false,
   );
 
+// Outils de lecture de Wispr Flow, les seuls autorisés pour la routine Inbox.
+export const WISPR_OUTILS_LECTURE = [
+  'mcp__claude_ai_Wispr_Flow__search_meetings',
+  'mcp__claude_ai_Wispr_Flow__get_meeting',
+  'mcp__claude_ai_Wispr_Flow__get_meeting_participants_enriched',
+] as const;
+
 // Claude Code arguments of a run. Only a `cerveau` request with an existing folder gets file
 // tools, limited to that folder (a `//` rule prefix means an absolute path).
 export async function argumentsClaude(
@@ -110,14 +117,23 @@ export async function argumentsClaude(
   config: string,
   cerveau: string | undefined,
 ): Promise<{ args: string[]; cwd?: string }> {
-  const base = ['--mcp-config', config, '--strict-mcp-config', '--allowedTools'];
-  if (!d.cerveau) return { args: ['-p', prompt(d), ...base, 'mcp__simatis__*'] };
+  // Le connecteur Wispr Flow vient du compte claude.ai, que le mode strict masque. En mode non
+  // interactif tout outil non listé est refusé : les autres connecteurs claude.ai restent inutilisables.
+  const wispr = d.skill === 'alimenter-inbox';
+  const base = [
+    '--mcp-config',
+    config,
+    ...(wispr ? [] : ['--strict-mcp-config']),
+    '--allowedTools',
+  ];
+  const simatis = wispr ? ['mcp__simatis__*', ...WISPR_OUTILS_LECTURE] : ['mcp__simatis__*'];
+  if (!d.cerveau) return { args: ['-p', prompt(d), ...base, simatis.join(',')] };
   if (!cerveau || !(await dossierExiste(cerveau))) {
     const texte = `${prompt(d)}\nSecond cerveau non accessible sur ce poste : saute ce qui en a besoin et signale-le dans le rapport.`;
-    return { args: ['-p', texte, ...base, 'mcp__simatis__*'] };
+    return { args: ['-p', texte, ...base, simatis.join(',')] };
   }
   const outils = [
-    'mcp__simatis__*',
+    ...simatis,
     `Read(/${cerveau}/**)`,
     `Edit(/${cerveau}/**)`,
     `Write(/${cerveau}/**)`,
