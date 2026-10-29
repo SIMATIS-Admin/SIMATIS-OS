@@ -8,7 +8,9 @@ import { DEBUT_MESSAGE_RAPPORT } from '../diagnostic/rapport.js';
 import { consignesProposition, type Proposition } from '../diagnostic/proposition.js';
 import { DEBUT_MESSAGE_RESTITUTION } from '../diagnostic/restitution.js';
 import { construireCarte } from '../cerveau/carte.js';
-import { executer, type Operation } from '../cerveau/file.js';
+import { executer, type Operation, type Partage } from '../cerveau/file.js';
+import { cartePartage } from '../cerveau/partage.js';
+import { configPartage, connecterPartage } from '../cerveau/partage-mcp.js';
 import { consigneCerveau } from './cerveau.js';
 
 // Local runner (npm run runner, started by launchd on the workstation): picks the routine runs the
@@ -40,6 +42,8 @@ export type RunnerOptions = {
   ) => Promise<number>;
   // Second brain folder of this workstation (SECOND_CERVEAU_DIR); never in the repository.
   cerveau?: string;
+  // Espace partagé AlpesIA × Simatis : le serveur MCP « partage » de Claude Code, relancé par le runner.
+  partage?: () => Promise<Partage | null>;
   // What this workstation offers (Claude Code version, installed skills), sent at each pass.
   poste?: () => Promise<Poste>;
 };
@@ -177,26 +181,42 @@ async function deposerCarte(
   }
 }
 
-// Demandes de l'OS sur le second cerveau (ouvrir, enregistrer une note, ajouter une idée) : exécutées
-// ici, sur le dossier du Drive. Après une écriture, la carte est redéposée.
+// Dépose la carte de l'espace partagé (une lecture par note : le runner ne le fait qu'à l'ouverture,
+// après une écriture et toutes les dix minutes, pas à chaque passage).
+export async function deposerCartePartage(
+  api: <T>(chemin: string, body?: unknown) => Promise<T>,
+  partage: Partage | null,
+) {
+  if (!partage) return;
+  try {
+    const carte = await cartePartage(partage.appeler, partage.auteur);
+    await api('/api/runner/cerveau/carte', { ...carte, espace: 'partage' });
+  } catch (err) {
+    console.error("carte de l'espace partagé :", err instanceof Error ? err.message : err);
+  }
+}
+
+// Demandes de l'OS sur les deux cerveaux (ouvrir, enregistrer une note, ajouter une idée, déposer un
+// message) : exécutées ici, sur le dossier du Drive ou l'espace partagé. Après une écriture, la carte
+// du cerveau touché est redéposée.
 export async function tourCerveau(opts: RunnerOptions): Promise<number> {
   const api = clientOs(opts);
   const demandes = await api<{ id: string; operation: Operation }[]>(
     '/api/runner/cerveau/operations',
   );
+  if (demandes.length === 0) return 0;
   const cerveau = await dossierOuNull(opts.cerveau);
+  const partage = (await opts.partage?.().catch(() => null)) ?? null;
   for (const { id, operation } of demandes) {
-    const resultat = cerveau
-      ? await executer(cerveau, operation).catch((err: unknown) => ({
-          ok: false as const,
-          erreur: err instanceof Error ? err.message : String(err),
-        }))
-      : {
-          ok: false as const,
-          erreur: "Le dossier du second cerveau n'est pas accessible sur ce poste.",
-        };
+    const resultat = await executer(cerveau, operation, partage).catch((err: unknown) => ({
+      ok: false as const,
+      erreur: err instanceof Error ? err.message : String(err),
+    }));
     await api(`/api/runner/cerveau/operations/${id}`, resultat);
-    if (resultat.ok && operation.type !== 'lire') await deposerCarte(api, cerveau ?? undefined);
+    if (resultat.ok && operation.type !== 'lire') {
+      if (operation.espace === 'partage') await deposerCartePartage(api, partage);
+      else await deposerCarte(api, cerveau ?? undefined);
+    }
   }
   return demandes.length;
 }
@@ -846,7 +866,16 @@ function main() {
     console.error('RUNNER_TOKEN manquant : npm run admin -- token:create --nom runner --runner');
     process.exit(1);
   }
+  // Le serveur « partage » n'est lancé qu'à la première demande, puis réutilisé.
+  let connexion: Promise<Partage | null> | null = null;
+  const partage = () =>
+    (connexion ??= configPartage().then((c) => {
+      if (!c) return null;
+      const p = connecterPartage(c);
+      return { appeler: p.appeler, auteur: p.auteur };
+    }));
   const opts = {
+    partage,
     base: process.env.SIMATIS_URL ?? 'http://127.0.0.1:4300',
     token,
     claude: process.env.CLAUDE_BIN ?? 'claude',
@@ -880,6 +909,14 @@ function main() {
   };
   passeEchange();
   setInterval(passeEchange, 5_000);
+
+  // Carte de l'espace partagé : au démarrage, puis toutes les dix minutes.
+  const cartePartageRegulierement = () =>
+    void partage()
+      .then((p) => deposerCartePartage(clientOs(opts), p))
+      .catch(() => undefined);
+  cartePartageRegulierement();
+  setInterval(cartePartageRegulierement, 10 * 60_000);
 
   // L'éditeur du second cerveau attend la réponse à l'écran : on relève ses demandes plus souvent.
   let occupeCerveau = false;

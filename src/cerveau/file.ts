@@ -1,17 +1,45 @@
 import { randomUUID } from 'node:crypto';
 import { ajouterIdee, ecrireNote, ErreurCerveau, lireNote } from './fichiers.js';
+import {
+  ajouterDocumentPartage,
+  deposerMessage,
+  ecrirePartage,
+  lirePartage,
+  type AppelerPartage,
+} from './partage.js';
 
 // Le second cerveau est un dossier du poste de Marc : le serveur (dans Docker) ne peut pas le lire.
 // Il met donc les demandes en file, et le runner du poste les exécute puis répond.
 
+// Deux cerveaux : « simatis » (le dossier du Drive, par défaut) et « partage » (l'espace partagé
+// AlpesIA × Simatis, sur kDrive).
+export type Espace = 'simatis' | 'partage';
+
 export type Operation =
-  | { type: 'lire'; chemin: string }
-  | { type: 'ecrire'; chemin: string; contenu: string; empreinte: string }
-  | { type: 'ajouter'; titre: string; texte: string };
+  | { espace?: Espace; type: 'lire'; chemin: string }
+  | { espace?: Espace; type: 'ecrire'; chemin: string; contenu: string; empreinte: string }
+  | { espace?: Espace; type: 'ajouter'; titre: string; texte: string }
+  | {
+      espace: 'partage';
+      type: 'message';
+      genre: 'question' | 'reponse' | 'info';
+      sujet: string;
+      corps: string;
+      enReponseA?: string | undefined;
+    }
+  | { espace: 'partage'; type: 'actualiser' };
 
 export type Resultat =
-  | { ok: true; chemin?: string; contenu?: string; empreinte?: string }
+  | {
+      ok: true;
+      chemin?: string;
+      contenu?: string;
+      empreinte?: string;
+      lectureSeule?: string | null;
+    }
   | { ok: false; erreur: string; conflit?: boolean };
+
+export type Partage = { appeler: AppelerPartage; auteur: string };
 
 export class RunnerInjoignable extends Error {}
 
@@ -67,8 +95,18 @@ export function repondre(id: string, resultat: Resultat): boolean {
 export const viderFile = () => attentes.clear();
 
 // Exécution sur le poste : les refus attendus deviennent un résultat, le reste remonte.
-export async function executer(dossier: string, op: Operation): Promise<Resultat> {
+export async function executer(
+  dossier: string | null,
+  op: Operation,
+  partage: Partage | null = null,
+): Promise<Resultat> {
   try {
+    if (op.espace === 'partage') return await executerPartage(op, partage);
+    if (!dossier)
+      return {
+        ok: false,
+        erreur: "Le dossier du second cerveau n'est pas accessible sur ce poste.",
+      };
     switch (op.type) {
       case 'lire':
         return { ok: true, chemin: op.chemin, ...(await lireNote(dossier, op.chemin)) };
@@ -84,5 +122,31 @@ export async function executer(dossier: string, op: Operation): Promise<Resultat
   } catch (e) {
     if (e instanceof ErreurCerveau) return { ok: false, erreur: e.message, conflit: e.conflit };
     throw e;
+  }
+}
+
+async function executerPartage(op: Operation, partage: Partage | null): Promise<Resultat> {
+  if (!partage)
+    return {
+      ok: false,
+      erreur:
+        "L'espace partagé n'est pas connecté sur ce poste : le serveur « partage » de Claude Code est introuvable.",
+    };
+  const { appeler, auteur } = partage;
+  switch (op.type) {
+    case 'lire':
+      return { ok: true, chemin: op.chemin, ...(await lirePartage(appeler, op.chemin, auteur)) };
+    case 'ecrire':
+      return {
+        ok: true,
+        chemin: op.chemin,
+        ...(await ecrirePartage(appeler, op.chemin, op.contenu, op.empreinte, auteur)),
+      };
+    case 'ajouter':
+      return { ok: true, ...(await ajouterDocumentPartage(appeler, op, auteur)) };
+    case 'message':
+      return { ok: true, ...(await deposerMessage(appeler, op)) };
+    case 'actualiser':
+      return { ok: true };
   }
 }

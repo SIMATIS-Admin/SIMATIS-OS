@@ -6,7 +6,10 @@ import { resolveToken } from '../mcp/tokens.js';
 import { demander, prendre, repondre, RunnerInjoignable } from './file.js';
 import { deposerCarte, lireCarte } from './store.js';
 
+const espaceSchema = z.enum(['simatis', 'partage']).optional();
+
 const carteSchema = z.object({
+  espace: espaceSchema,
   noeuds: z
     .array(
       z.object({
@@ -23,18 +26,29 @@ const carteSchema = z.object({
 });
 
 const operationSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('lire'), chemin: z.string().max(300) }),
+  z.object({ espace: espaceSchema, type: z.literal('lire'), chemin: z.string().max(300) }),
   z.object({
+    espace: espaceSchema,
     type: z.literal('ecrire'),
     chemin: z.string().max(300),
     contenu: z.string().max(500_000),
     empreinte: z.string().max(100),
   }),
   z.object({
+    espace: espaceSchema,
     type: z.literal('ajouter'),
     titre: z.string().trim().min(1).max(200),
     texte: z.string().max(500_000),
   }),
+  z.object({
+    espace: z.literal('partage'),
+    type: z.literal('message'),
+    genre: z.enum(['question', 'reponse', 'info']),
+    sujet: z.string().trim().min(1).max(200),
+    corps: z.string().trim().min(1).max(100_000),
+    enReponseA: z.string().max(300).optional(),
+  }),
+  z.object({ espace: z.literal('partage'), type: z.literal('actualiser') }),
 ]);
 
 const resultatSchema = z.union([
@@ -43,6 +57,7 @@ const resultatSchema = z.union([
     chemin: z.string().optional(),
     contenu: z.string().optional(),
     empreinte: z.string().optional(),
+    lectureSeule: z.string().nullable().optional(),
   }),
   z.object({ ok: z.literal(false), erreur: z.string().max(1000), conflit: z.boolean().optional() }),
 ]);
@@ -62,7 +77,8 @@ export function registerCerveauRoutes(app: FastifyInstance, { db }: { db: Databa
     if (!(await estRunner(request))) return refus(reply);
     const parsed = carteSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Carte invalide' });
-    deposerCarte(parsed.data);
+    const { espace, ...carte } = parsed.data;
+    deposerCarte(carte, espace);
     return { ok: true };
   });
 
@@ -75,10 +91,14 @@ export function registerCerveauRoutes(app: FastifyInstance, { db }: { db: Databa
     return null;
   };
 
-  app.get<{ Params: { slug: string } }>('/api/i/:slug/cerveau/carte', async (request, reply) => {
-    const refuse = await acces(request.params.slug, reply);
-    return refuse ?? lireCarte();
-  });
+  app.get<{ Params: { slug: string }; Querystring: { espace?: string } }>(
+    '/api/i/:slug/cerveau/carte',
+    async (request, reply) => {
+      const refuse = await acces(request.params.slug, reply);
+      if (refuse) return refuse;
+      return lireCarte(request.query.espace === 'partage' ? 'partage' : 'simatis');
+    },
+  );
 
   // Lire, enregistrer une note ou ajouter une idée : exécuté par le runner, sur le dossier du Drive.
   app.post<{ Params: { slug: string }; Body: unknown }>(

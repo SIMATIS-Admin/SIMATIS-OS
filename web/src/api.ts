@@ -246,19 +246,33 @@ export const supprimerTestVma = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `vma/tests/${encodeURIComponent(id)}`), {});
 
 export const fetchJournal = (slug: string) => getJson<JournalEntry[]>(inst(slug, 'journal'));
-export const fetchCarteCerveau = (slug: string) =>
-  getJson<import('./cerveau.js').CarteCerveau | null>(inst(slug, 'cerveau/carte'));
-export type OperationCerveau =
-  | { type: 'lire'; chemin: string }
-  | { type: 'ecrire'; chemin: string; contenu: string; empreinte: string }
-  | { type: 'ajouter'; titre: string; texte: string };
-// Lire, enregistrer une note ou ajouter une idée : exécuté sur le dossier du second cerveau (Drive).
-export const operationCerveau = (slug: string, operation: OperationCerveau) =>
-  sendJson<{ chemin?: string; contenu?: string; empreinte?: string }>(
-    'POST',
-    inst(slug, 'cerveau/operations'),
-    operation,
+export type EspaceCerveau = 'simatis' | 'partage';
+export const fetchCarteCerveau = (slug: string, espace: EspaceCerveau = 'simatis') =>
+  getJson<import('./cerveau.js').CarteCerveau | null>(
+    `${inst(slug, 'cerveau/carte')}?espace=${espace}`,
   );
+export type OperationCerveau =
+  | { espace?: EspaceCerveau; type: 'lire'; chemin: string }
+  | { espace?: EspaceCerveau; type: 'ecrire'; chemin: string; contenu: string; empreinte: string }
+  | { espace?: EspaceCerveau; type: 'ajouter'; titre: string; texte: string }
+  | {
+      espace: 'partage';
+      type: 'message';
+      genre: 'question' | 'reponse' | 'info';
+      sujet: string;
+      corps: string;
+      enReponseA?: string;
+    }
+  | { espace: 'partage'; type: 'actualiser' };
+// Lire, enregistrer une note, ajouter une idée, déposer un message : exécuté sur le dossier du Drive
+// (SIMATIS) ou dans l'espace partagé kDrive (Partagé).
+export const operationCerveau = (slug: string, operation: OperationCerveau) =>
+  sendJson<{
+    chemin?: string;
+    contenu?: string;
+    empreinte?: string;
+    lectureSeule?: string | null;
+  }>('POST', inst(slug, 'cerveau/operations'), operation);
 export const fetchConsole = (slug: string) => getJson<ConsoleOS>(inst(slug, 'console'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>
