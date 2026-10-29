@@ -47,9 +47,14 @@ Avant de déposer, la routine cherche une entrée `compte_rendu` en attente qui 
 
 Paramètres > Connexions affiche l'état de Wispr Flow et la marche à suivre : connexion unique dans le navigateur avec le compte Wispr Flow de Marc. Les jetons restent dans le magasin de Claude Code du poste, jamais dans la base ni dans git.
 
-## À vérifier en premier
+## Faisabilité vérifiée (2026-10-29)
 
-Le jeton de rafraîchissement est-il bien repris par `claude -p` avec `--strict-mcp-config`, sans écran ? Test avec Marc : connexion unique, puis un appel `claude -p` en lecture seule. Si cela échoue, repli : appeler Wispr Flow depuis l'OS, comme pour Google, avec son propre OAuth.
+Wispr Flow est déjà connecté au compte claude.ai de Marc : le CLI du poste le liste (`claude mcp list`, « claude.ai Wispr Flow », connecté). Test en `claude -p`, lecture seule (`get_account_info`) :
+
+- avec `--strict-mcp-config` : l'outil est introuvable, le mode strict masque les connecteurs claude.ai ;
+- sans `--strict-mcp-config`, avec `--allowedTools 'mcp__claude_ai_Wispr_Flow__*'` : réponse OK, sans écran.
+
+Conséquence : pas d'OAuth à écrire dans l'OS. L'exécuteur doit retirer `--strict-mcp-config` pour la routine Inbox, et compenser : `--allowedTools` limité à `mcp__simatis__*` et aux seuls outils de lecture de Wispr Flow (en `-p`, tout outil non autorisé est refusé, donc Gmail, HubSpot et Drive restent inutilisables). À couvrir par un test sur les arguments construits par `argumentsClaude`.
 
 ## Données
 
