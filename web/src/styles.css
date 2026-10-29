@@ -5231,3 +5231,11 @@ label.btn.off {
   color: var(--white);
   font: 600 13px var(--f-num);
 }
+
+/* Menu : le libellé suivi d'une pastille bêta reste sur une seule ligne. */
+.nav a .lbl:has(+ .beta) {
+  white-space: nowrap;
+}
+.dg-detail.dg-detail-seul {
+  grid-template-columns: 1fr;
+}

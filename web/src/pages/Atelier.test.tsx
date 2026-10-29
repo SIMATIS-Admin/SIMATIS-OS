@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AtelierListe, Entreprise, ProjetDiag, TestVma } from '../api.js';
+import type { AtelierListe, Entreprise } from '../api.js';
 import { Atelier } from './Atelier.js';
 
 const api = vi.hoisted(() => ({
   fetchEntreprises: vi.fn(),
-  fetchProjetsDiag: vi.fn(),
-  fetchTestsVma: vi.fn(),
+  fetchFiche: vi.fn(),
   fetchAteliers: vi.fn(),
   fetchAtelier: vi.fn(),
   creerAtelier: vi.fn(),
@@ -50,67 +49,69 @@ const atelier = (n: number, extra: Partial<AtelierListe> = {}): AtelierListe => 
   createdAt: '2026-10-20T10:00:00Z',
   ...extra,
 });
-const diag = (n: number): ProjetDiag =>
-  ({
-    id: `p${n}`,
-    nom: 'P',
-    entrepriseId: `e${n}`,
-    etape: 3,
-    etapeMax: 3,
-    statutDiagnostic: null,
-    updatedAt: '2026-10-01T00:00:00Z',
-  }) as ProjetDiag;
-const vma = (n: number): TestVma =>
-  ({
-    id: `t${n}`,
-    entrepriseId: `e${n}`,
-    creeLe: '2026-10-02T00:00:00Z',
-    recueLe: '2026-10-12T00:00:00Z',
-    type: 'premier',
-    statut: 'utilisee',
-  }) as TestVma;
-
-const charger = (
-  opts: { e?: Entreprise[]; a?: AtelierListe[]; p?: ProjetDiag[]; t?: TestVma[] } = {},
-) => {
+const charger = (opts: { e?: Entreprise[]; a?: AtelierListe[]; contacts?: unknown[] } = {}) => {
   api.fetchEntreprises.mockResolvedValue(opts.e ?? [entreprise(1)]);
   api.fetchAteliers.mockResolvedValue(opts.a ?? [atelier(1)]);
-  api.fetchProjetsDiag.mockResolvedValue(opts.p ?? [diag(1)]);
-  api.fetchTestsVma.mockResolvedValue(opts.t ?? [vma(1)]);
+  api.fetchFiche.mockResolvedValue({ liens: { contacts: opts.contacts ?? [] } });
 };
 
 describe('Atelier : accueil de la section', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => cleanup());
 
-  it('affiche la pastille Bêta et liste les entreprises suivies', async () => {
-    charger({ e: [entreprise(1), entreprise(2)] });
+  it('affiche la pastille Bêta et ne liste que les entreprises qui ont un atelier', async () => {
+    charger({ e: [entreprise(1), entreprise(2)], a: [atelier(1)] });
     render(<Atelier slug="demo" />);
     await screen.findByText('Entreprise Fictive A');
     expect(screen.getAllByText('Bêta').length).toBeGreaterThan(0);
-    // l'entreprise B n'a ni diagnostic, ni test, ni atelier : elle n'apparaît pas
     expect(screen.queryByText('Entreprise Fictive B')).toBeNull();
+    expect(document.querySelectorAll('.dg-ligne')).toHaveLength(1);
   });
 
-  it('résume le diagnostic, les tests VMA et les ateliers de la ligne', async () => {
+  it('ne parle ni de diagnostic ni de test VMA', async () => {
     charger();
+    render(<Atelier slug="demo" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
+    expect(screen.queryByText(/Diagnostic/)).toBeNull();
+    expect(screen.queryByText(/VMA/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /Outils et diagnostics/ })).toBeNull();
+    expect(api.fetchEntreprises).toHaveBeenCalled();
+  });
+
+  it('résume les ateliers de la ligne : nombre, dernière modification, avancement', async () => {
+    charger({
+      a: [atelier(1), atelier(1, { id: 'a2', updatedAt: '2026-10-28T10:00:00Z', etapeMax: 2 })],
+    });
     render(<Atelier slug="demo" />);
     const ligne = (await screen.findByText('Entreprise Fictive A')).closest(
       '.dg-ligne',
     ) as HTMLElement;
-    expect(within(ligne).getByText('Étape 3 sur 5')).toBeTruthy();
-    expect(within(ligne).getByText(/1 test · 1 reçu/)).toBeTruthy();
-    expect(within(ligne).getByText(/1 · étape 4 sur 6/)).toBeTruthy();
+    expect(within(ligne).getByText('2')).toBeTruthy();
+    expect(within(ligne).getByText('28/10/2026')).toBeTruthy();
+    expect(within(ligne).getByText('Étape 2 sur 6')).toBeTruthy();
   });
 
-  it('le détail renvoie vers Outils et diagnostics et liste les ateliers', async () => {
+  it('le détail liste les ateliers et renvoie vers la fiche de l’entreprise et son contact', async () => {
+    charger({ contacts: [{ id: 'c1', nom: 'Dirigeant Fictif', principal: true }] });
+    render(<Atelier slug="demo" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
+    expect(screen.getByText('Atelier fictif 1')).toBeTruthy();
+    expect(screen.getByText(/14 actions/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Fiche entreprise' }).getAttribute('href')).toBe(
+      '#/demo/fiche/entreprise/e1',
+    );
+    expect(await screen.findByRole('link', { name: 'Fiche contact' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Fiche contact' }).getAttribute('href')).toBe(
+      '#/demo/fiche/contact/c1',
+    );
+  });
+
+  it('sans contact, pas de lien vers une fiche contact', async () => {
     charger();
     render(<Atelier slug="demo" />);
     fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
-    const liens = screen.getAllByRole('link', { name: /Outils et diagnostics/ });
-    expect(liens[0]!.getAttribute('href')).toBe('#/demo/diagnostics');
-    expect(screen.getByText('Atelier fictif 1')).toBeTruthy();
-    expect(screen.getByText(/14 actions/)).toBeTruthy();
+    await waitFor(() => expect(api.fetchFiche).toHaveBeenCalledWith('demo', 'entreprise', 'e1'));
+    expect(screen.queryByRole('link', { name: 'Fiche contact' })).toBeNull();
   });
 
   it('+ Nouveau propose un nouvel atelier et l’import', async () => {
