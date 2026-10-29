@@ -75,6 +75,9 @@ export const opportunites = pgTable(
       .default('spot'),
     dureeEngagementMois: integer('duree_engagement_mois').notNull().default(12),
     taciteReconduction: boolean('tacite_reconduction').notNull().default(true),
+    // Hand-set win probability for this deal only (0-100); null = the stage's standard one. OS-only
+    // like the billing terms: never sent to HubSpot.
+    probabiliteManuelle: integer('probabilite_manuelle'),
     montant: integer('montant'),
     echeance: date('echeance'),
     clos: text('clos', { enum: ['gagne', 'perdu'] }),

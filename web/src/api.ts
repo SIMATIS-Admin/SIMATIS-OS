@@ -395,6 +395,7 @@ export type PipelineOpp = {
   modeFacturation: 'spot' | 'recurrent';
   dureeEngagementMois: number;
   taciteReconduction: boolean;
+  probabiliteManuelle: number | null;
   echeance: string | null;
   qualification: Qualification | null;
   potentiel: string | null;

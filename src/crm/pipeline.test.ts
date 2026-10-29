@@ -295,6 +295,35 @@ describe('pipeline API', () => {
     expect(refus.status).toBe(400);
   });
 
+  it('sets a manual probability on one deal, clears it, and refuses values outside 0-100', async () => {
+    const creee = await req('POST', '/api/i/simatis/opportunites', {
+      titre: 'Devis sur mesure',
+      montant: 8000,
+      etape: 'prospection',
+    });
+    const id = (creee.body as { id: string }).id;
+    const patch = (body: unknown) => req('PATCH', `/api/i/simatis/fiches/affaire/${id}`, body);
+    const lue = async () =>
+      (
+        (await req('GET', '/api/i/simatis/pipeline')).body.opportunites as {
+          id: string;
+          probabiliteManuelle: number | null;
+        }[]
+      ).find((o) => o.id === id)?.probabiliteManuelle;
+
+    expect(await lue()).toBeNull();
+    expect((await patch({ probabiliteManuelle: 70 })).body).toMatchObject({
+      fiche: { probabiliteManuelle: 70 },
+    });
+    expect(await lue()).toBe(70);
+    expect((await patch({ probabiliteManuelle: 0 })).status).toBe(200);
+    expect(await lue()).toBe(0);
+    expect((await patch({ probabiliteManuelle: null })).status).toBe(200);
+    expect(await lue()).toBeNull();
+    for (const mauvais of [-1, 101, 12.5])
+      expect((await patch({ probabiliteManuelle: mauvais })).status).toBe(400);
+  });
+
   it('creates a spot deal by default and a recurring one with its commitment, and patches it', async () => {
     const spot = await req('POST', '/api/i/simatis/opportunites', {
       titre: 'Mission ponctuelle',
