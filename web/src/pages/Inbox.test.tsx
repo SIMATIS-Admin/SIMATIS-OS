@@ -20,6 +20,8 @@ function AvecEntete(props: Omit<Parameters<typeof Inbox>[0], 'entete'>) {
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let simulation = false;
+// Entrées ajoutées à la liste par un test (réunions Wispr Flow).
+let supplementaires: ReturnType<typeof sujet>[] = [];
 
 const proposition = {
   id: 'p1',
@@ -59,6 +61,7 @@ const sujet = (id: string, extra: Record<string, unknown> = {}) => ({
   instance: { slug: 'simatis', nom: 'SIMATIS', couleur: '#0B2545' },
   proposition: null,
   livreBlanc: null,
+  reunion: null,
   ...extra,
 });
 
@@ -135,7 +138,9 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       { slug: 'simatis', nom: 'SIMATIS', type: 'propre', phase: null },
       { slug: 'helioval', nom: 'Helioval', type: 'mandat', phase: 'en_cours' },
     ]);
-  if (url.includes('/contacts?q=')) return json([]);
+  if (url.includes('/contacts?q=Dup'))
+    return json([{ id: 'c9', nom: 'Dupont Fictif', entreprise: 'Atelier Fictif' }]);
+  if (url.includes('/contacts?q=') || url.includes('/entreprises?q=')) return json([]);
   if (url.includes('/echanges')) {
     if (url.endsWith('/ajouter')) return json({ echange: echange('ajoute'), sujet: sujet('n2') });
     return json(
@@ -172,7 +177,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     return json(sujet('n1', { type: 'autre' }), 201);
   if (method === 'POST') return json(sujet('s1', { statut: 'traite' }));
   if (url.includes('filtre=traites')) return json(traites());
-  return json(liste());
+  return json([...liste(), ...supplementaires]);
 }
 
 const titres = () =>
@@ -183,6 +188,7 @@ describe('Inbox screen', () => {
   beforeEach(() => {
     calls = [];
     simulation = false;
+    supplementaires = [];
     droitTransfert = false;
     routineActive = true;
     derniereRoutine = null;
@@ -664,5 +670,90 @@ describe('Inbox screen', () => {
     fireEvent.click(await screen.findByText('Écarter'));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]?.body).toEqual({ decision: 'ecarter' });
+  });
+  describe('réunion Wispr Flow', () => {
+    const reunion = (extra: Record<string, unknown> = {}) => ({
+      critique: false,
+      transcriptStocke: false,
+      participants: ['dupont.fictif@exemple.fr'],
+      resume: 'Résumé fictif de Wispr Flow',
+      dejaRelie: false,
+      ...extra,
+    });
+    const ouvrir = async () => {
+      render(<AvecEntete slug="simatis" />);
+      fireEvent.click(
+        (await screen.findAllByText('Compte rendu : Point fictif'))[0] as HTMLElement,
+      );
+      return document.querySelector('.inbox-detail') as HTMLElement;
+    };
+
+    it('propose critique (décochée) et enregistre le choix', async () => {
+      supplementaires = [
+        sujet('w1', {
+          type: 'compte_rendu',
+          origine: 'wispr',
+          titre: 'Compte rendu : Point fictif',
+          reunion: reunion(),
+        }),
+      ];
+      const detail = await ouvrir();
+      const critique = within(detail).getByRole<HTMLInputElement>('checkbox', {
+        name: /Réunion critique/,
+      });
+      expect(critique.checked).toBe(false);
+      fireEvent.click(critique);
+      fireEvent.click(within(detail).getByRole('button', { name: 'Enregistrer le rattachement' }));
+      await waitFor(() =>
+        expect(posts().find((c) => c.url.endsWith('/sujets/w1/reunion'))?.body).toEqual({
+          contactId: null,
+          entrepriseId: null,
+          critique: true,
+        }),
+      );
+    });
+
+    it('rattache à un contact trouvé par la recherche', async () => {
+      supplementaires = [
+        sujet('w2', {
+          type: 'compte_rendu',
+          origine: 'wispr',
+          titre: 'Compte rendu : Point fictif',
+          reunion: reunion(),
+        }),
+      ];
+      const detail = await ouvrir();
+      fireEvent.change(within(detail).getByLabelText('Rechercher un contact ou une entreprise'), {
+        target: { value: 'Dup' },
+      });
+      const choix = await within(detail).findByLabelText('Rattacher à');
+      await within(detail).findByRole('option', { name: /Dupont Fictif/ });
+      fireEvent.change(choix, { target: { value: 'contact:c9' } });
+      fireEvent.click(within(detail).getByRole('button', { name: 'Enregistrer le rattachement' }));
+      await waitFor(() =>
+        expect(posts().find((c) => c.url.endsWith('/sujets/w2/reunion'))?.body).toEqual({
+          contactId: 'c9',
+          entrepriseId: null,
+          critique: false,
+        }),
+      );
+    });
+
+    it('signale un compte rendu déjà trouvé et permet de le clore', async () => {
+      supplementaires = [
+        sujet('w3', {
+          type: 'compte_rendu',
+          origine: 'agenda',
+          titre: 'Compte rendu : Point fictif',
+          reunion: reunion({ dejaRelie: true }),
+        }),
+      ];
+      const detail = await ouvrir();
+      expect(within(detail).getByText(/Compte rendu trouvé dans Wispr Flow/)).toBeTruthy();
+      fireEvent.click(within(detail).getByRole('button', { name: 'Clore' }));
+      await waitFor(() =>
+        expect(posts().some((c) => c.url.endsWith('/sujets/w3/traite'))).toBe(true),
+      );
+    });
   });
 });

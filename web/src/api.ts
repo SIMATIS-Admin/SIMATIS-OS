@@ -492,7 +492,7 @@ export type SujetVue = {
   type: TypeSujet;
   titre: string;
   resume: string | null;
-  origine: 'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site';
+  origine: 'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site' | 'wispr';
   lien: string | null;
   echeance: string | null;
   priorite: number;
@@ -505,6 +505,14 @@ export type SujetVue = {
   instance: { slug: string; nom: string; couleur: string | null };
   proposition: PropositionItem | null;
   livreBlanc: { email: string; nom: string | null } | null;
+  // Réunion Wispr Flow ; dejaRelie : elle s'est reliée à un compte rendu déjà à faire.
+  reunion: {
+    critique: boolean;
+    transcriptStocke: boolean;
+    participants: string[];
+    resume: string | null;
+    dejaRelie: boolean;
+  } | null;
 };
 
 export const fetchBrief = (slug: string) => getJson<Brief>(inst(slug, 'brief'));
@@ -620,6 +628,11 @@ export const ajouterDepuisEchange = (slug: string, id: string) =>
   sendJson<{ echange: EchangeAjout; sujet: SujetVue }>('POST', echange(slug, id, 'ajouter'), {});
 export const annulerEchange = (slug: string, id: string) =>
   sendJson<EchangeAjout>('POST', echange(slug, id, 'annuler'), {});
+export const attribuerReunionSujet = (
+  slug: string,
+  id: string,
+  corps: { contactId: string | null; entrepriseId: string | null; critique: boolean },
+) => sendJson<SujetVue>('POST', sujet(slug, id, 'reunion'), corps);
 export const marquerSujetTraite = (slug: string, id: string) =>
   sendJson<SujetVue>('POST', sujet(slug, id, 'traite'), {});
 export const remettreSujet = (slug: string, id: string) =>
