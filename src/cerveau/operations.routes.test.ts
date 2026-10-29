@@ -124,14 +124,22 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
     expect(await readFile(path.join(dossier, 'note.md'), 'utf8')).toContain('Changée.');
   });
 
-  it('ajoute une idée dans l’inbox', async () => {
+  it('ajoute une idée dans les idées en vrac', async () => {
     const res = await demander('op-ok', {
       type: 'ajouter',
       titre: 'Idée fictive',
       texte: 'Texte.',
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json<{ chemin: string }>().chemin).toMatch(/^brain\/inbox\/.*idee-fictive\.md$/);
+    expect(res.json<{ chemin: string }>().chemin).toMatch(
+      /^brain\/idees-en-vrac\/.*idee-fictive\.md$/,
+    );
+  });
+
+  it('n’accepte que concerne: os', async () => {
+    const base = { type: 'ajouter', titre: 'x', texte: 'y' };
+    expect((await demander('op-ok', { ...base, concerne: 'autre' })).statusCode).toBe(400);
+    expect((await demander('op-ok', { ...base, concerne: 'os' })).statusCode).toBe(200);
   });
 
   it('refuse un chemin hors du dossier', async () => {

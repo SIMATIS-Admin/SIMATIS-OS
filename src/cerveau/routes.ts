@@ -40,6 +40,7 @@ const operationSchema = z.discriminatedUnion('type', [
     type: z.literal('ajouter'),
     titre: z.string().trim().min(1).max(200),
     texte: z.string().max(500_000),
+    concerne: z.literal('os').optional(),
   }),
   z.object({
     espace: z.literal('partage'),

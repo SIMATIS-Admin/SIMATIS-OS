@@ -136,7 +136,7 @@ export function NoteCerveau({
   );
 }
 
-// Dépose une idée dans l'inbox du second cerveau (draft), à trier ensuite avec la skill « mémoriser ».
+// Dépose une idée dans « Idées en vrac » du second cerveau (draft) ; l'Inbox la repère ensuite.
 export function IdeeCerveau({
   slug,
   espace = 'simatis',
@@ -150,6 +150,7 @@ export function IdeeCerveau({
   const [ouvert, setOuvert] = useState(false);
   const [titre, setTitre] = useState('');
   const [texte, setTexte] = useState('');
+  const [pourOs, setPourOs] = useState(false);
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [fait, setFait] = useState<string | null>(null);
@@ -162,7 +163,7 @@ export function IdeeCerveau({
         </button>
         {fait && (
           <p className="cerveau-note">
-            {partage ? 'Document publié' : 'Idée déposée dans l’inbox'} : {fait}
+            {partage ? 'Document publié' : 'Idée déposée dans les idées en vrac'} : {fait}
           </p>
         )}
       </div>
@@ -171,11 +172,18 @@ export function IdeeCerveau({
   const envoyer = () => {
     setEnvoi(true);
     setErreur(null);
-    operationCerveau(slug, { espace, type: 'ajouter', titre, texte }).then(
+    operationCerveau(slug, {
+      espace,
+      type: 'ajouter',
+      titre,
+      texte,
+      ...(!partage && pourOs ? { concerne: 'os' as const } : {}),
+    }).then(
       (r) => {
         setFait(r.chemin ?? null);
         setTitre('');
         setTexte('');
+        setPourOs(false);
         setEnvoi(false);
         setOuvert(false);
         if (r.chemin) onAjoutee(r.chemin);
@@ -206,10 +214,20 @@ export function IdeeCerveau({
         onChange={(e) => setTexte(e.target.value)}
         rows={5}
       />
+      {!partage && (
+        <label className="cerveau-note">
+          <input type="checkbox" checked={pourOs} onChange={(e) => setPourOs(e.target.checked)} />{' '}
+          Concerne le développement de l’OS
+        </label>
+      )}
       {erreur && <div className="empty">{erreur}</div>}
       <div className="cerveau-actions">
         <button className="btn primary" onClick={envoyer} disabled={envoi || !titre.trim()}>
-          {envoi ? 'Dépôt…' : partage ? 'Publier dans prospection/' : 'Déposer dans l’inbox'}
+          {envoi
+            ? 'Dépôt…'
+            : partage
+              ? 'Publier dans prospection/'
+              : 'Déposer dans les idées en vrac'}
         </button>
         <button className="btn" onClick={() => setOuvert(false)}>
           Annuler

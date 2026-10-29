@@ -104,21 +104,42 @@ describe('lireNote et ecrireNote', () => {
 });
 
 describe('ajouterIdee', () => {
-  it('crée une note draft dans l’inbox, la range dans l’index et la note au journal', async () => {
+  it('crée une note draft dans les idées en vrac, la range dans l’index et la note au journal', async () => {
     const { chemin } = await ajouterIdee(
       dossier,
       { titre: 'Idée : offre à la carte', texte: 'Proposer un module seul.' },
       JOUR,
     );
-    expect(chemin).toBe('brain/inbox/2026-10-29_idee-offre-a-la-carte.md');
+    expect(chemin).toBe('brain/idees-en-vrac/2026-10-29_idee-offre-a-la-carte.md');
     const note = await lire(chemin);
     expect(note).toContain('statut: draft');
     expect(note).toContain('# Idée : offre à la carte');
     expect(note).toContain('Proposer un module seul.');
-    expect(await lire('brain/inbox/index.md')).toContain(
+    expect(await lire('brain/idees-en-vrac/index.md')).toContain(
       '- [Idée : offre à la carte](2026-10-29_idee-offre-a-la-carte.md)',
     );
     expect(await lire('log.md')).toContain('2026-10-29_idee-offre-a-la-carte.md');
+  });
+
+  it('crée le dossier et un index titré au premier ajout', async () => {
+    await ajouterIdee(dossier, { titre: 'Première', texte: 'a' }, JOUR);
+    expect(await lire('brain/idees-en-vrac/index.md')).toMatch(/^# Idées en vrac\n/);
+  });
+
+  it('marque l’idée concerne: os seulement si demandé', async () => {
+    const avec = await ajouterIdee(
+      dossier,
+      { titre: 'Pour l’OS', texte: 'a', concerne: 'os' },
+      JOUR,
+    );
+    const sans = await ajouterIdee(dossier, { titre: 'Autre', texte: 'b' }, JOUR);
+    expect(await lire(avec.chemin)).toContain('concerne: os');
+    expect(await lire(sans.chemin)).not.toContain('concerne:');
+  });
+
+  it('nomme le fichier idee quand le titre n’a aucune lettre', async () => {
+    const { chemin } = await ajouterIdee(dossier, { titre: '!!!', texte: 'a' }, JOUR);
+    expect(chemin).toBe('brain/idees-en-vrac/2026-10-29_idee.md');
   });
 
   it('ne remplace jamais une note existante du même nom', async () => {

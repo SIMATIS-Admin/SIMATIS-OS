@@ -254,7 +254,7 @@ export const fetchCarteCerveau = (slug: string, espace: EspaceCerveau = 'simatis
 export type OperationCerveau =
   | { espace?: EspaceCerveau; type: 'lire'; chemin: string }
   | { espace?: EspaceCerveau; type: 'ecrire'; chemin: string; contenu: string; empreinte: string }
-  | { espace?: EspaceCerveau; type: 'ajouter'; titre: string; texte: string }
+  | { espace?: EspaceCerveau; type: 'ajouter'; titre: string; texte: string; concerne?: 'os' }
   | {
       espace: 'partage';
       type: 'message';
