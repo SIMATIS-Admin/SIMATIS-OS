@@ -351,6 +351,13 @@
       "when": 1793290312855,
       "tag": "0049_damp_mysterio",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793349243408,
+      "tag": "0050_talented_wendell_vaughn",
+      "breakpoints": true
     }
   ]
 }
