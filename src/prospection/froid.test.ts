@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { insererFiche } from '../../test/fiche-base.js';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { baseVivante } from '../base-vivante/schema.js';
 import { withInstance } from '../db/context.js';
@@ -36,21 +37,18 @@ describe('Prospection à froid', () => {
     instanceId = a,
   ): Promise<string> {
     n += 1;
-    const [r] = await t.owner.db
-      .insert(baseVivante)
-      .values({
-        instanceId,
-        zone: 'prospectable',
-        entreprise: `Atelier Fictif ${n}`,
-        prenom: 'Camille',
-        nom: `Dupré${n}`,
-        email: `contact${n}@fictif.test`,
-        fonction: 'Directeur',
-        provenance: 'Salon fictif',
-        ...o,
-      })
-      .returning({ id: baseVivante.id });
-    return r!.id;
+    const id = await insererFiche(t.owner.db, {
+      instanceId,
+      zone: 'prospectable',
+      entreprise: `Atelier Fictif ${n}`,
+      prenom: 'Camille',
+      nom: `Dupré${n}`,
+      email: `contact${n}@fictif.test`,
+      fonction: 'Directeur',
+      provenance: 'Salon fictif',
+      ...o,
+    });
+    return id;
   }
   const suivi = async (baseId: string, v: Partial<typeof prospectionSuiviFroid.$inferInsert>) => {
     await t.owner.db.insert(prospectionSuiviFroid).values({ instanceId: a, baseId, ...v });

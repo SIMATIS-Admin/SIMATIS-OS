@@ -9,12 +9,14 @@ const OFFRES: [OffreCampagne, string][] = [
 ];
 
 export function ReglageCampagne({
+  mode = 'relance',
   nbTaches,
   signatures,
   enCours,
   erreur,
   onLancer,
 }: {
+  mode?: 'relance' | 'froid';
   nbTaches: number;
   signatures: SignatureProspection[];
   enCours: boolean;
@@ -28,6 +30,7 @@ export function ReglageCampagne({
   );
   const [suivi, setSuivi] = useState<'courte' | 'longue' | 'date'>('courte');
   const [date, setDate] = useState('');
+  const [touchesMax, setTouchesMax] = useState(4);
 
   const lancer = () =>
     onLancer({
@@ -35,7 +38,7 @@ export function ReglageCampagne({
       creneaux,
       signatureId: signatureId === 'aucune' ? null : signatureId,
       suivi: suivi === 'date' ? { type: 'date', date } : { type: suivi },
-      touchesMax: 4,
+      touchesMax,
     });
 
   const radio = <T extends string>(
@@ -57,7 +60,14 @@ export function ReglageCampagne({
         <h2>
           Régler la campagne{' '}
           <span className="badge blue">
-            Relance · {nbTaches} {nbTaches > 1 ? 'tâches' : 'tâche'}
+            {mode === 'froid' ? 'À froid' : 'Relance'} · {nbTaches}{' '}
+            {mode === 'froid'
+              ? nbTaches > 1
+                ? 'contacts'
+                : 'contact'
+              : nbTaches > 1
+                ? 'tâches'
+                : 'tâche'}
           </span>
         </h2>
       </div>
@@ -74,7 +84,9 @@ export function ReglageCampagne({
           <div>{OFFRES.map(([v, l]) => radio('offre', v, offre, setOffre, l))}</div>
           <b>Style</b>
           <div className="small muted">
-            Reprend le ton du premier mail du fil, lu dans votre messagerie.
+            {mode === 'froid'
+              ? 'Court, au vouvoiement, un angle différent à chaque touche.'
+              : 'Reprend le ton du premier mail du fil, lu dans votre messagerie.'}
           </div>
           <b>Créneaux</b>
           <div>
@@ -124,6 +136,28 @@ export function ReglageCampagne({
               Échéances étalées sur les jours ouvrés ; la tâche de suivi garde le canal d'origine.
             </div>
           </div>
+          {mode === 'froid' && (
+            <>
+              <b>Touches maximum</b>
+              <div>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  max={10}
+                  aria-label="Touches maximum"
+                  style={{ width: 80 }}
+                  value={touchesMax}
+                  onChange={(e) =>
+                    setTouchesMax(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
+                  }
+                />{' '}
+                <span className="small muted">
+                  Au-delà, le contact vous est proposé comme « épuisé », sur votre confirmation.
+                </span>
+              </div>
+            </>
+          )}
         </div>
         {erreur && (
           <p className="small" role="alert" style={{ color: 'var(--red)' }}>

@@ -2,9 +2,11 @@ import type { ResultatCampagne } from '../../api.js';
 
 export function Resultat({
   resultat,
+  mode = 'relance',
   onRetour,
   onRevenir,
 }: {
+  mode?: 'relance' | 'froid';
   resultat: ResultatCampagne;
   onRetour: () => void;
   onRevenir: () => void;
@@ -55,10 +57,12 @@ export function Resultat({
               <td>Dossiers clos (sans suivi)</td>
               <td className="r num">{resultat.clos}</td>
             </tr>
-            <tr>
-              <td>Tâches de relance marquées faites</td>
-              <td className="r num">{resultat.faites}</td>
-            </tr>
+            {mode === 'relance' && (
+              <tr>
+                <td>Tâches de relance marquées faites</td>
+                <td className="r num">{resultat.faites}</td>
+              </tr>
+            )}
             {resultat.echecs > 0 && (
               <tr>
                 <td>Brouillons refusés par la messagerie</td>

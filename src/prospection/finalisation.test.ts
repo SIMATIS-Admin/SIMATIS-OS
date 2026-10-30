@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { insererFiche } from '../../test/fiche-base.js';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { configureConnexion, registerConnector } from '../connexions/service.js';
-import { baseVivante } from '../base-vivante/schema.js';
 import { contacts, entreprises, taches } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import { createInstance } from '../instances/service.js';
@@ -360,19 +360,16 @@ describe('Finalisation d’une campagne à froid', () => {
   ) {
     const baseIds: string[] = [];
     for (const nom of noms) {
-      const [f] = await t.owner.db
-        .insert(baseVivante)
-        .values({
-          instanceId: instance.id,
-          zone: 'prospectable',
-          entreprise: `Atelier ${nom}`,
-          prenom: nom,
-          nom: 'Fictif',
-          email: `${nom.toLowerCase()}@fictif.test`,
-          provenance: 'Salon fictif',
-        })
-        .returning({ id: baseVivante.id });
-      baseIds.push(f!.id);
+      const id = await insererFiche(t.owner.db, {
+        instanceId: instance.id,
+        zone: 'prospectable',
+        entreprise: `Atelier ${nom}`,
+        prenom: nom,
+        nom: 'Fictif',
+        email: `${nom.toLowerCase()}@fictif.test`,
+        provenance: 'Salon fictif',
+      });
+      baseIds.push(id);
     }
     const campagneId = await dans(async (tx) => {
       const r = await creerCampagneFroid(tx, { baseIds, reglage });

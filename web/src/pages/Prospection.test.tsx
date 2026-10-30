@@ -24,6 +24,7 @@ const avec = (s: StatsProspection): VueProspection => ({
   signatures: [],
   recentes: [],
   enCours: null,
+  froid: { disponibles: 12, aRelancer: 7 },
 });
 const repondre = (v: VueProspection) => () => Promise.resolve(new Response(JSON.stringify(v)));
 
@@ -73,7 +74,7 @@ describe('Prospection', () => {
     expect(screen.getByText(/Touche 2/)).toBeTruthy();
   });
 
-  it('propose de relancer des tâches, et annonce la prospection à froid comme Bientôt', async () => {
+  it('propose de relancer des tâches et de prospecter à froid, avec les effectifs', async () => {
     render(<Prospection slug="simatis" />);
     await screen.findByText('14');
     expect(
@@ -81,8 +82,9 @@ describe('Prospection', () => {
     ).toBe(false);
     expect(
       screen.getByRole('button', { name: /Tirer un échantillon/ }).hasAttribute('disabled'),
-    ).toBe(true);
-    expect(screen.getAllByText('Bientôt').length).toBe(1);
+    ).toBe(false);
+    expect(screen.getByText(/jamais sollicités/)).toBeTruthy();
+    expect(screen.queryByText('Bientôt')).toBeNull();
   });
 
   it('affiche des zéros sans erreur pour une instance vide', async () => {

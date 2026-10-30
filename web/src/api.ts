@@ -1673,6 +1673,7 @@ export type VueProspection = {
   signatures: SignatureProspection[];
   recentes: CampagneResume[];
   enCours: string | null;
+  froid: { disponibles: number; aRelancer: number };
 };
 export type StatutCampagne = 'redaction' | 'relecture' | 'terminee' | 'erreur';
 export type EtatBrouillon = 'a_rediger' | 'pret' | 'a_verifier' | 'ecarte' | 'cree';
@@ -1792,3 +1793,39 @@ export const relancerRedaction = (slug: string, id: string) =>
   );
 export const rapprocherEnvoisProspection = (slug: string) =>
   sendJson<{ envoyes: number }>('POST', inst(slug, 'prospection/rapprocher'), {});
+
+// Prospection à froid : contacts de la base vivante.
+export type ContactFroid = {
+  id: string;
+  nom: string;
+  entreprise: string;
+  fonction: string | null;
+  touche: number;
+};
+export type ContactAConfirmer = {
+  id: string;
+  nom: string;
+  entreprise: string;
+  touches: number;
+  touchesMax: number;
+  derniereLe: string | null;
+};
+export const fetchEchantillon = (slug: string, nombre: number, filtre: string) =>
+  getJson<ContactFroid[]>(
+    inst(
+      slug,
+      `prospection/echantillon?nombre=${nombre}${filtre.trim() ? `&filtre=${encodeURIComponent(filtre.trim())}` : ''}`,
+    ),
+  );
+export const creerCampagneFroid = (slug: string, baseIds: string[], reglage: ReglageCampagne) =>
+  sendJson<{ campagneId: string; refusees: { baseId: string; raison: string }[] }>(
+    'POST',
+    inst(slug, 'prospection/campagnes'),
+    { mode: 'froid', baseIds, reglage },
+  );
+export const fetchEpuises = (slug: string) =>
+  getJson<ContactAConfirmer[]>(inst(slug, 'prospection/epuises'));
+export const confirmerEpuisesProspection = (slug: string, ids: string[]) =>
+  sendJson<{ modifies: number }>('POST', inst(slug, 'prospection/epuises/confirmer'), { ids });
+export const garderContactsProspection = (slug: string, ids: string[]) =>
+  sendJson<{ modifies: number }>('POST', inst(slug, 'prospection/epuises/garder'), { ids });

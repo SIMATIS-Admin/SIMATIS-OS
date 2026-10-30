@@ -2,9 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { insererFiche } from '../../test/fiche-base.js';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
-import { baseVivante } from '../base-vivante/schema.js';
 import { contacts, entreprises, taches } from '../crm/schema.js';
 import { configureConnexion, registerConnector } from '../connexions/service.js';
 import { withInstance } from '../db/context.js';
@@ -367,19 +367,16 @@ describe('Routes de la prospection', () => {
 
   describe('prospection à froid', () => {
     async function fiche(nom: string) {
-      const [f] = await t.owner.db
-        .insert(baseVivante)
-        .values({
-          instanceId,
-          zone: 'prospectable',
-          entreprise: `Atelier ${nom}`,
-          prenom: nom,
-          nom: 'Fictif',
-          email: `${nom.toLowerCase()}@fictif.test`,
-          provenance: 'Salon fictif',
-        })
-        .returning({ id: baseVivante.id });
-      return f!.id;
+      const id = await insererFiche(t.owner.db, {
+        instanceId,
+        zone: 'prospectable',
+        entreprise: `Atelier ${nom}`,
+        prenom: nom,
+        nom: 'Fictif',
+        email: `${nom.toLowerCase()}@fictif.test`,
+        provenance: 'Salon fictif',
+      });
+      return id;
     }
     const reglage = {
       offre: 'vma',

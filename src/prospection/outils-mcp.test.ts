@@ -2,9 +2,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { insererFiche } from '../../test/fiche-base.js';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
-import { baseVivante } from '../base-vivante/schema.js';
 import { contacts, taches } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
@@ -170,21 +170,18 @@ describe('Outils MCP de rédaction de campagne', () => {
   });
 
   it('campagne_contexte d’une campagne à froid : consignes à froid, provenance, aucun fil, créneaux', async () => {
-    const [f] = await t.owner.db
-      .insert(baseVivante)
-      .values({
-        instanceId,
-        zone: 'prospectable',
-        entreprise: 'Atelier Fictif',
-        prenom: 'Inès',
-        nom: 'Marchand',
-        email: 'ines@fictif.test',
-        fonction: 'Gérante',
-        provenance: 'Salon fictif 2025',
-      })
-      .returning({ id: baseVivante.id });
+    const fId = await insererFiche(t.owner.db, {
+      instanceId,
+      zone: 'prospectable',
+      entreprise: 'Atelier Fictif',
+      prenom: 'Inès',
+      nom: 'Marchand',
+      email: 'ines@fictif.test',
+      fonction: 'Gérante',
+      provenance: 'Salon fictif 2025',
+    });
     const id = await withInstance(t.app.db, instanceId, async (tx) => {
-      const r = await creerCampagneFroid(tx, { baseIds: [f!.id], reglage: reglageParDefaut() });
+      const r = await creerCampagneFroid(tx, { baseIds: [fId], reglage: reglageParDefaut() });
       await demarrerCampagne(tx, r.campagneId);
       return r.campagneId;
     });

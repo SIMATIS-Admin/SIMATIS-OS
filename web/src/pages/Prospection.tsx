@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  creerCampagneFroid,
   creerCampagneRelance,
   fetchCampagne,
   fetchProspection,
@@ -10,7 +11,9 @@ import {
   type VueProspection,
 } from '../api.js';
 import { Attente } from './prospection/Attente.js';
+import { ChoixContactsFroid } from './prospection/ChoixContactsFroid.js';
 import { ChoixTaches } from './prospection/ChoixTaches.js';
+import { Epuises } from './prospection/Epuises.js';
 import { ReglageCampagne } from './prospection/ReglageCampagne.js';
 import { Relecture } from './prospection/Relecture.js';
 import { Resultat } from './prospection/Resultat.js';
@@ -66,7 +69,9 @@ const lignes = (o: Record<string, number>, mot?: string) =>
 type Etape =
   | { nom: 'accueil' }
   | { nom: 'choix' }
-  | { nom: 'reglage'; tacheIds: string[]; liens: Record<string, string> }
+  | { nom: 'choix-froid' }
+  | { nom: 'epuises' }
+  | { nom: 'reglage'; mode: 'relance' | 'froid'; ids: string[]; liens: Record<string, string> }
   | { nom: 'attente'; id: string }
   | { nom: 'relecture'; campagne: CampagneProspection }
   | { nom: 'fin'; campagne: CampagneProspection; resultat: ResultatCampagne };
@@ -114,24 +119,47 @@ export function Prospection({ slug }: { slug: string }) {
         {retour}
         <ChoixTaches
           slug={slug}
-          onContinuer={(tacheIds, liens) => setEtape({ nom: 'reglage', tacheIds, liens })}
+          onContinuer={(ids, liens) => setEtape({ nom: 'reglage', mode: 'relance', ids, liens })}
         />
       </>
     );
   }
+  if (etape.nom === 'choix-froid') {
+    return (
+      <>
+        {retour}
+        <ChoixContactsFroid
+          slug={slug}
+          onContinuer={(ids) => setEtape({ nom: 'reglage', mode: 'froid', ids, liens: {} })}
+        />
+      </>
+    );
+  }
+  if (etape.nom === 'epuises') {
+    return (
+      <>
+        {retour}
+        <Epuises slug={slug} />
+      </>
+    );
+  }
   if (etape.nom === 'reglage') {
-    const { tacheIds, liens } = etape;
+    const { mode, ids, liens } = etape;
     return (
       <>
         {retour}
         <ReglageCampagne
-          nbTaches={tacheIds.length}
+          mode={mode}
+          nbTaches={ids.length}
           signatures={vue.signatures}
           enCours={lancement.enCours}
           erreur={lancement.erreur}
           onLancer={(reglage) => {
             setLancement({ enCours: true, erreur: null });
-            creerCampagneRelance(slug, tacheIds, reglage, liens).then(
+            (mode === 'froid'
+              ? creerCampagneFroid(slug, ids, reglage)
+              : creerCampagneRelance(slug, ids, reglage, liens)
+            ).then(
               (r) => {
                 setLancement({ enCours: false, erreur: null });
                 setEtape({ nom: 'attente', id: r.campagneId });
@@ -180,6 +208,7 @@ export function Prospection({ slug }: { slug: string }) {
       <>
         {retour}
         <Resultat
+          mode={campagne.mode}
           resultat={resultat}
           onRetour={accueil}
           onRevenir={() =>
@@ -279,13 +308,17 @@ export function Prospection({ slug }: { slug: string }) {
         </div>
         <div className="panel" style={{ border: '2px solid var(--teal)' }}>
           <div className="panel-b">
-            <h2 style={{ marginTop: 0 }}>
-              Prospecter à froid <span className="badge amber">Bientôt</span>
-            </h2>
+            <h2 style={{ marginTop: 0 }}>Prospecter à froid</h2>
             <p className="small muted">
               Vous tirez un échantillon de la base vivante, l'OS rédige un mail par contact.
             </p>
-            <button className="btn go" disabled>
+            <p className="small">
+              <b className="num">{vue.froid.disponibles}</b>{' '}
+              {pluriel(vue.froid.disponibles, 'contact')} jamais sollicité
+              {vue.froid.disponibles > 1 ? 's' : ''} · <b className="num">{vue.froid.aRelancer}</b>{' '}
+              à relancer
+            </p>
+            <button className="btn go" onClick={() => setEtape({ nom: 'choix-froid' })}>
               Tirer un échantillon
             </button>
           </div>
@@ -328,6 +361,15 @@ export function Prospection({ slug }: { slug: string }) {
               </tbody>
             </table>
           )}
+          <p className="small" style={{ marginBottom: 0 }}>
+            {stats.aConfirmer > 0 ? (
+              <button className="link strong" onClick={() => setEtape({ nom: 'epuises' })}>
+                Contacts épuisés à confirmer ({stats.aConfirmer})
+              </button>
+            ) : (
+              <span className="muted">Aucun contact épuisé à confirmer.</span>
+            )}
+          </p>
         </div>
       </div>
     </div>
