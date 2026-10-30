@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { SyncCtx } from '../../connexions/types.js';
 import { logEvent } from '../../journal/service.js';
+import { adressesDe, estAutomatique } from '../envoi-automatique.js';
 import type { Intervalle } from './creneaux.js';
 import { accessToken, GoogleError, type FetchLike } from './oauth.js';
 
@@ -594,6 +595,10 @@ export type Fil = {
   date: string | null;
   objet: string | null;
   extrait: string;
+  // Destinataires directs (À) du dernier message ; absent quand la messagerie ne les donne pas.
+  a?: string[];
+  // Notification, newsletter ou robot : personne n'attend de réponse.
+  automatique?: boolean;
 };
 
 // Recent inbox threads, each reduced to its last message (who wrote last decides "unanswered").
@@ -613,7 +618,7 @@ export async function filsRecents(
       messages?: { snippet?: string; payload?: { headers?: Headers } }[];
     }>(
       'GET',
-      `${GMAIL}/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+      `${GMAIL}/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=List-Unsubscribe&metadataHeaders=Precedence&metadataHeaders=Auto-Submitted&metadataHeaders=X-Auto-Response-Suppress`,
     );
     const dernier = t.messages?.at(-1);
     if (!dernier) continue;
@@ -623,6 +628,11 @@ export async function filsRecents(
       date: header(dernier.payload?.headers, 'Date'),
       objet: header(dernier.payload?.headers, 'Subject'),
       extrait: dernier.snippet ?? '',
+      a: adressesDe(header(dernier.payload?.headers, 'To')),
+      automatique: estAutomatique(
+        dernier.payload?.headers ?? [],
+        header(dernier.payload?.headers, 'From'),
+      ),
     });
   }
   return out;

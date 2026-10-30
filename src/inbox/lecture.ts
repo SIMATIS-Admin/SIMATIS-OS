@@ -93,6 +93,10 @@ export function mailsARepondre(
     const date = f.date ? new Date(f.date) : null;
     if (!de || de === moi.toLowerCase() || !date || Number.isNaN(date.getTime())) return [];
     if (!plusDunJourOuvre(date, maintenant)) return [];
+    // Notification, newsletter, ou message où le pilote n'est qu'en copie : rien à répondre.
+    // Sans la liste des destinataires (messagerie qui ne la donne pas), on garde le fil.
+    if (f.automatique) return [];
+    if (f.a && f.a.length > 0 && !f.a.includes(moi.toLowerCase())) return [];
     const lien = rattacher(de, a);
     return lien ? [{ ...f, lien: lienFil(f.threadId), ...lien }] : [];
   });

@@ -171,7 +171,7 @@ async function annuaire(ctx: ToolCtx): Promise<Annuaire> {
 registerTool({
   name: 'mails_sans_reponse',
   description:
-    "Fils de messagerie reçus d'un contact du CRM de l'instance (ou du domaine d'une de ses entreprises), dont le dernier message n'est pas du pilote et date de plus d'un jour ouvré. Lecture seule.",
+    "Fils de messagerie reçus d'un contact du CRM de l'instance (ou du domaine d'une de ses entreprises), dont le dernier message n'est pas du pilote et date de plus d'un jour ouvré. Les notifications, newsletters et mails où le pilote n'est qu'en copie sont écartés. Lecture seule.",
   input: z.object({ jours: z.number().int().min(1).max(60).default(14) }),
   scope: 'instance',
   handler: async (ctx, { jours }) => {

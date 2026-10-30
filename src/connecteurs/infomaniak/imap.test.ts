@@ -27,6 +27,7 @@ const message = (o: {
   date: Date;
   enReponseA?: string;
   type?: string;
+  entetes?: string[];
   corps: string;
 }) =>
   [
@@ -36,6 +37,7 @@ const message = (o: {
     `Message-ID: ${o.id}`,
     `Date: ${o.date.toUTCString().replace('GMT', '+0000')}`,
     ...(o.enReponseA ? [`In-Reply-To: ${o.enReponseA}`, `References: ${o.enReponseA}`] : []),
+    ...(o.entetes ?? []),
     'MIME-Version: 1.0',
     `Content-Type: ${o.type ?? 'text/plain'}; charset="UTF-8"`,
     '',
@@ -136,6 +138,19 @@ describe('Infomaniak mailbox over IMAP', () => {
     await imap.deposer(
       'INBOX',
       message({
+        de: 'infos@lettre.example',
+        a: BOITE.user,
+        objet: 'Lettre mensuelle',
+        id: '<m6@lettre.example>',
+        date: ilYA(2),
+        entetes: ['List-Unsubscribe: <mailto:stop@lettre.example>', 'Precedence: bulk'],
+        corps: 'Les nouveautés du mois.',
+      }),
+      ilYA(2),
+    );
+    await imap.deposer(
+      'INBOX',
+      message({
         de: paul,
         a: BOITE.user,
         objet: 'Vieux message',
@@ -188,15 +203,19 @@ describe('Infomaniak mailbox over IMAP', () => {
 
   it('groups the inbox into threads reduced to their last message, sent replies included', async () => {
     const fils = await boite().filsRecents(14);
-    expect(fils).toHaveLength(2);
-    expect(fils[0]).toMatchObject({
+    expect(fils).toHaveLength(3);
+    // A newsletter is flagged, not hidden: the Inbox rules decide.
+    expect(fils[0]).toMatchObject({ threadId: '<m6@lettre.example>', automatique: true });
+    expect(fils[1]).toMatchObject({
       threadId: '<m3@autre.example>',
       de: 'lea@autre.example',
       objet: 'Question',
       extrait: 'Bonjour Marc, avez-vous une minute ?',
+      a: [BOITE.user.toLowerCase()],
+      automatique: false,
     });
     // The pilot answered Paul: the thread's last message is his own.
-    expect(fils[1]).toMatchObject({ threadId: '<m1@client.example>', de: BOITE.user });
+    expect(fils[2]).toMatchObject({ threadId: '<m1@client.example>', de: BOITE.user });
     expect(await boite().compte()).toBe(BOITE.user);
   });
 
@@ -294,9 +313,10 @@ describe('Infomaniak mailbox over IMAP', () => {
     expect(res.json()).toMatchObject({
       compte: BOITE.user,
       jours: 14,
-      fils: 2,
+      fils: 3,
       brouillons: 2,
       derniers: [
+        { de: 'infos@lettre.example', objet: 'Lettre mensuelle' },
         { de: 'lea@autre.example', objet: 'Question' },
         { de: BOITE.user, objet: 'Re: Demande de devis' },
       ],
