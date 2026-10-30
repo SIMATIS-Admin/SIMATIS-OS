@@ -1,6 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ErreurRelais } from 'os-agents-relay';
+import {
+  ErreurRelais,
+  GARDE_FOUS,
+  LIBELLES,
+  NIVEAUX as NIVEAUX_KIT,
+  REPERES,
+} from 'os-agents-relay';
 import { z } from 'zod';
 import type { Database } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -16,11 +22,14 @@ import {
   OBJETS_CRM,
   partenaires,
   type ChampExcluable,
+  type InvitationPartenaire,
   type Partenaire,
 } from './schema.js';
 import {
   couper,
   estPorteuse,
+  invitationsEnAttente,
+  inviter,
   listerPartenaires,
   missionsRecentes,
   PartenaireRefuse,
@@ -33,7 +42,7 @@ export type PartenairesRoutesDeps = {
   secretsDir: string;
   realWrites: boolean;
   // Agents relay; null = module off (RELAIS_URL unset).
-  relais: { url: string; fetch?: typeof fetch } | null;
+  relais: { url: string; cleInscription?: string; fetch?: typeof fetch } | null;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -50,7 +59,18 @@ const vue = (p: Partenaire) => ({
   synchroAt: p.synchroAt,
 });
 
+const vueInvitation = (i: InvitationPartenaire) => ({
+  id: i.id,
+  lien: i.lien,
+  email: i.email,
+  creeeLe: i.createdAt,
+  expireLe: i.expireAt,
+});
+
 const rejoindreSchema = z.object({ lien: z.string().trim().min(1).max(500) });
+const inviterSchema = z.object({
+  email: z.preprocess((v) => (v === '' ? undefined : v), z.email().max(254).optional()),
+});
 const CLES_EXCLUABLES = CHAMPS_EXCLUABLES.map((c) => c.cle) as [
   ChampExcluable,
   ...ChampExcluable[],
@@ -102,9 +122,14 @@ export function registerPartenairesRoutes(
         porteuse: estPorteuse(i),
         ecrituresReelles: canWriteReal(i, realWrites),
         inscrit: Boolean(secrets[SECRET_NOEUD]),
+        // Inviting needs a node, or the key to register one.
+        peutInviter: Boolean(secrets[SECRET_NOEUD] || relais?.cleInscription),
         objets: OBJETS_CRM,
         champsExcluables: CHAMPS_EXCLUABLES,
+        niveaux: NIVEAUX_KIT.map((n) => ({ id: REPERES[n], libelle: LIBELLES[n] })),
+        gardeFous: GARDE_FOUS,
         partenaires: (await listerPartenaires(tx)).map(vue),
+        invitations: (await invitationsEnAttente(tx)).map(vueInvitation),
         missions: await missionsRecentes(tx, { limite: 10 }),
       }));
     }),
@@ -117,6 +142,16 @@ export function registerPartenairesRoutes(
       if (!parsed.success) return reply.code(400).send({ error: "Lien d'invitation manquant" });
       const p = await rejoindre(db, i, parsed.data.lien, relaisDeps(), 'pilote');
       return { partenaire: vue(p) };
+    }),
+  );
+
+  app.post<Rt>(
+    '/api/i/:slug/partenaires/invitations',
+    surInstance(async (i, request, reply) => {
+      const parsed = inviterSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return reply.code(400).send({ error: 'E-mail invalide' });
+      const inv = await inviter(db, i, parsed.data.email ?? null, relaisDeps(), 'pilote');
+      return { invitation: vueInvitation(inv) };
     }),
   );
 

@@ -36,7 +36,12 @@ const app = buildApp({
   realWrites: config.realWrites,
   secretsDir: config.secretsDir,
   vma: config.site && config.vmaOsToken ? { url: config.site.url, token: config.vmaOsToken } : null,
-  relais: config.relaisUrl ? { url: config.relaisUrl } : null,
+  relais: config.relaisUrl
+    ? {
+        url: config.relaisUrl,
+        ...(config.relaisCleInscription ? { cleInscription: config.relaisCleInscription } : {}),
+      }
+    : null,
   logger: { level: config.logLevel },
 });
 

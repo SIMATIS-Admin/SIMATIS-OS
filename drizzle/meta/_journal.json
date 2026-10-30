@@ -400,6 +400,13 @@
       "when": 1793366362837,
       "tag": "0056_partenaires_brique1_retrait",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1793373676625,
+      "tag": "0057_partenaires_invitations",
+      "breakpoints": true
     }
   ]
 }

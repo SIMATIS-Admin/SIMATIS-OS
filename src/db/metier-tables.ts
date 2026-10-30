@@ -13,6 +13,7 @@ import {
 import { echangesAjout, reunionsWispr, sujets } from '../inbox/schema.js';
 import {
   crmPartages,
+  invitationsPartenaires,
   messagesPartenaires,
   missions,
   partenaires,
@@ -39,6 +40,7 @@ export const METIER_TABLES = [
   relaisVus,
   relaisSorties,
   crmPartages,
+  invitationsPartenaires,
   messagesPartenaires,
   missions,
   partenaires,
