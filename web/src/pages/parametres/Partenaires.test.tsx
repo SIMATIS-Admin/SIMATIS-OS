@@ -193,7 +193,7 @@ describe('Paramètres > Partenaires', () => {
 
   it('creates an invitation and lists it as pending, with its link to copy', async () => {
     render(<Partenaires slug="client-fictif" />);
-    fireEvent.change(await screen.findByLabelText(/E-mail du partenaire/), {
+    fireEvent.change(await screen.findByLabelText(/Pour qui/), {
       target: { value: 'contact@client.example' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Inviter un partenaire' }));

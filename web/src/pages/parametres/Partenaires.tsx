@@ -112,12 +112,13 @@ function Inviter({
       <div className="panel-b stack" style={{ gap: 8 }}>
         <label className="field">
           <span>
-            E-mail du partenaire (facultatif){' '}
+            Pour qui ? (facultatif){' '}
             <Tip text="Seulement pour reconnaître l'invitation : aucun mail n'est envoyé. Transmettez vous-même le lien ; le partenaire le colle dans son OS." />
           </span>
           <input
             className="input"
             type="email"
+            placeholder="E-mail du partenaire"
             autoComplete="off"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
