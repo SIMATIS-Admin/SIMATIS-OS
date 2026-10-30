@@ -118,6 +118,14 @@ export const WISPR_OUTILS_LECTURE = [
   'mcp__claude_ai_Wispr_Flow__get_meeting_participants_enriched',
 ] as const;
 
+// Espace partagé AlpesIA × Simatis : lecture seule, pour que les messages de Christophe arrivent
+// dans l'Inbox. Le serveur MCP « partage » vient de la config utilisateur de Claude Code, que le
+// mode non strict laisse passer ; l'écriture (deposer_message, publier_document) reste refusée.
+export const PARTAGE_OUTILS_LECTURE = [
+  'mcp__partage__nouveautes_partage',
+  'mcp__partage__lire_partage',
+] as const;
+
 // Claude Code arguments of a run. Only a `cerveau` request with an existing folder gets file
 // tools, limited to that folder (a `//` rule prefix means an absolute path).
 export async function argumentsClaude(
@@ -135,7 +143,9 @@ export async function argumentsClaude(
     ...(wispr ? [] : ['--strict-mcp-config']),
     '--allowedTools',
   ];
-  const simatis = wispr ? ['mcp__simatis__*', ...WISPR_OUTILS_LECTURE] : ['mcp__simatis__*'];
+  const simatis = wispr
+    ? ['mcp__simatis__*', ...WISPR_OUTILS_LECTURE, ...PARTAGE_OUTILS_LECTURE]
+    : ['mcp__simatis__*'];
   if (!d.cerveau) return { args: ['-p', prompt(d), ...base, simatis.join(',')] };
   if (!cerveau || !(await dossierExiste(cerveau))) {
     const texte = `${prompt(d)}\nSecond cerveau non accessible sur ce poste : saute ce qui en a besoin et signale-le dans le rapport.`;
