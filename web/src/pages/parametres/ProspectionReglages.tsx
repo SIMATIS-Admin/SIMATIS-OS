@@ -20,7 +20,7 @@ const lireFichier = (f: File) =>
     lecteur.onload = () =>
       resolve({
         typeMime: f.type,
-        imageBase64: String(lecteur.result).replace(/^data:[^,]*,/, ''),
+        imageBase64: (lecteur.result as string).replace(/^data:[^,]*,/, ''),
       });
     lecteur.readAsDataURL(f);
   });

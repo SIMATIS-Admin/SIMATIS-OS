@@ -136,6 +136,7 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
       return reply
         .header('Content-Type', img.typeMime)
         .header('Cache-Control', 'private, max-age=300')
+        .header('X-Content-Type-Options', 'nosniff')
         .send(img.octets);
     },
   );

@@ -67,7 +67,7 @@ describe('Réglages de la prospection', () => {
     expect(await screen.findByText('Simatis')).toBeTruthy();
     const img = screen.getByRole('img', { name: /Simatis/ });
     expect(img.getAttribute('src')).toBe('/api/i/simatis/prospection/signatures/s1/image');
-    expect((screen.getByLabelText(/par défaut/) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>(/par défaut/).checked).toBe(true);
   });
 
   it('ajoute une signature à partir d’un fichier PNG et recharge la liste', async () => {
@@ -126,7 +126,7 @@ describe('Réglages de la prospection', () => {
     await screen.findByText('Kairos');
     fireEvent.click(screen.getByLabelText('Kairos : par défaut'));
     await waitFor(() =>
-      expect((screen.getByLabelText('Kairos : par défaut') as HTMLInputElement).checked).toBe(true),
+      expect(screen.getByLabelText<HTMLInputElement>('Kairos : par défaut').checked).toBe(true),
     );
     expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ defaut: true });
   });
