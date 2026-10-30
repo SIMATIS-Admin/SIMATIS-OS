@@ -38,6 +38,7 @@ services:
       SITE_CONTACT_URL: ${SITE_CONTACT_URL:-}
       SITE_CONTACT_TOKEN: ${SITE_CONTACT_TOKEN:-}
       VMA_OS_TOKEN: ${VMA_OS_TOKEN:-}
+      RELAIS_URL: ${RELAIS_URL:-}
       # Grille de scoring du diagnostic : copie dans secrets/ (le conteneur ne voit pas le second cerveau).
       DIAGNOSTIC_GRILLE: /app/secrets/diagnostic/grille-scoring.json
       DIAGNOSTIC_CORRESPONDANCE: /app/secrets/diagnostic/correspondance-rapport.json

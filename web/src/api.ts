@@ -377,6 +377,55 @@ export const saveReglages = (
     inst(slug, `connexions/${kind}`),
     reglages,
   );
+// Paramètres > Partenaires : OS partenaires reliés par le relais d'agents (src/partenaires).
+export type ObjetPartage = 'prospect' | 'rendez_vous' | 'affaire' | 'compte_rendu';
+export type PartenaireVue = {
+  id: string;
+  nom: string;
+  connecteDepuis: string;
+  niveau: 'L0' | 'L1' | 'L2' | 'L3';
+  partage: ObjetPartage[];
+  statut: 'active' | 'coupee';
+  coupeeAt: string | null;
+};
+export type MissionVue = {
+  id: string;
+  titre: string;
+  partenaire: string;
+  etat: string;
+  dernierMessage: string | null;
+  creeeLe: string;
+  majLe: string;
+};
+export type PartenairesReponse = {
+  actif: boolean;
+  porteuse: boolean;
+  ecrituresReelles: boolean;
+  inscrit: boolean;
+  objets: ObjetPartage[];
+  partenaires: PartenaireVue[];
+  missions: MissionVue[];
+};
+export const fetchPartenaires = (slug: string) =>
+  getJson<PartenairesReponse>(inst(slug, 'partenaires'));
+export const rejoindrePartenaire = (slug: string, lien: string) =>
+  sendJson<{ partenaire: PartenaireVue }>('POST', inst(slug, 'partenaires/rejoindre'), { lien });
+export const reglerPartenaire = (
+  slug: string,
+  id: string,
+  reglages: { niveau?: PartenaireVue['niveau']; partage?: ObjetPartage[] },
+) =>
+  sendJson<{ partenaire: PartenaireVue }>(
+    'PATCH',
+    inst(slug, `partenaires/${encodeURIComponent(id)}`),
+    reglages,
+  );
+export const couperPartenaire = (slug: string, id: string) =>
+  sendJson<{ partenaire: PartenaireVue }>(
+    'DELETE',
+    inst(slug, `partenaires/${encodeURIComponent(id)}`),
+    {},
+  );
 export const brancherHubspot = (
   slug: string,
   token: string,
@@ -520,7 +569,7 @@ export type SujetVue = {
   type: TypeSujet;
   titre: string;
   resume: string | null;
-  origine: 'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site' | 'wispr';
+  origine: 'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site' | 'wispr' | 'partenaire';
   lien: string | null;
   echeance: string | null;
   priorite: number;

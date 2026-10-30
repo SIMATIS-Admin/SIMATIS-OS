@@ -18,7 +18,16 @@ describe('loadConfig', () => {
       backupStatusFile: './backup-status/last.json',
       site: null,
       vmaOsToken: null,
+      relaisUrl: null,
     });
+  });
+
+  it('reads the agents relay URL, empty meaning unset, and refuses another scheme', () => {
+    expect(loadConfig({ ...BASE, RELAIS_URL: 'https://relais.example' }).relaisUrl).toBe(
+      'https://relais.example',
+    );
+    expect(loadConfig({ ...BASE, RELAIS_URL: '' }).relaisUrl).toBeNull();
+    expect(() => loadConfig({ ...BASE, RELAIS_URL: 'ftp://relais.example' })).toThrow(/RELAIS_URL/);
   });
 
   it('reads the Test de VMA invitation token, empty meaning unset', () => {

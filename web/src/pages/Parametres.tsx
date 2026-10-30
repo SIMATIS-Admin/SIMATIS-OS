@@ -10,6 +10,7 @@ import {
 import { Icon } from '../icons.js';
 import { libelleType, type InstanceSummary } from '../nav.js';
 import { Connexions } from './parametres/Connexions.js';
+import { Partenaires } from './parametres/Partenaires.js';
 import { RoutinesParametres } from './parametres/Routines.js';
 import { Tip } from './widgets.js';
 
@@ -162,7 +163,7 @@ export function Parametres({ slug, onRenamed }: Props) {
   const [fiche, setFiche] = useState<InstanceFiche | null>(null);
   const [nom, setNom] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [tab, setTab] = useState<'instance' | 'connexions' | 'routines'>(
+  const [tab, setTab] = useState<'instance' | 'connexions' | 'partenaires' | 'routines'>(
     location.hash.includes('google=') ? 'connexions' : 'instance',
   );
 
@@ -196,6 +197,9 @@ export function Parametres({ slug, onRenamed }: Props) {
         <button className={tab === 'connexions' ? 'on' : ''} onClick={() => setTab('connexions')}>
           Connexions
         </button>
+        <button className={tab === 'partenaires' ? 'on' : ''} onClick={() => setTab('partenaires')}>
+          Partenaires
+        </button>
         <button className={tab === 'routines' ? 'on' : ''} onClick={() => setTab('routines')}>
           Routines Claude
         </button>
@@ -209,6 +213,8 @@ export function Parametres({ slug, onRenamed }: Props) {
       </div>
       {tab === 'connexions' ? (
         <Connexions slug={slug} />
+      ) : tab === 'partenaires' ? (
+        <Partenaires slug={slug} />
       ) : tab === 'routines' ? (
         <RoutinesParametres slug={slug} onConnexions={() => setTab('connexions')} />
       ) : (

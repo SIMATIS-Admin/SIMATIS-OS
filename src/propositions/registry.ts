@@ -8,6 +8,8 @@ export type ApplyCtx = {
   reel: boolean;
   // To reach the instance's tools (Gmail, HubSpot) through connexions/service writeVia.
   deps: { secretsDir: string; realWrites: boolean };
+  // The proposal being applied and who asked for it, for modules that keep the link.
+  proposition: { id: string; auteur: string };
 };
 
 export type PropositionType<T> = {

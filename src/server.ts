@@ -4,6 +4,7 @@ import { createDb } from './db.js';
 import './connexions/index.js';
 import { startScheduler } from './connexions/service.js';
 import { startPlanification } from './routines/planification.js';
+import { startRelevePartenaires } from './partenaires/releve.js';
 import { startReleveSite } from './site/releve.js';
 import { startReleveVma } from './vma/releve.js';
 import { appDatabaseUrl, ensureAppRole, lectureRoleOf } from './db/roles.js';
@@ -35,6 +36,7 @@ const app = buildApp({
   realWrites: config.realWrites,
   secretsDir: config.secretsDir,
   vma: config.site && config.vmaOsToken ? { url: config.site.url, token: config.vmaOsToken } : null,
+  relais: config.relaisUrl ? { url: config.relaisUrl } : null,
   logger: { level: config.logLevel },
 });
 
@@ -59,6 +61,7 @@ let stopScheduler = () => {};
 let stopPlanification = () => {};
 let stopReleveSite = () => {};
 let stopReleveVma = () => {};
+let stopRelevePartenaires = () => {};
 try {
   await prepareDatabase();
   await app.listen({ host: config.host, port: config.port });
@@ -70,6 +73,19 @@ try {
   stopPlanification = startPlanification(db, {
     onError: (err) => app.log.warn({ err }, 'routine planning pass failed'),
   });
+  if (config.relaisUrl) {
+    stopRelevePartenaires = startRelevePartenaires(db, {
+      url: config.relaisUrl,
+      secretsDir: config.secretsDir,
+      realWrites: config.realWrites,
+      onResult: (bilans) => {
+        for (const b of bilans) {
+          if (b.traitees + b.envoyees + b.abandonnees > 0) app.log.info(b, 'agents relay pass');
+        }
+      },
+      onError: (err, slug) => app.log.warn({ err, slug }, 'agents relay pass failed'),
+    });
+  }
   if (config.site) {
     stopReleveSite = startReleveSite(db, {
       ...config.site,
@@ -102,6 +118,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     stopPlanification();
     stopReleveSite();
     stopReleveVma();
+    stopRelevePartenaires();
     void app
       .close()
       .then(() => pool.end())

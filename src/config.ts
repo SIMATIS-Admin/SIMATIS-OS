@@ -35,6 +35,14 @@ const schema = z.object({
   SITE_CONTACT_TOKEN: z.preprocess(vide, z.string().min(32, '32 caractères au moins').optional()),
   // Test de VMA : création et révocation des invitations sur le site. Distinct du jeton de relève.
   VMA_OS_TOKEN: z.preprocess(vide, z.string().min(32, '32 caractères au moins').optional()),
+  // Relais d'agents (os-agents-relay) : absent, le module Partenaires est éteint.
+  RELAIS_URL: z.preprocess(
+    vide,
+    z
+      .string()
+      .refine((value) => /^https?:\/\//.test(value), 'doit commencer par http:// ou https://')
+      .optional(),
+  ),
 });
 
 export type Config = {
@@ -51,6 +59,8 @@ export type Config = {
   site: { url: string; token: string } | null;
   // Jeton des invitations du Test de VMA ; null tant qu'il n'est pas configuré.
   vmaOsToken: string | null;
+  // Relais d'agents des OS partenaires ; null tant qu'il n'est pas configuré.
+  relaisUrl: string | null;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -81,5 +91,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     backupStatusFile: e.BACKUP_STATUS_FILE,
     site: siteUrl && siteToken ? { url: siteUrl, token: siteToken } : null,
     vmaOsToken: e.VMA_OS_TOKEN ?? null,
+    relaisUrl: e.RELAIS_URL ?? null,
   };
 }
