@@ -3,6 +3,7 @@ import { taches } from '../crm/schema.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
+import { contactsAConfirmer } from './froid.js';
 import { OBJECTIF_DEFAUT, prospectionOccurrences, prospectionReglages } from './schema.js';
 
 export type StatsProspection = {
@@ -93,6 +94,6 @@ export async function statsProspection(
     relancesFaites: faites.filter((f) => f.faitAt && jourDe(f.faitAt) === aujourdhui).length,
     relancesRestantes: ouvertes.filter((o) => o.echeance && jourDe(o.echeance) <= aujourdhui)
       .length,
-    aConfirmer: 0,
+    aConfirmer: (await contactsAConfirmer(tx)).length,
   };
 }

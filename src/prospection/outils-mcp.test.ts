@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
+import { baseVivante } from '../base-vivante/schema.js';
 import { contacts, taches } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
@@ -11,7 +12,8 @@ import { getInstanceBySlug } from '../instances/service.js';
 import { createToken } from '../mcp/tokens.js';
 import { creerCampagneRelance, lireCampagne, reglageParDefaut } from './campagnes.js';
 import { demarrerCampagne } from './redaction.js';
-import { CONSIGNES_REDACTION } from './outils-mcp.js';
+import { CONSIGNES_FROID, CONSIGNES_REDACTION } from './outils-mcp.js';
+import { creerCampagneFroid } from './froid.js';
 
 type TextResult = { isError?: boolean; content: { type: string; text: string }[] };
 
@@ -165,5 +167,44 @@ describe('Outils MCP de rédaction de campagne', () => {
       brouillons: [{ id: b!.id, objet: 'x', corps: '<p>x</p>' }],
     });
     expect((await call('campagne_contexte', { campagneId: id })).isError).toBe(true);
+  });
+
+  it('campagne_contexte d’une campagne à froid : consignes à froid, provenance, aucun fil, créneaux', async () => {
+    const [f] = await t.owner.db
+      .insert(baseVivante)
+      .values({
+        instanceId,
+        zone: 'prospectable',
+        entreprise: 'Atelier Fictif',
+        prenom: 'Inès',
+        nom: 'Marchand',
+        email: 'ines@fictif.test',
+        fonction: 'Gérante',
+        provenance: 'Salon fictif 2025',
+      })
+      .returning({ id: baseVivante.id });
+    const id = await withInstance(t.app.db, instanceId, async (tx) => {
+      const r = await creerCampagneFroid(tx, { baseIds: [f!.id], reglage: reglageParDefaut() });
+      await demarrerCampagne(tx, r.campagneId);
+      return r.campagneId;
+    });
+    const c = (await call('campagne_contexte', { campagneId: id })).json<{
+      consignes: string;
+      brouillons: {
+        contact: { nom: string; fonction: string };
+        provenance: string;
+        fil: unknown[];
+        creneaux: string[];
+        touche: number;
+      }[];
+    }>();
+    expect(c.consignes).toBe(CONSIGNES_FROID);
+    expect(c.brouillons[0]).toMatchObject({
+      contact: { nom: 'Inès Marchand', fonction: 'Gérante' },
+      provenance: 'Salon fictif 2025',
+      fil: [],
+      touche: 1,
+    });
+    expect(c.brouillons[0]?.creneaux).toHaveLength(3);
   });
 });

@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { configureConnexion, registerConnector } from '../connexions/service.js';
+import { baseVivante } from '../base-vivante/schema.js';
 import { contacts, entreprises, taches } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import { createInstance } from '../instances/service.js';
@@ -16,8 +17,9 @@ import {
   reglageParDefaut,
 } from './campagnes.js';
 import { finaliserCampagne, modifierBrouillon, suiviDates } from './finalisation.js';
+import { creerCampagneFroid } from './froid.js';
 import { demarrerCampagne, deposerBrouillons } from './redaction.js';
-import { prospectionOccurrences, type ReglageCampagne } from './schema.js';
+import { prospectionOccurrences, prospectionSuiviFroid, type ReglageCampagne } from './schema.js';
 import { ajouterSignature } from './signatures.js';
 
 const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(40, 3)]);
@@ -324,5 +326,176 @@ describe('Relecture et finalisation d’une campagne', () => {
       );
     expect(os).toHaveLength(1);
     expect(os[0]?.source).toBe('natif');
+  });
+});
+
+describe('Finalisation d’une campagne à froid', () => {
+  let t: TestApp;
+  let instance: Instance;
+  let secretsDir: string;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    instance = await createInstance(t.owner.db, {
+      slug: 'final-froid',
+      nom: 'Froid',
+      type: 'mandat',
+      config: { ecrituresReelles: true },
+    });
+    secretsDir = await mkdtemp(path.join(tmpdir(), 'simatis-froid-'));
+    await withInstance(t.app.db, instance.id, (tx) =>
+      configureConnexion(tx, { kind: 'messagerie', fournisseur: 'boite-test' }),
+    );
+  });
+  afterAll(async () => {
+    await t.drop();
+    await rm(secretsDir, { recursive: true, force: true });
+  });
+  const dans = <T>(fn: Parameters<typeof withInstance<T>>[2]) =>
+    withInstance(t.app.db, instance.id, fn);
+
+  async function enRelecture(
+    noms: string[],
+    reglage: ReglageCampagne = { ...reglageParDefaut(), touchesMax: 3 },
+  ) {
+    const baseIds: string[] = [];
+    for (const nom of noms) {
+      const [f] = await t.owner.db
+        .insert(baseVivante)
+        .values({
+          instanceId: instance.id,
+          zone: 'prospectable',
+          entreprise: `Atelier ${nom}`,
+          prenom: nom,
+          nom: 'Fictif',
+          email: `${nom.toLowerCase()}@fictif.test`,
+          provenance: 'Salon fictif',
+        })
+        .returning({ id: baseVivante.id });
+      baseIds.push(f!.id);
+    }
+    const campagneId = await dans(async (tx) => {
+      const r = await creerCampagneFroid(tx, { baseIds, reglage });
+      await demarrerCampagne(tx, r.campagneId);
+      const c = await lireCampagne(tx, r.campagneId);
+      await deposerBrouillons(
+        tx,
+        r.campagneId,
+        c.brouillons.map((b) => ({
+          id: b.id,
+          objet: `Objet ${b.contactNom}`,
+          corps: '<p>Bonjour,</p><p>Bien à vous,</p>',
+        })),
+      );
+      return r.campagneId;
+    });
+    return {
+      campagneId,
+      baseIds,
+      brouillons: (await dans((tx) => lireCampagne(tx, campagneId))).brouillons,
+    };
+  }
+
+  it('crée les brouillons, les occurrences à froid, le suivi des touches et des tâches de suivi dans l’OS', async () => {
+    ecrits.length = 0;
+    const { campagneId, baseIds, brouillons } = await enRelecture(['Alice', 'Bruno', 'Carole']);
+    await dans((tx) => modifierBrouillon(tx, brouillons[2]!.id, { suiviType: 'clos' }));
+    const r = await finaliserCampagne(t.app.db, instance, campagneId, {
+      secretsDir,
+      realWrites: true,
+    });
+    expect(r).toEqual({
+      brouillons: 3,
+      simulation: false,
+      suivisCrees: 2,
+      suivisNonCrees: 0,
+      clos: 1,
+      faites: 0,
+      echecs: 0,
+    });
+    expect(ecrits).toHaveLength(3);
+    expect(ecrits[0]?.data).not.toHaveProperty('threadId');
+
+    const occ = await t.owner.db
+      .select()
+      .from(prospectionOccurrences)
+      .where(eq(prospectionOccurrences.lot, campagneId));
+    expect(occ).toHaveLength(3);
+    expect(
+      occ.every(
+        (o) =>
+          o.mode === 'froid' &&
+          o.touche === 1 &&
+          o.contactId === null &&
+          baseIds.includes(o.baseId ?? ''),
+      ),
+    ).toBe(true);
+
+    const suivis = await t.owner.db
+      .select()
+      .from(prospectionSuiviFroid)
+      .where(eq(prospectionSuiviFroid.instanceId, instance.id));
+    expect(suivis).toHaveLength(3);
+    expect(
+      suivis.every((x) => x.touches === 1 && x.touchesMax === 3 && x.derniereLe !== null),
+    ).toBe(true);
+    // « Dossier clos » : Marc l'a décidé, le contact ne revient plus.
+    expect(suivis.filter((x) => x.statut === 'epuise').map((x) => x.baseId)).toEqual([baseIds[2]]);
+
+    const taches_ = await t.owner.db
+      .select()
+      .from(taches)
+      .where(eq(taches.instanceId, instance.id));
+    expect(taches_.map((x) => x.titre).sort()).toEqual([
+      'Relance à froid (MAIL), touche 2 : Alice Fictif',
+      'Relance à froid (MAIL), touche 2 : Bruno Fictif',
+    ]);
+    expect(
+      taches_.every((x) => x.source === 'natif' && x.canal === 'email' && x.echeance !== null),
+    ).toBe(true);
+  });
+
+  it('en simulation, aucune trace : ni suivi ni tâche', async () => {
+    const { campagneId, baseIds } = await enRelecture(['Denis']);
+    const r = await finaliserCampagne(t.app.db, instance, campagneId, {
+      secretsDir,
+      realWrites: false,
+    });
+    expect(r.simulation).toBe(true);
+    expect(
+      await t.owner.db
+        .select()
+        .from(prospectionSuiviFroid)
+        .where(eq(prospectionSuiviFroid.baseId, baseIds[0]!)),
+    ).toHaveLength(0);
+  });
+
+  it('une deuxième campagne ajoute une touche au même contact', async () => {
+    const { campagneId, baseIds } = await enRelecture(['Emma']);
+    await finaliserCampagne(t.app.db, instance, campagneId, { secretsDir, realWrites: true });
+    // Plus tard : la touche suivante (le délai entre touches est simulé en reculant la date).
+    await t.owner.db
+      .update(prospectionSuiviFroid)
+      .set({ derniereLe: new Date(Date.now() - 20 * 86400_000) })
+      .where(eq(prospectionSuiviFroid.baseId, baseIds[0]!));
+    const suite = await dans(async (tx) => {
+      const r = await creerCampagneFroid(tx, { baseIds, reglage: reglageParDefaut() });
+      await demarrerCampagne(tx, r.campagneId);
+      const c = await lireCampagne(tx, r.campagneId);
+      await deposerBrouillons(
+        tx,
+        r.campagneId,
+        c.brouillons.map((b) => ({ id: b.id, objet: 'Suite', corps: '<p>Bonjour,</p>' })),
+      );
+      return { id: r.campagneId, touche: c.brouillons[0]?.touche };
+    });
+    expect(suite.touche).toBe(2);
+    await finaliserCampagne(t.app.db, instance, suite.id, { secretsDir, realWrites: true });
+    const [l] = await t.owner.db
+      .select()
+      .from(prospectionSuiviFroid)
+      .where(eq(prospectionSuiviFroid.baseId, baseIds[0]!));
+    expect(l?.touches).toBe(2);
+    expect(l?.touchesMax).toBe(4);
   });
 });

@@ -13,6 +13,14 @@ import {
   tachesRelance,
 } from './campagnes.js';
 import { finaliserCampagne, modifierBrouillon } from './finalisation.js';
+import {
+  compterFroid,
+  confirmerEpuises,
+  contactsAConfirmer,
+  creerCampagneFroid,
+  echantillonFroid,
+  garderContacts,
+} from './froid.js';
 import { rapprocherInstance } from './rapprochement.js';
 import { abandonnerCampagnes, relancerCampagne } from './redaction.js';
 import {
@@ -51,12 +59,20 @@ const reglageSchema = z.object({
   }),
   touchesMax: z.number().int(),
 });
-const campagneSchema = z.object({
-  mode: z.literal('relance'),
-  tacheIds: z.array(z.uuid()).max(200),
-  reglage: reglageSchema,
-  liens: z.record(z.uuid(), z.uuid()).optional(),
-});
+const campagneSchema = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('relance'),
+    tacheIds: z.array(z.uuid()).max(200),
+    reglage: reglageSchema,
+    liens: z.record(z.uuid(), z.uuid()).optional(),
+  }),
+  z.object({
+    mode: z.literal('froid'),
+    baseIds: z.array(z.uuid()).max(200),
+    reglage: reglageSchema,
+  }),
+]);
+const idsSchema = z.object({ ids: z.array(z.uuid()).max(500) });
 const brouillonSchema = z.object({
   objet: z.string().max(300).optional(),
   corps: z.string().max(50_000).optional(),
@@ -100,6 +116,7 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
       stats: await statsProspection(tx),
       signatures: await listerSignatures(tx),
       ...(await campagnesRecentes(tx)),
+      froid: await compterFroid(tx),
     })),
   );
 
@@ -163,6 +180,36 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
       }),
   );
 
+  app.get<{ Params: { slug: string }; Querystring: { nombre?: string; filtre?: string } }>(
+    '/api/i/:slug/prospection/echantillon',
+    (request, reply) => {
+      const nombre = Math.min(100, Math.max(1, Number(request.query.nombre) || 30));
+      const filtre = request.query.filtre?.slice(0, 80);
+      return dansInstance(request.params.slug, reply, (tx) =>
+        echantillonFroid(tx, { nombre, ...(filtre ? { filtre } : {}) }),
+      );
+    },
+  );
+
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/prospection/epuises', (request, reply) =>
+    dansInstance(request.params.slug, reply, (tx) => contactsAConfirmer(tx)),
+  );
+  for (const [chemin, action] of [
+    ['confirmer', confirmerEpuises],
+    ['garder', garderContacts],
+  ] as const) {
+    app.post<{ Params: { slug: string }; Body: unknown }>(
+      `/api/i/:slug/prospection/epuises/${chemin}`,
+      (request, reply) => {
+        const p = idsSchema.safeParse(request.body);
+        if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+        return dansInstance(request.params.slug, reply, async (tx) => ({
+          modifies: await action(tx, p.data.ids),
+        }));
+      },
+    );
+  }
+
   app.get<{ Params: { slug: string } }>(
     '/api/i/:slug/prospection/taches-relance',
     (request, reply) => dansInstance(request.params.slug, reply, (tx) => tachesRelance(tx)),
@@ -173,12 +220,18 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
     async (request, reply) => {
       const p = campagneSchema.safeParse(request.body);
       if (!p.success) return invalide(reply, p.error.issues[0]?.message);
-      const r = await dansInstance(request.params.slug, reply, (tx) =>
-        creerCampagneRelance(tx, {
-          tacheIds: p.data.tacheIds,
-          reglage: p.data.reglage,
-          ...(p.data.liens ? { liens: p.data.liens } : {}),
-        }),
+      const donnees = p.data;
+      const r = await dansInstance<{ campagneId: string; refusees: { raison: string }[] }>(
+        request.params.slug,
+        reply,
+        (tx) =>
+          donnees.mode === 'froid'
+            ? creerCampagneFroid(tx, { baseIds: donnees.baseIds, reglage: donnees.reglage })
+            : creerCampagneRelance(tx, {
+                tacheIds: donnees.tacheIds,
+                reglage: donnees.reglage,
+                ...(donnees.liens ? { liens: donnees.liens } : {}),
+              }),
       );
       return reply.sent ? undefined : reply.code(201).send(r);
     },
