@@ -17,6 +17,7 @@ import {
 } from './nav.js';
 import { Inbox } from './pages/Inbox.js';
 import { Bientot } from './pages/Bientot.js';
+import { Prospection } from './pages/Prospection.js';
 import { Brief } from './pages/Brief.js';
 import { Fiche } from './pages/Fiche.js';
 import { FicheRdv } from './pages/FicheRdv.js';
@@ -206,6 +207,8 @@ export function App() {
         return <PresentationDiagnostic />;
       case 'bases':
         return <Bases key={current.slug} slug={current.slug} />;
+      case 'prospection':
+        return <Prospection key={current.slug} slug={current.slug} />;
       case 'siteweb':
         return <SiteWeb key={current.slug} slug={current.slug} />;
       case 'tableau':

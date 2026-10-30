@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchBrief, type Brief as BriefData, type Compte } from '../api.js';
 import { Icon } from '../icons.js';
+import { PanneauProspection } from './Prospection.js';
 import { Tip } from './widgets.js';
 
 const heure = (iso: string) =>
@@ -183,6 +184,9 @@ export function Brief({ slug }: { slug: string }) {
             />
           </div>
         </div>
+      </div>
+      <div style={{ marginTop: 18 }}>
+        <PanneauProspection slug={slug} />
       </div>
     </>
   );
