@@ -48,7 +48,7 @@ export function ReglageCampagne({
     set: (v: T) => void,
     libelle: string,
   ) => (
-    <label style={{ marginRight: 14 }}>
+    <label key={valeur} style={{ marginRight: 14 }}>
       <input type="radio" name={nom} checked={courant === valeur} onChange={() => set(valeur)} />{' '}
       {libelle}
     </label>

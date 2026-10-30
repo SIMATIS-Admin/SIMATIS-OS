@@ -78,7 +78,7 @@ type Etape =
 
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-export function Prospection({ slug }: { slug: string }) {
+export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | undefined }) {
   const [vue, setVue] = useState<VueProspection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [etape, setEtape] = useState<Etape>({ nom: 'accueil' });
@@ -91,6 +91,18 @@ export function Prospection({ slug }: { slug: string }) {
     fetchProspection(slug).then(setVue, (e: unknown) => setMessage(messageErreur(e)));
 
   useEffect(() => {
+    // Lien « Rédiger la réponse » de l'Inbox : la campagne s'ouvre directement.
+    if (ouvrir) {
+      fetchCampagne(slug, ouvrir).then(
+        (c) =>
+          setEtape(
+            c.statut === 'relecture'
+              ? { nom: 'relecture', campagne: c }
+              : { nom: 'attente', id: c.id },
+          ),
+        (e: unknown) => setMessage(messageErreur(e)),
+      );
+    }
     void charger();
     // Les mails que Marc a envoyés depuis sa messagerie : constatés au passage, sans bloquer l'écran.
     rapprocherEnvoisProspection(slug).then(
@@ -197,7 +209,7 @@ export function Prospection({ slug }: { slug: string }) {
           slug={slug}
           campagne={campagne}
           signatures={vue.signatures}
-          envoiPossible={vue.envoiPossible}
+          envoiPossible={vue.envoiPossible && campagne.mode !== 'reponse'}
           onTermine={(resultat) => setEtape({ nom: 'fin', campagne, resultat })}
         />
       </>

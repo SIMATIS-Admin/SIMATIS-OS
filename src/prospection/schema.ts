@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { baseVivante } from '../base-vivante/schema.js';
 import { contacts, taches } from '../crm/schema.js';
+import { sujets } from '../inbox/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
 // Prospection : une occurrence est un mail de campagne (relance de tâche ou prospection à froid).
@@ -80,7 +81,8 @@ export const prospectionReglages = pgTable(
 
 export type OccurrenceProspection = typeof prospectionOccurrences.$inferSelect;
 
-export const MODES_CAMPAGNE = ['relance', 'froid'] as const;
+// `reponse` : le brouillon de réponse à un contact qui a répondu à une campagne (depuis l'Inbox).
+export const MODES_CAMPAGNE = ['relance', 'froid', 'reponse'] as const;
 export const STATUTS_CAMPAGNE = ['redaction', 'relecture', 'terminee', 'erreur'] as const;
 export const ETATS_BROUILLON = ['a_rediger', 'pret', 'a_verifier', 'ecarte', 'cree'] as const;
 export const SUIVIS_BROUILLON = ['delai', 'citee', 'clos'] as const;
@@ -142,6 +144,8 @@ export const prospectionBrouillons = pgTable(
     tacheId: uuid('tache_id').references(() => taches.id, { onDelete: 'set null' }),
     contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
     baseId: uuid('base_id').references(() => baseVivante.id, { onDelete: 'set null' }),
+    // Réponse à un contact : l'entrée de l'Inbox d'où part le brouillon.
+    sujetId: uuid('sujet_id').references(() => sujets.id, { onDelete: 'set null' }),
     contactNom: text('contact_nom').notNull(),
     contactEmail: text('contact_email').notNull(),
     societe: text('societe'),
@@ -164,7 +168,8 @@ export const prospectionBrouillons = pgTable(
 export type Campagne = typeof prospectionCampagnes.$inferSelect;
 export type Brouillon = typeof prospectionBrouillons.$inferSelect;
 
-export const STATUTS_FROID = ['actif', 'epuise'] as const;
+// `repondu` : le contact a répondu, il quitte la séquence.
+export const STATUTS_FROID = ['actif', 'epuise', 'repondu'] as const;
 export type StatutFroid = (typeof STATUTS_FROID)[number];
 
 // Où en est chaque contact de la base vivante dans la prospection à froid : nombre de touches

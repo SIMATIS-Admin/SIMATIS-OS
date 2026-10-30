@@ -271,7 +271,9 @@ export function Relecture({
           disabled={enCours || aVerifier > 0 || prets === 0}
           onClick={() => void finaliser('brouillons')}
         >
-          Créer les {prets} {prets > 1 ? 'brouillons' : 'brouillon'} dans la messagerie
+          {campagne.mode === 'reponse'
+            ? 'Créer le brouillon de réponse dans la messagerie'
+            : `Créer les ${prets} ${prets > 1 ? 'brouillons' : 'brouillon'} dans la messagerie`}
         </button>
         {envoiPossible ? (
           confirmerEnvoi ? (

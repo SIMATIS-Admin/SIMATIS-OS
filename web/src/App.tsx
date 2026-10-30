@@ -208,7 +208,13 @@ export function App() {
       case 'bases':
         return <Bases key={current.slug} slug={current.slug} />;
       case 'prospection':
-        return <Prospection key={current.slug} slug={current.slug} />;
+        return (
+          <Prospection
+            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            slug={current.slug}
+            ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+          />
+        );
       case 'siteweb':
         return <SiteWeb key={current.slug} slug={current.slug} />;
       case 'tableau':
