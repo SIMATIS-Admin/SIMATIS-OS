@@ -1,6 +1,6 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
+import { contenuRapportFictif, contenuRapportFictifV3 } from './fixtures/rapport-fictif.js';
 import { contenuRapportSchema, genererRapportWord } from './rapport-word.js';
 
 const ouvrir = (contenu = contenuRapportFictif) =>
@@ -63,6 +63,74 @@ describe('Rapport Word', () => {
       plan: { ...contenuRapportFictif.plan, nePasFaire: [] },
     };
     expect(strFromU8(ouvrir(contenu)['word/document.xml']!)).not.toContain('ne fera pas');
+  });
+
+  describe('structure v3', () => {
+    const doc = () => strFromU8(ouvrir(contenuRapportFictifV3)['word/document.xml']!);
+
+    it('range les nouveaux blocs dans l ordre du rapport', () => {
+      const d = doc();
+      const ordre = [
+        'Résultats du diagnostic',
+        'THÈME',
+        'Préconisations',
+        'DÉMARRAGE',
+        'Plan d’action commercial',
+        'RÉSULTAT ATTENDU',
+        'Les indicateurs à suivre',
+        'Les conditions de réussite',
+        'Conclusion et prochaine étape',
+        'Mon intervention',
+        'Qui fait quoi',
+        'Bien à vous,',
+        'Pour aller plus loin',
+        'A. Suivre les devis',
+        'B. Trier les demandes',
+      ].map((t) => d.indexOf(t));
+      expect(
+        ordre.every((n) => n >= 0),
+        ordre.join(),
+      ).toBe(true);
+      expect([...ordre].sort((a, b) => a - b)).toEqual(ordre);
+    });
+
+    it('fait varier les colonnes du tableau d actions selon les champs renseignés', () => {
+      const d = doc();
+      // Horizon 1 : quand + action + résultat ; horizon 3 : bloc + action seulement.
+      expect(d).toContain('>QUAND<');
+      expect(d).toContain('>BLOC DE LA MÉTHODE<');
+      expect(d.match(/>RÉSULTAT ATTENDU</g)).toHaveLength(2);
+    });
+
+    it('met en tableau les thèmes en nombre libre et les tableaux des blocs', () => {
+      const d = doc();
+      expect(d).toContain('Fichier de prospects');
+      expect(d).toContain('>INTERVENANT<');
+      expect(d).toContain('>LA QUESTION À SE POSER<');
+    });
+
+    it('omet récapitulatif, conditions, blocs et annexes quand ils ne sont pas renseignés', () => {
+      const d = strFromU8(ouvrir()['word/document.xml']!);
+      for (const t of ['DÉMARRAGE', 'Les conditions de réussite', 'Pour aller plus loin'])
+        expect(d, t).not.toContain(t);
+    });
+
+    it('relit un rapport enregistré avant ces blocs (sans les nouveaux champs)', () => {
+      const ancien = JSON.parse(JSON.stringify(contenuRapportFictif)) as Record<string, unknown>;
+      const plan = ancien.plan as Record<string, unknown>;
+      delete plan.conditions;
+      delete (ancien.conclusion as Record<string, unknown>).blocs;
+      delete ancien.annexes;
+      const lu = contenuRapportSchema.safeParse(ancien);
+      expect(lu.success).toBe(true);
+      if (lu.success) expect(lu.data.annexes).toEqual([]);
+    });
+
+    it('refuse un tableau dont une ligne n a pas autant de cellules que d en-têtes', () => {
+      const mauvais = structuredClone(contenuRapportFictifV3);
+      mauvais.annexes[1]!.tableau!.lignes = [['Budget', 'Une seule cellule de trop']];
+      expect(contenuRapportSchema.safeParse(mauvais).success).toBe(false);
+    });
   });
 
   it('refuse un contenu incomplet', () => {

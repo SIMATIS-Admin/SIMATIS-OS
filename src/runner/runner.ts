@@ -606,7 +606,7 @@ export const promptRapport = (a: AttenteDiag, cerveau: string | null, maintenant
       ? consigneCerveau(cerveau, 'lecture')
       : 'Second cerveau non accessible sur ce poste : saute ce qui en a besoin et dis-le au pilote.',
     'Format de sortie pour cette demande : ni formulaire, ni artifact, ni fichier. Les étapes de la skill qui en parlent ne s’appliquent pas ici.',
-    `Tâche : rédige le rapport complet, puis appelle une seule fois enregistrer_rapport avec projetId ${a.id} et le contenu structuré (dimensions notées sur 10, profil de la cascade, trois horizons de plan d'action sur la trame en sept blocs). Rien n'est inventé : un fait absent des données se laisse de côté.`,
+    `Tâche : rédige le rapport complet, puis appelle une seule fois enregistrer_rapport avec projetId ${a.id} et le contenu structuré (dimensions et thèmes notés sur 10, profil de la cascade, trois horizons de plan d'action sur la trame en sept blocs). Renseigne les blocs facultatifs quand les données s'y prêtent : « potentiel » de chaque préconisation (tableau récapitulatif), « quand » et « résultat attendu » des actions, conditions de réussite, blocs de suite de la proposition (intervention, rôles, premier cycle) et annexes « Pour aller plus loin » (une par sujet approfondi). Si le rapport précédent a de tels blocs, garde-les. Rien n'est inventé : un fait absent des données se laisse de côté.`,
     `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : un résumé en quelques phrases et les points à relire, puis arrête-toi. Vouvoie le pilote, en français.`,
   ].join('\n');
 };
