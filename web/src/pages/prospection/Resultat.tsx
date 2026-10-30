@@ -6,7 +6,7 @@ export function Resultat({
   onRetour,
   onRevenir,
 }: {
-  mode?: 'relance' | 'froid';
+  mode?: 'relance' | 'froid' | 'reponse';
   resultat: ResultatCampagne;
   onRetour: () => void;
   onRevenir: () => void;
@@ -61,7 +61,7 @@ export function Resultat({
               <td>Dossiers clos (sans suivi)</td>
               <td className="r num">{resultat.clos}</td>
             </tr>
-            {mode === 'relance' && (
+            {mode !== 'froid' && (
               <tr>
                 <td>Tâches de relance marquées faites</td>
                 <td className="r num">{resultat.faites}</td>

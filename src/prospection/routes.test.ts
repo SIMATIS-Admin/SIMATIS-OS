@@ -8,6 +8,8 @@ import { buildApp } from '../app.js';
 import { contacts, entreprises, taches } from '../crm/schema.js';
 import { configureConnexion, registerConnector } from '../connexions/service.js';
 import { withInstance } from '../db/context.js';
+import { sujets } from '../inbox/schema.js';
+import { prospectionOccurrences } from './schema.js';
 import { createInstance } from '../instances/service.js';
 import { demarrerCampagne, deposerBrouillons } from './redaction.js';
 import type { CampagneVue } from './campagnes.js';
@@ -485,6 +487,75 @@ describe('Routes de la prospection', () => {
         payload: { ids: ['pas-un-id'] },
       });
       expect(mauvais.statusCode).toBe(400);
+    });
+  });
+
+  describe('réponse à une campagne (Inbox)', () => {
+    it('reconnaît l’entrée liée à un mail de campagne et crée le brouillon de réponse', async () => {
+      const [c] = await t.owner.db
+        .insert(contacts)
+        .values({ instanceId, nom: 'Valérie Joly', email: 'valerie@exemple.test' })
+        .returning({ id: contacts.id });
+      await t.owner.db
+        .insert(prospectionOccurrences)
+        .values({
+          instanceId,
+          mode: 'relance',
+          contactId: c!.id,
+          contactNom: 'Valérie Joly',
+          theme: 'Test de VMA',
+          touche: 2,
+          etat: 'envoye',
+          envoyeAt: new Date(),
+          threadId: 'ab12cd34ef56ab78',
+        });
+      const [su] = await t.owner.db
+        .insert(sujets)
+        .values({
+          instanceId,
+          type: 'mail_a_repondre',
+          titre: 'Réponse',
+          origine: 'messagerie',
+          source: 'routine',
+          sourceId: 'ab12cd34ef56ab78',
+        })
+        .returning({ id: sujets.id });
+      const lire = await app.inject({ method: 'GET', url: `${base}/reponses/${su!.id}` });
+      expect(lire.json<{ reponse: { contactNom: string } | null }>().reponse).toMatchObject({
+        contactNom: 'Valérie Joly',
+        touche: 2,
+      });
+      const cree = await app.inject({ method: 'POST', url: `${base}/reponses/${su!.id}/rediger` });
+      expect(cree.statusCode).toBe(200);
+      const camp = (
+        await app.inject({
+          method: 'GET',
+          url: `${base}/campagnes/${cree.json<{ campagneId: string }>().campagneId}`,
+        })
+      ).json<CampagneVue>();
+      expect(camp.mode).toBe('reponse');
+      expect(camp.reglage.signatureId).toBeNull();
+    });
+
+    it('ne reconnaît rien pour une entrée sans campagne, et refuse de rédiger', async () => {
+      const [su] = await t.owner.db
+        .insert(sujets)
+        .values({
+          instanceId,
+          type: 'mail_a_repondre',
+          titre: 'Autre',
+          origine: 'messagerie',
+          source: 'routine',
+          sourceId: 'zz-inconnu-0000',
+        })
+        .returning({ id: sujets.id });
+      expect(
+        (await app.inject({ method: 'GET', url: `${base}/reponses/${su!.id}` })).json(),
+      ).toEqual({ reponse: null });
+      expect(
+        (await app.inject({ method: 'POST', url: `${base}/reponses/${su!.id}/rediger` }))
+          .statusCode,
+      ).toBe(400);
     });
   });
 });

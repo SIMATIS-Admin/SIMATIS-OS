@@ -561,6 +561,25 @@ describe('Contacts épuisés', () => {
   });
 });
 
+describe('Réponse ouverte depuis l’Inbox', () => {
+  it('ouvre directement la campagne de réponse en relecture, sans envoi direct', async () => {
+    campagne = { ...campagne, mode: 'reponse', brouillons: [brouillon('b1', 'Alice')] };
+    vue.envoiPossible = true;
+    render(<Prospection slug="simatis" ouvrir="c1" />);
+    expect(await screen.findByText('Objet : Re: Alice')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Créer le brouillon de réponse dans la messagerie' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Valider et envoyer/ })).toBeNull();
+  });
+
+  it('attend la rédaction quand la campagne ouverte n’est pas encore prête', async () => {
+    campagne.statut = 'redaction';
+    render(<Prospection slug="simatis" ouvrir="c1" />);
+    expect(await screen.findByText(/Claude rédige les brouillons/)).toBeTruthy();
+  });
+});
+
 describe('Valider et envoyer', () => {
   async function relecture() {
     campagne.brouillons = [brouillon('b1', 'Alice')];

@@ -9,6 +9,7 @@ import {
   CampagneIntrouvable,
   CampagneInvalide,
   campagnesRecentes,
+  reglageParDefaut,
   creerCampagneRelance,
   lireCampagne,
   tachesRelance,
@@ -23,6 +24,7 @@ import {
   garderContacts,
 } from './froid.js';
 import { rapprocherInstance } from './rapprochement.js';
+import { creerCampagneReponse, reponseDeSujet } from './reponses.js';
 import { abandonnerCampagnes, relancerCampagne } from './redaction.js';
 import {
   ajouterSignature,
@@ -215,6 +217,26 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
       },
     );
   }
+
+  // L'entrée de l'Inbox répond-elle à une campagne ? Et, si oui, brouillon de réponse.
+  app.get<{ Params: { slug: string; sujetId: string } }>(
+    '/api/i/:slug/prospection/reponses/:sujetId',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, async (tx) => ({
+        reponse: await reponseDeSujet(tx, request.params.sujetId),
+      })),
+  );
+  app.post<{ Params: { slug: string; sujetId: string } }>(
+    '/api/i/:slug/prospection/reponses/:sujetId/rediger',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, (tx) =>
+        // Signature : aucune, Marc signe lui-même ; l'offre n'a pas de rôle pour une réponse.
+        creerCampagneReponse(tx, {
+          sujetId: request.params.sujetId,
+          reglage: { ...reglageParDefaut(), signatureId: null },
+        }),
+      ),
+  );
 
   app.get<{ Params: { slug: string } }>(
     '/api/i/:slug/prospection/taches-relance',

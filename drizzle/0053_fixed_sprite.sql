@@ -1,0 +1,2 @@
+ALTER TABLE "prospection_brouillons" ADD COLUMN "sujet_id" uuid;--> statement-breakpoint
+ALTER TABLE "prospection_brouillons" ADD CONSTRAINT "prospection_brouillons_sujet_id_sujets_id_fk" FOREIGN KEY ("sujet_id") REFERENCES "public"."sujets"("id") ON DELETE set null ON UPDATE no action;
