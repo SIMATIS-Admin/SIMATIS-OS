@@ -141,7 +141,11 @@ function Partenaire({
           <div className="small muted">
             {coupee && p.coupeeAt
               ? `Connexion coupée le ${date(p.coupeeAt)}`
-              : `Connecté depuis le ${date(p.connecteDepuis)}`}
+              : `Connecté depuis le ${date(p.connecteDepuis)}${
+                  p.synchroAt
+                    ? ` · suivi commercial à jour le ${new Date(p.synchroAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}`
+                    : ''
+                }`}
           </div>
         </div>
         <span className={`badge ${coupee ? 'red' : 'green'}`}>

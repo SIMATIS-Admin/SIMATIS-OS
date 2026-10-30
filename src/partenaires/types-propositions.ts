@@ -1,10 +1,16 @@
-import { deposer, lireMission, mission } from 'os-agents-relay';
+import { deposer, lireMission, messageLibre, mission } from 'os-agents-relay';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import type { Kind } from '../crm/fiches.js';
+import { ecrireHubspot, ligne, viaHubspot } from '../crm/liens.js';
+import { activites, rendezVous, taches } from '../crm/schema.js';
+import { supprimerLocalement, verifierSansBloquant } from '../crm/suppression.js';
+import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
+import { sujets } from '../inbox/schema.js';
 import { logEvent } from '../journal/service.js';
 import { registerPropositionType } from '../propositions/registry.js';
-import { messageLibre } from './messages.js';
-import { messagesPartenaires, missions, TYPES_MESSAGE } from './schema.js';
+import { crmPartages, messagesPartenaires, missions, OBJETS_CRM, TYPES_MESSAGE } from './schema.js';
 import { missionRecue, PartenaireRefuse, partenaireActif, repondreMission } from './service.js';
 import { stockageTx } from './stockage.js';
 
@@ -92,7 +98,7 @@ registerPropositionType({
   },
 });
 
-const enAttente = async (tx: Parameters<typeof missionRecue>[0], id: string) => {
+const enAttente = async (tx: Tx, id: string) => {
   const m = await missionRecue(tx, id);
   if (m.etat !== 'submitted') throw new PartenaireRefuse(`Mission déjà traitée (${m.etat}).`);
   return m;
@@ -152,7 +158,12 @@ registerPropositionType({
   schema: messagePartenaire,
   apply: async (tx, c, ctx) => {
     const p = await partenaireActif(tx, c.partenaireId);
-    const m = messageLibre(c);
+    const m = messageLibre({
+      type: c.type,
+      sujet: c.sujet,
+      texte: c.texte,
+      ...(c.enReponseA ? { en_reponse_a: c.enReponseA } : {}),
+    });
     const sortie = ctx.reel
       ? await deposer({
           stockage: stockageTx(tx),
@@ -180,5 +191,80 @@ registerPropositionType({
       details: { message: m.messageId, ...(sortie ? { enveloppe: sortie.id } : {}) },
     });
     return { message: m.messageId, ...(ctx.reel ? {} : { simulation: true }) };
+  },
+});
+
+// A record the partner deleted: never deleted here alone (fixed safeguard). Validated by Marc, it
+// is deleted like from its page (in HubSpot first for a HubSpot record); set aside, it stays here,
+// out of the share.
+export const suppressionPartenaire = z.object({
+  partenaireId: z.uuid(),
+  objet: z.enum(OBJETS_CRM),
+  localId: z.uuid(),
+  titre: z.string().max(400),
+});
+
+const FICHES: Partial<Record<(typeof OBJETS_CRM)[number], Kind>> = {
+  entreprise: 'entreprise',
+  contact: 'contact',
+  affaire: 'affaire',
+};
+
+registerPropositionType({
+  type: 'partenaire.suppression',
+  action: 'partenaire',
+  schema: suppressionPartenaire,
+  apply: async (tx, c, ctx) => {
+    const kind = FICHES[c.objet];
+    if (kind) {
+      const ref = { kind, id: c.localId };
+      const l = await ligne(tx, kind, c.localId);
+      if (!l) throw new PartenaireRefuse('Fiche déjà supprimée.');
+      await verifierSansBloquant(tx, ref);
+      if (await viaHubspot(tx, l, l)) {
+        const simulation = await ecrireHubspot(
+          tx,
+          ctx.instance,
+          'record.archive',
+          { kind, id: c.localId },
+          ctx.deps,
+        );
+        if (simulation) return { simulation: true };
+      }
+      await supprimerLocalement(tx, ref);
+    } else {
+      const t = { tache: taches, rendez_vous: rendezVous, activite: activites }[
+        c.objet as 'tache' | 'rendez_vous' | 'activite'
+      ];
+      const [row] = await tx
+        .select({ source: t.source })
+        .from(t)
+        .where(and(eq(t.instanceId, currentInstance), eq(t.id, c.localId)));
+      if (!row) throw new PartenaireRefuse('Fiche déjà supprimée.');
+      if (row.source === 'hubspot') {
+        throw new PartenaireRefuse('Tâche copiée de HubSpot : à supprimer dans HubSpot.');
+      }
+      if (c.objet === 'tache')
+        await tx
+          .update(sujets)
+          .set({ tacheId: null })
+          .where(and(eq(sujets.instanceId, currentInstance), eq(sujets.tacheId, c.localId)));
+      await tx.delete(t).where(and(eq(t.instanceId, currentInstance), eq(t.id, c.localId)));
+    }
+    await tx
+      .delete(crmPartages)
+      .where(
+        and(
+          eq(crmPartages.instanceId, currentInstance),
+          eq(crmPartages.partenaireId, c.partenaireId),
+          eq(crmPartages.localId, c.localId),
+        ),
+      );
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: `Fiche supprimée après sa suppression chez un partenaire (${c.objet})`,
+      niveau: 'L1',
+    });
+    return { supprimee: c.localId };
   },
 });

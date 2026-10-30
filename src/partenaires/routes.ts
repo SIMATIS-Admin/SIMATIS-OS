@@ -47,6 +47,7 @@ const vue = (p: Partenaire) => ({
   voit: p.voit,
   statut: p.statut,
   coupeeAt: p.coupeeAt,
+  synchroAt: p.synchroAt,
 });
 
 const rejoindreSchema = z.object({ lien: z.string().trim().min(1).max(500) });

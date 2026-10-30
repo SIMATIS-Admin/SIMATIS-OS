@@ -83,4 +83,28 @@ describe('Inbox : proposition pour un OS partenaire', () => {
     fireEvent.click(screen.getByText('Refuser'));
     expect(onDecide).toHaveBeenLastCalledWith('ecarter');
   });
+
+  it('asks before deleting here a record the partner deleted', () => {
+    const onDecide = vi.fn();
+    render(
+      <PropositionDetail
+        p={{
+          ...base,
+          niveau: 'L1',
+          auteur: 'partenaire:connexion-fictive',
+          type: 'partenaire.suppression',
+          contenu: {
+            objet: 'affaire',
+            titre:
+              'Affaire « Diagnostic fictif » supprimée chez Alpes OS : la supprimer ici aussi ?',
+          },
+        }}
+        onDecide={onDecide}
+      />,
+    );
+    fireEvent.click(screen.getByText('Garder ici'));
+    expect(onDecide).toHaveBeenCalledWith('ecarter');
+    fireEvent.click(screen.getByText('Supprimer ici aussi'));
+    expect(onDecide).toHaveBeenLastCalledWith('valider', undefined);
+  });
 });

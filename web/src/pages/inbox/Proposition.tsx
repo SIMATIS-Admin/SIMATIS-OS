@@ -13,6 +13,7 @@ const TYPE_LIBELLE: Record<string, string> = {
   'partenaire.mission_recue': 'Mission reçue',
   'partenaire.reponse': 'Réponse à un partenaire',
   'partenaire.message': 'Message partenaire',
+  'partenaire.suppression': 'Suppression chez un partenaire',
 };
 const NIVEAU_TIP = (n: string) =>
   `Niveau d'autonomie de l'OS pour cette action (${n}). Il va de L0, l'OS suggère seulement, à L3, l'OS agit seul. Plus il y a de barres colorées, plus l'OS peut agir sans vous.`;
@@ -209,9 +210,11 @@ export function PropositionDetail({
                     ? 'Transmettre le devis'
                     : p.type === 'partenaire.mission_recue'
                       ? 'Accepter la mission'
-                      : p.type.startsWith('partenaire.')
-                        ? 'Envoyer au partenaire'
-                        : 'Enregistrer en brouillon'}
+                      : p.type === 'partenaire.suppression'
+                        ? 'Supprimer ici aussi'
+                        : p.type.startsWith('partenaire.')
+                          ? 'Envoyer au partenaire'
+                          : 'Enregistrer en brouillon'}
             </button>
             {p.type === 'email.brouillon' && (
               <button className="btn" onClick={() => setEdition(!edition)}>
@@ -220,7 +223,11 @@ export function PropositionDetail({
               </button>
             )}
             <button className="btn ghost danger" onClick={() => onDecide('ecarter')}>
-              {p.type === 'partenaire.mission_recue' ? 'Refuser' : 'Écarter'}
+              {p.type === 'partenaire.mission_recue'
+                ? 'Refuser'
+                : p.type === 'partenaire.suppression'
+                  ? 'Garder ici'
+                  : 'Écarter'}
             </button>
             <span className="hint">
               {p.type === 'email.brouillon'
@@ -229,9 +236,11 @@ export function PropositionDetail({
                   ? "La tâche sera créée dans l'outil du mandat et tracée dans le journal."
                   : p.type === 'partenaire.mission_recue'
                     ? 'Le partenaire est prévenu de votre réponse. Une fois acceptée, la mission se traite avec les outils habituels.'
-                    : p.type.startsWith('partenaire.')
-                      ? "Le partenaire reçoit ce contenu tel quel, par le relais d'agents."
-                      : "L'OS n'écrit jamais une note validée : vous la relirez dans le second cerveau."}
+                    : p.type === 'partenaire.suppression'
+                      ? 'Gardée, la fiche reste ici et ne se synchronise plus avec ce partenaire.'
+                      : p.type.startsWith('partenaire.')
+                        ? "Le partenaire reçoit ce contenu tel quel, par le relais d'agents."
+                        : "L'OS n'écrit jamais une note validée : vous la relirez dans le second cerveau."}
             </span>
           </div>
         )}

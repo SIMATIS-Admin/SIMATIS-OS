@@ -80,7 +80,7 @@ export async function supprimerLocalement(tx: Tx, ref: Ref): Promise<void> {
   await tx.delete(t).where(and(eq(t.instanceId, currentInstance), eq(t.id, ref.id)));
 }
 
-async function verifierSansBloquant(tx: Tx, ref: Ref) {
+export async function verifierSansBloquant(tx: Tx, ref: Ref) {
   for (const r of REFERENCES.filter((x) => x.kind === ref.kind && x.bloquant)) {
     const { rows } = await tx.execute<{ n: number }>(
       sql`select count(*)::int as n from ${colonne(r.table)} where ${colonne(r.colonne)} = ${ref.id} and instance_id = ${currentInstance}`,

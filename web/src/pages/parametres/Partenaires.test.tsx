@@ -56,6 +56,7 @@ const alpes = {
   },
   statut: 'active',
   coupeeAt: null,
+  synchroAt: null,
 };
 
 function fakeFetch(url: string, init?: { method?: string; body?: string }) {

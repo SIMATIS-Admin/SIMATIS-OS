@@ -7,7 +7,9 @@ import {
   creerClient,
   etat,
   lireEtat,
+  lireMessageLibre,
   lireMission,
+  messageLibre,
   mission as nouvelleMission,
   note,
   relaisSimule,
@@ -27,7 +29,6 @@ import { propositions } from '../propositions/schema.js';
 import { decide, propose } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { tourPartenaires } from './releve.js';
-import { lireMessageLibre, messageLibre } from './messages.js';
 import { messagesPartenaires, missions, partenaires, relaisSorties } from './schema.js';
 import { traiterEnveloppe, type RelaisDeps } from './service.js';
 import './types-propositions.js';
@@ -98,11 +99,12 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
     return decidee.resultat as { mission: string; etat: string; titre: string };
   };
 
-  // What Alpes OS does: pick up its mailbox and acknowledge.
+  // What Alpes OS does: pick up its mailbox and acknowledge. The CRM sync (synchro.test.ts) is
+  // left out here.
   const releverAlpes = async () => {
     const { enveloppes } = await alpes.boite();
     if (enveloppes.length) await alpes.acquitter(enveloppes.map((e) => e.id));
-    return enveloppes;
+    return enveloppes.filter((e) => e.type !== 'donnee');
   };
 
   beforeAll(async () => {
@@ -598,7 +600,7 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
       type: 'reponse',
       sujet: 'Re : atelier fictif',
       texte: 'Très bien, *merci*.',
-      enReponseA: question.messageId,
+      en_reponse_a: question.messageId,
     });
     const traces = await withInstance(t.app.db, client.id, (tx) =>
       tx.select().from(messagesPartenaires).orderBy(messagesPartenaires.createdAt),

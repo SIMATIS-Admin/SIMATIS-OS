@@ -8,6 +8,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { EtatEchange } from 'os-agents-relay';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import { propositions } from '../propositions/schema.js';
 
@@ -132,6 +133,7 @@ export const missions = pgTable(
 
 export type MissionPartenaire = typeof missions.$inferSelect;
 
+// Types of a free message (kit, messageLibre).
 export const TYPES_MESSAGE = ['question', 'reponse', 'info'] as const;
 export type TypeMessage = (typeof TYPES_MESSAGE)[number];
 
@@ -167,15 +169,11 @@ export type MessagePartenaire = typeof messagesPartenaires.$inferSelect;
 export const OBJETS_SYNCHRO = ['pipeline', ...OBJETS_CRM] as const;
 export type ObjetSynchro = (typeof OBJETS_SYNCHRO)[number];
 
-// Last state exchanged with a partner, per shared record: what was sent or received last. A change
-// is what differs from it, so a received change (written here too) never goes back.
-// `ref` is the record's reference in the CRM profile: `<origin node>/<local id>`. `detacheAt`: the
-// record left the share (deleted on one side): it no longer syncs.
-export type EtatEchange = {
-  champs: Record<string, unknown>;
-  liens: Record<string, string[]>;
-  modifieLe: string;
-};
+// Last state exchanged with a partner, per shared record (kit EtatEchange: fields, links and the
+// date of each): what was sent or received last. A change is what differs from it, so a received
+// change (written here too) never goes back. `ref` is the record's reference in the CRM profile:
+// `<origin node>/<local id>`. `detacheAt`: the record left the share (deleted on the other side,
+// Marc decides): it no longer syncs.
 export const crmPartages = pgTable(
   'crm_partages',
   {

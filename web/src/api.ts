@@ -388,6 +388,7 @@ export type PartenaireVue = {
   voit: Voit;
   statut: 'active' | 'coupee';
   coupeeAt: string | null;
+  synchroAt: string | null;
 };
 export type MissionVue = {
   id: string;

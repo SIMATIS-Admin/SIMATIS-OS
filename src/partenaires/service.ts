@@ -7,6 +7,7 @@ import {
   etat as etatMission,
   ETATS_FINAUX,
   lireEtat,
+  lireMessageLibre,
   lireMission,
   lireNote,
   niveauDepuisRepere,
@@ -28,8 +29,8 @@ import type { Instance, InstanceType } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { canWriteReal, propose } from '../propositions/service.js';
 import { loadInstanceSecrets, writeInstanceSecret } from '../secrets.js';
-import { lireMessageLibre } from './messages.js';
 import { marquerVu, stockageTx } from './stockage.js';
+import { recevoirDonnees } from './synchro.js';
 import {
   messagesPartenaires,
   missions,
@@ -54,8 +55,9 @@ export type RelaisDeps = {
   fetch?: typeof fetch;
 };
 
-// What processing a received envelope needs: answering goes through the double lock.
-export type ReceptionDeps = { secretsDir: string; realWrites: boolean };
+// What processing a received envelope needs: answering goes through the double lock; `noeud`
+// (this instance's relay node) recognizes our own records in the references of the CRM profile.
+export type ReceptionDeps = { secretsDir: string; realWrites: boolean; noeud?: string };
 
 export class PartenaireRefuse extends Error {}
 
@@ -535,7 +537,16 @@ async function recevoirMission(
 
 // A free message (no mission): kept, and a subject of the Inbox. A question comes first.
 async function recevoirMessageLibre(tx: Tx, env: Enveloppe, p: Partenaire): Promise<void> {
-  const lu = lireMessageLibre(env.corps as Message);
+  const n = env.corps as Message;
+  // A plain note from an OS without free messages still reads as an info.
+  const texte = lireNote(n).texte;
+  const lu = lireMessageLibre(n) ?? {
+    id: n.messageId,
+    type: 'info' as const,
+    sujet: texte.split('\n')[0]?.trim().slice(0, 160) || '(sans sujet)',
+    texte,
+    en_reponse_a: null,
+  };
   await tx
     .insert(messagesPartenaires)
     .values({
@@ -546,7 +557,7 @@ async function recevoirMessageLibre(tx: Tx, env: Enveloppe, p: Partenaire): Prom
       type: lu.type,
       sujet: lu.sujet,
       texte: lu.texte,
-      enReponseA: lu.enReponseA,
+      enReponseA: lu.en_reponse_a,
     })
     .onConflictDoNothing();
   await logEvent(tx, {
@@ -655,7 +666,8 @@ async function recevoirConnexion(tx: Tx, env: Enveloppe): Promise<void> {
   await deposerSujet(tx, {
     type: 'autre',
     titre: `Connexion coupée par ${nomCourt(p.nom)}`,
-    resume: 'Plus aucune mission ni donnée ne part vers ce partenaire.',
+    resume:
+      'Plus rien ne part vers ce partenaire. Rien n’est effacé : les fiches reçues de lui restent ici, à trier si besoin.',
     origine: 'partenaire',
     source: 'relais',
     sourceId: env.id,
@@ -684,10 +696,21 @@ export async function traiterEnveloppe(
       case 'mission':
         await recevoirMission(tx, instance, env, deps);
         break;
+      case 'donnee': {
+        const p = await partenaireDe(tx, env.connexion);
+        if (p?.statut === 'active') await recevoirDonnees(tx, instance, env, p, deps);
+        else
+          await logEvent(tx, {
+            acteur: 'relais',
+            action: 'Suivi commercial ignoré : connexion inconnue ou coupée',
+            details: { enveloppe: env.id },
+          });
+        break;
+      }
       default:
         await logEvent(tx, {
           acteur: 'relais',
-          action: `Partenaire : ${env.type} reçue, non prise en charge`,
+          action: `Partenaire : ${String(env.type)} reçue, non prise en charge`,
           details: { enveloppe: env.id },
         });
     }
