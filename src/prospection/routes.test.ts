@@ -265,6 +265,28 @@ describe('Routes de la prospection', () => {
       expect(vueProspection.enCours).toBe(campagneId);
     });
 
+    it('garde le style demandé dans le réglage de la campagne ; 400 s’il est trop long', async () => {
+      const id = await tache('Camille');
+      const cree = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: { mode: 'relance', tacheIds: [id], reglage: { ...reglage, style: 'Très court' } },
+      });
+      expect(cree.statusCode).toBe(201);
+      const { campagneId } = cree.json<{ campagneId: string }>();
+      expect((await campagne(campagneId)).reglage.style).toBe('Très court');
+      const trop = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: {
+          mode: 'relance',
+          tacheIds: [id],
+          reglage: { ...reglage, style: 'x'.repeat(2001) },
+        },
+      });
+      expect(trop.statusCode).toBe(400);
+    });
+
     it('refuse l’envoi direct tant que les verrous sont fermés', async () => {
       const id = await tache('Fabrice');
       const { campagneId } = (

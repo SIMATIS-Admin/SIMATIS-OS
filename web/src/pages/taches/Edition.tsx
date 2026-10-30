@@ -10,6 +10,7 @@ import { Icon } from '../../icons.js';
 import { typeActivite } from '../../../../src/crm/type-tache.js';
 import { Modal } from '../Overlay.js';
 import { ACTIVITES, ORDRE_ACTIVITES, plusJours } from './commun.js';
+import { BrouillonRelance } from './BrouillonRelance.js';
 import { heureParis, jourParis, memeHeure, parisVersIso } from './creneaux.js';
 
 type Type = TacheVue['type'];
@@ -329,6 +330,14 @@ export function EditionTache({
             />
             <span>Créer aussi dans HubSpot</span>
           </label>
+        )}
+        {slug && tache && !tache.fait && typeAffiche === 'email' && personne && (
+          <BrouillonRelance
+            slug={slug}
+            tacheId={tache.id}
+            contactId={personne.id}
+            tacheContactId={tache.contact?.id ?? null}
+          />
         )}
         {error && (
           <p className="small" style={{ color: 'var(--red)' }}>

@@ -32,16 +32,18 @@ export function Drawer({
 export function Modal({
   title,
   onClose,
+  large = false,
   children,
 }: {
   title: string;
   onClose: () => void;
+  large?: boolean;
   children: ReactNode;
 }) {
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <div className="modal" role="dialog" aria-label={title}>
+      <div className={large ? 'modal large' : 'modal'} role="dialog" aria-label={title}>
         <div className="panel-h">
           <h2>{title}</h2>
           <button className="btn ghost" aria-label="Fermer" onClick={onClose}>

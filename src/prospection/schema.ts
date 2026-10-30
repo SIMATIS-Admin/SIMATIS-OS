@@ -97,6 +97,8 @@ export type ReglageCampagne = {
   signatureId: string | null;
   suivi: { type: 'courte' | 'longue' | 'date'; date?: string };
   touchesMax: number;
+  // Contexte et ton demandés par Marc pour ce lot (relance depuis une tâche) ; facultatif.
+  style?: string;
 };
 export type ResultatCampagne = {
   brouillons: number;
