@@ -429,6 +429,87 @@ describe('Gmail and Calendar', () => {
     expect(raw).toContain('Subject: =?UTF-8?B?');
   });
 
+  it('sans image, le message reste exactement celui d’avant (une seule partie HTML)', () => {
+    const brut = mimeBrut({ to: 'a@b.example', subject: 'Relance', html: '<p>Bonjour</p>' });
+    expect(brut).toContain('Content-Type: text/html; charset="UTF-8"');
+    expect(brut).not.toMatch(/multipart|Content-ID/);
+  });
+
+  it('avec une signature en image, assemble un message multipart/related avec le cid', () => {
+    const image = {
+      cid: 'signature',
+      typeMime: 'image/png',
+      base64: Buffer.alloc(200, 7).toString('base64'),
+    };
+    const brut = mimeBrut({
+      to: 'a@b.example',
+      subject: 'Relance',
+      html: '<p>Bonjour</p><p><img src="cid:signature"></p>',
+      images: [image],
+    });
+    const frontiere = /Content-Type: multipart\/related; boundary="([^"]+)"/.exec(brut)?.[1];
+    expect(frontiere).toBeTruthy();
+    const parties = brut.split(`--${frontiere}`);
+    // en-têtes, partie HTML, partie image, fermeture
+    expect(parties).toHaveLength(4);
+    expect(parties[1]).toContain('Content-Type: text/html; charset="UTF-8"');
+    expect(parties[2]).toContain('Content-Type: image/png');
+    expect(parties[2]).toContain('Content-ID: <signature>');
+    expect(parties[2]).toContain('Content-Disposition: inline');
+    const lignes = (parties[2] ?? '').split('\r\n').filter((l) => /^[A-Za-z0-9+/=]{20,}$/.test(l));
+    expect(lignes.every((l) => l.length <= 76)).toBe(true);
+    expect(Buffer.from(lignes.join(''), 'base64').equals(Buffer.alloc(200, 7))).toBe(true);
+    expect(parties[3]?.trim()).toBe('--');
+  });
+
+  it('refuse une image dont le type, le cid ou le contenu n’est pas sûr', () => {
+    const faire = (i: { cid: string; typeMime: string; base64: string }) => () =>
+      mimeBrut({ to: 'a@b.example', subject: 's', html: 'h', images: [i] });
+    expect(faire({ cid: 'sig', typeMime: 'text/html', base64: 'AAAA' })).toThrow();
+    expect(faire({ cid: 'sig>\r\nBcc: x', typeMime: 'image/png', base64: 'AAAA' })).toThrow();
+    expect(faire({ cid: 'sig', typeMime: 'image/png', base64: '<script>' })).toThrow();
+  });
+
+  it('crée le brouillon dans le fil Gmail quand un threadId est donné, et seulement alors', async () => {
+    await ctx(true, (c) =>
+      createDraft(
+        c,
+        { to: 'a@b.example', subject: 'Re: Échange', html: '<p>x</p>', threadId: 'thread-9' },
+        google,
+      ),
+    );
+    await ctx(true, (c) =>
+      createDraft(c, { to: 'a@b.example', subject: 'Nouveau', html: '<p>x</p>' }, google),
+    );
+    const bodies = google.calls
+      .filter((c) => c.url.endsWith('/drafts'))
+      .map((c) => (JSON.parse(c.body ?? '{}') as { message: Record<string, unknown> }).message);
+    expect(bodies.at(-2)?.threadId).toBe('thread-9');
+    expect(bodies.at(-1)).not.toHaveProperty('threadId');
+  });
+
+  it('l’opération draft.create transmet images et fil à Gmail', async () => {
+    const image = { cid: 'signature', typeMime: 'image/png', base64: 'AAAA' };
+    await ctx(true, (c) =>
+      gmailConnector(google).write!(c, {
+        op: 'draft.create',
+        data: {
+          to: 'a@b.example',
+          subject: 'Re: x',
+          html: '<p>x</p>',
+          images: [image],
+          threadId: 't1',
+        },
+      }),
+    );
+    const draft = google.calls.filter((c) => c.url.endsWith('/drafts')).at(-1);
+    const message = (
+      JSON.parse(draft?.body ?? '{}') as { message: { raw: string; threadId: string } }
+    ).message;
+    expect(message.threadId).toBe('t1');
+    expect(Buffer.from(message.raw, 'base64url').toString()).toContain('Content-ID: <signature>');
+  });
+
   it('strips a signature block in any usual form', () => {
     expect(sansSignature('Bonjour\n-- \nMarc')).toBe('Bonjour');
     expect(sansSignature('<p>Bonjour</p><br>--<br>Marc')).toBe('<p>Bonjour</p>');

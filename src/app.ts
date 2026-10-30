@@ -52,7 +52,7 @@ export function buildApp({
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
   if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
-  registerProspectionRoutes(app, { db });
+  registerProspectionRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
   registerAtelierRoutes(app, { db });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db });

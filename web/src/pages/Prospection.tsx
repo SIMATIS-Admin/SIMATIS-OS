@@ -1,5 +1,19 @@
 import { useEffect, useState } from 'react';
-import { fetchProspection, type StatsProspection } from '../api.js';
+import {
+  creerCampagneRelance,
+  fetchCampagne,
+  fetchProspection,
+  rapprocherEnvoisProspection,
+  type CampagneProspection,
+  type ResultatCampagne,
+  type StatsProspection,
+  type VueProspection,
+} from '../api.js';
+import { Attente } from './prospection/Attente.js';
+import { ChoixTaches } from './prospection/ChoixTaches.js';
+import { ReglageCampagne } from './prospection/ReglageCampagne.js';
+import { Relecture } from './prospection/Relecture.js';
+import { Resultat } from './prospection/Resultat.js';
 
 const pluriel = (n: number, mot: string) => `${mot}${n > 1 ? 's' : ''}`;
 
@@ -49,21 +63,166 @@ const lignes = (o: Record<string, number>, mot?: string) =>
     </div>
   ));
 
+type Etape =
+  | { nom: 'accueil' }
+  | { nom: 'choix' }
+  | { nom: 'reglage'; tacheIds: string[] }
+  | { nom: 'attente'; id: string }
+  | { nom: 'relecture'; campagne: CampagneProspection }
+  | { nom: 'fin'; campagne: CampagneProspection; resultat: ResultatCampagne };
+
+const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 export function Prospection({ slug }: { slug: string }) {
-  const [stats, setStats] = useState<StatsProspection | null>(null);
+  const [vue, setVue] = useState<VueProspection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [etape, setEtape] = useState<Etape>({ nom: 'accueil' });
+  const [lancement, setLancement] = useState<{ enCours: boolean; erreur: string | null }>({
+    enCours: false,
+    erreur: null,
+  });
+
+  const charger = () =>
+    fetchProspection(slug).then(setVue, (e: unknown) => setMessage(messageErreur(e)));
 
   useEffect(() => {
-    fetchProspection(slug).then(
-      (v) => setStats(v.stats),
-      (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+    void charger();
+    // Les mails que Marc a envoyés depuis sa messagerie : constatés au passage, sans bloquer l'écran.
+    rapprocherEnvoisProspection(slug).then(
+      (r) => r.envoyes > 0 && void charger(),
+      () => undefined,
     );
   }, [slug]);
 
-  if (!stats) return message ? <div className="empty">{message}</div> : null;
+  if (!vue) return message ? <div className="empty">{message}</div> : null;
+  const { stats } = vue;
+  const accueil = () => {
+    setEtape({ nom: 'accueil' });
+    void charger();
+  };
+  const retour = (
+    <p>
+      <button className="btn" onClick={accueil}>
+        ← Retour à la prospection
+      </button>
+    </p>
+  );
+
+  if (etape.nom === 'choix') {
+    return (
+      <>
+        {retour}
+        <ChoixTaches
+          slug={slug}
+          onContinuer={(tacheIds) => setEtape({ nom: 'reglage', tacheIds })}
+        />
+      </>
+    );
+  }
+  if (etape.nom === 'reglage') {
+    const { tacheIds } = etape;
+    return (
+      <>
+        {retour}
+        <ReglageCampagne
+          nbTaches={tacheIds.length}
+          signatures={vue.signatures}
+          enCours={lancement.enCours}
+          erreur={lancement.erreur}
+          onLancer={(reglage) => {
+            setLancement({ enCours: true, erreur: null });
+            creerCampagneRelance(slug, tacheIds, reglage).then(
+              (r) => {
+                setLancement({ enCours: false, erreur: null });
+                setEtape({ nom: 'attente', id: r.campagneId });
+              },
+              (e: unknown) => setLancement({ enCours: false, erreur: messageErreur(e) }),
+            );
+          }}
+        />
+      </>
+    );
+  }
+  if (etape.nom === 'attente') {
+    return (
+      <>
+        {retour}
+        <Attente
+          slug={slug}
+          id={etape.id}
+          onPret={(campagne) =>
+            setEtape(
+              campagne.statut === 'terminee' ? { nom: 'accueil' } : { nom: 'relecture', campagne },
+            )
+          }
+        />
+      </>
+    );
+  }
+  if (etape.nom === 'relecture') {
+    const { campagne } = etape;
+    return (
+      <>
+        {retour}
+        <Relecture
+          key={campagne.id}
+          slug={slug}
+          campagne={campagne}
+          signatures={vue.signatures}
+          onTermine={(resultat) => setEtape({ nom: 'fin', campagne, resultat })}
+        />
+      </>
+    );
+  }
+  if (etape.nom === 'fin') {
+    const { campagne, resultat } = etape;
+    return (
+      <>
+        {retour}
+        <Resultat
+          resultat={resultat}
+          onRetour={accueil}
+          onRevenir={() =>
+            void fetchCampagne(slug, campagne.id).then(
+              (c) => setEtape({ nom: 'relecture', campagne: c }),
+              (e: unknown) => setMessage(messageErreur(e)),
+            )
+          }
+        />
+      </>
+    );
+  }
+
+  const reprendre = () => {
+    if (!vue.enCours) return;
+    void fetchCampagne(slug, vue.enCours).then(
+      (c) =>
+        setEtape(
+          c.statut === 'relecture'
+            ? { nom: 'relecture', campagne: c }
+            : { nom: 'attente', id: c.id },
+        ),
+      (e: unknown) => setMessage(messageErreur(e)),
+    );
+  };
 
   return (
     <div className="stack">
+      {message && (
+        <div className="alert amber">
+          <div>{message}</div>
+        </div>
+      )}
+      {vue.enCours && (
+        <div className="alert blue">
+          <div>
+            Une campagne est en cours.{' '}
+            <button className="btn sm primary" onClick={reprendre}>
+              Reprendre la campagne en cours
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid g3" style={{ gridTemplateColumns: '1.3fr 1fr 1fr' }}>
         <JaugeJour jour={stats.jour} objectif={stats.objectif} />
         <div className="panel">
@@ -104,9 +263,7 @@ export function Prospection({ slug }: { slug: string }) {
       <div className="grid g2">
         <div className="panel" style={{ border: '2px solid var(--navy)' }}>
           <div className="panel-b">
-            <h2 style={{ marginTop: 0 }}>
-              Relancer des tâches <span className="badge amber">Bientôt</span>
-            </h2>
+            <h2 style={{ marginTop: 0 }}>Relancer des tâches</h2>
             <p className="small muted">
               Vous choisissez des tâches de relance, l'OS rédige un mail par tâche dans le style du
               premier contact.
@@ -115,7 +272,7 @@ export function Prospection({ slug }: { slug: string }) {
               <b className="num">{stats.relancesRestantes}</b>{' '}
               {pluriel(stats.relancesRestantes, 'tâche')} de relance à traiter
             </p>
-            <button className="btn primary" disabled>
+            <button className="btn primary" onClick={() => setEtape({ nom: 'choix' })}>
               Choisir les tâches
             </button>
           </div>
@@ -132,6 +289,45 @@ export function Prospection({ slug }: { slug: string }) {
               Tirer un échantillon
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-h">
+          <h2>Campagnes récentes</h2>
+          <span className="small muted">Ce qui a été lancé, et ce que ça a donné</span>
+        </div>
+        <div className="panel-b">
+          {vue.recentes.length === 0 ? (
+            <p className="muted small" style={{ margin: 0 }}>
+              Aucune campagne pour l'instant.
+            </p>
+          ) : (
+            <table className="tbl small">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Campagne</th>
+                  <th className="r">Brouillons</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vue.recentes.map((c) => (
+                  <tr key={c.id}>
+                    <td>
+                      {new Date(c.creeLe).toLocaleDateString('fr-FR', {
+                        timeZone: 'Europe/Paris',
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </td>
+                    <td>{c.mode === 'relance' ? 'Relance de tâches' : 'Prospection à froid'}</td>
+                    <td className="r num">{c.resultat?.brouillons ?? c.brouillons}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

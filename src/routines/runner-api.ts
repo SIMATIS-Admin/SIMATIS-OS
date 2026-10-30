@@ -15,6 +15,14 @@ import {
 } from '../diagnostic/chat.js';
 import { and, eq } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
+import { CampagneInvalide } from '../prospection/campagnes.js';
+import {
+  abandonnerCampagnes,
+  campagnesEnAttente,
+  demarrerCampagne,
+  finirCampagne,
+} from '../prospection/redaction.js';
+import { prospectionBrouillons } from '../prospection/schema.js';
 import { ROUTINES } from './params.js';
 import { signalerPoste } from './sante.js';
 import {
@@ -205,6 +213,65 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
       }
     }
     return out;
+  });
+
+  // Campagnes de prospection dont Claude doit rédiger les brouillons.
+  app.get('/api/runner/campagnes', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const out = [];
+    for (const instance of await listInstances(db)) {
+      const rows = await withInstance(db, instance.id, async (tx) => {
+        await abandonnerCampagnes(tx);
+        const attente = await campagnesEnAttente(tx);
+        const nb = await tx
+          .select({ campagneId: prospectionBrouillons.campagneId })
+          .from(prospectionBrouillons)
+          .where(
+            and(
+              eq(prospectionBrouillons.instanceId, currentInstance),
+              eq(prospectionBrouillons.etat, 'a_rediger'),
+            ),
+          );
+        return attente.map((c) => ({
+          ...c,
+          nbBrouillons: nb.filter((x) => x.campagneId === c.id).length,
+        }));
+      });
+      for (const c of rows) out.push({ ...c, instance: instance.slug, nom: instance.nom });
+    }
+    return out;
+  });
+
+  app.post<Route>('/api/runner/campagnes/:id/demarrer', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const parsed = corps.safeParse(request.body);
+    const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    try {
+      await withInstance(db, instance.id, (tx) => demarrerCampagne(tx, request.params.id));
+    } catch (error) {
+      if (error instanceof CampagneInvalide) return reply.code(409).send({ error: error.message });
+      throw error;
+    }
+    const { id: tokenId, token } = await createToken(db, {
+      nom: 'campagne-prospection',
+      portee: 'instance',
+      instanceId: instance.id,
+      expiresAt: new Date(Date.now() + UN_QUART_HEURE),
+    });
+    return { tokenId, token };
+  });
+
+  app.post<Route>('/api/runner/campagnes/:id/fin', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const parsed = corps.safeParse(request.body);
+    const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
+    if (!parsed.success || !instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    if (parsed.data.tokenId) await revokeToken(db, parsed.data.tokenId);
+    await withInstance(db, instance.id, (tx) =>
+      finirCampagne(tx, request.params.id, parsed.data.erreur),
+    );
+    return { ok: true };
   });
 
   app.post<Route>('/api/runner/echanges/:id/demarrer', async (request, reply) => {

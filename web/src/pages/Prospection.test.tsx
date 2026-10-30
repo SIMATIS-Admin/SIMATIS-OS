@@ -19,7 +19,12 @@ const stats = (o: Partial<StatsProspection> = {}): StatsProspection => ({
 });
 
 let reponse: () => Promise<Response>;
-const avec = (s: StatsProspection): VueProspection => ({ stats: s, signatures: [], recentes: [] });
+const avec = (s: StatsProspection): VueProspection => ({
+  stats: s,
+  signatures: [],
+  recentes: [],
+  enCours: null,
+});
 const repondre = (v: VueProspection) => () => Promise.resolve(new Response(JSON.stringify(v)));
 
 beforeEach(() => {
@@ -68,15 +73,16 @@ describe('Prospection', () => {
     expect(screen.getByText(/Touche 2/)).toBeTruthy();
   });
 
-  it('montre les deux entrées de campagne, marquées Bientôt et désactivées', async () => {
+  it('propose de relancer des tâches, et annonce la prospection à froid comme Bientôt', async () => {
     render(<Prospection slug="simatis" />);
     await screen.findByText('14');
-    const boutons = [
-      screen.getByRole('button', { name: /Choisir les tâches/ }),
-      screen.getByRole('button', { name: /Tirer un échantillon/ }),
-    ];
-    boutons.forEach((b) => expect(b.hasAttribute('disabled')).toBe(true));
-    expect(screen.getAllByText('Bientôt').length).toBe(2);
+    expect(
+      screen.getByRole('button', { name: /Choisir les tâches/ }).hasAttribute('disabled'),
+    ).toBe(false);
+    expect(
+      screen.getByRole('button', { name: /Tirer un échantillon/ }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.getAllByText('Bientôt').length).toBe(1);
   });
 
   it('affiche des zéros sans erreur pour une instance vide', async () => {

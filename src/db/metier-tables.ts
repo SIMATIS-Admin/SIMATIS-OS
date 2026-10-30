@@ -12,6 +12,8 @@ import {
 } from '../base-vivante/schema.js';
 import { echangesAjout, reunionsWispr, sujets } from '../inbox/schema.js';
 import {
+  prospectionBrouillons,
+  prospectionCampagnes,
   prospectionOccurrences,
   prospectionReglages,
   prospectionSignatures,
@@ -33,6 +35,8 @@ export const METIER_TABLES = [
   devis,
   propositions,
   autonomie,
+  prospectionBrouillons,
+  prospectionCampagnes,
   prospectionOccurrences,
   prospectionSignatures,
   prospectionReglages,

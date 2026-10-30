@@ -1,8 +1,20 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import type { ConnexionDeps } from '../connexions/service.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
+import {
+  CampagneIntrouvable,
+  CampagneInvalide,
+  campagnesRecentes,
+  creerCampagneRelance,
+  lireCampagne,
+  tachesRelance,
+} from './campagnes.js';
+import { finaliserCampagne, modifierBrouillon } from './finalisation.js';
+import { rapprocherInstance } from './rapprochement.js';
+import { abandonnerCampagnes, relancerCampagne } from './redaction.js';
 import {
   ajouterSignature,
   definirDefaut,
@@ -17,7 +29,7 @@ import {
 } from './signatures.js';
 import { statsProspection } from './stats.js';
 
-export type ProspectionRoutesDeps = { db: Database };
+export type ProspectionRoutesDeps = { db: Database; connexionDeps: ConnexionDeps };
 
 const imageSchema = z.object({
   typeMime: z.string().max(40),
@@ -29,13 +41,39 @@ const modificationSchema = z.object({
   defaut: z.boolean().optional(),
 });
 const objectifSchema = z.object({ objectif: z.number() });
+const reglageSchema = z.object({
+  offre: z.enum(['vma', 'diagnostic', 'les-deux', 'kairos']),
+  creneaux: z.boolean(),
+  signatureId: z.uuid().nullable(),
+  suivi: z.object({
+    type: z.enum(['courte', 'longue', 'date']),
+    date: z.string().max(10).optional(),
+  }),
+  touchesMax: z.number().int(),
+});
+const campagneSchema = z.object({
+  mode: z.literal('relance'),
+  tacheIds: z.array(z.uuid()).max(200),
+  reglage: reglageSchema,
+});
+const brouillonSchema = z.object({
+  objet: z.string().max(300).optional(),
+  corps: z.string().max(50_000).optional(),
+  etat: z.enum(['pret', 'ecarte']).optional(),
+  suiviType: z.enum(['delai', 'citee', 'clos']).optional(),
+  suiviDate: z.string().max(10).nullable().optional(),
+});
 
 export function registerProspectionRoutes(app: FastifyInstance, deps: ProspectionRoutesDeps): void {
-  const { db } = deps;
+  const { db, connexionDeps } = deps;
 
   const erreur = (e: unknown, reply: FastifyReply) => {
-    if (e instanceof SignatureIntrouvable) return reply.code(404).send({ error: e.message });
-    if (e instanceof SignatureInvalide) return reply.code(400).send({ error: e.message });
+    if (e instanceof SignatureIntrouvable || e instanceof CampagneIntrouvable) {
+      return reply.code(404).send({ error: e.message });
+    }
+    if (e instanceof SignatureInvalide || e instanceof CampagneInvalide) {
+      return reply.code(400).send({ error: e.message });
+    }
     throw e;
   };
   const invalide = (reply: FastifyReply, issue?: string) =>
@@ -60,8 +98,7 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
     dansInstance(request.params.slug, reply, async (tx) => ({
       stats: await statsProspection(tx),
       signatures: await listerSignatures(tx),
-      // Les campagnes récentes arrivent avec les livraisons suivantes.
-      recentes: [],
+      ...(await campagnesRecentes(tx)),
     })),
   );
 
@@ -123,6 +160,81 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
         await supprimerSignature(tx, request.params.id);
         return { ok: true };
       }),
+  );
+
+  app.get<{ Params: { slug: string } }>(
+    '/api/i/:slug/prospection/taches-relance',
+    (request, reply) => dansInstance(request.params.slug, reply, (tx) => tachesRelance(tx)),
+  );
+
+  app.post<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/campagnes',
+    async (request, reply) => {
+      const p = campagneSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      const r = await dansInstance(request.params.slug, reply, (tx) =>
+        creerCampagneRelance(tx, { tacheIds: p.data.tacheIds, reglage: p.data.reglage }),
+      );
+      return reply.sent ? undefined : reply.code(201).send(r);
+    },
+  );
+
+  // Interrogée par l'écran d'attente : une campagne que l'exécuteur n'a pas prise passe en erreur.
+  app.get<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/campagnes/:id',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, async (tx) => {
+        await abandonnerCampagnes(tx);
+        return lireCampagne(tx, request.params.id);
+      }),
+  );
+
+  app.patch<{ Params: { slug: string; id: string; bid: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/campagnes/:id/brouillons/:bid',
+    (request, reply) => {
+      const p = brouillonSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      return dansInstance(request.params.slug, reply, (tx) =>
+        modifierBrouillon(tx, request.params.bid, p.data),
+      );
+    },
+  );
+
+  app.post<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/campagnes/:id/finaliser',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      try {
+        return await finaliserCampagne(db, instance, request.params.id, connexionDeps);
+      } catch (e) {
+        return erreur(e, reply);
+      }
+    },
+  );
+
+  app.post<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/campagnes/:id/relancer',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, async (tx) => {
+        await relancerCampagne(tx, request.params.id);
+        return { ok: true };
+      }),
+  );
+
+  // Constate les envois faits depuis la messagerie (les brouillons que Marc a envoyés).
+  app.post<{ Params: { slug: string } }>(
+    '/api/i/:slug/prospection/rapprocher',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      try {
+        return { envoyes: await rapprocherInstance(db, instance, connexionDeps) };
+      } catch {
+        // La messagerie peut être indisponible : l'écran s'affiche quand même, sans mise à jour.
+        return { envoyes: 0 };
+      }
+    },
   );
 
   app.get<{ Params: { slug: string; id: string } }>(
