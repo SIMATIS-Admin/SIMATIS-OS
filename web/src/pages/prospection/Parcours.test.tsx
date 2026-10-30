@@ -182,6 +182,7 @@ beforeEach(() => {
     recentes: [],
     enCours: null,
     froid: { disponibles: 2, aRelancer: 0 },
+    envoiPossible: false,
   };
   resultat = {
     brouillons: 1,
@@ -191,6 +192,7 @@ beforeEach(() => {
     clos: 0,
     faites: 1,
     echecs: 0,
+    envoye: false,
   };
   vi.stubGlobal('fetch', vi.fn(fakeFetch));
 });
@@ -556,5 +558,51 @@ describe('Contacts épuisés', () => {
   it('n’affiche pas le lien quand il n’y a rien à confirmer', async () => {
     render(<Prospection slug="simatis" />);
     expect(await screen.findByText('Aucun contact épuisé à confirmer.')).toBeTruthy();
+  });
+});
+
+describe('Valider et envoyer', () => {
+  async function relecture() {
+    campagne.brouillons = [brouillon('b1', 'Alice')];
+    vue.enCours = 'c1';
+    render(<Prospection slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la campagne en cours' }));
+    await screen.findByText('Objet : Re: Alice');
+  }
+
+  it('explique que l’envoi direct est indisponible quand les verrous sont fermés', async () => {
+    await relecture();
+    expect(screen.queryByRole('button', { name: /Valider et envoyer/ })).toBeNull();
+    expect(screen.getByText(/verrous d'écriture sont fermés/)).toBeTruthy();
+  });
+
+  it('demande confirmation avant d’envoyer, puis affiche le résumé des mails envoyés', async () => {
+    vue.envoiPossible = true;
+    resultat = { ...resultat, envoye: true };
+    await relecture();
+    fireEvent.click(screen.getByRole('button', { name: 'Valider et envoyer (1)' }));
+    expect(screen.getByText(/1 mail part maintenant/)).toBeTruthy();
+    expect(calls.some((c) => c.url.endsWith('/finaliser'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Oui, envoyer' }));
+    expect(await screen.findByText('Mails envoyés')).toBeTruthy();
+    expect(calls.find((c) => c.url.endsWith('/finaliser'))?.body).toEqual({ mode: 'envoi' });
+    expect(screen.getByText(/vos mails sont partis/)).toBeTruthy();
+  });
+
+  it('annuler la confirmation n’envoie rien', async () => {
+    vue.envoiPossible = true;
+    await relecture();
+    fireEvent.click(screen.getByRole('button', { name: 'Valider et envoyer (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(calls.some((c) => c.url.endsWith('/finaliser'))).toBe(false);
+    expect(screen.getByRole('button', { name: 'Valider et envoyer (1)' })).toBeTruthy();
+  });
+
+  it('créer les brouillons envoie le mode « brouillons »', async () => {
+    vue.envoiPossible = true;
+    await relecture();
+    fireEvent.click(screen.getByRole('button', { name: /Créer les 1 brouillon/ }));
+    await screen.findByText('Brouillons créés');
+    expect(calls.find((c) => c.url.endsWith('/finaliser'))?.body).toEqual({ mode: 'brouillons' });
   });
 });

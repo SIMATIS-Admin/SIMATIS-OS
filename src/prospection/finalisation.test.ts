@@ -20,6 +20,7 @@ import { finaliserCampagne, modifierBrouillon, suiviDates } from './finalisation
 import { creerCampagneFroid } from './froid.js';
 import { demarrerCampagne, deposerBrouillons } from './redaction.js';
 import { prospectionOccurrences, prospectionSuiviFroid, type ReglageCampagne } from './schema.js';
+import { statsProspection } from './stats.js';
 import { ajouterSignature } from './signatures.js';
 
 const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(40, 3)]);
@@ -208,6 +209,7 @@ describe('Relecture et finalisation d’une campagne', () => {
       clos: 1,
       faites: 3,
       echecs: 0,
+      envoye: false,
     });
 
     expect(ecrits).toHaveLength(3);
@@ -329,6 +331,114 @@ describe('Relecture et finalisation d’une campagne', () => {
   });
 });
 
+describe('Envoi direct', () => {
+  let t: TestApp;
+  let instance: Instance;
+  let secretsDir: string;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    instance = await createInstance(t.owner.db, {
+      slug: 'final-envoi',
+      nom: 'Envoi',
+      type: 'mandat',
+      config: { ecrituresReelles: true },
+    });
+    secretsDir = await mkdtemp(path.join(tmpdir(), 'simatis-envoi-'));
+    await withInstance(t.app.db, instance.id, (tx) =>
+      configureConnexion(tx, { kind: 'messagerie', fournisseur: 'boite-test' }),
+    );
+  });
+  afterAll(async () => {
+    await t.drop();
+    await rm(secretsDir, { recursive: true, force: true });
+  });
+  const dans = <T>(fn: Parameters<typeof withInstance<T>>[2]) =>
+    withInstance(t.app.db, instance.id, fn);
+
+  async function enRelecture(nom: string) {
+    const [c] = await t.owner.db
+      .insert(contacts)
+      .values({ instanceId: instance.id, nom, email: `${nom.toLowerCase()}@exemple.test` })
+      .returning({ id: contacts.id });
+    const [tc] = await t.owner.db
+      .insert(taches)
+      .values({
+        instanceId: instance.id,
+        titre: `Relancer ${nom}`,
+        canal: 'email',
+        contactId: c!.id,
+        echeance: new Date(),
+      })
+      .returning({ id: taches.id });
+    return dans(async (tx) => {
+      const r = await creerCampagneRelance(tx, { tacheIds: [tc!.id], reglage: reglageParDefaut() });
+      await demarrerCampagne(tx, r.campagneId);
+      const [b] = (await lireCampagne(tx, r.campagneId)).brouillons;
+      await deposerBrouillons(tx, r.campagneId, [
+        {
+          id: b!.id,
+          objet: `Re: ${nom}`,
+          corps: '<p>Bonjour,</p><p>Bien à vous,</p>',
+          threadId: `fil-${nom}`,
+        },
+      ]);
+      return r.campagneId;
+    });
+  }
+
+  it('envoie les mails (message.send), enregistre des occurrences « envoyé » et fait monter le compteur', async () => {
+    ecrits.length = 0;
+    const id = await enRelecture('Alice');
+    const avant = (await dans((tx) => statsProspection(tx))).jour;
+    const r = await finaliserCampagne(
+      t.app.db,
+      instance,
+      id,
+      { secretsDir, realWrites: true },
+      { envoi: true },
+    );
+    expect(r).toMatchObject({ brouillons: 1, simulation: false, envoye: true });
+    expect(ecrits.map((e) => e.op)).toEqual(['message.send']);
+    expect(ecrits[0]?.data).toMatchObject({ to: 'alice@exemple.test', threadId: 'fil-Alice' });
+    const [o] = await t.owner.db
+      .select()
+      .from(prospectionOccurrences)
+      .where(eq(prospectionOccurrences.lot, id));
+    expect(o?.etat).toBe('envoye');
+    expect(o?.envoyeAt).not.toBeNull();
+    expect((await dans((tx) => statsProspection(tx))).jour).toBe(avant + 1);
+    expect((await dans((tx) => lireCampagne(tx, id))).statut).toBe('terminee');
+  });
+
+  it('refuse l’envoi direct quand un des deux verrous est fermé, sans rien envoyer', async () => {
+    ecrits.length = 0;
+    const id = await enRelecture('Bruno');
+    await expect(
+      finaliserCampagne(t.app.db, instance, id, { secretsDir, realWrites: false }, { envoi: true }),
+    ).rejects.toThrow(/verrous/);
+    const ferme = { ...instance, config: { ...instance.config, ecrituresReelles: false } };
+    await expect(
+      finaliserCampagne(t.app.db, ferme, id, { secretsDir, realWrites: true }, { envoi: true }),
+    ).rejects.toThrow(/verrous/);
+    expect(ecrits).toHaveLength(0);
+    expect((await dans((tx) => lireCampagne(tx, id))).statut).toBe('relecture');
+  });
+
+  it('sans envoi demandé, le comportement reste celui des brouillons (draft.create, occurrence « brouillon »)', async () => {
+    ecrits.length = 0;
+    const id = await enRelecture('Carole');
+    const r = await finaliserCampagne(t.app.db, instance, id, { secretsDir, realWrites: true });
+    expect(r.envoye).toBe(false);
+    expect(ecrits.map((e) => e.op)).toEqual(['draft.create']);
+    const [o] = await t.owner.db
+      .select()
+      .from(prospectionOccurrences)
+      .where(eq(prospectionOccurrences.lot, id));
+    expect(o?.etat).toBe('brouillon');
+  });
+});
+
 describe('Finalisation d’une campagne à froid', () => {
   let t: TestApp;
   let instance: Instance;
@@ -409,6 +519,7 @@ describe('Finalisation d’une campagne à froid', () => {
       clos: 1,
       faites: 0,
       echecs: 0,
+      envoye: false,
     });
     expect(ecrits).toHaveLength(3);
     expect(ecrits[0]?.data).not.toHaveProperty('threadId');

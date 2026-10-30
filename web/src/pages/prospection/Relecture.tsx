@@ -24,11 +24,13 @@ export function Relecture({
   slug,
   campagne,
   signatures,
+  envoiPossible = false,
   onTermine,
 }: {
   slug: string;
   campagne: CampagneProspection;
   signatures: SignatureProspection[];
+  envoiPossible?: boolean;
   onTermine: (r: ResultatCampagne) => void;
 }) {
   const [brouillons, setBrouillons] = useState<BrouillonCampagne[]>(campagne.brouillons);
@@ -37,6 +39,7 @@ export function Relecture({
   const [citee, setCitee] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [confirmerEnvoi, setConfirmerEnvoi] = useState(false);
 
   const b = brouillons.find((x) => x.id === courant) ?? brouillons[0];
   const signature = signatures.find((s) => s.id === campagne.reglage.signatureId);
@@ -56,14 +59,15 @@ export function Relecture({
     }
   };
 
-  const finaliser = async () => {
+  const finaliser = async (mode: 'brouillons' | 'envoi' = 'brouillons') => {
     setEnCours(true);
     try {
-      onTermine(await finaliserCampagne(slug, campagne.id));
+      onTermine(await finaliserCampagne(slug, campagne.id, mode));
     } catch (e) {
       setErreur(message(e));
     } finally {
       setEnCours(false);
+      setConfirmerEnvoi(false);
     }
   };
 
@@ -265,10 +269,38 @@ export function Relecture({
         <button
           className="btn primary"
           disabled={enCours || aVerifier > 0 || prets === 0}
-          onClick={() => void finaliser()}
+          onClick={() => void finaliser('brouillons')}
         >
           Créer les {prets} {prets > 1 ? 'brouillons' : 'brouillon'} dans la messagerie
         </button>
+        {envoiPossible ? (
+          confirmerEnvoi ? (
+            <>
+              <b className="small">
+                {prets} {prets > 1 ? 'mails partent' : 'mail part'} maintenant, sans autre
+                relecture.
+              </b>
+              <button className="btn go" disabled={enCours} onClick={() => void finaliser('envoi')}>
+                Oui, envoyer
+              </button>
+              <button className="btn ghost" onClick={() => setConfirmerEnvoi(false)}>
+                Annuler
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn go"
+              disabled={enCours || aVerifier > 0 || prets === 0}
+              onClick={() => setConfirmerEnvoi(true)}
+            >
+              Valider et envoyer ({prets})
+            </button>
+          )
+        ) : (
+          <span className="small muted">
+            Envoi direct indisponible : les deux verrous d'écriture sont fermés.
+          </span>
+        )}
         {aVerifier > 0 && (
           <span className="small" style={{ color: 'var(--amber)' }}>
             {aVerifier} à vérifier : relisez-les avant de continuer.

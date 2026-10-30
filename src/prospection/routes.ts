@@ -4,6 +4,7 @@ import type { ConnexionDeps } from '../connexions/service.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
+import { canWriteReal } from '../propositions/service.js';
 import {
   CampagneIntrouvable,
   CampagneInvalide,
@@ -73,6 +74,7 @@ const campagneSchema = z.discriminatedUnion('mode', [
   }),
 ]);
 const idsSchema = z.object({ ids: z.array(z.uuid()).max(500) });
+const finalisationSchema = z.object({ mode: z.enum(['brouillons', 'envoi']).optional() });
 const brouillonSchema = z.object({
   objet: z.string().max(300).optional(),
   corps: z.string().max(50_000).optional(),
@@ -111,14 +113,18 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
     }
   }
 
-  app.get<{ Params: { slug: string } }>('/api/i/:slug/prospection', (request, reply) =>
-    dansInstance(request.params.slug, reply, async (tx) => ({
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/prospection', async (request, reply) => {
+    const instance = await getInstanceBySlug(db, request.params.slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    return withInstance(db, instance.id, async (tx) => ({
       stats: await statsProspection(tx),
       signatures: await listerSignatures(tx),
       ...(await campagnesRecentes(tx)),
       froid: await compterFroid(tx),
-    })),
-  );
+      // « Valider et envoyer » n'est proposé que si les deux verrous sont ouverts.
+      envoiPossible: canWriteReal(instance, connexionDeps.realWrites),
+    }));
+  });
 
   app.put<{ Params: { slug: string }; Body: unknown }>(
     '/api/i/:slug/prospection/objectif',
@@ -258,13 +264,17 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
     },
   );
 
-  app.post<{ Params: { slug: string; id: string } }>(
+  app.post<{ Params: { slug: string; id: string }; Body: unknown }>(
     '/api/i/:slug/prospection/campagnes/:id/finaliser',
     async (request, reply) => {
       const instance = await getInstanceBySlug(db, request.params.slug);
       if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      const corps = finalisationSchema.safeParse(request.body ?? {});
+      if (!corps.success) return invalide(reply, corps.error.issues[0]?.message);
       try {
-        return await finaliserCampagne(db, instance, request.params.id, connexionDeps);
+        return await finaliserCampagne(db, instance, request.params.id, connexionDeps, {
+          envoi: corps.data.mode === 'envoi',
+        });
       } catch (e) {
         return erreur(e, reply);
       }

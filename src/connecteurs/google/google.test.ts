@@ -510,6 +510,55 @@ describe('Gmail and Calendar', () => {
     expect(Buffer.from(message.raw, 'base64url').toString()).toContain('Content-ID: <signature>');
   });
 
+  it('envoie dans le fil Gmail avec la signature en image, et reste inchangé sans fil ni image', async () => {
+    const image = { cid: 'signature', typeMime: 'image/png', base64: 'AAAA' };
+    await ctx(true, (c) =>
+      sendMessage(
+        c,
+        {
+          to: 'a@b.example',
+          subject: 'Re: x',
+          html: '<p>x</p>',
+          images: [image],
+          threadId: 'fil-1',
+        },
+        google,
+      ),
+    );
+    await ctx(true, (c) =>
+      sendMessage(c, { to: 'a@b.example', subject: 'Simple', html: '<p>x</p>' }, google),
+    );
+    const envois = google.calls
+      .filter((c) => c.url.endsWith('/messages/send'))
+      .map((c) => JSON.parse(c.body ?? '{}') as { raw: string; threadId?: string });
+    const [avec, sans] = envois.slice(-2);
+    expect(avec?.threadId).toBe('fil-1');
+    expect(Buffer.from(avec?.raw ?? '', 'base64url').toString()).toContain(
+      'Content-ID: <signature>',
+    );
+    expect(sans).not.toHaveProperty('threadId');
+    expect(Buffer.from(sans?.raw ?? '', 'base64url').toString()).not.toContain('multipart');
+  });
+
+  it('l’opération message.send transmet images et fil, et rien ne part en simulation', async () => {
+    const data = {
+      to: 'a@b.example',
+      subject: 'Re: y',
+      html: '<p>y</p>',
+      images: [{ cid: 'signature', typeMime: 'image/png', base64: 'AAAA' }],
+      threadId: 't9',
+    };
+    const avant = google.calls.length;
+    const simule = await ctx(false, (c) =>
+      gmailConnector(google).write!(c, { op: 'message.send', data }),
+    );
+    expect(simule).toEqual({ simulation: true });
+    expect(google.calls).toHaveLength(avant);
+    await ctx(true, (c) => gmailConnector(google).write!(c, { op: 'message.send', data }));
+    const envoi = google.calls.filter((c) => c.url.endsWith('/messages/send')).at(-1);
+    expect((JSON.parse(envoi?.body ?? '{}') as { threadId: string }).threadId).toBe('t9');
+  });
+
   it('strips a signature block in any usual form', () => {
     expect(sansSignature('Bonjour\n-- \nMarc')).toBe('Bonjour');
     expect(sansSignature('<p>Bonjour</p><br>--<br>Marc')).toBe('<p>Bonjour</p>');

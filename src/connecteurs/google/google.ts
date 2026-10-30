@@ -194,7 +194,7 @@ export async function createDraft(
 // réelles, rien ne part.
 export async function sendMessage(
   ctx: SyncCtx,
-  message: { to: string; subject: string; html: string },
+  message: BrouillonMessage & { threadId?: string },
   options: GoogleOptions = {},
 ): Promise<{ simulation: boolean }> {
   if (!ctx.reel) {
@@ -206,6 +206,8 @@ export async function sendMessage(
   }
   await googleApi(ctx, options).request<{ id: string }>('POST', `${GMAIL}/messages/send`, {
     raw: mimeMessage(message),
+    // Avec un fil, le mail part dans la conversation du contact.
+    ...(message.threadId ? { threadId: message.threadId } : {}),
   });
   await logEvent(ctx.tx, {
     acteur: 'os',

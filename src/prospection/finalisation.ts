@@ -4,6 +4,7 @@ import type { ImageIntegree } from '../connecteurs/google/google.js';
 import { getConnector, writeVia, type ConnexionDeps } from '../connexions/service.js';
 import { CrmIndisponible } from '../crm/service.js';
 import { crmHubspot, createTache, updateTache } from '../crm/taches.js';
+import { canWriteReal } from '../propositions/service.js';
 import type { Database, Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
@@ -141,7 +142,14 @@ export async function finaliserCampagne(
   instance: Instance,
   campagneId: string,
   deps: ConnexionDeps,
+  // `envoi` : les mails partent tout de suite (au lieu de brouillons). Réservé au double verrou ouvert.
+  { envoi = false }: { envoi?: boolean } = {},
 ): Promise<ResultatCampagne> {
+  if (envoi && !canWriteReal(instance, deps.realWrites)) {
+    throw new CampagneInvalide(
+      'Envoi direct fermé : il faut ouvrir les deux verrous (variable du serveur et interrupteur administrateur). Vous pouvez créer les brouillons dans la messagerie.',
+    );
+  }
   return withInstance(db, instance.id, async (tx) => {
     // Le verrou de ligne empêche une seconde finalisation de la même campagne en parallèle.
     const [campagne] = await tx
@@ -217,6 +225,7 @@ export async function finaliserCampagne(
       clos: 0,
       faites: 0,
       echecs: 0,
+      envoye: envoi,
     };
 
     for (const b of prets) {
@@ -227,7 +236,7 @@ export async function finaliserCampagne(
           instance,
           'messagerie',
           {
-            op: 'draft.create',
+            op: envoi ? 'message.send' : 'draft.create',
             data: {
               to: b.contactEmail,
               subject: b.objet ?? '',
@@ -266,7 +275,8 @@ export async function finaliserCampagne(
         societe: b.societe,
         theme: themeDe(r.offre),
         touche: b.touche,
-        etat: 'brouillon',
+        etat: envoi ? 'envoye' : 'brouillon',
+        ...(envoi ? { envoyeAt: new Date() } : {}),
         threadId: b.threadId,
         lot: campagneId,
       });
