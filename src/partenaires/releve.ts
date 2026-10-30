@@ -11,11 +11,15 @@ import {
   abandonner,
   clientPour,
   journaliserInvalide,
+  listerPartenaires,
   SECRET_NOEUD,
   traiterEnveloppe,
   type RelaisDeps,
 } from './service.js';
 import { stockageInstance } from './stockage.js';
+import { synchroniser } from './synchro.js';
+// Received missions become proposals: their types must be known.
+import './types-propositions.js';
 
 const GARDE_VUS_MS = 90 * 86_400_000;
 
@@ -25,6 +29,8 @@ export type BilanPartenaires = {
   doublons: number;
   invalides: number;
   erreurs: number;
+  // CRM changes put in the outbox for the partners.
+  synchronises: number;
   envoyees: number;
   reportees: number;
   abandonnees: number;
@@ -37,13 +43,26 @@ export async function tourPartenaires(
   deps: RelaisDeps,
 ): Promise<BilanPartenaires> {
   const client = await clientPour(instance, deps);
+  const noeud = (await loadInstanceSecrets(deps.secretsDir, instance.slug))[SECRET_NOEUD];
   const stockage = stockageInstance(db, instance.id);
   const recu = await relever({
     client,
     stockage,
-    traiter: (env) => traiterEnveloppe(db, instance, env),
+    traiter: (env) => traiterEnveloppe(db, instance, env, { ...deps, ...(noeud ? { noeud } : {}) }),
     invalide: (env, problemes) => journaliserInvalide(db, instance, env, problemes),
   });
+  // Then what changed here in the shared sales follow-up, one transaction per partner: the state
+  // exchanged and the outbox commit together.
+  let synchronises = 0;
+  if (noeud) {
+    const actifs = await withInstance(db, instance.id, (tx) => listerPartenaires(tx));
+    for (const p of actifs.filter((x) => x.statut === 'active')) {
+      const bilan = await withInstance(db, instance.id, (tx) =>
+        synchroniser(tx, instance, p, noeud, deps.realWrites),
+      );
+      synchronises += bilan?.envoyes ?? 0;
+    }
+  }
   const envoi = await vider({
     client,
     stockage,
@@ -65,6 +84,7 @@ export async function tourPartenaires(
     doublons: recu.doublons,
     invalides: recu.invalides,
     erreurs: recu.erreurs.length,
+    synchronises,
     ...envoi,
   };
 }

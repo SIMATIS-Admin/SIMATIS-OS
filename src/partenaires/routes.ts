@@ -11,7 +11,13 @@ import { logEvent } from '../journal/service.js';
 import { NIVEAUX } from '../propositions/autonomie.js';
 import { canWriteReal } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
-import { OBJETS_PARTAGE, partenaires, type Partenaire } from './schema.js';
+import {
+  CHAMPS_EXCLUABLES,
+  OBJETS_CRM,
+  partenaires,
+  type ChampExcluable,
+  type Partenaire,
+} from './schema.js';
 import {
   couper,
   estPorteuse,
@@ -38,18 +44,29 @@ const vue = (p: Partenaire) => ({
   nom: p.nom,
   connecteDepuis: p.createdAt,
   niveau: p.niveau,
-  partage: p.partage,
+  voit: p.voit,
   statut: p.statut,
   coupeeAt: p.coupeeAt,
+  synchroAt: p.synchroAt,
 });
 
 const rejoindreSchema = z.object({ lien: z.string().trim().min(1).max(500) });
+const CLES_EXCLUABLES = CHAMPS_EXCLUABLES.map((c) => c.cle) as [
+  ChampExcluable,
+  ...ChampExcluable[],
+];
 const patchSchema = z
   .object({
     niveau: z.enum(NIVEAUX).optional(),
-    partage: z.array(z.enum(OBJETS_PARTAGE)).max(OBJETS_PARTAGE.length).optional(),
+    voit: z
+      .object({
+        objets: z.array(z.enum(OBJETS_CRM)).max(OBJETS_CRM.length),
+        champsExclus: z.array(z.enum(CLES_EXCLUABLES)).max(CLES_EXCLUABLES.length),
+        qualification: z.boolean(),
+      })
+      .optional(),
   })
-  .refine((v) => v.niveau !== undefined || v.partage !== undefined, 'Rien à modifier');
+  .refine((v) => v.niveau !== undefined || v.voit !== undefined, 'Rien à modifier');
 
 export function registerPartenairesRoutes(
   app: FastifyInstance,
@@ -85,7 +102,8 @@ export function registerPartenairesRoutes(
         porteuse: estPorteuse(i),
         ecrituresReelles: canWriteReal(i, realWrites),
         inscrit: Boolean(secrets[SECRET_NOEUD]),
-        objets: OBJETS_PARTAGE,
+        objets: OBJETS_CRM,
+        champsExcluables: CHAMPS_EXCLUABLES,
         partenaires: (await listerPartenaires(tx)).map(vue),
         missions: await missionsRecentes(tx, { limite: 10 }),
       }));
@@ -109,13 +127,23 @@ export function registerPartenairesRoutes(
       if (!parsed.success || !UUID.test(request.params.id)) {
         return reply.code(400).send({ error: 'Réglage invalide' });
       }
-      const { niveau, partage } = parsed.data;
+      const { niveau, voit } = parsed.data;
       const row = await withInstance(db, i.id, async (tx) => {
         const [r] = await tx
           .update(partenaires)
           .set({
             ...(niveau ? { niveau } : {}),
-            ...(partage ? { partage: [...new Set(partage)] } : {}),
+            ...(voit
+              ? {
+                  voit: {
+                    objets: [...new Set(voit.objets)],
+                    champsExclus: [...new Set(voit.champsExclus)],
+                    qualification: voit.qualification,
+                  },
+                  // What the partner sees changed: the next pass compares every record.
+                  passeCompleteAt: null,
+                }
+              : {}),
             updatedAt: new Date(),
           })
           .where(
@@ -127,7 +155,10 @@ export function registerPartenairesRoutes(
             acteur: 'pilote',
             action: `Réglages du partenaire ${r.nom} : ${[
               niveau && `missions reçues ${niveau}`,
-              partage && `voit ${partage.join(', ') || 'rien'}`,
+              voit &&
+                `voit ${voit.objets.join(', ') || 'rien'}${
+                  voit.champsExclus.length ? `, sans ${voit.champsExclus.join(', ')}` : ''
+                }${voit.qualification ? ', qualification comprise' : ''}`,
             ]
               .filter(Boolean)
               .join(' ; ')}`,

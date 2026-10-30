@@ -12,7 +12,8 @@ import {
 } from '../base-vivante/schema.js';
 import { echangesAjout, reunionsWispr, sujets } from '../inbox/schema.js';
 import {
-  donneesEnvoyees,
+  crmPartages,
+  messagesPartenaires,
   missions,
   partenaires,
   relaisSorties,
@@ -37,7 +38,8 @@ export const METIER_TABLES = [
   echangesAjout,
   relaisVus,
   relaisSorties,
-  donneesEnvoyees,
+  crmPartages,
+  messagesPartenaires,
   missions,
   partenaires,
   reunionsWispr,

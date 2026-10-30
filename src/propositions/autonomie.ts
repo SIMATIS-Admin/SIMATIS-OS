@@ -60,11 +60,10 @@ export const AUTONOMIE: AutonomieDef[] = [
     max: 'L2',
     limite: "Toujours en brouillon, jamais validé par l'OS.",
   }),
-  // L2 until Marc decides (L3: the agent sends as soon as he asks): every send to a partner OS is
-  // validated in the Inbox. Change the default here.
-  def('partenaire', 'Confier une mission ou envoyer une donnée à un OS partenaire', 'L2', {
-    min: 'L1',
-  }),
+  // Every send to a partner OS (mission, message, answer to a mission) is validated in the Inbox
+  // by default; L3: the agent sends as soon as Marc asks. The CRM sync is not an action: it follows
+  // the « … voit » settings of each connection.
+  def('partenaire', 'Confier une mission ou écrire à un OS partenaire', 'L2'),
   def('suppr', 'Supprimer des données', 'interdit', { limite: 'Interdit : on archive.' }),
 ];
 

@@ -4,8 +4,8 @@ import { currentInstance } from '../db/columns.js';
 import type { Instance } from '../instances/schema.js';
 import { cloreSujetProposition, sujetPourProposition } from '../inbox/depot.js';
 import { logEvent } from '../journal/service.js';
-import { niveauAction } from './autonomie.js';
-import { getPropositionType } from './registry.js';
+import { niveauAction, type Niveau } from './autonomie.js';
+import { getPropositionType, type ApplyCtx } from './registry.js';
 import { propositions, type Proposition } from './schema.js';
 
 export class PropositionRefusee extends Error {}
@@ -18,18 +18,20 @@ export function canWriteReal(instance: Instance, realWrites: boolean): boolean {
   return realWrites && instance.type !== 'prospect' && instance.config.ecrituresReelles === true;
 }
 
+const applyCtx = (ctx: PropositionCtx, p: Proposition): ApplyCtx => ({
+  instance: ctx.instance,
+  reel: canWriteReal(ctx.instance, ctx.realWrites),
+  deps: { secretsDir: ctx.secretsDir ?? './secrets/instances', realWrites: ctx.realWrites },
+  proposition: { id: p.id, auteur: p.auteur },
+});
+
 async function apply(tx: Tx, ctx: PropositionCtx, p: Proposition, par: string) {
   const definition = getPropositionType(p.type);
   const reel = canWriteReal(ctx.instance, ctx.realWrites);
   try {
     // Savepoint: a failing apply leaves none of its own writes behind.
     const resultat = await tx.transaction((sp) =>
-      definition.apply(sp, definition.schema.parse(p.contenu), {
-        instance: ctx.instance,
-        reel,
-        deps: { secretsDir: ctx.secretsDir ?? './secrets/instances', realWrites: ctx.realWrites },
-        proposition: { id: p.id, auteur: p.auteur },
-      }),
+      definition.apply(sp, definition.schema.parse(p.contenu), applyCtx(ctx, p)),
     );
     const [row] = await tx
       .update(propositions)
@@ -75,12 +77,14 @@ async function apply(tx: Tx, ctx: PropositionCtx, p: Proposition, par: string) {
 export async function propose(
   tx: Tx,
   ctx: PropositionCtx,
-  input: { type: string; contenu: unknown; auteur: string },
+  // `niveau`: set by the module instead of the action's autonomy, for what the pilot decides
+  // anyway (a mission received from a partner follows the level of that connection).
+  input: { type: string; contenu: unknown; auteur: string; niveau?: Niveau },
 ): Promise<Proposition> {
   const definition = getPropositionType(input.type);
   const contenu = definition.schema.parse(input.contenu);
-  const niveau = await niveauAction(tx, definition.action);
-  if (niveau === 'interdit' || niveau === 'L0') {
+  const niveau = input.niveau ?? (await niveauAction(tx, definition.action));
+  if (niveau === 'interdit' || (niveau === 'L0' && !input.niveau)) {
     throw new PropositionRefusee(
       `Action « ${definition.action} » non autorisée (${niveau === 'L0' ? 'L0 : suggestion seulement' : 'interdite'}).`,
     );
@@ -127,6 +131,10 @@ export async function decide(
   }
 
   if (decision === 'ecarter') {
+    const { ecarter, schema } = getPropositionType(p.type);
+    if (ecarter) {
+      await tx.transaction((sp) => ecarter(sp, schema.parse(p.contenu), applyCtx(ctx, p)));
+    }
     const [row] = await tx
       .update(propositions)
       .set({ statut: 'ecartee', decidePar: par, decideAt: new Date(), updatedAt: new Date() })
