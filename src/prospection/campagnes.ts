@@ -186,12 +186,13 @@ export async function creerCampagneRelance(
   return { campagneId: campagne.id, refusees };
 }
 
+// Colonnes techniques d'instance et de source : l'écran n'en a pas besoin.
 const sansInstance = <T extends { instanceId: string; source: string; sourceId: string | null }>(
   row: T,
-) => {
-  const { instanceId: _i, source: _s, sourceId: _id, ...reste } = row;
-  return reste;
-};
+): Omit<T, 'instanceId' | 'source' | 'sourceId'> =>
+  Object.fromEntries(
+    Object.entries(row).filter(([k]) => !['instanceId', 'source', 'sourceId'].includes(k)),
+  ) as Omit<T, 'instanceId' | 'source' | 'sourceId'>;
 
 export async function lireCampagne(tx: Executor, id: string): Promise<CampagneVue> {
   const [c] = await tx
