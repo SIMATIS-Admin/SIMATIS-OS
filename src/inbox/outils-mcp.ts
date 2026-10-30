@@ -14,7 +14,9 @@ import {
   rendezVousExternes,
   type Annuaire,
 } from './lecture.js';
+import { cleDejaDansUnAutreEspace } from './cle-unique.js';
 import { deposerSujet } from './depot.js';
+import { evenementsClos, sansRendezVousClos } from './rdv-clos.js';
 import { brouillonSchema, repondreClaude } from './echanges.js';
 import {
   comptesRendusEnAttente,
@@ -33,7 +35,7 @@ const execution = z.uuid().optional().describe("Identifiant de l'exécution de r
 registerTool({
   name: 'deposer_sujet',
   description:
-    "Dépose un sujet important à traiter dans l'Inbox (mail à répondre, devis, diagnostic, compte rendu, brouillon non envoyé, autre). La clé identifie le sujet pour toujours : si elle existe déjà, même traitée, rien n'est créé et la réponse est « existant ».",
+    "Dépose un sujet important à traiter dans l'Inbox (mail à répondre, devis, diagnostic, compte rendu, brouillon non envoyé, autre). La clé identifie le sujet pour toujours : si elle existe déjà, même traitée, rien n'est créé et la réponse est « existant ». La réponse « ignore » est normale, ce n'est pas une erreur : le rendez-vous a été écarté ou son compte rendu est déjà enregistré dans l'OS, ou un autre espace du pilote (Mon activité ou un mandat) a déjà un sujet pour cette clé. Ne rien déposer d'autre pour lui.",
   input: z.object({
     type: z.enum([
       'mail_a_repondre',
@@ -61,8 +63,18 @@ registerTool({
     executionId: execution,
   }),
   scope: 'instance',
-  handler: ({ tx }, input) =>
-    deposerSujet(tx, {
+  handler: async ({ tx, instance, deps }, input) => {
+    // Un événement d'agenda écarté, ou dont le compte rendu est déjà dans l'OS, n'est plus à faire.
+    const evenement = /^agenda:(.+)$/.exec(input.cle)?.[1];
+    if (evenement && (await evenementsClos(tx, [evenement])).size > 0)
+      return {
+        statut: 'ignore' as const,
+        raison: 'rendez-vous écarté ou compte rendu déjà enregistré',
+      };
+    // Même clé déjà vue dans un autre espace du pilote : une seule entrée pour tous.
+    if (await cleDejaDansUnAutreEspace(deps.db, instance, 'routine', input.cle))
+      return { statut: 'ignore' as const, raison: 'déjà dans l’Inbox d’un autre espace' };
+    return deposerSujet(tx, {
       type: input.type,
       titre: input.titre,
       resume: input.resume ?? null,
@@ -73,7 +85,8 @@ registerTool({
       echeance: input.echeance ? new Date(input.echeance) : null,
       contactId: input.contactId ?? null,
       entrepriseId: input.entrepriseId ?? null,
-    }),
+    });
+  },
 });
 
 registerTool({
@@ -208,11 +221,15 @@ registerTool({
       ? (c.reglages.calendriers as string[])
       : ['primary'];
     const g = await google(ctx);
-    return rendezVousExternes(
-      await evenements(g, debut < plancher ? plancher : debut, maintenant, calendriers),
-      domaineDe(await compteAgenda(g)),
-      await annuaire(ctx),
-      maintenant,
+    // Sans ceux déjà écartés ou documentés dans l'OS : la routine ne les propose plus jamais.
+    return sansRendezVousClos(
+      ctx.tx,
+      rendezVousExternes(
+        await evenements(g, debut < plancher ? plancher : debut, maintenant, calendriers),
+        domaineDe(await compteAgenda(g)),
+        await annuaire(ctx),
+        maintenant,
+      ),
     );
   },
 });
