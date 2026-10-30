@@ -19,6 +19,7 @@ import {
   marquerSujetTraite,
   ouvrirEchange,
   remettreSujet,
+  repondreSujet,
   repondreEchange,
   sujetEnTache,
   type EchangeAjout,
@@ -33,6 +34,7 @@ import { PropositionDetail } from './inbox/Proposition.js';
 import { CompteRendu } from './inbox/CompteRendu.js';
 import { ReponseCampagneCarte } from './inbox/ReponseCampagne.js';
 import { EditionTache } from './taches/Edition.js';
+import { MessagePartage } from './NoteCerveau.js';
 
 // Priority of a new entry, from 1 (low) to 5 (high); mirrors the server default.
 const PRIORITE_DEFAUT = 3;
@@ -418,6 +420,7 @@ function Detail({
   onTache,
   onModifier,
   onLivreBlanc,
+  onRepondre,
   onTransfere,
   onReunion,
   onCompteRendu,
@@ -435,8 +438,10 @@ function Detail({
   onTache: () => void;
   onModifier: (modif: { echeance?: string | null; priorite?: number }) => void;
   onLivreBlanc: (numero: 1 | 2) => void;
+  onRepondre: (reponse: { sujet: string; corps: string }) => Promise<unknown>;
   onTransfere: (cibleSlug: string) => void;
 }) {
+  const [reponse, setReponse] = useState(false);
   return (
     <div className="panel inbox-detail">
       <div className="panel-h">
@@ -496,6 +501,17 @@ function Detail({
         {s.statut === 'a_traiter' && s.type === 'mail_a_repondre' && (
           <ReponseCampagneCarte key={`reponse-${s.id}`} slug={s.instance.slug} sujetId={s.id} />
         )}
+        {s.statut === 'a_traiter' && s.partage && reponse && (
+          <MessagePartage
+            key={`reponse-partage-${s.id}`}
+            slug={s.instance.slug}
+            enReponseA={s.partage.chemin}
+            sujetInitial={`Re : ${s.titre.replace(/^(Répondre à|Lire le message de) Christophe : /, '')}`}
+            deposer={onRepondre}
+            onDepose={() => undefined}
+            onFerme={() => setReponse(false)}
+          />
+        )}
         <div className="decision">
           {lienWeb(s.lien) && (
             <a className="btn" href={lienWeb(s.lien) ?? undefined} target="_blank" rel="noreferrer">
@@ -509,6 +525,11 @@ function Detail({
                 <Icon name="check" />
                 Transformer en tâche
               </button>
+              {s.partage && (
+                <button className="btn" onClick={() => setReponse(true)}>
+                  Répondre
+                </button>
+              )}
               <button className="btn" onClick={onTraite}>
                 Marquer comme traité
               </button>
@@ -1003,6 +1024,9 @@ export function Inbox({
               ),
             erreur,
           )
+        }
+        onRepondre={(r) =>
+          repondreSujet(s.instance.slug, s.id, r).then(() => apres('Réponse déposée à Christophe.'))
         }
         onModifier={(modif) =>
           void agir(modifierSujet(s.instance.slug, s.id, modif), 'Entrée modifiée.')

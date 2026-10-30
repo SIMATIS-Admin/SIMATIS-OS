@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { demander, RunnerInjoignable, type Operation, type Resultat } from '../cerveau/file.js';
 import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import { contacts, entreprises } from '../crm/schema.js';
 import { createTache, crmHubspot, type SimulationTache } from '../crm/taches.js';
@@ -71,6 +72,8 @@ export type SujetVue = {
   proposition: PropositionVue | null;
   // Pour une demande de livre blanc dont l'adresse est lisible : à qui l'envoyer.
   livreBlanc: DestinataireLivreBlanc | null;
+  // Pour un message de l'espace partagé (Christophe) : le message auquel répondre.
+  partage: { chemin: string } | null;
   // Réunion Wispr Flow de l'entrée ; dejaRelie = elle s'est reliée à un compte rendu déjà à faire.
   reunion: {
     critique: boolean;
@@ -96,6 +99,13 @@ export function trierInbox(a: SujetVue, b: SujetVue): number {
 
 const parTraitement = (a: SujetVue, b: SujetVue) =>
   (b.traiteAt ?? '').localeCompare(a.traiteAt ?? '');
+
+const PREFIXE_PARTAGE = 'partage:';
+// La routine Inbox identifie un message de l'espace partagé « partage:<chemin> ».
+const cheminPartage = (source: string, sourceId: string | null) =>
+  source === 'routine' && sourceId?.startsWith(PREFIXE_PARTAGE)
+    ? { chemin: sourceId.slice(PREFIXE_PARTAGE.length) }
+    : null;
 
 async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise<SujetVue[]> {
   const rows = await tx
@@ -158,6 +168,7 @@ async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise
     instance: { slug: instance.slug, nom: instance.nom, couleur: instance.config.couleur ?? null },
     proposition: liees.find((p) => p.id === s.propositionId) ?? null,
     livreBlanc: destinataireLivreBlanc(s.titre, s.resume),
+    partage: cheminPartage(s.source, s.sourceId),
     reunion: (() => {
       const r = reunions.find((x) => x.sujetId === s.id);
       return r
@@ -449,6 +460,75 @@ export async function envoyerLivreBlanc(
       action: `Livre blanc n° ${numero} envoyé : ${s.titre}`,
       details: { sujet: id, livreBlanc: numero },
     });
+    return vue(tx, instance, id);
+  });
+}
+
+export class DepotRefuse extends Error {}
+
+// Réponses en cours d'envoi : un double clic ne doit pas déposer deux messages à Christophe.
+const reponsesEnCours = new Set<string>();
+
+// Dépose la réponse dans l'espace partagé (par l'exécuteur du poste), puis range l'entrée en
+// « traité ». L'attente de l'exécuteur se fait hors transaction : elle peut durer 15 s.
+export async function repondreMessagePartage(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  reponse: { sujet: string; corps: string },
+  demanderOperation: (op: Operation) => Promise<Resultat> = demander,
+): Promise<SujetVue | null> {
+  if (reponsesEnCours.has(id)) throw new SujetRefuse('Réponse déjà en cours.');
+  reponsesEnCours.add(id);
+  try {
+    return await deposerReponse(db, instance, id, reponse, demanderOperation);
+  } finally {
+    reponsesEnCours.delete(id);
+  }
+}
+
+async function deposerReponse(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  reponse: { sujet: string; corps: string },
+  demanderOperation: (op: Operation) => Promise<Resultat>,
+): Promise<SujetVue | null> {
+  const s = await withInstance(db, instance.id, (tx) => charger(tx, id));
+  if (!s) return null;
+  if (s.statut !== 'a_traiter') throw new SujetRefuse('Sujet déjà traité.');
+  const source = cheminPartage(s.source, s.sourceId);
+  if (!source) throw new SujetRefuse("Cette entrée ne vient pas de l'espace partagé.");
+  let depot: Resultat;
+  try {
+    depot = await demanderOperation({
+      espace: 'partage',
+      type: 'message',
+      genre: 'reponse',
+      sujet: reponse.sujet,
+      corps: reponse.corps,
+      enReponseA: source.chemin,
+    });
+  } catch (error) {
+    if (error instanceof RunnerInjoignable)
+      throw new DepotRefuse("L'exécuteur du poste ne répond pas : rien n'a été déposé.");
+    throw error;
+  }
+  if (!depot.ok) throw new DepotRefuse(depot.erreur);
+  return withInstance(db, instance.id, async (tx) => {
+    const actuel = await charger(tx, id);
+    // Traitée entre-temps (autre onglet) : la réponse est partie, rien à marquer de plus.
+    if (actuel?.statut === 'a_traiter') {
+      await tx
+        .update(sujets)
+        .set({ statut: 'traite', traiteAt: new Date(), traitePar: 'pilote', updatedAt: new Date() })
+        .where(eq(sujets.id, id));
+      await logEvent(tx, {
+        acteur: 'pilote',
+        action: `Réponse déposée à Christophe : ${s.titre}`,
+        details: { sujet: id, reponseA: source.chemin, message: depot.chemin ?? null },
+      });
+    }
     return vue(tx, instance, id);
   });
 }

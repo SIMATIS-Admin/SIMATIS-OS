@@ -72,6 +72,8 @@ import {
   modifierSujet,
   transformerEnTache,
   envoyerLivreBlanc,
+  DepotRefuse,
+  repondreMessagePartage,
 } from '../inbox/service.js';
 import { estNumeroLivreBlanc } from '../inbox/livre-blanc.js';
 import {
@@ -1255,6 +1257,28 @@ export function registerApi(
         return reply.code(400).send({ error: 'Livre blanc inconnu' });
       const r = await envoyerLivreBlanc(db, i, id, numero, connexionDeps);
       return r && 'simulation' in r ? reply.code(202).send(r) : r;
+    }),
+  );
+  const reponsePartageSchema = z.object({
+    sujet: z.string().trim().min(1).max(200),
+    corps: z.string().trim().min(1).max(100_000),
+  });
+  // Répond à un message de l'espace partagé : même périmètre que le second cerveau (jamais une démo).
+  app.post<SujetRoute>(
+    '/api/i/:slug/sujets/:id/repondre',
+    surSujet(async (i, id, request, reply) => {
+      const parsed = reponsePartageSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Sujet et message requis' });
+      if (i.type !== 'propre' || !(i.config.modules ?? []).includes('cerveau'))
+        return reply
+          .code(403)
+          .send({ error: "L'espace partagé n'est pas activé dans cet espace." });
+      try {
+        return await repondreMessagePartage(db, i, id, parsed.data);
+      } catch (error) {
+        if (error instanceof DepotRefuse) return reply.code(502).send({ error: error.message });
+        throw error;
+      }
     }),
   );
   const sujetTacheSchema = tacheSchema.omit({ hubspot: true });

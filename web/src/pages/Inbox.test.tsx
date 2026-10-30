@@ -20,6 +20,7 @@ function AvecEntete(props: Omit<Parameters<typeof Inbox>[0], 'entete'>) {
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let simulation = false;
+let repondreErreur = false;
 // Entrées ajoutées à la liste par un test (réunions Wispr Flow).
 let supplementaires: ReturnType<typeof sujet>[] = [];
 
@@ -61,6 +62,7 @@ const sujet = (id: string, extra: Record<string, unknown> = {}) => ({
   instance: { slug: 'simatis', nom: 'SIMATIS', couleur: '#0B2545' },
   proposition: null,
   livreBlanc: null,
+  partage: null,
   reunion: null,
   ...extra,
 });
@@ -163,6 +165,10 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     return simulation
       ? json({ simulation: true, message: 'Envoi simulé : rien n’est parti.' }, 202)
       : json(sujet('s1', { statut: 'traite' }));
+  if (url.endsWith('/repondre'))
+    return repondreErreur
+      ? json({ error: 'L’exécuteur du poste ne répond pas.' }, 502)
+      : json(sujet('p1', { statut: 'traite' }));
   if (url.endsWith('/tache'))
     return simulation
       ? json({ simulation: true, message: 'Simulation : rien n’a été écrit dans HubSpot.' }, 202)
@@ -198,6 +204,7 @@ describe('Inbox screen', () => {
   beforeEach(() => {
     calls = [];
     simulation = false;
+    repondreErreur = false;
     supplementaires = [];
     droitTransfert = false;
     routineActive = true;
@@ -593,6 +600,67 @@ describe('Inbox screen', () => {
     render(<AvecEntete slug="simatis" />);
     fireEvent.click(await screen.findByText('Devis Fonderie'));
     expect(screen.queryByRole('button', { name: 'Envoyer le livre blanc' })).toBeNull();
+  });
+
+  describe('reply to a shared-space message', () => {
+    const message = () =>
+      sujet('p1', {
+        titre: 'Répondre à Christophe : Point fictif',
+        partage: { chemin: 'echanges/2026-10-29-fictif.md' },
+      });
+
+    it('offers the reply button only on a shared-space entry', async () => {
+      supplementaires = [message()];
+      render(<AvecEntete slug="simatis" />);
+      fireEvent.click(await screen.findByText('Devis Fonderie'));
+      expect(screen.queryByRole('button', { name: 'Répondre' })).toBeNull();
+      fireEvent.click(await screen.findByText('Répondre à Christophe : Point fictif'));
+      expect(screen.getByRole('button', { name: 'Répondre' })).toBeTruthy();
+    });
+
+    it('prefills the subject, posts the reply after confirmation and reloads the list', async () => {
+      supplementaires = [message()];
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      render(<AvecEntete slug="simatis" />);
+      fireEvent.click(await screen.findByText('Répondre à Christophe : Point fictif'));
+      fireEvent.click(screen.getByRole('button', { name: 'Répondre' }));
+      const sujetChamp = screen.getByLabelText<HTMLInputElement>('Sujet du message');
+      expect(sujetChamp.value).toBe('Re : Point fictif');
+      expect(screen.queryByLabelText('Type de message')).toBeNull();
+      fireEvent.change(screen.getByLabelText('Corps du message'), {
+        target: { value: 'Ma réponse fictive.' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Déposer le message' }));
+      await waitFor(() => expect(posts()[0]?.url).toBe('/api/i/simatis/sujets/p1/repondre'));
+      expect(posts()[0]?.body).toEqual({
+        sujet: 'Re : Point fictif',
+        corps: 'Ma réponse fictive.',
+      });
+      expect(await screen.findByText('Réponse déposée à Christophe.')).toBeTruthy();
+    });
+
+    it('shows the error and keeps the form when the deposit fails', async () => {
+      supplementaires = [message()];
+      repondreErreur = true;
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      render(<AvecEntete slug="simatis" />);
+      fireEvent.click(await screen.findByText('Répondre à Christophe : Point fictif'));
+      fireEvent.click(screen.getByRole('button', { name: 'Répondre' }));
+      fireEvent.change(screen.getByLabelText('Corps du message'), { target: { value: 'Texte.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Déposer le message' }));
+      expect(await screen.findByText('L’exécuteur du poste ne répond pas.')).toBeTruthy();
+      expect(screen.getByLabelText('Corps du message')).toBeTruthy();
+    });
+
+    it('closes the form on cancel without posting', async () => {
+      supplementaires = [message()];
+      render(<AvecEntete slug="simatis" />);
+      fireEvent.click(await screen.findByText('Répondre à Christophe : Point fictif'));
+      fireEvent.click(screen.getByRole('button', { name: 'Répondre' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      expect(screen.queryByLabelText('Corps du message')).toBeNull();
+      expect(posts()).toHaveLength(0);
+    });
   });
 
   it('shows the simulation message and keeps the subject', async () => {
