@@ -8,6 +8,8 @@ export type GoogleOptions = { fetch?: FetchLike };
 
 export type Message = {
   id: string;
+  // Fil Gmail du message : un brouillon de relance y est créé pour rester dans la conversation.
+  threadId?: string;
   date: string | null;
   de: string | null;
   a: string | null;
@@ -333,6 +335,7 @@ export async function historique(
   for (const { id } of list.messages ?? []) {
     const m = await api.request<{
       id: string;
+      threadId?: string;
       snippet?: string;
       payload?: {
         headers?: { name: string; value: string }[];
@@ -350,6 +353,7 @@ export async function historique(
       m.payload?.body?.data;
     out.push({
       id: m.id,
+      ...(m.threadId ? { threadId: m.threadId } : {}),
       date: header(m.payload?.headers, 'Date'),
       de: header(m.payload?.headers, 'From'),
       a: header(m.payload?.headers, 'To'),
