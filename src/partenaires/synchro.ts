@@ -11,6 +11,7 @@ import {
   reference,
   retenir,
   type Changement,
+  type ChangementLu,
   type Conflit,
   type Enveloppe,
   type EtatEchange,
@@ -402,26 +403,26 @@ export async function recevoirDonnees(
 ): Promise<void> {
   const { changements, instantane } = lireLot(env.corps);
   const nom = nomCourt(p.nom);
-  const bilan = { crees: 0, modifies: 0, ignores: 0, conflits: 0, suppressions: 0 };
+  const bilan = { crees: 0, modifies: 0, ignores: 0, conflits: 0, suppressions: 0, erreurs: 0 };
   const refs = await references(tx, p, deps.noeud ?? '');
-  for (const brut of changements) {
+  const appliquerUn = async (tx: Tx, brut: ChangementLu): Promise<void> => {
     if (brut.objet === 'pipeline' || !p.voit.objets.includes(brut.objet)) {
       // SIMATIS OS's pipeline is the reference; an object Marc does not share stays out.
       bilan.ignores++;
-      continue;
+      return;
     }
     const objet = brut.objet;
     const c = filtrerRecu(brut, p);
     const { partage, localId } = await localDe(tx, p, deps.noeud ?? null, objet, c.ref);
     if (partage?.detacheAt) {
       bilan.ignores++;
-      continue;
+      return;
     }
     const [local] = localId ? await lireFiches(tx, objet, p.voit, { ids: [localId] }) : [];
     if (localId && !local) {
       // Ours, deleted here: our deletion is on its way.
       bilan.ignores++;
-      continue;
+      return;
     }
     const fiche: FicheLocale | undefined = local;
     const fusion = fusionner(
@@ -460,7 +461,7 @@ export async function recevoirDonnees(
         );
         bilan.suppressions++;
       } else if (partage) await tx.delete(crmPartages).where(eq(crmPartages.id, partage.id));
-      continue;
+      return;
     }
 
     let id = fiche?.id ?? null;
@@ -468,7 +469,7 @@ export async function recevoirDonnees(
     if (!fiche) {
       if (!appliquer || !creable(objet, appliquer.champs)) {
         bilan.ignores++;
-        continue;
+        return;
       }
       id = await creerFiche(tx, objet, appliquer.champs, { source: source(p), sourceId: c.ref });
       refs.ajouter(objet, id, c.ref);
@@ -518,10 +519,24 @@ export async function recevoirDonnees(
         sourceId: `conflit:${env.id}:${c.ref}`,
       });
     }
+  };
+  for (const brut of changements) {
+    try {
+      // Savepoint: a change the database refuses neither blocks the others nor the envelope,
+      // which would otherwise come back at every pickup.
+      await tx.transaction((sp) => appliquerUn(sp, brut));
+    } catch (error) {
+      bilan.erreurs++;
+      await logEvent(tx, {
+        acteur: 'relais',
+        action: `Changement de ${p.nom} non appliqué (${brut.objet})`,
+        details: { ref: brut.ref, erreur: error instanceof Error ? error.message : String(error) },
+      });
+    }
   }
   await logEvent(tx, {
     acteur: 'relais',
-    action: `Suivi commercial reçu de ${p.nom}${instantane ? ` (instantané ${instantane.page}/${instantane.pages})` : ''} : ${bilan.crees} créée(s), ${bilan.modifies} modifiée(s), ${bilan.suppressions} suppression(s) à confirmer, ${bilan.conflits} conflit(s), ${bilan.ignores} ignorée(s)`,
+    action: `Suivi commercial reçu de ${p.nom}${instantane ? ` (instantané ${instantane.page}/${instantane.pages})` : ''} : ${bilan.crees} créée(s), ${bilan.modifies} modifiée(s), ${bilan.suppressions} suppression(s) à confirmer, ${bilan.conflits} conflit(s), ${bilan.ignores} ignorée(s), ${bilan.erreurs} en erreur`,
     details: { enveloppe: env.id },
   });
 }

@@ -542,6 +542,38 @@ describe('Partenaires : suivi commercial partagé (profil crm/1)', () => {
     expect(await recusAlpes()).toEqual([]);
   });
 
+  it('applies the rest of a batch when the database refuses one change, once', async () => {
+    const p = await connexion();
+    const bloquee = reference(alpesNoeud, randomUUID());
+    // A record already holds this source: the creation is refused.
+    await owner()
+      .insert(entreprises)
+      .values({
+        instanceId: client.id,
+        nom: 'Doublon fictif',
+        source: `partenaire:${p.connexionId}`,
+        sourceId: bloquee,
+      });
+    await envoyerAlpes([
+      changement({
+        objet: 'entreprise',
+        ref: bloquee,
+        modifie_le: dans(1),
+        champs: { nom: 'Refusée' },
+      }),
+      changement({
+        objet: 'affaire',
+        ref: ref(ids.A1),
+        modifie_le: dans(9000),
+        champs: { origine: 'Après le refus' },
+      }),
+    ]);
+    expect((await tour()).traitees).toBe(1);
+    expect((await affaire()).origine).toBe('Après le refus');
+    expect((await tour()).traitees).toBe(0);
+    await lotsAlpes();
+  });
+
   it('sends nothing while real writes are closed, and shows no partner data to another instance', async () => {
     await owner()
       .update(opportunites)
