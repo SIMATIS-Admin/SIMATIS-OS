@@ -2,6 +2,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  ContactAConfirmer,
+  ContactFroid,
   BrouillonCampagne,
   CampagneProspection,
   ResultatCampagne,
@@ -17,6 +19,8 @@ let taches: TacheRelance[];
 let campagne: CampagneProspection;
 let vue: VueProspection;
 let resultat: ResultatCampagne;
+let echantillon: ContactFroid[];
+let epuises: ContactAConfirmer[];
 let refus: { url: RegExp; message: string } | null;
 
 const brouillon = (
@@ -54,6 +58,12 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     });
   }
   if (url.endsWith('/prospection/taches-relance')) return json(taches);
+  if (url.includes('/prospection/echantillon')) return json(echantillon);
+  if (url.endsWith('/prospection/epuises')) return json(epuises);
+  if (/\/epuises\/(confirmer|garder)$/.test(url)) {
+    epuises = epuises.filter((e) => !((body as { ids: string[] }).ids ?? []).includes(e.id));
+    return json({ modifies: 1 });
+  }
   if (url.endsWith('/prospection') && method === 'GET') return json(vue);
   if (url.endsWith('/prospection/campagnes') && method === 'POST') {
     return json({ campagneId: campagne.id, refusees: [] }, 201);
@@ -77,6 +87,34 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
 beforeEach(() => {
   calls = [];
   refus = null;
+  echantillon = [
+    {
+      id: 'f1',
+      nom: 'Inès Marchand',
+      entreprise: 'Usinage Fictif',
+      fonction: 'Gérante',
+      touche: 1,
+    },
+    { id: 'f2', nom: 'Paul Roux', entreprise: 'Fonderie Fictive', fonction: null, touche: 2 },
+  ];
+  epuises = [
+    {
+      id: 'e1',
+      nom: 'Louis Roche',
+      entreprise: 'Atelier Roche',
+      touches: 4,
+      touchesMax: 4,
+      derniereLe: '2026-10-01T08:00:00Z',
+    },
+    {
+      id: 'e2',
+      nom: 'Mia Perret',
+      entreprise: 'Atelier Perret',
+      touches: 3,
+      touchesMax: 3,
+      derniereLe: null,
+    },
+  ];
   taches = [
     {
       id: 't1',
@@ -143,6 +181,7 @@ beforeEach(() => {
     signatures: [{ id: 's1', nom: 'Simatis', defaut: true, typeMime: 'image/png' }],
     recentes: [],
     enCours: null,
+    froid: { disponibles: 2, aRelancer: 0 },
   };
   resultat = {
     brouillons: 1,
@@ -420,5 +459,102 @@ describe('Accueil : campagnes récentes', () => {
     ];
     render(<Prospection slug="simatis" />);
     expect(await screen.findByText('Relance de tâches')).toBeTruthy();
+  });
+});
+
+describe('Prospecter à froid', () => {
+  async function versReglageFroid() {
+    render(<Prospection slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tirer un échantillon' }));
+    await screen.findByText('Échantillon de la base vivante');
+    await screen.findByText('Inès Marchand');
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer avec 2 contacts' }));
+    await screen.findByText(/Régler la campagne/);
+  }
+
+  it('tire un échantillon, permet d’en retirer un contact et continue', async () => {
+    render(<Prospection slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tirer un échantillon' }));
+    await screen.findByText('Inès Marchand');
+    expect(calls.find((c) => c.url.includes('/echantillon'))?.url).toContain('nombre=30');
+    fireEvent.click(screen.getByLabelText('Garder Paul Roux'));
+    expect(screen.getByRole('button', { name: 'Continuer avec 1 contact' })).toBeTruthy();
+  });
+
+  it('refait un tirage avec le nombre et le filtre choisis', async () => {
+    render(<Prospection slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tirer un échantillon' }));
+    await screen.findByText('Inès Marchand');
+    fireEvent.change(screen.getByLabelText('Nombre de contacts'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Filtre'), { target: { value: 'fonderie' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tirer un autre échantillon' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.includes('nombre=12&filtre=fonderie'))).toBe(true),
+    );
+  });
+
+  it('prévient quand aucun contact ne correspond', async () => {
+    echantillon = [];
+    render(<Prospection slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tirer un échantillon' }));
+    expect(await screen.findByText(/Aucun contact ne correspond/)).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /Continuer avec 0 contact/ }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('règle les touches maximum et lance la campagne à froid', async () => {
+    await versReglageFroid();
+    fireEvent.change(screen.getByLabelText('Touches maximum'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Rédiger les 2 brouillons' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/campagnes'))).toBe(true),
+    );
+    const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/campagnes'))!;
+    expect(post.body).toMatchObject({
+      mode: 'froid',
+      baseIds: ['f1', 'f2'],
+      reglage: { touchesMax: 3 },
+    });
+    expect(post.body).not.toHaveProperty('liens');
+  });
+});
+
+describe('Contacts épuisés', () => {
+  it('liste, marque un contact épuisé, en garde un autre', async () => {
+    vue.stats.aConfirmer = 2;
+    render(<Prospection slug="simatis" />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Contacts épuisés à confirmer (2)' }),
+    );
+    expect(await screen.findByText('Louis Roche')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Marquer Louis Roche épuisé' }));
+    await waitFor(() => expect(screen.queryByText('Louis Roche')).toBeNull());
+    expect(calls.find((c) => c.url.endsWith('/epuises/confirmer'))?.body).toEqual({ ids: ['e1'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Garder Mia Perret' }));
+    await waitFor(() => expect(screen.getByText('Aucun contact à confirmer.')).toBeTruthy());
+    expect(calls.find((c) => c.url.endsWith('/epuises/garder'))?.body).toEqual({ ids: ['e2'] });
+  });
+
+  it('marque plusieurs contacts en lot', async () => {
+    vue.stats.aConfirmer = 2;
+    render(<Prospection slug="simatis" />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Contacts épuisés à confirmer (2)' }),
+    );
+    await screen.findByText('Louis Roche');
+    fireEvent.click(screen.getByLabelText('Choisir Louis Roche'));
+    fireEvent.click(screen.getByLabelText('Choisir Mia Perret'));
+    fireEvent.click(screen.getByRole('button', { name: 'Marquer épuisés (2)' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith('/epuises/confirmer'))?.body).toEqual({
+        ids: ['e1', 'e2'],
+      }),
+    );
+  });
+
+  it('n’affiche pas le lien quand il n’y a rien à confirmer', async () => {
+    render(<Prospection slug="simatis" />);
+    expect(await screen.findByText('Aucun contact épuisé à confirmer.')).toBeTruthy();
   });
 });

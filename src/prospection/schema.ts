@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { baseVivante } from '../base-vivante/schema.js';
 import { contacts, taches } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
@@ -29,6 +30,8 @@ export const prospectionOccurrences = pgTable(
     ...metierColumns(),
     mode: text('mode', { enum: MODES_OCCURRENCE }).notNull(),
     contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+    // Prospection à froid : le contact vient de la base vivante, pas du CRM.
+    baseId: uuid('base_id').references(() => baseVivante.id, { onDelete: 'set null' }),
     contactNom: text('contact_nom').notNull(),
     societe: text('societe'),
     theme: text('theme').notNull(),
@@ -136,6 +139,7 @@ export const prospectionBrouillons = pgTable(
       .references(() => prospectionCampagnes.id, { onDelete: 'cascade' }),
     tacheId: uuid('tache_id').references(() => taches.id, { onDelete: 'set null' }),
     contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+    baseId: uuid('base_id').references(() => baseVivante.id, { onDelete: 'set null' }),
     contactNom: text('contact_nom').notNull(),
     contactEmail: text('contact_email').notNull(),
     societe: text('societe'),
@@ -157,3 +161,28 @@ export const prospectionBrouillons = pgTable(
 
 export type Campagne = typeof prospectionCampagnes.$inferSelect;
 export type Brouillon = typeof prospectionBrouillons.$inferSelect;
+
+export const STATUTS_FROID = ['actif', 'epuise'] as const;
+export type StatutFroid = (typeof STATUTS_FROID)[number];
+
+// Où en est chaque contact de la base vivante dans la prospection à froid : nombre de touches
+// (brouillons créés), plafond choisi à la campagne, dernière touche. « Épuisé » : plus jamais
+// proposé, sur confirmation de Marc seulement.
+export const prospectionSuiviFroid = pgTable(
+  'prospection_suivi_froid',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    baseId: uuid('base_id')
+      .notNull()
+      .references(() => baseVivante.id, { onDelete: 'cascade' }),
+    touches: integer('touches').notNull().default(0),
+    touchesMax: integer('touches_max').notNull().default(4),
+    derniereLe: timestamp('derniere_le', { withTimezone: true }),
+    statut: text('statut', { enum: STATUTS_FROID }).notNull().default('actif'),
+  },
+  (t) => [
+    uniqueIndex('prospection_suivi_froid_base_idx').on(t.instanceId, t.baseId),
+    instanceIsolation('prospection_suivi_froid'),
+  ],
+);

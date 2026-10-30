@@ -365,6 +365,13 @@
       "when": 1793350656458,
       "tag": "0051_busy_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1793353190100,
+      "tag": "0052_broken_power_man",
+      "breakpoints": true
     }
   ]
 }

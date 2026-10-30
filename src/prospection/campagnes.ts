@@ -33,7 +33,7 @@ export type CampagneVue = Omit<Campagne, 'instanceId' | 'source' | 'sourceId'> &
   brouillons: BrouillonVue[];
 };
 
-async function verifierReglage(tx: Executor, r: ReglageCampagne) {
+export async function verifierReglage(tx: Executor, r: ReglageCampagne) {
   if (!(OFFRES as readonly string[]).includes(r.offre)) {
     throw new CampagneInvalide('Offre inconnue.');
   }

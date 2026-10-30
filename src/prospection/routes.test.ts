@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { insererFiche } from '../../test/fiche-base.js';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
 import { contacts, entreprises, taches } from '../crm/schema.js';
@@ -361,6 +362,95 @@ describe('Routes de la prospection', () => {
       expect(
         (await app.inject({ method: 'GET', url: `${autre}/campagnes/${campagneId}` })).statusCode,
       ).toBe(404);
+    });
+  });
+
+  describe('prospection à froid', () => {
+    async function fiche(nom: string) {
+      const id = await insererFiche(t.owner.db, {
+        instanceId,
+        zone: 'prospectable',
+        entreprise: `Atelier ${nom}`,
+        prenom: nom,
+        nom: 'Fictif',
+        email: `${nom.toLowerCase()}@fictif.test`,
+        provenance: 'Salon fictif',
+      });
+      return id;
+    }
+    const reglage = {
+      offre: 'vma',
+      creneaux: true,
+      signatureId: null,
+      suivi: { type: 'courte' },
+      touchesMax: 4,
+    };
+
+    it('tire un échantillon, filtré, et le compte dans l’accueil', async () => {
+      const id = await fiche('Zéphirine');
+      const r = (
+        await app.inject({ method: 'GET', url: `${base}/echantillon?nombre=5&filtre=zephirine` })
+      ).json<{ id: string; touche: number }[]>();
+      expect(r).toEqual([expect.objectContaining({ id, touche: 1 })]);
+      const accueil = (await app.inject({ method: 'GET', url: base })).json<{
+        froid: { disponibles: number };
+      }>();
+      expect(accueil.froid.disponibles).toBeGreaterThanOrEqual(1);
+    });
+
+    it('crée une campagne à froid, refuse un contact inconnu', async () => {
+      const id = await fiche('Octave');
+      const ok = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: { mode: 'froid', baseIds: [id], reglage },
+      });
+      expect(ok.statusCode).toBe(201);
+      const c = (
+        await app.inject({
+          method: 'GET',
+          url: `${base}/campagnes/${ok.json<{ campagneId: string }>().campagneId}`,
+        })
+      ).json<CampagneVue>();
+      expect(c.mode).toBe('froid');
+      const ko = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: { mode: 'froid', baseIds: ['00000000-0000-4000-8000-000000000001'], reglage },
+      });
+      expect(ko.statusCode).toBe(400);
+    });
+
+    it('liste, confirme et garde les contacts épuisés', async () => {
+      const id = await fiche('Ursule');
+      await t.owner.db.insert((await import('./schema.js')).prospectionSuiviFroid).values({
+        instanceId,
+        baseId: id,
+        touches: 4,
+        touchesMax: 4,
+        derniereLe: new Date(Date.now() - 30 * 86400_000),
+      });
+      const liste = (await app.inject({ method: 'GET', url: `${base}/epuises` })).json<
+        { id: string; nom: string }[]
+      >();
+      expect(liste.find((x) => x.id === id)?.nom).toBe('Ursule Fictif');
+      const garde = await app.inject({
+        method: 'POST',
+        url: `${base}/epuises/garder`,
+        payload: { ids: [id] },
+      });
+      expect(garde.json()).toEqual({ modifies: 1 });
+      expect(
+        (await app.inject({ method: 'GET', url: `${base}/epuises` }))
+          .json<{ id: string }[]>()
+          .some((x) => x.id === id),
+      ).toBe(false);
+      const mauvais = await app.inject({
+        method: 'POST',
+        url: `${base}/epuises/confirmer`,
+        payload: { ids: ['pas-un-id'] },
+      });
+      expect(mauvais.statusCode).toBe(400);
     });
   });
 });

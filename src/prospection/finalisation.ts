@@ -16,6 +16,7 @@ import {
   prospectionCampagnes,
   prospectionOccurrences,
   prospectionSignatures,
+  prospectionSuiviFroid,
   type ReglageCampagne,
   type ResultatCampagne,
   type SuiviBrouillon,
@@ -206,7 +207,8 @@ export async function finaliserCampagne(
     const echeanceDe = new Map<string, string>();
     aEtaler.forEach((b, i) => echeanceDe.set(b.id, etalees[i] as string));
 
-    const crm = await crmHubspot(tx);
+    const froid = campagne.mode === 'froid';
+    const crm = froid ? null : await crmHubspot(tx);
     const resultat: ResultatCampagne = {
       brouillons: 0,
       simulation: false,
@@ -257,8 +259,9 @@ export async function finaliserCampagne(
         .where(eq(prospectionBrouillons.id, b.id));
       await tx.insert(prospectionOccurrences).values({
         instanceId: currentInstance,
-        mode: 'relance',
+        mode: campagne.mode,
         contactId: b.contactId,
+        baseId: b.baseId,
         contactNom: b.contactNom,
         societe: b.societe,
         theme: themeDe(r.offre),
@@ -268,6 +271,31 @@ export async function finaliserCampagne(
         lot: campagneId,
       });
 
+      if (froid && b.baseId) {
+        // Le contact avance dans la séquence ; « dossier clos » décidé par Marc l'en retire.
+        const statut = b.suiviType === 'clos' ? ('epuise' as const) : ('actif' as const);
+        await tx
+          .insert(prospectionSuiviFroid)
+          .values({
+            instanceId: currentInstance,
+            baseId: b.baseId,
+            touches: b.touche,
+            touchesMax: r.touchesMax,
+            derniereLe: new Date(),
+            statut,
+          })
+          .onConflictDoUpdate({
+            target: [prospectionSuiviFroid.instanceId, prospectionSuiviFroid.baseId],
+            set: {
+              touches: b.touche,
+              touchesMax: r.touchesMax,
+              derniereLe: new Date(),
+              statut,
+              updatedAt: new Date(),
+            },
+          });
+      }
+
       if (b.suiviType === 'clos') {
         resultat.clos += 1;
       } else {
@@ -276,7 +304,9 @@ export async function finaliserCampagne(
             ? jourDe(b.suiviDate)
             : (echeanceDe.get(b.id) as string);
         const tache = {
-          titre: `RELANCE de prospection (MAIL) : ${b.contactNom}`,
+          titre: froid
+            ? `Relance à froid (MAIL), touche ${b.touche + 1} : ${b.contactNom}`
+            : `RELANCE de prospection (MAIL) : ${b.contactNom}`,
           type: 'email' as const,
           echeance: zoned(jour, '09:00', FUSEAU).toISOString(),
           contactId: b.contactId,
