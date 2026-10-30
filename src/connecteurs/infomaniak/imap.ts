@@ -9,7 +9,13 @@ import {
 } from 'imapflow';
 import type { SyncCtx } from '../../connexions/types.js';
 import { logEvent } from '../../journal/service.js';
-import { mimeBrut, type Brouillon, type Fil, type Message } from '../google/google.js';
+import {
+  mimeBrut,
+  type Brouillon,
+  type BrouillonMessage,
+  type Fil,
+  type Message,
+} from '../google/google.js';
 
 // A mailbox read over IMAP (Infomaniak): same reads and the same single write (a draft, never a
 // sent email) as the Gmail connector. One short connection per call, closed when it returns.
@@ -256,7 +262,7 @@ export async function verifier(secrets: Record<string, string>, nom = 'cette ins
 // Draft in the instance's own mailbox, never sent: the pilot reviews and sends it himself.
 export async function createDraft(
   ctx: SyncCtx,
-  draft: { to: string; subject: string; html: string },
+  draft: BrouillonMessage,
 ): Promise<{ draftId: string | null; simulation: boolean }> {
   if (!ctx.reel) {
     await logEvent(ctx.tx, {

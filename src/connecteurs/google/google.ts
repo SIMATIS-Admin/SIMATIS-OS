@@ -93,35 +93,82 @@ export function sansSignature(html: string): string {
 const encodeHeader = (value: string) =>
   /^[\x20-\x7e]*$/.test(value) ? value : `=?UTF-8?B?${Buffer.from(value).toString('base64')}?=`;
 
+// Image incorporée au message (signature) : elle s'affiche dans le corps par `<img src="cid:…">`.
+export type ImageIntegree = { cid: string; typeMime: string; base64: string };
+export type BrouillonMessage = {
+  to: string;
+  subject: string;
+  html: string;
+  images?: ImageIntegree[];
+};
+
+const TYPES_IMAGE = ['image/png', 'image/jpeg'];
+
+function partieImage({ cid, typeMime, base64 }: ImageIntegree): string[] {
+  // Ces trois valeurs finissent dans des en-têtes ou dans le corps : on n'accepte que le sûr.
+  if (!TYPES_IMAGE.includes(typeMime))
+    throw new Error(`Type d'image non pris en charge : ${typeMime}`);
+  if (!/^[A-Za-z0-9._-]{1,60}$/.test(cid)) throw new Error('Identifiant d’image invalide');
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw new Error('Image illisible');
+  return [
+    `Content-Type: ${typeMime}; name="${cid}"`,
+    'Content-Transfer-Encoding: base64',
+    `Content-ID: <${cid}>`,
+    `Content-Disposition: inline; filename="${cid}"`,
+    '',
+    ...(base64.match(/.{1,76}/g) ?? []),
+  ];
+}
+
 // The raw message, with any extra header lines (From, Date…) a mailbox other than Gmail needs.
+// Sans image : une seule partie HTML. Avec images : multipart/related (HTML puis une partie par image).
 export function mimeBrut(
-  { to, subject, html }: { to: string; subject: string; html: string },
+  { to, subject, html, images = [] }: BrouillonMessage,
   entetes: string[] = [],
 ) {
-  const lines = [
+  const entete = [
     ...entetes,
     // One line only: a line break in an address would add a header of its own (a hidden Bcc).
     `To: ${to.replace(/[\r\n]+/g, ' ')}`,
     `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
+  ];
+  // Mail servers cut lines beyond 998 characters: base64 goes 76 per line.
+  const corps =
+    Buffer.from(sansSignature(html))
+      .toString('base64')
+      .match(/.{1,76}/g) ?? [];
+  if (images.length === 0) {
+    return [
+      ...entete,
+      'Content-Type: text/html; charset="UTF-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      ...corps,
+    ].join('\r\n');
+  }
+  const frontiere = `simatis-${randomUUID()}`;
+  return [
+    ...entete,
+    `Content-Type: multipart/related; boundary="${frontiere}"`,
+    '',
+    `--${frontiere}`,
     'Content-Type: text/html; charset="UTF-8"',
     'Content-Transfer-Encoding: base64',
     '',
-    // Mail servers cut lines beyond 998 characters: base64 goes 76 per line.
-    ...(Buffer.from(sansSignature(html))
-      .toString('base64')
-      .match(/.{1,76}/g) ?? []),
-  ];
-  return lines.join('\r\n');
+    ...corps,
+    ...images.flatMap((image) => [`--${frontiere}`, ...partieImage(image)]),
+    `--${frontiere}--`,
+  ].join('\r\n');
 }
 
-export const mimeMessage = (draft: { to: string; subject: string; html: string }) =>
+export const mimeMessage = (draft: BrouillonMessage) =>
   Buffer.from(mimeBrut(draft)).toString('base64url');
 
 // Draft in the instance's own Gmail, never sent: Marc reviews and sends it himself.
 export async function createDraft(
   ctx: SyncCtx,
-  draft: { to: string; subject: string; html: string },
+  draft: BrouillonMessage & { threadId?: string },
   options: GoogleOptions = {},
 ): Promise<{ draftId: string | null; simulation: boolean }> {
   if (!ctx.reel) {
@@ -132,7 +179,8 @@ export async function createDraft(
     return { draftId: null, simulation: true };
   }
   const created = await googleApi(ctx, options).request<{ id: string }>('POST', `${GMAIL}/drafts`, {
-    message: { raw: mimeMessage(draft) },
+    // Avec un fil, le brouillon se range dans la conversation du contact.
+    message: { raw: mimeMessage(draft), ...(draft.threadId ? { threadId: draft.threadId } : {}) },
   });
   await logEvent(ctx.tx, {
     acteur: 'os',

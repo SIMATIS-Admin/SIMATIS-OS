@@ -1,6 +1,12 @@
 import { registerConnector } from '../../connexions/service.js';
 import type { Connector } from '../../connexions/types.js';
-import { createDraft, googleApi, sendMessage, type GoogleOptions } from './google.js';
+import {
+  createDraft,
+  googleApi,
+  sendMessage,
+  type GoogleOptions,
+  type ImageIntegree,
+} from './google.js';
 
 const VIDE = { lus: 0, crees: 0, maj: 0, erreurs: [] };
 
@@ -14,14 +20,24 @@ export function gmailConnector(options: GoogleOptions = {}): Connector {
       return VIDE;
     },
     write: async (ctx, op) => {
-      const { to, subject, html } = op.data as { to: string; subject: string; html: string };
+      const { to, subject, html, images, threadId } = op.data as {
+        to: string;
+        subject: string;
+        html: string;
+        images?: ImageIntegree[];
+        threadId?: string;
+      };
       if (op.op === 'message.send') {
         const result = await sendMessage(ctx, { to, subject, html }, options);
         return { simulation: result.simulation };
       }
       if (op.op !== 'draft.create')
         throw new Error(`Écriture Gmail non prise en charge : ${op.op}`);
-      const result = await createDraft(ctx, { to, subject, html }, options);
+      const result = await createDraft(
+        ctx,
+        { to, subject, html, ...(images ? { images } : {}), ...(threadId ? { threadId } : {}) },
+        options,
+      );
       return { simulation: result.simulation, ...(result.draftId ? { id: result.draftId } : {}) };
     },
   };
