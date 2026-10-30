@@ -51,6 +51,16 @@ Les cas 1 et 2 sont le même mécanisme (« Relancer des tâches »). Le cas 3 e
 - **Les mêmes chiffres apparaissent dans le Brief du jour** (mails envoyés aujourd'hui, objectif, tâches de relance faites et restantes).
 - Source : table d'occurrences de prospection (campagne, contact, date, thème, numéro de touche, état : brouillon, envoyé, réponse, rendez-vous). La base vivante en reçoit le statut (`contacté`, `a répondu`, `épuisé`).
 
+## Réponses à une campagne, dans l'Inbox
+
+L'Inbox de l'OS (section existante, entrées de plusieurs types : mails à répondre, devis, comptes rendus, brouillons non envoyés, etc.) reste le point d'arrivée des réponses. Elle gagne la reconnaissance des réponses de prospection :
+
+- **Détection.** Une entrée « mail à répondre » dont le fil correspond à une occurrence de prospection (même fil Gmail ou même contact) est signalée comme « Réponse à une campagne », avec la campagne, l'offre et le numéro de touche.
+- **Trois actions sur l'entrée**, dans l'esprit de celles qui existent déjà : **Rédiger la réponse** (brouillon Gmail), **Marquer comme traité**, **Transformer en tâche** (relance plus tard : la tâche réapparaît dans « Relancer des tâches », et Marc rédige alors son brouillon dans une campagne).
+- **Rédiger la réponse** s'adapte à la teneur du message du contact, pas au seul cadre de prospection. Claude lit le fil et propose une intention que Marc peut changer : intérêt (créneaux d'échange), refus (accepter poliment et remercier, sans relancer), date de reprise citée (accuser réception, suivi à cette date), ou autre (réponse libre au message). Le résultat est un **brouillon Gmail, jamais un envoi direct** ; signature « aucune » par défaut, modifiable. Marc le relit dans Gmail, signe et envoie.
+- **Effets sur la prospection.** À la réception de la réponse, l'occurrence passe à « réponse » ; en froid, la séquence s'arrête pour ce contact (statut `a répondu`, passage dans HubSpot) ; la tâche de suivi en attente est remplacée selon l'intention (refus : dossier clos, aucune tâche).
+- Une réponse qui n'a pas de campagne d'origine reste une entrée Inbox ordinaire.
+
 ## Envoi et garde-fous
 
 - Le droit Gmail existant (`gmail.compose`) couvre brouillons et envoi.
@@ -69,4 +79,4 @@ La maquette n'utilise que des noms, sociétés et chiffres inventés (règle de 
 
 ## Hors périmètre de cette étape
 
-Code produit, connexion Gmail/HubSpot réelle, table d'occurrences, génération par Claude, import des signatures. Ils feront l'objet d'un plan de construction après validation de la maquette.
+Code produit, liaison Inbox et campagnes (détection des réponses, bouton de rédaction), connexion Gmail/HubSpot réelle, table d'occurrences, génération par Claude, import des signatures. Ils feront l'objet d'un plan de construction après validation de la maquette.
