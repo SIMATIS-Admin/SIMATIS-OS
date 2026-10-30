@@ -69,7 +69,10 @@ const vueInvitation = (i: InvitationPartenaire) => ({
 
 const rejoindreSchema = z.object({ lien: z.string().trim().min(1).max(500) });
 const inviterSchema = z.object({
-  email: z.preprocess((v) => (v === '' ? undefined : v), z.email().max(254).optional()),
+  email: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().trim().max(254).optional(),
+  ),
 });
 const CLES_EXCLUABLES = CHAMPS_EXCLUABLES.map((c) => c.cle) as [
   ChampExcluable,

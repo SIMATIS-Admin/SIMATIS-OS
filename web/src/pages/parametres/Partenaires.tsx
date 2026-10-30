@@ -112,12 +112,13 @@ function Inviter({
       <div className="panel-b stack" style={{ gap: 8 }}>
         <label className="field">
           <span>
-            E-mail du partenaire (facultatif){' '}
+            Pour qui ? (facultatif){' '}
             <Tip text="Seulement pour reconnaître l'invitation : aucun mail n'est envoyé. Transmettez vous-même le lien ; le partenaire le colle dans son OS." />
           </span>
           <input
             className="input"
-            type="email"
+            type="text"
+            placeholder="Nom ou e-mail"
             autoComplete="off"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -153,7 +154,7 @@ function Invitation({ invitation }: { invitation: InvitationVue }) {
     <div className="panel">
       <div className="panel-h">
         <div>
-          <h2>{invitation.email ?? 'Invitation sans e-mail'}</h2>
+          <h2>{invitation.email ?? 'Invitation sans nom'}</h2>
           <div className="small muted">
             Créée le {date(invitation.creeeLe)} · valable jusqu'au {date(invitation.expireLe)}
           </div>

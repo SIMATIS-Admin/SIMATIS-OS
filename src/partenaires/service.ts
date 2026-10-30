@@ -197,7 +197,8 @@ export async function inviter(
       });
       await retenirNoeud(instance, inscription, deps);
     }
-    invitation = await client.inviter(email ? { email } : {});
+    // The name only helps the pilot recognise the invitation: it stays here, the relay never needs it.
+    invitation = await client.inviter();
   } catch (error) {
     if (error instanceof ErreurRelais && !error.passagere)
       throw new PartenaireRefuse(error.message);
