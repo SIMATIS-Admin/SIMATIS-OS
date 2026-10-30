@@ -14,7 +14,7 @@ Système d'exploitation interne de SIMATIS (direction commerciale en mode partag
 
 ## Démarrage
 
-Le plan de développement est dans [docs/plan.md](docs/plan.md). Les règles de contribution (dont la confidentialité) sont dans [AGENTS.md](AGENTS.md).
+Le plan de développement est dans [docs/plan.md](docs/plan.md). Brancher un nouveau CRM : [docs/AJOUTER-UN-CRM.md](docs/AJOUTER-UN-CRM.md). Les règles de contribution (dont la confidentialité) sont dans [AGENTS.md](AGENTS.md).
 
 ## Démarrer en local
 
