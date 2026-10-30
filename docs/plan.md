@@ -81,7 +81,7 @@ Livré : Bases vivantes, Site web (Analytics).
 
 Reste :
 
-- **Prospection** : maquette refaite (campagnes de relance et de prospection à froid, statistiques, signatures), à essayer par Marc. Spec : `docs/superpowers/specs/2026-10-30-prospection-design.md`. Reste à construire : table d'occurrences, génération par Claude, Gmail et HubSpot réels, import des signatures.
+- **Prospection** : livraisons 1 (socle, chiffres, signatures) et 2 (relancer des tâches : choix, rédaction par Claude, relecture, brouillons de messagerie, suivis) livrées. Restent : 3 prospection à froid (échantillon de la base vivante, touches, contacts épuisés), 4 envoi direct (« Valider et envoyer » derrière le double verrou), 5 Inbox (réponses aux campagnes, « Rédiger la réponse »). Spec : `docs/superpowers/specs/2026-10-30-prospection-design.md`.
 - **Détection** : reportée, à repenser (d'où vient la donnée, ce qu'un clic doit produire).
 - Bases vivantes : branchement sur la base de données commune en conception avec le partenaire.
 
