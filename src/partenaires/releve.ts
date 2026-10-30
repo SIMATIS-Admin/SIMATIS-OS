@@ -16,6 +16,8 @@ import {
   type RelaisDeps,
 } from './service.js';
 import { stockageInstance } from './stockage.js';
+// Received missions become proposals: their types must be known.
+import './types-propositions.js';
 
 const GARDE_VUS_MS = 90 * 86_400_000;
 
@@ -41,7 +43,7 @@ export async function tourPartenaires(
   const recu = await relever({
     client,
     stockage,
-    traiter: (env) => traiterEnveloppe(db, instance, env),
+    traiter: (env) => traiterEnveloppe(db, instance, env, deps),
     invalide: (env, problemes) => journaliserInvalide(db, instance, env, problemes),
   });
   const envoi = await vider({

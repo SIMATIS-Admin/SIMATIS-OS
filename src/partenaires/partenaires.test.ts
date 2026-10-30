@@ -1,15 +1,19 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import {
   creerClient,
   etat,
+  lireEtat,
   lireMission,
+  mission as nouvelleMission,
   note,
   relaisSimule,
   type Client,
+  type Etat,
+  type Message,
   type Mission,
 } from 'os-agents-relay';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -19,10 +23,12 @@ import { withInstance } from '../db/context.js';
 import { sujets } from '../inbox/schema.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
+import { propositions } from '../propositions/schema.js';
 import { decide, propose } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { tourPartenaires } from './releve.js';
-import { donneesEnvoyees, missions, partenaires, relaisSorties } from './schema.js';
+import { lireMessageLibre, messageLibre } from './messages.js';
+import { messagesPartenaires, missions, partenaires, relaisSorties } from './schema.js';
 import { traiterEnveloppe, type RelaisDeps } from './service.js';
 import './types-propositions.js';
 
@@ -33,7 +39,7 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
   let appFermee: FastifyInstance;
   let secretsDir: string;
   let relais: ReturnType<typeof relaisSimule>;
-  let propre: Instance;
+  let client: Instance;
   let autre: Instance;
   let alpes: Client;
   let intrus: Client;
@@ -44,26 +50,26 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
   const envoyer = (
     client: Client,
     connexion: string,
-    type: 'etat' | 'message',
+    type: 'etat' | 'message' | 'mission',
     corps: Record<string, unknown>,
   ) => client.envoyer({ connexion, type, corps });
 
   const sujetsRelais = () =>
-    withInstance(t.app.db, propre.id, (tx) =>
+    withInstance(t.app.db, client.id, (tx) =>
       tx
         .select()
         .from(sujets)
-        .where(and(eq(sujets.instanceId, propre.id), eq(sujets.origine, 'partenaire')))
+        .where(and(eq(sujets.instanceId, client.id), eq(sujets.origine, 'partenaire')))
         .orderBy(sujets.createdAt),
     );
   const mission = (id: string) =>
-    withInstance(t.app.db, propre.id, async (tx) => {
+    withInstance(t.app.db, client.id, async (tx) => {
       const [m] = await tx.select().from(missions).where(eq(missions.id, id));
       if (!m) throw new Error('mission absente');
       return m;
     });
   const partenaireAlpes = () =>
-    withInstance(t.app.db, propre.id, async (tx) => {
+    withInstance(t.app.db, client.id, async (tx) => {
       const [p] = await tx
         .select()
         .from(partenaires)
@@ -76,8 +82,8 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
   // Marc entrusts a mission; at L2 it waits in the Inbox until he validates it.
   const confier = async (consigne: string, titre?: string) => {
     const p = await partenaireAlpes();
-    const ctx = { instance: propre, realWrites: true, secretsDir };
-    const proposee = await withInstance(t.app.db, propre.id, (tx) =>
+    const ctx = { instance: client, realWrites: true, secretsDir };
+    const proposee = await withInstance(t.app.db, client.id, (tx) =>
       propose(tx, ctx, {
         type: 'partenaire.mission',
         auteur: 'agent:claude-marc',
@@ -85,7 +91,7 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
       }),
     );
     expect(proposee.statut).toBe('proposee');
-    const decidee = await withInstance(t.app.db, propre.id, (tx) =>
+    const decidee = await withInstance(t.app.db, client.id, (tx) =>
       decide(tx, ctx, proposee.id, { decision: 'valider', par: 'pilote' }),
     );
     expect(decidee.statut).toBe('appliquee');
@@ -102,16 +108,17 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
   beforeAll(async () => {
     t = await setupTestApp();
     secretsDir = await mkdtemp(path.join(tmpdir(), 'simatis-partenaires-'));
-    propre = await createInstance(t.owner.db, {
-      slug: 'mon-activite',
-      nom: 'Mon activité',
-      type: 'propre',
+    // The client's instance carries the connection with that client's OS.
+    client = await createInstance(t.owner.db, {
+      slug: 'client-fictif',
+      nom: 'Client fictif',
+      type: 'mandat',
       config: { ecrituresReelles: true },
     });
     autre = await createInstance(t.owner.db, {
-      slug: 'mandat-fictif',
-      nom: 'Mandat fictif',
-      type: 'mandat',
+      slug: 'mon-activite',
+      nom: 'Mon activité',
+      type: 'propre',
       config: { ecrituresReelles: true },
     });
     relais = relaisSimule();
@@ -161,51 +168,59 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
     appels = [];
     const res = await appFermee.inject({
       method: 'POST',
-      url: '/api/i/mon-activite/partenaires/rejoindre',
+      url: '/api/i/client-fictif/partenaires/rejoindre',
       payload: { lien },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json<{ error: string }>().error).toMatch(/Écritures réelles désactivées/);
     expect(appels).toEqual([]);
-    expect((await loadInstanceSecrets(secretsDir, 'mon-activite')).RELAIS_NOEUD).toBeUndefined();
+    expect((await loadInstanceSecrets(secretsDir, 'client-fictif')).RELAIS_NOEUD).toBeUndefined();
   });
 
   it('refuses to join from an instance that does not carry partners', async () => {
     const { lien } = await alpes.inviter();
     const res = await app.inject({
       method: 'POST',
-      url: '/api/i/mandat-fictif/partenaires/rejoindre',
+      url: '/api/i/mon-activite/partenaires/rejoindre',
       payload: { lien },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json<{ error: string }>().error).toMatch(/Mon activité/);
+    expect(res.json<{ error: string }>().error).toMatch(/mandat/);
   });
 
   it('joins with the invitation link: node registered, secrets written, partner listed', async () => {
     const { lien } = await alpes.inviter();
     const res = await app.inject({
       method: 'POST',
-      url: '/api/i/mon-activite/partenaires/rejoindre',
+      url: '/api/i/client-fictif/partenaires/rejoindre',
       payload: { lien },
     });
     expect(res.statusCode).toBe(200);
-    const secrets = await loadInstanceSecrets(secretsDir, 'mon-activite');
+    const secrets = await loadInstanceSecrets(secretsDir, 'client-fictif');
     expect(secrets.RELAIS_NOEUD).toBeTruthy();
     expect(secrets.RELAIS_SECRET).toBeTruthy();
     expect(
       (relais.noeuds.get(secrets.RELAIS_NOEUD ?? '') as { nom: string } | undefined)?.nom,
-    ).toBe('SIMATIS OS · Mon activité');
+    ).toBe('SIMATIS OS · Client fictif');
 
     // The connection shows on both sides.
     expect((await alpes.connexions()).map((c) => c.partenaire.nom)).toContain(
-      'SIMATIS OS · Mon activité',
+      'SIMATIS OS · Client fictif',
     );
-    const ecran = await app.inject({ method: 'GET', url: '/api/i/mon-activite/partenaires' });
+    const ecran = await app.inject({ method: 'GET', url: '/api/i/client-fictif/partenaires' });
     const corps = ecran.json<{
-      partenaires: { nom: string; niveau: string; partage: string[] }[];
+      partenaires: { nom: string; niveau: string; voit: unknown }[];
     }>();
     expect(corps.partenaires).toEqual([
-      expect.objectContaining({ nom: 'Alpes OS · Essai', niveau: 'L0', partage: [] }),
+      expect.objectContaining({
+        nom: 'Alpes OS · Essai',
+        niveau: 'L0',
+        voit: {
+          objets: ['entreprise', 'contact', 'affaire', 'tache', 'rendez_vous', 'activite'],
+          champsExclus: [],
+          qualification: false,
+        },
+      }),
     ]);
     expect(ecran.body).not.toContain(secrets.RELAIS_SECRET);
     // Alpes OS hears of the acceptance.
@@ -214,24 +229,24 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
 
   it('keeps a mission in simulation when real writes are closed: nothing queued, nothing sent', async () => {
     const p = await partenaireAlpes();
-    const ctx = { instance: propre, realWrites: false, secretsDir };
-    const proposee = await withInstance(t.app.db, propre.id, (tx) =>
+    const ctx = { instance: client, realWrites: false, secretsDir };
+    const proposee = await withInstance(t.app.db, client.id, (tx) =>
       propose(tx, ctx, {
         type: 'partenaire.mission',
         auteur: 'agent:claude-marc',
         contenu: { partenaireId: p.id, consigne: 'Un livre blanc fictif', titre: 'Essai simulé' },
       }),
     );
-    const decidee = await withInstance(t.app.db, propre.id, (tx) =>
+    const decidee = await withInstance(t.app.db, client.id, (tx) =>
       decide(tx, ctx, proposee.id, { decision: 'valider', par: 'pilote' }),
     );
     const { mission: id } = decidee.resultat as { mission: string };
     expect((await mission(id)).etat).toBe('simulation');
-    const sorties = await withInstance(t.app.db, propre.id, (tx) =>
+    const sorties = await withInstance(t.app.db, client.id, (tx) =>
       tx.select().from(relaisSorties),
     );
     expect(sorties).toEqual([]);
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
     expect(await releverAlpes()).toEqual([]);
   });
 
@@ -242,7 +257,7 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
     );
     expect(e).toBe('submitted');
     expect(await releverAlpes()).toEqual([]);
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
     const [recue] = await releverAlpes();
     expect(recue?.type).toBe('mission');
     const m = recue?.corps as Mission;
@@ -272,9 +287,9 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
       return relais.fetch(entree, init);
     };
     await expect(
-      tourPartenaires(t.app.db, propre, { ...deps, fetch: fetchPerte }),
+      tourPartenaires(t.app.db, client, { ...deps, fetch: fetchPerte }),
     ).rejects.toThrow();
-    const bilan = await tourPartenaires(t.app.db, propre, { ...deps, fetch: fetchNormal });
+    const bilan = await tourPartenaires(t.app.db, client, { ...deps, fetch: fetchNormal });
     expect(bilan).toMatchObject({ traitees: 0, doublons: 1 });
 
     const apres = await mission(id);
@@ -288,14 +303,14 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
 
   it('picks up a state sent while SIMATIS OS was off at the next start, once', async () => {
     const { mission: id } = await confier('Une étude fictive', 'Étude (essai)');
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
     const [recue] = await releverAlpes();
     const connexion = await connexionAlpes();
     const avant = (await sujetsRelais()).length;
 
     // SIMATIS OS is off: the relay is unreachable from here, Christophe answers anyway.
     relais.panne = true;
-    await expect(tourPartenaires(t.app.db, propre, deps)).rejects.toThrow();
+    await expect(tourPartenaires(t.app.db, client, deps)).rejects.toThrow();
     relais.panne = false;
     await envoyer(
       alpes,
@@ -308,8 +323,8 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
         resultat: { titre: 'Étude (essai)', lien: 'https://exemple.test/etude' },
       }),
     );
-    await tourPartenaires(t.app.db, propre, deps);
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
+    await tourPartenaires(t.app.db, client, deps);
 
     expect((await mission(id)).etat).toBe('completed');
     const nouveaux = (await sujetsRelais()).slice(avant);
@@ -327,7 +342,7 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
       'etat',
       etat({ mission: id, etat: 'working', message: 'En cours.' }),
     );
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
     const close = await mission(id);
     expect(close.etat).toBe('completed');
     expect(close.historique.at(-1)?.etat).toBe('working');
@@ -336,7 +351,7 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
 
   it('records a « later » message in the mission history and the Inbox', async () => {
     const { mission: id } = await confier('Une synthèse fictive', 'Synthèse (essai)');
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
     await releverAlpes();
     await envoyer(
       alpes,
@@ -344,7 +359,7 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
       'message',
       note({ texte: 'Reportée à plus tard.', mission: id }),
     );
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
     const m = await mission(id);
     expect(m.dernierMessage).toBe('Reportée à plus tard.');
     expect(m.historique.at(-1)).toMatchObject({ etat: null, message: 'Reportée à plus tard.' });
@@ -355,12 +370,12 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
 
   it('ignores a state about this mission coming from another connection', async () => {
     const { mission: id } = await confier('Une note fictive', 'Note (essai)');
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
     await releverAlpes();
     const { lien } = await intrus.inviter();
     const res = await app.inject({
       method: 'POST',
-      url: '/api/i/mon-activite/partenaires/rejoindre',
+      url: '/api/i/client-fictif/partenaires/rejoindre',
       payload: { lien },
     });
     expect(res.statusCode).toBe(200);
@@ -372,59 +387,235 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
       'etat',
       etat({ mission: id, etat: 'rejected', message: 'Non.' }),
     );
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
     expect((await mission(id)).etat).toBe('submitted');
     expect(await sujetsRelais()).toHaveLength(avant);
   });
 
-  it('sends a fact only when the partner is allowed to see it', async () => {
+  it('sets what the partner sees and its level for received missions', async () => {
     const p = await partenaireAlpes();
-    const ctx = { instance: propre, realWrites: true, secretsDir };
-    const contenu = {
-      partenaireId: p.id,
-      objet: 'affaire' as const,
-      evenement: 'cree' as const,
-      ref: 'affaire-fictive-1',
-      champs: { entreprise: 'Entreprise fictive', ville: 'Villefictive' },
-    };
-    const valider = async () => {
-      const proposee = await withInstance(t.app.db, propre.id, (tx) =>
-        propose(tx, ctx, { type: 'partenaire.donnee', auteur: 'agent:claude-marc', contenu }),
-      );
-      return withInstance(t.app.db, propre.id, (tx) =>
-        decide(tx, ctx, proposee.id, { decision: 'valider', par: 'pilote' }),
-      );
-    };
-    const refusee = await valider();
-    expect(refusee.statut).toBe('echec');
-    expect((refusee.resultat as { erreur: string }).erreur).toMatch(/ne voit pas/);
-
     const patch = await app.inject({
       method: 'PATCH',
-      url: `/api/i/mon-activite/partenaires/${p.id}`,
-      payload: { partage: ['affaire'], niveau: 'L1' },
+      url: `/api/i/client-fictif/partenaires/${p.id}`,
+      payload: {
+        niveau: 'L1',
+        voit: {
+          objets: ['entreprise', 'contact', 'affaire'],
+          champsExclus: ['contact.telephone', 'affaire.montant'],
+          qualification: true,
+        },
+      },
     });
-    expect(patch.json()).toMatchObject({ partenaire: { partage: ['affaire'], niveau: 'L1' } });
+    expect(patch.json()).toMatchObject({
+      partenaire: {
+        niveau: 'L1',
+        voit: {
+          objets: ['entreprise', 'contact', 'affaire'],
+          champsExclus: ['contact.telephone', 'affaire.montant'],
+          qualification: true,
+        },
+      },
+    });
+    // An internal field is not a setting.
+    const interne = await app.inject({
+      method: 'PATCH',
+      url: `/api/i/client-fictif/partenaires/${p.id}`,
+      payload: { voit: { objets: [], champsExclus: ['contact.source_id'], qualification: false } },
+    });
+    expect(interne.statusCode).toBe(400);
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/i/client-fictif/partenaires/${p.id}`,
+      payload: { niveau: 'L0' },
+    });
+  });
 
-    expect((await valider()).statut).toBe('appliquee');
-    const traces = await withInstance(t.app.db, propre.id, (tx) =>
-      tx.select().from(donneesEnvoyees),
+  // Alpes OS entrusts a mission to Marc; what happens depends on the level Marc set.
+  const recevoirMission = async (niveau: 'L0' | 'L1' | 'L2' | 'L3', consigne: string) => {
+    const p = await partenaireAlpes();
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/i/client-fictif/partenaires/${p.id}`,
+      payload: { niveau },
+    });
+    const m = nouvelleMission({ consigne, titre: `${consigne} (${niveau})` });
+    await envoyer(alpes, p.connexionId, 'mission', m);
+    await tourPartenaires(t.app.db, client, deps);
+    return m;
+  };
+  const etatsRecus = async (id: string) =>
+    (await releverAlpes())
+      .filter((e) => e.type === 'etat' && (e.corps as { taskId: string }).taskId === id)
+      .map((e) => lireEtat(e.corps as Etat).etat);
+  const propositionDe = async (missionId: string) => {
+    const [p] = await withInstance(t.app.db, client.id, (tx) =>
+      tx
+        .select()
+        .from(propositions)
+        .where(sql`${propositions.contenu} ->> 'missionId' = ${missionId}`),
     );
-    expect(traces).toEqual([
-      expect.objectContaining({ objet: 'affaire', ref: 'affaire-fictive-1' }),
+    if (!p) throw new Error('proposition absente');
+    return p;
+  };
+  const ctxReel = () => ({ instance: client, realWrites: true, secretsDir });
+
+  it('turns a mission received at L0 into a proposal of the Inbox, accepted by Marc', async () => {
+    const m = await recevoirMission('L0', 'Un rendez-vous fictif à préparer');
+    expect(await mission(m.id)).toMatchObject({
+      sens: 'recue',
+      etat: 'submitted',
+      niveau: 'L0',
+      titre: 'Un rendez-vous fictif à préparer (L0)',
+    });
+    // Nothing goes back before Marc decides.
+    expect(await etatsRecus(m.id)).toEqual([]);
+    const p = await propositionDe(m.id);
+    expect(p).toMatchObject({ type: 'partenaire.mission_recue', statut: 'proposee', niveau: 'L0' });
+    const [sujet] = await withInstance(t.app.db, client.id, (tx) =>
+      tx.select().from(sujets).where(eq(sujets.propositionId, p.id)),
+    );
+    expect(sujet?.titre).toBe('Alpes OS vous confie « Un rendez-vous fictif à préparer (L0) »');
+
+    await withInstance(t.app.db, client.id, (tx) =>
+      decide(tx, ctxReel(), p.id, { decision: 'valider', par: 'pilote' }),
+    );
+    expect((await mission(m.id)).etat).toBe('working');
+    await tourPartenaires(t.app.db, client, deps);
+    expect(await etatsRecus(m.id)).toEqual(['working']);
+  });
+
+  it('tells the partner when Marc refuses a mission received at L1', async () => {
+    const m = await recevoirMission('L1', 'Une relance fictive');
+    const p = await propositionDe(m.id);
+    expect(p.niveau).toBe('L1');
+    await withInstance(t.app.db, client.id, (tx) =>
+      decide(tx, ctxReel(), p.id, { decision: 'ecarter', par: 'pilote' }),
+    );
+    expect((await mission(m.id)).etat).toBe('rejected');
+    await tourPartenaires(t.app.db, client, deps);
+    expect(await etatsRecus(m.id)).toEqual(['rejected']);
+  });
+
+  it('takes a mission in hand at L2, then sends the answer once Marc validates it', async () => {
+    const m = await recevoirMission('L2', 'Une synthèse fictive à préparer');
+    expect((await mission(m.id)).etat).toBe('working');
+    expect((await sujetsRelais()).at(-1)).toMatchObject({
+      titre: 'Alpes OS vous confie « Une synthèse fictive à préparer (L2) »',
+      resume: expect.stringContaining('attendra votre validation') as unknown,
+    });
+    await tourPartenaires(t.app.db, client, deps);
+    expect(await etatsRecus(m.id)).toEqual(['working']);
+
+    const proposee = await withInstance(t.app.db, client.id, (tx) =>
+      propose(tx, ctxReel(), {
+        type: 'partenaire.reponse',
+        auteur: 'agent:claude-marc',
+        niveau: 'L2',
+        contenu: {
+          missionId: m.id,
+          titre: 'Répondre à Alpes OS',
+          etat: 'completed',
+          message: 'Voici la synthèse fictive.',
+          resultat: { lien: 'https://exemple.test/synthese' },
+        },
+      }),
+    );
+    expect(proposee.statut).toBe('proposee');
+    await tourPartenaires(t.app.db, client, deps);
+    expect(await etatsRecus(m.id)).toEqual([]);
+    await withInstance(t.app.db, client.id, (tx) =>
+      decide(tx, ctxReel(), proposee.id, { decision: 'valider', par: 'pilote' }),
+    );
+    await tourPartenaires(t.app.db, client, deps);
+    const [fait] = (await releverAlpes()).filter((e) => e.type === 'etat');
+    expect(lireEtat(fait?.corps as Etat)).toMatchObject({
+      mission: m.id,
+      etat: 'completed',
+      message: 'Voici la synthèse fictive.',
+      resultat: { lien: 'https://exemple.test/synthese' },
+    });
+  });
+
+  it('lets the agent work alone at L3, and keeps a refused send in simulation when writes close', async () => {
+    const m = await recevoirMission('L3', 'Une note fictive');
+    expect((await mission(m.id)).etat).toBe('working');
+    expect((await sujetsRelais()).at(-1)?.resume).toMatch(/L’agent la fait seul/);
+    await tourPartenaires(t.app.db, client, deps);
+    expect(await etatsRecus(m.id)).toEqual(['working']);
+    // Real writes closed: the answer is recorded, nothing leaves.
+    const fermee = await withInstance(t.app.db, client.id, (tx) =>
+      propose(
+        tx,
+        { ...ctxReel(), realWrites: false },
+        {
+          type: 'partenaire.reponse',
+          auteur: 'agent:claude-marc',
+          niveau: 'L3',
+          contenu: { missionId: m.id, titre: 'x', etat: 'completed', message: 'Fait.' },
+        },
+      ),
+    );
+    expect(fermee).toMatchObject({ statut: 'appliquee' });
+    expect((await mission(m.id)).historique.at(-1)?.message).toMatch(/Simulation/);
+    await tourPartenaires(t.app.db, client, deps);
+    expect(await etatsRecus(m.id)).toEqual([]);
+  });
+
+  it('turns a free message into an Inbox subject, and sends one back', async () => {
+    const p = await partenaireAlpes();
+    const question = messageLibre({
+      type: 'question',
+      sujet: 'Atelier fictif de jeudi',
+      texte: 'Le **compte rendu** est ici : https://exemple.test/cr. Qu’en penses-tu ?',
+    });
+    await envoyer(alpes, p.connexionId, 'message', question);
+    await tourPartenaires(t.app.db, client, deps);
+    expect((await sujetsRelais()).at(-1)).toMatchObject({
+      titre: 'Alpes OS demande : Atelier fictif de jeudi',
+      resume: expect.stringContaining('**compte rendu**') as unknown,
+      priorite: 4,
+    });
+
+    const reponse = await withInstance(t.app.db, client.id, (tx) =>
+      propose(tx, ctxReel(), {
+        type: 'partenaire.message',
+        auteur: 'agent:claude-marc',
+        contenu: {
+          partenaireId: p.id,
+          type: 'reponse',
+          sujet: 'Re : atelier fictif',
+          texte: 'Très bien, *merci*.',
+          enReponseA: question.messageId,
+        },
+      }),
+    );
+    await withInstance(t.app.db, client.id, (tx) =>
+      decide(tx, ctxReel(), reponse.id, { decision: 'valider', par: 'pilote' }),
+    );
+    await tourPartenaires(t.app.db, client, deps);
+    const [recu] = (await releverAlpes()).filter((e) => e.type === 'message');
+    expect(lireMessageLibre(recu?.corps as Message)).toMatchObject({
+      type: 'reponse',
+      sujet: 'Re : atelier fictif',
+      texte: 'Très bien, *merci*.',
+      enReponseA: question.messageId,
+    });
+    const traces = await withInstance(t.app.db, client.id, (tx) =>
+      tx.select().from(messagesPartenaires).orderBy(messagesPartenaires.createdAt),
+    );
+    expect(traces.map((m) => [m.sens, m.type])).toEqual([
+      ['recu', 'question'],
+      ['envoye', 'reponse'],
     ]);
-    await tourPartenaires(t.app.db, propre, deps);
-    const [recue] = await releverAlpes();
-    expect(recue).toMatchObject({ id: traces[0]?.id, type: 'donnee' });
   });
 
   it('marks the partner cut when it cuts, and gives up what was still queued for it', async () => {
     const { mission: id } = await confier('Une dernière mission fictive', 'Dernière (essai)');
     const [c] = (await alpes.connexions()).filter(
-      (x) => x.partenaire.nom === 'SIMATIS OS · Mon activité',
+      (x) => x.partenaire.nom === 'SIMATIS OS · Client fictif',
     );
     await alpes.couper(c?.id ?? '');
-    await tourPartenaires(t.app.db, propre, deps);
+    await tourPartenaires(t.app.db, client, deps);
 
     expect((await partenaireAlpes()).statut).toBe('coupee');
     const m = await mission(id);
@@ -433,35 +624,8 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
     expect(titres).toContain('Connexion coupée par Alpes OS');
     expect(titres).toContain('Mission non envoyée à Alpes OS : « Dernière (essai) »');
     expect(
-      await withInstance(t.app.db, propre.id, (tx) => tx.select().from(relaisSorties)),
+      await withInstance(t.app.db, client.id, (tx) => tx.select().from(relaisSorties)),
     ).toEqual([]);
-  });
-
-  it('logs an envelope of brique 2 and acknowledges it without effect', async () => {
-    const [c] = await intrus.connexions();
-    await intrus.envoyer({
-      connexion: c?.id ?? '',
-      type: 'mission',
-      corps: {
-        kind: 'task',
-        id: 'x',
-        contextId: 'y',
-        status: { state: 'submitted', timestamp: 'now' },
-        history: [
-          {
-            kind: 'message',
-            messageId: 'm',
-            role: 'user',
-            parts: [{ kind: 'text', text: 'Fictif' }],
-          },
-        ],
-      },
-    });
-    const bilan = await tourPartenaires(t.app.db, propre, deps);
-    expect(bilan.traitees).toBe(1);
-    expect(
-      (relais.enveloppes as { a: string }[]).filter((e) => e.a === c?.partenaire.id),
-    ).toHaveLength(0);
   });
 
   it('never shows the partners or missions of one instance to another', async () => {
@@ -470,19 +634,24 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
       missions: await tx.select().from(missions),
     }));
     expect(vus).toEqual({ partenaires: [], missions: [] });
-    const ecran = await app.inject({ method: 'GET', url: '/api/i/mandat-fictif/partenaires' });
+    const ecran = await app.inject({ method: 'GET', url: '/api/i/mon-activite/partenaires' });
     expect(ecran.json()).toMatchObject({ porteuse: false, partenaires: [], missions: [] });
     // Nor can it process an envelope into another instance's mission.
     await expect(
-      traiterEnveloppe(t.app.db, autre, {
-        id: 'env-fictive',
-        connexion: await connexionAlpes(),
-        de: 'x',
-        a: 'y',
-        type: 'etat',
-        corps: etat({ mission: 'inconnue', etat: 'completed' }),
-        cree_le: new Date().toISOString(),
-      }),
+      traiterEnveloppe(
+        t.app.db,
+        autre,
+        {
+          id: 'env-fictive',
+          connexion: await connexionAlpes(),
+          de: 'x',
+          a: 'y',
+          type: 'etat',
+          corps: etat({ mission: 'inconnue', etat: 'completed' }),
+          cree_le: new Date().toISOString(),
+        },
+        deps,
+      ),
     ).resolves.toBeUndefined();
   });
 });

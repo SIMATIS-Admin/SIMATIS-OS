@@ -1,10 +1,11 @@
-import { deposer, donnee, EVENEMENTS_DONNEE, lireMission, mission } from 'os-agents-relay';
+import { deposer, lireMission, mission } from 'os-agents-relay';
 import { z } from 'zod';
 import { currentInstance } from '../db/columns.js';
 import { logEvent } from '../journal/service.js';
 import { registerPropositionType } from '../propositions/registry.js';
-import { donneesEnvoyees, missions, OBJETS_PARTAGE } from './schema.js';
-import { PartenaireRefuse, partenaireActif } from './service.js';
+import { messageLibre } from './messages.js';
+import { messagesPartenaires, missions, TYPES_MESSAGE } from './schema.js';
+import { missionRecue, PartenaireRefuse, partenaireActif, repondreMission } from './service.js';
 import { stockageTx } from './stockage.js';
 
 export const missionPartenaire = z.object({
@@ -14,12 +15,33 @@ export const missionPartenaire = z.object({
   contexte: z.record(z.string(), z.unknown()).nullish(),
 });
 
-export const donneePartenaire = z.object({
+// A mission received from a partner, at L0 or L1: validate = accept it, set aside = refuse it.
+// The title and the instruction are only there for the Inbox to show.
+export const missionRecueSchema = z.object({
+  missionId: z.string().min(1).max(200),
+  partenaire: z.string().max(200),
+  titre: z.string().max(400),
+  consigne: z.string().max(10_000),
+});
+
+// What the agent answers to a received mission once accepted: done, a question, refused, failed.
+export const ETATS_REPONSE = ['completed', 'input-required', 'rejected', 'failed'] as const;
+export const reponseMission = z.object({
+  missionId: z.string().min(1).max(200),
+  titre: z.string().max(400),
+  etat: z.enum(ETATS_REPONSE),
+  message: z.string().trim().min(1).max(10_000),
+  resultat: z.record(z.string(), z.unknown()).nullish(),
+});
+
+export const messagePartenaire = z.object({
   partenaireId: z.uuid(),
-  objet: z.enum(OBJETS_PARTAGE),
-  evenement: z.enum(EVENEMENTS_DONNEE),
-  ref: z.string().trim().min(1).max(200),
-  champs: z.record(z.string(), z.union([z.string().max(5_000), z.number(), z.boolean(), z.null()])),
+  // Shown in the Inbox while the message waits for validation.
+  partenaire: z.string().max(200).nullish(),
+  type: z.enum(TYPES_MESSAGE),
+  sujet: z.string().trim().min(1).max(200),
+  texte: z.string().trim().min(1).max(20_000),
+  enReponseA: z.string().trim().min(1).max(200).nullish(),
 });
 
 // A mission entrusted to a partner OS. Real writes closed: it is recorded as `simulation` and
@@ -54,6 +76,7 @@ registerPropositionType({
       consigne: c.consigne,
       contexte: c.contexte ?? null,
       etat,
+      contextId: m.contextId,
       historique: [
         { etat, at: new Date().toISOString(), message: null, enveloppe: sortie?.id ?? null },
       ],
@@ -69,45 +92,93 @@ registerPropositionType({
   },
 });
 
-// A fact of the sales follow-up, only for what the partner is allowed to see.
+const enAttente = async (tx: Parameters<typeof missionRecue>[0], id: string) => {
+  const m = await missionRecue(tx, id);
+  if (m.etat !== 'submitted') throw new PartenaireRefuse(`Mission déjà traitée (${m.etat}).`);
+  return m;
+};
+
 registerPropositionType({
-  type: 'partenaire.donnee',
+  type: 'partenaire.mission_recue',
   action: 'partenaire',
-  schema: donneePartenaire,
+  schema: missionRecueSchema,
+  apply: async (tx, c, ctx) => {
+    const m = await repondreMission(
+      tx,
+      ctx.reel,
+      await enAttente(tx, c.missionId),
+      { etat: 'working', message: 'Mission acceptée.' },
+      'pilote',
+    );
+    return { mission: m.id, etat: m.etat };
+  },
+  ecarter: async (tx, c, ctx) => {
+    await repondreMission(
+      tx,
+      ctx.reel,
+      await enAttente(tx, c.missionId),
+      { etat: 'rejected', message: 'Mission refusée.' },
+      'pilote',
+    );
+  },
+});
+
+registerPropositionType({
+  type: 'partenaire.reponse',
+  action: 'partenaire',
+  schema: reponseMission,
+  apply: async (tx, c, ctx) => {
+    const m = await missionRecue(tx, c.missionId);
+    if (!['submitted', 'working', 'input-required'].includes(m.etat)) {
+      throw new PartenaireRefuse(`Mission déjà close (${m.etat}).`);
+    }
+    if (m.etat === 'submitted' && c.etat !== 'rejected') {
+      throw new PartenaireRefuse('Mission pas encore acceptée : validez-la d’abord dans l’Inbox.');
+    }
+    const apres = await repondreMission(
+      tx,
+      ctx.reel,
+      m,
+      { etat: c.etat, message: c.message, resultat: c.resultat ?? null },
+      ctx.proposition.auteur,
+    );
+    return { mission: apres.id, etat: apres.etat, ...(ctx.reel ? {} : { simulation: true }) };
+  },
+});
+
+registerPropositionType({
+  type: 'partenaire.message',
+  action: 'partenaire',
+  schema: messagePartenaire,
   apply: async (tx, c, ctx) => {
     const p = await partenaireActif(tx, c.partenaireId);
-    if (!p.partage.includes(c.objet)) {
-      throw new PartenaireRefuse(`${p.nom} ne voit pas les données « ${c.objet} ».`);
-    }
-    if (!ctx.reel) {
-      await logEvent(tx, {
-        acteur: ctx.proposition.auteur,
-        action: `Donnée pour ${p.nom} (simulation) : ${c.objet} ${c.evenement}`,
-      });
-      return { simulation: true };
-    }
-    const sortie = await deposer({
-      stockage: stockageTx(tx),
-      connexion: p.connexionId,
-      type: 'donnee',
-      corps: donnee({ objet: c.objet, evenement: c.evenement, ref: c.ref, champs: c.champs }),
-    });
-    await tx.insert(donneesEnvoyees).values({
-      id: sortie.id,
+    const m = messageLibre(c);
+    const sortie = ctx.reel
+      ? await deposer({
+          stockage: stockageTx(tx),
+          connexion: p.connexionId,
+          type: 'message',
+          corps: m,
+        })
+      : null;
+    await tx.insert(messagesPartenaires).values({
+      id: m.messageId,
       instanceId: currentInstance,
       partenaireId: p.id,
-      objet: c.objet,
-      evenement: c.evenement,
-      ref: c.ref,
-      champs: c.champs,
+      sens: 'envoye',
+      type: c.type,
+      sujet: c.sujet,
+      texte: c.texte,
+      enReponseA: c.enReponseA ?? null,
+      simulation: !ctx.reel,
       propositionId: ctx.proposition.id,
-      envoyeePar: ctx.proposition.auteur,
+      envoyePar: ctx.proposition.auteur,
     });
     await logEvent(tx, {
       acteur: ctx.proposition.auteur,
-      action: `Donnée envoyée à ${p.nom} : ${c.objet} ${c.evenement}`,
-      details: { enveloppe: sortie.id },
+      action: `Message à ${p.nom}${ctx.reel ? '' : ' (simulation)'} : ${c.sujet}`,
+      details: { message: m.messageId, ...(sortie ? { enveloppe: sortie.id } : {}) },
     });
-    return { envoyee: sortie.id };
+    return { message: m.messageId, ...(ctx.reel ? {} : { simulation: true }) };
   },
 });

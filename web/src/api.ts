@@ -378,18 +378,20 @@ export const saveReglages = (
     reglages,
   );
 // Paramètres > Partenaires : OS partenaires reliés par le relais d'agents (src/partenaires).
-export type ObjetPartage = 'prospect' | 'rendez_vous' | 'affaire' | 'compte_rendu';
+export type ObjetCrm = 'entreprise' | 'contact' | 'affaire' | 'tache' | 'rendez_vous' | 'activite';
+export type Voit = { objets: ObjetCrm[]; champsExclus: string[]; qualification: boolean };
 export type PartenaireVue = {
   id: string;
   nom: string;
   connecteDepuis: string;
   niveau: 'L0' | 'L1' | 'L2' | 'L3';
-  partage: ObjetPartage[];
+  voit: Voit;
   statut: 'active' | 'coupee';
   coupeeAt: string | null;
 };
 export type MissionVue = {
   id: string;
+  sens: 'envoyee' | 'recue';
   titre: string;
   partenaire: string;
   etat: string;
@@ -402,7 +404,8 @@ export type PartenairesReponse = {
   porteuse: boolean;
   ecrituresReelles: boolean;
   inscrit: boolean;
-  objets: ObjetPartage[];
+  objets: ObjetCrm[];
+  champsExcluables: { cle: string; libelle: string }[];
   partenaires: PartenaireVue[];
   missions: MissionVue[];
 };
@@ -413,7 +416,7 @@ export const rejoindrePartenaire = (slug: string, lien: string) =>
 export const reglerPartenaire = (
   slug: string,
   id: string,
-  reglages: { niveau?: PartenaireVue['niveau']; partage?: ObjetPartage[] },
+  reglages: { niveau?: PartenaireVue['niveau']; voit?: Voit },
 ) =>
   sendJson<{ partenaire: PartenaireVue }>(
     'PATCH',

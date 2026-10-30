@@ -386,6 +386,20 @@
       "when": 1793365618808,
       "tag": "0054_partenaires_relais",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1793366360987,
+      "tag": "0055_partenaires_crm",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1793366362837,
+      "tag": "0056_partenaires_brique1_retrait",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,9 @@ export type PropositionType<T> = {
   action: string;
   schema: z.ZodType<T>;
   apply: (tx: Tx, contenu: T, ctx: ApplyCtx) => Promise<unknown>;
+  // What setting the proposal aside does, when it is more than nothing (refusing a mission
+  // received from a partner tells the partner).
+  ecarter?: (tx: Tx, contenu: T, ctx: ApplyCtx) => Promise<unknown>;
 };
 
 const types = new Map<string, PropositionType<unknown>>();

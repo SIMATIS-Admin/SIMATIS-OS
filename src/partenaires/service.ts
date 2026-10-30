@@ -2,15 +2,22 @@ import { and, desc, eq } from 'drizzle-orm';
 import {
   carte,
   creerClient,
+  deposer,
   ErreurRelais,
+  etat as etatMission,
   ETATS_FINAUX,
   lireEtat,
+  lireMission,
   lireNote,
+  niveauDepuisRepere,
+  premiereEtape,
   type Client,
   type Connexion,
   type Enveloppe,
   type Etat,
+  type EtatMission,
   type Message,
+  type Mission,
   type Sortie,
 } from 'os-agents-relay';
 import type { Database, Tx } from '../db.js';
@@ -19,10 +26,12 @@ import { withInstance } from '../db/context.js';
 import { deposerSujet } from '../inbox/depot.js';
 import type { Instance, InstanceType } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
-import { canWriteReal } from '../propositions/service.js';
+import { canWriteReal, propose } from '../propositions/service.js';
 import { loadInstanceSecrets, writeInstanceSecret } from '../secrets.js';
-import { marquerVu } from './stockage.js';
+import { lireMessageLibre } from './messages.js';
+import { marquerVu, stockageTx } from './stockage.js';
 import {
+  messagesPartenaires,
   missions,
   partenaires,
   type EntreeHistorique,
@@ -31,9 +40,9 @@ import {
   type Partenaire,
 } from './schema.js';
 
-// Instances that may connect to a partner OS. « Mon activité » until Marc decides otherwise; the
-// model works for any instance (one relay node each): add a type here to open it.
-export const PORTEURS_PARTENAIRES: InstanceType[] = ['propre'];
+// The connection with a client's OS is carried by that client's instance (one relay node each):
+// what it shares can only come from that instance, by construction.
+export const PORTEURS_PARTENAIRES: InstanceType[] = ['mandat'];
 
 export const SECRET_NOEUD = 'RELAIS_NOEUD';
 export const SECRET_CLE = 'RELAIS_SECRET';
@@ -44,6 +53,9 @@ export type RelaisDeps = {
   realWrites: boolean;
   fetch?: typeof fetch;
 };
+
+// What processing a received envelope needs: answering goes through the double lock.
+export type ReceptionDeps = { secretsDir: string; realWrites: boolean };
 
 export class PartenaireRefuse extends Error {}
 
@@ -62,7 +74,9 @@ export async function clientPour(instance: Instance, deps: RelaisDeps): Promise<
 // Writing to the relay is writing to a third-party system: same double lock as the other tools.
 function verifierEcriture(instance: Instance, deps: RelaisDeps): void {
   if (!estPorteuse(instance)) {
-    throw new PartenaireRefuse('Les partenaires se connectent depuis « Mon activité ».');
+    throw new PartenaireRefuse(
+      'Un OS partenaire se connecte depuis l’instance de son client (un mandat).',
+    );
   }
   if (!canWriteReal(instance, deps.realWrites)) {
     throw new PartenaireRefuse(
@@ -71,7 +85,7 @@ function verifierEcriture(instance: Instance, deps: RelaisDeps): void {
   }
 }
 
-const nomCourt = (nom: string) => nom.split(' · ')[0]?.trim() || nom;
+export const nomCourt = (nom: string) => nom.split(' · ')[0]?.trim() || nom;
 
 async function enregistrerPartenaire(
   tx: Tx,
@@ -226,7 +240,10 @@ export async function missionsRecentes(
   return tx
     .select({
       id: missions.id,
+      sens: missions.sens,
       titre: missions.titre,
+      consigne: missions.consigne,
+      niveau: missions.niveau,
       partenaire: partenaires.nom,
       etat: missions.etat,
       dernierMessage: missions.dernierMessage,
@@ -369,10 +386,196 @@ async function recevoirEtat(tx: Tx, env: Enveloppe): Promise<void> {
   });
 }
 
+// Sends the partner a state of a mission it entrusted here, and records it. Real writes closed:
+// recorded only, nothing leaves.
+export async function repondreMission(
+  tx: Tx,
+  reel: boolean,
+  m: MissionPartenaire,
+  reponse: {
+    etat: EtatMission;
+    message?: string | null;
+    resultat?: Record<string, unknown> | null;
+  },
+  par: string,
+): Promise<MissionPartenaire> {
+  const p = await partenaireActif(tx, m.partenaireId);
+  const corps = etatMission({
+    mission: { id: m.id, ...(m.contextId ? { contextId: m.contextId } : {}) },
+    etat: reponse.etat,
+    ...(reponse.message ? { message: reponse.message } : {}),
+    ...(reponse.resultat ? { resultat: reponse.resultat } : {}),
+  });
+  const sortie = reel
+    ? await deposer({ stockage: stockageTx(tx), connexion: p.connexionId, type: 'etat', corps })
+    : null;
+  const entree: EntreeHistorique = {
+    etat: reponse.etat,
+    at: new Date().toISOString(),
+    message: reel ? (reponse.message ?? null) : 'Simulation : rien n’est parti au partenaire.',
+    enveloppe: sortie?.id ?? null,
+  };
+  const [row] = await tx
+    .update(missions)
+    .set({
+      etat: reponse.etat,
+      dernierMessage: reponse.message || m.dernierMessage,
+      resultat: reponse.resultat ?? m.resultat,
+      historique: [...m.historique, entree],
+      updatedAt: new Date(),
+    })
+    .where(and(eq(missions.instanceId, currentInstance), eq(missions.id, m.id)))
+    .returning();
+  await logEvent(tx, {
+    acteur: par,
+    action: `Mission « ${m.titre} » de ${p.nom} : ${reponse.etat}${reel ? '' : ' (simulation)'}`,
+    details: { mission: m.id, ...(sortie ? { enveloppe: sortie.id } : {}) },
+  });
+  return row ?? m;
+}
+
+export async function missionRecue(tx: Tx, id: string): Promise<MissionPartenaire> {
+  const [m] = await tx
+    .select()
+    .from(missions)
+    .where(
+      and(
+        eq(missions.instanceId, currentInstance),
+        eq(missions.id, id),
+        eq(missions.sens, 'recue'),
+      ),
+    );
+  if (!m) throw new PartenaireRefuse(`Mission reçue inconnue : ${id}`);
+  return m;
+}
+
+// A mission the partner entrusts here follows the level Marc set on the connection: a proposal of
+// the Inbox to accept or refuse (L0, L1), or taken in hand right away for the agent (L2, L3). The
+// fixed safeguards hold through the tools the agent uses, like for every other action of the OS.
+async function recevoirMission(
+  tx: Tx,
+  instance: Instance,
+  env: Enveloppe,
+  deps: ReceptionDeps,
+): Promise<void> {
+  const p = await partenaireDe(tx, env.connexion);
+  if (!p || p.statut !== 'active') {
+    await logEvent(tx, {
+      acteur: 'relais',
+      action: 'Mission ignorée : connexion inconnue ou coupée',
+      details: { enveloppe: env.id },
+    });
+    return;
+  }
+  const lu = lireMission(env.corps as Mission);
+  const [deja] = await tx
+    .select({ id: missions.id })
+    .from(missions)
+    .where(and(eq(missions.instanceId, currentInstance), eq(missions.id, lu.id)));
+  if (deja) return;
+  const [m] = await tx
+    .insert(missions)
+    .values({
+      id: lu.id,
+      instanceId: currentInstance,
+      partenaireId: p.id,
+      sens: 'recue',
+      titre: lu.titre,
+      consigne: lu.consigne,
+      contexte: lu.contexte,
+      etat: 'submitted',
+      contextId: lu.contextId,
+      niveau: p.niveau,
+      historique: [{ etat: 'submitted', at: env.cree_le, message: null, enveloppe: env.id }],
+      confieePar: `partenaire:${p.connexionId}`,
+    })
+    .returning();
+  if (!m) throw new Error('Mission non enregistrée');
+  await logEvent(tx, {
+    acteur: 'relais',
+    action: `Mission reçue de ${p.nom} (${p.niveau}) : « ${m.titre} »`,
+    details: { mission: m.id, enveloppe: env.id },
+  });
+  const nom = nomCourt(p.nom);
+  const titre = `${nom} vous confie « ${m.titre} »`;
+  const etape = premiereEtape(niveauDepuisRepere(p.niveau));
+  if (etape.proposer) {
+    await propose(
+      tx,
+      { instance, ...deps },
+      {
+        type: 'partenaire.mission_recue',
+        auteur: `partenaire:${p.connexionId}`,
+        niveau: p.niveau,
+        contenu: { missionId: m.id, partenaire: nom, titre, consigne: m.consigne },
+      },
+    );
+    return;
+  }
+  await repondreMission(
+    tx,
+    canWriteReal(instance, deps.realWrites),
+    m,
+    { etat: 'working', message: 'Prise en charge par l’agent de Simatis.' },
+    'os',
+  );
+  await deposerSujet(tx, {
+    type: 'autre',
+    titre,
+    resume: `${m.consigne}\n\n${
+      etape.validerApres
+        ? 'L’agent la prépare ; sa réponse attendra votre validation dans l’Inbox.'
+        : `L’agent la fait seul et répond à ${nom}.`
+    }`,
+    origine: 'partenaire',
+    source: 'relais',
+    sourceId: env.id,
+  });
+}
+
+// A free message (no mission): kept, and a subject of the Inbox. A question comes first.
+async function recevoirMessageLibre(tx: Tx, env: Enveloppe, p: Partenaire): Promise<void> {
+  const lu = lireMessageLibre(env.corps as Message);
+  await tx
+    .insert(messagesPartenaires)
+    .values({
+      id: lu.id,
+      instanceId: currentInstance,
+      partenaireId: p.id,
+      sens: 'recu',
+      type: lu.type,
+      sujet: lu.sujet,
+      texte: lu.texte,
+      enReponseA: lu.enReponseA,
+    })
+    .onConflictDoNothing();
+  await logEvent(tx, {
+    acteur: 'relais',
+    action: `Message de ${p.nom} : ${lu.sujet}`,
+    details: { enveloppe: env.id, message: lu.id },
+  });
+  const nom = nomCourt(p.nom);
+  await deposerSujet(tx, {
+    type: 'autre',
+    titre:
+      lu.type === 'question'
+        ? `${nom} demande : ${lu.sujet}`
+        : lu.type === 'reponse'
+          ? `${nom} répond : ${lu.sujet}`
+          : `${nom} : ${lu.sujet}`,
+    resume: lu.texte || null,
+    origine: 'partenaire',
+    source: 'relais',
+    sourceId: env.id,
+    priorite: lu.type === 'question' ? 4 : 3,
+  });
+}
+
 async function recevoirNote(tx: Tx, env: Enveloppe): Promise<void> {
   const n = lireNote(env.corps as Message);
   const trouve = await missionDe(tx, env.connexion, n.mission);
   const p = trouve?.p ?? (await partenaireDe(tx, env.connexion));
+  if (p && !n.mission) return recevoirMessageLibre(tx, env, p);
   if (!p) {
     await logEvent(tx, {
       acteur: 'relais',
@@ -465,6 +668,7 @@ export async function traiterEnveloppe(
   db: Database,
   instance: Instance,
   env: Enveloppe,
+  deps: ReceptionDeps,
 ): Promise<void> {
   await withInstance(db, instance.id, async (tx) => {
     switch (env.type) {
@@ -477,10 +681,13 @@ export async function traiterEnveloppe(
       case 'connexion':
         await recevoirConnexion(tx, env);
         break;
+      case 'mission':
+        await recevoirMission(tx, instance, env, deps);
+        break;
       default:
         await logEvent(tx, {
           acteur: 'relais',
-          action: `Partenaire : ${env.type} reçue, non prise en charge en brique 1`,
+          action: `Partenaire : ${env.type} reçue, non prise en charge`,
           details: { enveloppe: env.id },
         });
     }

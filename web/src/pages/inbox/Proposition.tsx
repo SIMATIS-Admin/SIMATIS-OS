@@ -10,7 +10,9 @@ const TYPE_LIBELLE: Record<string, string> = {
   'note.second_cerveau': 'Second cerveau',
   'devis.transmettre': 'Transmission de devis',
   'partenaire.mission': 'Mission partenaire',
-  'partenaire.donnee': 'Donnée partenaire',
+  'partenaire.mission_recue': 'Mission reçue',
+  'partenaire.reponse': 'Réponse à un partenaire',
+  'partenaire.message': 'Message partenaire',
 };
 const NIVEAU_TIP = (n: string) =>
   `Niveau d'autonomie de l'OS pour cette action (${n}). Il va de L0, l'OS suggère seulement, à L3, l'OS agit seul. Plus il y a de barres colorées, plus l'OS peut agir sans vous.`;
@@ -21,8 +23,8 @@ const titre = (p: PropositionItem) =>
     ? str(p.contenu.objet)
     : p.type === 'devis.transmettre'
       ? `Transmettre le devis ${str(p.contenu.numero)}`
-      : p.type === 'partenaire.donnee'
-        ? `Envoyer à un partenaire : ${str(p.contenu.objet)} ${str(p.contenu.evenement)}`
+      : p.type === 'partenaire.message'
+        ? `Message à ${str(p.contenu.partenaire) || 'un partenaire'} : ${str(p.contenu.sujet)}`
         : str(p.contenu.titre) || p.type;
 
 function Statut({ p }: { p: PropositionItem }) {
@@ -185,15 +187,14 @@ export function PropositionDetail({
           </p>
         )}
 
-        {p.type === 'partenaire.mission' && <p>{str(p.contenu.consigne)}</p>}
-        {p.type === 'partenaire.donnee' && (
-          <div className="meta-row">
-            {Object.entries((p.contenu.champs ?? {}) as Record<string, unknown>).map(([k, v]) => (
-              <span key={k}>
-                {k} : <b>{String(v)}</b>
-              </span>
-            ))}
-          </div>
+        {(p.type === 'partenaire.mission' || p.type === 'partenaire.mission_recue') && (
+          <p style={{ whiteSpace: 'pre-wrap' }}>{str(p.contenu.consigne)}</p>
+        )}
+        {p.type === 'partenaire.message' && (
+          <p style={{ whiteSpace: 'pre-wrap' }}>{str(p.contenu.texte)}</p>
+        )}
+        {p.type === 'partenaire.reponse' && (
+          <p style={{ whiteSpace: 'pre-wrap' }}>{str(p.contenu.message)}</p>
         )}
 
         {ouverte && (
@@ -206,9 +207,11 @@ export function PropositionDetail({
                   ? 'Créer la tâche'
                   : p.type === 'devis.transmettre'
                     ? 'Transmettre le devis'
-                    : p.type.startsWith('partenaire.')
-                      ? 'Envoyer au partenaire'
-                      : 'Enregistrer en brouillon'}
+                    : p.type === 'partenaire.mission_recue'
+                      ? 'Accepter la mission'
+                      : p.type.startsWith('partenaire.')
+                        ? 'Envoyer au partenaire'
+                        : 'Enregistrer en brouillon'}
             </button>
             {p.type === 'email.brouillon' && (
               <button className="btn" onClick={() => setEdition(!edition)}>
@@ -217,16 +220,18 @@ export function PropositionDetail({
               </button>
             )}
             <button className="btn ghost danger" onClick={() => onDecide('ecarter')}>
-              Écarter
+              {p.type === 'partenaire.mission_recue' ? 'Refuser' : 'Écarter'}
             </button>
             <span className="hint">
               {p.type === 'email.brouillon'
                 ? "Le brouillon est créé dans votre boîte mail, sans signature. C'est vous qui l'envoyez."
                 : p.type === 'crm.tache'
                   ? "La tâche sera créée dans l'outil du mandat et tracée dans le journal."
-                  : p.type.startsWith('partenaire.')
-                    ? "Le partenaire reçoit ce contenu tel quel, par le relais d'agents."
-                    : "L'OS n'écrit jamais une note validée : vous la relirez dans le second cerveau."}
+                  : p.type === 'partenaire.mission_recue'
+                    ? 'Le partenaire est prévenu de votre réponse. Une fois acceptée, la mission se traite avec les outils habituels.'
+                    : p.type.startsWith('partenaire.')
+                      ? "Le partenaire reçoit ce contenu tel quel, par le relais d'agents."
+                      : "L'OS n'écrit jamais une note validée : vous la relirez dans le second cerveau."}
             </span>
           </div>
         )}

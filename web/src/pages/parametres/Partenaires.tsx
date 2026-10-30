@@ -4,23 +4,27 @@ import {
   fetchPartenaires,
   reglerPartenaire,
   rejoindrePartenaire,
-  type ObjetPartage,
+  type ObjetCrm,
   type PartenaireVue,
   type PartenairesReponse,
+  type Voit,
 } from '../../api.js';
 import { Icon } from '../../icons.js';
 import { Tip } from '../widgets.js';
 
-const OBJETS: Record<ObjetPartage, string> = {
-  prospect: 'Prospects',
-  rendez_vous: 'Rendez-vous',
+const OBJETS: Record<ObjetCrm, string> = {
+  entreprise: 'Entreprises',
+  contact: 'Contacts',
   affaire: 'Affaires',
-  compte_rendu: 'Comptes rendus',
+  tache: 'Tâches',
+  rendez_vous: 'Rendez-vous',
+  activite: 'Activités',
 };
 
+// Same wording as the partner's OS (kit, autonomie.js LIBELLES).
 const NIVEAUX = [
-  ['L0', 'L0 · Suggérer seulement'],
-  ['L1', 'L1 · Préparer'],
+  ['L0', 'L0 · Me montrer seulement'],
+  ['L1', 'L1 · Demander avant'],
   ['L2', 'L2 · Faire, puis valider'],
   ['L3', 'L3 · Faire seul'],
 ] as const;
@@ -107,12 +111,14 @@ function Partenaire({
   slug,
   p,
   objets,
+  champs,
   ouvert,
   onChange,
 }: {
   slug: string;
   p: PartenaireVue;
-  objets: ObjetPartage[];
+  objets: ObjetCrm[];
+  champs: PartenairesReponse['champsExcluables'];
   ouvert: boolean;
   onChange: () => void;
 }) {
@@ -122,8 +128,10 @@ function Partenaire({
     setError(null);
     action().then(onChange, (e: unknown) => setError(message(e)));
   };
-  const toggle = (o: ObjetPartage) =>
-    p.partage.includes(o) ? p.partage.filter((x) => x !== o) : [...p.partage, o];
+  const basculer = <T,>(liste: T[], x: T) =>
+    liste.includes(x) ? liste.filter((y) => y !== x) : [...liste, x];
+  const regler = (voit: Partial<Voit>) =>
+    run(() => reglerPartenaire(slug, p.id, { voit: { ...p.voit, ...voit } }));
   const coupee = p.statut === 'coupee';
   return (
     <div className="panel">
@@ -145,25 +153,54 @@ function Partenaire({
           <div>
             <div className="small muted" style={{ marginBottom: 6 }}>
               {nomCourt(p.nom)} voit{' '}
-              <Tip text="Ce que l'agent peut lui envoyer du suivi commercial, quand vous le demandez. Rien n'est coché : rien ne part." />
+              <Tip text="Le suivi commercial de cette instance, tenu à jour dans les deux sens. Un objet décoché ou un champ exclu ne part jamais ; un rendez-vous non commercial non plus." />
             </div>
             <div className="checks-row">
               {objets.map((o) => (
                 <label key={o} className="check">
                   <input
                     type="checkbox"
-                    checked={p.partage.includes(o)}
-                    onChange={() => run(() => reglerPartenaire(slug, p.id, { partage: toggle(o) }))}
+                    checked={p.voit.objets.includes(o)}
+                    onChange={() => regler({ objets: basculer(p.voit.objets, o) })}
                   />
                   <span>{OBJETS[o]}</span>
                 </label>
               ))}
             </div>
           </div>
+          <div>
+            <div className="small muted" style={{ marginBottom: 6 }}>
+              Champs exclus{' '}
+              <Tip text="Comme pour la synchronisation HubSpot : un champ coché ici ne part pas." />
+            </div>
+            <div className="checks-row">
+              {champs.map((c) => (
+                <label key={c.cle} className="check">
+                  <input
+                    type="checkbox"
+                    checked={p.voit.champsExclus.includes(c.cle)}
+                    onChange={() => regler({ champsExclus: basculer(p.voit.champsExclus, c.cle) })}
+                  />
+                  <span>{c.libelle}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={p.voit.qualification}
+              onChange={() => regler({ qualification: !p.voit.qualification })}
+            />
+            <span>
+              Partager la qualification des affaires{' '}
+              <Tip text="Qualification, potentiel et faisabilité : vous en êtes responsable. Non cochée, elle reste ici." />
+            </span>
+          </label>
           <label className="field">
             <span>
               Missions reçues de {nomCourt(p.nom)}{' '}
-              <Tip text="Ce que l'OS fera d'une mission que ce partenaire vous confie. Réglage enregistré dès maintenant, utilisé quand la réception des missions arrivera." />
+              <Tip text="L0 et L1 : la mission arrive dans l'Inbox, à accepter ou refuser. L2 : l'agent la prépare, vous validez sa réponse. L3 : l'agent la fait seul. Prix, envoi à un client, publication et suppression restent à vous." />
             </span>
             <select
               className="input"
@@ -220,7 +257,12 @@ export function Partenaires({ slug }: { slug: string }) {
     );
   }
   if (!data.porteuse) {
-    return <div className="empty">Les OS partenaires se connectent depuis « Mon activité ».</div>;
+    return (
+      <div className="empty">
+        Un OS partenaire se connecte depuis l'instance de son client (un mandat) : seul le suivi
+        commercial de ce client est partagé.
+      </div>
+    );
   }
   return (
     <div className="stack">
@@ -240,6 +282,7 @@ export function Partenaires({ slug }: { slug: string }) {
           slug={slug}
           p={p}
           objets={data.objets}
+          champs={data.champsExcluables}
           ouvert={data.ecrituresReelles}
           onChange={load}
         />
@@ -247,7 +290,7 @@ export function Partenaires({ slug }: { slug: string }) {
       {data.missions.length > 0 && (
         <div className="panel">
           <div className="panel-h">
-            <h2>Missions confiées</h2>
+            <h2>Missions</h2>
           </div>
           <div className="panel-b">
             <table className="tbl small">
@@ -260,7 +303,9 @@ export function Partenaires({ slug }: { slug: string }) {
                         {m.titre}
                         {m.dernierMessage && <div className="muted">{m.dernierMessage}</div>}
                       </td>
-                      <td className="muted">{nomCourt(m.partenaire)}</td>
+                      <td className="muted">
+                        {m.sens === 'recue' ? 'De' : 'À'} {nomCourt(m.partenaire)}
+                      </td>
                       <td>
                         <span className={`badge ${couleur}`}>{libelle}</span>
                       </td>

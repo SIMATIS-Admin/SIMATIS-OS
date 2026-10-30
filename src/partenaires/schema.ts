@@ -1,10 +1,52 @@
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import { propositions } from '../propositions/schema.js';
 
-// What a partner may see of the sales follow-up (« Alpes OS voit »): the kit's data objects.
-export const OBJETS_PARTAGE = ['prospect', 'rendez_vous', 'affaire', 'compte_rendu'] as const;
-export type ObjetPartage = (typeof OBJETS_PARTAGE)[number];
+// Objects of the CRM profile (kit, profile crm/1) a partner may see (« Alpes OS voit »).
+export const OBJETS_CRM = [
+  'entreprise',
+  'contact',
+  'affaire',
+  'tache',
+  'rendez_vous',
+  'activite',
+] as const;
+export type ObjetCrm = (typeof OBJETS_CRM)[number];
+
+// Fields the pilot can keep from a partner, like the excluded fields of the HubSpot sync. Required
+// fields of the profile are not in the list: the partner's copy needs them.
+export const CHAMPS_EXCLUABLES = [
+  { cle: 'contact.telephone', libelle: 'Téléphone' },
+  { cle: 'contact.email', libelle: 'Emails' },
+  { cle: 'contact.fonction', libelle: 'Fonction' },
+  { cle: 'entreprise.taille', libelle: 'Effectif' },
+  { cle: 'affaire.montant', libelle: 'Montant' },
+  { cle: 'affaire.echeance', libelle: 'Échéance' },
+  { cle: 'affaire.proprietaire', libelle: 'Propriétaire' },
+  { cle: 'affaire.motif', libelle: 'Motif de perte' },
+  { cle: 'tache.notes', libelle: 'Notes des tâches' },
+  { cle: 'rendez_vous.compte_rendu', libelle: 'Comptes rendus' },
+  { cle: 'activite.resume', libelle: 'Contenu des activités' },
+] as const;
+export type ChampExcluable = (typeof CHAMPS_EXCLUABLES)[number]['cle'];
+
+// What leaves for a partner. The qualification of a deal (qualification, potentiel, faisabilite)
+// is Marc's call, connection by connection: off by default.
+export type Voit = { objets: ObjetCrm[]; champsExclus: ChampExcluable[]; qualification: boolean };
+export const VOIT_DEFAUT: Voit = {
+  objets: [...OBJETS_CRM],
+  champsExclus: [],
+  qualification: false,
+};
 
 export const ETATS_MISSION = [
   'simulation',
@@ -35,15 +77,19 @@ export const partenaires = pgTable(
     noeudId: text('noeud_id').notNull(),
     nom: text('nom').notNull(),
     carte: jsonb('carte').$type<Record<string, unknown>>(),
-    // Missions received from this partner (brique 2): stored now, used later.
+    // What the OS does with a mission received from this partner (L0 to L3).
     niveau: text('niveau', { enum: ['L0', 'L1', 'L2', 'L3'] })
       .notNull()
       .default('L0'),
-    partage: jsonb('partage').$type<ObjetPartage[]>().notNull().default([]),
+    voit: jsonb('voit').$type<Voit>().notNull().default(VOIT_DEFAUT),
     statut: text('statut', { enum: ['active', 'coupee'] })
       .notNull()
       .default('active'),
     coupeeAt: timestamp('coupee_at', { withTimezone: true }),
+    // CRM sync (synchro.ts): snapshot sent, last pass, last full pass.
+    instantaneAt: timestamp('instantane_at', { withTimezone: true }),
+    synchroAt: timestamp('synchro_at', { withTimezone: true }),
+    passeCompleteAt: timestamp('passe_complete_at', { withTimezone: true }),
   },
   (t) => [
     uniqueIndex('partenaires_connexion_idx').on(t.instanceId, t.connexionId),
@@ -53,8 +99,8 @@ export const partenaires = pgTable(
 
 export type Partenaire = typeof partenaires.$inferSelect;
 
-// Missions entrusted to a partner (and, in brique 2, received). `id` is the A2A task id, shared
-// with the partner.
+// Missions entrusted to a partner, or received from it. `id` is the A2A task id, shared with the
+// partner.
 export const missions = pgTable(
   'missions',
   {
@@ -73,6 +119,10 @@ export const missions = pgTable(
     historique: jsonb('historique').$type<EntreeHistorique[]>().notNull().default([]),
     propositionId: uuid('proposition_id').references(() => propositions.id),
     confieePar: text('confiee_par'),
+    // A2A context of the task: the states sent back carry it.
+    contextId: text('context_id'),
+    // Received mission: the partner's level when it arrived (what the agent may do with it).
+    niveau: text('niveau', { enum: ['L0', 'L1', 'L2', 'L3'] }),
   },
   (t) => [
     index('missions_partenaire_idx').on(t.instanceId, t.partenaireId),
@@ -82,24 +132,72 @@ export const missions = pgTable(
 
 export type MissionPartenaire = typeof missions.$inferSelect;
 
-// Trace of the facts pushed to a partner. `id` is the relay envelope id.
-export const donneesEnvoyees = pgTable(
-  'donnees_envoyees',
+export const TYPES_MESSAGE = ['question', 'reponse', 'info'] as const;
+export type TypeMessage = (typeof TYPES_MESSAGE)[number];
+
+// Free Markdown messages exchanged with a partner, outside any mission (they replace the
+// `echanges/` folder of the shared space). `id` is the A2A message id: a reply points to it.
+export const messagesPartenaires = pgTable(
+  'messages_partenaires',
   {
     id: text('id').primaryKey(),
     ...metierColumns(),
     partenaireId: uuid('partenaire_id')
       .notNull()
       .references(() => partenaires.id),
-    objet: text('objet', { enum: OBJETS_PARTAGE }).notNull(),
-    evenement: text('evenement').notNull(),
-    ref: text('ref').notNull(),
-    champs: jsonb('champs').$type<Record<string, unknown>>().notNull().default({}),
+    sens: text('sens', { enum: ['envoye', 'recu'] }).notNull(),
+    type: text('type', { enum: TYPES_MESSAGE }).notNull(),
+    sujet: text('sujet').notNull(),
+    texte: text('texte').notNull(),
+    enReponseA: text('en_reponse_a'),
+    // Real writes closed: recorded, nothing left.
+    simulation: boolean('simulation').notNull().default(false),
     propositionId: uuid('proposition_id').references(() => propositions.id),
-    envoyeePar: text('envoyee_par'),
+    envoyePar: text('envoye_par'),
   },
-  () => [instanceIsolation('donnees_envoyees')],
+  (t) => [
+    index('messages_partenaires_idx').on(t.instanceId, t.partenaireId),
+    instanceIsolation('messages_partenaires'),
+  ],
 );
+
+export type MessagePartenaire = typeof messagesPartenaires.$inferSelect;
+
+// Shared objects plus the pipeline, which travels with them.
+export const OBJETS_SYNCHRO = ['pipeline', ...OBJETS_CRM] as const;
+export type ObjetSynchro = (typeof OBJETS_SYNCHRO)[number];
+
+// Last state exchanged with a partner, per shared record: what was sent or received last. A change
+// is what differs from it, so a received change (written here too) never goes back.
+// `ref` is the record's reference in the CRM profile: `<origin node>/<local id>`. `detacheAt`: the
+// record left the share (deleted on one side): it no longer syncs.
+export type EtatEchange = {
+  champs: Record<string, unknown>;
+  liens: Record<string, string[]>;
+  modifieLe: string;
+};
+export const crmPartages = pgTable(
+  'crm_partages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    partenaireId: uuid('partenaire_id')
+      .notNull()
+      .references(() => partenaires.id),
+    objet: text('objet', { enum: OBJETS_SYNCHRO }).notNull(),
+    localId: uuid('local_id'),
+    ref: text('ref').notNull(),
+    etat: jsonb('etat').$type<EtatEchange>().notNull(),
+    detacheAt: timestamp('detache_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('crm_partages_ref_idx').on(t.instanceId, t.partenaireId, t.ref),
+    index('crm_partages_local_idx').on(t.instanceId, t.partenaireId, t.objet, t.localId),
+    instanceIsolation('crm_partages'),
+  ],
+);
+
+export type CrmPartage = typeof crmPartages.$inferSelect;
 
 // The kit's outbox: envelopes waiting to be posted to the relay, retried until accepted.
 export const relaisSorties = pgTable(
