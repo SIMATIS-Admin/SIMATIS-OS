@@ -242,18 +242,23 @@ export function IdeeCerveau({
 export function MessagePartage({
   slug,
   enReponseA,
+  sujetInitial = '',
+  deposer,
   onDepose,
   onFerme,
 }: {
   slug: string;
   enReponseA?: string | undefined;
+  sujetInitial?: string;
+  // Dépôt propre à l'appelant (l'Inbox range aussi l'entrée) : c'est alors toujours une réponse.
+  deposer?: (r: { sujet: string; corps: string }) => Promise<unknown>;
   onDepose: (chemin: string | undefined) => void;
   onFerme: () => void;
 }) {
   const [genre, setGenre] = useState<'question' | 'reponse' | 'info'>(
     enReponseA ? 'reponse' : 'question',
   );
-  const [sujet, setSujet] = useState('');
+  const [sujet, setSujet] = useState(sujetInitial);
   const [corps, setCorps] = useState('');
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -267,15 +272,18 @@ export function MessagePartage({
       return;
     setEnvoi(true);
     setErreur(null);
-    operationCerveau(slug, {
-      espace: 'partage',
-      type: 'message',
-      genre,
-      sujet,
-      corps,
-      ...(enReponseA ? { enReponseA } : {}),
-    }).then(
-      (r) => onDepose(r.chemin),
+    (deposer
+      ? deposer({ sujet, corps }).then(() => undefined)
+      : operationCerveau(slug, {
+          espace: 'partage',
+          type: 'message',
+          genre,
+          sujet,
+          corps,
+          ...(enReponseA ? { enReponseA } : {}),
+        }).then((r) => r.chemin)
+    ).then(
+      (chemin) => onDepose(chemin),
       (e: unknown) => {
         setErreur(e instanceof Error ? e.message : String(e));
         setEnvoi(false);
@@ -288,17 +296,19 @@ export function MessagePartage({
       <div className="panel-b cerveau-idee">
         <b>{enReponseA ? 'Répondre' : 'Nouveau message'}</b>
         {enReponseA && <span className="cerveau-note">En réponse à {enReponseA}</span>}
-        <select
-          aria-label="Type de message"
-          value={genre}
-          onChange={(e) => setGenre(e.target.value as typeof genre)}
-        >
-          <option value="question">Question (attend une réponse)</option>
-          <option value="reponse" disabled={!enReponseA}>
-            Réponse
-          </option>
-          <option value="info">Information (n’attend rien)</option>
-        </select>
+        {!deposer && (
+          <select
+            aria-label="Type de message"
+            value={genre}
+            onChange={(e) => setGenre(e.target.value as typeof genre)}
+          >
+            <option value="question">Question (attend une réponse)</option>
+            <option value="reponse" disabled={!enReponseA}>
+              Réponse
+            </option>
+            <option value="info">Information (n’attend rien)</option>
+          </select>
+        )}
         <input
           aria-label="Sujet du message"
           placeholder="Sujet, une ligne"

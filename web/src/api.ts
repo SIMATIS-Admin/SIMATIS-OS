@@ -533,6 +533,8 @@ export type SujetVue = {
   instance: { slug: string; nom: string; couleur: string | null };
   proposition: PropositionItem | null;
   livreBlanc: { email: string; nom: string | null } | null;
+  // Message de l'espace partagé (Christophe) auquel l'entrée permet de répondre.
+  partage: { chemin: string } | null;
   // Réunion Wispr Flow ; dejaRelie : elle s'est reliée à un compte rendu déjà à faire.
   reunion: {
     critique: boolean;
@@ -683,6 +685,11 @@ export const sujetEnTache = (slug: string, id: string, saisie: TacheSaisie) =>
   sendJson<SujetVue | SimulationTache>('POST', sujet(slug, id, 'tache'), saisie);
 export const envoyerLivreBlanc = (slug: string, id: string, numero: 1 | 2) =>
   sendJson<SujetVue | SimulationTache>('POST', sujet(slug, id, 'livre-blanc'), { numero });
+export const repondreSujet = (
+  slug: string,
+  id: string,
+  reponse: { sujet: string; corps: string },
+) => sendJson<SujetVue>('POST', sujet(slug, id, 'repondre'), reponse);
 export const decider = (
   slug: string,
   id: string,
