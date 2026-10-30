@@ -170,14 +170,16 @@ describe('clés de doublon', () => {
 describe('complétude', () => {
   const fiche = (brut: Parameters<typeof normaliserFiche>[0]) => normaliserFiche(brut).fiche;
 
-  it('exige entreprise et nom pour sortir du sas', () => {
+  it('exige une entreprise pour sortir du sas', () => {
     expect(evaluer(fiche({ nom: 'Durand' }))).toEqual({
       etat: 'sous_minimum',
       raison: 'Entreprise manquante',
     });
-    expect(evaluer(fiche({ entreprise: 'Acme' }))).toEqual({
-      etat: 'sous_minimum',
-      raison: 'Nom manquant',
+    // A company alone leaves the airlock « à enrichir »: a contact is still to be found.
+    expect(evaluer(fiche({ entreprise: 'Acme' }))).toEqual({ etat: 'pret', zone: 'a_enrichir' });
+    expect(evaluer(fiche({ entreprise: 'Acme', email: 'contact@acme.test' }))).toEqual({
+      etat: 'pret',
+      zone: 'a_enrichir',
     });
     expect(evaluer(fiche({}))).toMatchObject({ etat: 'sous_minimum' });
   });

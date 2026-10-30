@@ -35,7 +35,6 @@ describe('point d’entrée unique de la base vivante', () => {
 
   it('refuse une fiche incomplète', async () => {
     await expect(integrer(fiche({ nom: 'Durand' }))).rejects.toThrow(FicheNonHomogene);
-    await expect(integrer(fiche({ entreprise: 'Acme' }))).rejects.toThrow(FicheNonHomogene);
   });
 
   it('refuse une fiche non normalisée', () => {
