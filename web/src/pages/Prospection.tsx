@@ -66,7 +66,7 @@ const lignes = (o: Record<string, number>, mot?: string) =>
 type Etape =
   | { nom: 'accueil' }
   | { nom: 'choix' }
-  | { nom: 'reglage'; tacheIds: string[] }
+  | { nom: 'reglage'; tacheIds: string[]; liens: Record<string, string> }
   | { nom: 'attente'; id: string }
   | { nom: 'relecture'; campagne: CampagneProspection }
   | { nom: 'fin'; campagne: CampagneProspection; resultat: ResultatCampagne };
@@ -114,13 +114,13 @@ export function Prospection({ slug }: { slug: string }) {
         {retour}
         <ChoixTaches
           slug={slug}
-          onContinuer={(tacheIds) => setEtape({ nom: 'reglage', tacheIds })}
+          onContinuer={(tacheIds, liens) => setEtape({ nom: 'reglage', tacheIds, liens })}
         />
       </>
     );
   }
   if (etape.nom === 'reglage') {
-    const { tacheIds } = etape;
+    const { tacheIds, liens } = etape;
     return (
       <>
         {retour}
@@ -131,7 +131,7 @@ export function Prospection({ slug }: { slug: string }) {
           erreur={lancement.erreur}
           onLancer={(reglage) => {
             setLancement({ enCours: true, erreur: null });
-            creerCampagneRelance(slug, tacheIds, reglage).then(
+            creerCampagneRelance(slug, tacheIds, reglage, liens).then(
               (r) => {
                 setLancement({ enCours: false, erreur: null });
                 setEtape({ nom: 'attente', id: r.campagneId });
