@@ -28,6 +28,7 @@ function fakeGoogle() {
             payload: {
               headers: [
                 h('From', 'Paul Client <paul@client.example>'),
+                h('To', 'Pilote <pilote@exemple.fr>, Léa <lea@client.example>'),
                 h('Subject', 'Rappel'),
                 h('Date', 'Mon, 5 Oct 2026 09:00:00 +0200'),
               ],
@@ -86,6 +87,8 @@ describe('Google : lectures de la routine Inbox', () => {
         date: 'Mon, 5 Oct 2026 09:00:00 +0200',
         objet: 'Rappel',
         extrait: 'Pouvez-vous me rappeler ?',
+        a: ['pilote@exemple.fr', 'lea@client.example'],
+        automatique: false,
       },
     ]);
     expect(g.urls.find((u) => u.includes('/threads?'))).toContain(

@@ -9,6 +9,7 @@ import {
 } from 'imapflow';
 import type { SyncCtx } from '../../connexions/types.js';
 import { logEvent } from '../../journal/service.js';
+import { estAutomatique, type EnTetes } from '../envoi-automatique.js';
 import {
   mimeBrut,
   type Brouillon,
@@ -181,15 +182,37 @@ export async function historique(
   });
 }
 
+// The raw header block as name/value pairs (folded lines joined).
+const entetes = (m: FetchMessageObject): EnTetes =>
+  (m.headers?.toString('utf8') ?? '')
+    .replace(/\r?\n[ \t]+/g, ' ')
+    .split(/\r?\n/)
+    .flatMap((l) => {
+      const i = l.indexOf(':');
+      return i > 0 ? [{ name: l.slice(0, i).trim(), value: l.slice(i + 1).trim() }] : [];
+    });
+
 const references = (m: FetchMessageObject): string[] =>
-  (m.headers?.toString('utf8') ?? '').replace(/\r?\n[ \t]+/g, ' ').match(/<[^>\s]+>/g) ?? [];
+  entetes(m)
+    .filter((e) => e.name.toLowerCase() === 'references')
+    .flatMap((e) => e.value.match(/<[^>\s]+>/g) ?? []);
 
 // Recent inbox threads, each reduced to its last message, sent ones included (who wrote last
 // decides "unanswered"). IMAP has no threads: messages are grouped by the root they refer to.
 export async function filsRecents(ctx: Ctx, jours: number): Promise<Fil[]> {
   return avecBoite(ctx.secrets, ctx.instance.nom, async (client) => {
     const critere = { since: new Date(Date.now() - jours * JOUR) };
-    const champs = { envelope: true, bodyStructure: true, headers: ['references'] };
+    const champs = {
+      envelope: true,
+      bodyStructure: true,
+      headers: [
+        'references',
+        'list-unsubscribe',
+        'precedence',
+        'auto-submitted',
+        'x-auto-response-suppress',
+      ],
+    };
     const envoyes = await dossier(client, '\\Sent');
     const lus = [
       ...(await lire(client, 'INBOX', critere, champs)),
@@ -234,6 +257,10 @@ export async function filsRecents(ctx: Ctx, jours: number): Promise<Fil[]> {
         extrait: extraitDe(
           await dansDossier(client, dernier.path, () => texte(client, dernier, MAX_EXTRAIT)),
         ),
+        a: (dernier.envelope?.to ?? []).flatMap((x) =>
+          x.address ? [x.address.toLowerCase()] : [],
+        ),
+        automatique: estAutomatique(entetes(dernier), adresse(dernier.envelope?.from)),
       });
     }
     return out;

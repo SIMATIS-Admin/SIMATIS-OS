@@ -65,6 +65,18 @@ describe('Inbox : sélection des lectures', () => {
     });
   });
 
+  it('ignore les notifications et les mails où le pilote n’est qu’en copie', () => {
+    const date = 'Mon, 5 Oct 2026 09:00:00 +0200';
+    const de = 'Paul Client <paul@client.example>';
+    const garde = (extra: Partial<Fil>) =>
+      mailsARepondre([fil(de, date, extra)], MOI, annuaire, MERCREDI).length;
+    expect(garde({ automatique: true })).toBe(0);
+    expect(garde({ a: ['autre@exemple.fr'] })).toBe(0);
+    expect(garde({ a: ['autre@exemple.fr', 'pilote@exemple.fr'] })).toBe(1);
+    expect(garde({ a: [], automatique: false })).toBe(1);
+    expect(garde({})).toBe(1);
+  });
+
   it('links to the mailbox that holds the thread when it is not Gmail', () => {
     const [m] = mailsARepondre(
       [fil('paul@client.example', 'Mon, 5 Oct 2026 09:00:00 +0200', { threadId: 't1' })],
