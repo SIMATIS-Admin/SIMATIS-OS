@@ -85,6 +85,10 @@ const texte = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
 export function titreProposition(p: Pick<Proposition, 'type' | 'contenu'>): string {
   const c = (p.contenu ?? {}) as Record<string, unknown>;
   const numero = texte(c.numero);
+  // Its `objet` is a kind of record (prospect, affaire…), not a mail subject.
+  if (p.type === 'partenaire.donnee') {
+    return `Envoyer à un partenaire : ${String(c.objet)} ${String(c.evenement)}`;
+  }
   return (
     texte(c.objet) ?? texte(c.titre) ?? (numero ? `Transmettre le devis ${numero}` : null) ?? p.type
   );

@@ -12,6 +12,13 @@ import {
 } from '../base-vivante/schema.js';
 import { echangesAjout, reunionsWispr, sujets } from '../inbox/schema.js';
 import {
+  donneesEnvoyees,
+  missions,
+  partenaires,
+  relaisSorties,
+  relaisVus,
+} from '../partenaires/schema.js';
+import {
   prospectionBrouillons,
   prospectionCampagnes,
   prospectionOccurrences,
@@ -28,6 +35,11 @@ export const METIER_TABLES = [
   baseImports,
   baseCorrespondances,
   echangesAjout,
+  relaisVus,
+  relaisSorties,
+  donneesEnvoyees,
+  missions,
+  partenaires,
   reunionsWispr,
   sujets,
   connexions,

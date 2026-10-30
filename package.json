@@ -29,6 +29,7 @@
     "fastify": "^5.12.5",
     "fflate": "^0.8.3",
     "imapflow": "^2.4.0",
+    "os-agents-relay": "github:ChristopheHvd/os-agents-relay#18d98fb969e517aa66c03496c39268ddaeef8828",
     "pg": "^8.23.1",
     "pptxgenjs": "^4.0.1",
     "react": "^19.3.0",

@@ -23,7 +23,8 @@ export const TYPES_SUJET = [
   'autre',
 ] as const;
 // `site`: a request left on the public website's contact form. `test-vma`: a result of the VMA test.
-// `wispr`: a meeting note read in Wispr Flow by the Inbox routine.
+// `wispr`: a meeting note read in Wispr Flow by the Inbox routine. `partenaire`: news from a partner
+// OS through the agents relay.
 export const ORIGINES_SUJET = [
   'messagerie',
   'agenda',
@@ -32,6 +33,7 @@ export const ORIGINES_SUJET = [
   'site',
   'test-vma',
   'wispr',
+  'partenaire',
 ] as const;
 export const STATUTS_SUJET = ['a_traiter', 'tache', 'traite'] as const;
 export const PRIORITE_MIN = 1;

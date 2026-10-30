@@ -379,6 +379,13 @@
       "when": 1793354130572,
       "tag": "0053_fixed_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1793365618808,
+      "tag": "0054_partenaires_relais",
+      "breakpoints": true
     }
   ]
 }

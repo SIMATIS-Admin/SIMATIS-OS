@@ -7,6 +7,7 @@ import type { Database } from './db.js';
 import type { CompteImap } from './secrets.js';
 import { registerHealth } from './health.js';
 import { registerMcp } from './mcp/server.js';
+import { registerPartenairesRoutes } from './partenaires/routes.js';
 import { registerCerveauRoutes } from './cerveau/routes.js';
 import { registerRunnerApi } from './routines/runner-api.js';
 import { registerAtelierRoutes } from './atelier/routes.js';
@@ -29,6 +30,8 @@ export type AppDeps = {
   imapServeur?: Pick<CompteImap, 'host' | 'port' | 'secure'>;
   // Test de VMA : site et jeton des invitations ; null ou absent = non configuré.
   vma?: { url: string; token: string } | null;
+  // Relais d'agents des OS partenaires ; null ou absent = module éteint.
+  relais?: { url: string; fetch?: typeof fetch } | null;
   logger?: FastifyServerOptions['logger'];
 };
 
@@ -44,6 +47,7 @@ export function buildApp({
   googleFetch,
   imapServeur,
   vma = null,
+  relais = null,
   logger = false,
 }: AppDeps): FastifyInstance {
   const app = Fastify({ logger });
@@ -54,6 +58,7 @@ export function buildApp({
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
   registerProspectionRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
   registerAtelierRoutes(app, { db });
+  registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db });
   registerCerveauRoutes(app, { db });

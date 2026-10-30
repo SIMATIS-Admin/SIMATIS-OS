@@ -60,6 +60,11 @@ export const AUTONOMIE: AutonomieDef[] = [
     max: 'L2',
     limite: "Toujours en brouillon, jamais validé par l'OS.",
   }),
+  // L2 until Marc decides (L3: the agent sends as soon as he asks): every send to a partner OS is
+  // validated in the Inbox. Change the default here.
+  def('partenaire', 'Confier une mission ou envoyer une donnée à un OS partenaire', 'L2', {
+    min: 'L1',
+  }),
   def('suppr', 'Supprimer des données', 'interdit', { limite: 'Interdit : on archive.' }),
 ];
 

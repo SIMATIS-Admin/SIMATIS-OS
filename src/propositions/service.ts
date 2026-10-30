@@ -28,6 +28,7 @@ async function apply(tx: Tx, ctx: PropositionCtx, p: Proposition, par: string) {
         instance: ctx.instance,
         reel,
         deps: { secretsDir: ctx.secretsDir ?? './secrets/instances', realWrites: ctx.realWrites },
+        proposition: { id: p.id, auteur: p.auteur },
       }),
     );
     const [row] = await tx
