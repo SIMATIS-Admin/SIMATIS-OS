@@ -672,7 +672,7 @@ export function Bases({ slug }: { slug: string }) {
               setPage(0);
             }}
           >
-            {entier(etat.compteurs.aEnrichir)} fiches sans email ni téléphone à compléter
+            {entier(etat.compteurs.aEnrichir)} fiches sans contact à enrichir
           </button>,
         ]
       : []),

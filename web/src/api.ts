@@ -1466,6 +1466,7 @@ export type FicheBase = {
   entreprise: string;
   civilite: 'M.' | 'Mme' | null;
   prenom: string | null;
+  // Empty while the record only knows its company (« à enrichir »).
   nom: string;
   email: string | null;
   telephone: string | null;
@@ -1560,7 +1561,17 @@ export const integrerImportBase = (slug: string, id: string) =>
     {},
   );
 export const annulerImportBase = (slug: string, id: string) =>
-  sendJson<{ ok: true }>('DELETE', inst(slug, `base/imports/${id}`), undefined);
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/imports/${id}`), {});
+
+export type ApportContactBase = {
+  prenom?: string;
+  nom?: string;
+  email?: string;
+  telephone?: string;
+  fonction?: string;
+};
+export const enrichirFicheBase = (slug: string, id: string, apport: ApportContactBase) =>
+  sendJson<{ zone: ZoneBase }>('POST', inst(slug, `base/fiches/${id}/enrichir`), apport);
 
 // Rapprochement avec la boîte Gmail d'un mandat (lecture seule, depuis le début du mandat).
 export type MandatBase = { slug: string; nom: string; debutMandat: string | null };

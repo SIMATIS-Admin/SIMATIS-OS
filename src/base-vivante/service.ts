@@ -19,7 +19,13 @@ import {
   type Alerte,
   type ContactCrm,
 } from './historique.js';
-import { integrerFiches, majConformite, type PatchConformite } from './integration.js';
+import {
+  enrichir,
+  integrerFiches,
+  majConformite,
+  type Apport,
+  type PatchConformite,
+} from './integration.js';
 import { lireFichier, lireTexte, FichierIllisible, type Feuille } from './lecture.js';
 import {
   baseCorrespondances,
@@ -736,6 +742,17 @@ export async function modifierConformite(
   patch: PatchConformite,
 ): Promise<void> {
   await withInstance(db, instanceId, (tx) => majConformite(tx, instanceId, id, patch));
+}
+
+export async function enrichirFiche(
+  db: Executor,
+  instanceId: string,
+  id: string,
+  apport: Apport,
+): Promise<{ zone: Zone }> {
+  return withInstance(db, instanceId, async (tx) => ({
+    zone: await enrichir(tx, instanceId, id, apport),
+  }));
 }
 
 export { STATUTS_PROSPECTION };

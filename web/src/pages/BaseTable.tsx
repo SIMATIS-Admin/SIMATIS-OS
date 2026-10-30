@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  enrichirFicheBase,
   majConformiteBase,
   type AlerteBase,
   type EtatBase,
@@ -52,7 +53,7 @@ const LIBELLE_RESULTAT: Record<string, string> = {
   reponse_auto: 'réponse automatique',
 };
 const ASTUCE_ENRICHIR =
-  "Ces fiches n'ont ni email ni téléphone. Une fiche à enrichir n'entre jamais dans un CRM : dès qu'un moyen de contact valide est ajouté, elle devient prête à contacter.";
+  "Ces fiches n'ont pas encore de contact (nom et email ou téléphone). Ouvrez une fiche pour le renseigner : une fiche à enrichir n'entre jamais dans un CRM, et devient prête à contacter dès qu'elle a un nom et un moyen de contact valide.";
 
 const libelleZone = (zone: ZoneBase) =>
   zone === 'prospectable' ? (
@@ -65,7 +66,8 @@ const libelleZone = (zone: ZoneBase) =>
 const moisAnnee = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('fr-FR', { month: '2-digit', year: 'numeric' }) : 'NA';
 
-const nomComplet = (f: FicheBase) => [f.prenom, f.nom].filter(Boolean).join(' ');
+const nomComplet = (f: FicheBase) =>
+  [f.prenom, f.nom].filter(Boolean).join(' ') || `Contact à trouver chez ${f.entreprise}`;
 
 const detailContact = (f: FicheBase) =>
   [
@@ -105,13 +107,77 @@ const patchConformite = (valeur: string) => ({
     : null,
 });
 
+function EnrichirFiche({ slug, f, onFait }: { slug: string; f: FicheBase; onFait: () => void }) {
+  const [champs, setChamps] = useState({
+    prenom: f.prenom ?? '',
+    nom: f.nom,
+    email: f.email ?? '',
+    telephone: f.telephone ?? '',
+    fonction: f.fonction ?? '',
+  });
+  const [occupe, setOccupe] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const champ = (cle: keyof typeof champs, libelle: string) => (
+    <label className="bv-champ">
+      <span className="small muted">{libelle}</span>
+      <input
+        className="input"
+        aria-label={libelle}
+        value={champs[cle]}
+        onChange={(e) => setChamps({ ...champs, [cle]: e.target.value })}
+      />
+    </label>
+  );
+  const enregistrer = async () => {
+    setError(null);
+    setOccupe(true);
+    try {
+      await enrichirFicheBase(slug, f.id, champs);
+      onFait();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setOccupe(false);
+    }
+  };
+  return (
+    <>
+      <h3 className="bv-sous-titre">Enrichir avec un contact</h3>
+      {champ('prenom', 'Prénom')}
+      {champ('nom', 'Nom')}
+      {champ('email', 'Email')}
+      {champ('telephone', 'Téléphone')}
+      {champ('fonction', 'Fonction')}
+      {error && (
+        <div className="alert amber">
+          <Icon name="info" />
+          <div>{error}</div>
+        </div>
+      )}
+      <p>
+        <button
+          className="btn primary"
+          disabled={occupe || !Object.values(champs).some((v) => v.trim())}
+          onClick={() => void enregistrer()}
+        >
+          Enregistrer le contact
+        </button>
+      </p>
+    </>
+  );
+}
+
 function FicheTiroir({
+  slug,
   f,
   onConformite,
+  onEnrichi,
   onFermer,
 }: {
+  slug: string;
   f: FicheBase;
   onConformite: (valeur: string) => void;
+  onEnrichi: () => void;
   onFermer: () => void;
 }) {
   return (
@@ -138,6 +204,7 @@ function FicheTiroir({
           <Conformite f={f} onChange={onConformite} />
         </dd>
       </dl>
+      {f.zone === 'a_enrichir' && <EnrichirFiche key={f.id} slug={slug} f={f} onFait={onEnrichi} />}
       <h3 className="bv-sous-titre">Historique</h3>
       <p>
         {LIBELLE_STATUT[f.statutProspection]}
@@ -415,7 +482,12 @@ export function BaseTable({
 
       {fiche && (
         <FicheTiroir
+          slug={slug}
           f={fiche}
+          onEnrichi={() => {
+            setOuverte(null);
+            onChange();
+          }}
           onFermer={() => setOuverte(null)}
           onConformite={(v) => void conformite([fiche.id], v)}
         />

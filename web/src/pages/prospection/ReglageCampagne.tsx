@@ -31,6 +31,7 @@ export function ReglageCampagne({
   const [suivi, setSuivi] = useState<'courte' | 'longue' | 'date'>('courte');
   const [date, setDate] = useState('');
   const [touchesMax, setTouchesMax] = useState(4);
+  const [style, setStyle] = useState('');
 
   const lancer = () =>
     onLancer({
@@ -39,6 +40,7 @@ export function ReglageCampagne({
       signatureId: signatureId === 'aucune' ? null : signatureId,
       suivi: suivi === 'date' ? { type: 'date', date } : { type: suivi },
       touchesMax,
+      ...(style.trim() ? { style: style.trim() } : {}),
     });
 
   const radio = <T extends string>(
@@ -83,10 +85,24 @@ export function ReglageCampagne({
           <b>Offre</b>
           <div>{OFFRES.map(([v, l]) => radio('offre', v, offre, setOffre, l))}</div>
           <b>Style</b>
-          <div className="small muted">
-            {mode === 'froid'
-              ? 'Court, au vouvoiement, un angle différent à chaque touche.'
-              : 'Reprend le ton du premier mail du fil, lu dans votre messagerie.'}
+          <div>
+            <textarea
+              className="input"
+              aria-label="Style des mails"
+              rows={4}
+              maxLength={2000}
+              placeholder="Vos consignes pour cette vague : ton, longueur, ce qu'il faut dire ou éviter…"
+              value={style}
+              onChange={(e) => setStyle(e.target.value)}
+            />
+            <div className="small muted">
+              Recommandé, appliqué dans tous les cas :{' '}
+              {mode === 'froid'
+                ? 'court, au vouvoiement, un angle différent à chaque touche.'
+                : 'reprend le ton du premier mail du fil, lu dans votre messagerie.'}{' '}
+              Ce que vous écrivez ici s'ajoute à ces consignes pour rédiger les brouillons de cette
+              vague.
+            </div>
           </div>
           <b>Créneaux</b>
           <div>

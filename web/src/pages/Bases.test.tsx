@@ -60,6 +60,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
   if (method === 'POST' && url.endsWith('/base/imports')) return json([apercu]);
+  if (method === 'POST' && url.endsWith('/enrichir')) return json({ zone: 'prospectable' });
   if (method === 'POST' && url.endsWith('/integrer'))
     return json({ creees: 2, fusionnees: 0, restantes: 1 });
   if (method === 'PUT') return json(apercu);
@@ -171,6 +172,17 @@ describe('base vivante : import en trois temps', () => {
     expect(screen.getByText('Intégrer 2 fiches à la base')).toBeTruthy();
   });
 
+  it('annule un import en envoyant une requête que le serveur accepte', async () => {
+    etat = { ...videEtat(), imports: [{ ...apercu }] };
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText(/Valider l'import « Texte collé » \(3 lignes\)/));
+    fireEvent.click(await screen.findByText("Annuler l'import"));
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true));
+    // Fastify refuses a JSON request without a body: the cancel must carry one.
+    expect(calls.find((c) => c.method === 'DELETE')?.body).toEqual({});
+    expect(screen.queryByText('Bad Request')).toBeNull();
+  });
+
   it('se ferme avec Échap', async () => {
     render(<Bases slug="simatis" />);
     await screen.findByText(/La base est vide/);
@@ -243,7 +255,7 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
 
   it('propose de compléter les fiches sans moyen de contact', async () => {
     render(<Bases slug="simatis" />);
-    fireEvent.click(await screen.findByText(/4 fiches sans email ni téléphone/));
+    fireEvent.click(await screen.findByText(/4 fiches sans contact à enrichir/));
     await waitFor(() => expect(lectures().some((u) => u.includes('zone=a_enrichir'))).toBe(true));
     expect(await screen.findByText(/n'entre jamais dans un CRM/)).toBeTruthy();
   });
@@ -283,6 +295,24 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     const lien = screen.getByText('Exporter en CSV').closest('a');
     expect(lien?.getAttribute('href')).toContain('export.csv?');
     expect(lien?.getAttribute('href')).toContain('alerte=email_invalide');
+  });
+
+  it('enrichit une entreprise sans contact depuis sa fiche', async () => {
+    etat = {
+      ...etat,
+      fiches: [{ ...fiche, zone: 'a_enrichir', prenom: null, nom: '', email: null }],
+    };
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Contact à trouver chez Atelier Fictif'));
+    fireEvent.change(screen.getByLabelText('Prénom'), { target: { value: 'Léa' } });
+    fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Martin' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'lea@atelier.test' } });
+    fireEvent.click(screen.getByText('Enregistrer le contact'));
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.endsWith('/enrichir'));
+      expect(post?.url).toContain('/base/fiches/22222222');
+      expect(post?.body).toMatchObject({ prenom: 'Léa', nom: 'Martin', email: 'lea@atelier.test' });
+    });
   });
 
   it('marque une opposition depuis la fiche', async () => {
