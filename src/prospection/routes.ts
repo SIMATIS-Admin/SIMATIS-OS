@@ -61,6 +61,7 @@ const reglageSchema = z.object({
     date: z.string().max(10).optional(),
   }),
   touchesMax: z.number().int(),
+  style: z.string().max(2000).optional(),
 });
 const campagneSchema = z.discriminatedUnion('mode', [
   z.object({

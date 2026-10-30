@@ -322,7 +322,7 @@ describe('base vivante : réponses, entrée dans le CRM, outils de la routine', 
       const [imp] = await creerImports(t.app.db, base.id, {
         nomFichier: 'x.csv',
         contenu: Buffer.from(
-          'Société;Interlocuteur;Code;Mail\nAtelier Fictif;Léa Martin;A1;lea@atelier-fictif.test\nBureau Fictif;;A2;\n;Paul Petit;A3;paul@bureau.test',
+          'Société;Interlocuteur;Code;Mail\nAtelier Fictif;Léa Martin;A1;lea@atelier-fictif.test\nBureau Fictif;;A2;\n;Paul Petit;A3;paul@bureau.test\n;Marie Durand;A4;',
         ),
         provenance: 'Test',
       });
@@ -341,7 +341,7 @@ describe('base vivante : réponses, entrée dans le CRM, outils de la routine', 
       expect(r.imports).toHaveLength(1);
       expect(r.imports[0]?.importId).toBe(imp?.id);
       expect(r.imports[0]?.colonnesNonReconnues.map((c) => [c.entete, c.exemples])).toEqual([
-        ['Code', ['A1', 'A2', 'A3']],
+        ['Code', ['A1', 'A2', 'A3', 'A4']],
       ]);
       expect(JSON.stringify(r)).not.toContain('Paul Petit');
     });
@@ -366,12 +366,13 @@ describe('base vivante : réponses, entrée dans le CRM, outils de la routine', 
         statut: 'sous_minimum',
         limite: 30,
       });
-      // Line 3 has no company, but its address (paul@bureau.test) gives one.
-      expect(l.map((x) => [x.numero, x.raison])).toEqual([[2, 'Nom manquant']]);
+      // Line 3 has no company, but its address (paul@bureau.test) gives one; line 2 (a company
+      // alone) leaves the airlock « à enrichir ».
+      expect(l.map((x) => [x.numero, x.raison])).toEqual([[4, 'Entreprise manquante']]);
       const c = await appeler<{ statut: string; zone: string }>('base_corriger_ligne', {
         importId: imp?.id,
-        numero: 2,
-        nom: 'Roche',
+        numero: 4,
+        entreprise: 'Maison Fictive',
       });
       expect(c).toMatchObject({ statut: 'pret', zone: 'a_enrichir' });
     });

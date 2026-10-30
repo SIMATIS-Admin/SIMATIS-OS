@@ -47,10 +47,16 @@ describe('Inbox : répondre à un message de l’espace partagé (API)', () => {
       url: `/api/i/${slug}/sujets/${id}/repondre`,
       payload: payload as object,
     });
-  // Le runner du poste : prend la demande en file et y répond.
+  // Le runner du poste : attend la demande en file (le délai d'arrivée dépend de la machine) et y répond.
   const passerRunner = async (resultat: Resultat) => {
-    await new Promise((r) => setTimeout(r, 50));
-    for (const { id } of prendre()) repondre(id, resultat);
+    for (let essai = 0; essai < 200; essai += 1) {
+      const demandes = prendre();
+      if (demandes.length > 0) {
+        for (const { id } of demandes) repondre(id, resultat);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 25));
+    }
   };
 
   beforeAll(async () => {

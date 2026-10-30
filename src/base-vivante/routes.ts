@@ -16,6 +16,7 @@ import {
 import { FichierIllisible } from './lecture.js';
 import {
   annulerImport,
+  enrichirFiche,
   apercu,
   completerLigne,
   creerImports,
@@ -62,6 +63,14 @@ const correspondanceSchema = z.object({
 
 const completementSchema = z.object({
   entreprise: z.string().max(200).optional(),
+  prenom: z.string().max(120).optional(),
+  nom: z.string().max(120).optional(),
+  email: z.string().max(200).optional(),
+  telephone: z.string().max(60).optional(),
+  fonction: z.string().max(200).optional(),
+});
+
+const apportSchema = z.object({
   prenom: z.string().max(120).optional(),
   nom: z.string().max(120).optional(),
   email: z.string().max(200).optional(),
@@ -280,6 +289,15 @@ export function registerBaseVivanteRoutes(
   app.post<Route>(
     '/api/i/:slug/base/historique/actualiser',
     surInstance((instanceId) => actualiserHistorique(db, instanceId)),
+  );
+
+  app.post<Route>(
+    '/api/i/:slug/base/fiches/:id/enrichir',
+    surInstance(async (instanceId, request) => {
+      const corps = apportSchema.safeParse(request.body);
+      if (!corps.success) throw new ImportRefuse('Contact invalide');
+      return enrichirFiche(db, instanceId, request.params.id as string, corps.data);
+    }),
   );
 
   app.patch<Route>(

@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull } from 'drizzle-orm';
 import {
   carte,
   creerClient,
@@ -32,10 +32,12 @@ import { loadInstanceSecrets, writeInstanceSecret } from '../secrets.js';
 import { marquerVu, stockageTx } from './stockage.js';
 import { recevoirDonnees } from './synchro.js';
 import {
+  invitationsPartenaires,
   messagesPartenaires,
   missions,
   partenaires,
   type EntreeHistorique,
+  type InvitationPartenaire,
   type EtatMissionLocal,
   type MissionPartenaire,
   type Partenaire,
@@ -50,6 +52,8 @@ export const SECRET_CLE = 'RELAIS_SECRET';
 
 export type RelaisDeps = {
   url: string;
+  // Relay registration key (RELAIS_CLE_INSCRIPTION): lets an instance invite before being invited.
+  cleInscription?: string;
   secretsDir: string;
   realWrites: boolean;
   fetch?: typeof fetch;
@@ -115,6 +119,27 @@ async function enregistrerPartenaire(
   return { partenaire: existant, cree: false };
 }
 
+function identite(instance: Instance) {
+  const nom = `SIMATIS OS · ${instance.nom}`;
+  return {
+    nom,
+    carte: carte({
+      nom,
+      description: 'Direction commerciale en mode partagé : prospects, rendez-vous, affaires.',
+      organisation: 'Simatis',
+    }),
+  };
+}
+
+async function retenirNoeud(
+  instance: Instance,
+  inscription: { id: string; secret: string },
+  deps: RelaisDeps,
+): Promise<void> {
+  await writeInstanceSecret(deps.secretsDir, instance.slug, SECRET_NOEUD, inscription.id);
+  await writeInstanceSecret(deps.secretsDir, instance.slug, SECRET_CLE, inscription.secret);
+}
+
 // Pastes an invitation link: registers the instance's node with it the first time, otherwise
 // accepts it. The node identity goes to the instance's secrets, never anywhere else.
 export async function rejoindre(
@@ -126,28 +151,16 @@ export async function rejoindre(
 ): Promise<Partenaire> {
   verifierEcriture(instance, deps);
   const client = await clientPour(instance, deps);
-  const nom = `SIMATIS OS · ${instance.nom}`;
   let resultat;
   try {
-    resultat = await client.rejoindre({
-      lien,
-      nom,
-      carte: carte({
-        nom,
-        description: 'Direction commerciale en mode partagé : prospects, rendez-vous, affaires.',
-        organisation: 'Simatis',
-      }),
-    });
+    resultat = await client.rejoindre({ lien, ...identite(instance) });
   } catch (error) {
     if (error instanceof ErreurRelais && !error.passagere)
       throw new PartenaireRefuse(error.message);
     throw error;
   }
   const { connexion, inscription } = resultat;
-  if (inscription) {
-    await writeInstanceSecret(deps.secretsDir, instance.slug, SECRET_NOEUD, inscription.id);
-    await writeInstanceSecret(deps.secretsDir, instance.slug, SECRET_CLE, inscription.secret);
-  }
+  if (inscription) await retenirNoeud(instance, inscription, deps);
   return withInstance(db, instance.id, async (tx) => {
     const { partenaire } = await enregistrerPartenaire(tx, connexion);
     await logEvent(tx, {
@@ -157,6 +170,72 @@ export async function rejoindre(
     });
     return partenaire;
   });
+}
+
+// Creates an invitation link to hand to a partner. An instance without a node registers first,
+// with the relay registration key; the email is only a label (the relay sends nothing).
+export async function inviter(
+  db: Database,
+  instance: Instance,
+  email: string | null,
+  deps: RelaisDeps,
+  par: string,
+): Promise<InvitationPartenaire> {
+  verifierEcriture(instance, deps);
+  const client = await clientPour(instance, deps);
+  let invitation;
+  try {
+    if (!client.inscrit) {
+      if (!deps.cleInscription) {
+        throw new PartenaireRefuse(
+          'Clé d’inscription du relais absente (RELAIS_CLE_INSCRIPTION) : collez plutôt le lien reçu d’un partenaire.',
+        );
+      }
+      const inscription = await client.inscrire({
+        ...identite(instance),
+        cle_inscription: deps.cleInscription,
+      });
+      await retenirNoeud(instance, inscription, deps);
+    }
+    invitation = await client.inviter(email ? { email } : {});
+  } catch (error) {
+    if (error instanceof ErreurRelais && !error.passagere)
+      throw new PartenaireRefuse(error.message);
+    throw error;
+  }
+  return withInstance(db, instance.id, async (tx) => {
+    const [row] = await tx
+      .insert(invitationsPartenaires)
+      .values({
+        instanceId: currentInstance,
+        code: invitation.code,
+        lien: invitation.lien,
+        email,
+        expireAt: new Date(invitation.expire_le),
+        creePar: par,
+      })
+      .returning();
+    if (!row) throw new Error('Invitation non enregistrée');
+    await logEvent(tx, {
+      acteur: par,
+      action: `Invitation de partenaire créée${email ? ` pour ${email}` : ''}`,
+    });
+    return row;
+  });
+}
+
+export async function invitationsEnAttente(tx: Tx): Promise<InvitationPartenaire[]> {
+  return tx
+    .select()
+    .from(invitationsPartenaires)
+    .where(
+      and(
+        eq(invitationsPartenaires.instanceId, currentInstance),
+        isNull(invitationsPartenaires.accepteeAt),
+        gt(invitationsPartenaires.expireAt, new Date()),
+      ),
+    )
+    .orderBy(desc(invitationsPartenaires.createdAt));
 }
 
 // Cuts the connection at the relay (the partner is told), then here.
@@ -633,11 +712,22 @@ async function recevoirNote(tx: Tx, env: Enveloppe): Promise<void> {
 async function recevoirConnexion(tx: Tx, env: Enveloppe): Promise<void> {
   const corps = env.corps as {
     evenement: 'acceptee' | 'coupee';
+    invitation?: string;
     connexion: { id: string; partenaire?: Connexion['partenaire'] };
   };
   if (corps.evenement === 'acceptee') {
-    // An invitation sent from here was accepted (brique 1 only pastes invitations, but a node
-    // may also have invited from a script).
+    // An invitation sent from here was accepted: it leaves the pending list.
+    if (corps.invitation) {
+      await tx
+        .update(invitationsPartenaires)
+        .set({ accepteeAt: new Date(), connexionId: corps.connexion.id, updatedAt: new Date() })
+        .where(
+          and(
+            eq(invitationsPartenaires.instanceId, currentInstance),
+            eq(invitationsPartenaires.code, corps.invitation),
+          ),
+        );
+    }
     if (!corps.connexion.partenaire) return;
     const { partenaire, cree } = await enregistrerPartenaire(tx, {
       id: corps.connexion.id,

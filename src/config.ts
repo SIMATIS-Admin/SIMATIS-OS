@@ -43,6 +43,7 @@ const schema = z.object({
       .refine((value) => /^https?:\/\//.test(value), 'doit commencer par http:// ou https://')
       .optional(),
   ),
+  RELAIS_CLE_INSCRIPTION: z.preprocess(vide, z.string().min(1).optional()),
 });
 
 export type Config = {
@@ -61,6 +62,7 @@ export type Config = {
   vmaOsToken: string | null;
   // Relais d'agents des OS partenaires ; null tant qu'il n'est pas configuré.
   relaisUrl: string | null;
+  relaisCleInscription: string | null;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -92,5 +94,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     site: siteUrl && siteToken ? { url: siteUrl, token: siteToken } : null,
     vmaOsToken: e.VMA_OS_TOKEN ?? null,
     relaisUrl: e.RELAIS_URL ?? null,
+    relaisCleInscription: e.RELAIS_CLE_INSCRIPTION ?? null,
   };
 }

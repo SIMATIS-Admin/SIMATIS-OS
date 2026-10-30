@@ -400,18 +400,33 @@ export type MissionVue = {
   creeeLe: string;
   majLe: string;
 };
+export type InvitationVue = {
+  id: string;
+  lien: string;
+  email: string | null;
+  creeeLe: string;
+  expireLe: string;
+};
 export type PartenairesReponse = {
   actif: boolean;
   porteuse: boolean;
   ecrituresReelles: boolean;
   inscrit: boolean;
+  peutInviter: boolean;
   objets: ObjetCrm[];
   champsExcluables: { cle: string; libelle: string }[];
+  niveaux: { id: PartenaireVue['niveau']; libelle: string }[];
+  gardeFous: string[];
   partenaires: PartenaireVue[];
+  invitations: InvitationVue[];
   missions: MissionVue[];
 };
 export const fetchPartenaires = (slug: string) =>
   getJson<PartenairesReponse>(inst(slug, 'partenaires'));
+export const inviterPartenaire = (slug: string, email: string) =>
+  sendJson<{ invitation: InvitationVue }>('POST', inst(slug, 'partenaires/invitations'), {
+    email,
+  });
 export const rejoindrePartenaire = (slug: string, lien: string) =>
   sendJson<{ partenaire: PartenaireVue }>('POST', inst(slug, 'partenaires/rejoindre'), { lien });
 export const reglerPartenaire = (
@@ -1451,6 +1466,7 @@ export type FicheBase = {
   entreprise: string;
   civilite: 'M.' | 'Mme' | null;
   prenom: string | null;
+  // Empty while the record only knows its company (« à enrichir »).
   nom: string;
   email: string | null;
   telephone: string | null;
@@ -1545,7 +1561,17 @@ export const integrerImportBase = (slug: string, id: string) =>
     {},
   );
 export const annulerImportBase = (slug: string, id: string) =>
-  sendJson<{ ok: true }>('DELETE', inst(slug, `base/imports/${id}`), undefined);
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/imports/${id}`), {});
+
+export type ApportContactBase = {
+  prenom?: string;
+  nom?: string;
+  email?: string;
+  telephone?: string;
+  fonction?: string;
+};
+export const enrichirFicheBase = (slug: string, id: string, apport: ApportContactBase) =>
+  sendJson<{ zone: ZoneBase }>('POST', inst(slug, `base/fiches/${id}/enrichir`), apport);
 
 // Rapprochement avec la boîte Gmail d'un mandat (lecture seule, depuis le début du mandat).
 export type MandatBase = { slug: string; nom: string; debutMandat: string | null };
@@ -1710,6 +1736,7 @@ export type ReglageCampagne = {
   signatureId: string | null;
   suivi: { type: 'courte' | 'longue' | 'date'; date?: string };
   touchesMax: number;
+  style?: string;
 };
 export type ResultatCampagne = {
   brouillons: number;

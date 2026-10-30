@@ -1178,6 +1178,32 @@ textarea.input {
   font-size: 14px;
   cursor: pointer;
 }
+.chip.fixe {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+  color: var(--ink-2);
+}
+.chip.fixe svg {
+  width: 13px;
+  height: 13px;
+}
+/* Safeguards of a partner connection: a label, then the locked chips. */
+.garde-fous {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.lien-copie {
+  display: flex;
+  gap: 8px;
+}
+.lien-copie .input {
+  flex: 1;
+  min-width: 0;
+}
 .chip.on {
   background: var(--navy);
   color: var(--white);
@@ -1606,6 +1632,12 @@ textarea.input {
 .modal .panel-b {
   padding: 20px 22px;
 }
+.modal.large {
+  width: min(980px, calc(100% - 32px));
+  top: 6vh;
+  max-height: 88vh;
+  overflow-y: auto;
+}
 .toast {
   position: fixed;
   bottom: 24px;
@@ -1665,6 +1697,15 @@ textarea.input {
 .seg button.on {
   background: var(--navy);
   color: var(--white);
+}
+/* Long labels: the buttons wrap on a narrow screen instead of overflowing. */
+.seg.adaptable {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.seg.adaptable button {
+  flex: 1 1 auto;
+  box-shadow: 0 1px 0 var(--line);
 }
 .seg button[disabled] {
   cursor: not-allowed;

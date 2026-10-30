@@ -75,7 +75,7 @@ function fusionner(cible: Travail, fiche: Fiche): void {
     civilite: v.civilite ?? null,
     civiliteDeduite: v.civiliteDeduite ?? false,
     prenom: v.prenom ?? null,
-    nom: v.nom,
+    nom: v.nom || null,
     // An address known to bounce no longer makes the record prospectable.
     email: v.emailInvalide ? null : (v.email ?? null),
     telephone: v.telephone ?? null,
@@ -140,7 +140,8 @@ export async function integrerFiches(
         civilite: f.civilite,
         civiliteDeduite: f.civiliteDeduite,
         prenom: f.prenom,
-        nom: f.nom as string,
+        // The column is not null: « à enrichir » records without a contact keep an empty name.
+        nom: f.nom ?? '',
         email: f.email,
         telephone: f.telephone,
         fonction: f.fonction,
@@ -194,8 +195,8 @@ export type PatchHistorique = {
   mandatContacteur?: string | null;
 };
 
-const zoneDe = (f: Pick<FicheBase, 'email' | 'emailInvalide' | 'telephone'>): Zone =>
-  (f.email && !f.emailInvalide) || f.telephone ? 'prospectable' : 'a_enrichir';
+const zoneDe = (f: Pick<FicheBase, 'nom' | 'email' | 'emailInvalide' | 'telephone'>): Zone =>
+  f.nom && ((f.email && !f.emailInvalide) || f.telephone) ? 'prospectable' : 'a_enrichir';
 
 async function charger(tx: Tx, instanceId: string, id: string): Promise<FicheBase> {
   const [fiche] = await tx
@@ -270,6 +271,59 @@ export async function majConformite(
       updatedAt: new Date(),
     })
     .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
+}
+
+export type Apport = {
+  prenom?: string;
+  nom?: string;
+  email?: string;
+  telephone?: string;
+  fonction?: string;
+};
+
+// A contact found for a record « à enrichir »: fills what is given, through the same
+// normalisation as an import, and moves the record to « prospectable » once it has a name and a
+// way to reach it.
+export async function enrichir(
+  tx: Tx,
+  instanceId: string,
+  id: string,
+  apport: Apport,
+): Promise<FicheBase['zone']> {
+  const f = await charger(tx, instanceId, id);
+  const neuf = (v: string | undefined, ancien: string | null) => v?.trim() || ancien;
+  const { fiche, avertissements } = normaliserFiche({
+    entreprise: f.entreprise,
+    civilite: f.civiliteDeduite ? null : f.civilite,
+    prenom: neuf(apport.prenom, f.prenom),
+    nom: neuf(apport.nom, f.nom),
+    email: neuf(apport.email, f.email),
+    telephone: neuf(apport.telephone, f.telephone),
+    fonction: neuf(apport.fonction, f.fonction),
+    linkedin: f.linkedin,
+  });
+  if (avertissements.length > 0) throw new FicheNonHomogene(avertissements.join(', '));
+  const emailChange = fiche.email !== f.email;
+  const suivant = { nom: fiche.nom ?? '', email: fiche.email, telephone: fiche.telephone };
+  const zone = zoneDe({ ...suivant, emailInvalide: emailChange ? false : f.emailInvalide });
+  await tx
+    .update(baseVivante)
+    .set({
+      civilite: fiche.civilite,
+      civiliteDeduite: fiche.civiliteDeduite,
+      prenom: fiche.prenom,
+      nom: suivant.nom,
+      email: fiche.email,
+      telephone: fiche.telephone,
+      fonction: fiche.fonction,
+      domaine: fiche.domaine ?? f.domaine,
+      emailInvalide: emailChange ? false : f.emailInvalide,
+      cles: [...new Set([...f.cles, ...clesDoublon(fiche)])],
+      zone,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
+  return zone;
 }
 
 // The record entered the CRM of a mandate: the link is kept for history and duplicates.

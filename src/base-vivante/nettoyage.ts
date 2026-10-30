@@ -250,6 +250,8 @@ export function clesDoublon(f: Fiche): string[] {
   const cles: string[] = [];
   if (f.email) cles.push(`e:${f.email}`);
   if (f.linkedin) cles.push(`l:${f.linkedin}`);
+  // A company alone has no person to match: the company is its key, until a contact completes it.
+  if (!f.nom && f.entreprise) cles.push(`c:${sansAccent(f.entreprise.toLowerCase())}`);
   if (f.prenom && f.nom) {
     const personne = `${sansAccent(f.prenom.toLowerCase())}|${sansAccent(f.nom.toLowerCase())}`;
     // Both company spellings: a record that later gains an email must still match its older self.

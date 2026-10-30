@@ -520,6 +520,21 @@ describe('Prospecter à froid', () => {
     });
     expect(post.body).not.toHaveProperty('liens');
   });
+
+  it('transmet le style écrit par Marc pour la vague', async () => {
+    await versReglageFroid();
+    fireEvent.change(screen.getByLabelText('Style des mails'), {
+      target: { value: '  Ton chaleureux, trois phrases maximum.  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Rédiger les 2 brouillons' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/campagnes'))).toBe(true),
+    );
+    const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/campagnes'))!;
+    expect(post.body).toMatchObject({
+      reglage: { style: 'Ton chaleureux, trois phrases maximum.' },
+    });
+  });
 });
 
 describe('Contacts épuisés', () => {

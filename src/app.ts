@@ -31,7 +31,7 @@ export type AppDeps = {
   // Test de VMA : site et jeton des invitations ; null ou absent = non configuré.
   vma?: { url: string; token: string } | null;
   // Relais d'agents des OS partenaires ; null ou absent = module éteint.
-  relais?: { url: string; fetch?: typeof fetch } | null;
+  relais?: { url: string; cleInscription?: string; fetch?: typeof fetch } | null;
   logger?: FastifyServerOptions['logger'];
 };
 

@@ -10,6 +10,7 @@ import {
   apercu,
   completerLigne,
   creerImports,
+  enrichirFiche,
   ImportRefuse,
   integrerImport,
   listerFiches,
@@ -86,8 +87,8 @@ describe('base vivante : chaîne d’import', () => {
       total: 7,
       // Jean Dupont (téléphone), Claire Martin (email), Luc Bon (email, entreprise déduite)
       prospectables: 3,
-      aEnrichir: 1, // Paul Petit
-      sousMinimum: 2, // Marie Durand (sans entreprise), Boutique Fictive (sans nom)
+      aEnrichir: 2, // Paul Petit (sans moyen de contact), Boutique Fictive (sans nom)
+      sousMinimum: 1, // Marie Durand (sans entreprise)
       doublonsInternes: 1, // Claire Martin, ligne 6
       integrees: 0,
     });
@@ -106,7 +107,6 @@ describe('base vivante : chaîne d’import', () => {
     const imp = await apercu(t.app.db, mandat.id, (await importer()).id, 'sous_minimum');
     expect(imp.lignes.map((l) => [l.brut[1], l.raison])).toEqual([
       ['Marie Durand', 'Entreprise manquante'],
-      ['', 'Nom manquant'],
     ]);
   });
 
@@ -118,11 +118,12 @@ describe('base vivante : chaîne d’import', () => {
   it('intègre les lignes prêtes dans les bonnes zones et laisse les autres dans le sas', async () => {
     const imp = await importer();
     const rapport = await integrerImport(t.app.db, mandat.id, imp.id);
-    expect(rapport).toEqual({ creees: 4, fusionnees: 0, restantes: 2 });
+    expect(rapport).toEqual({ creees: 5, fusionnees: 0, restantes: 1 });
     const base = await listerFiches(t.app.db, mandat.id);
-    expect(base.compteurs).toEqual({ aEnrichir: 1, prospectable: 3 });
+    expect(base.compteurs).toEqual({ aEnrichir: 2, prospectable: 3 });
     expect(base.fiches.map((f) => [f.entreprise, f.nom, f.zone])).toEqual([
       ['Atelier Fictif', 'DUPONT', 'prospectable'],
+      ['Boutique Fictive', '', 'a_enrichir'],
       ['Bureau Fictif', 'MARTIN', 'prospectable'],
       ['Cabinet Fictif', 'PETIT', 'a_enrichir'],
       ['Societe Fictive', 'BON', 'prospectable'],
@@ -130,7 +131,7 @@ describe('base vivante : chaîne d’import', () => {
     expect(base.fiches[0]).toMatchObject({ provenance: 'Sharp', telephone: '+33612345678' });
     const apres = await apercu(t.app.db, mandat.id, imp.id);
     expect(apres.statut).toBe('integre');
-    expect(apres.compteurs.integrees).toBe(4);
+    expect(apres.compteurs.integrees).toBe(5);
   });
 
   it('rejouer l’intégration ne crée rien de plus', async () => {
@@ -140,7 +141,7 @@ describe('base vivante : chaîne d’import', () => {
       creees: 0,
       fusionnees: 0,
     });
-    expect((await listerFiches(t.app.db, mandat.id)).total).toBe(4);
+    expect((await listerFiches(t.app.db, mandat.id)).total).toBe(5);
   });
 
   it('un second fichier fusionne avec la base sans doublon ni écrasement', async () => {
@@ -155,9 +156,9 @@ describe('base vivante : chaîne d’import', () => {
     const rapport = await integrerImport(t.app.db, mandat.id, imp.id);
     expect(rapport).toMatchObject({ creees: 1, fusionnees: 2 });
     const { fiches, compteurs, total } = await listerFiches(t.app.db, mandat.id);
-    expect(total).toBe(5);
-    // Paul Petit gained an email: « à enrichir » → « prospectable ».
-    expect(compteurs).toEqual({ aEnrichir: 0, prospectable: 5 });
+    expect(total).toBe(6);
+    // Paul Petit gained an email: « à enrichir » → « prospectable ». The company alone stays.
+    expect(compteurs).toEqual({ aEnrichir: 1, prospectable: 5 });
     const paul = fiches.find((f) => f.nom === 'PETIT');
     expect(paul).toMatchObject({
       email: 'paul@cabinet-fictif.test',
@@ -206,17 +207,62 @@ describe('base vivante : chaîne d’import', () => {
   it('une ligne du sas se complète puis s’intègre à la relance', async () => {
     const imp = await importer();
     await integrerImport(t.app.db, mandat.id, imp.id);
-    const ligne = await completerLigne(t.app.db, mandat.id, imp.id, 5, { nom: 'Roche' });
+    const ligne = await completerLigne(t.app.db, mandat.id, imp.id, 4, {
+      entreprise: 'Maison Fictive',
+    });
     expect(ligne).toMatchObject({ statut: 'pret', zone: 'a_enrichir', raison: null });
-    expect(ligne.fiche).toMatchObject({ entreprise: 'Boutique Fictive', nom: 'ROCHE' });
+    expect(ligne.fiche).toMatchObject({ entreprise: 'Maison Fictive', nom: 'DURAND' });
     expect(await integrerImport(t.app.db, mandat.id, imp.id)).toMatchObject({
       creees: 1,
-      restantes: 1,
+      restantes: 0,
     });
-    expect((await listerFiches(t.app.db, mandat.id)).total).toBe(5);
+    expect((await listerFiches(t.app.db, mandat.id)).total).toBe(6);
     await expect(completerLigne(t.app.db, mandat.id, imp.id, 1, { nom: 'X' })).rejects.toThrow(
       ImportRefuse,
     );
+  });
+
+  it('une entreprise sans contact entre « à enrichir », puis un contact la rend prospectable', async () => {
+    const liste = ['Raison sociale;Email', 'Atelier Seul;', 'Atelier Seul;', 'Garage Seul;'].join(
+      '\n',
+    );
+    const imp = await importer('Shaarp', liste);
+    expect(imp.compteurs).toMatchObject({ aEnrichir: 2, sousMinimum: 0, doublonsInternes: 1 });
+    expect(await integrerImport(t.app.db, mandat.id, imp.id)).toMatchObject({ creees: 2 });
+    // Importing the same list again finds the same companies instead of duplicating them.
+    const encore = await importer('Shaarp', liste);
+    expect(await integrerImport(t.app.db, mandat.id, encore.id)).toMatchObject({
+      creees: 0,
+      fusionnees: 2,
+    });
+    const base = await listerFiches(t.app.db, mandat.id);
+    expect(base.compteurs).toEqual({ aEnrichir: 2, prospectable: 0 });
+    const fiche = base.fiches.find((f) => f.entreprise === 'Atelier Seul');
+    if (!fiche) throw new Error('fiche absente');
+
+    await expect(
+      enrichirFiche(t.app.db, mandat.id, fiche.id, { email: 'pas-un-mail' }),
+    ).rejects.toThrow();
+    expect(
+      await enrichirFiche(t.app.db, mandat.id, fiche.id, { prenom: 'Léa', nom: 'martin' }),
+    ).toEqual({
+      zone: 'a_enrichir',
+    });
+    expect(
+      await enrichirFiche(t.app.db, mandat.id, fiche.id, { email: 'lea@atelier-seul.test' }),
+    ).toEqual({ zone: 'prospectable' });
+    const apres = (await listerFiches(t.app.db, mandat.id)).fiches.find((f) => f.id === fiche.id);
+    expect(apres).toMatchObject({
+      prenom: 'Léa',
+      nom: 'MARTIN',
+      civilite: 'Mme',
+      email: 'lea@atelier-seul.test',
+      zone: 'prospectable',
+    });
+    expect((await listerFiches(t.app.db, mandat.id)).compteurs).toEqual({
+      aEnrichir: 1,
+      prospectable: 1,
+    });
   });
 
   it('annule un import non intégré, pas un import intégré', async () => {
@@ -352,11 +398,11 @@ describe('base vivante : chaîne d’import', () => {
         method: 'POST',
         url: `/api/i/bv-mandat/base/imports/${imp.id}/integrer`,
       });
-      expect(integration.json()).toEqual({ creees: 4, fusionnees: 0, restantes: 2 });
+      expect(integration.json()).toEqual({ creees: 5, fusionnees: 0, restantes: 1 });
 
       const liste = await a.inject({ method: 'GET', url: '/api/i/bv-mandat/base?zone=a_enrichir' });
-      expect(liste.json<Liste>().fiches).toHaveLength(1);
-      expect(liste.json<Liste>().compteurs).toEqual({ aEnrichir: 1, prospectable: 3 });
+      expect(liste.json<Liste>().fiches).toHaveLength(2);
+      expect(liste.json<Liste>().compteurs).toEqual({ aEnrichir: 2, prospectable: 3 });
       expect(liste.json<Liste>().imports[0]?.statut).toBe('integre');
       const recherche = await a.inject({ method: 'GET', url: '/api/i/bv-mandat/base?q=bureau' });
       expect(recherche.json<Liste>().total).toBe(1);

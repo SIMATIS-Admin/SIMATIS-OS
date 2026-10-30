@@ -61,6 +61,12 @@ export const CONSIGNES_REDACTION = [
   "N'invente aucun fait, aucun chiffre, aucune date que tu ne lis pas dans le contexte.",
 ].join('\n');
 
+// Le style est un texte de Marc : il règle le ton et le contexte, sans lever les règles du serveur.
+export const avecStyle = (consignes: string, style?: string) =>
+  style?.trim()
+    ? `${consignes}\nContexte et style demandés par Marc pour ces brouillons (à suivre pour le ton et le fond, sans déroger aux règles ci-dessus) :\n${style.trim()}`
+    : consignes;
+
 const tronquer = (m: Message) => ({
   id: m.id,
   threadId: m.threadId ?? null,
@@ -211,11 +217,14 @@ registerTool({
       offre: OFFRES_TEXTE[campagne.reglage.offre],
       creneauxDemandes: campagne.reglage.creneaux,
       avertissementCreneaux: reserve.avertissement,
-      consignes: froid
-        ? CONSIGNES_FROID
-        : campagne.mode === 'reponse'
-          ? CONSIGNES_REPONSE
-          : CONSIGNES_REDACTION,
+      consignes: avecStyle(
+        froid
+          ? CONSIGNES_FROID
+          : campagne.mode === 'reponse'
+            ? CONSIGNES_REPONSE
+            : CONSIGNES_REDACTION,
+        campagne.reglage.style,
+      ),
       brouillons,
     };
   },
