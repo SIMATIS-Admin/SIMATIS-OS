@@ -100,7 +100,8 @@ export type ResultatCampagne = {
   suivisNonCrees: number;
   clos: number;
   faites: number;
-  reportees: number;
+  // Brouillons que la messagerie a refusés : ils restent prêts, la campagne n'est pas terminée.
+  echecs: number;
 };
 
 // Lot de mails rédigés par Claude puis relus par Marc. `redaction` : en attente de l'exécuteur ;
