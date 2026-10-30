@@ -245,12 +245,9 @@ describe('Outils MCP de rédaction de campagne', () => {
       brouillons: { contact: { nom: string }; touche: number; threadId: string }[];
     }>();
     expect(r.consignes).toBe(CONSIGNES_REPONSE);
-    expect(r.brouillons).toEqual([
-      expect.objectContaining({
-        contact: expect.objectContaining({ nom: 'Mathis Roussel' }),
-        touche: 3,
-        threadId: '9999aaaabbbbcccc',
-      }),
-    ]);
+    expect(r.brouillons).toHaveLength(1);
+    expect(r.brouillons[0]?.contact.nom).toBe('Mathis Roussel');
+    expect(r.brouillons[0]?.touche).toBe(3);
+    expect(r.brouillons[0]?.threadId).toBe('9999aaaabbbbcccc');
   });
 });

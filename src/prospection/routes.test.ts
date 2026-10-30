@@ -496,19 +496,17 @@ describe('Routes de la prospection', () => {
         .insert(contacts)
         .values({ instanceId, nom: 'Valérie Joly', email: 'valerie@exemple.test' })
         .returning({ id: contacts.id });
-      await t.owner.db
-        .insert(prospectionOccurrences)
-        .values({
-          instanceId,
-          mode: 'relance',
-          contactId: c!.id,
-          contactNom: 'Valérie Joly',
-          theme: 'Test de VMA',
-          touche: 2,
-          etat: 'envoye',
-          envoyeAt: new Date(),
-          threadId: 'ab12cd34ef56ab78',
-        });
+      await t.owner.db.insert(prospectionOccurrences).values({
+        instanceId,
+        mode: 'relance',
+        contactId: c!.id,
+        contactNom: 'Valérie Joly',
+        theme: 'Test de VMA',
+        touche: 2,
+        etat: 'envoye',
+        envoyeAt: new Date(),
+        threadId: 'ab12cd34ef56ab78',
+      });
       const [su] = await t.owner.db
         .insert(sujets)
         .values({
