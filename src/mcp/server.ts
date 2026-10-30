@@ -10,6 +10,7 @@ import '../base-vivante/outils-mcp.js';
 import '../diagnostic/outils-mcp.js';
 import '../inbox/outils-mcp.js';
 import '../partenaires/outils-mcp.js';
+import '../prospection/outils-mcp.js';
 import '../routines/outils-mcp.js';
 import { echouerExecution, RoutineArretee } from '../routines/service.js';
 

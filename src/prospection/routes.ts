@@ -1,0 +1,313 @@
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { z } from 'zod';
+import type { ConnexionDeps } from '../connexions/service.js';
+import type { Database } from '../db.js';
+import { withInstance } from '../db/context.js';
+import { getInstanceBySlug } from '../instances/service.js';
+import {
+  CampagneIntrouvable,
+  CampagneInvalide,
+  campagnesRecentes,
+  creerCampagneRelance,
+  lireCampagne,
+  tachesRelance,
+} from './campagnes.js';
+import { finaliserCampagne, modifierBrouillon } from './finalisation.js';
+import {
+  compterFroid,
+  confirmerEpuises,
+  contactsAConfirmer,
+  creerCampagneFroid,
+  echantillonFroid,
+  garderContacts,
+} from './froid.js';
+import { rapprocherInstance } from './rapprochement.js';
+import { abandonnerCampagnes, relancerCampagne } from './redaction.js';
+import {
+  ajouterSignature,
+  definirDefaut,
+  imageSignature,
+  listerSignatures,
+  reglerObjectif,
+  remplacerImage,
+  renommerSignature,
+  SignatureIntrouvable,
+  SignatureInvalide,
+  supprimerSignature,
+} from './signatures.js';
+import { statsProspection } from './stats.js';
+
+export type ProspectionRoutesDeps = { db: Database; connexionDeps: ConnexionDeps };
+
+const imageSchema = z.object({
+  typeMime: z.string().max(40),
+  imageBase64: z.string().max(700_000),
+});
+const creationSchema = imageSchema.extend({ nom: z.string().max(200) });
+const modificationSchema = z.object({
+  nom: z.string().max(200).optional(),
+  defaut: z.boolean().optional(),
+});
+const objectifSchema = z.object({ objectif: z.number() });
+const reglageSchema = z.object({
+  offre: z.enum(['vma', 'diagnostic', 'les-deux', 'kairos']),
+  creneaux: z.boolean(),
+  signatureId: z.uuid().nullable(),
+  suivi: z.object({
+    type: z.enum(['courte', 'longue', 'date']),
+    date: z.string().max(10).optional(),
+  }),
+  touchesMax: z.number().int(),
+});
+const campagneSchema = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('relance'),
+    tacheIds: z.array(z.uuid()).max(200),
+    reglage: reglageSchema,
+    liens: z.record(z.uuid(), z.uuid()).optional(),
+  }),
+  z.object({
+    mode: z.literal('froid'),
+    baseIds: z.array(z.uuid()).max(200),
+    reglage: reglageSchema,
+  }),
+]);
+const idsSchema = z.object({ ids: z.array(z.uuid()).max(500) });
+const brouillonSchema = z.object({
+  objet: z.string().max(300).optional(),
+  corps: z.string().max(50_000).optional(),
+  etat: z.enum(['pret', 'ecarte']).optional(),
+  suiviType: z.enum(['delai', 'citee', 'clos']).optional(),
+  suiviDate: z.string().max(10).nullable().optional(),
+});
+
+export function registerProspectionRoutes(app: FastifyInstance, deps: ProspectionRoutesDeps): void {
+  const { db, connexionDeps } = deps;
+
+  const erreur = (e: unknown, reply: FastifyReply) => {
+    if (e instanceof SignatureIntrouvable || e instanceof CampagneIntrouvable) {
+      return reply.code(404).send({ error: e.message });
+    }
+    if (e instanceof SignatureInvalide || e instanceof CampagneInvalide) {
+      return reply.code(400).send({ error: e.message });
+    }
+    throw e;
+  };
+  const invalide = (reply: FastifyReply, issue?: string) =>
+    reply.code(400).send({ error: issue ?? 'Requête invalide' });
+
+  // Résout l'instance du chemin, puis exécute `fn` dans son contexte (cloisonnement par Postgres).
+  async function dansInstance<T>(
+    slug: string,
+    reply: FastifyReply,
+    fn: Parameters<typeof withInstance<T>>[2],
+  ) {
+    const instance = await getInstanceBySlug(db, slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    try {
+      return await withInstance(db, instance.id, fn);
+    } catch (e) {
+      return erreur(e, reply);
+    }
+  }
+
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/prospection', (request, reply) =>
+    dansInstance(request.params.slug, reply, async (tx) => ({
+      stats: await statsProspection(tx),
+      signatures: await listerSignatures(tx),
+      ...(await campagnesRecentes(tx)),
+      froid: await compterFroid(tx),
+    })),
+  );
+
+  app.put<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/objectif',
+    (request, reply) => {
+      const p = objectifSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, "L'objectif doit être un nombre.");
+      return dansInstance(request.params.slug, reply, async (tx) => {
+        await reglerObjectif(tx, p.data.objectif);
+        return { ok: true };
+      });
+    },
+  );
+
+  app.post<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/signatures',
+    async (request, reply) => {
+      const p = creationSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      const s = await dansInstance(request.params.slug, reply, (tx) =>
+        ajouterSignature(tx, p.data),
+      );
+      return reply.sent ? undefined : reply.code(201).send(s);
+    },
+  );
+
+  app.patch<{ Params: { slug: string; id: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/signatures/:id',
+    (request, reply) => {
+      const p = modificationSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      return dansInstance(request.params.slug, reply, async (tx) => {
+        if (p.data.nom !== undefined) await renommerSignature(tx, request.params.id, p.data.nom);
+        if (p.data.defaut !== undefined) {
+          await definirDefaut(tx, p.data.defaut ? request.params.id : null);
+        }
+        return { ok: true };
+      });
+    },
+  );
+
+  app.put<{ Params: { slug: string; id: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/signatures/:id/image',
+    (request, reply) => {
+      const p = imageSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      return dansInstance(request.params.slug, reply, async (tx) => {
+        await remplacerImage(tx, request.params.id, p.data);
+        return { ok: true };
+      });
+    },
+  );
+
+  app.delete<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/signatures/:id',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, async (tx) => {
+        await supprimerSignature(tx, request.params.id);
+        return { ok: true };
+      }),
+  );
+
+  app.get<{ Params: { slug: string }; Querystring: { nombre?: string; filtre?: string } }>(
+    '/api/i/:slug/prospection/echantillon',
+    (request, reply) => {
+      const nombre = Math.min(100, Math.max(1, Number(request.query.nombre) || 30));
+      const filtre = request.query.filtre?.slice(0, 80);
+      return dansInstance(request.params.slug, reply, (tx) =>
+        echantillonFroid(tx, { nombre, ...(filtre ? { filtre } : {}) }),
+      );
+    },
+  );
+
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/prospection/epuises', (request, reply) =>
+    dansInstance(request.params.slug, reply, (tx) => contactsAConfirmer(tx)),
+  );
+  for (const [chemin, action] of [
+    ['confirmer', confirmerEpuises],
+    ['garder', garderContacts],
+  ] as const) {
+    app.post<{ Params: { slug: string }; Body: unknown }>(
+      `/api/i/:slug/prospection/epuises/${chemin}`,
+      (request, reply) => {
+        const p = idsSchema.safeParse(request.body);
+        if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+        return dansInstance(request.params.slug, reply, async (tx) => ({
+          modifies: await action(tx, p.data.ids),
+        }));
+      },
+    );
+  }
+
+  app.get<{ Params: { slug: string } }>(
+    '/api/i/:slug/prospection/taches-relance',
+    (request, reply) => dansInstance(request.params.slug, reply, (tx) => tachesRelance(tx)),
+  );
+
+  app.post<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/campagnes',
+    async (request, reply) => {
+      const p = campagneSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      const donnees = p.data;
+      const r = await dansInstance<{ campagneId: string; refusees: { raison: string }[] }>(
+        request.params.slug,
+        reply,
+        (tx) =>
+          donnees.mode === 'froid'
+            ? creerCampagneFroid(tx, { baseIds: donnees.baseIds, reglage: donnees.reglage })
+            : creerCampagneRelance(tx, {
+                tacheIds: donnees.tacheIds,
+                reglage: donnees.reglage,
+                ...(donnees.liens ? { liens: donnees.liens } : {}),
+              }),
+      );
+      return reply.sent ? undefined : reply.code(201).send(r);
+    },
+  );
+
+  // Interrogée par l'écran d'attente : une campagne que l'exécuteur n'a pas prise passe en erreur.
+  app.get<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/campagnes/:id',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, async (tx) => {
+        await abandonnerCampagnes(tx);
+        return lireCampagne(tx, request.params.id);
+      }),
+  );
+
+  app.patch<{ Params: { slug: string; id: string; bid: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/campagnes/:id/brouillons/:bid',
+    (request, reply) => {
+      const p = brouillonSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      return dansInstance(request.params.slug, reply, (tx) =>
+        modifierBrouillon(tx, request.params.bid, p.data),
+      );
+    },
+  );
+
+  app.post<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/campagnes/:id/finaliser',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      try {
+        return await finaliserCampagne(db, instance, request.params.id, connexionDeps);
+      } catch (e) {
+        return erreur(e, reply);
+      }
+    },
+  );
+
+  app.post<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/campagnes/:id/relancer',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, async (tx) => {
+        await relancerCampagne(tx, request.params.id);
+        return { ok: true };
+      }),
+  );
+
+  // Constate les envois faits depuis la messagerie (les brouillons que Marc a envoyés).
+  app.post<{ Params: { slug: string } }>(
+    '/api/i/:slug/prospection/rapprocher',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      try {
+        return { envoyes: await rapprocherInstance(db, instance, connexionDeps) };
+      } catch {
+        // La messagerie peut être indisponible : l'écran s'affiche quand même, sans mise à jour.
+        return { envoyes: 0 };
+      }
+    },
+  );
+
+  app.get<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/signatures/:id/image',
+    async (request, reply) => {
+      const img = await dansInstance(request.params.slug, reply, (tx) =>
+        imageSignature(tx, request.params.id),
+      );
+      if (reply.sent) return undefined;
+      if (!img) return reply.code(404).send({ error: 'Signature introuvable.' });
+      return reply
+        .header('Content-Type', img.typeMime)
+        .header('Cache-Control', 'private, max-age=300')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(img.octets);
+    },
+  );
+}

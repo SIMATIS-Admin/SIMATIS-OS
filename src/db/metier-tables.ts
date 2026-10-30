@@ -18,6 +18,14 @@ import {
   relaisSorties,
   relaisVus,
 } from '../partenaires/schema.js';
+import {
+  prospectionBrouillons,
+  prospectionCampagnes,
+  prospectionOccurrences,
+  prospectionReglages,
+  prospectionSignatures,
+  prospectionSuiviFroid,
+} from '../prospection/schema.js';
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
@@ -40,6 +48,12 @@ export const METIER_TABLES = [
   devis,
   propositions,
   autonomie,
+  prospectionBrouillons,
+  prospectionCampagnes,
+  prospectionOccurrences,
+  prospectionSignatures,
+  prospectionReglages,
+  prospectionSuiviFroid,
   activites,
   taches,
   opportunites,

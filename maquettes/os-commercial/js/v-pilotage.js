@@ -42,9 +42,10 @@ VIEWS.brief = () => {
         <div class="panel-b">
           ${rdv.length && f === 'tout' ? `<h4 class="sec-h">Rendez-vous</h4><ul class="tasks">${rdv.map(r => `<li><span class="canal">${ic('cal')}</span><div><b>${r.heure}, ${esc(r.titre)}</b><div class="small muted">${esc(r.lieu)}${r.binome ? ', en binôme avec ' + esc(r.binome) : ''}</div></div><button class="btn sm" data-act="rdv-prep" data-id="${r.id}">Préparer</button></li>`).join('')}</ul><h4 class="sec-h">Tâches du jour</h4>` : ''}
           ${taches.length ? `<ul class="tasks">${taches.map(ligne).join('')}</ul>` : '<div class="empty">Aucune tâche pour ce filtre.</div>'}</div></div>
+      <div class="stack">${typeof prospBriefPanel === 'function' && D().prospection ? prospBriefPanel() : ''}
       <div class="panel"><div class="panel-h"><h2>Tâches réalisées ${tip(`Tâches marquées faites dans ${inst.outil}, par canal. Les autres tâches regroupent tout ce qui n'est ni un email ni un appel.`)}</h2>${auj.total ? `<span class="small muted">Aujourd'hui : <b class="num">${auj.total}</b></span>` : ''}</div>
         <div class="panel-b activ">${per.map(p => `<div class="activ-row"><div><b>${p.l}</b><div class="small muted">${p.s}</div></div><div class="activ-n num">${p.v.total}<small>tâches</small></div>
-          <div class="activ-d"><span>${ic('send')}<b class="num">${p.v.email}</b> email${p.v.email > 1 ? 's' : ''}</span><span>${ic('phone')}<b class="num">${p.v.appel}</b> appel${p.v.appel > 1 ? 's' : ''}</span><span class="muted"><b class="num">${p.v.autre}</b> autre${p.v.autre > 1 ? 's' : ''}</span></div></div>`).join('')}</div></div>
+          <div class="activ-d"><span>${ic('send')}<b class="num">${p.v.email}</b> email${p.v.email > 1 ? 's' : ''}</span><span>${ic('phone')}<b class="num">${p.v.appel}</b> appel${p.v.appel > 1 ? 's' : ''}</span><span class="muted"><b class="num">${p.v.autre}</b> autre${p.v.autre > 1 ? 's' : ''}</span></div></div>`).join('')}</div></div></div>
     </div>`
   };
 };

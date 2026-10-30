@@ -1,6 +1,6 @@
 /* Noyau de la maquette : état, navigation, interface commune. */
 
-const STORE_KEY = 'simatis-os-maquette-v6';
+const STORE_KEY = 'simatis-os-maquette-v7';
 const VIEWS = {};
 const ACTIONS = {};
 

@@ -114,7 +114,8 @@ describe('nav', () => {
     expect(isBuilt('brief')).toBe(true);
     expect(isBuilt('tableau')).toBe(true);
     expect(isBuilt('devis')).toBe(true);
-    expect(isBuilt('prospection')).toBe(false);
+    expect(isBuilt('prospection')).toBe(true);
+    expect(isBuilt('relais')).toBe(false);
   });
 
   it('reorders favourites before or after a target', () => {

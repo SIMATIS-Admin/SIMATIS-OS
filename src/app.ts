@@ -12,6 +12,7 @@ import { registerCerveauRoutes } from './cerveau/routes.js';
 import { registerRunnerApi } from './routines/runner-api.js';
 import { registerAtelierRoutes } from './atelier/routes.js';
 import { registerVmaRoutes } from './vma/routes.js';
+import { registerProspectionRoutes } from './prospection/routes.js';
 import { registerTransfertRoutes } from './transfert/routes.js';
 import { registerWeb } from './web.js';
 
@@ -55,6 +56,7 @@ export function buildApp({
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
   if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
+  registerProspectionRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
   registerAtelierRoutes(app, { db });
   registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });

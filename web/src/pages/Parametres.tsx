@@ -11,6 +11,7 @@ import { Icon } from '../icons.js';
 import { libelleType, type InstanceSummary } from '../nav.js';
 import { Connexions } from './parametres/Connexions.js';
 import { Partenaires } from './parametres/Partenaires.js';
+import { ProspectionReglages } from './parametres/ProspectionReglages.js';
 import { RoutinesParametres } from './parametres/Routines.js';
 import { Tip } from './widgets.js';
 
@@ -163,9 +164,9 @@ export function Parametres({ slug, onRenamed }: Props) {
   const [fiche, setFiche] = useState<InstanceFiche | null>(null);
   const [nom, setNom] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [tab, setTab] = useState<'instance' | 'connexions' | 'partenaires' | 'routines'>(
-    location.hash.includes('google=') ? 'connexions' : 'instance',
-  );
+  const [tab, setTab] = useState<
+    'instance' | 'connexions' | 'partenaires' | 'routines' | 'prospection'
+  >(location.hash.includes('google=') ? 'connexions' : 'instance');
 
   useEffect(() => {
     fetchInstanceFiche(slug).then(
@@ -203,6 +204,9 @@ export function Parametres({ slug, onRenamed }: Props) {
         <button className={tab === 'routines' ? 'on' : ''} onClick={() => setTab('routines')}>
           Routines Claude
         </button>
+        <button className={tab === 'prospection' ? 'on' : ''} onClick={() => setTab('prospection')}>
+          Prospection
+        </button>
       </div>
       <div className="alert blue" style={{ marginBottom: 18 }}>
         <Icon name="lock" />
@@ -217,6 +221,8 @@ export function Parametres({ slug, onRenamed }: Props) {
         <Partenaires slug={slug} />
       ) : tab === 'routines' ? (
         <RoutinesParametres slug={slug} onConnexions={() => setTab('connexions')} />
+      ) : tab === 'prospection' ? (
+        <ProspectionReglages slug={slug} />
       ) : (
         <div className="grid g2">
           <div className="panel">

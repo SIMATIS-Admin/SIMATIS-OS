@@ -1672,3 +1672,209 @@ export const majAtelier = (
   });
 export const supprimerAtelier = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `ateliers-strategie/${encodeURIComponent(id)}`), {});
+
+// Prospection : compteur du jour, statistiques et signatures (voir src/prospection).
+export type StatsProspection = {
+  jour: number;
+  objectif: number;
+  semaine: number;
+  reponses: number;
+  rdv: number;
+  parTheme: Record<string, number>;
+  parTouche: Record<string, number>;
+  relancesFaites: number;
+  relancesRestantes: number;
+  aConfirmer: number;
+};
+export type SignatureProspection = {
+  id: string;
+  nom: string;
+  defaut: boolean;
+  typeMime: string;
+};
+export type OffreCampagne = 'vma' | 'diagnostic' | 'les-deux' | 'kairos';
+export type ReglageCampagne = {
+  offre: OffreCampagne;
+  creneaux: boolean;
+  signatureId: string | null;
+  suivi: { type: 'courte' | 'longue' | 'date'; date?: string };
+  touchesMax: number;
+};
+export type ResultatCampagne = {
+  brouillons: number;
+  simulation: boolean;
+  suivisCrees: number;
+  suivisNonCrees: number;
+  clos: number;
+  faites: number;
+  echecs: number;
+};
+export type CampagneResume = {
+  id: string;
+  mode: 'relance' | 'froid';
+  statut: StatutCampagne;
+  creeLe: string;
+  brouillons: number;
+  resultat: ResultatCampagne | null;
+};
+export type VueProspection = {
+  stats: StatsProspection;
+  signatures: SignatureProspection[];
+  recentes: CampagneResume[];
+  enCours: string | null;
+  froid: { disponibles: number; aRelancer: number };
+};
+export type StatutCampagne = 'redaction' | 'relecture' | 'terminee' | 'erreur';
+export type EtatBrouillon = 'a_rediger' | 'pret' | 'a_verifier' | 'ecarte' | 'cree';
+export type SuiviBrouillon = 'delai' | 'citee' | 'clos';
+export type BrouillonCampagne = {
+  id: string;
+  contactNom: string;
+  contactEmail: string;
+  societe: string | null;
+  touche: number;
+  etat: EtatBrouillon;
+  objet: string | null;
+  corps: string | null;
+  note: string | null;
+  suiviType: SuiviBrouillon;
+  suiviDate: string | null;
+};
+export type CampagneProspection = {
+  id: string;
+  mode: 'relance' | 'froid';
+  statut: StatutCampagne;
+  reglage: ReglageCampagne;
+  erreur: string | null;
+  resultat: ResultatCampagne | null;
+  brouillons: BrouillonCampagne[];
+};
+export type TacheRelance = {
+  id: string;
+  titre: string;
+  contactNom: string | null;
+  societe: string | null;
+  echeance: string | null;
+  touche: number;
+  utilisable: boolean;
+  suggestion: { contactId: string; contactNom: string; societe: string | null } | null;
+};
+export const fetchProspection = (slug: string) =>
+  getJson<VueProspection>(inst(slug, 'prospection'));
+export const reglerObjectifProspection = (slug: string, objectif: number) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, 'prospection/objectif'), { objectif });
+export type ImageSignature = { typeMime: string; imageBase64: string };
+export const ajouterSignatureProspection = (
+  slug: string,
+  signature: ImageSignature & { nom: string },
+) => sendJson<SignatureProspection>('POST', inst(slug, 'prospection/signatures'), signature);
+export const modifierSignatureProspection = (
+  slug: string,
+  id: string,
+  champs: { nom?: string; defaut?: boolean },
+) =>
+  sendJson<{ ok: true }>(
+    'PATCH',
+    inst(slug, `prospection/signatures/${encodeURIComponent(id)}`),
+    champs,
+  );
+export const remplacerImageSignature = (slug: string, id: string, image: ImageSignature) =>
+  sendJson<{ ok: true }>(
+    'PUT',
+    inst(slug, `prospection/signatures/${encodeURIComponent(id)}/image`),
+    image,
+  );
+export const supprimerSignatureProspection = (slug: string, id: string) =>
+  sendJson<{ ok: true }>(
+    'DELETE',
+    inst(slug, `prospection/signatures/${encodeURIComponent(id)}`),
+    {},
+  );
+export const urlImageSignature = (slug: string, id: string) =>
+  inst(slug, `prospection/signatures/${encodeURIComponent(id)}/image`);
+export const fetchTachesRelance = (slug: string) =>
+  getJson<TacheRelance[]>(inst(slug, 'prospection/taches-relance'));
+export const creerCampagneRelance = (
+  slug: string,
+  tacheIds: string[],
+  reglage: ReglageCampagne,
+  // Contact choisi pour une tâche que le CRM ne relie à personne : tâche => contact.
+  liens: Record<string, string> = {},
+) =>
+  sendJson<{ campagneId: string; refusees: { tacheId: string; raison: string }[] }>(
+    'POST',
+    inst(slug, 'prospection/campagnes'),
+    { mode: 'relance', tacheIds, reglage, ...(Object.keys(liens).length ? { liens } : {}) },
+  );
+export const fetchCampagne = (slug: string, id: string) =>
+  getJson<CampagneProspection>(inst(slug, `prospection/campagnes/${encodeURIComponent(id)}`));
+export const modifierBrouillonCampagne = (
+  slug: string,
+  campagneId: string,
+  brouillonId: string,
+  champs: {
+    objet?: string;
+    corps?: string;
+    etat?: 'pret' | 'ecarte';
+    suiviType?: SuiviBrouillon;
+    suiviDate?: string | null;
+  },
+) =>
+  sendJson<BrouillonCampagne>(
+    'PATCH',
+    inst(
+      slug,
+      `prospection/campagnes/${encodeURIComponent(campagneId)}/brouillons/${encodeURIComponent(brouillonId)}`,
+    ),
+    champs,
+  );
+export const finaliserCampagne = (slug: string, id: string) =>
+  sendJson<ResultatCampagne>(
+    'POST',
+    inst(slug, `prospection/campagnes/${encodeURIComponent(id)}/finaliser`),
+    {},
+  );
+export const relancerRedaction = (slug: string, id: string) =>
+  sendJson<{ ok: true }>(
+    'POST',
+    inst(slug, `prospection/campagnes/${encodeURIComponent(id)}/relancer`),
+    {},
+  );
+export const rapprocherEnvoisProspection = (slug: string) =>
+  sendJson<{ envoyes: number }>('POST', inst(slug, 'prospection/rapprocher'), {});
+
+// Prospection à froid : contacts de la base vivante.
+export type ContactFroid = {
+  id: string;
+  nom: string;
+  entreprise: string;
+  fonction: string | null;
+  touche: number;
+};
+export type ContactAConfirmer = {
+  id: string;
+  nom: string;
+  entreprise: string;
+  touches: number;
+  touchesMax: number;
+  derniereLe: string | null;
+};
+export const fetchEchantillon = (slug: string, nombre: number, filtre: string) =>
+  getJson<ContactFroid[]>(
+    inst(
+      slug,
+      `prospection/echantillon?nombre=${nombre}${filtre.trim() ? `&filtre=${encodeURIComponent(filtre.trim())}` : ''}`,
+    ),
+  );
+export const creerCampagneFroid = (slug: string, baseIds: string[], reglage: ReglageCampagne) =>
+  sendJson<{ campagneId: string; refusees: { baseId: string; raison: string }[] }>(
+    'POST',
+    inst(slug, 'prospection/campagnes'),
+    { mode: 'froid', baseIds, reglage },
+  );
+export const fetchEpuises = (slug: string) =>
+  getJson<ContactAConfirmer[]>(inst(slug, 'prospection/epuises'));
+export const confirmerEpuisesProspection = (slug: string, ids: string[]) =>
+  sendJson<{ modifies: number }>('POST', inst(slug, 'prospection/epuises/confirmer'), { ids });
+export const garderContactsProspection = (slug: string, ids: string[]) =>
+  sendJson<{ modifies: number }>('POST', inst(slug, 'prospection/epuises/garder'), { ids });
