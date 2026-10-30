@@ -4,7 +4,12 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
+import { contacts, entreprises, taches } from '../crm/schema.js';
+import { configureConnexion, registerConnector } from '../connexions/service.js';
+import { withInstance } from '../db/context.js';
 import { createInstance } from '../instances/service.js';
+import { demarrerCampagne, deposerBrouillons } from './redaction.js';
+import type { CampagneVue } from './campagnes.js';
 import type { StatsProspection } from './stats.js';
 import type { SignatureVue } from './signatures.js';
 
@@ -12,6 +17,12 @@ const png = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
   Buffer.alloc(16),
 ]);
+// Boîte mail fictive : en simulation, rien n'est créé (écritures réelles fermées).
+registerConnector({
+  fournisseur: 'boite-test',
+  sync: () => Promise.resolve({ lus: 0, crees: 0, maj: 0, erreurs: [] }),
+  write: () => Promise.resolve({ simulation: true }),
+});
 const image = { typeMime: 'image/png', imageBase64: png.toString('base64') };
 
 describe('Routes de la prospection', () => {
@@ -20,11 +31,17 @@ describe('Routes de la prospection', () => {
   let secretsDir: string;
   const base = '/api/i/prosp-routes/prospection';
   const autre = '/api/i/prosp-autre/prospection';
+  let instanceId: string;
 
   beforeAll(async () => {
     t = await setupTestApp();
-    await createInstance(t.owner.db, { slug: 'prosp-routes', nom: 'Routes', type: 'mandat' });
+    instanceId = (
+      await createInstance(t.owner.db, { slug: 'prosp-routes', nom: 'Routes', type: 'mandat' })
+    ).id;
     await createInstance(t.owner.db, { slug: 'prosp-autre', nom: 'Autre', type: 'mandat' });
+    await withInstance(t.app.db, instanceId, (tx) =>
+      configureConnexion(tx, { kind: 'messagerie', fournisseur: 'boite-test' }),
+    );
     secretsDir = await mkdtemp(path.join(tmpdir(), 'simatis-prosp-routes-'));
     app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
   });
@@ -146,5 +163,170 @@ describe('Routes de la prospection', () => {
       (await app.inject({ method: 'DELETE', url: `${base}/signatures/${id}` })).statusCode,
     ).toBe(404);
     expect((await vue()).signatures).toEqual([]);
+  });
+
+  describe('campagne de relance', () => {
+    const reglage = {
+      offre: 'vma',
+      creneaux: true,
+      signatureId: null,
+      suivi: { type: 'courte' },
+      touchesMax: 4,
+    };
+
+    async function tache(nom: string) {
+      const [e] = await t.owner.db
+        .insert(entreprises)
+        .values({ instanceId, nom: `Société ${nom}` })
+        .returning({ id: entreprises.id });
+      const [c] = await t.owner.db
+        .insert(contacts)
+        .values({
+          instanceId,
+          nom,
+          entrepriseId: e!.id,
+          email: `${nom.toLowerCase()}@exemple.test`,
+        })
+        .returning({ id: contacts.id });
+      const [tc] = await t.owner.db
+        .insert(taches)
+        .values({
+          instanceId,
+          titre: `Relancer ${nom}`,
+          canal: 'email',
+          contactId: c!.id,
+          echeance: new Date(),
+        })
+        .returning({ id: taches.id });
+      return tc!.id;
+    }
+    const campagne = async (id: string) =>
+      (await app.inject({ method: 'GET', url: `${base}/campagnes/${id}` })).json<CampagneVue>();
+
+    it('liste les tâches de relance utilisables', async () => {
+      const id = await tache('Alice');
+      const liste = (await app.inject({ method: 'GET', url: `${base}/taches-relance` })).json<
+        { id: string; contactNom: string; touche: number; utilisable: boolean }[]
+      >();
+      expect(liste.find((x) => x.id === id)).toMatchObject({
+        contactNom: 'Alice',
+        touche: 2,
+        utilisable: true,
+      });
+    });
+
+    it('parcours : création, rédaction, relecture, finalisation en simulation', async () => {
+      const id = await tache('Bruno');
+      const cree = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: { mode: 'relance', tacheIds: [id], reglage },
+      });
+      expect(cree.statusCode).toBe(201);
+      const { campagneId } = cree.json<{ campagneId: string }>();
+      expect((await campagne(campagneId)).statut).toBe('redaction');
+
+      const [b] = (await campagne(campagneId)).brouillons;
+      await withInstance(t.app.db, instanceId, async (tx) => {
+        await demarrerCampagne(tx, campagneId);
+        await deposerBrouillons(tx, campagneId, [
+          { id: b!.id, objet: 'Re: Échange', corps: '<p>Bonjour Bruno,</p><p>Bien à vous,</p>' },
+        ]);
+      });
+      expect((await campagne(campagneId)).statut).toBe('relecture');
+
+      const modif = await app.inject({
+        method: 'PATCH',
+        url: `${base}/campagnes/${campagneId}/brouillons/${b!.id}`,
+        payload: { suiviType: 'clos' },
+      });
+      expect(modif.statusCode).toBe(200);
+      expect(modif.json<{ suiviType: string }>().suiviType).toBe('clos');
+
+      const fin = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes/${campagneId}/finaliser`,
+      });
+      expect(fin.statusCode).toBe(200);
+      expect(fin.json<{ simulation: boolean }>().simulation).toBe(true);
+      expect((await campagne(campagneId)).statut).toBe('relecture');
+
+      const vueProspection = (await app.inject({ method: 'GET', url: base })).json<{
+        enCours: string | null;
+      }>();
+      expect(vueProspection.enCours).toBe(campagneId);
+    });
+
+    it('400 quand aucune tâche n’est utilisable, avec la raison', async () => {
+      const r = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: { mode: 'relance', tacheIds: ['00000000-0000-4000-8000-000000000001'], reglage },
+      });
+      expect(r.statusCode).toBe(400);
+      expect(r.json<{ error: string }>().error).toContain('Aucune tâche utilisable');
+    });
+
+    it('400 sur un réglage invalide, 404 sur une campagne ou un brouillon inconnus', async () => {
+      const id = await tache('Carole');
+      const mauvais = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: { mode: 'relance', tacheIds: [id], reglage: { ...reglage, offre: 'x' } },
+      });
+      expect(mauvais.statusCode).toBe(400);
+      const inconnue = '00000000-0000-4000-8000-0000000000aa';
+      expect(
+        (await app.inject({ method: 'GET', url: `${base}/campagnes/${inconnue}` })).statusCode,
+      ).toBe(404);
+      expect(
+        (
+          await app.inject({
+            method: 'PATCH',
+            url: `${base}/campagnes/${inconnue}/brouillons/${inconnue}`,
+            payload: { etat: 'pret' },
+          })
+        ).statusCode,
+      ).toBe(404);
+      expect(
+        (await app.inject({ method: 'POST', url: `${base}/campagnes/${inconnue}/finaliser` }))
+          .statusCode,
+      ).toBe(404);
+    });
+
+    it('relancer une campagne en erreur la remet en rédaction ; une autre est refusée', async () => {
+      const id = await tache('Denis');
+      const { campagneId } = (
+        await app.inject({
+          method: 'POST',
+          url: `${base}/campagnes`,
+          payload: { mode: 'relance', tacheIds: [id], reglage },
+        })
+      ).json<{ campagneId: string }>();
+      expect(
+        (await app.inject({ method: 'POST', url: `${base}/campagnes/${campagneId}/relancer` }))
+          .statusCode,
+      ).toBe(400);
+    });
+
+    it('rapprocher sans messagerie branchée ne plante pas', async () => {
+      const r = await app.inject({ method: 'POST', url: `${base}/rapprocher` });
+      expect(r.statusCode).toBe(200);
+      expect(r.json()).toEqual({ envoyes: 0 });
+    });
+
+    it('cloisonne les campagnes entre instances', async () => {
+      const id = await tache('Emma');
+      const { campagneId } = (
+        await app.inject({
+          method: 'POST',
+          url: `${base}/campagnes`,
+          payload: { mode: 'relance', tacheIds: [id], reglage },
+        })
+      ).json<{ campagneId: string }>();
+      expect(
+        (await app.inject({ method: 'GET', url: `${autre}/campagnes/${campagneId}` })).statusCode,
+      ).toBe(404);
+    });
   });
 });

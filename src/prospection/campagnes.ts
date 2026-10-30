@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, ne } from 'drizzle-orm';
 import { contacts, entreprises, taches } from '../crm/schema.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -15,6 +15,7 @@ import {
 } from './schema.js';
 
 export class CampagneInvalide extends Error {}
+export class CampagneIntrouvable extends CampagneInvalide {}
 
 export const MAX_TACHES_CAMPAGNE = 60;
 export const TOUCHES_MAX_DEFAUT = 4;
@@ -201,7 +202,7 @@ export async function lireCampagne(tx: Executor, id: string): Promise<CampagneVu
     .where(
       and(eq(prospectionCampagnes.instanceId, currentInstance), eq(prospectionCampagnes.id, id)),
     );
-  if (!c) throw new CampagneInvalide('Campagne introuvable.');
+  if (!c) throw new CampagneIntrouvable('Campagne introuvable.');
   const brouillons = await tx
     .select()
     .from(prospectionBrouillons)
@@ -213,4 +214,122 @@ export async function lireCampagne(tx: Executor, id: string): Promise<CampagneVu
     )
     .orderBy(asc(prospectionBrouillons.createdAt), asc(prospectionBrouillons.contactNom));
   return { ...sansInstance(c), brouillons: brouillons.map(sansInstance) };
+}
+
+export type TacheRelanceVue = {
+  id: string;
+  titre: string;
+  contactNom: string | null;
+  societe: string | null;
+  echeance: Date | null;
+  touche: number;
+  // Faux : la tâche n'a pas de contact ou le contact n'a pas d'adresse, elle ne peut pas être choisie.
+  utilisable: boolean;
+};
+
+// Tâches de mail ouvertes, échues ou à échéance dans les deux jours : ce que Marc peut relancer.
+export async function tachesRelance(
+  tx: Executor,
+  maintenant = new Date(),
+): Promise<TacheRelanceVue[]> {
+  const rows = await tx
+    .select({
+      id: taches.id,
+      titre: taches.titre,
+      echeance: taches.echeance,
+      contactId: contacts.id,
+      contactNom: contacts.nom,
+      contactEmail: contacts.email,
+      societe: entreprises.nom,
+    })
+    .from(taches)
+    .leftJoin(
+      contacts,
+      and(eq(contacts.id, taches.contactId), eq(contacts.instanceId, currentInstance)),
+    )
+    .leftJoin(
+      entreprises,
+      and(eq(entreprises.id, contacts.entrepriseId), eq(entreprises.instanceId, currentInstance)),
+    )
+    .where(
+      and(
+        eq(taches.instanceId, currentInstance),
+        eq(taches.canal, 'email'),
+        isNull(taches.faitAt),
+        lt(taches.echeance, new Date(maintenant.getTime() + 2 * 86400_000)),
+      ),
+    )
+    .orderBy(asc(taches.echeance))
+    .limit(300);
+  const ids = rows.flatMap((r) => (r.contactId ? [r.contactId] : []));
+  const envoyes = ids.length
+    ? await tx
+        .select({ contactId: prospectionOccurrences.contactId })
+        .from(prospectionOccurrences)
+        .where(
+          and(
+            eq(prospectionOccurrences.instanceId, currentInstance),
+            ne(prospectionOccurrences.etat, 'brouillon'),
+            inArray(prospectionOccurrences.contactId, ids),
+          ),
+        )
+    : [];
+  const nb = new Map<string, number>();
+  for (const o of envoyes) if (o.contactId) nb.set(o.contactId, (nb.get(o.contactId) ?? 0) + 1);
+  return rows.map((r) => ({
+    id: r.id,
+    titre: r.titre,
+    contactNom: r.contactNom,
+    societe: r.societe,
+    echeance: r.echeance,
+    touche: 2 + (r.contactId ? (nb.get(r.contactId) ?? 0) : 0),
+    utilisable: !!r.contactId && !!r.contactEmail,
+  }));
+}
+
+export type CampagneResume = {
+  id: string;
+  mode: Campagne['mode'];
+  statut: Campagne['statut'];
+  creeLe: Date;
+  brouillons: number;
+  resultat: Campagne['resultat'];
+};
+
+// Les dernières campagnes, pour l'accueil, et celle qu'il faut rouvrir (rédaction, relecture, erreur).
+export async function campagnesRecentes(
+  tx: Executor,
+  limite = 5,
+): Promise<{ recentes: CampagneResume[]; enCours: string | null }> {
+  const rows = await tx
+    .select()
+    .from(prospectionCampagnes)
+    .where(eq(prospectionCampagnes.instanceId, currentInstance))
+    .orderBy(desc(prospectionCampagnes.createdAt))
+    .limit(Math.max(limite, 20));
+  const ids = rows.map((r) => r.id);
+  const bs = ids.length
+    ? await tx
+        .select({ campagneId: prospectionBrouillons.campagneId })
+        .from(prospectionBrouillons)
+        .where(
+          and(
+            eq(prospectionBrouillons.instanceId, currentInstance),
+            inArray(prospectionBrouillons.campagneId, ids),
+            ne(prospectionBrouillons.etat, 'ecarte'),
+          ),
+        )
+    : [];
+  const resume = rows.map((r) => ({
+    id: r.id,
+    mode: r.mode,
+    statut: r.statut,
+    creeLe: r.createdAt,
+    brouillons: bs.filter((b) => b.campagneId === r.id).length,
+    resultat: r.resultat,
+  }));
+  return {
+    recentes: resume.filter((r) => r.statut === 'terminee').slice(0, limite),
+    enCours: resume.find((r) => r.statut !== 'terminee')?.id ?? null,
+  };
 }

@@ -275,6 +275,32 @@ describe('Relecture et finalisation d’une campagne', () => {
     );
   });
 
+  it('refuse de finaliser sans messagerie branchée', async () => {
+    const sans = await createInstance(t.owner.db, {
+      slug: 'final-sans',
+      nom: 'Sans',
+      type: 'mandat',
+    });
+    const [c] = await t.owner.db
+      .insert(contacts)
+      .values({ instanceId: sans.id, nom: 'Léa', email: 'lea@exemple.test' })
+      .returning({ id: contacts.id });
+    const [tc] = await t.owner.db
+      .insert(taches)
+      .values({ instanceId: sans.id, titre: 'Relancer Léa', canal: 'email', contactId: c!.id })
+      .returning({ id: taches.id });
+    const campagneId = await withInstance(t.app.db, sans.id, async (tx) => {
+      const r = await creerCampagneRelance(tx, { tacheIds: [tc!.id], reglage: reglageParDefaut() });
+      await demarrerCampagne(tx, r.campagneId);
+      const [b] = (await lireCampagne(tx, r.campagneId)).brouillons;
+      await deposerBrouillons(tx, r.campagneId, [{ id: b!.id, objet: 'x', corps: '<p>x</p>' }]);
+      return r.campagneId;
+    });
+    await expect(finaliserCampagne(t.app.db, sans, campagneId, deps())).rejects.toThrow(
+      /Aucune messagerie/,
+    );
+  });
+
   it('HubSpot en lecture seule : le suivi est créé dans l’OS et compté comme non créé dans HubSpot', async () => {
     await dans((tx) =>
       configureConnexion(tx, {

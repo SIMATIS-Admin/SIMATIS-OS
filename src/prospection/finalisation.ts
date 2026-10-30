@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import type { ImageIntegree } from '../connecteurs/google/google.js';
-import { writeVia, type ConnexionDeps } from '../connexions/service.js';
+import { getConnector, writeVia, type ConnexionDeps } from '../connexions/service.js';
 import { CrmIndisponible } from '../crm/service.js';
 import { crmHubspot, createTache, updateTache } from '../crm/taches.js';
 import type { Database, Executor } from '../db.js';
@@ -9,7 +9,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
-import { CampagneInvalide, type BrouillonVue } from './campagnes.js';
+import { CampagneIntrouvable, CampagneInvalide, type BrouillonVue } from './campagnes.js';
 import { nettoyerCorps } from './redaction.js';
 import {
   prospectionBrouillons,
@@ -75,7 +75,7 @@ export async function modifierBrouillon(
     .where(
       and(eq(prospectionBrouillons.instanceId, currentInstance), eq(prospectionBrouillons.id, id)),
     );
-  if (!b) throw new CampagneInvalide('Brouillon introuvable.');
+  if (!b) throw new CampagneIntrouvable('Brouillon introuvable.');
   if (b.statut !== 'relecture') {
     throw new CampagneInvalide("Cette campagne n'est plus en relecture.");
   }
@@ -120,7 +120,7 @@ export async function modifierBrouillon(
     })
     .where(eq(prospectionBrouillons.id, id))
     .returning();
-  if (!row) throw new CampagneInvalide('Brouillon introuvable.');
+  if (!row) throw new CampagneIntrouvable('Brouillon introuvable.');
   return sansInstance(row);
 }
 
@@ -153,7 +153,7 @@ export async function finaliserCampagne(
         ),
       )
       .for('update');
-    if (!campagne) throw new CampagneInvalide('Campagne introuvable.');
+    if (!campagne) throw new CampagneIntrouvable('Campagne introuvable.');
     if (campagne.statut !== 'relecture') {
       throw new CampagneInvalide("Cette campagne n'est pas en relecture.");
     }
@@ -167,6 +167,11 @@ export async function finaliserCampagne(
         ),
       )
       .orderBy(asc(prospectionBrouillons.createdAt), asc(prospectionBrouillons.contactNom));
+    if (!(await getConnector(tx, 'messagerie'))?.connector.write) {
+      throw new CampagneInvalide(
+        'Aucune messagerie branchée sur cette instance : connectez-la dans Paramètres, onglet Connexions.',
+      );
+    }
     const aVerifier = brouillons.filter((b) => b.etat === 'a_verifier').length;
     if (aVerifier > 0) {
       throw new CampagneInvalide(
