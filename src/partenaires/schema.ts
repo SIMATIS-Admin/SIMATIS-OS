@@ -100,6 +100,30 @@ export const partenaires = pgTable(
 
 export type Partenaire = typeof partenaires.$inferSelect;
 
+// Invitations created here (Paramètres > Partenaires) and not yet used: the link is handed to the
+// partner by hand, the relay tells us when it is accepted (connexion envelope).
+export const invitationsPartenaires = pgTable(
+  'invitations_partenaires',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    code: text('code').notNull(),
+    lien: text('lien').notNull(),
+    // Label only: the OS sends no mail.
+    email: text('email'),
+    expireAt: timestamp('expire_at', { withTimezone: true }).notNull(),
+    accepteeAt: timestamp('acceptee_at', { withTimezone: true }),
+    connexionId: text('connexion_id'),
+    creePar: text('cree_par'),
+  },
+  (t) => [
+    uniqueIndex('invitations_partenaires_code_idx').on(t.instanceId, t.code),
+    instanceIsolation('invitations_partenaires'),
+  ],
+);
+
+export type InvitationPartenaire = typeof invitationsPartenaires.$inferSelect;
+
 // Missions entrusted to a partner, or received from it. `id` is the A2A task id, shared with the
 // partner.
 export const missions = pgTable(

@@ -19,6 +19,7 @@ describe('loadConfig', () => {
       site: null,
       vmaOsToken: null,
       relaisUrl: null,
+      relaisCleInscription: null,
     });
   });
 
@@ -28,6 +29,13 @@ describe('loadConfig', () => {
     );
     expect(loadConfig({ ...BASE, RELAIS_URL: '' }).relaisUrl).toBeNull();
     expect(() => loadConfig({ ...BASE, RELAIS_URL: 'ftp://relais.example' })).toThrow(/RELAIS_URL/);
+  });
+
+  it('reads the relay registration key, empty meaning unset', () => {
+    expect(
+      loadConfig({ ...BASE, RELAIS_CLE_INSCRIPTION: 'cle-fictive' }).relaisCleInscription,
+    ).toBe('cle-fictive');
+    expect(loadConfig({ ...BASE, RELAIS_CLE_INSCRIPTION: '' }).relaisCleInscription).toBeNull();
   });
 
   it('reads the Test de VMA invitation token, empty meaning unset', () => {

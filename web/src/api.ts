@@ -400,18 +400,33 @@ export type MissionVue = {
   creeeLe: string;
   majLe: string;
 };
+export type InvitationVue = {
+  id: string;
+  lien: string;
+  email: string | null;
+  creeeLe: string;
+  expireLe: string;
+};
 export type PartenairesReponse = {
   actif: boolean;
   porteuse: boolean;
   ecrituresReelles: boolean;
   inscrit: boolean;
+  peutInviter: boolean;
   objets: ObjetCrm[];
   champsExcluables: { cle: string; libelle: string }[];
+  niveaux: { id: PartenaireVue['niveau']; libelle: string }[];
+  gardeFous: string[];
   partenaires: PartenaireVue[];
+  invitations: InvitationVue[];
   missions: MissionVue[];
 };
 export const fetchPartenaires = (slug: string) =>
   getJson<PartenairesReponse>(inst(slug, 'partenaires'));
+export const inviterPartenaire = (slug: string, email: string) =>
+  sendJson<{ invitation: InvitationVue }>('POST', inst(slug, 'partenaires/invitations'), {
+    email,
+  });
 export const rejoindrePartenaire = (slug: string, lien: string) =>
   sendJson<{ partenaire: PartenaireVue }>('POST', inst(slug, 'partenaires/rejoindre'), { lien });
 export const reglerPartenaire = (
