@@ -1710,6 +1710,7 @@ export type ReglageCampagne = {
   signatureId: string | null;
   suivi: { type: 'courte' | 'longue' | 'date'; date?: string };
   touchesMax: number;
+  style?: string;
 };
 export type ResultatCampagne = {
   brouillons: number;

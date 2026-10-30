@@ -133,6 +133,22 @@ describe('Outils MCP de rédaction de campagne', () => {
     expect(c.brouillons[0]?.creneaux).toEqual([]);
   });
 
+  it('le style demandé par Marc s’ajoute aux consignes, sans les remplacer', async () => {
+    const id = await campagneDe(['Denis'], {
+      ...reglageParDefaut(),
+      style: 'Court, tutoiement, rebondir sur le rendez-vous de mardi',
+    });
+    const c = (await call('campagne_contexte', { campagneId: id })).json<{ consignes: string }>();
+    expect(c.consignes.startsWith(CONSIGNES_REDACTION)).toBe(true);
+    expect(c.consignes).toContain('Court, tutoiement, rebondir sur le rendez-vous de mardi');
+  });
+
+  it('sans style, les consignes restent celles du serveur', async () => {
+    const id = await campagneDe(['Elsa'], { ...reglageParDefaut(), style: '   ' });
+    const c = (await call('campagne_contexte', { campagneId: id })).json<{ consignes: string }>();
+    expect(c.consignes).toBe(CONSIGNES_REDACTION);
+  });
+
   it('campagne_deposer enregistre les brouillons nettoyés et passe en relecture', async () => {
     const id = await campagneDe(['Denis']);
     const [b] = (await lire(id)).brouillons;

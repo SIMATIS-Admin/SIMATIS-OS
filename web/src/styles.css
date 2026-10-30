@@ -1606,6 +1606,12 @@ textarea.input {
 .modal .panel-b {
   padding: 20px 22px;
 }
+.modal.large {
+  width: min(980px, calc(100% - 32px));
+  top: 6vh;
+  max-height: 88vh;
+  overflow-y: auto;
+}
 .toast {
   position: fixed;
   bottom: 24px;
