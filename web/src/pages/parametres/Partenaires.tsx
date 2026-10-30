@@ -117,8 +117,8 @@ function Inviter({
           </span>
           <input
             className="input"
-            type="email"
-            placeholder="E-mail du partenaire"
+            type="text"
+            placeholder="Nom ou e-mail"
             autoComplete="off"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -154,7 +154,7 @@ function Invitation({ invitation }: { invitation: InvitationVue }) {
     <div className="panel">
       <div className="panel-h">
         <div>
-          <h2>{invitation.email ?? 'Invitation sans e-mail'}</h2>
+          <h2>{invitation.email ?? 'Invitation sans nom'}</h2>
           <div className="small muted">
             Créée le {date(invitation.creeeLe)} · valable jusqu'au {date(invitation.expireLe)}
           </div>

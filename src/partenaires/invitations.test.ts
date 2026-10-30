@@ -27,6 +27,7 @@ describe('Partenaires : inviter depuis SIMATIS OS', () => {
   let relais: ReturnType<typeof relaisSimule>;
   let partenaire: Client;
   let appels: string[];
+  let corps: string[];
 
   const ecran = async (a: FastifyInstance, slug: string) =>
     (await a.inject({ method: 'GET', url: `/api/i/${slug}/partenaires` })).json<Ecran>();
@@ -46,7 +47,9 @@ describe('Partenaires : inviter depuis SIMATIS OS', () => {
     }
     relais = relaisSimule({ cle: 'cle-fictive' });
     appels = [];
+    corps = [];
     const fetchRelais: typeof fetch = (entree, init) => {
+      corps.push(typeof init?.body === 'string' ? init.body : '');
       appels.push(
         `${init?.method ?? 'GET'} ${new URL(entree instanceof Request ? entree.url : entree).pathname}`,
       );
@@ -93,15 +96,17 @@ describe('Partenaires : inviter depuis SIMATIS OS', () => {
     expect((await loadInstanceSecrets(secretsDir, 'mandat-a')).RELAIS_NOEUD).toBeUndefined();
   });
 
-  it('refuses an invalid email', async () => {
-    const res = await inviter(app, 'mandat-a', { email: 'pas-un-email' });
+  it('refuses a name longer than 254 characters', async () => {
+    const res = await inviter(app, 'mandat-a', { email: 'x'.repeat(255) });
     expect(res.statusCode).toBe(400);
   });
 
   it('registers with the key, then lists the pending invitation until the partner accepts', async () => {
     expect((await ecran(app, 'mandat-a')).peutInviter).toBe(true);
-    const res = await inviter(app, 'mandat-a', { email: 'contact@client.example' });
+    const res = await inviter(app, 'mandat-a', { email: 'Client fictif (à relancer)' });
     expect(res.statusCode).toBe(200);
+    // the name stays in the OS: nothing sent to the relay carries it
+    expect(corps.some((b) => b.includes('Client fictif'))).toBe(false);
     const { lien } = res.json<{ invitation: { lien: string } }>().invitation;
     expect(lien).toMatch(/\/invitations\/[A-Z2-7]{24}$/);
 
@@ -112,7 +117,7 @@ describe('Partenaires : inviter depuis SIMATIS OS', () => {
     ).toBe('SIMATIS OS · Mandat A');
     const avant = await ecran(app, 'mandat-a');
     expect(avant.invitations).toEqual([
-      expect.objectContaining({ lien, email: 'contact@client.example' }),
+      expect.objectContaining({ lien, email: 'Client fictif (à relancer)' }),
     ]);
     expect(JSON.stringify(avant)).not.toContain(secrets.RELAIS_SECRET);
 

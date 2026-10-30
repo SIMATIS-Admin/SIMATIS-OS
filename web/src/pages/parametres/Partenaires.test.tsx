@@ -194,13 +194,13 @@ describe('Paramètres > Partenaires', () => {
   it('creates an invitation and lists it as pending, with its link to copy', async () => {
     render(<Partenaires slug="client-fictif" />);
     fireEvent.change(await screen.findByLabelText(/Pour qui/), {
-      target: { value: 'contact@client.example' },
+      target: { value: 'Marc (essai)' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Inviter un partenaire' }));
-    expect(await screen.findByText('contact@client.example')).toBeTruthy();
+    expect(await screen.findByText('Marc (essai)')).toBeTruthy();
     expect(calls.find((c) => c.method === 'POST')).toMatchObject({
       url: '/api/i/client-fictif/partenaires/invitations',
-      body: { email: 'contact@client.example' },
+      body: { email: 'Marc (essai)' },
     });
     expect(screen.getByText('En attente')).toBeTruthy();
     expect(screen.getByLabelText<HTMLInputElement>("Lien d'invitation à transmettre").value).toBe(
