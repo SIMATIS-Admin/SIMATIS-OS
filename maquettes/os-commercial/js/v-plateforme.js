@@ -143,9 +143,9 @@ VIEWS.parametres = () => {
     <div class="panel-b">${(PARAMS_DEF[x.id] || []).map(f => champ(f, x.params[f.k], `data-change="rt-param" data-id="${x.id}" data-k="${f.k}"`)).join('') || '<p class="muted small" style="margin:0">Rien à régler.</p>'}</div></div>`;
   return {
     title: 'Paramètres',
-    actions: `<div class="seg"><button class="${tab === 'instance' ? 'on' : ''}" data-act="param-tab" data-tab="instance">${inst.type === 'propre' ? 'Activité' : 'Mandat'}</button><button class="${tab === 'connexions' ? 'on' : ''}" data-act="param-tab" data-tab="connexions">Connexions</button><button class="${tab === 'routines' ? 'on' : ''}" data-act="param-tab" data-tab="routines">Routines Claude</button></div>`,
+    actions: `<div class="seg"><button class="${tab === 'instance' ? 'on' : ''}" data-act="param-tab" data-tab="instance">${inst.type === 'propre' ? 'Activité' : 'Mandat'}</button><button class="${tab === 'connexions' ? 'on' : ''}" data-act="param-tab" data-tab="connexions">Connexions</button><button class="${tab === 'routines' ? 'on' : ''}" data-act="param-tab" data-tab="routines">Routines Claude</button><button class="${tab === 'prospection' ? 'on' : ''}" data-act="param-tab" data-tab="prospection">Prospection</button></div>`,
     body: `<div class="alert blue" style="margin-bottom:18px">${ic('lock')}<div>Réglages de <b>${esc(inst.nom)}</b> uniquement. Chaque instance a ses propres connexions ; les accès eux-mêmes ne sont jamais stockés dans l'OS.</div></div>
-      ${tab === 'instance' ? instanceTab(inst) : tab === 'connexions' ? `<div class="stack">${(inst.conn || []).map(conn).join('')}</div>`
+      ${tab === 'prospection' ? prospParamTab() : tab === 'instance' ? instanceTab(inst) : tab === 'connexions' ? `<div class="stack">${(inst.conn || []).map(conn).join('')}</div>`
         : `<div class="grid g2">${D().routines.map(routine).join('')}</div><p class="small muted" style="margin-top:12px">Les règles de rédaction (vouvoiement, sans signature, contrôles avant envoi) restent celles des skills Claude.</p>`}`
   };
 };
