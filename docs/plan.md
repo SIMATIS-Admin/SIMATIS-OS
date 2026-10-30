@@ -81,7 +81,7 @@ Livré : Bases vivantes, Site web (Analytics).
 
 Reste :
 
-- **Prospection** : écran non construit. Marc doit d'abord l'essayer avant de trancher ; les règles de sélection (base utilisée, ciblage, exclusions) devront s'afficher explicitement.
+- **Prospection** : maquette refaite (campagnes de relance et de prospection à froid, statistiques, signatures), à essayer par Marc. Spec : `docs/superpowers/specs/2026-10-30-prospection-design.md`. Reste à construire : table d'occurrences, génération par Claude, Gmail et HubSpot réels, import des signatures.
 - **Détection** : reportée, à repenser (d'où vient la donnée, ce qu'un clic doit produire).
 - Bases vivantes : branchement sur la base de données commune en conception avec le partenaire.
 

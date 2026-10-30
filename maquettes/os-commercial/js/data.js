@@ -85,6 +85,8 @@ function seedInstance(cfg) {
     activites: activitesSeed(cfg.rythme ?? 1),
     reglages: JSON.parse(JSON.stringify(REGLAGES_DEFAUT))
   };
+  d.prospection = prospectionSeed();
+  d.taches.push(...d.prospection.relances);
   return d;
 }
 
@@ -106,6 +108,41 @@ function activitesSeed(r) {
     out.push({ date: iso(d), email: Math.round(((n * 7) % 9 + 3) * r), appel: Math.round(((n * 5) % 4 + 1) * r), autre: (n * 2) % 3 });
   }
   return out;
+}
+
+/* Prospection fictive : occurrences d'envoi, base de contacts à froid, tâches de relance et signatures.
+   Les noms sont tirés de listes inventées ; aucune donnée réelle. */
+function prospectionSeed() {
+  const PRE = ['Camille', 'Julien', 'Sophie', 'Marc-Antoine', 'Élodie', 'Thomas', 'Nadia', 'Laurent', 'Inès', 'Paul', 'Claire', 'Hugo'];
+  const NOM = ['Marchand', 'Roux', 'Lefèvre', 'Garnier', 'Perrin', 'Colin', 'Brun', 'Giraud', 'Faure', 'Masson', 'Vidal', 'Joly'];
+  const SOC = ['Fonderie Arvieux', 'Usinage Delmas', 'Cartonnages Lorrain', 'Thermique Ravel', 'Plasturgie Nolot', 'Mécanique Sauvan', 'Tôlerie Vernay', 'Laiterie Rochat', 'Emballages Perrot', 'Câblerie Solaire'];
+  const FCT = ['Directeur général', 'Responsable maintenance', 'Directrice de site', 'Responsable QSE', 'Gérant', 'Directeur technique'];
+  const THEMES = ['Test de VMA', 'Diagnostic', 'Kairos'];
+  const nom = i => `${PRE[i % 12]} ${NOM[(i * 5 + 3) % 12]}`;
+  const froid = Array.from({ length: 120 }, (_, i) => {
+    const statut = i < 30 ? 'contacte' : i < 38 ? 'repondu' : i < 48 ? 'epuise' : 'jamais';
+    return { id: 'fc' + i, nom: nom(i), soc: SOC[i % 10] + (i >= 10 ? ' ' + ['Est', 'Sud', 'Nord', 'Ouest'][Math.floor(i / 10) % 4] : ''), fonction: FCT[i % 6],
+      touches: statut === 'jamais' ? 0 : statut === 'contacte' ? (i < 18 ? 4 : 1 + (i % 3)) : statut === 'epuise' ? 4 : 2,
+      statut, derniere: statut === 'jamais' ? null : dp(-(15 + (i * 3) % 40)) };
+  });
+  const occurrences = []; let k = 0;
+  const parJour = [14, 11, 9, 12, 0, 0, 16];
+  parJour.forEach((n, j) => {
+    for (let m = 0; m < n; m++, k++) {
+      const etat = k % 9 === 0 ? 'reponse' : k % 23 === 0 ? 'rdv' : 'envoye';
+      occurrences.push({ id: 'oc' + k, date: dp(-j), contact: nom(k), soc: SOC[k % 10], theme: THEMES[k % 3 === 2 ? 2 : k % 2], touche: 1 + (k % 3), etat, campagne: j === 0 ? 'Froid, lot 3' : 'Lot précédent' });
+    }
+  });
+  const relances = [
+    ['Relancer Camille Marchand', 'Fonderie Arvieux', 1], ['Relancer Julien Roux', 'Usinage Delmas', 1], ['Relancer Sophie Lefèvre', 'Cartonnages Lorrain', 1],
+    ['Relancer Thomas Garnier', 'Thermique Ravel', 2], ['Relancer Nadia Perrin', 'Plasturgie Nolot', 1], ['Relancer Laurent Colin', 'Mécanique Sauvan', 1]
+  ].map(([titre, soc, touche], i) => ({ id: 'pr-t' + i, titre, contactNom: titre.replace('Relancer ', ''), soc, echeance: dp(-(1 + i % 3)), canal: 'email', fait: false,
+    relance: { touche, fil: i === 5 ? null : 'Re: Échange suite à une recommandation' } }));
+  return {
+    objectifJour: 30, themes: THEMES, verrous: { serveur: false, admin: false }, occurrences, froid, relances,
+    signatures: [{ id: 'sg1', nom: 'Simatis', defaut: true }, { id: 'sg2', nom: 'Simatis et Kairos', defaut: false }],
+    lots: [{ id: 'lt2', date: dp(-1), nom: 'Relance suite à une recommandation', mails: 6, reponses: 4 }, { id: 'lt1', date: dp(-3), nom: 'Froid, lot 2', mails: 30, reponses: 2 }]
+  };
 }
 
 const email = (c, objet, lignes, slots, rappel) =>
