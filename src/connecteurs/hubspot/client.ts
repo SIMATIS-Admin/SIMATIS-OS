@@ -176,6 +176,20 @@ export function hubspotClient(auth: HubspotAuth, options: ClientOptions = {}) {
     return out;
   }
 
+  // Ids still known to HubSpot. A record merged into another or archived is no longer returned.
+  async function presents(objectType: string, ids: string[]): Promise<Set<string>> {
+    const out = new Set<string>();
+    for (let i = 0; i < ids.length; i += 100) {
+      const page = await request<{ results: HsObject[] }>(
+        'POST',
+        `/crm/v3/objects/${objectType}/batch/read`,
+        { inputs: ids.slice(i, i + 100).map((id) => ({ id })), properties: [] },
+      );
+      for (const r of page.results) out.add(r.id);
+    }
+    return out;
+  }
+
   async function dealPipelines(): Promise<HsPipeline[]> {
     return (await request<{ results: HsPipeline[] }>('GET', '/crm/v3/pipelines/deals')).results;
   }
@@ -219,7 +233,15 @@ export function hubspotClient(auth: HubspotAuth, options: ClientOptions = {}) {
     return out;
   }
 
-  return { request, listAll, modifiedSince, dealPipelines, firstAssociations, allAssociations };
+  return {
+    request,
+    listAll,
+    modifiedSince,
+    presents,
+    dealPipelines,
+    firstAssociations,
+    allAssociations,
+  };
 }
 
 export type HubspotClient = ReturnType<typeof hubspotClient>;

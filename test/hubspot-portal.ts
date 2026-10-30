@@ -194,6 +194,8 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
   const refuses = new Set<string>();
   // Ids of created records never repeat, even when a test clears `calls`.
   let cree = 0;
+  // Records created through the API exist for HubSpot without being part of the demo data.
+  const crees = new Set<string>();
 
   const only = (o: HsObject, properties: string[]): HsObject => ({
     id: o.id,
@@ -232,6 +234,15 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
       const items = (data[type] as HsObject[]).map((o) => only(o, properties));
       return json(page(items, u.searchParams.get('after') ?? undefined));
     }
+    // Like HubSpot: ids merged away or archived are simply missing from the results.
+    const lecture = /^\/crm\/v3\/objects\/(\w+)\/batch\/read$/.exec(u.pathname);
+    if (lecture && body) {
+      const type = lecture[1] as keyof PortalData;
+      const ids = new Set((body.inputs as { id: string }[]).map((i) => i.id));
+      const items = (data[type] as HsObject[]).filter((o) => ids.has(o.id));
+      const creees = [...ids].filter((id) => crees.has(id)).map((id) => ({ id, properties: {} }));
+      return json({ results: [...items.map((o) => only(o, [])), ...creees] });
+    }
     const search = /^\/crm\/v3\/objects\/(\w+)\/search$/.exec(u.pathname);
     if (search && body) {
       const type = search[1] as keyof PortalData;
@@ -268,7 +279,11 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
     if (/^\/crm\/v3\/objects\/\w+\/\w+$/.test(u.pathname) && method === 'DELETE') {
       return Promise.resolve(new Response(null, { status: 204 }));
     }
-    if (list && method === 'POST') return json({ id: `9${(cree += 1)}` }, 201);
+    if (list && method === 'POST') {
+      const id = `9${(cree += 1)}`;
+      crees.add(id);
+      return json({ id }, 201);
+    }
     if (
       /^\/crm\/v4\/objects\/\w+\/\w+\/associations\/default\/\w+\/\w+$/.test(u.pathname) &&
       method === 'PUT'

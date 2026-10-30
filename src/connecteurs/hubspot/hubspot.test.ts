@@ -899,6 +899,54 @@ describe('HubSpot mirror', () => {
     }
   });
 
+  it('removes the copies of records merged away or deleted in HubSpot, and keeps the others', async () => {
+    const mirrored = async (table: string, sourceId: string) =>
+      (
+        await t.owner.pool.query(
+          `select 1 from ${table} where instance_id = $1 and source = 'hubspot' and source_id = $2`,
+          [a.id, sourceId],
+        )
+      ).rowCount;
+    // A task made in the OS and linked to the deal that goes away must survive without the link.
+    const natif = await t.owner.pool.query<{ id: string }>(
+      `update taches set opportunite_id = (select id from opportunites where instance_id = $1 and source_id = '303'),
+         source = 'natif', source_id = null
+       where instance_id = $1 and source_id = '401' returning id`,
+      [a.id],
+    );
+    data.companies = data.companies.filter((c) => c.id !== '103');
+    data.deals = data.deals.filter((d) => d.id !== '303');
+    data.contacts = data.contacts.filter((c) => c.id !== '202');
+
+    const report = await syncConnexion(t.app.db, a, 'crm', deps());
+    expect(report.erreurs).toEqual([]);
+    expect(await mirrored('entreprises', '103')).toBe(0);
+    expect(await mirrored('opportunites', '303')).toBe(0);
+    expect(await mirrored('contacts', '202')).toBe(0);
+    expect(await mirrored('entreprises', '101')).toBe(1);
+    expect(await mirrored('opportunites', '301')).toBe(1);
+    expect(await mirrored('contacts', '201')).toBe(1);
+    const tache = await t.owner.pool.query<{ opportunite_id: string | null }>(
+      'select opportunite_id from taches where instance_id = $1 and id = $2',
+      [a.id, natif.rows[0]?.id],
+    );
+    expect(tache.rows).toHaveLength(1);
+    expect(tache.rows[0]?.opportunite_id).toBeNull();
+    const journal = await t.owner.pool.query<{ action: string }>(
+      "select action from journal where instance_id = $1 and action like '%absentes de HubSpot%'",
+      [a.id],
+    );
+    expect(journal.rows[0]?.action).toMatch(/3 fiches absentes de HubSpot retirées de la copie/);
+  });
+
+  it('refuses to remove a large share of the copy at once (a token problem is not a cleanup)', async () => {
+    const before = await count('entreprises');
+    data.companies = [];
+    const report = await syncConnexion(t.app.db, a, 'crm', deps());
+    expect(report.erreurs.join(' ')).toMatch(/nettoyage ignoré/i);
+    expect(await count('entreprises')).toBe(before);
+  });
+
   it('explains a missing token without leaking any secret', async () => {
     const other = await createInstance(t.owner.db, {
       slug: 'sans-jeton',
