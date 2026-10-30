@@ -266,6 +266,23 @@ describe('HubSpot mirror', () => {
     expect(await count('entreprises')).toBe(3);
   });
 
+  it('reads a contact modified since the last pass (its date is lastmodifieddate)', async () => {
+    const contact = data.contacts[0];
+    if (contact) {
+      contact.properties.jobtitle = 'Directeur';
+      contact.properties.lastmodifieddate = new Date(Date.now() + 70_000).toISOString();
+    }
+    const report = await syncConnexion(t.app.db, a, 'crm', deps());
+    const read = portal.calls.find((c) => c.path === '/crm/v3/objects/contacts/search');
+    expect(read).toBeDefined();
+    expect(report.lus).toBeGreaterThanOrEqual(1);
+    const { rows } = await t.owner.pool.query<{ fonction: string }>(
+      "select fonction from contacts where instance_id = $1 and source_id = '201'",
+      [a.id],
+    );
+    expect(rows[0]?.fonction).toBe('Directeur');
+  });
+
   it('vigilance 2: a persistent rate limit deletes nothing, shows the error, and the next pass recovers', async () => {
     const before = await count('contacts');
     portal.failWith(429);
@@ -285,7 +302,7 @@ describe('HubSpot mirror', () => {
     try {
       const contact = data.contacts[0];
       if (contact)
-        contact.properties.hs_lastmodifieddate = new Date(Date.now() + 90_000).toISOString();
+        contact.properties.lastmodifieddate = new Date(Date.now() + 90_000).toISOString();
       const report = await syncConnexion(t.app.db, a, 'crm', deps());
       expect(report.erreurs).toEqual([
         'Emails non lus : la clé HubSpot n’a pas le droit nécessaire (sales-email-read).',
@@ -302,8 +319,7 @@ describe('HubSpot mirror', () => {
       [a.id],
     );
     const contact = data.contacts[0];
-    if (contact)
-      contact.properties.hs_lastmodifieddate = new Date(Date.now() + 120_000).toISOString();
+    if (contact) contact.properties.lastmodifieddate = new Date(Date.now() + 120_000).toISOString();
     await syncConnexion(t.app.db, a, 'crm', deps());
 
     const read = portal.calls.find((c) => c.path === '/crm/v3/objects/contacts/search');
@@ -869,7 +885,7 @@ describe('HubSpot mirror', () => {
       const agathe = data.contacts[0];
       if (agathe) {
         agathe.properties.email = 'agathe@menuiserie-arpin.example';
-        agathe.properties.hs_lastmodifieddate = new Date(Date.now() + 180_000).toISOString();
+        agathe.properties.lastmodifieddate = new Date(Date.now() + 180_000).toISOString();
       }
       await syncConnexion(t.app.db, a, 'crm', deps());
       expect(await mirrored('contacts', '201')).toBe(0);
