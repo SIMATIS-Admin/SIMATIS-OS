@@ -235,10 +235,13 @@ export function fakePortal(data: PortalData, { pageSize = 2 } = {}) {
     const search = /^\/crm\/v3\/objects\/(\w+)\/search$/.exec(u.pathname);
     if (search && body) {
       const type = search[1] as keyof PortalData;
-      const groups = body.filterGroups as { filters: { value: string }[] }[];
-      const since = Number(groups[0]?.filters[0]?.value ?? 0);
+      const groups = body.filterGroups as { filters: { propertyName: string; value: string }[] }[];
+      const filter = groups[0]?.filters[0];
+      const since = Number(filter?.value ?? 0);
+      // Like HubSpot: a property the object does not have matches nothing (contacts carry
+      // `lastmodifieddate`, the other objects `hs_lastmodifieddate`).
       const items = (data[type] as HsObject[])
-        .filter((o) => new Date(o.properties.hs_lastmodifieddate ?? 0).getTime() > since)
+        .filter((o) => new Date(o.properties[filter?.propertyName ?? ''] ?? 0).getTime() > since)
         .map((o) => only(o, body.properties as string[]));
       return json(page(items, body.after as string | undefined));
     }

@@ -138,13 +138,15 @@ export function hubspotClient(auth: HubspotAuth, options: ClientOptions = {}) {
     return out;
   }
 
-  // Incremental passes: only what changed since the last successful sync.
+  // Incremental passes: only what changed since the last successful sync. Contacts carry their
+  // modification date in `lastmodifieddate`; filtering them on `hs_lastmodifieddate` matches nothing.
   async function modifiedSince(
     objectType: string,
     since: Date,
     properties: string[],
   ): Promise<HsObject[]> {
     const out: HsObject[] = [];
+    const dateProp = objectType === 'contacts' ? 'lastmodifieddate' : 'hs_lastmodifieddate';
     let after: string | undefined;
     do {
       const page = await request<{ results: HsObject[]; paging?: { next?: { after: string } } }>(
@@ -155,14 +157,14 @@ export function hubspotClient(auth: HubspotAuth, options: ClientOptions = {}) {
             {
               filters: [
                 {
-                  propertyName: 'hs_lastmodifieddate',
+                  propertyName: dateProp,
                   operator: 'GT',
                   value: String(since.getTime()),
                 },
               ],
             },
           ],
-          sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'ASCENDING' }],
+          sorts: [{ propertyName: dateProp, direction: 'ASCENDING' }],
           properties,
           limit: PAGE,
           ...(after ? { after } : {}),
