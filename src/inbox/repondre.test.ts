@@ -148,4 +148,24 @@ describe('Répondre à un message de l’espace partagé depuis l’Inbox', () =
     expect(r).toMatchObject({ id, statut: 'traite' });
     expect((await evenements()).length).toBe(avant);
   });
+
+  it('refuse une seconde réponse pendant que la première est en cours (double clic)', async () => {
+    const id = await deposer(`partage:${CHEMIN}-double`);
+    let appels = 0;
+    let liberer: () => void = () => undefined;
+    const lente = () => {
+      appels++;
+      return new Promise<Resultat>((resolve) => {
+        liberer = () => resolve({ ok: true });
+      });
+    };
+    const premiere = repondreMessagePartage(t.app.db, inst, id, reponse, lente);
+    await new Promise((r) => setTimeout(r, 50));
+    await expect(repondreMessagePartage(t.app.db, inst, id, reponse, lente)).rejects.toThrow(
+      /déjà en cours/,
+    );
+    liberer();
+    await premiere;
+    expect(appels).toBe(1);
+  });
 });

@@ -466,6 +466,9 @@ export async function envoyerLivreBlanc(
 
 export class DepotRefuse extends Error {}
 
+// Réponses en cours d'envoi : un double clic ne doit pas déposer deux messages à Christophe.
+const reponsesEnCours = new Set<string>();
+
 // Dépose la réponse dans l'espace partagé (par l'exécuteur du poste), puis range l'entrée en
 // « traité ». L'attente de l'exécuteur se fait hors transaction : elle peut durer 15 s.
 export async function repondreMessagePartage(
@@ -474,6 +477,22 @@ export async function repondreMessagePartage(
   id: string,
   reponse: { sujet: string; corps: string },
   demanderOperation: (op: Operation) => Promise<Resultat> = demander,
+): Promise<SujetVue | null> {
+  if (reponsesEnCours.has(id)) throw new SujetRefuse('Réponse déjà en cours.');
+  reponsesEnCours.add(id);
+  try {
+    return await deposerReponse(db, instance, id, reponse, demanderOperation);
+  } finally {
+    reponsesEnCours.delete(id);
+  }
+}
+
+async function deposerReponse(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  reponse: { sujet: string; corps: string },
+  demanderOperation: (op: Operation) => Promise<Resultat>,
 ): Promise<SujetVue | null> {
   const s = await withInstance(db, instance.id, (tx) => charger(tx, id));
   if (!s) return null;
