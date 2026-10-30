@@ -28,7 +28,11 @@ export function gmailConnector(options: GoogleOptions = {}): Connector {
         threadId?: string;
       };
       if (op.op === 'message.send') {
-        const result = await sendMessage(ctx, { to, subject, html }, options);
+        const result = await sendMessage(
+          ctx,
+          { to, subject, html, ...(images ? { images } : {}), ...(threadId ? { threadId } : {}) },
+          options,
+        );
         return { simulation: result.simulation };
       }
       if (op.op !== 'draft.create')

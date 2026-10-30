@@ -25,6 +25,7 @@ const avec = (s: StatsProspection): VueProspection => ({
   recentes: [],
   enCours: null,
   froid: { disponibles: 12, aRelancer: 7 },
+  envoiPossible: false,
 });
 const repondre = (v: VueProspection) => () => Promise.resolve(new Response(JSON.stringify(v)));
 

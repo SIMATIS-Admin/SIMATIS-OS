@@ -105,6 +105,8 @@ export type ResultatCampagne = {
   faites: number;
   // Brouillons que la messagerie a refusés : ils restent prêts, la campagne n'est pas terminée.
   echecs: number;
+  // Vrai : les mails sont partis (envoi direct) ; faux : brouillons créés dans la messagerie.
+  envoye: boolean;
 };
 
 // Lot de mails rédigés par Claude puis relus par Marc. `redaction` : en attente de l'exécuteur ;

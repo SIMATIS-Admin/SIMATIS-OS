@@ -197,6 +197,7 @@ export function Prospection({ slug }: { slug: string }) {
           slug={slug}
           campagne={campagne}
           signatures={vue.signatures}
+          envoiPossible={vue.envoiPossible}
           onTermine={(resultat) => setEtape({ nom: 'fin', campagne, resultat })}
         />
       </>

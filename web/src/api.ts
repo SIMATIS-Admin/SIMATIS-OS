@@ -1659,6 +1659,8 @@ export type ResultatCampagne = {
   clos: number;
   faites: number;
   echecs: number;
+  // Vrai : les mails sont partis ; faux : brouillons créés dans la messagerie.
+  envoye: boolean;
 };
 export type CampagneResume = {
   id: string;
@@ -1674,6 +1676,8 @@ export type VueProspection = {
   recentes: CampagneResume[];
   enCours: string | null;
   froid: { disponibles: number; aRelancer: number };
+  // Les deux verrous d'écriture sont ouverts : « Valider et envoyer » est proposé.
+  envoiPossible: boolean;
 };
 export type StatutCampagne = 'redaction' | 'relecture' | 'terminee' | 'erreur';
 export type EtatBrouillon = 'a_rediger' | 'pret' | 'a_verifier' | 'ecarte' | 'cree';
@@ -1779,11 +1783,15 @@ export const modifierBrouillonCampagne = (
     ),
     champs,
   );
-export const finaliserCampagne = (slug: string, id: string) =>
+export const finaliserCampagne = (
+  slug: string,
+  id: string,
+  mode: 'brouillons' | 'envoi' = 'brouillons',
+) =>
   sendJson<ResultatCampagne>(
     'POST',
     inst(slug, `prospection/campagnes/${encodeURIComponent(id)}/finaliser`),
-    {},
+    { mode },
   );
 export const relancerRedaction = (slug: string, id: string) =>
   sendJson<{ ok: true }>(

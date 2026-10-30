@@ -63,6 +63,11 @@ describe('Routes de la prospection', () => {
     const v = await vue();
     expect(v.stats).toMatchObject({ jour: 0, semaine: 0, objectif: 30 });
     expect(v.signatures).toEqual([]);
+    // Les écritures réelles sont fermées dans ce test : l'envoi direct n'est pas proposé.
+    expect(
+      (await app.inject({ method: 'GET', url: base })).json<{ envoiPossible: boolean }>()
+        .envoiPossible,
+    ).toBe(false);
   });
 
   it('404 sur une instance inconnue', async () => {
@@ -256,6 +261,35 @@ describe('Routes de la prospection', () => {
         enCours: string | null;
       }>();
       expect(vueProspection.enCours).toBe(campagneId);
+    });
+
+    it('refuse l’envoi direct tant que les verrous sont fermés', async () => {
+      const id = await tache('Fabrice');
+      const { campagneId } = (
+        await app.inject({
+          method: 'POST',
+          url: `${base}/campagnes`,
+          payload: { mode: 'relance', tacheIds: [id], reglage },
+        })
+      ).json<{ campagneId: string }>();
+      const [b] = (await campagne(campagneId)).brouillons;
+      await withInstance(t.app.db, instanceId, async (tx) => {
+        await demarrerCampagne(tx, campagneId);
+        await deposerBrouillons(tx, campagneId, [{ id: b!.id, objet: 'Re: x', corps: '<p>x</p>' }]);
+      });
+      const r = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes/${campagneId}/finaliser`,
+        payload: { mode: 'envoi' },
+      });
+      expect(r.statusCode).toBe(400);
+      expect(r.json<{ error: string }>().error).toContain('verrous');
+      const mauvais = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes/${campagneId}/finaliser`,
+        payload: { mode: 'autre' },
+      });
+      expect(mauvais.statusCode).toBe(400);
     });
 
     it('400 quand aucune tâche n’est utilisable, avec la raison', async () => {
