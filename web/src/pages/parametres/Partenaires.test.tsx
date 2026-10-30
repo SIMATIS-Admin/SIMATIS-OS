@@ -8,18 +8,34 @@ let calls: Call[] = [];
 let ecrituresReelles = true;
 let porteuse = true;
 let partenaires: unknown[] = [];
+let invitations: unknown[] = [];
+let peutInviter = true;
 
 const reponse = () => ({
   actif: true,
   porteuse,
   ecrituresReelles,
   inscrit: partenaires.length > 0,
+  peutInviter,
   objets: ['entreprise', 'contact', 'affaire', 'tache', 'rendez_vous', 'activite'],
   champsExcluables: [
     { cle: 'contact.telephone', libelle: 'Téléphone' },
     { cle: 'affaire.montant', libelle: 'Montant' },
   ],
+  niveaux: [
+    { id: 'L0', libelle: 'Me montrer seulement' },
+    { id: 'L1', libelle: 'Demander avant' },
+    { id: 'L2', libelle: 'Faire, puis valider' },
+    { id: 'L3', libelle: 'Faire seul' },
+  ],
+  gardeFous: [
+    'Prix, devis, engagement',
+    'Envoi à un client ou un prospect',
+    'Publication',
+    'Suppression',
+  ],
   partenaires,
+  invitations,
   missions: [
     {
       id: 'm-1',
@@ -65,6 +81,17 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   calls.push({ url, method, body });
   const json = (b: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(b), { status }));
+  if (url.endsWith('/partenaires/invitations')) {
+    const invitation = {
+      id: 'i-1',
+      lien: 'https://relais.test/invitations/ABCDEFGHIJKLMNOPQRSTUVWX',
+      email: (body as { email: string }).email || null,
+      creeeLe: '2026-10-30T08:00:00Z',
+      expireLe: '2026-11-06T08:00:00Z',
+    };
+    invitations = [invitation];
+    return json({ invitation });
+  }
   if (url.endsWith('/partenaires/rejoindre')) {
     if ((body as { lien: string }).lien.endsWith('BON')) {
       partenaires = [alpes];
@@ -83,6 +110,8 @@ describe('Paramètres > Partenaires', () => {
     ecrituresReelles = true;
     porteuse = true;
     partenaires = [];
+    invitations = [];
+    peutInviter = true;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -142,12 +171,50 @@ describe('Paramètres > Partenaires', () => {
         voit: { qualification: true },
       }),
     );
-    fireEvent.change(screen.getByLabelText(/Missions reçues de Alpes OS/), {
-      target: { value: 'L2' },
-    });
+    fireEvent.click(screen.getByText('Faire, puis valider'));
     await waitFor(() =>
       expect(calls.filter((c) => c.method === 'PATCH').at(-1)?.body).toEqual({ niveau: 'L2' }),
     );
+  });
+
+  it('shows the settings of a connection: level, what it does, locked safeguards', async () => {
+    partenaires = [alpes];
+    render(<Partenaires slug="client-fictif" />);
+    expect(await screen.findByText('Quand Alpes OS confie une mission à votre agent')).toBeTruthy();
+    expect(screen.getByText('Me montrer seulement').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText(/rien ne démarre sans vous/)).toBeTruthy();
+    expect(screen.getByText('Toujours avec votre accord')).toBeTruthy();
+    expect(screen.getByText('Suppression').tagName).toBe('SPAN');
+    expect(screen.getByText('Alpes OS voit')).toBeTruthy();
+    // Clicking the current level sends nothing.
+    fireEvent.click(screen.getByText('Me montrer seulement'));
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
+  });
+
+  it('creates an invitation and lists it as pending, with its link to copy', async () => {
+    render(<Partenaires slug="client-fictif" />);
+    fireEvent.change(await screen.findByLabelText(/E-mail du partenaire/), {
+      target: { value: 'contact@client.example' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Inviter un partenaire' }));
+    expect(await screen.findByText('contact@client.example')).toBeTruthy();
+    expect(calls.find((c) => c.method === 'POST')).toMatchObject({
+      url: '/api/i/client-fictif/partenaires/invitations',
+      body: { email: 'contact@client.example' },
+    });
+    expect(screen.getByText('En attente')).toBeTruthy();
+    expect(screen.getByLabelText<HTMLInputElement>("Lien d'invitation à transmettre").value).toBe(
+      'https://relais.test/invitations/ABCDEFGHIJKLMNOPQRSTUVWX',
+    );
+  });
+
+  it('says what is missing to invite without a node nor the registration key', async () => {
+    peutInviter = false;
+    render(<Partenaires slug="client-fictif" />);
+    expect(await screen.findByText(/RELAIS_CLE_INSCRIPTION/)).toBeTruthy();
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Inviter un partenaire' }).disabled,
+    ).toBe(true);
   });
 
   it('cuts the connection in two clicks', async () => {
@@ -176,6 +243,9 @@ describe('Paramètres > Partenaires', () => {
       target: { value: 'https://relais.test/invitations/BON' },
     });
     expect(screen.getByText<HTMLButtonElement>('Se connecter').disabled).toBe(true);
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Inviter un partenaire' }).disabled,
+    ).toBe(true);
   });
 
   it('sends the pilot to the client’s instance from another one', async () => {

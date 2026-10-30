@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   couperPartenaire,
   fetchPartenaires,
+  inviterPartenaire,
   reglerPartenaire,
   rejoindrePartenaire,
+  type InvitationVue,
   type ObjetCrm,
   type PartenaireVue,
   type PartenairesReponse,
@@ -22,12 +24,13 @@ const OBJETS: Record<ObjetCrm, string> = {
 };
 
 // Same wording as the partner's OS (kit, autonomie.js LIBELLES).
-const NIVEAUX = [
-  ['L0', 'L0 · Me montrer seulement'],
-  ['L1', 'L1 · Demander avant'],
-  ['L2', 'L2 · Faire, puis valider'],
-  ['L3', 'L3 · Faire seul'],
-] as const;
+// What the chosen level does with a mission received from partner `p`.
+const NOTE_NIVEAU: Record<PartenaireVue['niveau'], (p: string) => string> = {
+  L0: () => 'Ses missions arrivent dans l’Inbox, rien ne démarre sans vous.',
+  L1: () => 'Votre agent vous demande avant de commencer, dans l’Inbox.',
+  L2: (p) => `Rien ne repart chez ${p} sans votre accord.`,
+  L3: (p) => `Votre agent fait la mission et répond seul à ${p}.`,
+};
 
 const ETATS: Record<string, [string, string]> = {
   simulation: ['Simulation', 'amber'],
@@ -43,6 +46,126 @@ const ETATS: Record<string, [string, string]> = {
 const nomCourt = (nom: string) => nom.split(' · ')[0]?.trim() || nom;
 const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR');
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+function Copier({ texte }: { texte: string }) {
+  const [copie, setCopie] = useState(false);
+  return (
+    <button
+      className="btn"
+      onClick={() =>
+        void navigator.clipboard.writeText(texte).then(() => {
+          setCopie(true);
+          setTimeout(() => setCopie(false), 2000);
+        })
+      }
+    >
+      {copie ? 'Copié' : 'Copier'}
+    </button>
+  );
+}
+
+function Lien({ invitation }: { invitation: InvitationVue }) {
+  return (
+    <div className="lien-copie">
+      <input
+        className="input"
+        readOnly
+        aria-label="Lien d'invitation à transmettre"
+        value={invitation.lien}
+        onFocus={(e) => e.target.select()}
+      />
+      <Copier texte={invitation.lien} />
+    </div>
+  );
+}
+
+function Inviter({
+  slug,
+  data,
+  onDone,
+}: {
+  slug: string;
+  data: PartenairesReponse;
+  onDone: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = () => {
+    setBusy(true);
+    setError(null);
+    inviterPartenaire(slug, email.trim())
+      .then(
+        () => {
+          setEmail('');
+          onDone();
+        },
+        (e: unknown) => setError(message(e)),
+      )
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <h2>Inviter un partenaire</h2>
+      </div>
+      <div className="panel-b stack" style={{ gap: 8 }}>
+        <label className="field">
+          <span>
+            E-mail du partenaire (facultatif){' '}
+            <Tip text="Seulement pour reconnaître l'invitation : aucun mail n'est envoyé. Transmettez vous-même le lien ; le partenaire le colle dans son OS." />
+          </span>
+          <input
+            className="input"
+            type="email"
+            autoComplete="off"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+        <div>
+          <button
+            className="btn primary"
+            disabled={busy || !data.ecrituresReelles || !data.peutInviter}
+            onClick={submit}
+          >
+            {busy ? 'Création…' : 'Inviter un partenaire'}
+          </button>
+        </div>
+        {!data.peutInviter && (
+          <p className="small muted">
+            Il manque la clé d'inscription du relais (RELAIS_CLE_INSCRIPTION) sur le serveur. Sans
+            elle, collez le lien reçu d'un partenaire.
+          </p>
+        )}
+        {error && (
+          <p className="small" style={{ color: 'var(--red)' }}>
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Invitation({ invitation }: { invitation: InvitationVue }) {
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <div>
+          <h2>{invitation.email ?? 'Invitation sans e-mail'}</h2>
+          <div className="small muted">
+            Créée le {date(invitation.creeeLe)} · valable jusqu'au {date(invitation.expireLe)}
+          </div>
+        </div>
+        <span className="badge amber">En attente</span>
+      </div>
+      <div className="panel-b">
+        <Lien invitation={invitation} />
+      </div>
+    </div>
+  );
+}
 
 function Rejoindre({
   slug,
@@ -110,18 +233,16 @@ function Rejoindre({
 function Partenaire({
   slug,
   p,
-  objets,
-  champs,
-  ouvert,
+  data,
   onChange,
 }: {
   slug: string;
   p: PartenaireVue;
-  objets: ObjetCrm[];
-  champs: PartenairesReponse['champsExcluables'];
-  ouvert: boolean;
+  data: PartenairesReponse;
   onChange: () => void;
 }) {
+  const { objets, champsExcluables: champs, ecrituresReelles: ouvert } = data;
+  const court = nomCourt(p.nom);
   const [armed, setArmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const run = (action: () => Promise<unknown>) => {
@@ -154,11 +275,46 @@ function Partenaire({
       </div>
       {!coupee && (
         <div className="panel-b stack">
-          <div>
-            <div className="small muted" style={{ marginBottom: 6 }}>
-              {nomCourt(p.nom)} voit{' '}
-              <Tip text="Le suivi commercial de cette instance, tenu à jour dans les deux sens. Un objet décoché ou un champ exclu ne part jamais ; un rendez-vous non commercial non plus." />
+          <h3>Paramètres</h3>
+          <div className="stack" style={{ gap: 8 }}>
+            <h4 id={`niveau-${p.id}`}>Quand {court} confie une mission à votre agent</h4>
+            <div
+              className="seg adaptable"
+              role="group"
+              aria-labelledby={`niveau-${p.id}`}
+              style={{ alignSelf: 'flex-start' }}
+            >
+              {data.niveaux.map((n) => (
+                <button
+                  key={n.id}
+                  className={p.niveau === n.id ? 'on' : ''}
+                  aria-pressed={p.niveau === n.id}
+                  onClick={() =>
+                    p.niveau !== n.id && run(() => reglerPartenaire(slug, p.id, { niveau: n.id }))
+                  }
+                >
+                  {n.libelle}
+                </button>
+              ))}
             </div>
+            <p className="small muted" style={{ margin: 0 }}>
+              {NOTE_NIVEAU[p.niveau](court)}
+            </p>
+            <div className="garde-fous">
+              <span className="small muted">Toujours avec votre accord</span>
+              {data.gardeFous.map((g) => (
+                <span key={g} className="chip fixe">
+                  <Icon name="lock" />
+                  {g}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="stack" style={{ gap: 8 }}>
+            <h4>
+              {court} voit{' '}
+              <Tip text="Vos missions, vos messages et le suivi commercial de cette instance, tenu à jour dans les deux sens. Un objet décoché ou un champ exclu ne part jamais ; un rendez-vous non commercial non plus." />
+            </h4>
             <div className="checks-row">
               {objets.map((o) => (
                 <label key={o} className="check">
@@ -171,9 +327,7 @@ function Partenaire({
                 </label>
               ))}
             </div>
-          </div>
-          <div>
-            <div className="small muted" style={{ marginBottom: 6 }}>
+            <div className="small muted">
               Champs exclus{' '}
               <Tip text="Comme pour la synchronisation HubSpot : un champ coché ici ne part pas." />
             </div>
@@ -189,41 +343,18 @@ function Partenaire({
                 </label>
               ))}
             </div>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={p.voit.qualification}
+                onChange={() => regler({ qualification: !p.voit.qualification })}
+              />
+              <span>
+                Partager la qualification des affaires{' '}
+                <Tip text="Qualification, potentiel et faisabilité : vous en êtes responsable. Non cochée, elle reste ici." />
+              </span>
+            </label>
           </div>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={p.voit.qualification}
-              onChange={() => regler({ qualification: !p.voit.qualification })}
-            />
-            <span>
-              Partager la qualification des affaires{' '}
-              <Tip text="Qualification, potentiel et faisabilité : vous en êtes responsable. Non cochée, elle reste ici." />
-            </span>
-          </label>
-          <label className="field">
-            <span>
-              Missions reçues de {nomCourt(p.nom)}{' '}
-              <Tip text="L0 et L1 : la mission arrive dans l'Inbox, à accepter ou refuser. L2 : l'agent la prépare, vous validez sa réponse. L3 : l'agent la fait seul. Prix, envoi à un client, publication et suppression restent à vous." />
-            </span>
-            <select
-              className="input"
-              value={p.niveau}
-              onChange={(e) =>
-                run(() =>
-                  reglerPartenaire(slug, p.id, {
-                    niveau: e.target.value as PartenaireVue['niveau'],
-                  }),
-                )
-              }
-            >
-              {NIVEAUX.map(([n, label]) => (
-                <option key={n} value={n}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
           <div>
             <button
               className="btn"
@@ -274,22 +405,18 @@ export function Partenaires({ slug }: { slug: string }) {
         <div className="alert blue">
           <Icon name="lock" />
           <div>
-            Écritures réelles désactivées : rien ne part au relais. Se connecter est impossible et
-            les missions restent en simulation, notées au journal.
+            Écritures réelles désactivées : rien ne part au relais. Inviter ou se connecter est
+            impossible et les missions restent en simulation, notées au journal.
           </div>
         </div>
       )}
+      <Inviter slug={slug} data={data} onDone={load} />
+      {data.invitations.map((i) => (
+        <Invitation key={i.id} invitation={i} />
+      ))}
       <Rejoindre slug={slug} ouvert={data.ecrituresReelles} onDone={load} />
       {data.partenaires.map((p) => (
-        <Partenaire
-          key={p.id}
-          slug={slug}
-          p={p}
-          objets={data.objets}
-          champs={data.champsExcluables}
-          ouvert={data.ecrituresReelles}
-          onChange={load}
-        />
+        <Partenaire key={p.id} slug={slug} p={p} data={data} onChange={load} />
       ))}
       {data.missions.length > 0 && (
         <div className="panel">
