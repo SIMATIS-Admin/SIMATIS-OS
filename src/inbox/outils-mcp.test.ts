@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { contacts } from '../crm/schema.js';
+import { contacts, rendezVous } from '../crm/schema.js';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
 import { withInstance } from '../db/context.js';
@@ -103,6 +103,65 @@ describe('Inbox : outils MCP', () => {
       [id],
     );
     expect(rows).toEqual([{ source: 'routine', instance_id: helioval.id }]);
+  });
+
+  it('ne redépose pas un compte rendu pour un rendez-vous écarté ou déjà documenté', async () => {
+    await t.owner.db.insert(rendezVous).values([
+      { instanceId: helioval.id, eventId: 'evt-ecarte', titre: 'Écarté', statut: 'ignore' },
+      {
+        instanceId: helioval.id,
+        eventId: 'evt-documente',
+        titre: 'Documenté',
+        statut: 'rdv',
+        compteRendu: 'Compte rendu fictif',
+      },
+    ]);
+    const agenda = (evt: string) =>
+      sujet(`agenda:${evt}`, { type: 'compte_rendu', origine: 'agenda' });
+    for (const evt of ['evt-ecarte', 'evt-documente']) {
+      const r = await call('deposer_sujet', agenda(evt));
+      expect(r.isError).toBe(false);
+      expect(r.json<{ statut: string }>().statut).toBe('ignore');
+    }
+    expect(
+      (await call('deposer_sujet', agenda('evt-libre'))).json<{ statut: string }>().statut,
+    ).toBe('cree');
+    const { rows } = await t.owner.pool.query<{ n: number }>(
+      "select count(*)::int as n from sujets where source_id in ('agenda:evt-ecarte', 'agenda:evt-documente')",
+    );
+    expect(rows[0]?.n).toBe(0);
+  });
+
+  it('garde une seule entrée par clé pour tout le pilote, quel que soit l’espace et l’ordre', async () => {
+    const commun = sujet('agenda:evt-commun', { type: 'compte_rendu', origine: 'agenda' });
+    const aqua = await clientDe('aquaterra');
+    const perso = await clientDe('simatis');
+    const statut = async (c: Client) =>
+      (await call('deposer_sujet', commun, c)).json<{ statut: string }>().statut;
+    expect(await statut(aqua)).toBe('cree');
+    // Un autre mandat et Mon activité voient le même événement : aucune seconde entrée.
+    expect(await statut(client)).toBe('ignore');
+    expect(await statut(perso)).toBe('ignore');
+    // Et dans l'autre sens : Mon activité d'abord, puis un mandat.
+    const inverse = sujet('agenda:evt-inverse', { type: 'compte_rendu', origine: 'agenda' });
+    expect((await call('deposer_sujet', inverse, perso)).json<{ statut: string }>().statut).toBe(
+      'cree',
+    );
+    expect((await call('deposer_sujet', inverse, aqua)).json<{ statut: string }>().statut).toBe(
+      'ignore',
+    );
+    const { rows } = await t.owner.pool.query<{ n: number }>(
+      "select count(*)::int as n from sujets where source_id in ('agenda:evt-commun', 'agenda:evt-inverse')",
+    );
+    expect(rows[0]?.n).toBe(2);
+  });
+
+  it('une clé reste libre dans un espace sans lien : la même clé déjà vue dans le même espace donne existant', async () => {
+    const un = sujet('fil-meme-espace');
+    const premier = await call('deposer_sujet', un);
+    const second = await call('deposer_sujet', un);
+    expect(premier.json<{ statut: string }>().statut).toBe('cree');
+    expect(second.json<{ statut: string }>().statut).toBe('existant');
   });
 
   it('refuses an a_valider subject or an os origin', async () => {
