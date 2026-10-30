@@ -46,6 +46,13 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     Promise.resolve(new Response(JSON.stringify(b), { status }));
   if (refus?.url.test(url)) return json({ error: refus.message }, 400);
   if (url.endsWith('/prospection/rapprocher')) return json({ envoyes: 0 });
+  if (url.includes('/recherche?q=')) {
+    return json({
+      affaires: [],
+      organisations: [],
+      personnes: [{ id: 'c-choisi', nom: 'Paul Choisi', entreprise: 'Société Choisie' }],
+    });
+  }
   if (url.endsWith('/prospection/taches-relance')) return json(taches);
   if (url.endsWith('/prospection') && method === 'GET') return json(vue);
   if (url.endsWith('/prospection/campagnes') && method === 'POST') {
@@ -79,6 +86,7 @@ beforeEach(() => {
       echeance: '2026-10-28T08:00:00Z',
       touche: 2,
       utilisable: true,
+      suggestion: null,
     },
     {
       id: 't2',
@@ -88,6 +96,7 @@ beforeEach(() => {
       echeance: '2026-10-29T08:00:00Z',
       touche: 2,
       utilisable: true,
+      suggestion: null,
     },
     {
       id: 't3',
@@ -97,6 +106,7 @@ beforeEach(() => {
       echeance: null,
       touche: 2,
       utilisable: false,
+      suggestion: { contactId: 'c-sans', contactNom: 'Sandra Nom', societe: 'Société Sandra' },
     },
   ];
   campagne = {
@@ -170,6 +180,55 @@ describe('Relancer des tâches : choix', () => {
     expect(
       screen.getByRole('button', { name: /Continuer avec 0 tâche/ }).hasAttribute('disabled'),
     ).toBe(true);
+  });
+});
+
+describe('Relancer des tâches : tâche sans contact lié', () => {
+  it('propose le contact trouvé dans le titre et l’utilise pour la campagne', async () => {
+    await ouvrirChoix();
+    fireEvent.click(screen.getByRole('button', { name: /Utiliser Sandra Nom/ }));
+    expect(screen.getByText('Sandra Nom')).toBeTruthy();
+    expect(screen.getByLabelText<HTMLInputElement>('Choisir Relancer Sans').checked).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer avec 1 tâche' }));
+    await screen.findByText(/Régler la campagne/);
+    fireEvent.click(screen.getByRole('button', { name: 'Rédiger le brouillon' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/campagnes'))).toBe(true),
+    );
+    const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/campagnes'))!;
+    expect((post.body as { tacheIds: string[]; liens: unknown }).tacheIds).toEqual(['t3']);
+    expect((post.body as { liens: unknown }).liens).toEqual({ t3: 'c-sans' });
+  });
+
+  it('cherche un autre contact par son nom', async () => {
+    await ouvrirChoix();
+    fireEvent.click(screen.getByRole('button', { name: /Choisir un contact pour Relancer Sans/ }));
+    fireEvent.change(screen.getByLabelText(/Chercher un contact pour Relancer Sans/), {
+      target: { value: 'Paul' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Paul Choisi/ }));
+    expect(screen.getByText('Paul Choisi')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer avec 1 tâche' }));
+    await screen.findByText(/Régler la campagne/);
+    fireEvent.click(screen.getByRole('button', { name: 'Rédiger le brouillon' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/campagnes'))).toBe(true),
+    );
+    expect(
+      (
+        calls.find((c) => c.method === 'POST' && c.url.endsWith('/campagnes'))!.body as {
+          liens: unknown;
+        }
+      ).liens,
+    ).toEqual({ t3: 'c-choisi' });
+  });
+
+  it('permet de changer le contact choisi', async () => {
+    await ouvrirChoix();
+    fireEvent.click(screen.getByRole('button', { name: /Utiliser Sandra Nom/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Changer' }));
+    expect(screen.getByLabelText<HTMLInputElement>('Choisir Relancer Sans').checked).toBe(false);
+    expect(screen.getByRole('button', { name: /Utiliser Sandra Nom/ })).toBeTruthy();
   });
 });
 

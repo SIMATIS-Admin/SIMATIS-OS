@@ -1707,6 +1707,7 @@ export type TacheRelance = {
   echeance: string | null;
   touche: number;
   utilisable: boolean;
+  suggestion: { contactId: string; contactNom: string; societe: string | null } | null;
 };
 export const fetchProspection = (slug: string) =>
   getJson<VueProspection>(inst(slug, 'prospection'));
@@ -1743,11 +1744,17 @@ export const urlImageSignature = (slug: string, id: string) =>
   inst(slug, `prospection/signatures/${encodeURIComponent(id)}/image`);
 export const fetchTachesRelance = (slug: string) =>
   getJson<TacheRelance[]>(inst(slug, 'prospection/taches-relance'));
-export const creerCampagneRelance = (slug: string, tacheIds: string[], reglage: ReglageCampagne) =>
+export const creerCampagneRelance = (
+  slug: string,
+  tacheIds: string[],
+  reglage: ReglageCampagne,
+  // Contact choisi pour une tâche que le CRM ne relie à personne : tâche => contact.
+  liens: Record<string, string> = {},
+) =>
   sendJson<{ campagneId: string; refusees: { tacheId: string; raison: string }[] }>(
     'POST',
     inst(slug, 'prospection/campagnes'),
-    { mode: 'relance', tacheIds, reglage },
+    { mode: 'relance', tacheIds, reglage, ...(Object.keys(liens).length ? { liens } : {}) },
   );
 export const fetchCampagne = (slug: string, id: string) =>
   getJson<CampagneProspection>(inst(slug, `prospection/campagnes/${encodeURIComponent(id)}`));

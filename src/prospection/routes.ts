@@ -55,6 +55,7 @@ const campagneSchema = z.object({
   mode: z.literal('relance'),
   tacheIds: z.array(z.uuid()).max(200),
   reglage: reglageSchema,
+  liens: z.record(z.uuid(), z.uuid()).optional(),
 });
 const brouillonSchema = z.object({
   objet: z.string().max(300).optional(),
@@ -173,7 +174,11 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
       const p = campagneSchema.safeParse(request.body);
       if (!p.success) return invalide(reply, p.error.issues[0]?.message);
       const r = await dansInstance(request.params.slug, reply, (tx) =>
-        creerCampagneRelance(tx, { tacheIds: p.data.tacheIds, reglage: p.data.reglage }),
+        creerCampagneRelance(tx, {
+          tacheIds: p.data.tacheIds,
+          reglage: p.data.reglage,
+          ...(p.data.liens ? { liens: p.data.liens } : {}),
+        }),
       );
       return reply.sent ? undefined : reply.code(201).send(r);
     },

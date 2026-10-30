@@ -8,6 +8,7 @@ import {
   creerCampagneRelance,
   lireCampagne,
   reglageParDefaut,
+  tachesRelance,
 } from './campagnes.js';
 import { prospectionOccurrences, type ReglageCampagne } from './schema.js';
 import { ajouterSignature } from './signatures.js';
@@ -233,5 +234,121 @@ describe('Campagnes de relance', () => {
     await expect(
       withInstance(t.app.db, b, (tx) => lireCampagne(tx, r.campagneId)),
     ).rejects.toBeInstanceOf(CampagneInvalide);
+  });
+
+  describe('tâches dont le contact n’est pas lié', () => {
+    // Tâche importée sans association : seul son titre nomme la personne.
+    async function tacheNommee(instanceId: string, titre: string) {
+      const [tc] = await t.owner.db
+        .insert(taches)
+        .values({ instanceId, titre, canal: 'email', echeance: new Date() })
+        .returning({ id: taches.id });
+      return tc!.id;
+    }
+    async function contact(
+      instanceId: string,
+      nom: string,
+      email: string | null = `${nom.toLowerCase().replace(/\W/g, '')}@exemple.test`,
+    ) {
+      const [e] = await t.owner.db
+        .insert(entreprises)
+        .values({ instanceId, nom: `Société de ${nom}` })
+        .returning({ id: entreprises.id });
+      const [c] = await t.owner.db
+        .insert(contacts)
+        .values({ instanceId, nom, entrepriseId: e!.id, ...(email ? { email } : {}) })
+        .returning({ id: contacts.id });
+      return c!.id;
+    }
+    const liste = () => dansA((tx) => tachesRelance(tx));
+
+    it('propose le contact dont le nom figure seul dans le titre (accents et casse ignorés)', async () => {
+      const tid = await tacheNommee(
+        a,
+        'Relance prospection mail – Recommandation Élodie Brunet – NOPHONE',
+      );
+      const cid = await contact(a, 'Elodie BRUNET');
+      const t1 = (await liste()).find((x) => x.id === tid)!;
+      expect(t1.utilisable).toBe(false);
+      expect(t1.suggestion).toMatchObject({
+        contactId: cid,
+        contactNom: 'Elodie BRUNET',
+        societe: 'Société de Elodie BRUNET',
+      });
+    });
+
+    it('ne propose rien quand deux contacts ou aucun contact avec adresse correspondent', async () => {
+      const deux = await tacheNommee(a, 'Relance Gaspard Lenoir');
+      await contact(a, 'Gaspard Lenoir', 'gaspard1@exemple.test');
+      await contact(a, 'Gaspard Lenoir', 'gaspard2@exemple.test');
+      const sansMail = await tacheNommee(a, 'Relance Honorine Vasseur');
+      await contact(a, 'Honorine Vasseur', null);
+      const autre = await tacheNommee(a, 'Relance Ignace Martel');
+      await contact(b, 'Ignace Martel');
+      const l = await liste();
+      expect(l.find((x) => x.id === deux)?.suggestion).toBeNull();
+      expect(l.find((x) => x.id === sansMail)?.suggestion).toBeNull();
+      expect(l.find((x) => x.id === autre)?.suggestion).toBeNull();
+    });
+
+    it('crée la campagne avec le contact choisi pour une tâche sans contact', async () => {
+      const tid = await tacheNommee(a, 'Relance prospection mail – Recommandation Jeanne Colas');
+      const cid = await contact(a, 'Jeanne Colas');
+      const r = await dansA((tx) =>
+        creerCampagneRelance(tx, {
+          tacheIds: [tid],
+          reglage: reglageParDefaut(),
+          liens: { [tid]: cid },
+        }),
+      );
+      expect(r.refusees).toEqual([]);
+      const [b1] = (await dansA((tx) => lireCampagne(tx, r.campagneId))).brouillons;
+      expect(b1).toMatchObject({
+        contactId: cid,
+        contactNom: 'Jeanne Colas',
+        contactEmail: 'jeannecolas@exemple.test',
+        tacheId: tid,
+      });
+    });
+
+    it('refuse un contact choisi sans adresse, inconnu ou d’une autre instance', async () => {
+      const tid = await tacheNommee(a, 'Relance Kévin Dupuis');
+      const sans = await contact(a, 'Kevin Dupuis', null);
+      const ailleurs = await contact(b, 'Kevin Dupuis ailleurs');
+      for (const cid of [sans, ailleurs, '00000000-0000-4000-8000-000000000099']) {
+        await expect(
+          dansA((tx) =>
+            creerCampagneRelance(tx, {
+              tacheIds: [tid],
+              reglage: reglageParDefaut(),
+              liens: { [tid]: cid },
+            }),
+          ),
+        ).rejects.toBeInstanceOf(CampagneInvalide);
+      }
+    });
+
+    it('le contact choisi remplace celui de la tâche, et compte ses envois pour la touche', async () => {
+      const tid = await tacheNommee(a, 'Relance Laure Perret');
+      const cid = await contact(a, 'Laure Perret');
+      await t.owner.db.insert(prospectionOccurrences).values({
+        instanceId: a,
+        mode: 'relance',
+        contactId: cid,
+        contactNom: 'Laure Perret',
+        theme: 'Test de VMA',
+        touche: 2,
+        etat: 'envoye',
+        envoyeAt: new Date(),
+      });
+      const r = await dansA((tx) =>
+        creerCampagneRelance(tx, {
+          tacheIds: [tid],
+          reglage: reglageParDefaut(),
+          liens: { [tid]: cid },
+        }),
+      );
+      expect((await dansA((tx) => lireCampagne(tx, r.campagneId))).brouillons[0]?.touche).toBe(3);
+    });
   });
 });

@@ -315,6 +315,40 @@ describe('Routes de la prospection', () => {
       expect(r.json()).toEqual({ envoyes: 0 });
     });
 
+    it('une tâche sans contact devient utilisable avec le contact choisi', async () => {
+      const [tc] = await t.owner.db
+        .insert(taches)
+        .values({
+          instanceId,
+          titre: 'Relance Mathis Roussel',
+          canal: 'email',
+          echeance: new Date(),
+        })
+        .returning({ id: taches.id });
+      const [c] = await t.owner.db
+        .insert(contacts)
+        .values({ instanceId, nom: 'Mathis Roussel', email: 'mathis@exemple.test' })
+        .returning({ id: contacts.id });
+      const liste = (await app.inject({ method: 'GET', url: `${base}/taches-relance` })).json<
+        { id: string; utilisable: boolean; suggestion: { contactId: string } | null }[]
+      >();
+      const vue = liste.find((x) => x.id === tc!.id)!;
+      expect(vue.utilisable).toBe(false);
+      expect(vue.suggestion?.contactId).toBe(c!.id);
+      const sans = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: { mode: 'relance', tacheIds: [tc!.id], reglage },
+      });
+      expect(sans.statusCode).toBe(400);
+      const avec = await app.inject({
+        method: 'POST',
+        url: `${base}/campagnes`,
+        payload: { mode: 'relance', tacheIds: [tc!.id], reglage, liens: { [tc!.id]: c!.id } },
+      });
+      expect(avec.statusCode).toBe(201);
+    });
+
     it('cloisonne les campagnes entre instances', async () => {
       const id = await tache('Emma');
       const { campagneId } = (

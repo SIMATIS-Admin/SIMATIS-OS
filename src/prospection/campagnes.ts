@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lt, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne } from 'drizzle-orm';
 import { contacts, entreprises, taches } from '../crm/schema.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -78,7 +78,8 @@ const REFUS = {
 // Les tâches refusées sont rendues avec leur raison ; si aucune n'est valide, rien n'est créé.
 export async function creerCampagneRelance(
   tx: Executor,
-  input: { tacheIds: string[]; reglage: ReglageCampagne },
+  // `liens` : contact choisi par Marc pour une tâche que HubSpot ne relie à personne (tâche => contact).
+  input: { tacheIds: string[]; reglage: ReglageCampagne; liens?: Record<string, string> },
 ): Promise<{ campagneId: string; refusees: { tacheId: string; raison: string }[] }> {
   const ids = [...new Set(input.tacheIds)];
   if (ids.length === 0) throw new CampagneInvalide('Choisissez au moins une tâche.');
@@ -109,6 +110,45 @@ export async function creerCampagneRelance(
     .where(and(eq(taches.instanceId, currentInstance), inArray(taches.id, ids)));
   const parId = new Map(rows.map((r) => [r.id, r]));
 
+  // Un contact choisi à la main remplace celui de la tâche ; il doit exister dans l'instance, avec une adresse.
+  const choix = new Map<
+    string,
+    { id: string; nom: string; email: string; societe: string | null }
+  >();
+  const choisis = [
+    ...new Set(
+      Object.entries(input.liens ?? {})
+        .filter(([t]) => ids.includes(t))
+        .map(([, c]) => c),
+    ),
+  ];
+  if (choisis.length > 0) {
+    const trouves = await tx
+      .select({
+        id: contacts.id,
+        nom: contacts.nom,
+        email: contacts.email,
+        societe: entreprises.nom,
+      })
+      .from(contacts)
+      .leftJoin(
+        entreprises,
+        and(eq(entreprises.id, contacts.entrepriseId), eq(entreprises.instanceId, currentInstance)),
+      )
+      .where(and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, choisis)));
+    const parContact = new Map(trouves.map((c) => [c.id, c]));
+    for (const [tacheId, contactId] of Object.entries(input.liens ?? {})) {
+      if (!ids.includes(tacheId)) continue;
+      const c = parContact.get(contactId);
+      if (!c) throw new CampagneInvalide('Le contact choisi est introuvable dans cette instance.');
+      if (!c.email)
+        throw new CampagneInvalide(
+          `${c.nom} n'a pas d'adresse mail : choisissez un autre contact.`,
+        );
+      choix.set(tacheId, { id: c.id, nom: c.nom, email: c.email, societe: c.societe });
+    }
+  }
+
   const refusees: { tacheId: string; raison: string }[] = [];
   const valides: {
     tacheId: string;
@@ -119,6 +159,17 @@ export async function creerCampagneRelance(
   }[] = [];
   for (const id of ids) {
     const r = parId.get(id);
+    const lie = choix.get(id);
+    if (lie && r && !r.faitAt && r.canal === 'email') {
+      valides.push({
+        tacheId: id,
+        contactId: lie.id,
+        nom: lie.nom,
+        email: lie.email,
+        societe: lie.societe,
+      });
+      continue;
+    }
     const raison = !r
       ? REFUS.introuvable
       : r.faitAt
@@ -225,7 +276,15 @@ export type TacheRelanceVue = {
   touche: number;
   // Faux : la tâche n'a pas de contact ou le contact n'a pas d'adresse, elle ne peut pas être choisie.
   utilisable: boolean;
+  // Tâche inutilisable dont le titre nomme un seul contact de l'instance ayant une adresse.
+  suggestion: { contactId: string; contactNom: string; societe: string | null } | null;
 };
+
+const normaliser = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
 
 // Tâches de mail ouvertes, échues ou à échéance dans les deux jours : ce que Marc peut relancer.
 export async function tachesRelance(
@@ -276,15 +335,42 @@ export async function tachesRelance(
     : [];
   const nb = new Map<string, number>();
   for (const o of envoyes) if (o.contactId) nb.set(o.contactId, (nb.get(o.contactId) ?? 0) + 1);
-  return rows.map((r) => ({
-    id: r.id,
-    titre: r.titre,
-    contactNom: r.contactNom,
-    societe: r.societe,
-    echeance: r.echeance,
-    touche: 2 + (r.contactId ? (nb.get(r.contactId) ?? 0) : 0),
-    utilisable: !!r.contactId && !!r.contactEmail,
-  }));
+  const inutilisables = rows.filter((r) => !r.contactId || !r.contactEmail);
+  const candidats =
+    inutilisables.length > 0
+      ? (
+          await tx
+            .select({ id: contacts.id, nom: contacts.nom, societe: entreprises.nom })
+            .from(contacts)
+            .leftJoin(
+              entreprises,
+              and(
+                eq(entreprises.id, contacts.entrepriseId),
+                eq(entreprises.instanceId, currentInstance),
+              ),
+            )
+            .where(and(eq(contacts.instanceId, currentInstance), isNotNull(contacts.email)))
+        ).filter((c) => normaliser(c.nom).length >= 5)
+      : [];
+  const suggestion = (titre: string) => {
+    const t = normaliser(titre);
+    const trouves = candidats.filter((c) => t.includes(normaliser(c.nom)));
+    const un = trouves.length === 1 ? trouves[0] : undefined;
+    return un ? { contactId: un.id, contactNom: un.nom, societe: un.societe } : null;
+  };
+  return rows.map((r) => {
+    const utilisable = !!r.contactId && !!r.contactEmail;
+    return {
+      id: r.id,
+      titre: r.titre,
+      contactNom: r.contactNom,
+      societe: r.societe,
+      echeance: r.echeance,
+      touche: 2 + (r.contactId ? (nb.get(r.contactId) ?? 0) : 0),
+      utilisable,
+      suggestion: utilisable ? null : suggestion(r.titre),
+    };
+  });
 }
 
 export type CampagneResume = {
