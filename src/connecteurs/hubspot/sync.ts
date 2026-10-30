@@ -1,6 +1,8 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { connexions } from '../../connexions/schema.js';
 import { remplacerLiensHubspot, reparerPrincipaux } from '../../crm/liens.js';
+import { supprimerLocalement, verifierSansBloquant } from '../../crm/suppression.js';
+import { logEvent } from '../../journal/service.js';
 import type { SyncCtx, SyncReport } from '../../connexions/types.js';
 import {
   activites,
@@ -331,7 +333,59 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
       }
     }
   }
+  await retirerAbsentes(ctx.tx, client, reglages.objets, report);
   return report;
+}
+
+// What a pass cannot see: a record merged into another or deleted in HubSpot is not "modified", it
+// is gone. Its copy would stay for ever, empty, beside the one that kept the data.
+const ABSENTES = [
+  { objet: 'entreprises', type: 'companies', table: entreprises, kind: 'entreprise' },
+  { objet: 'contacts', type: 'contacts', table: contacts, kind: 'contact' },
+  { objet: 'transactions', type: 'deals', table: opportunites, kind: 'affaire' },
+] as const;
+
+async function retirerAbsentes(
+  tx: Tx,
+  client: HubspotClient,
+  objets: readonly string[],
+  report: SyncReport,
+) {
+  let retirees = 0;
+  for (const { objet, type, table, kind } of ABSENTES) {
+    if (!objets.includes(objet)) continue;
+    const copies = await tx
+      .select({ id: table.id, sourceId: table.sourceId })
+      .from(table)
+      .where(and(eq(table.instanceId, currentInstance), eq(table.source, SOURCE)));
+    const ids = copies.flatMap((c) => (c.sourceId ? [c.sourceId] : []));
+    const connus = await client.presents(type, ids);
+    const absentes = copies.filter((c) => c.sourceId && !connus.has(c.sourceId));
+    if (absentes.length === 0) continue;
+    // A token or API problem answers "nothing" for everything: that is not a cleanup.
+    if (absentes.length >= 2 && absentes.length * 2 > ids.length) {
+      report.erreurs.push(
+        `Nettoyage ignoré (${objet}) : ${absentes.length} fiches sur ${ids.length} semblent absentes de HubSpot.`,
+      );
+      continue;
+    }
+    for (const c of absentes) {
+      try {
+        await verifierSansBloquant(tx, { kind, id: c.id });
+      } catch {
+        report.erreurs.push(`Une fiche absente de HubSpot est gardée : elle a des éléments liés.`);
+        continue;
+      }
+      await supprimerLocalement(tx, { kind, id: c.id });
+      retirees += 1;
+    }
+  }
+  if (retirees > 0)
+    await logEvent(tx, {
+      acteur: 'synchro',
+      action: `${retirees} fiches absentes de HubSpot retirées de la copie`,
+      niveau: 'L2',
+    });
 }
 
 // Removes copies (HubSpot is untouched). Deals, tasks and activities linked to them are kept,
