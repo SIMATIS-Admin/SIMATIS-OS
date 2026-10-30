@@ -1623,3 +1623,61 @@ export const majAtelier = (
   });
 export const supprimerAtelier = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `ateliers-strategie/${encodeURIComponent(id)}`), {});
+
+// Prospection : compteur du jour, statistiques et signatures (voir src/prospection).
+export type StatsProspection = {
+  jour: number;
+  objectif: number;
+  semaine: number;
+  reponses: number;
+  rdv: number;
+  parTheme: Record<string, number>;
+  parTouche: Record<string, number>;
+  relancesFaites: number;
+  relancesRestantes: number;
+  aConfirmer: number;
+};
+export type SignatureProspection = {
+  id: string;
+  nom: string;
+  defaut: boolean;
+  typeMime: string;
+};
+export type VueProspection = {
+  stats: StatsProspection;
+  signatures: SignatureProspection[];
+  recentes: unknown[];
+};
+export const fetchProspection = (slug: string) =>
+  getJson<VueProspection>(inst(slug, 'prospection'));
+export const reglerObjectifProspection = (slug: string, objectif: number) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, 'prospection/objectif'), { objectif });
+export type ImageSignature = { typeMime: string; imageBase64: string };
+export const ajouterSignatureProspection = (
+  slug: string,
+  signature: ImageSignature & { nom: string },
+) => sendJson<SignatureProspection>('POST', inst(slug, 'prospection/signatures'), signature);
+export const modifierSignatureProspection = (
+  slug: string,
+  id: string,
+  champs: { nom?: string; defaut?: boolean },
+) =>
+  sendJson<{ ok: true }>(
+    'PATCH',
+    inst(slug, `prospection/signatures/${encodeURIComponent(id)}`),
+    champs,
+  );
+export const remplacerImageSignature = (slug: string, id: string, image: ImageSignature) =>
+  sendJson<{ ok: true }>(
+    'PUT',
+    inst(slug, `prospection/signatures/${encodeURIComponent(id)}/image`),
+    image,
+  );
+export const supprimerSignatureProspection = (slug: string, id: string) =>
+  sendJson<{ ok: true }>(
+    'DELETE',
+    inst(slug, `prospection/signatures/${encodeURIComponent(id)}`),
+    {},
+  );
+export const urlImageSignature = (slug: string, id: string) =>
+  inst(slug, `prospection/signatures/${encodeURIComponent(id)}/image`);
