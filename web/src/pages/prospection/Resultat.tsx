@@ -6,7 +6,7 @@ export function Resultat({
   onRetour,
   onRevenir,
 }: {
-  mode?: 'relance' | 'froid';
+  mode?: 'relance' | 'froid' | 'reponse';
   resultat: ResultatCampagne;
   onRetour: () => void;
   onRevenir: () => void;
@@ -34,13 +34,17 @@ export function Resultat({
   return (
     <div className="panel">
       <div className="panel-h">
-        <h2>Brouillons créés</h2>
+        <h2>{resultat.envoye ? 'Mails envoyés' : 'Brouillons créés'}</h2>
       </div>
       <div className="panel-b">
         <table className="tbl small">
           <tbody>
             <tr>
-              <td>Brouillons créés dans votre messagerie</td>
+              <td>
+                {resultat.envoye
+                  ? 'Mails envoyés depuis votre messagerie'
+                  : 'Brouillons créés dans votre messagerie'}
+              </td>
               <td className="r num">{resultat.brouillons}</td>
             </tr>
             <tr>
@@ -57,7 +61,7 @@ export function Resultat({
               <td>Dossiers clos (sans suivi)</td>
               <td className="r num">{resultat.clos}</td>
             </tr>
-            {mode === 'relance' && (
+            {mode !== 'froid' && (
               <tr>
                 <td>Tâches de relance marquées faites</td>
                 <td className="r num">{resultat.faites}</td>
@@ -72,8 +76,9 @@ export function Resultat({
           </tbody>
         </table>
         <p className="small muted">
-          Ouvrez vos brouillons dans la messagerie, relisez, signez au besoin et envoyez. Le
-          compteur du jour monte quand vos mails sont partis.
+          {resultat.envoye
+            ? 'Le compteur du jour a monté : vos mails sont partis.'
+            : 'Ouvrez vos brouillons dans la messagerie, relisez, signez au besoin et envoyez. Le compteur du jour monte quand vos mails sont partis.'}
         </p>
         <button className="btn primary" onClick={onRetour}>
           Retour à la prospection

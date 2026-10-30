@@ -12,7 +12,10 @@ import { getInstanceBySlug } from '../instances/service.js';
 import { createToken } from '../mcp/tokens.js';
 import { creerCampagneRelance, lireCampagne, reglageParDefaut } from './campagnes.js';
 import { demarrerCampagne } from './redaction.js';
-import { CONSIGNES_FROID, CONSIGNES_REDACTION } from './outils-mcp.js';
+import { CONSIGNES_FROID, CONSIGNES_REDACTION, CONSIGNES_REPONSE } from './outils-mcp.js';
+import { creerCampagneReponse } from './reponses.js';
+import { sujets } from '../inbox/schema.js';
+import { prospectionOccurrences } from './schema.js';
 import { creerCampagneFroid } from './froid.js';
 
 type TextResult = { isError?: boolean; content: { type: string; text: string }[] };
@@ -203,5 +206,48 @@ describe('Outils MCP de rédaction de campagne', () => {
       touche: 1,
     });
     expect(c.brouillons[0]?.creneaux).toHaveLength(3);
+  });
+
+  it('campagne_contexte d’une réponse : consignes de réponse, fil de l’entrée, un seul brouillon', async () => {
+    const [c] = await t.owner.db
+      .insert(contacts)
+      .values({ instanceId, nom: 'Mathis Roussel', email: 'mathis@exemple.test' })
+      .returning({ id: contacts.id });
+    await t.owner.db.insert(prospectionOccurrences).values({
+      instanceId,
+      mode: 'relance',
+      contactId: c!.id,
+      contactNom: 'Mathis Roussel',
+      theme: 'Test de VMA',
+      touche: 2,
+      etat: 'envoye',
+      envoyeAt: new Date(),
+      threadId: '9999aaaabbbbcccc',
+    });
+    const [su] = await t.owner.db
+      .insert(sujets)
+      .values({
+        instanceId,
+        type: 'mail_a_repondre',
+        titre: 'Réponse',
+        origine: 'messagerie',
+        source: 'routine',
+        sourceId: '9999aaaabbbbcccc',
+      })
+      .returning({ id: sujets.id });
+    const id = await withInstance(t.app.db, instanceId, async (tx) => {
+      const r = await creerCampagneReponse(tx, { sujetId: su!.id, reglage: reglageParDefaut() });
+      await demarrerCampagne(tx, r.campagneId);
+      return r.campagneId;
+    });
+    const r = (await call('campagne_contexte', { campagneId: id })).json<{
+      consignes: string;
+      brouillons: { contact: { nom: string }; touche: number; threadId: string }[];
+    }>();
+    expect(r.consignes).toBe(CONSIGNES_REPONSE);
+    expect(r.brouillons).toHaveLength(1);
+    expect(r.brouillons[0]?.contact.nom).toBe('Mathis Roussel');
+    expect(r.brouillons[0]?.touche).toBe(3);
+    expect(r.brouillons[0]?.threadId).toBe('9999aaaabbbbcccc');
   });
 });

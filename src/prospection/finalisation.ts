@@ -1,9 +1,11 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import type { ImageIntegree } from '../connecteurs/google/google.js';
 import { getConnector, writeVia, type ConnexionDeps } from '../connexions/service.js';
 import { CrmIndisponible } from '../crm/service.js';
 import { crmHubspot, createTache, updateTache } from '../crm/taches.js';
+import { taches } from '../crm/schema.js';
+import { canWriteReal } from '../propositions/service.js';
 import type { Database, Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
@@ -141,7 +143,14 @@ export async function finaliserCampagne(
   instance: Instance,
   campagneId: string,
   deps: ConnexionDeps,
+  // `envoi` : les mails partent tout de suite (au lieu de brouillons). Réservé au double verrou ouvert.
+  { envoi = false }: { envoi?: boolean } = {},
 ): Promise<ResultatCampagne> {
+  if (envoi && !canWriteReal(instance, deps.realWrites)) {
+    throw new CampagneInvalide(
+      'Envoi direct fermé : il faut ouvrir les deux verrous (variable du serveur et interrupteur administrateur). Vous pouvez créer les brouillons dans la messagerie.',
+    );
+  }
   return withInstance(db, instance.id, async (tx) => {
     // Le verrou de ligne empêche une seconde finalisation de la même campagne en parallèle.
     const [campagne] = await tx
@@ -157,6 +166,11 @@ export async function finaliserCampagne(
     if (!campagne) throw new CampagneIntrouvable('Campagne introuvable.');
     if (campagne.statut !== 'relecture') {
       throw new CampagneInvalide("Cette campagne n'est pas en relecture.");
+    }
+    if (envoi && campagne.mode === 'reponse') {
+      throw new CampagneInvalide(
+        'Une réponse part toujours en brouillon dans la messagerie : relisez-la et envoyez-la vous-même.',
+      );
     }
     const brouillons = await tx
       .select()
@@ -208,6 +222,7 @@ export async function finaliserCampagne(
     aEtaler.forEach((b, i) => echeanceDe.set(b.id, etalees[i] as string));
 
     const froid = campagne.mode === 'froid';
+    const reponse = campagne.mode === 'reponse';
     const crm = froid ? null : await crmHubspot(tx);
     const resultat: ResultatCampagne = {
       brouillons: 0,
@@ -217,6 +232,7 @@ export async function finaliserCampagne(
       clos: 0,
       faites: 0,
       echecs: 0,
+      envoye: envoi,
     };
 
     for (const b of prets) {
@@ -227,7 +243,7 @@ export async function finaliserCampagne(
           instance,
           'messagerie',
           {
-            op: 'draft.create',
+            op: envoi ? 'message.send' : 'draft.create',
             data: {
               to: b.contactEmail,
               subject: b.objet ?? '',
@@ -257,19 +273,23 @@ export async function finaliserCampagne(
         .update(prospectionBrouillons)
         .set({ etat: 'cree', updatedAt: new Date() })
         .where(eq(prospectionBrouillons.id, b.id));
-      await tx.insert(prospectionOccurrences).values({
-        instanceId: currentInstance,
-        mode: campagne.mode,
-        contactId: b.contactId,
-        baseId: b.baseId,
-        contactNom: b.contactNom,
-        societe: b.societe,
-        theme: themeDe(r.offre),
-        touche: b.touche,
-        etat: 'brouillon',
-        threadId: b.threadId,
-        lot: campagneId,
-      });
+      // Une réponse n'est pas une touche de campagne : ni occurrence, ni compteur du jour.
+      if (!reponse) {
+        await tx.insert(prospectionOccurrences).values({
+          instanceId: currentInstance,
+          mode: campagne.mode === 'froid' ? 'froid' : 'relance',
+          contactId: b.contactId,
+          baseId: b.baseId,
+          contactNom: b.contactNom,
+          societe: b.societe,
+          theme: themeDe(r.offre),
+          touche: b.touche,
+          etat: envoi ? 'envoye' : 'brouillon',
+          ...(envoi ? { envoyeAt: new Date() } : {}),
+          threadId: b.threadId,
+          lot: campagneId,
+        });
+      }
 
       if (froid && b.baseId) {
         // Le contact avance dans la séquence ; « dossier clos » décidé par Marc l'en retire.
@@ -296,6 +316,11 @@ export async function finaliserCampagne(
           });
       }
 
+      if (reponse) {
+        // Le contact a répondu : les relances prévues pour lui n'ont plus lieu d'être.
+        resultat.faites += await cloreSuivisEnAttente(tx, instance, b.contactNom, deps);
+      }
+
       if (b.suiviType === 'clos') {
         resultat.clos += 1;
       } else {
@@ -306,14 +331,21 @@ export async function finaliserCampagne(
         const tache = {
           titre: froid
             ? `Relance à froid (MAIL), touche ${b.touche + 1} : ${b.contactNom}`
-            : `RELANCE de prospection (MAIL) : ${b.contactNom}`,
+            : reponse
+              ? `Suite de la réponse (MAIL) : ${b.contactNom}`
+              : `RELANCE de prospection (MAIL) : ${b.contactNom}`,
           type: 'email' as const,
           echeance: zoned(jour, '09:00', FUSEAU).toISOString(),
           contactId: b.contactId,
         };
         let dansLeCrm = true;
         try {
-          const cree = await createTache(tx, instance, { ...tache, hubspot: crm !== null }, deps);
+          const cree = await createTache(
+            tx,
+            instance,
+            { ...tache, hubspot: crm !== null && (!reponse || !!b.contactId) },
+            deps,
+          );
           if ('simulation' in cree) dansLeCrm = false;
         } catch (e) {
           if (!(e instanceof CrmIndisponible)) throw e;
@@ -343,4 +375,33 @@ export async function finaliserCampagne(
     }
     return resultat;
   });
+}
+
+// Suivis créés par une campagne pour ce contact et pas encore faits : ils sont marqués faits.
+async function cloreSuivisEnAttente(
+  tx: Executor,
+  instance: Instance,
+  contactNom: string,
+  deps: ConnexionDeps,
+): Promise<number> {
+  const enAttente = await tx
+    .select({ id: taches.id, titre: taches.titre })
+    .from(taches)
+    .where(and(eq(taches.instanceId, currentInstance), isNull(taches.faitAt)));
+  const concernees = enAttente.filter(
+    (t) =>
+      t.titre === `RELANCE de prospection (MAIL) : ${contactNom}` ||
+      (t.titre.startsWith('Relance à froid (MAIL), touche ') &&
+        t.titre.endsWith(` : ${contactNom}`)),
+  );
+  let faites = 0;
+  for (const t of concernees) {
+    try {
+      const fait = await updateTache(tx, instance, t.id, { fait: true }, deps);
+      if (fait && !('simulation' in fait)) faites += 1;
+    } catch (e) {
+      if (!(e instanceof CrmIndisponible)) throw e;
+    }
+  }
+  return faites;
 }

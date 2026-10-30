@@ -1708,10 +1708,12 @@ export type ResultatCampagne = {
   clos: number;
   faites: number;
   echecs: number;
+  // Vrai : les mails sont partis ; faux : brouillons créés dans la messagerie.
+  envoye: boolean;
 };
 export type CampagneResume = {
   id: string;
-  mode: 'relance' | 'froid';
+  mode: 'relance' | 'froid' | 'reponse';
   statut: StatutCampagne;
   creeLe: string;
   brouillons: number;
@@ -1723,6 +1725,8 @@ export type VueProspection = {
   recentes: CampagneResume[];
   enCours: string | null;
   froid: { disponibles: number; aRelancer: number };
+  // Les deux verrous d'écriture sont ouverts : « Valider et envoyer » est proposé.
+  envoiPossible: boolean;
 };
 export type StatutCampagne = 'redaction' | 'relecture' | 'terminee' | 'erreur';
 export type EtatBrouillon = 'a_rediger' | 'pret' | 'a_verifier' | 'ecarte' | 'cree';
@@ -1742,7 +1746,7 @@ export type BrouillonCampagne = {
 };
 export type CampagneProspection = {
   id: string;
-  mode: 'relance' | 'froid';
+  mode: 'relance' | 'froid' | 'reponse';
   statut: StatutCampagne;
   reglage: ReglageCampagne;
   erreur: string | null;
@@ -1828,11 +1832,15 @@ export const modifierBrouillonCampagne = (
     ),
     champs,
   );
-export const finaliserCampagne = (slug: string, id: string) =>
+export const finaliserCampagne = (
+  slug: string,
+  id: string,
+  mode: 'brouillons' | 'envoi' = 'brouillons',
+) =>
   sendJson<ResultatCampagne>(
     'POST',
     inst(slug, `prospection/campagnes/${encodeURIComponent(id)}/finaliser`),
-    {},
+    { mode },
   );
 export const relancerRedaction = (slug: string, id: string) =>
   sendJson<{ ok: true }>(
@@ -1878,3 +1886,24 @@ export const confirmerEpuisesProspection = (slug: string, ids: string[]) =>
   sendJson<{ modifies: number }>('POST', inst(slug, 'prospection/epuises/confirmer'), { ids });
 export const garderContactsProspection = (slug: string, ids: string[]) =>
   sendJson<{ modifies: number }>('POST', inst(slug, 'prospection/epuises/garder'), { ids });
+
+// Réponse d'un contact à une campagne de prospection, reconnue dans l'Inbox.
+export type ReponseCampagne = {
+  occurrenceId: string;
+  mode: 'relance' | 'froid';
+  contactNom: string;
+  societe: string | null;
+  theme: string;
+  touche: number;
+  etat: string;
+};
+export const fetchReponseCampagne = (slug: string, sujetId: string) =>
+  getJson<{ reponse: ReponseCampagne | null }>(
+    inst(slug, `prospection/reponses/${encodeURIComponent(sujetId)}`),
+  );
+export const redigerReponseCampagne = (slug: string, sujetId: string) =>
+  sendJson<{ campagneId: string }>(
+    'POST',
+    inst(slug, `prospection/reponses/${encodeURIComponent(sujetId)}/rediger`),
+    {},
+  );

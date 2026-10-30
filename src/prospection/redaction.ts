@@ -117,7 +117,8 @@ export async function deposerBrouillons(
       .set({
         objet: it.objet.trim().slice(0, 300),
         corps: nettoyerCorps(it.corps),
-        threadId: it.threadId ?? null,
+        // Sans fil renvoyé par Claude, celui de l'entrée d'origine (réponse) est conservé.
+        ...(it.threadId ? { threadId: it.threadId } : {}),
         etat: it.aVerifier ? 'a_verifier' : 'pret',
         note: it.aVerifier ?? null,
         updatedAt: new Date(),
