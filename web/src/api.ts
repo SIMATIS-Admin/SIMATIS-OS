@@ -1643,10 +1643,70 @@ export type SignatureProspection = {
   defaut: boolean;
   typeMime: string;
 };
+export type OffreCampagne = 'vma' | 'diagnostic' | 'les-deux' | 'kairos';
+export type ReglageCampagne = {
+  offre: OffreCampagne;
+  creneaux: boolean;
+  signatureId: string | null;
+  suivi: { type: 'courte' | 'longue' | 'date'; date?: string };
+  touchesMax: number;
+};
+export type ResultatCampagne = {
+  brouillons: number;
+  simulation: boolean;
+  suivisCrees: number;
+  suivisNonCrees: number;
+  clos: number;
+  faites: number;
+  echecs: number;
+};
+export type CampagneResume = {
+  id: string;
+  mode: 'relance' | 'froid';
+  statut: StatutCampagne;
+  creeLe: string;
+  brouillons: number;
+  resultat: ResultatCampagne | null;
+};
 export type VueProspection = {
   stats: StatsProspection;
   signatures: SignatureProspection[];
-  recentes: unknown[];
+  recentes: CampagneResume[];
+  enCours: string | null;
+};
+export type StatutCampagne = 'redaction' | 'relecture' | 'terminee' | 'erreur';
+export type EtatBrouillon = 'a_rediger' | 'pret' | 'a_verifier' | 'ecarte' | 'cree';
+export type SuiviBrouillon = 'delai' | 'citee' | 'clos';
+export type BrouillonCampagne = {
+  id: string;
+  contactNom: string;
+  contactEmail: string;
+  societe: string | null;
+  touche: number;
+  etat: EtatBrouillon;
+  objet: string | null;
+  corps: string | null;
+  note: string | null;
+  suiviType: SuiviBrouillon;
+  suiviDate: string | null;
+};
+export type CampagneProspection = {
+  id: string;
+  mode: 'relance' | 'froid';
+  statut: StatutCampagne;
+  reglage: ReglageCampagne;
+  erreur: string | null;
+  resultat: ResultatCampagne | null;
+  brouillons: BrouillonCampagne[];
+};
+export type TacheRelance = {
+  id: string;
+  titre: string;
+  contactNom: string | null;
+  societe: string | null;
+  echeance: string | null;
+  touche: number;
+  utilisable: boolean;
 };
 export const fetchProspection = (slug: string) =>
   getJson<VueProspection>(inst(slug, 'prospection'));
@@ -1681,3 +1741,47 @@ export const supprimerSignatureProspection = (slug: string, id: string) =>
   );
 export const urlImageSignature = (slug: string, id: string) =>
   inst(slug, `prospection/signatures/${encodeURIComponent(id)}/image`);
+export const fetchTachesRelance = (slug: string) =>
+  getJson<TacheRelance[]>(inst(slug, 'prospection/taches-relance'));
+export const creerCampagneRelance = (slug: string, tacheIds: string[], reglage: ReglageCampagne) =>
+  sendJson<{ campagneId: string; refusees: { tacheId: string; raison: string }[] }>(
+    'POST',
+    inst(slug, 'prospection/campagnes'),
+    { mode: 'relance', tacheIds, reglage },
+  );
+export const fetchCampagne = (slug: string, id: string) =>
+  getJson<CampagneProspection>(inst(slug, `prospection/campagnes/${encodeURIComponent(id)}`));
+export const modifierBrouillonCampagne = (
+  slug: string,
+  campagneId: string,
+  brouillonId: string,
+  champs: {
+    objet?: string;
+    corps?: string;
+    etat?: 'pret' | 'ecarte';
+    suiviType?: SuiviBrouillon;
+    suiviDate?: string | null;
+  },
+) =>
+  sendJson<BrouillonCampagne>(
+    'PATCH',
+    inst(
+      slug,
+      `prospection/campagnes/${encodeURIComponent(campagneId)}/brouillons/${encodeURIComponent(brouillonId)}`,
+    ),
+    champs,
+  );
+export const finaliserCampagne = (slug: string, id: string) =>
+  sendJson<ResultatCampagne>(
+    'POST',
+    inst(slug, `prospection/campagnes/${encodeURIComponent(id)}/finaliser`),
+    {},
+  );
+export const relancerRedaction = (slug: string, id: string) =>
+  sendJson<{ ok: true }>(
+    'POST',
+    inst(slug, `prospection/campagnes/${encodeURIComponent(id)}/relancer`),
+    {},
+  );
+export const rapprocherEnvoisProspection = (slug: string) =>
+  sendJson<{ envoyes: number }>('POST', inst(slug, 'prospection/rapprocher'), {});
