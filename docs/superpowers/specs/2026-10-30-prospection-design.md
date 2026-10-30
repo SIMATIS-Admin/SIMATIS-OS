@@ -56,7 +56,7 @@ Les cas 1 et 2 sont le même mécanisme (« Relancer des tâches »). Le cas 3 e
 - Le droit Gmail existant (`gmail.compose`) couvre brouillons et envoi.
 - Deux boutons en relecture : **« Mettre en brouillons Gmail »** (toujours disponible) et **« Valider et envoyer »**, actif seulement quand les deux verrous de la règle « écritures vers un système tiers » sont ouverts (variable serveur et interrupteur admin). Par défaut, simulation.
 - Chaque lot envoyé est tracé dans le journal d'audit.
-- Signatures : trois images fournies par Marc, rangées dans l'OS (hors dépôt), intégrées au mail en pièce inline.
+- Signatures : des images fournies par Marc, rangées dans l'OS (hors dépôt), intégrées au mail en pièce inline. Marc en a aujourd'hui deux (Simatis seul ; Simatis et Kairos, avec l'adresse Kairos) et doit pouvoir **en ajouter, renommer, remplacer ou supprimer facilement** : une rubrique « Signatures » dans Paramètres (nom, image, signature par défaut), qui alimente le menu de choix de chaque campagne. Le menu de la maquette affiche donc les signatures existantes, plus « Aucune ».
 
 ## Données fictives
 
