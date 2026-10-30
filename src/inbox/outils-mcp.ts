@@ -237,7 +237,7 @@ registerTool({
 registerTool({
   name: 'deposer_reunion_wispr',
   description:
-    "Dépose dans l'Inbox une réunion lue dans Wispr Flow (titre, date, participants, résumé). Une réunion déjà déposée n'est jamais recréée (« existant »). Dans un mandat, une réunion sans aucun participant connu du CRM est ignorée (« ignore ») : ce n'est pas une erreur, la réunion appartient à un autre mandat. Si une entrée « compte rendu » en attente correspond à la même réunion (voir comptes_rendus_en_attente), passe son id en sujetExistantId : la réunion s'y relie au lieu de créer une autre entrée.",
+    "Dépose dans l'Inbox une réunion lue dans Wispr Flow (titre, date, participants, résumé). Une réunion déjà déposée n'est jamais recréée (« existant »). Dans un mandat, une réunion sans aucun participant connu du CRM est ignorée (« ignore ») : ce n'est pas une erreur, la réunion appartient à un autre mandat. Si une entrée « compte rendu » en attente correspond à la même réunion (voir comptes_rendus_en_attente), passe son id en sujetExistantId : la réunion s'y relie au lieu de créer une autre entrée. L'OS relie aussi seul une réunion à l'entrée d'un rendez-vous de même titre et de même heure, même déjà traitée.",
   input: z.object({
     wisprId: z
       .string()

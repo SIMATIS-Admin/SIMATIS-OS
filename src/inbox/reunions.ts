@@ -1,5 +1,5 @@
-import { and, eq, isNull, notExists } from 'drizzle-orm';
-import { contacts, entreprises } from '../crm/schema.js';
+import { and, eq, gte, isNull, like, lte, ne, notExists, sql } from 'drizzle-orm';
+import { contacts, entreprises, rendezVous } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { deposerSujet } from './depot.js';
@@ -20,6 +20,38 @@ export type DepotReunion = {
   entrepriseId?: string | null;
   // Entrée « compte rendu » déjà dans l'Inbox : la réunion s'y relie au lieu d'en créer une autre.
   sujetExistantId?: string | null;
+};
+
+// Même marge que pour proposer le rendez-vous d'une entrée (compte-rendu.ts).
+const PROCHE_MS = 3 * 3_600_000;
+
+// L'entrée « compte rendu » déjà créée depuis l'agenda pour cette réunion, traitée ou non : même
+// titre, et un rendez-vous de l'OS à l'heure de la réunion. Sans elle, une réunion Wispr Flow
+// arrivée après le traitement de l'entrée en créerait une seconde.
+const sujetDuRendezVous = async (tx: Tx, titre: string, debutAt: Date): Promise<string | null> => {
+  const [s] = await tx
+    .select({ id: sujets.id })
+    .from(sujets)
+    .innerJoin(
+      rendezVous,
+      and(
+        eq(rendezVous.instanceId, sujets.instanceId),
+        sql`${sujets.sourceId} = 'agenda:' || ${rendezVous.eventId}`,
+      ),
+    )
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.type, 'compte_rendu'),
+        like(sujets.sourceId, 'agenda:%'),
+        ne(rendezVous.statut, 'ignore'),
+        sql`lower(btrim(${rendezVous.titre})) = lower(btrim(${titre}))`,
+        gte(rendezVous.debut, new Date(debutAt.getTime() - PROCHE_MS)),
+        lte(rendezVous.debut, new Date(debutAt.getTime() + PROCHE_MS)),
+      ),
+    )
+    .limit(1);
+  return s?.id ?? null;
 };
 
 const reunionPar = async (tx: Tx, wisprId: string) => {
@@ -55,6 +87,7 @@ export async function deposerReunion(
       );
     sujetId = cible?.id ?? null;
   }
+  sujetId ??= await sujetDuRendezVous(tx, r.titre, r.debutAt);
   const relie = sujetId !== null;
   if (!sujetId) {
     sujetId = (
