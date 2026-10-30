@@ -1435,9 +1435,18 @@ textarea.input {
   padding: 10px 12px;
   margin-bottom: 8px;
   cursor: grab;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .card:hover {
   border-color: var(--ink-3);
+  box-shadow: 0 2px 6px rgb(12 55 107 / 0.08);
+}
+/* Clavier : une carte sélectionnée doit se voir */
+.card:focus-visible {
+  outline: 2px solid var(--navy-3);
+  outline-offset: 2px;
 }
 .card .soc {
   font-weight: 600;
@@ -3018,7 +3027,8 @@ textarea.input {
 /* Pipeline à la Pipedrive : totaux, personne, ajout */
 .pipe-totaux {
   display: flex;
-  gap: 18px;
+  flex-wrap: wrap;
+  gap: 4px 18px;
   align-items: baseline;
   margin: 0 0 10px;
   font-size: 13px;
@@ -3119,7 +3129,8 @@ tr.sel {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
+  flex: 1 1 280px;
+  min-width: 0;
   justify-content: flex-end;
 }
 .barre-recherche {
@@ -3127,6 +3138,8 @@ tr.sel {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 180px;
+  min-width: 0;
   width: min(420px, 100%);
 }
 .barre-recherche > svg {
