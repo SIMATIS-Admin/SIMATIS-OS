@@ -44,6 +44,7 @@
   .g-chips-aff .chip.on { background: var(--teal); border-color: var(--teal); }
   .g-effet { background: var(--line-2); border-radius: var(--r-m); padding: 12px 14px; margin: 4px 0 14px; }
   .g-effet b { font: 600 18px var(--f-num); }
+  .g-seuil { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); font-size: 15px; }
   .g-mini { display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 8px; }
   .g-mini span { flex: 1; background: var(--navy-3); border-radius: 2px 2px 0 0; min-height: 2px; }
   .g-mini span.zero { background: var(--line); }
@@ -115,7 +116,7 @@
 <script>
 /* ---------- Données fictives ---------- */
 const AUJOURDHUI = { y: 2026, m: 11, d: 12 };
-const SOLDE_OUVERTURE = 18400, SEUIL_ALERTE = 6000;
+const SOLDE_OUVERTURE = 18400;
 const MANDATS = ['Mandat Alpha', 'Mandat Bêta', 'Mandat Gamma'];
 const AFFECTATIONS = ['SIMATIS', 'KAIROS', ...MANDATS];
 const CATEGORIES = ['Outils et abonnements', 'Télécom', 'Locaux', 'Assurances', 'Déplacements', 'Honoraires', 'Marketing', 'Autres'];
@@ -200,7 +201,7 @@ function tresorerie(nbMois, scenario) {
 }
 
 /* ---------- État de l'écran ---------- */
-const etat = { onglet: 'vue', y: 2026, m: 11, filtre: 'toutes', recherche: '', aff: '', refactSeul: false, horizon: 12, scenario: 'central' };
+const etat = { onglet: 'vue', y: 2026, m: 11, filtre: 'toutes', recherche: '', aff: '', refactSeul: false, horizon: 12, scenario: 'central', seuil: { mode: 'montant', valeur: null } };
 const ONGLETS = [
   ['vue', "Vue d'ensemble"], ['depenses', 'Dépenses'], ['revenus', 'Revenus & facturation'],
   ['tresorerie', 'Trésorerie'], ['ik', 'IK & compte associé'], ['tva', 'TVA'],
@@ -251,7 +252,7 @@ function toast(t) { $('#toast').innerHTML = `<div class="toast"><span class="dot
 /* ---------- Vue d'ensemble ---------- */
 function graphique(pts, seuil) {
   const W = 760, H = 220, g = 46, d = 12;
-  const vals = pts.map((p) => p.solde).concat([seuil, 0]);
+  const vals = pts.map((p) => p.solde).concat(seuil == null ? [0] : [seuil, 0]);
   const max = Math.max(...vals) * 1.08, min = Math.min(...vals, 0) * 1.08;
   const x = (i) => g + (pts.length === 1 ? 0 : (i * (W - g - d)) / (pts.length - 1));
   const y = (v) => d + ((max - v) / (max - min)) * (H - d - 26);
@@ -262,10 +263,15 @@ function graphique(pts, seuil) {
   const axes = [0, 0.5, 1].map((f) => { const v = min + (max - min) * f; return `<line x1="${g}" x2="${W - d}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line-2)"/><text x="${g - 6}" y="${y(v) + 4}" text-anchor="end">${Math.round(v / 1000)}${NB}k</text>`; }).join('');
   return `<svg class="g-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trésorerie projetée, fin de mois">
     ${axes}
-    <line x1="${g}" x2="${W - d}" y1="${y(seuil)}" y2="${y(seuil)}" stroke="var(--amber)" stroke-dasharray="5 4"/><text x="${W - d}" y="${y(seuil) - 5}" text-anchor="end" style="fill:var(--amber)">seuil d'alerte ${Math.round(seuil / 1000)}${NB}k</text>
+    ${seuil == null ? '' : `<line x1="${g}" x2="${W - d}" y1="${y(seuil)}" y2="${y(seuil)}" stroke="var(--amber)" stroke-dasharray="5 4"/><text x="${W - d}" y="${y(seuil) - 5}" text-anchor="end" style="fill:var(--amber)">seuil d'alerte ${eur(Math.round(seuil))}</text>`}
     <path d="${ligne}" fill="none" stroke="var(--navy)" stroke-width="2.2"/>
-    ${pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.solde)}" r="${i === iMin ? 5 : 3}" fill="${p.solde < seuil ? 'var(--red)' : 'var(--navy)'}"><title>${MOIS[p.m - 1]} ${p.y} : ${eur(Math.round(p.solde))}</title></circle>${i % pas === 0 ? `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${MOIS[p.m - 1].slice(0, 3)}${pts.length > 12 ? ' ' + String(p.y).slice(2) : ''}</text>` : ''}`).join('')}
+    ${pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.solde)}" r="${i === iMin ? 5 : 3}" fill="${seuil != null && p.solde < seuil ? 'var(--red)' : 'var(--navy)'}"><title>${MOIS[p.m - 1]} ${p.y} : ${eur(Math.round(p.solde))}</title></circle>${i % pas === 0 ? `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${MOIS[p.m - 1].slice(0, 3)}${pts.length > 12 ? ' ' + String(p.y).slice(2) : ''}</text>` : ''}`).join('')}
   </svg>`;
+}
+function seuilMontant(recTotal) {
+  const v = etat.seuil.valeur;
+  if (v == null || !(v > 0)) return null;
+  return etat.seuil.mode === 'mois' ? v * recTotal : v;
 }
 function vueEnsemble() {
   const occ = occMois(etat.y, etat.m);
@@ -280,6 +286,7 @@ function vueEnsemble() {
   const factTotal = FACTURES.reduce((t, f) => t + f.ttc, 0), retard = FACTURES.filter((f) => f.retard).length;
   const pts = tresorerie(etat.horizon, etat.scenario);
   const mini = pts.reduce((a, p) => (p.solde < a.solde ? p : a), pts[0]);
+  const seuil = seuilMontant(recTotal);
   const refLignes = occ.flatMap((o) => o.e.refact);
   const somme = (st) => refLignes.filter((r) => r.etat === st).reduce((t, r) => t + r.ttc, 0);
   const catRec = {};
@@ -309,8 +316,12 @@ function vueEnsemble() {
           <div class="seg" role="group" aria-label="Horizon">${[1, 3, 6, 12, 24].map((h) => `<button class="${etat.horizon === h ? 'on' : ''}" data-horizon="${h}">${h} m</button>`).join('')}</div>
           <div class="seg adaptable" role="group" aria-label="Scénario">${[['securise', 'Sécurisé'], ['central', 'Central'], ['ambitieux', 'Ambitieux']].map(([k, l]) => `<button class="${etat.scenario === k ? 'on' : ''}" data-scenario="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div>
         </div>
-        ${graphique(pts, SEUIL_ALERTE)}
-        <div class="small muted" style="margin-top:6px">Minimum projeté : <b class="num" style="color:${mini.solde < SEUIL_ALERTE ? 'var(--red)' : 'inherit'}">${eur(Math.round(mini.solde))}</b> en ${MOIS[mini.m - 1]} ${mini.y}${mini.solde < SEUIL_ALERTE ? ' · sous le seuil d’alerte' : ''}</div>
+        ${graphique(pts, seuil)}
+        <div class="small muted" style="margin-top:6px">Minimum projeté : <b class="num" style="color:${seuil != null && mini.solde < seuil ? 'var(--red)' : 'inherit'}">${eur(Math.round(mini.solde))}</b> en ${MOIS[mini.m - 1]} ${mini.y}${seuil != null && mini.solde < seuil ? ' · sous le seuil d’alerte' : ''}</div>
+        <div class="g-seuil"><span><b>Seuil d'alerte</b> (vous le fixez)</span>
+          <div class="seg adaptable" role="group" aria-label="Mode du seuil">${[['montant', 'Montant en €'], ['mois', 'Mois de charges']].map(([k, l]) => `<button class="${etat.seuil.mode === k ? 'on' : ''}" data-seuil-mode="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div>
+          <input class="input num" id="seuil-val" inputmode="decimal" style="width:110px" placeholder="${etat.seuil.mode === 'montant' ? 'ex. 5 000' : 'ex. 2'}" value="${etat.seuil.valeur ?? ''}" aria-label="Valeur du seuil d'alerte">
+          ${etat.seuil.valeur == null ? '<span class="small muted">Aucune alerte tant qu\u2019il n\u2019est pas défini.</span>' : `<span class="small muted">${etat.seuil.mode === 'mois' ? `= ${eur(Math.round(seuil))} avec vos charges récurrentes actuelles` : ''}</span><button class="btn ghost sm" id="seuil-x" type="button">Effacer</button>`}</div>
       </div>
     </div>
     <div class="stack">
@@ -409,6 +420,10 @@ function rendre() {
   if (q) q.oninput = () => { etat.recherche = q.value; const pos = q.selectionStart; rendre(); const n = $('#f-q'); n.focus(); n.setSelectionRange(pos, pos); };
   const a = $('#f-aff'); if (a) a.onchange = () => { etat.aff = a.value; rendre(); };
   const r = $('#f-ref'); if (r) r.onchange = () => { etat.refactSeul = r.checked; rendre(); };
+  const sv = $('#seuil-val');
+  if (sv) sv.onchange = () => { const n = Number(sv.value.replace(/\s/g, '').replace(',', '.')); etat.seuil.valeur = n > 0 ? n : null; rendre(); };
+  const sx = $('#seuil-x'); if (sx) sx.onclick = () => { etat.seuil.valeur = null; rendre(); };
+  document.querySelectorAll('[data-seuil-mode]').forEach((b) => (b.onclick = () => { etat.seuil = { mode: b.dataset.seuilMode, valeur: null }; rendre(); }));
   const v = $('#voir-rec'); if (v) v.onclick = () => { etat.onglet = 'depenses'; etat.filtre = 'recurrentes'; rendre(); };
 }
 
