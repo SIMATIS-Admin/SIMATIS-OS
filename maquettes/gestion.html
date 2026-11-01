@@ -17,8 +17,7 @@
   .g-periode b { min-width: 118px; text-align: center; font-weight: 600; }
   .g-niveaux { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
   .g-niveaux .kpi .v { font-size: 24px; }
-  .g-niveaux .kpi { display: flex; flex-direction: column; gap: 2px; }
-  .g-duo { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 14px; }
+    .g-duo { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 14px; }
   .g-duo span { display: inline-flex; align-items: center; gap: 5px; }
   .g-duo i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--teal); }
   .g-duo i.prev { background: none; border: 2px solid var(--ink-3); }
@@ -45,6 +44,30 @@
   .g-effet { background: var(--line-2); border-radius: var(--r-m); padding: 12px 14px; margin: 4px 0 14px; }
   .g-effet b { font: 600 18px var(--f-num); }
   .g-seuil { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); font-size: 15px; }
+  .g-ic { width: 22px; height: 22px; flex: none; color: var(--teal); }
+  .g-niveaux .kpi { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; }
+  .g-niveaux .kpi > div { display: flex; flex-direction: column; gap: 2px; min-height: 100%; flex: 1; min-width: 0; }
+  .g-legende { display: inline-flex; gap: 4px; }
+  .g-legende button { border: 0; background: none; cursor: pointer; font: 500 14px var(--f-body); color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 99px; }
+  .g-legende button.on { background: var(--line-2); color: var(--ink); font-weight: 700; }
+  .g-legende i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .g-note { display: flex; gap: 8px; align-items: flex-start; background: var(--line-2); border-radius: var(--r-s); padding: 8px 12px; font-size: 14px; color: var(--ink-2); margin-top: 8px; }
+  .g-note svg { width: 16px; height: 16px; flex: none; margin-top: 3px; }
+  .g-revenus { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .g-anneau { width: 150px; height: 150px; flex: none; }
+  .g-liste-mandats { flex: 1; min-width: 200px; }
+  .g-liste-mandats > div { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-2); }
+  .g-liste-mandats > div:last-child { border-bottom: 0; }
+  .g-liste-mandats > div > i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .g-liste-mandats > div > div { flex: 1; }
+  .g-pied { display: flex; justify-content: space-between; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line-2); font-size: 15px; }
+  .g-ik { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 10px; border: 1px solid var(--line); border-radius: var(--r-s); padding: 10px 12px; }
+  .g-ik > div { display: flex; flex-direction: column; }
+  .g-ik-est { background: var(--line-2); border-radius: var(--r-s); padding: 6px 10px; margin: -4px 0; }
+  .g-ligne .g-ic { width: 15px; height: 15px; color: var(--ink-3); vertical-align: -2px; margin-right: 6px; }
+  .g-tva { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; padding: 14px 18px; margin-top: 18px; }
+  .g-tva > div { display: flex; flex-direction: column; }
+  .g-tva > a { margin-left: auto; }
   .g-mini { display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 8px; }
   .g-mini span { flex: 1; background: var(--navy-3); border-radius: 2px 2px 0 0; min-height: 2px; }
   .g-mini span.zero { background: var(--line); }
@@ -139,8 +162,8 @@ let depenses = [
 const REVENUS = [
   { libelle: 'Abonnement', mandat: 'Mandat Alpha', ttc: 1800, debut: [2026, 11], cadence: 'mensuelle', certitude: 'certain', prob: 1 },
   { libelle: 'Abonnement', mandat: 'Mandat Bêta', ttc: 1200, debut: [2026, 11], cadence: 'mensuelle', certitude: 'certain', prob: 1 },
-  { libelle: 'Commission', mandat: 'Mandat Alpha', ttc: 3000, debut: [2027, 1], cadence: 'ponctuelle', certitude: 'probable', prob: 0.6 },
-  { libelle: 'Commission', mandat: 'Mandat Gamma', ttc: 4500, debut: [2027, 3], cadence: 'ponctuelle', certitude: 'hypothese', prob: 0.3 },
+  { libelle: 'Commission', mandat: 'Mandat Alpha', ttc: 6000, debut: [2027, 1], cadence: 'ponctuelle', certitude: 'probable', prob: 0.6 },
+  { libelle: 'Commission', mandat: 'Mandat Gamma', ttc: 9000, debut: [2027, 3], cadence: 'ponctuelle', certitude: 'hypothese', prob: 0.3 },
 ];
 const FACTURES = [
   { libelle: 'Abonnement novembre', mandat: 'Mandat Alpha', ttc: 1800, echeance: '2026-11-05', retard: true },
@@ -250,28 +273,50 @@ document.addEventListener('keydown', (ev) => {
 function toast(t) { $('#toast').innerHTML = `<div class="toast"><span class="dot"></span>${esc(t)}</div>`; clearTimeout(toast.t); toast.t = setTimeout(() => ($('#toast').innerHTML = ''), 2600); }
 
 /* ---------- Vue d'ensemble ---------- */
-function graphique(pts, seuil) {
-  const W = 760, H = 220, g = 46, d = 12;
-  const vals = pts.map((p) => p.solde).concat(seuil == null ? [0] : [seuil, 0]);
+const ICO = {
+  depenses: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>',
+  recurrent: '<path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/><path d="M8 16H3v5"/>',
+  revenus: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
+  tresorerie: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  tva: '<path d="M19 5L5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  voiture: '<path d="M3 17h18v-4l-2-6H5l-2 6z"/><path d="M3 13h18"/><circle cx="7.5" cy="17" r="1.5"/><circle cx="16.5" cy="17" r="1.5"/>',
+  pin: '<path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+};
+const ic = (n) => `<svg class="g-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICO[n]}</svg>`;
+const SCENARIOS = [['securise', 'Prudent', 'var(--ink-3)'], ['central', 'Central', 'var(--navy)'], ['ambitieux', 'Ambitieux', 'var(--teal)']];
+
+function graphique(series, seuil, sel) {
+  const W = 760, H = 230, g = 48, d = 14;
+  const central = series[sel];
+  const vals = Object.values(series).flat().map((p) => p.solde).concat(seuil == null ? [0] : [seuil, 0]);
   const max = Math.max(...vals) * 1.08, min = Math.min(...vals, 0) * 1.08;
-  const x = (i) => g + (pts.length === 1 ? 0 : (i * (W - g - d)) / (pts.length - 1));
-  const y = (v) => d + ((max - v) / (max - min)) * (H - d - 26);
-  const ligne = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.solde).toFixed(1)}`).join(' ');
-  const mini = pts.reduce((a, p) => (p.solde < a.solde ? p : a), pts[0]);
-  const iMin = pts.indexOf(mini);
-  const pas = Math.ceil(pts.length / 12);
-  const axes = [0, 0.5, 1].map((f) => { const v = min + (max - min) * f; return `<line x1="${g}" x2="${W - d}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line-2)"/><text x="${g - 6}" y="${y(v) + 4}" text-anchor="end">${Math.round(v / 1000)}${NB}k</text>`; }).join('');
+  const n = central.length;
+  const x = (i) => g + (n === 1 ? 0 : (i * (W - g - d)) / (n - 1));
+  const y = (v) => d + ((max - v) / (max - min)) * (H - d - 28);
+  const chemin = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.solde).toFixed(1)}`).join(' ');
+  const mini = central.reduce((a, p) => (p.solde < a.solde ? p : a), central[0]);
+  const iMin = central.indexOf(mini);
+  const pas = Math.ceil(n / 12);
+  const axes = [0, 0.25, 0.5, 0.75, 1].map((f) => { const v = min + (max - min) * f; return `<line x1="${g}" x2="${W - d}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line-2)"/><text x="${g - 6}" y="${y(v) + 4}" text-anchor="end">${Math.round(v / 1000)}${NB}k</text>`; }).join('');
+  const aire = `${chemin(central)} L${x(n - 1)},${y(min)} L${x(0)},${y(min)} Z`;
   return `<svg class="g-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trésorerie projetée, fin de mois">
     ${axes}
+    <path d="${aire}" fill="${SCENARIOS.find((s) => s[0] === sel)[2]}" opacity=".10"/>
+    ${SCENARIOS.map(([k, , c]) => `<path d="${chemin(series[k])}" fill="none" stroke="${c}" stroke-width="${k === sel ? 2.6 : 1.6}" ${k === 'ambitieux' ? 'stroke-dasharray="2 5" stroke-linecap="round"' : ''} opacity="${k === sel ? 1 : 0.7}"/>`).join('')}
     ${seuil == null ? '' : `<line x1="${g}" x2="${W - d}" y1="${y(seuil)}" y2="${y(seuil)}" stroke="var(--amber)" stroke-dasharray="5 4"/><text x="${W - d}" y="${y(seuil) - 5}" text-anchor="end" style="fill:var(--amber)">seuil d'alerte ${eur(Math.round(seuil))}</text>`}
-    <path d="${ligne}" fill="none" stroke="var(--navy)" stroke-width="2.2"/>
-    ${pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.solde)}" r="${i === iMin ? 5 : 3}" fill="${seuil != null && p.solde < seuil ? 'var(--red)' : 'var(--navy)'}"><title>${MOIS[p.m - 1]} ${p.y} : ${eur(Math.round(p.solde))}</title></circle>${i % pas === 0 ? `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${MOIS[p.m - 1].slice(0, 3)}${pts.length > 12 ? ' ' + String(p.y).slice(2) : ''}</text>` : ''}`).join('')}
+    ${central.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.solde)}" r="${i === iMin ? 5 : 3.2}" fill="${seuil != null && p.solde < seuil ? 'var(--red)' : 'var(--white)'}" stroke="${seuil != null && p.solde < seuil ? 'var(--red)' : 'var(--navy)'}" stroke-width="2"><title>${MOIS[p.m - 1]} ${p.y} : ${eur(Math.round(p.solde))}</title></circle>${i % pas === 0 ? `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${MOIS[p.m - 1].slice(0, 4)}.${n > 12 ? ' ' + String(p.y).slice(2) : ''}</text>` : ''}`).join('')}
   </svg>`;
 }
 function seuilMontant(recTotal) {
   const v = etat.seuil.valeur;
   if (v == null || !(v > 0)) return null;
   return etat.seuil.mode === 'mois' ? v * recTotal : v;
+}
+function anneau(parts) {
+  const total = parts.reduce((t, p) => t + p.v, 0) || 1, R = 52, C = 2 * Math.PI * R;
+  let cumul = 0;
+  const arcs = parts.map((p) => { const l = (p.v / total) * C; const a = `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${p.c}" stroke-width="22" stroke-dasharray="${l} ${C - l}" stroke-dashoffset="${-cumul}" transform="rotate(-90 70 70)"><title>${esc(p.l)} : ${eur(p.v)}</title></circle>`; cumul += l; return a; }).join('');
+  return `<svg viewBox="0 0 140 140" class="g-anneau" role="img" aria-label="Revenus par mandat">${arcs}<text x="70" y="68" text-anchor="middle" style="font:600 15px var(--f-num);fill:var(--ink)">${eur(total)}</text><text x="70" y="86" text-anchor="middle" style="font:400 11px var(--f-body);fill:var(--ink-3)">/ mois</text></svg>`;
 }
 function vueEnsemble() {
   const occ = occMois(etat.y, etat.m);
@@ -281,66 +326,70 @@ function vueEnsemble() {
   const recTotal = rec.reduce((t, e) => t + normMensuel(e), 0);
   const recAVenir = rec.filter((e) => e.nature === 'prevue').length;
   const cert = revenusMois(etat.y, etat.m, 'securise'), prob = revenusMois(etat.y, etat.m, 'central') - cert;
-  const tres = tresorerie(Math.max(1, idx(etat.y, etat.m) - idx(2026, 11) + 1), 'central');
-  const finMois = tres[tres.length - 1].solde;
+  const finMois = tresorerie(Math.max(1, idx(etat.y, etat.m) - idx(2026, 11) + 1), 'central').slice(-1)[0].solde;
   const factTotal = FACTURES.reduce((t, f) => t + f.ttc, 0), retard = FACTURES.filter((f) => f.retard).length;
-  const pts = tresorerie(etat.horizon, etat.scenario);
+  const series = Object.fromEntries(SCENARIOS.map(([k]) => [k, tresorerie(etat.horizon, k)]));
+  const pts = series[etat.scenario];
   const mini = pts.reduce((a, p) => (p.solde < a.solde ? p : a), pts[0]);
   const seuil = seuilMontant(recTotal);
-  const refLignes = occ.flatMap((o) => o.e.refact);
-  const somme = (st) => refLignes.filter((r) => r.etat === st).reduce((t, r) => t + r.ttc, 0);
-  const catRec = {};
-  rec.forEach((e) => { catRec[e.cat] = (catRec[e.cat] || 0) + normMensuel(e); });
   const periode = `${MOIS[etat.m - 1]} ${etat.y}`;
-  const kpi = (l, v, bas, extra, lien) => `<div class="panel kpi"><span class="l">${l}</span><span class="v num">${v}</span>${bas}${extra || ''}<span class="g-maj">${lien || ''}</span></div>`;
+  const kpi = (icone, l, v, bas, lien) => `<div class="panel kpi">${ic(icone)}<div><span class="l">${l}</span><span class="v num">${v}</span>${bas}<span class="g-maj">${lien || ''}</span></div></div>`;
+  const parMandat = MANDATS.map((m, i) => ({ l: m, c: ['var(--navy)', 'var(--teal)', 'var(--teal-mid)'][i], v: revenusMois(etat.y, etat.m, 'securise') && REVENUS.filter((r) => r.mandat === m && r.certitude === 'certain').reduce((t, r) => t + r.ttc, 0), types: [...new Set(REVENUS.filter((r) => r.mandat === m).map((r) => r.libelle))] }));
+  const aSuivre = occ.filter((o) => !payee(o) || PAS[o.e.cadence]).slice(0, 5);
+  const ligne = (o) => `<tr class="click" data-edit="${o.e.id}" data-cle="${o.cle}"><td class="g-lib"><b>${esc(o.e.libelle)}</b></td><td>${PAS[o.e.cadence] ? '<span class="badge blue">Récurrente</span>' : payee(o) ? '<span class="badge green">Ponctuelle</span>' : '<span class="badge amber">Prévisionnelle</span>'}</td><td><span class="g-aff">${o.e.aff.map(badgeAff).join('')}</span></td><td class="r num"><b>${eur(montantOcc(o))}</b></td><td class="r">${o.e.refact.length ? `<span class="badge blue">${eur(o.e.refact.reduce((t, r) => t + r.ttc, 0))}</span>` : '<span class="muted">–</span>'}</td></tr>`;
   return `
   <div class="g-niveaux">
-    ${kpi('Dépenses TTC du mois', eur(paye + prevu),
-      `<div class="g-duo"><span><i></i>Payé ${eur(paye)}</span><span><i class="prev"></i>À venir ${eur(prevu)}</span></div>`, '', `${periode} · toute la société`)}
-    ${kpi('Charges récurrentes / mois', eur(Math.round(recTotal * 100) / 100),
-      `<span class="small muted">${rec.length} séries, normalisées au mois${recAVenir ? ` · ${recAVenir} à venir` : ''}</span>`, '', '<a href="#" data-onglet="depenses">Voir les charges</a>')}
-    ${kpi('Revenus à encaisser', eur(cert),
-      `<div class="g-duo"><span><i></i>Certain ${eur(cert)}</span><span><i class="prev"></i>Probable ${eur(Math.round(prob))}</span></div>`, '', '<a href="#" data-onglet="revenus">Voir les revenus prévus</a>')}
-    ${kpi('Trésorerie fin de mois', eur(Math.round(finMois)),
-      `<span class="small muted">Scénario central</span>`, '', 'Solde fictif du 31/10 · saisie')}
-    ${kpi('Factures à émettre', `${FACTURES.length}`,
-      `<span class="small muted">${eur(factTotal)} TTC${retard ? ` · <b style="color:var(--red)">${retard} en retard</b>` : ''}</span>`, '', '<a href="#" data-onglet="revenus">Préparer</a>')}
+    ${kpi('tresorerie', 'Trésorerie fin de mois', eur(Math.round(finMois)), '<span class="small muted">Scénario central</span>', 'Solde fictif du 31/10 · saisie')}
+    ${kpi('depenses', 'Dépenses TTC du mois', eur(paye + prevu), `<div class="g-duo"><span><i></i>Payé ${eur(paye)}</span><span><i class="prev"></i>À venir ${eur(prevu)}</span></div>`, `${periode} · toute la société`)}
+    ${kpi('recurrent', 'Charges récurrentes / mois', eur(Math.round(recTotal * 100) / 100), `<span class="small muted">${rec.length} séries${recAVenir ? ` · ${recAVenir} à venir` : ''}</span>`, '<a href="#" data-filtre="recurrentes" data-onglet="depenses" id="voir-rec">Voir le détail</a>')}
+    ${kpi('revenus', 'Revenus à encaisser', eur(cert), `<div class="g-duo"><span><i></i>Certain</span><span><i class="prev"></i>Probable ${eur(Math.round(prob))}</span></div>`, '<a href="#" data-onglet="revenus">Revenus prévus</a>')}
+    ${kpi('tva', 'TVA du mois', '<span style="font:700 20px var(--f-body);display:block;margin-top:2px">À confirmer</span>', '<span class="small muted">Exigibilité à valider</span>', '<a href="#" data-onglet="tva">Voir la TVA</a>')}
   </div>
-  <div class="alert blue" style="margin-top:18px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><div>TVA déclarée chaque mois ; régime d'exigibilité <b>à confirmer avec le comptable</b>. Aucune TVA à payer n'est affichée comme certaine. <a href="#" data-onglet="tva">Détails</a></div></div>
   <div class="grid g-main" style="margin-top:18px">
     <div class="panel">
-      <div class="panel-h"><div><h2>Trésorerie projetée</h2><div class="small muted">Solde en fin de mois, TTC, au jour de paiement · départ fictif ${eur(SOLDE_OUVERTURE)} au 31/10/2026</div></div>
-        <a href="#" data-onglet="tresorerie" class="small">Ouvrir Trésorerie</a></div>
-      <div class="panel-b">
-        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">
+      <div class="panel-h"><div style="display:flex;align-items:center;gap:10px">${ic('revenus')}<h2>Projection de trésorerie</h2></div>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          <div class="g-legende" role="group" aria-label="Scénario">${SCENARIOS.map(([k, l, c]) => `<button class="${etat.scenario === k ? 'on' : ''}" data-scenario="${k}"><i style="background:${c}"></i>${l}</button>`).join('')}</div>
           <div class="seg" role="group" aria-label="Horizon">${[1, 3, 6, 12, 24].map((h) => `<button class="${etat.horizon === h ? 'on' : ''}" data-horizon="${h}">${h} m</button>`).join('')}</div>
-          <div class="seg adaptable" role="group" aria-label="Scénario">${[['securise', 'Sécurisé'], ['central', 'Central'], ['ambitieux', 'Ambitieux']].map(([k, l]) => `<button class="${etat.scenario === k ? 'on' : ''}" data-scenario="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div>
-        </div>
-        ${graphique(pts, seuil)}
-        <div class="small muted" style="margin-top:6px">Minimum projeté : <b class="num" style="color:${seuil != null && mini.solde < seuil ? 'var(--red)' : 'inherit'}">${eur(Math.round(mini.solde))}</b> en ${MOIS[mini.m - 1]} ${mini.y}${seuil != null && mini.solde < seuil ? ' · sous le seuil d’alerte' : ''}</div>
+        </div></div>
+      <div class="panel-b">
+        ${graphique(series, seuil, etat.scenario)}
+        <div class="g-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><div>Fin de mois, TTC, au jour de paiement : charges récurrentes, dépenses ponctuelles, factures à émettre et refacturations prévues. Départ fictif ${eur(SOLDE_OUVERTURE)} au 31/10/2026. Minimum projeté : <b class="num" style="color:${seuil != null && mini.solde < seuil ? 'var(--red)' : 'inherit'}">${eur(Math.round(mini.solde))}</b> en ${MOIS[mini.m - 1]} ${mini.y}${seuil != null && mini.solde < seuil ? ' · sous le seuil d’alerte' : ''}.</div></div>
         <div class="g-seuil"><span><b>Seuil d'alerte</b> (vous le fixez)</span>
           <div class="seg adaptable" role="group" aria-label="Mode du seuil">${[['montant', 'Montant en €'], ['mois', 'Mois de charges']].map(([k, l]) => `<button class="${etat.seuil.mode === k ? 'on' : ''}" data-seuil-mode="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div>
           <input class="input num" id="seuil-val" inputmode="decimal" style="width:110px" placeholder="${etat.seuil.mode === 'montant' ? 'ex. 5 000' : 'ex. 2'}" value="${etat.seuil.valeur ?? ''}" aria-label="Valeur du seuil d'alerte">
-          ${etat.seuil.valeur == null ? '<span class="small muted">Aucune alerte tant qu\u2019il n\u2019est pas défini.</span>' : `<span class="small muted">${etat.seuil.mode === 'mois' ? `= ${eur(Math.round(seuil))} avec vos charges récurrentes actuelles` : ''}</span><button class="btn ghost sm" id="seuil-x" type="button">Effacer</button>`}</div>
+          ${etat.seuil.valeur == null ? '<span class="small muted">Aucune alerte tant qu’il n’est pas défini.</span>' : `<span class="small muted">${etat.seuil.mode === 'mois' ? `= ${eur(Math.round(seuil))} avec vos charges actuelles` : ''}</span><button class="btn ghost sm" id="seuil-x" type="button">Effacer</button>`}</div>
       </div>
     </div>
-    <div class="stack">
-      <div class="panel">
-        <div class="panel-h"><h2>Charges récurrentes</h2><span class="badge">${eur(Math.round(recTotal * 100) / 100)} / mois</span></div>
-        <div class="panel-b">${Object.entries(catRec).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<div class="g-ligne"><span>${esc(c)}</span><span class="num">${eur(Math.round(v * 100) / 100)}</span></div>`).join('')}
-          <div style="margin-top:10px"><button class="btn sm" data-filtre="recurrentes" data-onglet="depenses" id="voir-rec">Voir le détail</button></div></div>
+    <div class="panel">
+      <div class="panel-h"><div style="display:flex;align-items:center;gap:10px">${ic('depenses')}<h2>Revenus prévus par mandat</h2></div><span class="badge amber" title="Écran complet au Lot B">Lot B</span></div>
+      <div class="panel-b g-revenus">
+        ${anneau(parMandat.filter((p) => p.v > 0))}
+        <div class="g-liste-mandats">${parMandat.map((p) => `<div><i style="background:${p.c}"></i><div><b>${esc(p.l)}</b><div class="g-aff">${p.types.map((t) => `<span class="badge ${t === 'Commission' ? 'green' : 'blue'}">${t}</span>`).join('')}</div></div><span class="num">${p.v ? eur(p.v) : '<span class="muted">à venir</span>'}</span></div>`).join('')}</div>
       </div>
-      <div class="panel">
-        <div class="panel-h"><div><h2>Refacturation</h2><div class="small muted">Dépenses de ${periode}</div></div></div>
-        <div class="panel-b">
-          <div class="g-ligne"><span>Refacturable, pas encore facturé</span><span class="num">${eur(somme('a_refacturer'))}</span></div>
-          <div class="g-ligne"><span>Facturé, en attente d'encaissement</span><span class="num">${eur(somme('facture'))}</span></div>
-          <div class="g-ligne"><span>Encaissé</span><span class="num">${eur(somme('encaisse'))}</span></div>
-          <p class="small muted" style="margin:10px 0 0">Refacturable n'est pas refacturé : la refacturation réelle devient une recette distincte, jamais une réduction de la dépense.</p>
-        </div>
+      <div class="g-pied"><span>À facturer : <b>${FACTURES.length}</b> · ${eur(factTotal)} TTC${retard ? ` · <b style="color:var(--red)">${retard} en retard</b>` : ''}</span><a href="#" data-onglet="revenus">Préparer</a></div>
+    </div>
+  </div>
+  <div class="grid g-main" style="margin-top:18px">
+    <div class="panel">
+      <div class="panel-h"><div style="display:flex;align-items:center;gap:10px">${ic('depenses')}<h2>Dépenses à suivre ce mois-ci</h2></div><div style="display:flex;gap:8px"><a href="#" class="btn sm" data-onglet="depenses">Toutes les dépenses</a><button class="btn sm go" data-ouvrir type="button">+ Ajouter une dépense</button></div></div>
+      <table class="tbl"><thead><tr><th>Libellé</th><th>Type</th><th>Affectation</th><th class="r">Montant TTC</th><th class="r">Refacturable</th></tr></thead><tbody>${aSuivre.length ? aSuivre.map(ligne).join('') : '<tr><td colspan="5" class="muted">Rien à suivre ce mois-ci.</td></tr>'}</tbody></table>
+    </div>
+    <div class="panel">
+      <div class="panel-h"><div style="display:flex;align-items:center;gap:10px">${ic('voiture')}<h2>Indemnités kilométriques</h2></div><span class="badge amber" title="Écran complet au Lot D">Lot D</span></div>
+      <div class="panel-b">
+        <div class="g-ik"><div><span class="small muted">Période</span><b>${periode}</b></div><div><span class="small muted">Kilomètres saisis</span><b class="num">428 km</b></div><div class="g-ik-est"><span class="small muted">IK estimées</span><b>Barème à renseigner</b></div></div>
+        <div class="g-ligne" style="margin-top:8px"><span>${ic('pin')}Jassans → Lyon</span><span class="num">74 km · 14 nov.</span></div>
+        <div class="g-ligne"><span>${ic('pin')}Jassans → Grenoble</span><span class="num">186 km · 7 nov.</span></div>
+        <p class="small muted" style="margin:8px 0 0">Aucun taux n'est codé : le calcul démarre quand vous importez le barème validé.</p>
       </div>
     </div>
-  </div>`;
+  </div>
+  <div class="panel g-tva"><div style="display:flex;align-items:center;gap:10px">${ic('tva')}<h2>Suivi TVA</h2></div>
+    <div><span class="small muted">Déclaration</span><b>mensuelle</b></div>
+    <div><span class="small muted">Exigibilité</span><b>à confirmer avec le comptable</b></div>
+    <div><span class="small muted">Dernière estimation</span><b>non calculée</b></div>
+    <a href="#" data-onglet="tva">Détails</a></div>`;
 }
 
 /* ---------- Dépenses ---------- */
