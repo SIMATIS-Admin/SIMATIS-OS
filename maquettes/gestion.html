@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette : section Gestion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- La vraie feuille de style de l'application : mêmes couleurs, polices, boutons, tableaux, tiroir. -->
+<link rel="stylesheet" href="../web/src/styles.css">
+<style>
+  /* Seulement ce que l'application n'a pas encore ; à reporter dans styles.css au Lot A. */
+  .g-onglets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; }
+  .g-onglets .chip { font-size: 15px; padding: 5px 13px; }
+  .g-onglets .espace { flex: 1; }
+  .g-periode { display: inline-flex; align-items: center; gap: 4px; }
+  .g-periode b { min-width: 118px; text-align: center; font-weight: 600; }
+  .g-niveaux { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+  .g-niveaux .kpi .v { font-size: 24px; }
+  .g-niveaux .kpi { display: flex; flex-direction: column; gap: 2px; }
+  .g-duo { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 14px; }
+  .g-duo span { display: inline-flex; align-items: center; gap: 5px; }
+  .g-duo i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--teal); }
+  .g-duo i.prev { background: none; border: 2px solid var(--ink-3); }
+  .g-maj { font-size: 13px; color: var(--ink-3); margin-top: auto; padding-top: 6px; }
+  .g-ligne { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line-2); font-size: 15px; }
+  .g-ligne:last-child { border-bottom: 0; }
+  .g-ligne .num { white-space: nowrap; }
+  .g-bandeau-tri { display: flex; gap: 20px; flex-wrap: wrap; padding: 12px 18px; }
+  .g-bandeau-tri div { min-width: 150px; }
+  .g-bandeau-tri .v { font: 600 20px var(--f-num); display: block; }
+  .g-filtres { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-2); }
+  .g-filtres .input { width: 220px; }
+  .g-filtres select.input { width: auto; }
+  .g-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  .g-aff { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  .g-lib small { display: block; color: var(--ink-3); font-size: 13px; }
+  .g-act { white-space: nowrap; text-align: right; }
+  .g-act .btn { opacity: .55; }
+  tr:hover .g-act .btn { opacity: 1; }
+  .g-svg { width: 100%; height: auto; display: block; }
+  .g-svg text { font: 500 11px var(--f-num); fill: var(--ink-3); }
+  .g-chips-aff { display: flex; flex-wrap: wrap; gap: 6px; }
+  .g-chips-aff .chip.on { background: var(--teal); border-color: var(--teal); }
+  .g-effet { background: var(--line-2); border-radius: var(--r-m); padding: 12px 14px; margin: 4px 0 14px; }
+  .g-effet b { font: 600 18px var(--f-num); }
+  .g-mini { display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 8px; }
+  .g-mini span { flex: 1; background: var(--navy-3); border-radius: 2px 2px 0 0; min-height: 2px; }
+  .g-mini span.zero { background: var(--line); }
+  .g-champs2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .g-fin { position: sticky; bottom: 0; background: var(--white); border-top: 1px solid var(--line); padding: 12px 22px; margin: 0 -22px -40px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .g-plus summary { cursor: pointer; font-weight: 600; color: var(--navy-3); padding: 4px 0 10px; }
+  .g-ventil { display: grid; grid-template-columns: 1fr 90px; gap: 6px 10px; align-items: center; margin-bottom: 10px; font-size: 15px; }
+  .g-maquette { cursor: pointer; }
+  .g-demo-controls { margin-left: auto; display: flex; gap: 8px; }
+  @media (max-width: 1200px) { .g-niveaux { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 760px) {
+    .g-niveaux { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .g-champs2 { grid-template-columns: 1fr; }
+    .content { padding: 0 16px 48px; }
+  }
+  /* Gestion se replie avec le menu réduit, comme les autres entrées de la zone fixe. */
+  .groupes-replies .nav-group:not(.favs) > a { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">
+      <img class="brand-mark" src="../web/src/assets/simatis-mark.png" alt="SIMATIS">
+      <div class="brand-name">SIMATIS <span>OS</span></div>
+    </div>
+    <button class="inst-btn" type="button">
+      <span class="inst-dot" style="background:#41A594"></span>
+      <span><b>SIMATIS</b><small>Mon activité</small></span>
+    </button>
+    <nav class="nav" id="nav"></nav>
+    <!-- Zone fixe du bas : Gestion juste au-dessus de « Feuille de route de l'OS ». -->
+    <div class="nav side-feuille">
+      <a href="#gestion" class="on" id="lien-gestion">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h2"/></svg>
+        <span class="lbl">Gestion</span>
+      </a>
+      <a href="#feuille">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>
+        <span class="lbl">Feuille de route de l’OS</span>
+      </a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="demo-band">
+      <b>Maquette</b> Données fictives, au 12/11/2026 (date fictive). Rien n'est enregistré.
+      <span class="g-demo-controls">
+        <button class="btn sm" id="repli" type="button">Replier tous les groupes du menu</button>
+      </span>
+    </div>
+    <div class="top">
+      <div><h1>Gestion</h1></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn primary" id="btn-depense" type="button">+ Dépense</button>
+        <button class="btn" data-bientot="Revenu : Lot B" type="button">+ Revenu</button>
+        <button class="btn" data-bientot="Trajet : Lot D" type="button">+ Trajet</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="g-onglets" id="onglets" role="tablist"></div>
+      <div id="page"></div>
+    </div>
+  </main>
+</div>
+<div id="overlay"></div>
+<div id="toast"></div>
+
+<script>
+/* ---------- Données fictives ---------- */
+const AUJOURDHUI = { y: 2026, m: 11, d: 12 };
+const SOLDE_OUVERTURE = 18400, SEUIL_ALERTE = 6000;
+const MANDATS = ['Mandat Alpha', 'Mandat Bêta', 'Mandat Gamma'];
+const AFFECTATIONS = ['SIMATIS', 'KAIROS', ...MANDATS];
+const CATEGORIES = ['Outils et abonnements', 'Télécom', 'Locaux', 'Assurances', 'Déplacements', 'Honoraires', 'Marketing', 'Autres'];
+const PAS = { ponctuelle: 0, mensuelle: 1, trimestrielle: 3, annuelle: 12 };
+const NOM_PAS = { ponctuelle: 'Ponctuelle', mensuelle: 'Mensuelle', trimestrielle: 'Trimestrielle', annuelle: 'Annuelle' };
+let seq = 100;
+let depenses = [
+  { id: 1, libelle: 'Abonnement outil de prospection', cat: 'Outils et abonnements', ttc: 120, date: '2026-09-05', nature: 'payee', cadence: 'mensuelle', aff: ['SIMATIS'], payeur: 'societe',
+    refact: [{ mandat: 'Mandat Alpha', ttc: 50, etat: 'facture' }, { mandat: 'Mandat Bêta', ttc: 50, etat: 'a_refacturer' }] },
+  { id: 2, libelle: 'Forfait téléphone mobile', cat: 'Télécom', ttc: 35, date: '2026-01-08', nature: 'payee', cadence: 'mensuelle', aff: ['SIMATIS'], payeur: 'societe', refact: [] },
+  { id: 3, libelle: 'Logiciel de facturation', cat: 'Outils et abonnements', ttc: 29, date: '2026-01-15', nature: 'payee', cadence: 'mensuelle', aff: ['SIMATIS', 'KAIROS'], payeur: 'societe', refact: [] },
+  { id: 4, libelle: 'Assurance responsabilité civile', cat: 'Assurances', ttc: 480, date: '2026-03-20', nature: 'payee', cadence: 'annuelle', aff: ['SIMATIS'], payeur: 'societe', refact: [] },
+  { id: 5, libelle: 'Hébergement du site web', cat: 'Outils et abonnements', ttc: 96, date: '2026-12-01', nature: 'prevue', cadence: 'annuelle', aff: ['SIMATIS'], payeur: 'societe', refact: [] },
+  { id: 6, libelle: 'Journée de coworking', cat: 'Locaux', ttc: 180, date: '2026-11-04', nature: 'payee', cadence: 'ponctuelle', aff: ['Mandat Alpha'], payeur: 'societe',
+    refact: [{ mandat: 'Mandat Alpha', ttc: 180, etat: 'a_refacturer' }] },
+  { id: 7, libelle: 'Billets de train, rendez-vous client', cat: 'Déplacements', ttc: 86.4, date: '2026-11-09', nature: 'payee', cadence: 'ponctuelle', aff: ['Mandat Bêta'], payeur: 'associe', refact: [] },
+  { id: 8, libelle: 'Salon professionnel, entrée', cat: 'Marketing', ttc: 240, date: '2026-11-25', nature: 'prevue', cadence: 'ponctuelle', aff: ['KAIROS'], payeur: 'societe', refact: [] },
+  { id: 9, libelle: 'Honoraires comptables, trimestre', cat: 'Honoraires', ttc: 540, date: '2026-10-28', nature: 'payee', cadence: 'trimestrielle', aff: ['SIMATIS'], payeur: 'societe', refact: [] },
+];
+const REVENUS = [
+  { libelle: 'Abonnement', mandat: 'Mandat Alpha', ttc: 1800, debut: [2026, 11], cadence: 'mensuelle', certitude: 'certain', prob: 1 },
+  { libelle: 'Abonnement', mandat: 'Mandat Bêta', ttc: 1200, debut: [2026, 11], cadence: 'mensuelle', certitude: 'certain', prob: 1 },
+  { libelle: 'Commission', mandat: 'Mandat Alpha', ttc: 3000, debut: [2027, 1], cadence: 'ponctuelle', certitude: 'probable', prob: 0.6 },
+  { libelle: 'Commission', mandat: 'Mandat Gamma', ttc: 4500, debut: [2027, 3], cadence: 'ponctuelle', certitude: 'hypothese', prob: 0.3 },
+];
+const FACTURES = [
+  { libelle: 'Abonnement novembre', mandat: 'Mandat Alpha', ttc: 1800, echeance: '2026-11-05', retard: true },
+  { libelle: 'Abonnement novembre', mandat: 'Mandat Bêta', ttc: 1200, echeance: '2026-11-30', retard: false },
+];
+
+/* ---------- Aides ---------- */
+const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const idx = (y, m) => y * 12 + (m - 1);
+const parse = (iso) => { const [y, m, d] = iso.split('-').map(Number); return { y, m, d }; };
+const joursDans = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const avant = (a, b) => (a.y * 10000 + a.m * 100 + a.d) <= (b.y * 10000 + b.m * 100 + b.d);
+const NB = ' ';
+const eur = (n) => {
+  const t = Number.isInteger(n) ? 0 : 2;
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: t, maximumFractionDigits: 2 }) + NB + '€';
+};
+const ABREGE = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const jourCourt = (d) => `${d.d}${NB}${ABREGE[d.m - 1]}`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = (s, r = document) => r.querySelector(s);
+const normMensuel = (e) => (PAS[e.cadence] ? e.ttc / PAS[e.cadence] : 0);
+
+/* Occurrences d'une dépense dans un mois : identifiant stable (id, date), jamais stockées d'avance. */
+function occurrences(e, y, m) {
+  const s = parse(e.date), pas = PAS[e.cadence];
+  const ecart = idx(y, m) - idx(s.y, s.m);
+  if (pas === 0) return ecart === 0 ? [{ e, date: s, cle: `${e.id}|${e.date}` }] : [];
+  if (ecart < 0 || ecart % pas !== 0) return [];
+  if (e.fin && idx(y, m) > idx(...e.fin)) return [];
+  const date = { y, m, d: Math.min(s.d, joursDans(y, m)) };
+  return [{ e, date, cle: `${e.id}|${y}-${m}` }];
+}
+const montantOcc = (o) => (o.e.exceptions && o.e.exceptions[o.cle] != null ? o.e.exceptions[o.cle] : o.e.ttc);
+const payee = (o) => (o.e.cadence === 'ponctuelle' ? o.e.nature === 'payee' : avant(o.date, AUJOURDHUI));
+const occMois = (y, m) => depenses.flatMap((e) => occurrences(e, y, m)).sort((a, b) => (a.date.d - b.date.d));
+
+function revenusMois(y, m, scenario) {
+  return REVENUS.reduce((t, r) => {
+    const ecart = idx(y, m) - idx(...r.debut);
+    const du = r.cadence === 'ponctuelle' ? ecart === 0 : ecart >= 0;
+    if (!du) return t;
+    const poids = scenario === 'securise' ? (r.certitude === 'certain' ? 1 : 0)
+      : scenario === 'central' ? r.prob : 1;
+    return t + r.ttc * poids;
+  }, 0);
+}
+function tresorerie(nbMois, scenario) {
+  let solde = SOLDE_OUVERTURE;
+  const pts = [];
+  for (let i = 0; i < nbMois; i++) {
+    const k = idx(2026, 11) + i, y = Math.floor(k / 12), m = (k % 12) + 1;
+    const sorties = occMois(y, m).reduce((t, o) => t + montantOcc(o), 0);
+    solde += revenusMois(y, m, scenario) - sorties;
+    pts.push({ y, m, solde });
+  }
+  return pts;
+}
+
+/* ---------- État de l'écran ---------- */
+const etat = { onglet: 'vue', y: 2026, m: 11, filtre: 'toutes', recherche: '', aff: '', refactSeul: false, horizon: 12, scenario: 'central' };
+const ONGLETS = [
+  ['vue', "Vue d'ensemble"], ['depenses', 'Dépenses'], ['revenus', 'Revenus & facturation'],
+  ['tresorerie', 'Trésorerie'], ['ik', 'IK & compte associé'], ['tva', 'TVA'],
+];
+
+/* ---------- Menu (mêmes groupes que l'application) ---------- */
+const NAV = [
+  ['Pilotage', ['Routines Claude', 'Brief du jour', 'Inbox', 'Tableau de bord', 'Second cerveau']],
+  ['Stratégie', ['Démarrage du mandat', 'Outils et diagnostics', 'Atelier stratégique']],
+  ['Générer la demande', ['Prospection', 'Bases vivantes', 'Site web']],
+  ['Convertir', ['Pipeline', 'Entreprises', 'Contacts', 'Agenda', 'Rendez-vous', 'Devis', 'Relais internes']],
+  ['Réglages', ['Paramètres']],
+];
+$('#nav').innerHTML = NAV.map(([t, items]) => `<div class="nav-group"><button class="later-btn" type="button" aria-expanded="true">${t}</button>${items.map((i) => `<a href="#x"><span class="lbl">${i}</span></a>`).join('')}</div>`).join('');
+$('#repli').onclick = () => {
+  const r = document.body.classList.toggle('groupes-replies');
+  $('#repli').textContent = r ? 'Déplier les groupes du menu' : 'Replier tous les groupes du menu';
+};
+
+/* ---------- Onglets et actions rapides ---------- */
+function dessinerOnglets() {
+  $('#onglets').innerHTML = ONGLETS.map(([id, l]) => `<button class="chip ${etat.onglet === id ? 'on' : ''}" role="tab" aria-selected="${etat.onglet === id}" data-onglet="${id}">${l}</button>`).join('')
+    + '<span class="espace"></span>'
+    + `<span class="g-periode"><button class="btn ghost sm" aria-label="Mois précédent" data-mois="-1">‹</button><b>${MOIS[etat.m - 1][0].toUpperCase() + MOIS[etat.m - 1].slice(1)} ${etat.y}</b><button class="btn ghost sm" aria-label="Mois suivant" data-mois="1">›</button></span>`;
+}
+document.addEventListener('click', (ev) => {
+  const t = ev.target.closest('[data-onglet],[data-mois],[data-bientot],[data-ouvrir],[data-edit],[data-dup],[data-filtre],[data-horizon],[data-scenario]');
+  if (!t) return;
+  const d = t.dataset;
+  if (d.onglet) { etat.onglet = d.onglet; rendre(); }
+  else if (d.mois) { const k = idx(etat.y, etat.m) + Number(d.mois); etat.y = Math.floor(k / 12); etat.m = (k % 12) + 1; rendre(); }
+  else if (d.bientot) toast(`${d.bientot}, hors maquette`);
+  else if (d.ouvrir !== undefined) ouvrirTiroir();
+  else if (d.edit) ouvrirTiroir(depenses.find((e) => e.id == d.edit), d.cle);
+  else if (d.dup) { const e = structuredClone(depenses.find((x) => x.id == d.dup)); ouvrirTiroir({ ...e, id: null, libelle: e.libelle, date: `${etat.y}-${String(etat.m).padStart(2, '0')}-${String(Math.min(parse(e.date).d, 28)).padStart(2, '0')}`, nature: 'prevue', refact: e.refact.map((r) => ({ ...r, etat: 'a_refacturer' })) }, null, true); }
+  else if (d.filtre) { etat.filtre = d.filtre; rendre(); }
+  else if (d.horizon) { etat.horizon = Number(d.horizon); rendre(); }
+  else if (d.scenario) { etat.scenario = d.scenario; rendre(); }
+});
+$('#btn-depense').onclick = () => ouvrirTiroir();
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') fermer();
+  const saisie = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if (!saisie && ev.key === 'n' && !$('#overlay').innerHTML) { ev.preventDefault(); ouvrirTiroir(); }
+});
+function toast(t) { $('#toast').innerHTML = `<div class="toast"><span class="dot"></span>${esc(t)}</div>`; clearTimeout(toast.t); toast.t = setTimeout(() => ($('#toast').innerHTML = ''), 2600); }
+
+/* ---------- Vue d'ensemble ---------- */
+function graphique(pts, seuil) {
+  const W = 760, H = 220, g = 46, d = 12;
+  const vals = pts.map((p) => p.solde).concat([seuil, 0]);
+  const max = Math.max(...vals) * 1.08, min = Math.min(...vals, 0) * 1.08;
+  const x = (i) => g + (pts.length === 1 ? 0 : (i * (W - g - d)) / (pts.length - 1));
+  const y = (v) => d + ((max - v) / (max - min)) * (H - d - 26);
+  const ligne = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.solde).toFixed(1)}`).join(' ');
+  const mini = pts.reduce((a, p) => (p.solde < a.solde ? p : a), pts[0]);
+  const iMin = pts.indexOf(mini);
+  const pas = Math.ceil(pts.length / 12);
+  const axes = [0, 0.5, 1].map((f) => { const v = min + (max - min) * f; return `<line x1="${g}" x2="${W - d}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line-2)"/><text x="${g - 6}" y="${y(v) + 4}" text-anchor="end">${Math.round(v / 1000)}${NB}k</text>`; }).join('');
+  return `<svg class="g-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trésorerie projetée, fin de mois">
+    ${axes}
+    <line x1="${g}" x2="${W - d}" y1="${y(seuil)}" y2="${y(seuil)}" stroke="var(--amber)" stroke-dasharray="5 4"/><text x="${W - d}" y="${y(seuil) - 5}" text-anchor="end" style="fill:var(--amber)">seuil d'alerte ${Math.round(seuil / 1000)}${NB}k</text>
+    <path d="${ligne}" fill="none" stroke="var(--navy)" stroke-width="2.2"/>
+    ${pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.solde)}" r="${i === iMin ? 5 : 3}" fill="${p.solde < seuil ? 'var(--red)' : 'var(--navy)'}"><title>${MOIS[p.m - 1]} ${p.y} : ${eur(Math.round(p.solde))}</title></circle>${i % pas === 0 ? `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${MOIS[p.m - 1].slice(0, 3)}${pts.length > 12 ? ' ' + String(p.y).slice(2) : ''}</text>` : ''}`).join('')}
+  </svg>`;
+}
+function vueEnsemble() {
+  const occ = occMois(etat.y, etat.m);
+  const paye = occ.filter(payee).reduce((t, o) => t + montantOcc(o), 0);
+  const prevu = occ.filter((o) => !payee(o)).reduce((t, o) => t + montantOcc(o), 0);
+  const rec = depenses.filter((e) => PAS[e.cadence]);
+  const recTotal = rec.reduce((t, e) => t + normMensuel(e), 0);
+  const recAVenir = rec.filter((e) => e.nature === 'prevue').length;
+  const cert = revenusMois(etat.y, etat.m, 'securise'), prob = revenusMois(etat.y, etat.m, 'central') - cert;
+  const tres = tresorerie(Math.max(1, idx(etat.y, etat.m) - idx(2026, 11) + 1), 'central');
+  const finMois = tres[tres.length - 1].solde;
+  const factTotal = FACTURES.reduce((t, f) => t + f.ttc, 0), retard = FACTURES.filter((f) => f.retard).length;
+  const pts = tresorerie(etat.horizon, etat.scenario);
+  const mini = pts.reduce((a, p) => (p.solde < a.solde ? p : a), pts[0]);
+  const refLignes = occ.flatMap((o) => o.e.refact);
+  const somme = (st) => refLignes.filter((r) => r.etat === st).reduce((t, r) => t + r.ttc, 0);
+  const catRec = {};
+  rec.forEach((e) => { catRec[e.cat] = (catRec[e.cat] || 0) + normMensuel(e); });
+  const periode = `${MOIS[etat.m - 1]} ${etat.y}`;
+  const kpi = (l, v, bas, extra, lien) => `<div class="panel kpi"><span class="l">${l}</span><span class="v num">${v}</span>${bas}${extra || ''}<span class="g-maj">${lien || ''}</span></div>`;
+  return `
+  <div class="g-niveaux">
+    ${kpi('Dépenses TTC du mois', eur(paye + prevu),
+      `<div class="g-duo"><span><i></i>Payé ${eur(paye)}</span><span><i class="prev"></i>À venir ${eur(prevu)}</span></div>`, '', `${periode} · toute la société`)}
+    ${kpi('Charges récurrentes / mois', eur(Math.round(recTotal * 100) / 100),
+      `<span class="small muted">${rec.length} séries, normalisées au mois${recAVenir ? ` · ${recAVenir} à venir` : ''}</span>`, '', '<a href="#" data-onglet="depenses">Voir les charges</a>')}
+    ${kpi('Revenus à encaisser', eur(cert),
+      `<div class="g-duo"><span><i></i>Certain ${eur(cert)}</span><span><i class="prev"></i>Probable ${eur(Math.round(prob))}</span></div>`, '', '<a href="#" data-onglet="revenus">Voir les revenus prévus</a>')}
+    ${kpi('Trésorerie fin de mois', eur(Math.round(finMois)),
+      `<span class="small muted">Scénario central</span>`, '', 'Solde fictif du 31/10 · saisie')}
+    ${kpi('Factures à émettre', `${FACTURES.length}`,
+      `<span class="small muted">${eur(factTotal)} TTC${retard ? ` · <b style="color:var(--red)">${retard} en retard</b>` : ''}</span>`, '', '<a href="#" data-onglet="revenus">Préparer</a>')}
+  </div>
+  <div class="alert blue" style="margin-top:18px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><div>TVA déclarée chaque mois ; régime d'exigibilité <b>à confirmer avec le comptable</b>. Aucune TVA à payer n'est affichée comme certaine. <a href="#" data-onglet="tva">Détails</a></div></div>
+  <div class="grid g-main" style="margin-top:18px">
+    <div class="panel">
+      <div class="panel-h"><div><h2>Trésorerie projetée</h2><div class="small muted">Solde en fin de mois, TTC, au jour de paiement · départ fictif ${eur(SOLDE_OUVERTURE)} au 31/10/2026</div></div>
+        <a href="#" data-onglet="tresorerie" class="small">Ouvrir Trésorerie</a></div>
+      <div class="panel-b">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">
+          <div class="seg" role="group" aria-label="Horizon">${[1, 3, 6, 12, 24].map((h) => `<button class="${etat.horizon === h ? 'on' : ''}" data-horizon="${h}">${h} m</button>`).join('')}</div>
+          <div class="seg adaptable" role="group" aria-label="Scénario">${[['securise', 'Sécurisé'], ['central', 'Central'], ['ambitieux', 'Ambitieux']].map(([k, l]) => `<button class="${etat.scenario === k ? 'on' : ''}" data-scenario="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div>
+        </div>
+        ${graphique(pts, SEUIL_ALERTE)}
+        <div class="small muted" style="margin-top:6px">Minimum projeté : <b class="num" style="color:${mini.solde < SEUIL_ALERTE ? 'var(--red)' : 'inherit'}">${eur(Math.round(mini.solde))}</b> en ${MOIS[mini.m - 1]} ${mini.y}${mini.solde < SEUIL_ALERTE ? ' · sous le seuil d’alerte' : ''}</div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <div class="panel-h"><h2>Charges récurrentes</h2><span class="badge">${eur(Math.round(recTotal * 100) / 100)} / mois</span></div>
+        <div class="panel-b">${Object.entries(catRec).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<div class="g-ligne"><span>${esc(c)}</span><span class="num">${eur(Math.round(v * 100) / 100)}</span></div>`).join('')}
+          <div style="margin-top:10px"><button class="btn sm" data-filtre="recurrentes" data-onglet="depenses" id="voir-rec">Voir le détail</button></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><div><h2>Refacturation</h2><div class="small muted">Dépenses de ${periode}</div></div></div>
+        <div class="panel-b">
+          <div class="g-ligne"><span>Refacturable, pas encore facturé</span><span class="num">${eur(somme('a_refacturer'))}</span></div>
+          <div class="g-ligne"><span>Facturé, en attente d'encaissement</span><span class="num">${eur(somme('facture'))}</span></div>
+          <div class="g-ligne"><span>Encaissé</span><span class="num">${eur(somme('encaisse'))}</span></div>
+          <p class="small muted" style="margin:10px 0 0">Refacturable n'est pas refacturé : la refacturation réelle devient une recette distincte, jamais une réduction de la dépense.</p>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- Dépenses ---------- */
+const badgeAff = (a) => `<span class="badge ${a === 'SIMATIS' ? 'navy' : a === 'KAIROS' ? 'green' : 'blue'}">${esc(a)}</span>`;
+const ETAT_REF = { a_refacturer: ['À refacturer', 'amber'], facture: ['Facturé', 'blue'], encaisse: ['Encaissé', 'green'] };
+function pageDepenses() {
+  let occ = occMois(etat.y, etat.m);
+  const tous = occ;
+  const f = etat.filtre;
+  if (f === 'recurrentes') occ = occ.filter((o) => PAS[o.e.cadence]);
+  if (f === 'ponctuelles') occ = occ.filter((o) => !PAS[o.e.cadence]);
+  if (f === 'previsionnelles') occ = occ.filter((o) => !payee(o));
+  if (etat.aff) occ = occ.filter((o) => o.e.aff.includes(etat.aff));
+  if (etat.refactSeul) occ = occ.filter((o) => o.e.refact.length);
+  const q = etat.recherche.trim().toLowerCase();
+  if (q) occ = occ.filter((o) => (o.e.libelle + o.e.cat + o.e.aff.join(' ')).toLowerCase().includes(q));
+  const paye = tous.filter(payee).reduce((t, o) => t + montantOcc(o), 0);
+  const prevu = tous.filter((o) => !payee(o)).reduce((t, o) => t + montantOcc(o), 0);
+  const recTotal = depenses.filter((e) => PAS[e.cadence]).reduce((t, e) => t + normMensuel(e), 0);
+  const total = occ.reduce((t, o) => t + montantOcc(o), 0);
+  const chip = (id, l) => `<button class="chip ${f === id ? 'on' : ''}" data-filtre="${id}">${l}</button>`;
+  const lignes = occ.map((o) => {
+    const e = o.e, p = payee(o), refTot = e.refact.reduce((t, r) => t + r.ttc, 0);
+    const etats = [...new Set(e.refact.map((r) => r.etat))];
+    const refacte = e.refact.filter((r) => r.etat !== 'a_refacturer').reduce((t, r) => t + r.ttc, 0);
+    return `<tr class="click" data-edit="${e.id}" data-cle="${o.cle}">
+      <td class="num">${jourCourt(o.date)}</td>
+      <td class="g-lib"><b>${esc(e.libelle)}</b><small>${esc(e.cat)}${e.payeur === 'associe' ? ' · avancé par l’associé' : ''}</small></td>
+      <td><span class="badge ${p ? 'green' : 'amber'}">${p ? 'Payée' : 'Prévue'}</span> ${PAS[e.cadence] ? `<span class="badge">${NOM_PAS[e.cadence]}</span>` : ''}</td>
+      <td><span class="g-aff">${e.aff.map(badgeAff).join('')}</span></td>
+      <td>${refTot ? `<span class="badge blue" title="Montant que vous pouvez refacturer, pas encore une recette">Refacturable ${eur(refTot)}</span>` : '<span class="muted">–</span>'}</td>
+      <td>${refacte ? etats.filter((s) => s !== 'a_refacturer').map((s) => `<span class="badge ${ETAT_REF[s][1]}">${ETAT_REF[s][0]} ${eur(e.refact.filter((r) => r.etat === s).reduce((t, r) => t + r.ttc, 0))}</span>`).join(' ') : '<span class="muted">–</span>'}</td>
+      <td class="r num"><b>${eur(montantOcc(o))}</b></td>
+      <td class="g-act"><button class="btn ghost sm" data-dup="${e.id}" title="Dupliquer">Dupliquer</button></td>
+    </tr>`;
+  }).join('');
+  return `
+  <div class="panel g-bandeau-tri" style="margin-bottom:18px">
+    <div><span class="small muted">Payé en ${MOIS[etat.m - 1]}</span><span class="v">${eur(paye)}</span></div>
+    <div><span class="small muted">À venir d'ici fin de mois</span><span class="v">${eur(prevu)}</span></div>
+    <div><span class="small muted">Total TTC du mois</span><span class="v">${eur(paye + prevu)}</span></div>
+    <div><span class="small muted">Charges récurrentes / mois</span><span class="v">${eur(Math.round(recTotal * 100) / 100)}</span></div>
+  </div>
+  <div class="panel">
+    <div class="g-filtres">
+      ${chip('toutes', 'Toutes')}${chip('recurrentes', 'Récurrentes')}${chip('ponctuelles', 'Ponctuelles')}${chip('previsionnelles', 'Prévisionnelles')}
+      <span class="g-sep"></span>
+      <select class="input" id="f-aff" aria-label="Affectation"><option value="">Toutes les affectations</option>${AFFECTATIONS.map((a) => `<option ${etat.aff === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+      <label class="chip ${etat.refactSeul ? 'on' : ''}" style="cursor:pointer"><input type="checkbox" id="f-ref" ${etat.refactSeul ? 'checked' : ''} style="display:none">Refacturables</label>
+      <span style="flex:1"></span>
+      <input class="input" id="f-q" type="search" placeholder="Rechercher une dépense" value="${esc(etat.recherche)}" aria-label="Rechercher">
+    </div>
+    ${occ.length ? `<table class="tbl">
+      <thead><tr><th>Date</th><th>Dépense</th><th>État</th><th>Affectée à</th><th>Refacturable</th><th>Refacturé (réel)</th><th class="r">Montant TTC</th><th></th></tr></thead>
+      <tbody>${lignes}<tr><td colspan="6" class="r"><b>Total affiché</b></td><td class="r num"><b>${eur(total)}</b></td><td></td></tr></tbody></table>`
+      : `<div class="panel-b"><p class="muted" style="margin:0">Aucune dépense ne correspond. <a href="#" data-ouvrir>Ajouter une dépense</a></p></div>`}
+  </div>
+  <p class="small muted" style="margin-top:10px">Cliquer une ligne pour la modifier. Touche <b>N</b> : nouvelle dépense. Une série récurrente propose « cette occurrence » ou « toutes les suivantes ».</p>`;
+}
+
+/* ---------- Écrans prévus ---------- */
+const PREVU = {
+  revenus: ['Lot B', 'Revenus & facturation', ['Revenus par mandat : abonnement, commission, refacturation, chacun avec sa fréquence et son statut (hypothèse, acquise, facturable, émise, encaissée).', 'Liste des factures à émettre, avec « Marquer émise » et la référence de facture, sans fabriquer de facture comptable.', 'Les dépenses marquées refacturables arrivent ici comme lignes « à refacturer ».']],
+  tresorerie: ['Lot C', 'Trésorerie', ['Échéancier des entrées et sorties, vue mensuelle ou hebdomadaire, horizons 1, 3, 6, 12 et 24 mois ou période libre.', 'Scénarios sécurisé, central et ambitieux ; simulation d’un retard de paiement sans toucher aux factures.', 'Chaque mouvement du graphique est explicable en un clic.']],
+  ik: ['Lot D', 'IK & compte associé', ['Trajets, véhicule, barème versionné par année, calcul au cumul annuel : aucun taux écrit dans le code.', 'Compte courant d’associé : confirmé séparé du prévisionnel, solde d’ouverture « non renseigné » tant qu’il n’est pas validé.', 'Export CSV et PDF pour le comptable, sans envoi automatique.']],
+  tva: ['Lot C', 'TVA', ['Déclaration mensuelle (confirmée) ; exigibilité à confirmer avec le comptable.', 'Estimations étiquetées « incertaines » ; montant déclaré saisi à la main, jamais transmis.', 'Taux propre à chaque ligne : pas de 20 % universel.']],
+};
+function pagePrevu(id) {
+  const [lot, titre, pts] = PREVU[id];
+  return `<div class="panel"><div class="panel-h"><h2>${titre}</h2><span class="badge amber">${lot}, hors maquette</span></div><div class="panel-b"><ul class="rt-steps">${pts.map((p) => `<li>${p}</li>`).join('')}</ul></div></div>`;
+}
+
+function rendre() {
+  dessinerOnglets();
+  $('#page').innerHTML = etat.onglet === 'vue' ? vueEnsemble() : etat.onglet === 'depenses' ? pageDepenses() : pagePrevu(etat.onglet);
+  const q = $('#f-q');
+  if (q) q.oninput = () => { etat.recherche = q.value; const pos = q.selectionStart; rendre(); const n = $('#f-q'); n.focus(); n.setSelectionRange(pos, pos); };
+  const a = $('#f-aff'); if (a) a.onchange = () => { etat.aff = a.value; rendre(); };
+  const r = $('#f-ref'); if (r) r.onchange = () => { etat.refactSeul = r.checked; rendre(); };
+  const v = $('#voir-rec'); if (v) v.onclick = () => { etat.onglet = 'depenses'; etat.filtre = 'recurrentes'; rendre(); };
+}
+
+/* ---------- Tiroir de saisie rapide ---------- */
+function fermer() { $('#overlay').innerHTML = ''; }
+function ouvrirTiroir(source, cle, duplique) {
+  const base = source ? structuredClone(source) : {
+    id: null, libelle: '', cat: 'Autres', ttc: '', date: `${AUJOURDHUI.y}-${String(AUJOURDHUI.m).padStart(2, '0')}-${String(AUJOURDHUI.d).padStart(2, '0')}`,
+    nature: 'payee', cadence: 'ponctuelle', aff: ['SIMATIS'], payeur: 'societe', refact: [],
+  };
+  const montantInitial = source && cle && source.exceptions && source.exceptions[cle] != null ? source.exceptions[cle] : base.ttc;
+  const s = { ...base, ttc: montantInitial, portee: 'cette', refacturable: base.refact.length > 0, ventil: {}, tva: base.tva ?? 20, ref: base.ref ?? '', note: base.note ?? '', fournisseur: base.fournisseur ?? '' };
+  const edition = !!source && !duplique && !!source.id;
+  const recurrent = () => s.cadence !== 'ponctuelle';
+  const dessiner = () => {
+    const pas = PAS[s.cadence], ttc = Number(String(s.ttc).replace(',', '.')) || 0;
+    const mois12 = Array.from({ length: 12 }, (_, i) => {
+      const k = idx(AUJOURDHUI.y, AUJOURDHUI.m) + i, y = Math.floor(k / 12), m = (k % 12) + 1;
+      const fictive = { id: -1, date: s.date, cadence: s.cadence, ttc };
+      return occurrences(fictive, y, m).length ? ttc : 0;
+    });
+    const tot12 = mois12.reduce((t, v) => t + v, 0);
+    const effet = !(ttc > 0) ? '<span class="muted">Saisissez un montant pour voir l’effet sur les 12 prochains mois.</span>' : recurrent()
+      ? `<b>${eur(Math.round((ttc / pas) * 100) / 100)}</b> / mois en moyenne · <b>${eur(Math.round(tot12 * 100) / 100)}</b> sur les 12 prochains mois`
+      : `<b>${eur(ttc)}</b> une seule fois, ${s.nature === 'payee' ? 'sortie de trésorerie à la date indiquée' : 'prévue à la date indiquée'}`;
+    const max = Math.max(...mois12, 1);
+    const sel = s.aff;
+    const mandatsSel = sel.filter((a) => MANDATS.includes(a));
+    const part = sel.length ? Math.round(10000 / sel.length) / 100 : 0;
+    $('#overlay').innerHTML = `<div class="scrim" id="scrim"></div>
+    <aside class="drawer" role="dialog" aria-label="Saisie d'une dépense">
+      <div class="drawer-h"><div><h2>${edition ? 'Modifier la dépense' : duplique ? 'Dupliquer la dépense' : 'Nouvelle dépense'}</h2><div class="small muted">Trois champs suffisent : libellé, montant, date.</div></div>
+        <button class="btn ghost" aria-label="Fermer" id="x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+      <form class="drawer-b" id="form" autocomplete="off">
+        <label class="field"><span>Libellé</span><input class="input" id="c-lib" list="suggestions" value="${esc(s.libelle)}" placeholder="Ex. abonnement, repas client, matériel" required>
+          <datalist id="suggestions">${[...new Set(depenses.map((d) => d.libelle))].map((l) => `<option value="${esc(l)}">`).join('')}</datalist></label>
+        <div class="g-champs2">
+          <label class="field"><span>Montant TTC (€)</span><input class="input num" id="c-ttc" inputmode="decimal" value="${s.ttc}" placeholder="0,00" required></label>
+          <label class="field"><span>${recurrent() ? 'Première échéance' : 'Date'}</span><input class="input" id="c-date" type="date" value="${s.date}" required></label>
+        </div>
+        <div class="field"><span>Fréquence</span>
+          <div class="seg adaptable" role="group" aria-label="Fréquence">${Object.entries(NOM_PAS).map(([k, l]) => `<button type="button" class="${s.cadence === k ? 'on' : ''}" data-cad="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div></div>
+        <div class="field"><span>État</span>
+          <div class="seg" role="group" aria-label="État">${[['payee', 'Déjà payée'], ['prevue', 'Prévisionnelle']].map(([k, l]) => `<button type="button" class="${s.nature === k ? 'on' : ''}" data-nat="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div>
+          ${recurrent() ? '<div class="small muted" style="margin-top:4px">Pour une série, chaque échéance passée est comptée payée, chaque échéance à venir est prévue.</div>' : ''}</div>
+        <div class="g-effet" aria-live="polite">${effet}<div class="g-mini" aria-hidden="true">${mois12.map((v) => `<span class="${v ? '' : 'zero'}" style="height:${Math.max(6, (v / max) * 100)}%"></span>`).join('')}</div>
+          <div class="small muted" style="margin-top:4px">Effet sur les 12 prochains mois, à partir de novembre 2026</div></div>
+        <div class="field"><span>Affectée à</span>
+          <div class="g-chips-aff" role="group" aria-label="Affectation">${AFFECTATIONS.map((a) => `<button type="button" class="chip ${sel.includes(a) ? 'on' : ''}" data-aff="${esc(a)}">${esc(a)}</button>`).join('')}</div>
+          ${sel.length > 1 ? `<div class="g-ventil" style="margin-top:10px">${sel.map((a) => `<span>${esc(a)}</span><input class="input num" data-part="${esc(a)}" value="${s.ventil[a] ?? part}" aria-label="Part de ${esc(a)} en pour cent">`).join('')}<span class="small muted">Répartition analytique, en %</span><span class="small muted" id="somme"></span></div>` : '<div class="small muted" style="margin-top:4px">Une affectation analytique n’est pas une refacturation.</div>'}</div>
+        <div class="field"><span>Paiement</span>
+          <div class="seg" role="group" aria-label="Paiement">${[['societe', 'Par la société'], ['associe', 'Avancé par l’associé']].map(([k, l]) => `<button type="button" class="${s.payeur === k ? 'on' : ''}" data-pay="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div>
+          ${s.payeur === 'associe' ? '<div class="small muted" style="margin-top:4px">Pas de sortie bancaire de la société ; le compte associé n’est mis à jour qu’après écriture reconnue (onglet IK & compte associé).</div>' : ''}</div>
+        <label class="check" style="margin:0 0 6px"><input type="checkbox" id="c-ref" ${s.refacturable ? 'checked' : ''}>&nbsp;Refacturable à un client</label>
+        ${s.refacturable ? `<div class="alert blue" style="margin-bottom:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><div>Indique ce qui <b>pourra</b> être refacturé. La facturation réelle se suit dans Revenus & facturation.
+          <div class="g-ventil" style="margin-top:8px">${(mandatsSel.length ? mandatsSel : MANDATS).map((m) => { const ex = s.refact.find((r) => r.mandat === m); return `<span>${esc(m)}</span><input class="input num" data-rm="${esc(m)}" value="${ex ? ex.ttc : ''}" placeholder="0 €" aria-label="Montant TTC refacturable à ${esc(m)}">`; }).join('')}</div></div></div>` : ''}
+        <details class="g-plus" ${s.ref || s.note || s.fournisseur ? 'open' : ''}><summary>Plus d'options</summary>
+          <div class="g-champs2">
+            <label class="field"><span>Catégorie</span><select class="input" id="c-cat">${CATEGORIES.map((c) => `<option ${s.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+            <label class="field"><span>Taux de TVA (%)</span><input class="input num" id="c-tva" value="${s.tva}"></label>
+          </div>
+          <label class="field"><span>Fournisseur</span><input class="input" id="c-four" value="${esc(s.fournisseur)}"></label>
+          <label class="field"><span>Justificatif (référence ou lien)</span><input class="input" id="c-just" value="${esc(s.ref)}" placeholder="Numéro de facture ou lien vers la pièce"></label>
+          ${recurrent() ? '<label class="field"><span>Dernière échéance (facultatif)</span><input class="input" id="c-fin" type="date"></label>' : ''}
+          <label class="field"><span>Note</span><textarea class="input" id="c-note" style="min-height:60px">${esc(s.note)}</textarea></label>
+        </details>
+        ${edition && PAS[source.cadence] ? `<div class="field"><span>Cette modification s'applique à</span><div class="seg adaptable" role="group" aria-label="Portée">${[['cette', 'Cette occurrence seulement'], ['suivantes', 'Cette occurrence et les suivantes']].map(([k, l]) => `<button type="button" class="${s.portee === k ? 'on' : ''}" data-portee="${k}" style="font-family:var(--f-body)">${l}</button>`).join('')}</div></div>` : ''}
+        <div class="g-fin"><button class="btn primary" type="submit">Enregistrer</button>${edition ? '' : '<button class="btn" type="button" id="encore">Enregistrer et ajouter une autre</button>'}<button class="btn ghost" type="button" id="annuler">Annuler</button></div>
+      </form></aside>`;
+    câbler();
+  };
+  const lire = () => {
+    const v = (id) => { const el = $(id); return el ? el.value : undefined; };
+    if ($('#c-lib')) {
+      s.libelle = v('#c-lib'); s.ttc = v('#c-ttc'); s.date = v('#c-date') || s.date;
+      if ($('#c-cat')) { s.cat = v('#c-cat'); s.tva = v('#c-tva'); s.fournisseur = v('#c-four'); s.ref = v('#c-just'); s.note = v('#c-note'); }
+      document.querySelectorAll('[data-part]').forEach((i) => (s.ventil[i.dataset.part] = i.value));
+      s.refact = [...document.querySelectorAll('[data-rm]')].map((i) => ({ mandat: i.dataset.rm, ttc: Number(String(i.value).replace(',', '.')) || 0, etat: 'a_refacturer' })).filter((r) => r.ttc > 0).concat(s.refacturable && !document.querySelector('[data-rm]') ? s.refact : []);
+    }
+  };
+  const enregistrer = (encore) => {
+    lire();
+    const ttc = Number(String(s.ttc).replace(',', '.'));
+    if (!s.libelle.trim() || !(ttc > 0)) { toast('Libellé et montant TTC sont obligatoires'); return; }
+    const fin = $('#c-fin') && $('#c-fin').value ? $('#c-fin').value.split('-').slice(0, 2).map(Number) : undefined;
+    const donnees = { libelle: s.libelle.trim(), cat: s.cat, ttc, date: s.date, nature: s.nature, cadence: s.cadence, aff: s.aff.length ? s.aff : ['SIMATIS'], payeur: s.payeur, refact: s.refacturable ? s.refact : [], tva: s.tva, fournisseur: s.fournisseur, ref: s.ref, note: s.note };
+    if (fin) donnees.fin = fin;
+    if (edition) {
+      const orig = depenses.find((e) => e.id === source.id);
+      if (PAS[orig.cadence] && s.portee === 'cette') {
+        orig.exceptions = { ...(orig.exceptions || {}), [cle]: ttc };
+      } else if (PAS[orig.cadence] && s.portee === 'suivantes') {
+        // On coupe l'ancienne série le mois d'avant et on en ouvre une nouvelle à partir de cette occurrence.
+        const [oy, om] = cle.split('|')[1].split('-').map(Number);
+        const o = { y: oy, m: om };
+        const prec = idx(o.y, o.m) - 1;
+        const premier = parse(orig.date);
+        if (idx(o.y, o.m) === idx(premier.y, premier.m)) Object.assign(orig, donnees);
+        else {
+          orig.fin = [Math.floor(prec / 12), (prec % 12) + 1];
+          depenses.push({ ...donnees, id: ++seq, date: `${o.y}-${String(o.m).padStart(2, '0')}-${String(parse(donnees.date).d).padStart(2, '0')}` });
+        }
+      } else Object.assign(orig, donnees);
+    } else depenses.push({ ...donnees, id: ++seq });
+    toast(`Dépense enregistrée${PAS[s.cadence] ? ` · ${eur(Math.round((ttc / PAS[s.cadence]) * 100) / 100)} / mois` : ''}`);
+    if (encore) { fermer(); ouvrirTiroir(); } else fermer();
+    const k = parse(s.date); if (!edition) { etat.y = k.y; etat.m = k.m; }
+    rendre();
+  };
+  const câbler = () => {
+    $('#scrim').onclick = fermer; $('#x').onclick = fermer; $('#annuler').onclick = fermer;
+    $('#form').onsubmit = (e) => { e.preventDefault(); enregistrer(false); };
+    const encore = $('#encore'); if (encore) encore.onclick = () => enregistrer(true);
+    const rafraichir = () => { lire(); dessiner(); };
+    document.querySelectorAll('[data-cad]').forEach((b) => (b.onclick = () => { lire(); s.cadence = b.dataset.cad; dessiner(); }));
+    document.querySelectorAll('[data-nat]').forEach((b) => (b.onclick = () => { lire(); s.nature = b.dataset.nat; dessiner(); }));
+    document.querySelectorAll('[data-pay]').forEach((b) => (b.onclick = () => { lire(); s.payeur = b.dataset.pay; dessiner(); }));
+    document.querySelectorAll('[data-portee]').forEach((b) => (b.onclick = () => { lire(); s.portee = b.dataset.portee; dessiner(); }));
+    document.querySelectorAll('[data-aff]').forEach((b) => (b.onclick = () => { lire(); const a = b.dataset.aff; s.aff = s.aff.includes(a) ? s.aff.filter((x) => x !== a) : [...s.aff, a]; s.ventil = {}; dessiner(); }));
+    $('#c-ref').onchange = (e) => { lire(); s.refacturable = e.target.checked; dessiner(); };
+    ['#c-ttc', '#c-date'].forEach((id) => ($(id).oninput = () => { const p = document.activeElement.id, pos = document.activeElement.selectionStart; rafraichir(); const n = $('#' + p); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) { /* champ date */ } } }));
+    $('#c-lib').oninput = () => {
+      const m = depenses.find((d) => d.libelle.toLowerCase() === $('#c-lib').value.toLowerCase());
+      if (m && !$('#c-ttc').value) { lire(); s.ttc = m.ttc; s.cat = m.cat; s.cadence = m.cadence; s.aff = [...m.aff]; dessiner(); $('#c-lib').focus(); }
+    };
+    document.querySelectorAll('[data-part]').forEach((i) => (i.oninput = () => { lire(); const t = [...document.querySelectorAll('[data-part]')].reduce((a, n) => a + (Number(String(n.value).replace(',', '.')) || 0), 0); $('#somme').textContent = `Total ${Math.round(t * 100) / 100} %`; $('#somme').style.color = Math.abs(t - 100) < 0.05 ? 'var(--green)' : 'var(--red)'; }));
+  };
+  dessiner();
+  $('#c-lib').focus();
+}
+
+rendre();
+</script>
+</body>
+</html>
