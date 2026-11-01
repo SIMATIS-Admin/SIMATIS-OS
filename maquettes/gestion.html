@@ -15,8 +15,8 @@
   .g-onglets .espace { flex: 1; }
   .g-periode { display: inline-flex; align-items: center; gap: 4px; }
   .g-periode b { min-width: 118px; text-align: center; font-weight: 600; }
-  .g-niveaux { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
-  .g-niveaux .kpi .v { font-size: 24px; }
+  .g-niveaux { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; }
+  .g-niveaux .kpi .v { font-size: 24px; white-space: nowrap; }
     .g-duo { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 14px; }
   .g-duo span { display: inline-flex; align-items: center; gap: 5px; }
   .g-duo i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--teal); }
@@ -67,6 +67,7 @@
   .g-ligne .g-ic { width: 15px; height: 15px; color: var(--ink-3); vertical-align: -2px; margin-right: 6px; }
   .g-tva { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; padding: 14px 18px; margin-top: 18px; }
   .g-tva > div { display: flex; flex-direction: column; }
+  .g-tva > div:first-child { flex-direction: row; }
   .g-tva > a { margin-left: auto; }
   .g-mini { display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 8px; }
   .g-mini span { flex: 1; background: var(--navy-3); border-radius: 2px 2px 0 0; min-height: 2px; }
@@ -77,9 +78,7 @@
   .g-ventil { display: grid; grid-template-columns: 1fr 90px; gap: 6px 10px; align-items: center; margin-bottom: 10px; font-size: 15px; }
   .g-maquette { cursor: pointer; }
   .g-demo-controls { margin-left: auto; display: flex; gap: 8px; }
-  @media (max-width: 1200px) { .g-niveaux { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   @media (max-width: 760px) {
-    .g-niveaux { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .g-champs2 { grid-template-columns: 1fr; }
     .content { padding: 0 16px 48px; }
   }
