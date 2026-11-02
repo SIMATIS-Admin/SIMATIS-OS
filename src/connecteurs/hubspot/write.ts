@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { SyncCtx, WriteOp, WriteResult } from '../../connexions/types.js';
-import { contacts, entreprises, opportunites, taches } from '../../crm/schema.js';
+import { activites, contacts, entreprises, opportunites, taches } from '../../crm/schema.js';
 import { currentInstance } from '../../db/columns.js';
 import { logEvent } from '../../journal/service.js';
 import type { HubspotClient } from './client.js';
@@ -8,7 +8,8 @@ import { parseReglages } from './reglages.js';
 
 export class EcritureRefusee extends Error {}
 
-type Table = typeof entreprises | typeof contacts | typeof opportunites | typeof taches;
+type Table =
+  typeof entreprises | typeof contacts | typeof opportunites | typeof taches | typeof activites;
 
 // HubSpot id of a local record; it must be a HubSpot copy of the current instance.
 async function hubspotId(ctx: SyncCtx, table: Table, localId: unknown): Promise<string> {
@@ -251,6 +252,16 @@ export async function writeHubspot(
         client.request('POST', '/crm/v3/objects/notes', {
           properties: { hs_note_body: corps, hs_timestamp: new Date().toISOString() },
           associations,
+        });
+      break;
+    }
+    case 'note.update': {
+      const id = await hubspotId(ctx, activites, d.noteId);
+      const corps = str(d.corps);
+      if (!corps) throw new EcritureRefusee('Note vide');
+      call = () =>
+        client.request('PATCH', `/crm/v3/objects/notes/${id}`, {
+          properties: { hs_note_body: corps },
         });
       break;
     }

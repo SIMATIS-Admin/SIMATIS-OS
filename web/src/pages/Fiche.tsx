@@ -6,6 +6,7 @@ import {
   fetchFiche,
   fetchInstances,
   lierMandat,
+  modifierNoteFiche,
   noteFiche,
   patchFiche,
   updateTache,
@@ -327,6 +328,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
   const [message, setMessage] = useState<string | null>(null);
   const [onglet, setOnglet] = useState<'note' | 'activite'>('note');
   const [note, setNote] = useState('');
+  const [noteEditee, setNoteEditee] = useState<{ id: string; corps: string } | null>(null);
   const [versHubspot, setVersHubspot] = useState(true);
   const [filtre, setFiltre] = useState('tout');
   const [cloture, setCloture] = useState<'gagne' | 'perdu' | null>(null);
@@ -800,14 +802,58 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                     <span className="fi-ico" title={lbl}>
                       <Icon name={ico} />
                     </span>
-                    <div>
+                    <div className="fi-evt-corps">
                       <div className="small muted">
                         {lbl} · {dateHeure(e.at)}
                         {e.origine === 'hubspot' ? ' · HubSpot' : ''}
                       </div>
                       {e.titre && <b>{e.type === 'etape' ? `Étape : ${e.titre}` : e.titre}</b>}
-                      {e.texte && <p>{e.texte}</p>}
+                      {noteEditee?.id === e.id ? (
+                        <>
+                          <textarea
+                            className="input"
+                            aria-label="Modifier la note"
+                            rows={3}
+                            value={noteEditee.corps}
+                            onChange={(x) => setNoteEditee({ id: e.id, corps: x.target.value })}
+                          />
+                          <div className="fi-note-actions">
+                            <button
+                              className="btn primary"
+                              disabled={!noteEditee.corps.trim()}
+                              onClick={() =>
+                                void modifierNoteFiche(slug, kind, id, e.id, noteEditee.corps).then(
+                                  (r) => {
+                                    setNoteEditee(null);
+                                    apres(r);
+                                  },
+                                  erreur,
+                                )
+                              }
+                            >
+                              Enregistrer
+                            </button>
+                            <button className="btn" onClick={() => setNoteEditee(null)}>
+                              Annuler
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        e.texte && <p>{e.texte}</p>
+                      )}
                     </div>
+                    {e.type === 'note' &&
+                      noteEditee?.id !== e.id &&
+                      (e.origine === 'os' || data.ecrit) && (
+                        <button
+                          className="btn ghost sm"
+                          aria-label="Modifier la note"
+                          title="Modifier la note"
+                          onClick={() => setNoteEditee({ id: e.id, corps: e.texte ?? '' })}
+                        >
+                          <Icon name="edit" />
+                        </button>
+                      )}
                   </li>
                 );
               })}

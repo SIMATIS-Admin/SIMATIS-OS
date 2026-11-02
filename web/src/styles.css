@@ -3036,6 +3036,19 @@ textarea.input {
   padding: 8px 0;
   border-bottom: 1px solid var(--line-2);
 }
+.fi-evt-corps {
+  flex: 1;
+  min-width: 0;
+}
+.fi-evt-corps textarea {
+  width: 100%;
+  margin-top: 4px;
+}
+.fi-note-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
 .fi-evt p {
   margin: 4px 0 0;
   white-space: pre-wrap;
