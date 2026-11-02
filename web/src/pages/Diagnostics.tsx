@@ -4,6 +4,7 @@ import {
   fetchProjetsDiag,
   fetchTestsVma,
   ouvrirEspaceTesteurVma,
+  relancerTestVma,
   revoquerTestVma,
   supprimerProjetDiag,
   supprimerTestVma,
@@ -15,6 +16,8 @@ import { Icon } from '../icons.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
 import { Modale, NouveauDiagnostic, NouveauTestVma } from './diagnostics/Creation.js';
+import { messageRelance } from './diagnostics/envoi.js';
+import { etapesFrise, peutRelancer, sansReponse } from './diagnostics/suivi.js';
 import { libelleStatut, fmtEur } from './TestsVma.js';
 import {
   filtrer,
@@ -71,6 +74,9 @@ export function Diagnostics({
   const [erreur, setErreur] = useState<string | null>(null);
   const [suppression, setSuppression] = useState<Suppression | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [relance, setRelance] = useState<{ test: TestVma; tu: boolean } | null>(null);
+  const [infoRelance, setInfoRelance] = useState<string | null>(null);
+  const [sansReponseSeul, setSansReponseSeul] = useState(false);
 
   // L'onglet s'ouvre tout de suite, pendant le clic : après une attente, le navigateur le bloquerait.
   const ouvrirTesteur = async () => {
@@ -136,6 +142,22 @@ export function Diagnostics({
     }
   };
 
+  const envoyerRelance = async () => {
+    if (!relance) return;
+    setEnCours(true);
+    try {
+      const res = await relancerTestVma(slug, relance.test.id, relance.tu);
+      setInfoRelance(messageRelance(res.envoi ?? { statut: 'echec' }, res.contactEmail));
+      setRelance(null);
+      await charger();
+    } catch (err) {
+      setErreur(messageErreur(err));
+      setRelance(null);
+    } finally {
+      setEnCours(false);
+    }
+  };
+
   // Tests d'abord : un test ouvert est révoqué côté site, et s'il échoue rien d'autre n'est effacé.
   const confirmerSuppression = async () => {
     if (!suppression) return;
@@ -194,7 +216,9 @@ export function Diagnostics({
   }
 
   const lignes = lignesSuivies(grouper(entreprises, projets, tests));
-  const filtrees = filtrer(lignes, recherche);
+  const filtrees = filtrer(lignes, recherche).filter(
+    (l) => !sansReponseSeul || l.tests.some((t) => sansReponse(t)),
+  );
   const { items, page: pageCourante, pages } = paginer(filtrees, page, PAR_PAGE);
 
   return (
@@ -253,8 +277,27 @@ export function Diagnostics({
               setPage(1);
             }}
           />
+          <label className="dg-filtre small">
+            <input
+              type="checkbox"
+              checked={sansReponseSeul}
+              onChange={(e) => {
+                setSansReponseSeul(e.target.checked);
+                setPage(1);
+              }}
+            />
+            <span>Sans réponse depuis plus de 7 jours</span>
+          </label>
         </div>
       </div>
+      {infoRelance && (
+        <div className="alert" role="status">
+          <span>{infoRelance}</span>
+          <button className="btn" type="button" onClick={() => setInfoRelance(null)}>
+            Fermer
+          </button>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="panel empty">
@@ -423,6 +466,18 @@ export function Diagnostics({
                             <span className="dg-actions">
                               {t.statut === 'envoyee' && (
                                 <>
+                                  {peutRelancer(t) && (
+                                    <button
+                                      className="btn"
+                                      type="button"
+                                      onClick={() => {
+                                        setInfoRelance(null);
+                                        setRelance({ test: t, tu: t.tutoiement });
+                                      }}
+                                    >
+                                      Relancer
+                                    </button>
+                                  )}
                                   <button
                                     className="btn"
                                     type="button"
@@ -456,6 +511,18 @@ export function Diagnostics({
                                 <Icon name="trash" />
                               </button>
                             </span>
+                            <ol className="frise small">
+                              {etapesFrise(t).map((e, i) => (
+                                <li key={i} className={e.fait ? 'fait' : 'attente'}>
+                                  {e.libelle}
+                                </li>
+                              ))}
+                            </ol>
+                            {t.echecEnvoi && (
+                              <span className="small muted">
+                                Dernier envoi en échec : {t.echecEnvoi}
+                              </span>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -516,6 +583,35 @@ export function Diagnostics({
               onClick={() => void confirmerSuppression()}
             >
               Confirmer
+            </button>
+          </div>
+        </Modale>
+      )}
+      {relance && (
+        <Modale titre="Relancer l’invitation" onFermer={() => setRelance(null)}>
+          <p>
+            Un court rappel part à {relance.test.contactNom ?? relance.test.entrepriseNom} (
+            {relance.test.contactEmail}), avec le même lien.
+          </p>
+          <label className="dg-filtre">
+            <input
+              type="checkbox"
+              checked={relance.tu}
+              onChange={(e) => setRelance({ ...relance, tu: e.target.checked })}
+            />
+            <span>Tutoyer pour cette relance</span>
+          </label>
+          <div className="dg-actions">
+            <button className="btn" type="button" onClick={() => setRelance(null)}>
+              Annuler
+            </button>
+            <button
+              className="btn go"
+              type="button"
+              disabled={enCours}
+              onClick={() => void envoyerRelance()}
+            >
+              Envoyer la relance
             </button>
           </div>
         </Modale>

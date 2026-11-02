@@ -5726,18 +5726,29 @@ tr:hover .g-act .btn {
 
 /* Frise de suivi d'une invitation (Test de VMA) : étapes atteintes en plein, les autres grisées. */
 .frise {
+  flex-basis: 100%;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 4px;
+  gap: 2px 6px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
+.dg-tests .frise li {
+  display: inline;
+  padding: 0;
+  border-top: 0;
+}
 .frise li + li::before {
   content: '→';
-  margin-right: 4px;
+  margin-right: 6px;
   color: var(--ink-3);
 }
 .frise li.attente {
   color: var(--ink-3);
+}
+.dg-filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

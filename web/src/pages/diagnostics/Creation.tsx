@@ -153,6 +153,7 @@ export function NouveauTestVma({
   const [type, setType] = useState<TestVmaType>('premier');
   const [contact, setContact] = useState('');
   const [email, setEmail] = useState('');
+  const [tutoiement, setTutoiement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [semestre, setSemestre] = useState<{ message: string; demande: NouveauTestVma } | null>(
     null,
@@ -200,6 +201,7 @@ export function NouveauTestVma({
         type,
         contactNom: contact.trim(),
         contactEmail: email.trim(),
+        ...(tutoiement ? { tutoiement } : {}),
       });
     } finally {
       setEnvoi(false);
@@ -280,6 +282,14 @@ export function NouveauTestVma({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+        <label className="dg-filtre">
+          <input
+            type="checkbox"
+            checked={tutoiement}
+            onChange={(e) => setTutoiement(e.target.checked)}
+          />
+          <span>Tutoyer le dirigeant</span>
+        </label>
         {semestre && (
           <div className="alert amber">
             {semestre.message}

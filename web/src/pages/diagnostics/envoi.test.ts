@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageEnvoi } from './envoi.js';
+import { messageEnvoi, messageRelance } from './envoi.js';
 
 describe('Message d’envoi de l’invitation', () => {
   it('sans envoi, n’annonce rien', () => {
@@ -17,5 +17,20 @@ describe('Message d’envoi de l’invitation', () => {
       'Mail non envoyé : Connexion absente',
     );
     expect(messageEnvoi({ statut: 'simule' }, 'a@b.test')).toContain('simulation');
+  });
+});
+
+describe('Message de relance', () => {
+  it('dit à qui la relance est partie', () => {
+    expect(messageRelance({ statut: 'envoye' }, 'jeanne@exemple.test')).toBe(
+      'Relance envoyée à jeanne@exemple.test.',
+    );
+  });
+
+  it('dit quand la relance n’est pas partie', () => {
+    expect(messageRelance({ statut: 'simule' }, 'a@b.test')).toContain('simulation');
+    expect(messageRelance({ statut: 'echec', raison: 'adresse refusée' }, 'a@b.test')).toBe(
+      'Relance non envoyée : adresse refusée.',
+    );
   });
 });
