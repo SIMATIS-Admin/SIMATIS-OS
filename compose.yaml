@@ -38,6 +38,7 @@ services:
       SITE_CONTACT_URL: ${SITE_CONTACT_URL:-}
       SITE_CONTACT_TOKEN: ${SITE_CONTACT_TOKEN:-}
       VMA_OS_TOKEN: ${VMA_OS_TOKEN:-}
+      VMA_RELANCE_AUTO: ${VMA_RELANCE_AUTO:-}
       RELAIS_URL: ${RELAIS_URL:-}
       RELAIS_CLE_INSCRIPTION: ${RELAIS_CLE_INSCRIPTION:-}
       # Grille de scoring du diagnostic : copie dans secrets/ (le conteneur ne voit pas le second cerveau).
