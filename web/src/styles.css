@@ -2352,6 +2352,33 @@ textarea.input {
   text-align: left;
   margin-left: 8px;
 }
+.ag-instances {
+  position: relative;
+}
+.ag-instances summary {
+  cursor: pointer;
+  list-style: none;
+}
+.ag-instances-liste {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  margin-top: 4px;
+  min-width: 100%;
+  padding: 6px 4px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d8dee6);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+}
+.ag-instances-liste label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
 .ag-barre-d {
   display: flex;
   align-items: center;

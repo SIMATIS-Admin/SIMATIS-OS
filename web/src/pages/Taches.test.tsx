@@ -121,6 +121,7 @@ async function liste() {
 
 describe('Tâches screen', () => {
   beforeEach(() => {
+    localStorage.clear();
     calls = [];
     hubspot = true;
     patchReponse = null;
@@ -222,16 +223,56 @@ describe('Tâches screen', () => {
     fireEvent.click(screen.getByLabelText('Marquer faite : Appeler Romain Arpin'));
     await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
     expect(calls.find((c) => c.method === 'PATCH')?.url).toBe('/api/i/mandat-a/taches/t1');
-    fireEvent.change(screen.getByLabelText('Instance'), { target: { value: 'simatis' } });
+    fireEvent.click(screen.getByLabelText('Mandat A'));
     expect(titres()).not.toContain('Appeler Romain Arpin');
     expect(titres()).toContain('Envoyer la plaquette');
-    fireEvent.change(screen.getByLabelText('Instance'), { target: { value: '' } });
+    expect(JSON.parse(localStorage.getItem('agenda.instances-masquees') ?? '[]')).toEqual([
+      'mandat-a',
+    ]);
+    fireEvent.click(screen.getByLabelText('Mandat A'));
     expect(titres()).toContain('Appeler Romain Arpin');
+  });
+
+  it('keeps an unticked instance hidden on the next visit, while the others stay shown', async () => {
+    plusieurs = true;
+    localStorage.setItem('agenda.instances-masquees', JSON.stringify(['mandat-a']));
+    const base = semaine;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string; body?: string }) => {
+        if (!url.includes('/taches?')) return fakeFetch(url, init);
+        const s = base();
+        const marque = <T extends { id: string }>(liste: T[]) =>
+          liste.map((t) => ({
+            ...t,
+            instance:
+              t.id === 't1'
+                ? { slug: 'mandat-a', nom: 'Mandat A', couleur: null }
+                : { slug: 'simatis', nom: 'SIMATIS', couleur: null },
+          }));
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ...s,
+              taches: marque(s.taches),
+              enRetard: marque(s.enRetard),
+              sansEcheance: marque(s.sansEcheance),
+            }),
+          ),
+        );
+      }),
+    );
+    render(<Taches slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tableau' }));
+    await screen.findByText('Envoyer la plaquette');
+    expect(titres()).not.toContain('Appeler Romain Arpin');
+    expect(screen.getByLabelText<HTMLInputElement>('Mandat A').checked).toBe(false);
+    expect(screen.getByLabelText<HTMLInputElement>('SIMATIS').checked).toBe(true);
   });
 
   it('shows no instance filter when there is a single instance', async () => {
     await liste();
-    expect(screen.queryByLabelText('Instance')).toBeNull();
+    expect(screen.queryByLabelText('Instances affichées')).toBeNull();
   });
 
   it('creates an OS task by default, and a HubSpot one when the box is checked', async () => {
