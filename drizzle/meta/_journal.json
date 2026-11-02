@@ -428,13 +428,6 @@
       "when": 1793610915455,
       "tag": "0060_gestion_lot_b",
       "breakpoints": true
-    },
-    {
-      "idx": 61,
-      "version": "7",
-      "when": 1793612094548,
-      "tag": "0061_gestion_lot_c",
-      "breakpoints": true
     }
   ]
 }
