@@ -368,6 +368,37 @@ describe('Routes de la prospection', () => {
       ).toBe(400);
     });
 
+    it('reformuler un mail : la demande est enregistrée, vide ou en double elle est refusée', async () => {
+      const id = await tache('Elise');
+      const { campagneId } = (
+        await app.inject({
+          method: 'POST',
+          url: `${base}/campagnes`,
+          payload: { mode: 'relance', tacheIds: [id], reglage },
+        })
+      ).json<{ campagneId: string }>();
+      const [b] = (await campagne(campagneId)).brouillons;
+      await withInstance(t.app.db, instanceId, async (tx) => {
+        await demarrerCampagne(tx, campagneId);
+        await deposerBrouillons(tx, campagneId, [
+          { id: b!.id, objet: 'Re: Échange', corps: '<p>Bonjour Elise,</p><p>Bien à vous,</p>' },
+        ]);
+      });
+      const url = `${base}/campagnes/${campagneId}/brouillons/${b!.id}/reformuler`;
+      expect(
+        (await app.inject({ method: 'POST', url, payload: { consigne: '  ' } })).statusCode,
+      ).toBe(400);
+      expect(
+        (await app.inject({ method: 'POST', url, payload: { consigne: 'Plus court' } })).statusCode,
+      ).toBe(200);
+      const apres = await campagne(campagneId);
+      expect(apres.statut).toBe('redaction');
+      expect(apres.brouillons[0]).toMatchObject({ etat: 'a_rediger', consigne: 'Plus court' });
+      expect(
+        (await app.inject({ method: 'POST', url, payload: { consigne: 'Encore' } })).statusCode,
+      ).toBe(400);
+    });
+
     it('rapprocher sans messagerie branchée ne plante pas', async () => {
       const r = await app.inject({ method: 'POST', url: `${base}/rapprocher` });
       expect(r.statusCode).toBe(200);

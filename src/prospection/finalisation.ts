@@ -79,8 +79,12 @@ export async function modifierBrouillon(
       and(eq(prospectionBrouillons.instanceId, currentInstance), eq(prospectionBrouillons.id, id)),
     );
   if (!b) throw new CampagneIntrouvable('Brouillon introuvable.');
-  if (b.statut !== 'relecture') {
+  // Pendant qu'un mail est reformulé (campagne en `redaction`), les autres restent modifiables.
+  if (b.statut !== 'relecture' && b.statut !== 'redaction') {
     throw new CampagneInvalide("Cette campagne n'est plus en relecture.");
+  }
+  if (b.b.etat === 'a_rediger') {
+    throw new CampagneInvalide('Claude est en train de reformuler ce mail.');
   }
   if (patch.objet !== undefined && !patch.objet.trim())
     throw new CampagneInvalide("L'objet est vide.");

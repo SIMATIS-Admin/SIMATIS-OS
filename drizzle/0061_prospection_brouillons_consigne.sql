@@ -1,0 +1,1 @@
+ALTER TABLE "prospection_brouillons" ADD COLUMN "consigne" text;

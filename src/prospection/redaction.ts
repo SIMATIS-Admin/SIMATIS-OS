@@ -1,8 +1,8 @@
-import { and, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
 import { sansSignature } from '../connecteurs/google/google.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
-import { CampagneInvalide } from './campagnes.js';
+import { CampagneIntrouvable, CampagneInvalide } from './campagnes.js';
 import { prospectionBrouillons, prospectionCampagnes } from './schema.js';
 
 // Même délai que les demandes de routine et l'Ajout de l'Inbox : au-delà, l'exécuteur est réputé arrêté.
@@ -11,6 +11,9 @@ export const MOTIF_SANS_PRISE =
   "L'exécuteur n'a pas pris la demande en 15 minutes. Vérifiez qu'il tourne sur l'ordinateur, puis relancez la rédaction.";
 const NOTE_MANQUANT =
   "Claude n'a pas rédigé ce brouillon : rédigez-le vous-même ou relancez la rédaction.";
+const NOTE_REFORMULATION_ECHEC =
+  "La reformulation n'a pas abouti : l'ancien texte est conservé. Modifiez-le vous-même ou redemandez.";
+export const CONSIGNE_MAX = 1000;
 
 // Le mail de Claude est du HTML venu d'un modèle qui lit des mails extérieurs : on en retire ce qui
 // s'exécute ou charge quelque chose, puis toute signature (l'OS ajoute la sienne, en image).
@@ -121,6 +124,7 @@ export async function deposerBrouillons(
         ...(it.threadId ? { threadId: it.threadId } : {}),
         etat: it.aVerifier ? 'a_verifier' : 'pret',
         note: it.aVerifier ?? null,
+        consigne: null,
         updatedAt: new Date(),
       })
       .where(
@@ -143,6 +147,80 @@ export async function deposerBrouillons(
   }
 }
 
+// Remet à relire les mails dont la reformulation n'a pas été rendue : leur texte n'a pas changé.
+async function annulerReformulations(tx: Executor, campagneId: string): Promise<number> {
+  const rows = await tx
+    .update(prospectionBrouillons)
+    .set({
+      etat: 'a_verifier',
+      note: NOTE_REFORMULATION_ECHEC,
+      consigne: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(prospectionBrouillons.instanceId, currentInstance),
+        eq(prospectionBrouillons.campagneId, campagneId),
+        eq(prospectionBrouillons.etat, 'a_rediger'),
+        isNotNull(prospectionBrouillons.consigne),
+      ),
+    )
+    .returning({ id: prospectionBrouillons.id });
+  return rows.length;
+}
+
+// Marc demande à Claude de reformuler un seul mail de la relecture : le mail repasse « à rédiger »
+// avec sa demande, la campagne repart chez l'exécuteur, les autres mails ne bougent pas.
+export async function demanderReformulation(
+  tx: Executor,
+  campagneId: string,
+  brouillonId: string,
+  consigne: string,
+) {
+  const demande = consigne.trim();
+  if (!demande) throw new CampagneInvalide('Dites à Claude ce que vous voulez changer.');
+  if (demande.length > CONSIGNE_MAX) throw new CampagneInvalide('La demande est trop longue.');
+  const [c] = await tx
+    .select({ statut: prospectionCampagnes.statut })
+    .from(prospectionCampagnes)
+    .where(
+      and(
+        eq(prospectionCampagnes.instanceId, currentInstance),
+        eq(prospectionCampagnes.id, campagneId),
+      ),
+    );
+  if (!c) throw new CampagneIntrouvable('Campagne introuvable.');
+  if (c.statut === 'redaction') throw new CampagneInvalide('Une reformulation est déjà en cours.');
+  if (c.statut !== 'relecture')
+    throw new CampagneInvalide("Cette campagne n'est plus en relecture.");
+  const rows = await tx
+    .update(prospectionBrouillons)
+    .set({ etat: 'a_rediger', consigne: demande, note: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(prospectionBrouillons.instanceId, currentInstance),
+        eq(prospectionBrouillons.campagneId, campagneId),
+        eq(prospectionBrouillons.id, brouillonId),
+        inArray(prospectionBrouillons.etat, ['pret', 'a_verifier']),
+        isNotNull(prospectionBrouillons.corps),
+      ),
+    )
+    .returning({ id: prospectionBrouillons.id });
+  if (rows.length === 0) {
+    throw new CampagneInvalide('Ce mail ne peut pas être reformulé (écarté, déjà créé ou vide).');
+  }
+  await tx
+    .update(prospectionCampagnes)
+    .set({
+      statut: 'redaction',
+      erreur: null,
+      demarreAt: null,
+      demandeAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(prospectionCampagnes.id, campagneId));
+}
+
 // Fin du travail de l'exécuteur : ce que Claude n'a pas rédigé reste à la main de Marc.
 export async function finirCampagne(tx: Executor, id: string, erreur?: string) {
   const [c] = await tx
@@ -152,6 +230,14 @@ export async function finirCampagne(tx: Executor, id: string, erreur?: string) {
       and(eq(prospectionCampagnes.instanceId, currentInstance), eq(prospectionCampagnes.id, id)),
     );
   if (!c || c.statut !== 'redaction') return;
+  // Une reformulation qui échoue ne fait pas tomber la campagne : l'ancien texte reste à relire.
+  if ((await annulerReformulations(tx, id)) > 0) {
+    await tx
+      .update(prospectionCampagnes)
+      .set({ statut: 'relecture', updatedAt: new Date() })
+      .where(eq(prospectionCampagnes.id, id));
+    return;
+  }
   if (erreur) {
     await tx
       .update(prospectionCampagnes)
@@ -208,9 +294,9 @@ export async function relancerCampagne(tx: Executor, id: string) {
 }
 
 export async function abandonnerCampagnes(tx: Executor, maintenant = new Date()): Promise<number> {
-  const rows = await tx
-    .update(prospectionCampagnes)
-    .set({ statut: 'erreur', erreur: MOTIF_SANS_PRISE, updatedAt: maintenant })
+  const perimees = await tx
+    .select({ id: prospectionCampagnes.id })
+    .from(prospectionCampagnes)
     .where(
       and(
         eq(prospectionCampagnes.instanceId, currentInstance),
@@ -218,7 +304,18 @@ export async function abandonnerCampagnes(tx: Executor, maintenant = new Date())
         isNull(prospectionCampagnes.demarreAt),
         lt(prospectionCampagnes.demandeAt, new Date(maintenant.getTime() - DELAI_PRISE_MS)),
       ),
-    )
-    .returning({ id: prospectionCampagnes.id });
-  return rows.length;
+    );
+  for (const { id } of perimees) {
+    // Une reformulation jamais prise rend la campagne à la relecture, pas en erreur.
+    const reprise = (await annulerReformulations(tx, id)) > 0;
+    await tx
+      .update(prospectionCampagnes)
+      .set(
+        reprise
+          ? { statut: 'relecture', updatedAt: maintenant }
+          : { statut: 'erreur', erreur: MOTIF_SANS_PRISE, updatedAt: maintenant },
+      )
+      .where(eq(prospectionCampagnes.id, id));
+  }
+  return perimees.length;
 }
