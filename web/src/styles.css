@@ -4037,6 +4037,26 @@ label.btn.off {
 .rc {
   max-width: 760px;
 }
+.rc-header {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.rc-heading {
+  flex: 1 1 280px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rc-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+.rc-actions .btn {
+  white-space: nowrap;
+}
 .rc-carte {
   padding: 18px 20px;
   display: flex;

@@ -111,8 +111,8 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
   return (
     <div className="stack rc" ref={fiche}>
       <div className="panel">
-        <div className="panel-h">
-          <div>
+        <div className="panel-h rc-header">
+          <div className="rc-heading">
             <h2>Résultat complet · {test.entrepriseNom}</h2>
             <div className="small muted">
               Tel que le dirigeant l’a vu
@@ -122,7 +122,7 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
               {test.type === 'essai' ? ' · essai (non compté dans l’historique)' : ''}
             </div>
           </div>
-          <div className="row" data-pdf-exclude>
+          <div className="rc-actions" data-pdf-exclude>
             <button
               className="btn"
               type="button"
