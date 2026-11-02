@@ -117,7 +117,7 @@ export function TestsVma({ slug }: { slug: string }) {
   const peutEnvoyer = nouveau.entrepriseNom.trim().length > 0 && !envoi;
 
   return (
-    <div className="stack">
+    <div className="stack vma-outils">
       <div className="panel">
         <div className="panel-h">
           <span>Tests VMA</span>

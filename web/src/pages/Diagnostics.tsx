@@ -226,68 +226,76 @@ export function Diagnostics({
       {alerte}
       <div className="panel dg-titre">
         <div className="panel-h">
-          <p className="dg-intro">Chaque entreprise avec son diagnostic et ses tests VMA.</p>
-          <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
-            Test VMA: module d'essai
-          </button>
-          {/* Hors du menu latéral : la présentation s'ouvre depuis cette barre. */}
-          <a className="btn" href={`#/${slug}/presentation-diagnostic`}>
-            Diagnostic d’endurance commerciale : présentation
-          </a>
-          <div className="dg-menu">
-            <button
-              className="btn go"
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={menuOuvert}
-              onClick={() => setMenuOuvert((o) => !o)}
-            >
-              + Nouveau
-            </button>
-            {menuOuvert && (
-              <div className="dg-menu-liste">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOuvert(false);
-                    setModale({ type: 'diag' });
-                  }}
-                >
-                  Nouveau diagnostic
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOuvert(false);
-                    setModale({ type: 'vma' });
-                  }}
-                >
-                  Nouveau test VMA
-                </button>
-              </div>
-            )}
+          <div className="dg-introduction">
+            <span className="dg-kicker">ÉVALUER · COMPRENDRE · AGIR</span>
+            <h2>Diagnostics &amp; tests VMA</h2>
+            <p className="dg-intro">Chaque entreprise avec son diagnostic et ses tests VMA.</p>
           </div>
-          <input
-            type="search"
-            aria-label="Rechercher une entreprise"
-            placeholder="Recherche"
-            value={recherche}
-            onChange={(e) => {
-              setRecherche(e.target.value);
-              setPage(1);
-            }}
-          />
-          <label className="dg-filtre small">
+          <div className="dg-outils">
+            <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
+              Test VMA: module d'essai
+            </button>
+            {/* Hors du menu latéral : la présentation s'ouvre depuis cette barre. */}
+            <a className="btn" href={`#/${slug}/presentation-diagnostic`}>
+              Diagnostic d’endurance commerciale : présentation
+            </a>
+            <div className="dg-menu">
+              <button
+                className="btn go"
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={menuOuvert}
+                onClick={() => setMenuOuvert((o) => !o)}
+              >
+                + Nouveau
+              </button>
+              {menuOuvert && (
+                <div className="dg-menu-liste">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOuvert(false);
+                      setModale({ type: 'diag' });
+                    }}
+                  >
+                    Nouveau diagnostic
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOuvert(false);
+                      setModale({ type: 'vma' });
+                    }}
+                  >
+                    Nouveau test VMA
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="dg-recherche">
             <input
-              type="checkbox"
-              checked={sansReponseSeul}
+              type="search"
+              aria-label="Rechercher une entreprise"
+              placeholder="Recherche"
+              value={recherche}
               onChange={(e) => {
-                setSansReponseSeul(e.target.checked);
+                setRecherche(e.target.value);
                 setPage(1);
               }}
             />
-            <span>Sans réponse depuis plus de 7 jours</span>
-          </label>
+            <label className="dg-filtre small">
+              <input
+                type="checkbox"
+                checked={sansReponseSeul}
+                onChange={(e) => {
+                  setSansReponseSeul(e.target.checked);
+                  setPage(1);
+                }}
+              />
+              <span>Sans réponse depuis plus de 7 jours</span>
+            </label>
+          </div>
         </div>
       </div>
       {infoRelance && (
