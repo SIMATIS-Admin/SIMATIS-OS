@@ -26,6 +26,60 @@ const synthese = {
   parMois12: [{ mois: '2026-11', cents: 12_000 }],
   recurrentMensuelCents: 12_000,
 };
+const projection = {
+  aujourdhui: '2026-11-12',
+  granularite: 'mois',
+  reglages: {
+    soldeCents: null,
+    soldeDate: null,
+    soldeSource: null,
+    seuilMode: 'aucun',
+    seuilCents: null,
+    delaiPaiementJours: null,
+  },
+  seuil: { mode: 'aucun', cents: null, bfr: null },
+  scenarios: ['securise', 'central', 'ambitieux'].map((scenario) => ({
+    scenario,
+    alerte: null,
+    periodes: [
+      {
+        debut: '2026-11-01',
+        fin: '2026-11-30',
+        entreesCents: 0,
+        sortiesCents: 12_000,
+        soldeFinCents: null,
+        variationCumuleeCents: -12_000,
+        mouvements: [
+          {
+            date: '2026-11-20',
+            sens: 'sortie',
+            libelle: 'Abonnement fictif',
+            montantCents: 12_000,
+            nature: 'depense',
+            ref: 'x',
+            estime: true,
+            note: null,
+          },
+        ],
+      },
+    ],
+  })),
+  avertissements: ["Solde d'ouverture non renseigné : seules les variations sont affichées."],
+};
+const suiviTva = {
+  mois: '2026-11',
+  declaration: 'mensuelle',
+  exigibilite: 'a_confirmer',
+  collecteeCents: 20_000,
+  deductibleCents: 2_000,
+  estimeeCents: 18_000,
+  lignesSansTva: { recettes: 0, depenses: 0 },
+  recettesIncertainesExclues: 0,
+  declaree: null,
+  avertissements: [
+    "Exigibilité à confirmer avec le comptable : l'estimation retient la date de facture.",
+  ],
+};
 const mandats = [{ slug: 'mandat-test', nom: 'Mandat test' }];
 let envois: { url: string; method: string; corps: unknown }[] = [];
 
@@ -54,7 +108,11 @@ describe('Gestion', () => {
               }
             : url.includes('factures-a-emettre')
               ? []
-              : { id: occurrence.depenseId, refacturations: [] };
+              : url.includes('gestion/tresorerie')
+                ? projection
+                : url.includes('gestion/tva')
+                  ? suiviTva
+                  : { id: occurrence.depenseId, refacturations: [] };
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(corps) });
       }),
     );
@@ -74,7 +132,8 @@ describe('Gestion', () => {
   it('affiche le mois, le récurrent mensuel et laisse les autres sources « non renseigné »', async () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
     await waitFor(() => expect(screen.getAllByText(/12\s000|120/).length).toBeGreaterThan(0));
-    expect(screen.getAllByText('Non renseigné')).toHaveLength(2);
+    expect(screen.getAllByText('Non renseigné')).toHaveLength(1);
+    expect(screen.getByText('À confirmer')).toBeTruthy();
     expect(screen.getByText('Charges récurrentes / mois')).toBeTruthy();
   });
 
@@ -171,6 +230,53 @@ describe('Gestion', () => {
         recurrence: 'mensuelle',
         depenseId: occurrence.depenseId,
       },
+    });
+  });
+
+  it('affiche la projection sans solde inventé et rend ses mouvements explicables', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Trésorerie' }));
+    expect(await screen.findByText(/Solde d'ouverture non renseigné/)).toBeTruthy();
+    expect(screen.getByText(/Variation cumulée depuis aujourd’hui/)).toBeTruthy();
+    fireEvent.click(document.querySelector('svg rect')!);
+    expect(await screen.findByText('Abonnement fictif')).toBeTruthy();
+    expect(screen.getByText('Estimé')).toBeTruthy();
+  });
+
+  it('enregistre un seuil que Marc fixe, sans valeur par défaut', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Trésorerie' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Montant que je fixe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(envois).toHaveLength(0);
+    const champs = screen.getAllByRole('textbox');
+    const seuil = champs.find(
+      (c) =>
+        (c as HTMLInputElement).inputMode === 'decimal' && !(c as HTMLInputElement).placeholder,
+    );
+    fireEvent.change(seuil!, { target: { value: '6 000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(envois).toHaveLength(1));
+    expect(envois[0]).toMatchObject({
+      url: '/api/i/simatis/gestion/reglages',
+      method: 'PUT',
+      corps: { seuilMode: 'montant', seuilCents: 600_000, soldeCents: null },
+    });
+  });
+
+  it('saisit la TVA déclarée à la main, avec l’exigibilité à confirmer', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'TVA' }));
+    expect(await screen.findByText(/exigibilité à confirmer/)).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText('Non renseigné'), { target: { value: '175' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(envois).toHaveLength(1));
+    expect(envois[0]).toMatchObject({
+      url: '/api/i/simatis/gestion/tva/2026-11',
+      method: 'PUT',
+      corps: { declareeCents: 17_500 },
     });
   });
 });

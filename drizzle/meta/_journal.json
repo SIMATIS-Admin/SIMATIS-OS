@@ -435,6 +435,13 @@
       "when": 1793611708512,
       "tag": "0061_prospection_brouillons_consigne",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793613457471,
+      "tag": "0062_gestion_lot_c",
+      "breakpoints": true
     }
   ]
 }

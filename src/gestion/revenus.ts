@@ -33,6 +33,7 @@ const revenuBase = z.object({
   date: jour,
   dateEncaissement: jour.nullish(),
   referenceFacture: z.string().trim().max(200).nullish(),
+  tvaCents: z.number().int().min(0).nullish(),
   recurrence: z.enum(RECURRENCES),
   dateFin: jour.nullish(),
   certitude: z.enum(CERTITUDES),
@@ -173,6 +174,7 @@ export async function modifierOccurrenceRevenu(
       recurrence: serie.recurrence,
       certitude: serie.certitude,
       depenseId: serie.depenseId,
+      tvaCents: serie.tvaCents,
       ...entree.serie,
       date,
       dateFin: entree.serie?.dateFin ?? serie.dateFin,
@@ -226,6 +228,8 @@ export type OccurrenceRevenu = {
   referenceFacture: string | null;
   recurrente: boolean;
   depenseId: string | null;
+  // TVA de l'échéance, proportionnelle si le montant a été modifié ; null = non renseignée.
+  tvaCents: number | null;
 };
 
 // Échéances de toutes les recettes entre deux jours (comme les occurrences de dépenses : calculées à
@@ -266,6 +270,12 @@ export async function occurrencesRevenus(
           s.recurrence === 'aucune' ? s.referenceFacture : (ex?.referenceFacture ?? null),
         recurrente: s.recurrence !== 'aucune',
         depenseId: s.depenseId,
+        tvaCents:
+          s.tvaCents == null
+            ? null
+            : ex?.montantHtCents == null || s.montantHtCents === 0
+              ? s.tvaCents
+              : Math.round((s.tvaCents * ex.montantHtCents) / s.montantHtCents),
       });
     }
   }
