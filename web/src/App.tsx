@@ -31,6 +31,7 @@ import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
 import { Cerveau } from './pages/Cerveau.js';
 import { FeuilleDeRouteOS } from './pages/FeuilleDeRouteOS.js';
+import { Gestion } from './pages/Gestion.js';
 import { Journal } from './pages/Journal.js';
 import { Parametres } from './pages/Parametres.js';
 import { Pipeline } from './pages/Pipeline.js';
@@ -146,7 +147,9 @@ export function App() {
           ? 'Diagnostic d’endurance commerciale : présentation'
           : view === 'feuille-de-route-os'
             ? 'Feuille de route de l’OS'
-            : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+            : view === 'gestion'
+              ? 'Gestion'
+              : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
@@ -221,6 +224,17 @@ export function App() {
         return <Tableau key={current.slug} slug={current.slug} />;
       case 'cerveau':
         return <Cerveau key={current.slug} slug={current.slug} />;
+      case 'gestion':
+        return (
+          <Gestion
+            key={current.slug}
+            slug={current.slug}
+            autorise={current.type === 'propre' && current.modules.includes('gestion')}
+            mandats={instances
+              .filter((i) => i.type === 'mandat')
+              .map((i) => ({ slug: i.slug, nom: i.nom }))}
+          />
+        );
       case 'feuille-de-route-os':
         return (
           <FeuilleDeRouteOS

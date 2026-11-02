@@ -6,6 +6,7 @@ import { getInstanceBySlug } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import {
   archiverDepense,
+  lireDepense,
   creerDepense,
   DepenseIntrouvable,
   DepenseInvalide,
@@ -78,6 +79,14 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
         return d;
       });
       return reply.sent ? r : reply.code(201).send(r);
+    },
+  );
+
+  app.get<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/gestion/depenses/:id',
+    async (request, reply) => {
+      if (!z.uuid().safeParse(request.params.id).success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, (tx) => lireDepense(tx, request.params.id));
     },
   );
 

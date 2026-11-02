@@ -105,7 +105,7 @@ const depenseVisible = (id: string) =>
     isNull(gestionDepenses.archiveeAt),
   );
 
-async function lireDepense(tx: Executor, id: string) {
+export async function lireDepense(tx: Executor, id: string) {
   const [d] = await tx.select().from(gestionDepenses).where(depenseVisible(id));
   if (!d) throw new DepenseIntrouvable();
   return d;
@@ -154,20 +154,24 @@ export async function modifierOccurrence(
       .update(gestionDepenses)
       .set({ dateFin: veille(date), updatedAt: new Date() })
       .where(depenseVisible(id));
-    const {
-      id: _id,
-      instanceId: _i,
-      createdAt: _c,
-      updatedAt: _u,
-      archiveeAt: _a,
-      ...base
-    } = serie;
+    const base = {
+      libelle: serie.libelle,
+      categorie: serie.categorie,
+      montantTtcCents: serie.montantTtcCents,
+      tvaCents: serie.tvaCents,
+      statut: serie.statut,
+      recurrence: serie.recurrence,
+      payeur: serie.payeur,
+      affectations: serie.affectations,
+      refacturable: serie.refacturable,
+      justificatif: serie.justificatif,
+    };
     return creerDepense(tx, instanceId, {
       ...base,
       ...entree.serie,
       dateDebut: date,
       dateFin: entree.serie?.dateFin ?? serie.dateFin,
-    } as DepenseEntree);
+    });
   }
 
   if (!entree.etat) throw new DepenseInvalide("État de l'occurrence requis");

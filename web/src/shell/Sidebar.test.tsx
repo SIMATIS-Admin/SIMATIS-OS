@@ -59,6 +59,25 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: /Feuille de route de l’OS/ })).toBeNull();
   });
 
+  it('shows Gestion in the fixed zone, right above the roadmap, only in Mon activité', () => {
+    const { container, unmount } = renderSidebar(
+      { ...simatis, modules: ['cerveau', 'gestion'] },
+      [],
+    );
+    const gestion = screen.getByRole('link', { name: /Gestion/ });
+    const feuille = screen.getByRole('link', { name: /Feuille de route de l’OS/ });
+    expect(gestion.getAttribute('href')).toBe('#/simatis/gestion');
+    expect(gestion.parentElement).toBe(feuille.parentElement);
+    expect(gestion.compareDocumentPosition(feuille)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(container.querySelector('nav')?.contains(gestion)).toBe(false);
+    unmount();
+    renderSidebar(simatis, []);
+    expect(screen.queryByRole('link', { name: /Gestion/ })).toBeNull();
+    cleanup();
+    renderSidebar({ ...mandat, modules: ['gestion'] }, []);
+    expect(screen.queryByRole('link', { name: /Gestion/ })).toBeNull();
+  });
+
   it('shows the Favourites group first, in the saved order', () => {
     const { container } = renderSidebar(simatis, ['pipeline', 'brief']);
     const groups = container.querySelectorAll('.nav-group');

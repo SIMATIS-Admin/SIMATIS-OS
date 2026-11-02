@@ -230,18 +230,31 @@ export function Sidebar({
           );
         })}
       </nav>
-      {current.type === 'propre' && current.modules.includes('cerveau') && (
-        <div className="nav side-feuille">
-          <a
-            href={`#/${current.slug}/feuille-de-route-os`}
-            className={view === 'feuille-de-route-os' ? 'on' : ''}
-            title={reduite ? 'Feuille de route de l’OS' : undefined}
-          >
-            <Icon name="map" />
-            <span className="lbl">Feuille de route de l’OS</span>
-          </a>
-        </div>
-      )}
+      {current.type === 'propre' &&
+        (current.modules.includes('cerveau') || current.modules.includes('gestion')) && (
+          <div className="nav side-feuille">
+            {current.modules.includes('gestion') && (
+              <a
+                href={`#/${current.slug}/gestion`}
+                className={view === 'gestion' ? 'on' : ''}
+                title={reduite ? 'Gestion' : undefined}
+              >
+                <Icon name="wallet" />
+                <span className="lbl">Gestion</span>
+              </a>
+            )}
+            {current.modules.includes('cerveau') && (
+              <a
+                href={`#/${current.slug}/feuille-de-route-os`}
+                className={view === 'feuille-de-route-os' ? 'on' : ''}
+                title={reduite ? 'Feuille de route de l’OS' : undefined}
+              >
+                <Icon name="map" />
+                <span className="lbl">Feuille de route de l’OS</span>
+              </a>
+            )}
+          </div>
+        )}
     </aside>
   );
 }
