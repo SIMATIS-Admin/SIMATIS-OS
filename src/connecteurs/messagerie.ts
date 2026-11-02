@@ -10,6 +10,7 @@ export type Messagerie = {
     email: string,
     o: { mois: number; complet?: boolean; max?: number },
   ): Promise<Message[]>;
+  message?(id: string): Promise<Message>;
   filsRecents(jours: number): Promise<Fil[]>;
   brouillons(): Promise<Brouillon[]>;
   // Address of the connected mailbox: tells the pilot's own messages from the others.
@@ -36,6 +37,7 @@ export function messagerieDe(
   }
   return {
     historique: (email, o) => gmail.historique(ctx, email, o),
+    message: (id) => gmail.lireMessage(ctx, id),
     filsRecents: (jours) => gmail.filsRecents(ctx, jours),
     brouillons: () => gmail.brouillons(ctx),
     compte: () => gmail.compteGmail(ctx),

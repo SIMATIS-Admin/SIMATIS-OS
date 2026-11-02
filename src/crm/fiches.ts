@@ -34,6 +34,19 @@ export type Evenement = {
   origine: 'hubspot' | 'os';
   // Mailbox a mail was read in, when the instance has two.
   compte?: string;
+  mail?: {
+    fil: string;
+    objet: string;
+    de: string | null;
+    a: string | null;
+    cc?: string | null;
+    sens: 'envoye' | 'recu';
+    reponse: boolean;
+    lien?: string;
+    html?: string;
+    corps?: string;
+    charge?: boolean;
+  };
 };
 type Lien = { id: string; nom: string };
 export type Fiche = {

@@ -1,3 +1,4 @@
+import { ConversationMail, regrouperMails } from './ConversationsMail.js';
 import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import {
   changeOpportunite,
@@ -380,6 +381,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
   const titre = enTexte(f.titre) || enTexte(f.nom);
   const mailsLus = mails === 'chargement' ? [] : mails.mails;
   const historique = [...data.historique, ...mailsLus].sort((x, y) => y.at.localeCompare(x.at));
+  const fils = regrouperMails(historique);
   const shown = historique.filter((e) => {
     const types = FILTRES.find(([k]) => k === filtre)?.[2] ?? [];
     return types.length === 0 || types.includes(e.type);
@@ -822,6 +824,17 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                 )}
               {shown.length === 0 && <li className="muted small">Rien pour ce filtre.</li>}
               {shown.map((e) => {
+                if (e.mail) {
+                  const messages = fils.get(e.mail.fil)!;
+                  if (messages[0]?.id !== e.id) return null;
+                  return (
+                    <ConversationMail
+                      key={`${slug}-${kind}-${id}-${e.mail.fil}`}
+                      messages={messages}
+                      contexte={{ slug, kind, id }}
+                    />
+                  );
+                }
                 const [ico, lbl] = EVENEMENTS[e.type];
                 return (
                   <li key={e.id} className={`fi-evt ${e.type}`}>
