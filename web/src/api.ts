@@ -1037,6 +1037,10 @@ const fiche = (slug: string, kind: KindFiche, id: string) =>
   inst(slug, `fiches/${kind}/${encodeURIComponent(id)}`);
 export const fetchFiche = (slug: string, kind: KindFiche, id: string) =>
   getJson<FicheDetail>(fiche(slug, kind, id));
+// Mails exchanged with the record, read from the instance's mailbox (apart from the card: slow).
+export type MailsFiche = { mails: Evenement[]; adresses: number; message?: string };
+export const fetchMailsFiche = (slug: string, kind: KindFiche, id: string) =>
+  getJson<MailsFiche>(`${fiche(slug, kind, id)}/mails`);
 export const patchFiche = (
   slug: string,
   kind: KindFiche,

@@ -4,6 +4,7 @@ import {
   createTache,
   creerMandatDepuisAffaire,
   fetchFiche,
+  fetchMailsFiche,
   fetchInstances,
   lierMandat,
   modifierNoteFiche,
@@ -333,6 +334,10 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
   const [filtre, setFiltre] = useState('tout');
   const [cloture, setCloture] = useState<'gagne' | 'perdu' | null>(null);
   const [planifier, setPlanifier] = useState(false);
+  // Mails come from the mailbox, after the card: a slow or failed read never hides the rest.
+  const [mails, setMails] = useState<{ mails: Evenement[]; message?: string } | 'chargement'>(
+    'chargement',
+  );
 
   const load = useCallback(() => {
     fetchFiche(slug, kind, id).then(setData, (e: unknown) =>
@@ -340,6 +345,17 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
     );
   }, [slug, kind, id]);
   useEffect(load, [load]);
+  useEffect(() => {
+    setMails('chargement');
+    let actuel = true;
+    fetchMailsFiche(slug, kind, id).then(
+      (r) => actuel && setMails(r),
+      () => actuel && setMails({ mails: [], message: 'Mails non lus : messagerie injoignable.' }),
+    );
+    return () => {
+      actuel = false;
+    };
+  }, [slug, kind, id]);
 
   const erreur = (e: unknown) => setMessage(e instanceof Error ? e.message : String(e));
   const apres = (r: unknown) => {
@@ -362,7 +378,9 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
   const mode = f.modeFacturation === 'recurrent' ? 'recurrent' : 'spot';
   const mensuel = mode === 'recurrent';
   const titre = enTexte(f.titre) || enTexte(f.nom);
-  const shown = data.historique.filter((e) => {
+  const mailsLus = mails === 'chargement' ? [] : mails.mails;
+  const historique = [...data.historique, ...mailsLus].sort((x, y) => y.at.localeCompare(x.at));
+  const shown = historique.filter((e) => {
     const types = FILTRES.find(([k]) => k === filtre)?.[2] ?? [];
     return types.length === 0 || types.includes(e.type);
   });
@@ -794,6 +812,14 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
               ))}
             </div>
             <ul className="panel-b fi-histo">
+              {mails === 'chargement' && (filtre === 'tout' || filtre === 'emails') && (
+                <li className="muted small">Lecture des mails…</li>
+              )}
+              {mails !== 'chargement' &&
+                mails.message &&
+                (filtre === 'tout' || filtre === 'emails') && (
+                  <li className="muted small">{mails.message}</li>
+                )}
               {shown.length === 0 && <li className="muted small">Rien pour ce filtre.</li>}
               {shown.map((e) => {
                 const [ico, lbl] = EVENEMENTS[e.type];

@@ -369,21 +369,30 @@ export async function modifierDoc(
 const header = (headers: { name: string; value: string }[] | undefined, name: string) =>
   headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
 
+const LOT_LECTURE = 8;
+
 // Recent exchanges with a contact. Snippets only, unless the instance reads full bodies.
 export async function historique(
   ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
   email: string,
-  { mois, complet = false }: { mois: number; complet?: boolean },
+  { mois, complet = false, max = 25 }: { mois: number; complet?: boolean; max?: number },
   options: GoogleOptions = {},
 ): Promise<Message[]> {
   const api = googleApi(ctx, options);
   const q = `(from:${email} OR to:${email}) newer_than:${mois}m`;
   const list = await api.request<{ messages?: { id: string }[] }>(
     'GET',
-    `${GMAIL}/messages?${new URLSearchParams({ q, maxResults: '25' }).toString()}`,
+    `${GMAIL}/messages?${new URLSearchParams({ q, maxResults: String(max) }).toString()}`,
   );
+  // One request per message: a few at a time keeps a long history from taking a minute.
+  const ids = (list.messages ?? []).map((m) => m.id);
   const out: Message[] = [];
-  for (const { id } of list.messages ?? []) {
+  for (let i = 0; i < ids.length; i += LOT_LECTURE) {
+    out.push(...(await Promise.all(ids.slice(i, i + LOT_LECTURE).map((id) => lireMessage(id)))));
+  }
+  return out;
+
+  async function lireMessage(id: string): Promise<Message> {
     const m = await api.request<{
       id: string;
       threadId?: string;
@@ -402,7 +411,7 @@ export async function historique(
     const data =
       m.payload?.parts?.find((p) => p.mimeType === 'text/plain')?.body?.data ??
       m.payload?.body?.data;
-    out.push({
+    return {
       id: m.id,
       ...(m.threadId ? { threadId: m.threadId } : {}),
       date: header(m.payload?.headers, 'Date'),
@@ -411,9 +420,8 @@ export async function historique(
       objet: header(m.payload?.headers, 'Subject'),
       extrait: m.snippet ?? '',
       ...(complet && data ? { corps: Buffer.from(data, 'base64url').toString('utf8') } : {}),
-    });
+    };
   }
-  return out;
 }
 
 // Busy periods of the instance's calendars (to propose free slots, never to read the meetings).

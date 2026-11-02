@@ -6,7 +6,10 @@ import * as imap from './infomaniak/imap.js';
 // What the OS reads in an instance's mailbox, whoever hosts it (Gmail by OAuth, Infomaniak by
 // IMAP). The one write, a draft, goes through the connector (connexions/service.ts writeVia).
 export type Messagerie = {
-  historique(email: string, o: { mois: number; complet?: boolean }): Promise<Message[]>;
+  historique(
+    email: string,
+    o: { mois: number; complet?: boolean; max?: number },
+  ): Promise<Message[]>;
   filsRecents(jours: number): Promise<Fil[]>;
   brouillons(): Promise<Brouillon[]>;
   // Address of the connected mailbox: tells the pilot's own messages from the others.
