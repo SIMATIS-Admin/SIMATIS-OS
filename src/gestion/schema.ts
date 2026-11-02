@@ -104,6 +104,8 @@ export const gestionRevenus = pgTable(
     dateEncaissement: date('date_encaissement', { mode: 'string' }),
     // Référence de la facture émise ailleurs : jamais une facture fabriquée ici.
     referenceFacture: text('reference_facture'),
+    // TVA comprise dans le montant par échéance ; vide = non renseignée (jamais un taux supposé).
+    tvaCents: integer('tva_cents'),
     // Série : première échéance = `date`, dernière éventuelle = `dateFin` ; l'état de chaque échéance
     // vit alors dans gestion_revenu_exceptions. Ponctuelle (« aucune ») : l'état est celui de la ligne.
     recurrence: text('recurrence', { enum: RECURRENCES }).notNull().default('aucune'),
@@ -137,5 +139,44 @@ export const gestionRevenuExceptions = pgTable(
   (t) => [
     uniqueIndex('gestion_revenu_exceptions_occ_idx').on(t.revenuId, t.dateOrigine),
     instanceIsolation('gestion_revenu_exceptions'),
+  ],
+);
+
+// Réglages de trésorerie : un seul enregistrement par instance. Un solde sans date ni source n'existe pas,
+// et aucun seuil ni délai n'a de valeur par défaut : ils se règlent à la main.
+export const MODES_SEUIL = ['aucun', 'montant', 'bfr'] as const;
+export type ModeSeuil = (typeof MODES_SEUIL)[number];
+export const gestionReglages = pgTable(
+  'gestion_reglages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    soldeCents: integer('solde_cents'),
+    soldeDate: date('solde_date', { mode: 'string' }),
+    soldeSource: text('solde_source'),
+    seuilMode: text('seuil_mode', { enum: MODES_SEUIL }).notNull().default('aucun'),
+    seuilCents: integer('seuil_cents'),
+    delaiPaiementJours: integer('delai_paiement_jours'),
+  },
+  (t) => [
+    uniqueIndex('gestion_reglages_instance_idx').on(t.instanceId),
+    instanceIsolation('gestion_reglages'),
+  ],
+);
+
+// TVA mensuelle : la déclaration est mensuelle (confirmé), l'exigibilité reste à confirmer. Le montant
+// déclaré est saisi à la main, jamais transmis.
+export const gestionTvaMois = pgTable(
+  'gestion_tva_mois',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    mois: text('mois').notNull(),
+    declareeCents: integer('declaree_cents'),
+    note: text('note'),
+  },
+  (t) => [
+    uniqueIndex('gestion_tva_mois_idx').on(t.instanceId, t.mois),
+    instanceIsolation('gestion_tva_mois'),
   ],
 );

@@ -13,8 +13,10 @@ import {
 import {
   gestionDepenseExceptions,
   gestionDepenses,
+  gestionReglages,
   gestionRevenuExceptions,
   gestionRevenus,
+  gestionTvaMois,
 } from '../gestion/schema.js';
 import { echangesAjout, reunionsWispr, sujets } from '../inbox/schema.js';
 import {
@@ -37,6 +39,8 @@ import {
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
+  gestionTvaMois,
+  gestionReglages,
   gestionDepenseExceptions,
   gestionRevenuExceptions,
   gestionRevenus,

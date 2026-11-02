@@ -73,6 +73,8 @@ export type OccurrenceVue = {
   statut: 'reelle' | 'prevue';
   recurrente: boolean;
   payeur: 'societe' | 'associe';
+  // TVA de l'échéance (proportionnelle si le montant réel diffère) ; null = non renseignée.
+  tvaCents: number | null;
   affectations: Affectation[];
   refacturable: boolean;
   justificatif: string | null;
@@ -254,6 +256,12 @@ export async function occurrencesDepenses(
         statut: s.statut,
         recurrente: s.recurrence !== 'aucune',
         payeur: s.payeur,
+        tvaCents:
+          s.tvaCents == null
+            ? null
+            : ex?.montantTtcCents == null || s.montantTtcCents === 0
+              ? s.tvaCents
+              : Math.round((s.tvaCents * ex.montantTtcCents) / s.montantTtcCents),
         affectations: s.affectations,
         refacturable: s.refacturable,
         justificatif: s.justificatif,
