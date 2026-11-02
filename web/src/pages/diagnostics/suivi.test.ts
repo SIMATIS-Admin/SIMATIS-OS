@@ -9,6 +9,8 @@ const enCours = (extra: Partial<TestVma> = {}): TestVma =>
     contactEmail: 'jeanne@exemple.test',
     envoyeeLe: '2026-10-12T08:00:00.000Z',
     relances: [],
+    mailOuvertLe: null,
+    lienOuvertLe: null,
     ...extra,
   }) as TestVma;
 
@@ -20,6 +22,8 @@ describe('Suivi des invitations du Test de VMA', () => {
     expect(etapesFrise(t)).toEqual([
       { libelle: 'Envoyé 12/10', fait: true },
       { libelle: 'Relancé 19/10 (auto)', fait: true },
+      { libelle: 'Mail ouvert', fait: false },
+      { libelle: 'Lien ouvert', fait: false },
       { libelle: 'Test passé', fait: false },
     ]);
     expect(etapesFrise({ ...t, statut: 'utilisee' }).at(-1)).toEqual({
@@ -30,6 +34,17 @@ describe('Suivi des invitations du Test de VMA', () => {
       libelle: 'Envoyé',
       fait: false,
     });
+  });
+
+  it('la frise date l’ouverture du mail et du lien quand le site les a relevées', () => {
+    const t = enCours({
+      mailOuvertLe: '2026-10-13T07:00:00.000Z',
+      lienOuvertLe: '2026-10-13T09:00:00.000Z',
+    });
+    expect(etapesFrise(t).slice(1, 3)).toEqual([
+      { libelle: 'Mail ouvert 13/10', fait: true },
+      { libelle: 'Lien ouvert 13/10', fait: true },
+    ]);
   });
 
   it('une relance à la main s’affiche sans mention', () => {

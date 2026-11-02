@@ -25,7 +25,7 @@ export const sansReponse = (
 
 // La frise d'une invitation : envoi, relances, résultat ; une étape non atteinte reste grisée.
 export function etapesFrise(
-  t: Pick<TestVma, 'statut' | 'envoyeeLe' | 'relances'>,
+  t: Pick<TestVma, 'statut' | 'envoyeeLe' | 'relances' | 'mailOuvertLe' | 'lienOuvertLe'>,
 ): { libelle: string; fait: boolean }[] {
   return [
     t.envoyeeLe
@@ -35,6 +35,13 @@ export function etapesFrise(
       libelle: `Relancé ${jourMois(r.le)}${r.origine === 'auto' ? ' (auto)' : ''}`,
       fait: true,
     })),
+    // L'ouverture du mail est indicative : certaines messageries chargent les images sans que le mail soit lu.
+    t.mailOuvertLe
+      ? { libelle: `Mail ouvert ${jourMois(t.mailOuvertLe)}`, fait: true }
+      : { libelle: 'Mail ouvert', fait: false },
+    t.lienOuvertLe
+      ? { libelle: `Lien ouvert ${jourMois(t.lienOuvertLe)}`, fait: true }
+      : { libelle: 'Lien ouvert', fait: false },
     { libelle: 'Test passé', fait: t.statut === 'utilisee' },
   ];
 }

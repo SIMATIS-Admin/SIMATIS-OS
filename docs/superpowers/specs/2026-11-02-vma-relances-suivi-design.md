@@ -71,13 +71,13 @@ Sur chaque ligne d'invitation, une frise :
 - « Reçu » n'est pas garanti : on montre « envoyé », et « rejeté » quand la messagerie renvoie une erreur d'adresse.
 - L'ouverture du mail est indicative (Apple Mail et Gmail peuvent précharger les images) ; le clic est fiable.
 
-## 6. Site Web SIMATIS (autre dépôt, PR séparée)
+## 6. Site Web SIMATIS (autre dossier, non versionné) — livré
 
-- Pixel d'ouverture à identifiant d'invitation, inclus dans le gabarit des mails.
-- Enregistrement du premier clic quand `/test-vma?i=<id>` est chargé.
-- Ces deux dates sont ajoutées aux données que la relève renvoie à l'OS.
-
-Tant que le site n'est pas à jour, l'OS n'affiche que l'envoi et les relances.
+- `GET /api/test-vma/pixel?i=<id>` : image d'un pixel glissée dans les mails d'invitation et de relance ; date la première ouverture du mail sur l'invitation. Même réponse pour toute invitation, connue ou non.
+- `GET /api/test-vma/session?i=<id>` : quand l'invitation est valide, date la première ouverture du lien (la page a vraiment chargé ; un simple aperçu du lien n'appelle pas cette API).
+- `GET` et `POST /api/test-vma/suivi` (jeton `OS_PULL_TOKEN`) : l'OS relève les dates (identifiant d'invitation et dates seulement), puis acquitte ; le site efface alors son relevé. Une réouverture ne recrée rien : chaque date est posée une fois, sur l'invitation.
+- L'OS date `mail_ouvert_le` et `lien_ouvert_le` (la plus ancienne l'emporte) avec le même passage que les résultats ; un site pas encore à jour (404) n'est pas une erreur.
+- Limites : l'ouverture du mail est indicative (Apple Mail et Gmail peuvent charger l'image sans lecture) ; un antivirus qui exécute la page peut dater un lien ouvert. Les mails déjà envoyés n'ont pas de pixel : seul leur lien est suivi.
 
 ## 7. Livraison
 

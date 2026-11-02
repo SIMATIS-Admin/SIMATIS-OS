@@ -163,6 +163,20 @@ const registre = (tutoiement?: boolean) =>
     ? { votre: 'ton', lienVoici: 'Voici ton lien', copiez: 'copie' }
     : { votre: 'votre', lienVoici: 'Voici votre lien', copiez: 'copiez' };
 
+const pixel = (lien: string) => {
+  const url = urlPixel(lien);
+  return url
+    ? `<tr><td style="height:0;line-height:0;font-size:0;"><img src="${echapper(url)}" width="1" height="1" alt="" style="display:block;border:0;"></td></tr>`
+    : '';
+};
+
+// Le pixel de suivi vient du lien du test : même site, même identifiant d'invitation. Sans lien reconnaissable, pas de pixel.
+export function urlPixel(lien: string): string | null {
+  return lien.includes('/test-vma?i=')
+    ? lien.replace('/test-vma?i=', '/api/test-vma/pixel?i=')
+    : null;
+}
+
 function corpsMail(p: ParamsMail, introduction: string): string {
   const r = registre(p.tutoiement);
   const lien = echapper(p.lien);
@@ -174,7 +188,7 @@ function corpsMail(p: ParamsMail, introduction: string): string {
     paragraphe(
       `Si le bouton ne s’ouvre pas, ${r.copiez} ce lien : <a href="${lien}" style="color:${COULEURS.nuit};text-decoration:underline;">${lien}</a>`,
     ),
-  ].join('')}</td></tr>`;
+  ].join('')}</td></tr>${pixel(p.lien)}`;
 }
 
 // Mail d'invitation : le lien, le nom de l'entreprise et la date d'expiration, rien d'autre.

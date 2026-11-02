@@ -33,6 +33,8 @@ const test = (extra: Partial<TestVma> = {}): TestVma => ({
   envoyeeLe: null,
   relances: [],
   echecEnvoi: null,
+  mailOuvertLe: null,
+  lienOuvertLe: null,
   type: 'premier',
   statut: 'envoyee',
   lien: 'https://www.simatis.fr/test-vma?i=abc',

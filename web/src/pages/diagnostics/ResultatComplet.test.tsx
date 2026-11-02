@@ -26,6 +26,8 @@ const test = (resultat: Partial<NonNullable<TestVma['resultat']>>): TestVma => (
   envoyeeLe: null,
   relances: [],
   echecEnvoi: null,
+  mailOuvertLe: null,
+  lienOuvertLe: null,
   type: 'essai',
   statut: 'utilisee',
   lien: 'https://www.simatis.fr/test-vma?i=abc',

@@ -9,6 +9,7 @@ import { listInstances } from '../instances/service.js';
 import { echeanceDe } from '../site/releve.js';
 import { brouillonResultat, type EcranDirigeant } from './brouillon.js';
 import { vmaTests } from './schema.js';
+import { releverSuiviVma } from './suivi.js';
 
 export type ReleveVmaDeps = {
   url: string;
@@ -263,6 +264,7 @@ export function startReleveVma(
     running = true;
     releverTestsVma(db, deps)
       .then((r) => deps.onResult?.(r))
+      .then(() => releverSuiviVma(db, deps))
       .catch((error: unknown) => deps.onError?.(error))
       .finally(() => {
         running = false;

@@ -28,6 +28,9 @@ export const vmaTests = pgTable(
     envoyeeLe: timestamp('envoyee_le', { withTimezone: true }),
     relances: jsonb('relances').$type<Relance[]>().notNull().default([]),
     echecEnvoi: text('echec_envoi'),
+    // Suivi relevé du site : première ouverture du mail (pixel, indicatif) et du lien. Jamais écrasé par une date plus tardive.
+    mailOuvertLe: timestamp('mail_ouvert_le', { withTimezone: true }),
+    lienOuvertLe: timestamp('lien_ouvert_le', { withTimezone: true }),
     // Relance automatique : faux pour les invitations d'avant la routine, que Marc relance à la main.
     relanceAuto: boolean('relance_auto').notNull().default(true),
     type: text('type', { enum: TYPES_TEST_VMA }).notNull(),

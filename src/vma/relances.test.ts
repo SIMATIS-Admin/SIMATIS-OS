@@ -227,7 +227,12 @@ describe('Relance d’une invitation au test VMA', () => {
 
     it('la liste expose le registre, l’envoi, les relances et l’échec', async () => {
       const relance = { le: '2026-11-01T08:00:00.000Z', origine: 'auto' as const };
-      await inviter({ tutoiement: true, relances: [relance], echecEnvoi: 'boîte hors ligne' });
+      await inviter({
+        tutoiement: true,
+        relances: [relance],
+        echecEnvoi: 'boîte hors ligne',
+        mailOuvertLe: new Date('2026-11-03T08:00:00.000Z'),
+      });
       const app = serveur();
       const rep = await app.inject({ method: 'GET', url: '/api/i/relance-reel/vma/tests' });
       await app.close();
@@ -235,6 +240,8 @@ describe('Relance d’une invitation au test VMA', () => {
         tutoiement: true,
         relances: [relance],
         echecEnvoi: 'boîte hors ligne',
+        mailOuvertLe: '2026-11-03T08:00:00.000Z',
+        lienOuvertLe: null,
         envoyeeLe: expect.any(String) as string,
       });
     });
