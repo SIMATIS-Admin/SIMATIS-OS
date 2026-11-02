@@ -76,6 +76,10 @@ type Etape =
   | { nom: 'relecture'; campagne: CampagneProspection }
   | { nom: 'fin'; campagne: CampagneProspection; resultat: ResultatCampagne };
 
+// Un mail déjà rédigé que Claude reformule : on reste à la relecture, pas à l'écran d'attente.
+const reformulationEnCours = (c: CampagneProspection) =>
+  c.statut === 'redaction' && c.brouillons.some((b) => b.etat === 'a_rediger' && b.corps);
+
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | undefined }) {
@@ -96,7 +100,7 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
       fetchCampagne(slug, ouvrir).then(
         (c) =>
           setEtape(
-            c.statut === 'relecture'
+            c.statut === 'relecture' || reformulationEnCours(c)
               ? { nom: 'relecture', campagne: c }
               : { nom: 'attente', id: c.id },
           ),
@@ -240,7 +244,7 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
     void fetchCampagne(slug, vue.enCours).then(
       (c) =>
         setEtape(
-          c.statut === 'relecture'
+          c.statut === 'relecture' || reformulationEnCours(c)
             ? { nom: 'relecture', campagne: c }
             : { nom: 'attente', id: c.id },
         ),

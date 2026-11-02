@@ -11,8 +11,13 @@ import { seedDemoIfEmpty } from '../demo/seed.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { createToken } from '../mcp/tokens.js';
 import { creerCampagneRelance, lireCampagne, reglageParDefaut } from './campagnes.js';
-import { demarrerCampagne } from './redaction.js';
-import { CONSIGNES_FROID, CONSIGNES_REDACTION, CONSIGNES_REPONSE } from './outils-mcp.js';
+import { demanderReformulation, demarrerCampagne, deposerBrouillons } from './redaction.js';
+import {
+  CONSIGNES_FROID,
+  CONSIGNES_REDACTION,
+  CONSIGNES_REFORMULATION,
+  CONSIGNES_REPONSE,
+} from './outils-mcp.js';
 import { creerCampagneReponse } from './reponses.js';
 import { sujets } from '../inbox/schema.js';
 import { prospectionOccurrences } from './schema.js';
@@ -141,6 +146,46 @@ describe('Outils MCP de rédaction de campagne', () => {
     const c = (await call('campagne_contexte', { campagneId: id })).json<{ consignes: string }>();
     expect(c.consignes.startsWith(CONSIGNES_REDACTION)).toBe(true);
     expect(c.consignes).toContain('Court, tutoiement, rebondir sur le rendez-vous de mardi');
+  });
+
+  it('le style est présenté à Claude comme un texte brut à corriger et à enrichir', async () => {
+    const id = await campagneDe(['Denise'], { ...reglageParDefaut(), style: 'Cour, direct' });
+    const c = (await call('campagne_contexte', { campagneId: id })).json<{ consignes: string }>();
+    expect(c.consignes).toMatch(/corriger/);
+    expect(c.consignes).toMatch(/enrichir/);
+    expect(c.consignes).toMatch(/sans trahir/);
+  });
+
+  it('une reformulation donne à Claude le mail actuel et la demande, pour ce mail seulement', async () => {
+    const id = await campagneDe(['Fanny', 'Gaël']);
+    const [b1] = (await lire(id)).brouillons;
+    await withInstance(t.app.db, instanceId, async (tx) => {
+      await deposerBrouillons(
+        tx,
+        id,
+        (await lireCampagne(tx, id)).brouillons.map((b) => ({
+          id: b.id,
+          objet: `Re: ${b.contactNom}`,
+          corps: '<p>Bonjour,</p>',
+        })),
+      );
+      await demanderReformulation(tx, id, b1!.id, 'Sans la phrase sur le prix');
+      await demarrerCampagne(tx, id);
+    });
+    const c = (await call('campagne_contexte', { campagneId: id })).json<{
+      consignes: string;
+      brouillons: {
+        id: string;
+        reformulation?: { demande: string; objetActuel: string; corpsActuel: string };
+      }[];
+    }>();
+    expect(c.brouillons).toHaveLength(1);
+    expect(c.brouillons[0]!.reformulation).toEqual({
+      demande: 'Sans la phrase sur le prix',
+      objetActuel: `Re: ${(await lire(id)).brouillons.find((b) => b.id === b1!.id)!.contactNom}`,
+      corpsActuel: '<p>Bonjour,</p>',
+    });
+    expect(c.consignes).toContain(CONSIGNES_REFORMULATION);
   });
 
   it('sans style, les consignes restent celles du serveur', async () => {

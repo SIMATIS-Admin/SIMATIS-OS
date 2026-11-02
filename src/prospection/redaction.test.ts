@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { contacts, taches } from '../crm/schema.js';
@@ -9,12 +10,13 @@ import {
   attribuerCreneaux,
   campagnesEnAttente,
   demarrerCampagne,
+  demanderReformulation,
   deposerBrouillons,
   finirCampagne,
   nettoyerCorps,
   relancerCampagne,
 } from './redaction.js';
-import { prospectionCampagnes } from './schema.js';
+import { prospectionBrouillons, prospectionCampagnes } from './schema.js';
 
 describe('nettoyerCorps', () => {
   it('retire les scripts, styles, gestionnaires et liens dangereux', () => {
@@ -188,6 +190,118 @@ describe('Rédaction d’une campagne par Claude', () => {
     expect(relance).toMatchObject({ statut: 'redaction', erreur: null, demarreAt: null });
     expect(relance.brouillons.every((x) => x.etat === 'a_rediger')).toBe(true);
     expect((await dans(a, (tx) => campagnesEnAttente(tx))).map((x) => x.id)).toContain(c.id);
+  });
+
+  describe('reformulation d’un mail', () => {
+    async function enRelecture(noms: string[]) {
+      const c = await nouvelle(a, noms);
+      await dans(a, (tx) => demarrerCampagne(tx, c.id));
+      await dans(a, (tx) =>
+        deposerBrouillons(
+          tx,
+          c.id,
+          c.brouillons.map((b) => ({
+            id: b.id,
+            objet: `Objet ${b.contactNom}`,
+            corps: '<p>Texte</p>',
+          })),
+        ),
+      );
+      return c;
+    }
+
+    it('remet seulement ce mail à rédiger, avec la demande, et renvoie la campagne à l’exécuteur', async () => {
+      const c = await enRelecture(['Marina', 'Noël']);
+      const [b1, b2] = c.brouillons;
+      await dans(a, (tx) => demanderReformulation(tx, c.id, b1!.id, '  Plus court  '));
+      const apres = await dans(a, (tx) => lireCampagne(tx, c.id));
+      expect(apres).toMatchObject({ statut: 'redaction', demarreAt: null });
+      expect(apres.brouillons.find((x) => x.id === b1!.id)).toMatchObject({
+        etat: 'a_rediger',
+        consigne: 'Plus court',
+        corps: '<p>Texte</p>',
+      });
+      expect(apres.brouillons.find((x) => x.id === b2!.id)).toMatchObject({
+        etat: 'pret',
+        consigne: null,
+      });
+      expect((await dans(a, (tx) => campagnesEnAttente(tx))).map((x) => x.id)).toContain(c.id);
+    });
+
+    it('le nouveau texte déposé remplace l’ancien et efface la demande', async () => {
+      const c = await enRelecture(['Olga']);
+      const id = c.brouillons[0]!.id;
+      await dans(a, (tx) => demanderReformulation(tx, c.id, id, 'Plus court'));
+      await dans(a, (tx) => demarrerCampagne(tx, c.id));
+      await dans(a, (tx) =>
+        deposerBrouillons(tx, c.id, [{ id, objet: 'Nouveau', corps: '<p>Court</p>' }]),
+      );
+      const apres = await dans(a, (tx) => lireCampagne(tx, c.id));
+      expect(apres.statut).toBe('relecture');
+      expect(apres.brouillons[0]).toMatchObject({
+        etat: 'pret',
+        objet: 'Nouveau',
+        corps: '<p>Court</p>',
+        consigne: null,
+      });
+    });
+
+    it('refuse une demande vide, un mail écarté et une reformulation déjà en cours', async () => {
+      const c = await enRelecture(['Paul', 'Quentin']);
+      const [b1, b2] = c.brouillons;
+      await expect(dans(a, (tx) => demanderReformulation(tx, c.id, b1!.id, '   '))).rejects.toThrow(
+        /changer/i,
+      );
+      await t.owner.db
+        .update(prospectionBrouillons)
+        .set({ etat: 'ecarte' })
+        .where(eq(prospectionBrouillons.id, b2!.id));
+      await expect(
+        dans(a, (tx) => demanderReformulation(tx, c.id, b2!.id, 'Autre')),
+      ).rejects.toThrow(/ne peut pas/i);
+      await dans(a, (tx) => demanderReformulation(tx, c.id, b1!.id, 'Plus court'));
+      await expect(
+        dans(a, (tx) => demanderReformulation(tx, c.id, b1!.id, 'Encore')),
+      ).rejects.toThrow(/déjà en cours/i);
+    });
+
+    it('refuse un mail d’une autre instance', async () => {
+      const c = await enRelecture(['Rita']);
+      const autre = await nouvelle(b, ['Samir']);
+      await expect(
+        dans(a, (tx) => demanderReformulation(tx, c.id, autre.brouillons[0]!.id, 'Plus court')),
+      ).rejects.toThrow(/ne peut pas/i);
+    });
+
+    it('si Claude échoue, l’ancien texte est conservé « à vérifier » et la campagne reste en relecture', async () => {
+      const c = await enRelecture(['Tania']);
+      const id = c.brouillons[0]!.id;
+      await dans(a, (tx) => demanderReformulation(tx, c.id, id, 'Plus court'));
+      await dans(a, (tx) => demarrerCampagne(tx, c.id));
+      await dans(a, (tx) => finirCampagne(tx, c.id, 'Claude s’est arrêté'));
+      const apres = await dans(a, (tx) => lireCampagne(tx, c.id));
+      expect(apres.statut).toBe('relecture');
+      expect(apres.brouillons[0]).toMatchObject({
+        etat: 'a_verifier',
+        corps: '<p>Texte</p>',
+        consigne: null,
+      });
+      expect(apres.brouillons[0]!.note).toMatch(/reformulation/i);
+    });
+
+    it('une reformulation que l’exécuteur ne prend pas rend la campagne à la relecture', async () => {
+      const c = await enRelecture(['Ugo']);
+      const id = c.brouillons[0]!.id;
+      await dans(a, (tx) => demanderReformulation(tx, c.id, id, 'Plus court'));
+      await t.owner.db
+        .update(prospectionCampagnes)
+        .set({ demandeAt: new Date(Date.now() - 20 * 60_000) })
+        .where(eq(prospectionCampagnes.id, c.id));
+      await dans(a, (tx) => abandonnerCampagnes(tx));
+      const apres = await dans(a, (tx) => lireCampagne(tx, c.id));
+      expect(apres.statut).toBe('relecture');
+      expect(apres.brouillons[0]).toMatchObject({ etat: 'a_verifier', corps: '<p>Texte</p>' });
+    });
   });
 
   it('abandonne une campagne que l’exécuteur n’a pas prise en 15 minutes', async () => {

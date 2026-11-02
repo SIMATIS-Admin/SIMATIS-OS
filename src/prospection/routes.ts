@@ -25,7 +25,12 @@ import {
 } from './froid.js';
 import { rapprocherInstance } from './rapprochement.js';
 import { creerCampagneReponse, reponseDeSujet } from './reponses.js';
-import { abandonnerCampagnes, relancerCampagne } from './redaction.js';
+import {
+  abandonnerCampagnes,
+  CONSIGNE_MAX,
+  demanderReformulation,
+  relancerCampagne,
+} from './redaction.js';
 import {
   ajouterSignature,
   definirDefaut,
@@ -77,6 +82,7 @@ const campagneSchema = z.discriminatedUnion('mode', [
   }),
 ]);
 const idsSchema = z.object({ ids: z.array(z.uuid()).max(500) });
+const reformulationSchema = z.object({ consigne: z.string().max(CONSIGNE_MAX) });
 const finalisationSchema = z.object({ mode: z.enum(['brouillons', 'envoi']).optional() });
 const brouillonSchema = z.object({
   objet: z.string().max(300).optional(),
@@ -284,6 +290,18 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
       return dansInstance(request.params.slug, reply, (tx) =>
         modifierBrouillon(tx, request.params.bid, p.data),
       );
+    },
+  );
+
+  app.post<{ Params: { slug: string; id: string; bid: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/campagnes/:id/brouillons/:bid/reformuler',
+    (request, reply) => {
+      const p = reformulationSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      return dansInstance(request.params.slug, reply, async (tx) => {
+        await demanderReformulation(tx, request.params.id, request.params.bid, p.data.consigne);
+        return { ok: true };
+      });
     },
   );
 
