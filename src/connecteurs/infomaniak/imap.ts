@@ -123,19 +123,25 @@ const ENTITES: Record<string, string> = {
 
 // The message's text (its plain part, else its HTML without tags), never its attachments. Must
 // run while the message's folder is open.
-async function texte(client: ImapFlow, m: FetchMessageObject, max: number): Promise<string> {
+async function texte(
+  client: ImapFlow,
+  m: FetchMessageObject,
+  max: number,
+  html = false,
+): Promise<string> {
   const parts = m.bodyStructure
     ? feuilles(m.bodyStructure).filter((p) => p.disposition !== 'attachment')
     : [];
-  const part =
-    parts.find((p) => p.type === 'text/plain') ?? parts.find((p) => p.type === 'text/html');
+  const part = html
+    ? parts.find((p) => p.type === 'text/html')
+    : (parts.find((p) => p.type === 'text/plain') ?? parts.find((p) => p.type === 'text/html'));
   if (!part) return '';
   const d = await client.download(String(m.uid), part.part ?? '1', { uid: true, maxBytes: max });
   if (!d.content) return '';
   const chunks: Buffer[] = [];
   for await (const chunk of d.content) chunks.push(chunk as Buffer);
   const brut = Buffer.concat(chunks).toString('utf8');
-  if (part.type !== 'text/html') return brut;
+  if (html || part.type !== 'text/html') return brut;
   return brut
     .replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
@@ -158,7 +164,13 @@ export async function historique(
     const envoyes = await dossier(client, '\\Sent');
     const lus: Lu[] = [];
     for (const path of ['INBOX', ...(envoyes ? [envoyes] : [])]) {
-      lus.push(...(await lire(client, path, critere, { envelope: true, bodyStructure: true })));
+      lus.push(
+        ...(await lire(client, path, critere, {
+          envelope: true,
+          bodyStructure: true,
+          headers: ['References', 'In-Reply-To'],
+        })),
+      );
     }
     const recents = lus
       .sort((a, b) => (dateDe(b)?.getTime() ?? 0) - (dateDe(a)?.getTime() ?? 0))
@@ -168,7 +180,15 @@ export async function historique(
       const corps = await dansDossier(client, m.path, () =>
         texte(client, m, complet ? MAX_CORPS : MAX_EXTRAIT),
       );
+      const html = complet
+        ? await dansDossier(client, m.path, () => texte(client, m, MAX_CORPS, true))
+        : '';
+      const reply = entetes(m).find((h) => h.name.toLowerCase() === 'in-reply-to')?.value ?? null;
       out.push({
+        threadId: references(m)[0] ?? reply ?? m.envelope?.messageId ?? `${m.path}:${m.uid}`,
+        inReplyTo: reply,
+        cc: adresse(m.envelope?.cc),
+        ...(html ? { html } : {}),
         id: m.envelope?.messageId ?? `${m.path}:${m.uid}`,
         date: dateDe(m)?.toISOString() ?? null,
         de: adresse(m.envelope?.from),

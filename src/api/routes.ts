@@ -896,7 +896,29 @@ export function registerApi(
       const kind = ficheParams(request.params);
       if (!kind || !(await getFiche(db, i, kind, request.params.id)))
         return reply.code(404).send({ error: 'Fiche introuvable' });
-      return mailsDeFiche(db, i, kind, request.params.id, connexionDeps);
+      const message = (request.query as { message?: unknown }).message;
+      if (message !== undefined && (typeof message !== 'string' || message.length > 1000))
+        return reply.code(400).send({ error: 'Message invalide' });
+      reply.header('Cache-Control', 'no-store');
+      const result = await mailsDeFiche(
+        db,
+        i,
+        kind,
+        request.params.id,
+        connexionDeps,
+        undefined,
+        message,
+      );
+      if (message) {
+        const mail = result.mails.find((m) => m.id === message);
+        if (!mail) return reply.code(404).send({ error: 'Mail introuvable sur cette fiche' });
+        if (!mail.mail?.charge)
+          return reply.code(502).send({
+            error: 'Le mail complet est indisponible. Réessayez ou ouvrez la messagerie.',
+          });
+        return { ...result, mails: [mail] };
+      }
+      return result;
     }),
   );
   app.patch<FicheRoute>(

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import type { Message } from '../connecteurs/google/google.js';
 import type { Messagerie } from '../connecteurs/messagerie.js';
@@ -55,6 +55,31 @@ describe('Mails échangés avec une fiche', () => {
         ['Extrait m1', 'Envoyé · Relance 1', 'email'],
       ]);
       expect(mails[1]?.texte).toBe('Extrait m1');
+    });
+
+    it('charge uniquement le message autorisé de la fiche et conserve le fil et les participants', async () => {
+      const m = {
+        ...message('m1', 'contact@exemple.test', 'Tue, 06 Oct 2026 09:00:00 +0000'),
+        threadId: 't1',
+        inReplyTo: '<original@exemple.test>',
+        a: 'moi@exemple.test',
+      };
+      const lire = vi.fn().mockResolvedValue({ ...m, html: '<p>Complet</p>' });
+      const boite = { ...boiteDe({ 'contact@exemple.test': [m] }), message: lire };
+      const first = await mailsEchanges([boite], ['contact@exemple.test']);
+      expect(lire).not.toHaveBeenCalled();
+      expect(first.mails[0]?.mail).toMatchObject({
+        fil: 'moi@exemple.test:t1',
+        de: m.de,
+        a: m.a,
+        sens: 'recu',
+        reponse: true,
+      });
+      await mailsEchanges([boite], ['contact@exemple.test'], 'mail-autre-m1');
+      expect(lire).not.toHaveBeenCalled();
+      const result = await mailsEchanges([boite], ['contact@exemple.test'], first.mails[0]!.id);
+      expect(lire).toHaveBeenCalledExactlyOnceWith('m1');
+      expect(result.mails[0]?.mail).toMatchObject({ html: '<p>Complet</p>', charge: true });
     });
 
     it('ignore un mail sans date lisible et nomme un mail sans objet', async () => {

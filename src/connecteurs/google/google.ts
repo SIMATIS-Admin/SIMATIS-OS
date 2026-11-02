@@ -17,6 +17,9 @@ export type Message = {
   objet: string | null;
   extrait: string;
   corps?: string;
+  html?: string;
+  cc?: string | null;
+  inReplyTo?: string | null;
 };
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
@@ -388,40 +391,77 @@ export async function historique(
   const ids = (list.messages ?? []).map((m) => m.id);
   const out: Message[] = [];
   for (let i = 0; i < ids.length; i += LOT_LECTURE) {
-    out.push(...(await Promise.all(ids.slice(i, i + LOT_LECTURE).map((id) => lireMessage(id)))));
+    out.push(
+      ...(await Promise.all(
+        ids.slice(i, i + LOT_LECTURE).map((id) => messageAvecApi(api, id, complet)),
+      )),
+    );
   }
   return out;
+}
 
-  async function lireMessage(id: string): Promise<Message> {
-    const m = await api.request<{
-      id: string;
-      threadId?: string;
-      snippet?: string;
-      payload?: {
-        headers?: { name: string; value: string }[];
-        body?: { data?: string };
-        parts?: { mimeType: string; body?: { data?: string } }[];
-      };
-    }>(
-      'GET',
-      `${GMAIL}/messages/${id}?${new URLSearchParams(
-        complet ? { format: 'full' } : { format: 'metadata', metadataHeaders: 'Subject' },
-      ).toString()}&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`,
-    );
-    const data =
-      m.payload?.parts?.find((p) => p.mimeType === 'text/plain')?.body?.data ??
-      m.payload?.body?.data;
-    return {
-      id: m.id,
-      ...(m.threadId ? { threadId: m.threadId } : {}),
-      date: header(m.payload?.headers, 'Date'),
-      de: header(m.payload?.headers, 'From'),
-      a: header(m.payload?.headers, 'To'),
-      objet: header(m.payload?.headers, 'Subject'),
-      extrait: m.snippet ?? '',
-      ...(complet && data ? { corps: Buffer.from(data, 'base64url').toString('utf8') } : {}),
-    };
+type MessagePart = {
+  mimeType?: string;
+  filename?: string;
+  headers?: { name: string; value: string }[];
+  body?: { data?: string; attachmentId?: string };
+  parts?: MessagePart[];
+};
+
+export function lireMessage(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  id: string,
+  complet = true,
+  options: GoogleOptions = {},
+): Promise<Message> {
+  return messageAvecApi(googleApi(ctx, options), id, complet);
+}
+
+async function messageAvecApi(
+  api: ReturnType<typeof googleApi>,
+  id: string,
+  complet: boolean,
+): Promise<Message> {
+  const params = new URLSearchParams({ format: complet ? 'full' : 'metadata' });
+  if (!complet)
+    for (const name of ['Subject', 'From', 'To', 'Cc', 'Date', 'In-Reply-To'])
+      params.append('metadataHeaders', name);
+  const m = await api.request<{
+    id: string;
+    threadId?: string;
+    snippet?: string;
+    payload?: MessagePart;
+  }>('GET', `${GMAIL}/messages/${encodeURIComponent(id)}?${params.toString()}`);
+  const leaves = (p: MessagePart): MessagePart[] =>
+    p.filename ? [] : (p.parts?.flatMap(leaves) ?? [p]);
+  const parts = m.payload ? leaves(m.payload) : [];
+  async function body(type: string) {
+    const part = parts.find((p) => p.mimeType === type);
+    let data = part?.body?.data;
+    if (!data && part?.body?.attachmentId) {
+      const attachment = await api.request<{ data?: string }>(
+        'GET',
+        `${GMAIL}/messages/${encodeURIComponent(id)}/attachments/${encodeURIComponent(part.body.attachmentId)}`,
+      );
+      data = attachment.data;
+    }
+    return data ? Buffer.from(data, 'base64url').toString('utf8') : undefined;
   }
+  const corps = complet ? await body('text/plain') : undefined;
+  const html = complet ? await body('text/html') : undefined;
+  return {
+    id: m.id,
+    ...(m.threadId ? { threadId: m.threadId } : {}),
+    date: header(m.payload?.headers, 'Date'),
+    de: header(m.payload?.headers, 'From'),
+    a: header(m.payload?.headers, 'To'),
+    cc: header(m.payload?.headers, 'Cc'),
+    inReplyTo: header(m.payload?.headers, 'In-Reply-To'),
+    objet: header(m.payload?.headers, 'Subject'),
+    extrait: m.snippet ?? '',
+    ...(corps ? { corps } : {}),
+    ...(html ? { html } : {}),
+  };
 }
 
 // Busy periods of the instance's calendars (to propose free slots, never to read the meetings).

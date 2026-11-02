@@ -1010,6 +1010,19 @@ export type Evenement = {
   at: string;
   origine: 'hubspot' | 'os';
   compte?: string;
+  mail?: {
+    fil: string;
+    objet: string;
+    de: string | null;
+    a: string | null;
+    cc?: string | null;
+    sens: 'envoye' | 'recu';
+    reponse: boolean;
+    lien?: string;
+    html?: string;
+    corps?: string;
+    charge?: boolean;
+  };
 };
 export type RdvLie = { id: string; titre: string; debut: string | null; compteRendu: boolean };
 export type LienFiche = { id: string; nom: string; principal: boolean };
@@ -1056,8 +1069,10 @@ export const fetchFiche = (slug: string, kind: KindFiche, id: string) =>
   getJson<FicheDetail>(fiche(slug, kind, id));
 // Mails exchanged with the record, read from the instance's mailbox (apart from the card: slow).
 export type MailsFiche = { mails: Evenement[]; adresses: number; message?: string };
-export const fetchMailsFiche = (slug: string, kind: KindFiche, id: string) =>
-  getJson<MailsFiche>(`${fiche(slug, kind, id)}/mails`);
+export const fetchMailsFiche = (slug: string, kind: KindFiche, id: string, message?: string) =>
+  getJson<MailsFiche>(
+    `${fiche(slug, kind, id)}/mails${message ? `?message=${encodeURIComponent(message)}` : ''}`,
+  );
 export const patchFiche = (
   slug: string,
   kind: KindFiche,
