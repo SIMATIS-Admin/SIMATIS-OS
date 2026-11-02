@@ -1,5 +1,5 @@
 {
-  "id": "86ceec35-c75a-481d-aee0-5cf946f20f45",
+  "id": "9fa2795f-541b-482f-9f9a-034687afe5e5",
   "prevId": "fe4360ee-a3a7-4ad9-848c-e18ce3cbfd41",
   "version": "7",
   "dialect": "postgresql",
@@ -4708,6 +4708,137 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.gestion_reglages": {
+      "name": "gestion_reglages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'natif'"
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "solde_cents": {
+          "name": "solde_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "solde_date": {
+          "name": "solde_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "solde_source": {
+          "name": "solde_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seuil_mode": {
+          "name": "seuil_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'aucun'"
+        },
+        "seuil_cents": {
+          "name": "seuil_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delai_paiement_jours": {
+          "name": "delai_paiement_jours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "gestion_reglages_instance_idx": {
+          "name": "gestion_reglages_instance_idx",
+          "columns": [
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "gestion_reglages_instance_id_instances_id_fk": {
+          "name": "gestion_reglages_instance_id_instances_id_fk",
+          "tableFrom": "gestion_reglages",
+          "tableTo": "instances",
+          "columnsFrom": [
+            "instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "gestion_reglages_instance_isolation": {
+          "name": "gestion_reglages_instance_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid",
+          "withCheck": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.gestion_revenu_exceptions": {
       "name": "gestion_revenu_exceptions",
       "schema": "",
@@ -4951,6 +5082,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "tva_cents": {
+          "name": "tva_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "recurrence": {
           "name": "recurrence",
           "type": "text",
@@ -5040,6 +5177,124 @@
       "policies": {
         "gestion_revenus_instance_isolation": {
           "name": "gestion_revenus_instance_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid",
+          "withCheck": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.gestion_tva_mois": {
+      "name": "gestion_tva_mois",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'natif'"
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "mois": {
+          "name": "mois",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "declaree_cents": {
+          "name": "declaree_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "gestion_tva_mois_idx": {
+          "name": "gestion_tva_mois_idx",
+          "columns": [
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "mois",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "gestion_tva_mois_instance_id_instances_id_fk": {
+          "name": "gestion_tva_mois_instance_id_instances_id_fk",
+          "tableFrom": "gestion_tva_mois",
+          "tableTo": "instances",
+          "columnsFrom": [
+            "instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "gestion_tva_mois_instance_isolation": {
+          "name": "gestion_tva_mois_instance_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
           "to": [
@@ -8715,32 +8970,6 @@
         },
         "contact_email": {
           "name": "contact_email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tutoiement": {
-          "name": "tutoiement",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "envoyee_le": {
-          "name": "envoyee_le",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "relances": {
-          "name": "relances",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "echec_envoi": {
-          "name": "echec_envoi",
           "type": "text",
           "primaryKey": false,
           "notNull": false

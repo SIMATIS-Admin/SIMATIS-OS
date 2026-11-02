@@ -34,6 +34,7 @@ Nouvelle migration, colonnes ajoutées :
 | `mail_ouvert_le` | timestamp, nul | Première ouverture du mail (relève du site) |
 | `lien_ouvert_le` | timestamp, nul | Premier clic sur le lien (relève du site) |
 | `echec_envoi` | text, nul | Dernière raison d'échec d'envoi, effacée à l'envoi suivant réussi |
+| `relance_auto` | booléen, défaut `true` | Faux pour les invitations d'avant la routine : Marc les relance à la main |
 
 Les invitations existantes n'ont pas de `envoyee_le` : on prend `created_at` comme date d'envoi pour celles qui ont une adresse e-mail (l'envoi se faisait à la création).
 
@@ -53,7 +54,7 @@ Les invitations existantes n'ont pas de `envoyee_le` : on prend `created_at` com
 
 ## 4. Routine de relance automatique
 
-- Éligible : invitation `envoyee`, non expirée, avec adresse, `envoyee_le` il y a 7 jours ou plus, et `relances` vide (une seule relance auto ; une relance manuelle déjà faite l'empêche).
+- Éligible : invitation `envoyee`, `relance_auto` vrai (les invitations d'avant la routine en sont exclues, la migration les met à faux), non expirée, avec adresse, `envoyee_le` il y a 7 jours ou plus, et `relances` vide (une seule relance auto ; une relance manuelle déjà faite l'empêche).
 - Passage quotidien le matin (à partir de 8 h, heure de Paris), lancé par le serveur comme la relève du site. Interrupteur : variable serveur `VMA_RELANCE_AUTO` (active par défaut) ; Paramètres > Routines est réservé aux routines Claude.
 - Même chemin d'envoi que le bouton : dry-run par défaut, écriture réelle seulement avec le double verrou. Origine `auto`.
 - Idempotente : un second passage le même jour n'envoie rien.

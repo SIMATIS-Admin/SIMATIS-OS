@@ -4,6 +4,14 @@ import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
+import { saisirTva, suiviTva, tvaSaisieSchema } from './tva.js';
+import {
+  ecrireReglages,
+  lireReglages,
+  projeter,
+  ReglagesInvalides,
+  reglagesSchema,
+} from './tresorerie.js';
 import {
   archiverRevenu,
   creerRevenu,
@@ -62,6 +70,7 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
       return await withInstance(db, instance.id, (tx) => fn(tx, instance.id));
     } catch (e) {
       if (e instanceof DepenseIntrouvable) return reply.code(404).send({ error: e.message });
+      if (e instanceof ReglagesInvalides) return reply.code(400).send({ error: e.message });
       if (e instanceof RevenuIntrouvable) return reply.code(404).send({ error: e.message });
       if (e instanceof RevenuInvalide) return reply.code(400).send({ error: e.message });
       if (e instanceof DepenseInvalide) return reply.code(400).send({ error: e.message });
@@ -324,6 +333,72 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
       const jusqua = jourSchema.safeParse(request.query.jusqua);
       if (!jusqua.success) return invalide(reply);
       return dansGestion(request.params.slug, reply, (tx) => facturesAEmettre(tx, jusqua.data));
+    },
+  );
+
+  const projectionSchema = z.object({
+    horizon: z.coerce
+      .number()
+      .int()
+      .refine((n) => [1, 3, 6, 12, 24].includes(n)),
+    granularite: z.enum(['mois', 'semaine']).default('mois'),
+    retard: z.coerce.number().int().min(0).max(365).default(0),
+  });
+  app.get<{ Params: { slug: string }; Querystring: Record<string, string> }>(
+    '/api/i/:slug/gestion/tresorerie',
+    async (request, reply) => {
+      const q = projectionSchema.safeParse(request.query);
+      if (!q.success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, (tx) =>
+        projeter(tx, {
+          horizonMois: q.data.horizon,
+          granularite: q.data.granularite,
+          retardJours: q.data.retard,
+        }),
+      );
+    },
+  );
+
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/gestion/reglages', async (request, reply) =>
+    dansGestion(request.params.slug, reply, (tx) => lireReglages(tx)),
+  );
+  app.put<{ Params: { slug: string } }>('/api/i/:slug/gestion/reglages', async (request, reply) => {
+    const parsed = reglagesSchema.safeParse(request.body);
+    if (!parsed.success) return invalide(reply);
+    return dansGestion(request.params.slug, reply, async (tx, instanceId) => {
+      const r = await ecrireReglages(tx, instanceId, parsed.data);
+      await logEvent(tx, {
+        acteur: 'pilote',
+        action: 'Réglages de trésorerie Gestion modifiés',
+        niveau: 'L2',
+      });
+      return r;
+    });
+  });
+
+  app.get<{ Params: { slug: string }; Querystring: { mois?: string } }>(
+    '/api/i/:slug/gestion/tva',
+    async (request, reply) => {
+      const mois = moisSchema.safeParse(request.query.mois);
+      if (!mois.success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, (tx) => suiviTva(tx, mois.data));
+    },
+  );
+  app.put<{ Params: { slug: string; mois: string } }>(
+    '/api/i/:slug/gestion/tva/:mois',
+    async (request, reply) => {
+      const mois = moisSchema.safeParse(request.params.mois);
+      const parsed = tvaSaisieSchema.safeParse(request.body);
+      if (!mois.success || !parsed.success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx, instanceId) => {
+        const r = await saisirTva(tx, instanceId, mois.data, parsed.data);
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: 'TVA déclarée saisie (Gestion)',
+          niveau: 'L2',
+        });
+        return r;
+      });
     },
   );
 }

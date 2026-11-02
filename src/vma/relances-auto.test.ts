@@ -105,6 +105,13 @@ describe('Relance automatique des invitations au test VMA', () => {
     expect(ecrits).toHaveLength(0);
   });
 
+  it('ne touche pas aux invitations d’avant la routine : Marc les relance lui-même', async () => {
+    const ancienne = await inviter({ relanceAuto: false });
+    expect(await passer()).toMatchObject({ relancees: 0 });
+    expect(await relances(ancienne.id)).toEqual([]);
+    expect(ecrits).toHaveLength(0);
+  });
+
   it('un second passage ne relance pas de nouveau', async () => {
     const test = await inviter();
     await passer();

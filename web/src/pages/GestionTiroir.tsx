@@ -327,7 +327,7 @@ export function GestionTiroir({
             {(
               [
                 ['societe', 'Par la société'],
-                ['associe', 'Avancé par l’associé'],
+                ['associe', 'Avancé ou crédité à l’associé'],
               ] as const
             ).map(([k, l]) => (
               <button
@@ -340,6 +340,12 @@ export function GestionTiroir({
               </button>
             ))}
           </div>
+          {payeur === 'associe' && (
+            <div className="small muted">
+              Pas de sortie du compte bancaire de la société : avance personnelle ou crédit de votre
+              compte d’associé (un loyer, par exemple). Le compte d’associé se suit au Lot D.
+            </div>
+          )}
         </div>
         <label className="check">
           <input

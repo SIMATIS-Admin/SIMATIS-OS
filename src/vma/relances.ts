@@ -93,6 +93,7 @@ export async function relancerEnAttente(
           and(
             eq(vmaTests.instanceId, instance.id),
             eq(vmaTests.statut, 'envoyee'),
+            eq(vmaTests.relanceAuto, true),
             gt(vmaTests.expireLe, maintenant),
             isNotNull(vmaTests.contactEmail),
             lte(vmaTests.envoyeeLe, limite),
