@@ -8,6 +8,10 @@ let calls: Call[] = [];
 // Present (null or a mandate) only for a deal of the own activity.
 let mandat: { slug: string; nom: string } | null | undefined;
 let droitTransfert = false;
+let mailsFiche: { mails: unknown[]; adresses: number; message?: string } = {
+  mails: [],
+  adresses: 0,
+};
 
 const affaire = () => ({
   kind: 'affaire',
@@ -114,6 +118,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       organisations: [],
     });
   if (url.endsWith('/transfert/droit')) return json({ autorise: droitTransfert });
+  if (url.endsWith('/mails')) return json(mailsFiche);
   if (url.includes('/emails')) return json({ emails: [] });
   if (url.includes('/fiches/contact/')) return json(contact());
   if (url.endsWith('/mandat') || url.endsWith('/mandat/lier'))
@@ -138,6 +143,7 @@ describe('Fiche page : pastille d’instance', () => {
     calls = [];
     mandat = undefined;
     droitTransfert = false;
+    mailsFiche = { mails: [], adresses: 0 };
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -163,6 +169,7 @@ describe('Fiche page', () => {
     calls = [];
     mandat = undefined;
     droitTransfert = false;
+    mailsFiche = { mails: [], adresses: 0 };
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -430,5 +437,36 @@ describe('Fiche page', () => {
       }),
     );
     expect(location.hash).toBe('#/simatis/fiche/contact/c2');
+  });
+
+  it('merges the mails read from the mailbox into the history, newest first', async () => {
+    mailsFiche = {
+      adresses: 1,
+      mails: [
+        {
+          id: 'mail-m1',
+          type: 'email',
+          titre: 'Envoyé · Relance fictive',
+          texte: 'Bonjour, je reviens vers vous',
+          at: '2026-10-20T08:00:00.000Z',
+          origine: 'os',
+        },
+      ],
+    };
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    expect(await screen.findByText('Envoyé · Relance fictive')).toBeTruthy();
+    expect(screen.getByText('Bonjour, je reviens vers vous')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Emails' }));
+    expect(screen.getByText('Envoyé · Relance fictive')).toBeTruthy();
+  });
+
+  it('says why no mail is shown when the mailbox cannot be read', async () => {
+    mailsFiche = {
+      mails: [],
+      adresses: 1,
+      message: 'Aucune messagerie connectée à cette instance.',
+    };
+    render(<Fiche slug="simatis" kind="contact" id="c1" />);
+    expect(await screen.findByText('Aucune messagerie connectée à cette instance.')).toBeTruthy();
   });
 });

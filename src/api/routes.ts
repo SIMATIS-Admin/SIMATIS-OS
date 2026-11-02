@@ -141,6 +141,7 @@ import { fusionnerFiches } from '../crm/fusion.js';
 import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../crm/liens.js';
 import { rechercherDans, rechercherMandats } from '../crm/recherche.js';
 import { peutTransferer, UTILISATEUR_PILOTE } from '../transfert/droits.js';
+import { mailsDeFiche } from '../crm/mails.js';
 import { supprimerFiche } from '../crm/suppression.js';
 import {
   ajouterNote,
@@ -886,6 +887,16 @@ export function registerApi(
       return kind === 'affaire' && i.type === 'propre'
         ? { ...fiche, mandat: await mandatLie(db, request.params.id) }
         : fiche;
+    }),
+  );
+  // Read apart from the card: one request per mail to the mailbox can take seconds.
+  app.get<FicheRoute>(
+    '/api/i/:slug/fiches/:kind/:id/mails',
+    onInstance<FicheRoute>(async (i, request, reply) => {
+      const kind = ficheParams(request.params);
+      if (!kind || !(await getFiche(db, i, kind, request.params.id)))
+        return reply.code(404).send({ error: 'Fiche introuvable' });
+      return mailsDeFiche(db, i, kind, request.params.id, connexionDeps);
     }),
   );
   app.patch<FicheRoute>(

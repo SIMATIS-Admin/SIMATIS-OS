@@ -149,7 +149,7 @@ const extraitDe = (t: string) => t.replace(/\s+/g, ' ').trim().slice(0, 200);
 export async function historique(
   ctx: Ctx,
   email: string,
-  { mois, complet = false }: { mois: number; complet?: boolean },
+  { mois, complet = false, max = 25 }: { mois: number; complet?: boolean; max?: number },
 ): Promise<Message[]> {
   return avecBoite(ctx.secrets, ctx.instance.nom, async (client) => {
     const since = new Date();
@@ -162,7 +162,7 @@ export async function historique(
     }
     const recents = lus
       .sort((a, b) => (dateDe(b)?.getTime() ?? 0) - (dateDe(a)?.getTime() ?? 0))
-      .slice(0, 25);
+      .slice(0, max);
     const out: Message[] = [];
     for (const m of recents) {
       const corps = await dansDossier(client, m.path, () =>
