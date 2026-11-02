@@ -145,7 +145,40 @@ describe('Diagnostics : résumé des tests VMA', () => {
       dernier: null,
       evolution: [],
       ecart: null,
+      methodesMelangees: false,
     });
+  });
+
+  it('ne compare pas les résultats de méthodes différentes', () => {
+    const r = resumerVma([
+      test({ id: 'a', version: '2.3', recueLe: '2026-04-14T10:00:00Z', resultat: resultat(3400) }),
+      test({ id: 'b', version: '3.0', recueLe: '2026-10-02T10:00:00Z', resultat: resultat(1200) }),
+    ]);
+    expect(r.methodesMelangees).toBe(true);
+    expect(r.ecart).toBeNull();
+    const memeMethode = resumerVma([
+      test({ id: 'a', version: '3.0', recueLe: '2026-04-14T10:00:00Z', resultat: resultat(1000) }),
+      test({ id: 'b', version: '3.1', recueLe: '2026-10-02T10:00:00Z', resultat: resultat(1500) }),
+    ]);
+    expect(memeMethode.methodesMelangees).toBe(false);
+    expect(memeMethode.ecart).toEqual({ euros: 500, pourcentage: 50 });
+  });
+
+  it('méthode 3.0 : le dernier résultat porte le CA mensuel, pas l’allure', () => {
+    const r = resumerVma([
+      test({
+        id: 'a',
+        version: '3.0',
+        recueLe: '2026-10-22T10:00:00Z',
+        resultat: {
+          ...resultat(1300)!,
+          caMensuel: { total: 29000, regulier: 22000, engage: 5000, ponctuel: 2000 },
+        },
+      }),
+    ]);
+    expect(r.dernier?.caMensuel).toBe(29000);
+    expect(r.dernier?.allure).toBeNull();
+    expect(r.dernier?.vma).toBe(1300);
   });
 
   it('exclut une VMA non mesurable de l’évolution', () => {
@@ -153,7 +186,7 @@ describe('Diagnostics : résumé des tests VMA', () => {
       test({ id: 'a', recueLe: '2026-04-14T10:00:00Z', resultat: resultat(null) }),
       test({ id: 'b', recueLe: '2026-10-02T10:00:00Z', resultat: resultat(4150) }),
     ]);
-    expect(r.evolution).toEqual([{ date: '2026-10-02T10:00:00Z', vma: 4150 }]);
+    expect(r.evolution).toEqual([{ date: '2026-10-02T10:00:00Z', vma: 4150, methode: '' }]);
     expect(r.ecart).toBeNull();
   });
 });

@@ -95,4 +95,71 @@ describe('Résultat complet : même contenu que le mail', () => {
     expect(screen.getByText('Frein A')).toBeTruthy();
     expect(screen.getByText('Frein B')).toBeTruthy();
   });
+  it('méthode 3.0 : CA mensuel en trois catégories, deux conclusions, freins typés', () => {
+    render(
+      <ResultatComplet
+        onRetour={() => {}}
+        test={test({
+          methode: '3.0',
+          periode: 3,
+          recurrent: undefined,
+          allureActuelle: undefined,
+          trajectoire: undefined,
+          socleEcheance: undefined,
+          caMensuel: { total: 29000, regulier: 22000, engage: 5000, ponctuel: 2000 },
+          tauxObserve: 0.75,
+          vma: 1300,
+          objectif: {
+            caMensuel: 30000,
+            echeance: 2,
+            partEngageeVisee: 0.3,
+            montantEngageMensuel: 9000,
+          },
+          projection: {
+            ca: 24000,
+            caAvecReconduction: null,
+            engage: 0,
+            engageAvecReconduction: null,
+            echu: 5000,
+          },
+          conclusionCa: {
+            statut: 'a-confirmer',
+            manque: ['clients réguliers partis'],
+            ecart: 6000,
+            ecartAvecReconduction: null,
+            ecartPct: 0.25,
+          },
+          composition: { statut: 'non-atteint', partVisee: 0.3, cible: 9000, partActuelle: 0.17 },
+          freins: [{ ...frein(1, 'Frein A'), nature: 'gain' }],
+          freinsPortefeuille: [{ ...frein(11, 'Frein B'), enjeu: null, nature: 'securise' }],
+          textes: {
+            libelleCaMensuel: 'Votre chiffre d’affaires mensuel',
+            libellesRevenus: {
+              regulier: 'Régulier variable',
+              engage: 'Sous engagement',
+              ponctuel: 'Ponctuel',
+            },
+            natures: { gain: 'Gain', securise: 'Revenu sécurisé', nonChiffre: 'Enjeu non chiffré' },
+            conclusions: {
+              titreCa: 'CA couvert ?',
+              titreComposition: 'Part sous engagement atteinte ?',
+              ca: { 'a-confirmer': 'À confirmer : données insuffisantes.' },
+              composition: { 'non-atteint': 'Non atteinte.' },
+            },
+          } as unknown as Record<string, string>,
+        })}
+      />,
+    );
+    expect(screen.getByText('Votre chiffre d’affaires mensuel')).toBeTruthy();
+    expect(screen.getByText(/Régulier variable : 22.k€ par mois \(76.%\)/)).toBeTruthy();
+    expect(screen.getByText(/Sous engagement : 5.k€ par mois \(17.%\)/)).toBeTruthy();
+    expect(screen.getByText(/sur vos prestations ponctuelles/)).toBeTruthy();
+    expect(screen.getByText(/pas le taux de signature habituel/)).toBeTruthy();
+    expect(screen.getByText(/À confirmer : données insuffisantes/)).toBeTruthy();
+    expect(screen.getByText(/Ce qui manque pour conclure : clients réguliers partis/)).toBeTruthy();
+    expect(screen.getByText(/Non atteinte\./)).toBeTruthy();
+    expect(screen.getByText(/Revenu sécurisé · enjeu non chiffré/)).toBeTruthy();
+    expect(screen.getByText(/Gain estimé : environ \+5.k€ par mois\*/)).toBeTruthy();
+    expect(screen.queryByText(/nouvelles affaires/i)).toBeNull();
+  });
 });

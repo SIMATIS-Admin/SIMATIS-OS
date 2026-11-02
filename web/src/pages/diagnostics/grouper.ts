@@ -80,12 +80,20 @@ export type ResumeVma = {
     vma: number | null;
     // Mode portefeuille : le mail met l'allure totale (socle récurrent compris) en avant, pas la VMA seule.
     allure: number | null;
+    // Méthode 3.0 : chiffre d'affaires mensuel (régulier variable + engagé + ponctuel), mis en avant avant la VMA ponctuelle.
+    caMensuel: number | null;
   } | null;
   // Premiers tests seulement, en ordre chronologique ; une VMA non mesurable n'y entre pas.
-  evolution: { date: string; vma: number }[];
-  // Écart entre le premier et le dernier premier test de l'évolution ; null sous deux points.
+  evolution: { date: string; vma: number; methode: string }[];
+  // Écart entre le premier et le dernier premier test de l'évolution, d'une même méthode ; null sous deux points.
   ecart: { euros: number; pourcentage: number } | null;
+  // La méthode 3.0 ne mesure plus la même chose que la 2.x (la VMA ne compte plus les nouveaux contrats récurrents) :
+  // les résultats de méthodes différentes ne se comparent pas.
+  methodesMelangees: boolean;
 };
+
+// « 2.3 » → « 2 » : la méthode change quand la version majeure change.
+const methodeDe = (version: string | null) => (version ?? '').split('.')[0] ?? '';
 
 // Les essais ne rentrent ni dans l'historique ni dans l'évolution (cahier des charges §5.1).
 export function resumerVma(tests: TestVma[]): ResumeVma {
@@ -95,12 +103,18 @@ export function resumerVma(tests: TestVma[]): ResumeVma {
   const dernier = recus.at(-1);
   const evolution = recus
     .filter((t) => t.type === 'premier' && typeof t.resultat?.vma === 'number')
-    .map((t) => ({ date: t.recueLe, vma: t.resultat!.vma as number }));
+    .map((t) => ({
+      date: t.recueLe,
+      vma: t.resultat!.vma as number,
+      methode: methodeDe(t.version),
+    }));
 
-  const premier = evolution[0];
-  const dernierPremier = evolution.at(-1);
+  const dernierPoint = evolution.at(-1);
+  const comparables = evolution.filter((p) => p.methode === dernierPoint?.methode);
+  const premier = comparables[0];
+  const dernierPremier = comparables.at(-1);
   const ecart =
-    evolution.length >= 2 && premier && dernierPremier
+    comparables.length >= 2 && premier && dernierPremier
       ? {
           euros: dernierPremier.vma - premier.vma,
           pourcentage: Math.round(((dernierPremier.vma - premier.vma) / premier.vma) * 100),
@@ -114,7 +128,13 @@ export function resumerVma(tests: TestVma[]): ResumeVma {
           type: dernier.type,
           date: dernier.recueLe,
           vma: typeof dernier.resultat?.vma === 'number' ? dernier.resultat.vma : null,
+          caMensuel:
+            methodeDe(dernier.version) === '3' &&
+            typeof dernier.resultat?.caMensuel?.total === 'number'
+              ? dernier.resultat.caMensuel.total
+              : null,
           allure:
+            methodeDe(dernier.version) !== '3' &&
             dernier.resultat?.modePortefeuille === true &&
             (dernier.resultat.recurrent ?? 0) > 0 &&
             typeof dernier.resultat.allureActuelle === 'number'
@@ -124,5 +144,6 @@ export function resumerVma(tests: TestVma[]): ResumeVma {
       : null,
     evolution,
     ecart,
+    methodesMelangees: new Set(evolution.map((p) => p.methode)).size > 1,
   };
 }

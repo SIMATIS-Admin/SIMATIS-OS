@@ -29,6 +29,37 @@ const ans = (n: number) => (n < 1 ? `${Math.round(n * 12)} mois` : `${n} ${n < 2
 // Forme de l'écran dirigeant, telle que la relève la reçoit du site (v0.2 : avec le socle récurrent).
 export type EcranDirigeant = {
   entreprise: string;
+  // Méthode 3.0 : trois catégories de revenus (régulier variable, engagé, ponctuel), flux séparés, deux conclusions.
+  methode?: string;
+  periode?: number;
+  caMensuel?: { total: number; regulier: number; engage: number; ponctuel: number };
+  tauxObserve?: number | null;
+  objectif?: {
+    caMensuel: number;
+    echeance: number;
+    partEngageeVisee: number | null;
+    montantEngageMensuel: number | null;
+  };
+  projection?: {
+    ca: number;
+    caAvecReconduction: number | null;
+    engage: number;
+    engageAvecReconduction: number | null;
+    echu: number;
+  };
+  conclusionCa?: {
+    statut: string;
+    manque: string[];
+    ecart: number;
+    ecartAvecReconduction: number | null;
+    ecartPct: number | null;
+  };
+  composition?: {
+    statut: string;
+    partVisee?: number;
+    cible?: number;
+    partActuelle?: number;
+  };
   vma: number | null;
   mesurable: boolean;
   statut: string;
@@ -67,7 +98,9 @@ export type EcranDirigeant = {
     titre: string;
     phrase: string;
     // Enjeu estimé en € par mois, présenté comme une estimation moyenne (décision de Marc, 21 octobre 2026).
-    enjeu?: number;
+    // Méthode 3.0 : null pour les freins sur les clients réguliers et les contrats ; `nature` dit ce que l'enjeu représente.
+    enjeu?: number | null;
+    nature?: string;
     reponse?: string;
     cible?: string;
     debut?: string[];
@@ -91,6 +124,16 @@ export type EcranDirigeant = {
     libelleVmaPrev?: string;
     pastillePrev?: string;
     indicatif?: string;
+    // Méthode 3.0
+    libelleCaMensuel?: string;
+    libellesRevenus?: Record<string, string>;
+    natures?: Record<string, string>;
+    conclusions?: {
+      titreCa: string;
+      titreComposition: string;
+      ca: Record<string, string>;
+      composition: Record<string, string>;
+    };
   };
 };
 
@@ -103,7 +146,15 @@ function detailFrein(f: EcranDirigeant['freins'][number], t: EcranDirigeant['tex
   const ligne = (contenu: string) =>
     `<div style="margin:6px 0 0;font:14px/1.5 ${POLICE};color:${C.roche};">${contenu}</div>`;
   const lignes: string[] = [];
-  if (typeof f.enjeu === 'number' && f.enjeu > 0)
+  if (t.natures) {
+    // Méthode 3.0 : l'enjeu dit sa nature (gain, perte évitée, revenu sécurisé) ; sans montant quand il n'est pas chiffré.
+    const nature = t.natures[f.nature ?? 'gain'] ?? '';
+    const texte =
+      typeof f.enjeu === 'number' && f.enjeu > 0
+        ? `${nature} estimé : environ +${euros(f.enjeu)} par mois*`
+        : `${nature} · ${(t.natures.nonChiffre ?? 'enjeu non chiffré').toLowerCase()}`;
+    lignes.push(ligne(`<span style="color:${C.teal};font-weight:700;">${esc(texte)}</span>`));
+  } else if (typeof f.enjeu === 'number' && f.enjeu > 0)
     lignes.push(
       ligne(
         `<span style="color:${C.teal};font-weight:700;">${esc(t.libelleEnjeu ?? 'Enjeu estimé')} : environ +${esc(euros(f.enjeu))} par mois*</span>`,
@@ -126,6 +177,7 @@ export function brouillonResultat(p0: { contactNom: string | null; ecran: EcranD
   subject: string;
   html: string;
 } {
+  if (p0.ecran.methode?.startsWith('3') && p0.ecran.caMensuel) return brouillonResultatV3(p0);
   const e = p0.ecran;
   const salut = salutation(p0.contactNom);
   const socle =
@@ -241,6 +293,103 @@ ${allure}
 ${objectif}
 ${trajectoire}
 ${phrase}
+${freins}`);
+  return { subject: 'Votre résultat au Test de VMA', html };
+}
+
+// Méthode 3.0 : le mail reprend l'écran du dirigeant. Le CA mensuel et ses trois catégories ouvrent le résultat ; la VMA
+// ne désigne que les prestations ponctuelles ; deux conclusions distinctes (CA couvert ? part sous engagement atteinte ?).
+function brouillonResultatV3(p0: { contactNom: string | null; ecran: EcranDirigeant }): {
+  subject: string;
+  html: string;
+} {
+  const e = p0.ecran;
+  const t = e.textes;
+  const cm = e.caMensuel!;
+  const lib = t.libellesRevenus ?? {};
+  const o = e.objectif;
+  const pr = e.projection;
+  const c = e.conclusionCa;
+  const comp = e.composition;
+  const mesure = e.mesurable && e.vma !== null;
+  const previsionnel = e.previsionnel === true && mesure;
+  const pastille = previsionnel
+    ? (t.pastillePrev ?? 'Chiffres prévisionnels').toLowerCase()
+    : e.pastille === 'estimés' || e.statut === 'à confirmer'
+      ? 'chiffres en partie estimés'
+      : e.pastille === 'non mesurable'
+        ? 'non mesurable'
+        : 'chiffres réels';
+  const tenue = e.tenue === 'tenue' ? 'activité régulière' : 'activité par vagues';
+  const puce = (x: string) =>
+    `<span style="display:inline-block;margin:10px 6px 0 0;padding:3px 10px;border:1px solid ${C.menthe};border-radius:12px;font:12px/1.4 ${POLICE};color:${C.menthe};">${esc(x)}</span>`;
+  const ligne = (x: string, fort = false) =>
+    `<div style="font:${fort ? '700 ' : ''}15px/1.7 ${POLICE};color:${C.nuit};">${esc(x)}</div>`;
+  const part = (k: 'regulier' | 'engage' | 'ponctuel') =>
+    cm.total > 0 ? ` (${pct(cm[k] / cm.total)})` : '';
+  const categories = (['regulier', 'engage', 'ponctuel'] as const).map(
+    (k) => `${lib[k] ?? k} : ${euros(cm[k])} par mois${part(k)}`,
+  );
+  const hero = `<tr><td style="background:${C.nuit};padding:28px 32px 26px;">
+<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.menthe};">${esc(t.libelleCaMensuel ?? 'Votre chiffre d’affaires mensuel')}</div>
+<div style="margin:8px 0 4px;font:800 44px/1.1 ${POLICE};color:#FFFFFF;">${esc(euros(cm.total))}<span style="font:400 16px/1.4 ${POLICE};color:#FFFFFF;"> par mois</span></div>
+<div style="font:16px/1.5 ${POLICE};color:#FFFFFF;">${esc(`Soit ${euros(cm.total * 12)} par an, en moyenne sur ${e.periode ?? 3} mois.`)}</div>
+<div>${puce(pastille)}${puce(tenue)}</div>
+</td></tr>
+<tr><td style="padding:22px 32px 0;"><div style="padding:14px 18px;background:${C.glacier};border-radius:6px;">${categories.map((x) => ligne(x)).join('')}</div></td></tr>`;
+
+  const vma = `<tr><td style="padding:22px 32px 0;"><div style="padding:14px 18px;border:1px solid ${C.trait};border-radius:6px;">
+<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">${esc(previsionnel ? (t.libelleVmaPrev ?? 'Votre VMA prévisionnelle') : 'Votre VMA commerciale')}</div>
+<div style="margin-top:6px;font:15px/1.6 ${POLICE};color:${C.nuit};">${esc(mesure ? `${euros(e.vma ?? 0)} de CA commandé par mois ${previsionnel ? 'attendu ' : ''}sur vos prestations ponctuelles, soit ${euros((e.vma ?? 0) * 12)} par an.` : t.nonMesurable)}</div>
+<div style="margin-top:4px;font:14px/1.5 ${POLICE};color:${C.roche};">${esc(t.definitionVma)}</div>
+${typeof e.tauxObserve === 'number' ? `<div style="margin-top:4px;font:14px/1.5 ${POLICE};color:${C.roche};">${esc(`Sur la période, vos commandes représentent ${pct(e.tauxObserve)} du montant de vos devis : un rapport de montants, pas votre taux de signature habituel.`)}</div>` : ''}
+${e.indicatif === true && t.indicatif ? `<div style="margin-top:4px;font:14px/1.5 ${POLICE};color:${C.roche};">${esc(t.indicatif)}</div>` : ''}
+</div></td></tr>`;
+
+  const conclusions = t.conclusions;
+  const bloc = (titre: string, texte: string, detail = '') =>
+    `<div style="margin-top:12px;font:15px/1.6 ${POLICE};color:${C.nuit};"><strong style="color:${C.marine};">${esc(titre)}</strong> ${esc(texte)}${detail ? `<div style="font:14px/1.5 ${POLICE};color:${C.roche};">${esc(detail)}</div>` : ''}</div>`;
+  const avecRec = typeof pr?.caAvecReconduction === 'number';
+  const detailCa = c
+    ? [
+        c.statut !== 'a-confirmer' && c.ecart > 0
+          ? `Sans reconduction, il vous manquera ${euros(c.ecart)} par mois à l’échéance${c.ecartPct !== null ? ` (+${pct(c.ecartPct)})` : ''}, soit ${euros(c.ecart * 12)} par an.`
+          : '',
+        c.manque.length ? `Ce qui manque pour conclure : ${c.manque.join(', ')}.` : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : '';
+  const detailComposition =
+    comp && comp.statut !== 'non-demande' && pr
+      ? `Part visée : ${pct(comp.partVisee ?? 0)}, soit ${euros(comp.cible ?? 0)} par mois sous engagement (aujourd’hui ${pct(comp.partActuelle ?? 0)}). Estimé à l’échéance : ${euros(pr.engage)} par mois${typeof pr.engageAvecReconduction === 'number' ? `, ${euros(pr.engageAvecReconduction)} avec la reconduction indiquée` : ''}.`
+      : '';
+  const objectif = `<tr><td style="padding:22px 32px 0;"><div style="padding:16px 18px;border:1px solid ${C.trait};border-left:4px solid ${C.teal};border-radius:6px;">
+<div style="font:700 17px/1.4 ${POLICE};color:${C.marine};">Votre objectif : ${esc(e.niveau.label)}</div>
+<div style="margin-top:4px;font:15px/1.6 ${POLICE};color:${C.nuit};">${esc(`${euros(o?.caMensuel ?? e.allureVisee)} par mois dans ${ans(e.echeance)}, soit ${euros((o?.caMensuel ?? e.allureVisee) * 12)} par an.`)}${pr ? ` ${esc(`Sur votre lancée, ${euros(pr.ca)} par mois${avecRec ? ` sans reconduction, ${euros(pr.caAvecReconduction as number)} avec la reconduction indiquée` : ''}.`)}` : ''}</div>
+${conclusions && c ? bloc(conclusions.titreCa, conclusions.ca[c.statut] ?? '', detailCa) : ''}
+${conclusions && comp && comp.statut !== 'non-demande' ? bloc(conclusions.titreComposition, conclusions.composition[comp.statut] ?? '', detailComposition) : ''}
+</div></td></tr>
+<tr><td style="padding:16px 32px 0;">${p(esc(e.niveau.phrase), 'margin:0;')}</td></tr>`;
+
+  const noteEnjeu =
+    t.noteEnjeu && e.freins.some((f) => typeof f.enjeu === 'number' && f.enjeu > 0)
+      ? `<tr><td style="padding:4px 32px 0;"><div style="font:12px/1.5 ${POLICE};color:${C.roche};">* ${esc(t.noteEnjeu)}</div></td></tr>`
+      : '';
+  const carte = (f: EcranDirigeant['freins'][number], i: number) =>
+    `<tr><td style="padding:12px 32px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.trait};border-radius:6px;"><tr>
+<td valign="top" width="44" style="padding:16px 0 16px 16px;"><div style="width:28px;height:28px;border-radius:14px;background:${C.marine};font:700 14px/28px ${POLICE};color:${C.menthe};text-align:center;">${i + 1}</div></td>
+<td valign="top" style="padding:16px 18px 16px 8px;"><div style="font:700 16px/1.4 ${POLICE};color:${C.marine};">${esc(f.titre)}</div><div style="margin-top:2px;font:15px/1.5 ${POLICE};color:${C.nuit};">${esc(f.phrase)}</div>${detailFrein(f, t)}</td>
+</tr></table></td></tr>`;
+  const section = (titre: string, liste: EcranDirigeant['freins']) =>
+    `<tr><td style="padding:28px 32px 0;"><div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">${esc(titre)}</div></td></tr>${liste.length ? liste.map(carte).join('') : `<tr><td style="padding:12px 32px 0;">${p(esc(t.aucunFrein), 'margin:0;')}</td></tr>`}`;
+  const freins = `${e.freins.length || mesure ? section(`Vos freins : ${(t.titreConquete ?? 'Prestations ponctuelles').toLowerCase()}`, e.freins) : ''}${cm.regulier + cm.engage > 0 || (e.freinsPortefeuille ?? []).length ? section(`Vos freins : ${(t.titrePortefeuille ?? 'Clients réguliers et contrats').toLowerCase()}`, e.freinsPortefeuille ?? []) : ''}${noteEnjeu}`;
+
+  const html =
+    habillerMail(`<tr><td style="padding:26px 32px 20px;">${p(salutation(p0.contactNom), 'margin:0 0 10px;')}${p(`Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.`, 'margin:0;')}</td></tr>
+${hero}
+${vma}
+${objectif}
 ${freins}`);
   return { subject: 'Votre résultat au Test de VMA', html };
 }

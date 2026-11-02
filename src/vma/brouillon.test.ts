@@ -235,4 +235,127 @@ describe('brouillon du résultat au dirigeant', () => {
       expect(html).toContain('Votre allure commerciale');
     });
   });
+  describe('méthode 3.0', () => {
+    const v3 = (extra: Partial<EcranDirigeant> = {}): EcranDirigeant =>
+      ecran({
+        methode: '3.0',
+        periode: 3,
+        vma: 1300,
+        caMensuel: { total: 29000, regulier: 22000, engage: 5000, ponctuel: 2000 },
+        tauxObserve: 0.75,
+        echeance: 2,
+        allureVisee: 30000,
+        objectif: {
+          caMensuel: 30000,
+          echeance: 2,
+          partEngageeVisee: 0.3,
+          montantEngageMensuel: 9000,
+        },
+        projection: {
+          ca: 24000,
+          caAvecReconduction: 27000,
+          engage: 0,
+          engageAvecReconduction: 2500,
+          echu: 5000,
+        },
+        conclusionCa: {
+          statut: 'non-couvert',
+          manque: [],
+          ecart: 6000,
+          ecartAvecReconduction: 3000,
+          ecartPct: 0.25,
+        },
+        composition: { statut: 'non-atteint', partVisee: 0.3, cible: 9000, partActuelle: 0.17 },
+        niveau: { cle: 'ecart', label: 'Écart à combler', phrase: 'Phrase fictive.' },
+        freins: [{ n: 1, titre: 'Frein ponctuel', phrase: 'Phrase.', enjeu: 333, nature: 'gain' }],
+        freinsPortefeuille: [
+          { n: 11, titre: 'Forfaits engagés', phrase: 'Phrase.', enjeu: null, nature: 'securise' },
+        ],
+        textes: {
+          definitionVma: 'La VMA est votre rythme de commandes ponctuelles.',
+          nonMesurable: 'Non mesurable.',
+          aucunFrein: 'Aucun frein marqué.',
+          libelleCaMensuel: 'Votre chiffre d’affaires mensuel',
+          libellesRevenus: {
+            regulier: 'Activité régulière à montant variable',
+            engage: 'Revenus sous engagement',
+            ponctuel: 'Prestations ponctuelles',
+          },
+          natures: {
+            gain: 'Gain de chiffre d’affaires',
+            securise: 'Revenu mieux sécurisé, sans gain de chiffre d’affaires',
+            nonChiffre: 'Enjeu non chiffré',
+          },
+          noteEnjeu: 'Un ordre de grandeur.',
+          conclusions: {
+            titreCa: 'Votre objectif de chiffre d’affaires est-il couvert ?',
+            titreComposition: 'Votre objectif sous engagement est-il atteint ?',
+            ca: { 'non-couvert': 'Non : il manque du chiffre d’affaires.' },
+            composition: { 'non-atteint': 'Non : un excédent de variable ne compense pas.' },
+          },
+        },
+        ...extra,
+      });
+
+    it('ouvre sur le CA mensuel et ses trois catégories, la VMA ne désigne que le ponctuel', () => {
+      const { html } = brouillonResultat({ contactNom: 'Jeanne', ecran: v3() });
+      expect(html).toContain('Votre chiffre d’affaires mensuel');
+      expect(html).toContain('29\u00a0k€');
+      expect(html).toContain(
+        'Activité régulière à montant variable : 22\u00a0k€ par mois (76\u00a0%)',
+      );
+      expect(html).toContain('Revenus sous engagement : 5\u00a0k€ par mois (17\u00a0%)');
+      expect(html).toContain('sur vos prestations ponctuelles');
+      expect(html).not.toContain('nouvelles affaires');
+      expect(html).not.toContain('Nouvelles affaires');
+      expect(html).toContain('un rapport de montants, pas votre taux de signature habituel');
+    });
+
+    it('sépare les deux conclusions et la reconduction', () => {
+      const { html } = brouillonResultat({ contactNom: null, ecran: v3() });
+      expect(html).toContain('Votre objectif de chiffre d’affaires est-il couvert ?');
+      expect(html).toContain('Non : il manque du chiffre d’affaires.');
+      expect(html).toContain('Votre objectif sous engagement est-il atteint ?');
+      expect(html).toContain('un excédent de variable ne compense pas');
+      expect(html).toContain('27\u00a0k€ avec la reconduction indiquée');
+      expect(html).toContain(
+        'Sans reconduction, il vous manquera 6\u00a0k€ par mois à l’échéance (+25\u00a0%)',
+      );
+    });
+
+    it('type chaque enjeu : en euros pour le ponctuel, non chiffré pour les contrats', () => {
+      const { html } = brouillonResultat({ contactNom: null, ecran: v3() });
+      expect(html).toContain('Gain de chiffre d’affaires estimé : environ +333\u00a0€ par mois*');
+      expect(html).toContain(
+        'Revenu mieux sécurisé, sans gain de chiffre d’affaires · enjeu non chiffré',
+      );
+      expect(html).toContain('Vos freins : prestations ponctuelles');
+      expect(html).toContain('Vos freins : clients réguliers et contrats');
+    });
+
+    it('à confirmer : dit ce qui manque, sans verdict', () => {
+      const { html } = brouillonResultat({
+        contactNom: null,
+        ecran: v3({
+          conclusionCa: {
+            statut: 'a-confirmer',
+            manque: ['clients réguliers partis'],
+            ecart: 6000,
+            ecartAvecReconduction: null,
+            ecartPct: 0.25,
+          },
+          textes: {
+            ...v3().textes,
+            conclusions: {
+              ...v3().textes.conclusions!,
+              ca: { 'a-confirmer': 'À confirmer : données insuffisantes.' },
+            },
+          },
+        }),
+      });
+      expect(html).toContain('À confirmer : données insuffisantes.');
+      expect(html).toContain('Ce qui manque pour conclure : clients réguliers partis.');
+      expect(html).not.toContain('il vous manquera');
+    });
+  });
 });
