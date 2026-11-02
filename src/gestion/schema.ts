@@ -77,3 +77,33 @@ export const gestionDepenseExceptions = pgTable(
     instanceIsolation('gestion_depense_exceptions'),
   ],
 );
+
+// Recettes (CA en HT). Pour l'instant : recettes ponctuelles, par exemple une commission facturée à un
+// mandat. Les états restent distincts : prévue, facturée (émise), encaissée.
+export const TYPES_REVENU = ['commission', 'abonnement', 'refacturation', 'autre'] as const;
+export const ETATS_REVENU = ['prevue', 'emise', 'encaissee'] as const;
+export type EtatRevenu = (typeof ETATS_REVENU)[number];
+
+export const gestionRevenus = pgTable(
+  'gestion_revenus',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    libelle: text('libelle').notNull(),
+    type: text('type', { enum: TYPES_REVENU }).notNull().default('commission'),
+    // Slug du mandat concerné ; vide = non rattachée. Aucun accès aux données du mandat.
+    mandat: text('mandat'),
+    montantHtCents: integer('montant_ht_cents').notNull(),
+    etat: text('etat', { enum: ETATS_REVENU }).notNull().default('prevue'),
+    // Date prévue ou de facture ; la date d'encaissement est distincte.
+    date: date('date', { mode: 'string' }).notNull(),
+    dateEncaissement: date('date_encaissement', { mode: 'string' }),
+    // Référence de la facture émise ailleurs : jamais une facture fabriquée ici.
+    referenceFacture: text('reference_facture'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('gestion_revenus_instance_idx').on(t.instanceId, t.date),
+    instanceIsolation('gestion_revenus'),
+  ],
+);

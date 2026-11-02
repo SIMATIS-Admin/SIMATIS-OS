@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   archiverDepenseGestion,
+  archiverRevenuGestion,
+  fetchRevenus,
+  type RevenuGestion,
+  type SyntheseRevenus,
   fetchDepenseGestion,
   fetchDepenses,
   occurrenceDepenseGestion,
@@ -18,6 +22,7 @@ import {
 } from '../gestion.js';
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
+import { ETATS_REVENU, GestionRevenuTiroir, TYPES_REVENU } from './GestionRevenuTiroir.js';
 
 type Onglet = 'vue' | 'depenses' | 'revenus' | 'tresorerie' | 'ik' | 'tva';
 const ONGLETS: [Onglet, string][] = [
@@ -30,7 +35,6 @@ const ONGLETS: [Onglet, string][] = [
 ];
 // Écrans suivants : annoncés, jamais simulés avec des chiffres.
 const PREVU: Partial<Record<Onglet, [string, string]>> = {
-  revenus: ['Lot B', 'Revenus par mandat, refacturations et factures à émettre.'],
   tresorerie: ['Lot C', 'Échéancier, scénarios et projection de trésorerie.'],
   ik: ['Lot D', 'Trajets, barème versionné et compte courant d’associé.'],
   tva: ['Lot C', 'Suivi mensuel de la TVA, exigibilité à confirmer avec le comptable.'],
@@ -58,6 +62,11 @@ export function Gestion({
   } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [tiroir, setTiroir] = useState<{ cible: CibleTiroir; duplique?: boolean } | null>(null);
+  const [recettes, setRecettes] = useState<{
+    synthese: SyntheseRevenus;
+    revenus: RevenuGestion[];
+  } | null>(null);
+  const [tiroirRevenu, setTiroirRevenu] = useState<{ revenu?: RevenuGestion } | null>(null);
   const [filtre, setFiltre] = useState<Filtre>('toutes');
   const [affectation, setAffectation] = useState('');
   const [refacturables, setRefacturables] = useState(false);
@@ -66,7 +75,9 @@ export function Gestion({
   const charger = useCallback(async () => {
     try {
       setErreur(null);
-      setDonnees(await fetchDepenses(slug, mois));
+      const [d, r] = await Promise.all([fetchDepenses(slug, mois), fetchRevenus(slug, mois)]);
+      setDonnees(d);
+      setRecettes(r);
     } catch (e) {
       setErreur(message(e));
     }
@@ -209,10 +220,34 @@ export function Gestion({
             </a>
           </div>
         </div>
+        <div className="panel kpi">
+          <span className="g-ic">
+            <Icon name="chart" />
+          </span>
+          <div>
+            <span className="l">Revenus à encaisser (HT)</span>
+            <span className="v num">
+              {recettes ? eurCents(recettes.synthese.aEncaisserCents) : '–'}
+            </span>
+            <span className="g-duo">
+              <span>
+                <i /> {recettes ? eurCents(recettes.synthese.encaisseCents) : '–'} encaissé
+              </span>
+            </span>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                setOnglet('revenus');
+              }}
+            >
+              Voir les recettes
+            </a>
+          </div>
+        </div>
         {(
           [
             ['Trésorerie fin de mois', 'Lot C'],
-            ['Revenus à encaisser', 'Lot B'],
             ['TVA du mois', 'Lot C'],
           ] as const
         ).map(([k, lot]) => (
@@ -434,6 +469,105 @@ export function Gestion({
     </>
   );
 
+  const nomMandat = (m: string | null) =>
+    m ? (mandats.find((x) => x.slug === m)?.nom ?? m) : 'Aucun mandat';
+  const retirerRevenu = async (r: RevenuGestion) => {
+    try {
+      await archiverRevenuGestion(slug, r.id);
+      await charger();
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
+  const revenus = (
+    <>
+      <div className="panel g-bandeau-tri" style={{ marginBottom: 18 }}>
+        <div>
+          <span className="small muted">À encaisser (HT)</span>
+          <span className="v">{recettes ? eurCents(recettes.synthese.aEncaisserCents) : '–'}</span>
+        </div>
+        <div>
+          <span className="small muted">Encaissé (HT)</span>
+          <span className="v">{recettes ? eurCents(recettes.synthese.encaisseCents) : '–'}</span>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="g-filtres">
+          <span style={{ flex: 1 }} />
+          {cheminDuMois}
+        </div>
+        {recettes?.revenus.length ? (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Recette</th>
+                <th>Mandat</th>
+                <th>État</th>
+                <th className="r">Montant HT</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {recettes.revenus.map((r) => (
+                <tr key={r.id} className="click" onClick={() => setTiroirRevenu({ revenu: r })}>
+                  <td className="num">
+                    {jourCourt(
+                      r.etat === 'encaissee' && r.dateEncaissement ? r.dateEncaissement : r.date,
+                    )}
+                  </td>
+                  <td className="g-lib">
+                    <b>{r.libelle}</b>
+                    <small>
+                      {TYPES_REVENU.find(([k]) => k === r.type)?.[1]}
+                      {r.referenceFacture ? ` · ${r.referenceFacture}` : ''}
+                    </small>
+                  </td>
+                  <td>
+                    <span className="badge">{nomMandat(r.mandat)}</span>
+                  </td>
+                  <td>
+                    <span
+                      className={`badge ${r.etat === 'encaissee' ? 'green' : r.etat === 'emise' ? 'blue' : 'amber'}`}
+                    >
+                      {ETATS_REVENU.find(([k]) => k === r.etat)?.[1]}
+                    </span>
+                  </td>
+                  <td className="r num">
+                    <b>{eurCents(r.montantHtCents)}</b>
+                  </td>
+                  <td className="g-act" onClick={(e) => e.stopPropagation()}>
+                    <button className="btn ghost sm" onClick={() => void retirerRevenu(r)}>
+                      Supprimer
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="panel-b">
+            <p className="muted" style={{ margin: 0 }}>
+              Aucune recette ce mois-ci.{' '}
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setTiroirRevenu({});
+                }}
+              >
+                Ajouter une recette
+              </a>
+            </p>
+          </div>
+        )}
+      </div>
+      <p className="small muted" style={{ marginTop: 10 }}>
+        Montants hors taxes. Revenus récurrents, refacturations et factures à émettre : Lot B.
+      </p>
+    </>
+  );
+
   const prevu = PREVU[onglet];
   return (
     <>
@@ -453,6 +587,9 @@ export function Gestion({
         <button className="btn primary" onClick={() => setTiroir({ cible: {} })}>
           + Dépense
         </button>
+        <button className="btn" onClick={() => setTiroirRevenu({})}>
+          + Recette
+        </button>
       </div>
       {erreur && (
         <div className="alert red" role="alert">
@@ -461,6 +598,7 @@ export function Gestion({
       )}
       {onglet === 'vue' && vue}
       {onglet === 'depenses' && depenses}
+      {onglet === 'revenus' && revenus}
       {prevu && (
         <div className="panel">
           <div className="panel-h">
@@ -474,6 +612,19 @@ export function Gestion({
             </p>
           </div>
         </div>
+      )}
+      {tiroirRevenu && (
+        <GestionRevenuTiroir
+          key={tiroirRevenu.revenu?.id ?? 'neuve'}
+          slug={slug}
+          mandats={mandats}
+          revenu={tiroirRevenu.revenu}
+          onClose={() => setTiroirRevenu(null)}
+          onSaved={() => {
+            setTiroirRevenu(null);
+            void charger();
+          }}
+        />
       )}
       {tiroir && (
         <GestionTiroir

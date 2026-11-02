@@ -414,6 +414,13 @@
       "when": 1793608612865,
       "tag": "0058_gestion_depenses",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1793609775479,
+      "tag": "0059_gestion_revenus",
+      "breakpoints": true
     }
   ]
 }

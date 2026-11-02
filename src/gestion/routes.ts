@@ -5,6 +5,17 @@ import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import {
+  archiverRevenu,
+  creerRevenu,
+  lireRevenu,
+  modifierRevenu,
+  RevenuIntrouvable,
+  RevenuInvalide,
+  revenuPatchSchema,
+  revenuSchema,
+  revenusDuMois,
+} from './revenus.js';
+import {
   archiverDepense,
   lireDepense,
   creerDepense,
@@ -45,6 +56,8 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
       return await withInstance(db, instance.id, (tx) => fn(tx, instance.id));
     } catch (e) {
       if (e instanceof DepenseIntrouvable) return reply.code(404).send({ error: e.message });
+      if (e instanceof RevenuIntrouvable) return reply.code(404).send({ error: e.message });
+      if (e instanceof RevenuInvalide) return reply.code(400).send({ error: e.message });
       if (e instanceof DepenseInvalide) return reply.code(400).send({ error: e.message });
       throw e;
     }
@@ -165,6 +178,74 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
         return invalide(reply);
       return dansGestion(request.params.slug, reply, async (tx) => {
         await reinitialiserOccurrence(tx, request.params.id, request.params.date);
+        return { ok: true };
+      });
+    },
+  );
+
+  app.get<{ Params: { slug: string }; Querystring: { mois?: string } }>(
+    '/api/i/:slug/gestion/revenus',
+    async (request, reply) => {
+      const mois = moisSchema.safeParse(request.query.mois);
+      if (!mois.success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, (tx) => revenusDuMois(tx, mois.data));
+    },
+  );
+
+  app.post<{ Params: { slug: string } }>('/api/i/:slug/gestion/revenus', async (request, reply) => {
+    const parsed = revenuSchema.safeParse(request.body);
+    if (!parsed.success) return invalide(reply);
+    const r = await dansGestion(request.params.slug, reply, async (tx, instanceId) => {
+      const l = await creerRevenu(tx, instanceId, parsed.data);
+      await logEvent(tx, {
+        acteur: 'pilote',
+        action: 'Recette Gestion créée',
+        niveau: 'L2',
+        details: { revenuId: l.id },
+      });
+      return l;
+    });
+    return reply.sent ? r : reply.code(201).send(r);
+  });
+
+  app.get<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/gestion/revenus/:id',
+    async (request, reply) => {
+      if (!z.uuid().safeParse(request.params.id).success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, (tx) => lireRevenu(tx, request.params.id));
+    },
+  );
+
+  app.patch<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/gestion/revenus/:id',
+    async (request, reply) => {
+      const parsed = revenuPatchSchema.safeParse(request.body);
+      if (!parsed.success || !z.uuid().safeParse(request.params.id).success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx) => {
+        const l = await modifierRevenu(tx, request.params.id, parsed.data);
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: 'Recette Gestion modifiée',
+          niveau: 'L2',
+          details: { revenuId: l.id },
+        });
+        return l;
+      });
+    },
+  );
+
+  app.delete<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/gestion/revenus/:id',
+    async (request, reply) => {
+      if (!z.uuid().safeParse(request.params.id).success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx) => {
+        await archiverRevenu(tx, request.params.id);
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: 'Recette Gestion archivée',
+          niveau: 'L2',
+          details: { revenuId: request.params.id },
+        });
         return { ok: true };
       });
     },

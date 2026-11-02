@@ -41,7 +41,12 @@ describe('Gestion', () => {
         if (method !== 'GET') envois.push({ url, method, corps: JSON.parse(init?.body as string) });
         const corps = url.includes('gestion/depenses?')
           ? { synthese, occurrences: [occurrence] }
-          : { id: occurrence.depenseId };
+          : url.includes('gestion/revenus?')
+            ? {
+                synthese: { mois: '2026-11', aEncaisserCents: 600_000, encaisseCents: 0 },
+                revenus: [],
+              }
+            : { id: occurrence.depenseId };
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(corps) });
       }),
     );
@@ -61,7 +66,7 @@ describe('Gestion', () => {
   it('affiche le mois, le récurrent mensuel et laisse les autres sources « non renseigné »', async () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
     await waitFor(() => expect(screen.getAllByText(/12\s000|120/).length).toBeGreaterThan(0));
-    expect(screen.getAllByText('Non renseigné')).toHaveLength(3);
+    expect(screen.getAllByText('Non renseigné')).toHaveLength(2);
     expect(screen.getByText('Charges récurrentes / mois')).toBeTruthy();
   });
 
@@ -103,5 +108,29 @@ describe('Gestion', () => {
     expect(await screen.findByText('Abonnement fictif')).toBeTruthy();
     expect(screen.getByText('Refacturable', { selector: '.badge' })).toBeTruthy();
     expect(screen.getByText('Mandat test', { selector: '.badge' })).toBeTruthy();
+  });
+
+  it('ajoute une recette unique pour un mandat, en HT et en centimes entiers', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('button', { name: '+ Recette' }));
+    fireEvent.change(screen.getByPlaceholderText(/commission sur contrat/), {
+      target: { value: 'Commission fictive' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('0,00'), { target: { value: '6 000' } });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'mandat-test' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(envois).toHaveLength(1));
+    expect(envois[0]).toMatchObject({
+      url: '/api/i/simatis/gestion/revenus',
+      method: 'POST',
+      corps: {
+        libelle: 'Commission fictive',
+        montantHtCents: 600_000,
+        mandat: 'mandat-test',
+        type: 'commission',
+        etat: 'prevue',
+        dateEncaissement: null,
+      },
+    });
   });
 });
