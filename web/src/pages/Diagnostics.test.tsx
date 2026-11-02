@@ -195,6 +195,11 @@ describe('Diagnostics : écran fusionné', () => {
     render(<Diagnostics slug="demo" />);
     fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Résultat complet' }));
+    expect(screen.getByRole('button', { name: 'Exporter en PDF' }).closest('.panel-h')).toBe(
+      screen
+        .getByRole('heading', { name: 'Résultat complet · Entreprise Fictive' })
+        .closest('.panel-h'),
+    );
     expect(screen.getByText('Votre VMA commerciale')).toBeTruthy();
     expect(screen.getByText('Frein fictif')).toBeTruthy();
     expect(screen.getByText('Première action fictive')).toBeTruthy();
