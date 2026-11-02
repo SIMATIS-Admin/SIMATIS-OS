@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react';
 import type { FreinVma, TestVma } from '../../api.js';
 import { fmtEur } from '../TestsVma.js';
+import { exporterResultatPdf } from './exportPdf.js';
 
 const NB = ' ';
 const pct = (x: number) =>
@@ -9,6 +11,21 @@ const ans = (n: number) => (n < 1 ? `${Math.round(n * 12)} mois` : `${n} ${n < 2
 // Reproduit l'écran « Votre résultat » du site, tel que le dirigeant l'a lu : mêmes textes, mêmes
 // chiffres, rien du calcul réservé à Marc (potentiel, gains, blocs).
 export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: () => void }) {
+  const fiche = useRef<HTMLDivElement>(null);
+  const [exportEnCours, setExportEnCours] = useState(false);
+  const [erreurExport, setErreurExport] = useState<string | null>(null);
+  const exporter = async () => {
+    if (!fiche.current) return;
+    setExportEnCours(true);
+    setErreurExport(null);
+    try {
+      await exporterResultatPdf(fiche.current, `Test VMA - ${test.entrepriseNom}`);
+    } catch (e) {
+      setErreurExport(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExportEnCours(false);
+    }
+  };
   const e = test.resultat;
   if (!e) return null;
   const t = e.textes ?? {};
@@ -92,7 +109,7 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
   );
 
   return (
-    <div className="stack rc">
+    <div className="stack rc" ref={fiche}>
       <div className="panel">
         <div className="panel-h">
           <div>
@@ -105,11 +122,27 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
               {test.type === 'essai' ? ' · essai (non compté dans l’historique)' : ''}
             </div>
           </div>
-          <button className="btn" type="button" onClick={onRetour}>
-            ← Retour
-          </button>
+          <div className="row" data-pdf-exclude>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => void exporter()}
+              disabled={exportEnCours}
+              title="Choisissez Enregistrer au format PDF dans la fenêtre d’impression"
+            >
+              {exportEnCours ? 'Préparation…' : 'Exporter en PDF'}
+            </button>
+            <button className="btn" type="button" onClick={onRetour}>
+              ← Retour
+            </button>
+          </div>
         </div>
       </div>
+      {erreurExport && (
+        <div className="alert amber" role="alert" data-pdf-exclude>
+          {erreurExport}
+        </div>
+      )}
 
       <div className="panel rc-carte">
         <div className="rc-eyebrow">
