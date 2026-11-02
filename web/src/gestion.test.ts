@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { aujourdhui, effet12, eurCents, libelleMois, moisDecale, versCents } from './gestion.js';
+import {
+  aujourdhui,
+  effet12,
+  eurCents,
+  jourCourt,
+  libelleMois,
+  moisDecale,
+  versCents,
+} from './gestion.js';
 
 describe('gestion', () => {
   it('lit un montant saisi à la française', () => {
@@ -19,6 +27,12 @@ describe('gestion', () => {
     expect(moisDecale('2026-11', 2)).toBe('2027-01');
     expect(moisDecale('2026-01', -1)).toBe('2025-12');
     expect(libelleMois('2026-11')).toBe('novembre 2026');
+  });
+
+  it('abrège les dates sans ambiguïté entre juin et juillet', () => {
+    expect(jourCourt('2026-11-02')).toBe('2 nov.');
+    expect(jourCourt('2026-06-15')).toBe('15 juin');
+    expect(jourCourt('2026-07-01')).toBe('1 juil.');
   });
 
   it('calcule l’effet sur 12 mois', () => {

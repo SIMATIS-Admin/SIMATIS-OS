@@ -34,9 +34,24 @@ export function moisDecale(mois: string, n: number): string {
   return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
 }
 
+export const MOIS_COURTS = [
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+];
+
 export const jourCourt = (jour: string) => {
   const [, m, j] = jour.split('-').map(Number) as [number, number, number];
-  return `${j} ${MOIS[m - 1]!.slice(0, 4)}.`.replace('mai.', 'mai').replace('juin.', 'juin');
+  return `${j} ${MOIS_COURTS[m - 1]}`;
 };
 
 export const aujourdhui = (maintenant = new Date()) =>

@@ -7,7 +7,15 @@ import {
   type OccurrenceDepense,
   type SyntheseDepenses,
 } from '../api.js';
-import { aujourdhui, eurCents, jourCourt, libelleMois, moisDecale, MOIS } from '../gestion.js';
+import {
+  aujourdhui,
+  eurCents,
+  jourCourt,
+  libelleMois,
+  moisDecale,
+  MOIS,
+  MOIS_COURTS,
+} from '../gestion.js';
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
 
@@ -214,7 +222,7 @@ export function Gestion({
             </span>
             <div>
               <span className="l">{k}</span>
-              <span className="v num">Non renseigné</span>
+              <span className="v vide">Non renseigné</span>
               <span className="g-maj">Arrive avec le {lot}</span>
             </div>
           </div>
@@ -233,7 +241,7 @@ export function Gestion({
                 return s.parMois12.map((m) => (
                   <div key={m.mois} title={`${libelleMois(m.mois)} : ${eurCents(m.cents)}`}>
                     <span style={{ height: `${Math.max(2, (m.cents / max) * 100)}%` }} />
-                    {MOIS[Number(m.mois.slice(5)) - 1]!.slice(0, 3)}.
+                    {MOIS_COURTS[Number(m.mois.slice(5)) - 1]}
                   </div>
                 ));
               })()}
