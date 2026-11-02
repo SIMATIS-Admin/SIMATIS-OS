@@ -1909,6 +1909,8 @@ export function registerApi(
         options: { objets: OBJETS, champs: CHAMPS_EXCLUABLES },
         googleClientDisponible: await google.clientDisponible(i.slug),
         // Connected before Drive was asked for: the token lacks the scope until Marc reconnects.
+        // Second mailbox (read only) connected for this instance.
+        secondeBoite: !!secrets.GOOGLE_LECTURE2_REFRESH_TOKEN,
         googleDriveManquant:
           !!secrets.GOOGLE_REFRESH_TOKEN && !scopeAccorde(secrets.GOOGLE_SCOPE, DRIVE_SCOPE),
         ecrituresReelles: realWrites && i.config.ecrituresReelles === true,
@@ -2023,6 +2025,26 @@ export function registerApi(
     }),
   );
 
+  // A second Gmail account, read only: its mails join the first one's on the cards.
+  app.post<SlugParams>(
+    '/api/i/:slug/connexions/google/start-lecture',
+    onInstance<SlugParams>(async (i, request, reply) => {
+      try {
+        const url = await google.start(
+          i.slug,
+          `${request.protocol}://${request.host}/oauth/google/callback`,
+          'lecture2',
+        );
+        return { url };
+      } catch (error) {
+        if (error instanceof BranchementRefuse) {
+          return reply.code(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    }),
+  );
+
   // The OS's Google client secret, pasted once for every instance; never sent back.
   app.put<{ Body: unknown }>('/api/google/secret', async (request, reply) => {
     const parsed = z.object({ secret: z.string().min(1).max(200) }).safeParse(request.body);
@@ -2049,7 +2071,9 @@ export function registerApi(
           request.query,
         );
         return await reply.redirect(
-          usage === 'analytics' ? `/#/${slug}/siteweb` : `/#/${slug}/parametres?google=ok`,
+          usage === 'analytics'
+            ? `/#/${slug}/siteweb`
+            : `/#/${slug}/parametres?${usage === 'lecture2' ? 'boite2' : 'google'}=ok`,
         );
       } catch (error) {
         request.log.warn({ err: error }, 'Google consent failed');

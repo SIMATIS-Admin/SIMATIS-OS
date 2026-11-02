@@ -246,4 +246,37 @@ describe('connecting tools from Paramètres > Connexions', () => {
     });
     expect(replay.body).toMatch(/expirée/);
   });
+
+  it('connects a second mailbox, read only, without touching the first one', async () => {
+    const start = await app.inject({
+      method: 'POST',
+      url: '/api/i/mandat-b/connexions/google/start-lecture',
+      headers: { host: '127.0.0.1:4300' },
+      payload: {},
+    });
+    expect(start.statusCode).toBe(200);
+    const consent = new URL(start.json<{ url: string }>().url);
+    expect(consent.searchParams.get('scope')).toBe(
+      'https://www.googleapis.com/auth/gmail.readonly',
+    );
+    const premier = await readFile(path.join(secretsDir, 'mandat-b.google.json'), 'utf8');
+
+    tokenCalls.length = 0;
+    const back = await app.inject({
+      method: 'GET',
+      url: `/oauth/google/callback?state=${consent.searchParams.get('state') ?? ''}&code=code-fictif`,
+    });
+    expect(back.headers.location).toBe('/#/mandat-b/parametres?boite2=ok');
+    expect(await readFile(path.join(secretsDir, 'mandat-b.google.json'), 'utf8')).toBe(premier);
+    const seconde = JSON.parse(
+      await readFile(path.join(secretsDir, 'mandat-b.lecture2.json'), 'utf8'),
+    ) as { refresh_token: string };
+    expect(seconde.refresh_token).toBe('refresh-fictif');
+
+    const etat = await app.inject({ method: 'GET', url: '/api/i/mandat-b/connexions' });
+    expect(etat.json<{ secondeBoite: boolean }>().secondeBoite).toBe(true);
+    expect(etat.body).not.toContain('refresh-fictif');
+    const autre = await app.inject({ method: 'GET', url: '/api/i/mandat-a/connexions' });
+    expect(autre.json<{ secondeBoite: boolean }>().secondeBoite).toBe(false);
+  });
 });

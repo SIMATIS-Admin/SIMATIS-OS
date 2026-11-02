@@ -11,6 +11,7 @@ let clientDisponible = true;
 let avecInfomaniak = false;
 let degrade = false;
 let driveManquant = false;
+let secondeBoite = false;
 
 const reponse = () => ({
   connexions: [
@@ -60,6 +61,7 @@ const reponse = () => ({
   },
   googleClientDisponible: clientDisponible,
   googleDriveManquant: driveManquant,
+  secondeBoite,
   ecrituresReelles: false,
 });
 
@@ -95,6 +97,8 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     });
   }
   if (url === '/api/google/secret') return json({ ok: true });
+  if (url.endsWith('/google/start-lecture'))
+    return json({ url: 'https://accounts.example/lecture' });
   if (url.endsWith('/google/start')) return json({ url: 'https://accounts.example/consent' });
   if (method === 'POST') return json({ lus: 4, crees: 1, maj: 3 });
   if (method === 'PATCH') return json({ reglages: {} });
@@ -110,6 +114,7 @@ describe('Paramètres > Connexions', () => {
     avecInfomaniak = false;
     degrade = false;
     driveManquant = false;
+    secondeBoite = false;
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -282,5 +287,30 @@ describe('Paramètres > Connexions', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText(/lea@autre.example · Question/)).toBeTruthy();
+  });
+
+  it('offers a second read-only Gmail mailbox once Gmail is connected', async () => {
+    avecGoogle = true;
+    render(<Connexions slug="simatis" />);
+    expect(await screen.findByText(/non connectée\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Connecter une seconde boîte Gmail' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith('/connexions/google/start-lecture'))).toBe(true),
+    );
+  });
+
+  it('shows the second mailbox as connected and does not offer it without Gmail', async () => {
+    avecGoogle = true;
+    secondeBoite = true;
+    render(<Connexions slug="simatis" />);
+    expect(
+      await screen.findByRole('button', { name: 'Reconnecter la seconde boîte' }),
+    ).toBeTruthy();
+    cleanup();
+    avecGoogle = false;
+    avecInfomaniak = true;
+    render(<Connexions slug="simatis" />);
+    await screen.findByText('Infomaniak');
+    expect(screen.queryByText(/Seconde boîte Gmail/)).toBeNull();
   });
 });

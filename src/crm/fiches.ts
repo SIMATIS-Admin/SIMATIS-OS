@@ -31,6 +31,8 @@ export type Evenement = {
   texte: string | null;
   at: string;
   origine: 'hubspot' | 'os';
+  // Mailbox a mail was read in, when the instance has two.
+  compte?: string;
 };
 type Lien = { id: string; nom: string };
 export type Fiche = {

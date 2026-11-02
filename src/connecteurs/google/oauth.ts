@@ -29,6 +29,10 @@ export const scopeAccorde = (accordes: string | undefined, scope: string): boole
 // Analytics property is not always the mailbox connected for the instance.
 export const ANALYTICS_SCOPES = ['https://www.googleapis.com/auth/analytics.readonly'];
 
+// Second mailbox of an instance (a brand's own address, say): read only, to show its mails on the
+// cards. No draft, no agenda: the first mailbox stays the one the OS writes in.
+export const GMAIL_LECTURE_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
+
 // The OS's own Google OAuth client ("SIMATIS OS", desktop type, project simatis-os). Published on
 // purpose: Google treats installed-app client IDs as public, consent and PKCE protect the
 // mailboxes. Its secret is never committed: it is pasted once in Paramètres > Connexions.
