@@ -5436,3 +5436,270 @@ label.btn.off {
   gap: 8px;
   margin-top: 10px;
 }
+
+/* Gestion (Mon activité) : reporté de maquettes/gestion.html. */
+.g-onglets .chip {
+  font-size: 15px;
+  padding: 5px 13px;
+}
+.g-onglets .espace {
+  flex: 1;
+}
+.g-niveaux {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 14px;
+}
+.g-niveaux .kpi .v {
+  font-size: 24px;
+  white-space: nowrap;
+}
+.g-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 15px;
+}
+.g-ligne:last-child {
+  border-bottom: 0;
+}
+.g-ligne .num {
+  white-space: nowrap;
+}
+.g-bandeau-tri {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+}
+.g-bandeau-tri div {
+  min-width: 150px;
+}
+.g-bandeau-tri .v {
+  font: 600 20px var(--f-num);
+  display: block;
+}
+.g-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-2);
+}
+.g-filtres .input {
+  width: 220px;
+}
+.g-filtres select.input {
+  width: auto;
+}
+.g-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--line);
+  margin: 0 4px;
+}
+.g-aff {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.g-lib small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.g-act {
+  white-space: nowrap;
+  text-align: right;
+}
+.g-act .btn {
+  opacity: 0.55;
+}
+tr:hover .g-act .btn {
+  opacity: 1;
+}
+.g-chips-aff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.g-chips-aff .chip.on {
+  background: var(--teal);
+  border-color: var(--teal);
+}
+.g-effet {
+  background: var(--line-2);
+  border-radius: var(--r-m);
+  padding: 12px 14px;
+  margin: 4px 0 14px;
+}
+.g-effet b {
+  font: 600 18px var(--f-num);
+}
+.g-ic {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: var(--teal);
+}
+.g-niveaux .kpi {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+}
+.g-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: var(--line-2);
+  border-radius: var(--r-s);
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--ink-2);
+  margin-top: 8px;
+}
+.g-note svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 3px;
+}
+.g-ligne .g-ic {
+  width: 15px;
+  height: 15px;
+  color: var(--ink-3);
+  vertical-align: -2px;
+  margin-right: 6px;
+}
+.g-mini {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 34px;
+  margin-top: 8px;
+}
+.g-mini span {
+  flex: 1;
+  background: var(--navy-3);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+}
+.g-mini span.zero {
+  background: var(--line);
+}
+.g-champs2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.g-fin {
+  position: sticky;
+  bottom: 0;
+  background: var(--white);
+  border-top: 1px solid var(--line);
+  padding: 12px 22px;
+  margin: 0 -22px -40px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.g-plus summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--navy-3);
+  padding: 4px 0 10px;
+}
+.g-champs2 {
+  grid-template-columns: 1fr;
+}
+@media (max-width: 760px) {
+  .g-champs2 {
+    grid-template-columns: 1fr;
+  }
+}
+.g-niveaux .kpi > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.g-barres {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 120px;
+  padding: 0 4px;
+}
+.g-barres > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.g-barres span {
+  width: 100%;
+  background: var(--navy-3);
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+}
+.g-ic svg {
+  width: 100%;
+  height: 100%;
+}
+.g-onglets .espace {
+  flex: 1;
+}
+.g-periode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.g-periode b {
+  min-width: 118px;
+  text-align: center;
+  font-weight: 600;
+}
+.g-duo {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 14px;
+}
+.g-duo span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.g-duo i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--teal);
+}
+.g-duo i.prev {
+  background: none;
+  border: 2px solid var(--ink-3);
+}
+.g-maj {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: auto;
+  padding-top: 6px;
+}
+.g-niveaux .kpi .v.vide {
+  font: 700 20px var(--f-body);
+  white-space: normal;
+  margin-top: 2px;
+}

@@ -10,6 +10,7 @@ import {
   baseLignesBrutes,
   baseVivante,
 } from '../base-vivante/schema.js';
+import { gestionDepenseExceptions, gestionDepenses, gestionRevenus } from '../gestion/schema.js';
 import { echangesAjout, reunionsWispr, sujets } from '../inbox/schema.js';
 import {
   crmPartages,
@@ -31,6 +32,9 @@ import {
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
+  gestionDepenseExceptions,
+  gestionDepenses,
+  gestionRevenus,
   baseReponses,
   baseLignesBrutes,
   baseVivante,

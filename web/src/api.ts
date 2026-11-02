@@ -1945,3 +1945,97 @@ export const redigerReponseCampagne = (slug: string, sujetId: string) =>
     inst(slug, `prospection/reponses/${encodeURIComponent(sujetId)}/rediger`),
     {},
   );
+
+// Gestion (Mon activité) : dépenses, occurrences et synthèse du mois.
+export type AffectationGestion = { cible: 'simatis' | 'kairos' | 'mandat'; mandat?: string };
+export type OccurrenceDepense = {
+  depenseId: string;
+  cle: string;
+  libelle: string;
+  categorie: string | null;
+  date: string;
+  montantTtcCents: number;
+  etat: 'payee' | 'a_venir' | 'ignoree';
+  statut: 'reelle' | 'prevue';
+  recurrente: boolean;
+  payeur: 'societe' | 'associe';
+  affectations: AffectationGestion[];
+  refacturable: boolean;
+  justificatif: string | null;
+};
+export type SyntheseDepenses = {
+  mois: string;
+  payeCents: number;
+  aVenirCents: number;
+  totalCents: number;
+  parMois12: { mois: string; cents: number }[];
+  recurrentMensuelCents: number;
+};
+export type DepenseGestion = {
+  id: string;
+  libelle: string;
+  categorie: string | null;
+  montantTtcCents: number;
+  tvaCents: number | null;
+  statut: 'reelle' | 'prevue';
+  recurrence: 'aucune' | 'mensuelle' | 'trimestrielle' | 'annuelle';
+  dateDebut: string;
+  dateFin: string | null;
+  payeur: 'societe' | 'associe';
+  affectations: AffectationGestion[];
+  refacturable: boolean;
+  justificatif: string | null;
+};
+export type NouvelleDepense = Omit<DepenseGestion, 'id'>;
+export const fetchDepenses = (slug: string, mois: string) =>
+  getJson<{ synthese: SyntheseDepenses; occurrences: OccurrenceDepense[] }>(
+    inst(slug, `gestion/depenses?mois=${mois}`),
+  );
+export const creerDepenseGestion = (slug: string, d: NouvelleDepense) =>
+  sendJson<DepenseGestion>('POST', inst(slug, 'gestion/depenses'), d);
+export const modifierDepenseGestion = (slug: string, id: string, d: Partial<NouvelleDepense>) =>
+  sendJson<DepenseGestion>('PATCH', inst(slug, `gestion/depenses/${id}`), d);
+export const archiverDepenseGestion = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/depenses/${id}`), {});
+export const occurrenceDepenseGestion = (
+  slug: string,
+  id: string,
+  date: string,
+  corps: {
+    portee?: 'cette' | 'suivantes';
+    etat?: 'payee' | 'ignoree';
+    datePaiement?: string | null;
+    montantTtcCents?: number | null;
+    serie?: Partial<NouvelleDepense>;
+  },
+) =>
+  sendJson<DepenseGestion>('PUT', inst(slug, `gestion/depenses/${id}/occurrences/${date}`), corps);
+export const reinitialiserOccurrenceGestion = (slug: string, id: string, date: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/depenses/${id}/occurrences/${date}`), {});
+export const fetchDepenseGestion = (slug: string, id: string) =>
+  getJson<DepenseGestion>(inst(slug, `gestion/depenses/${id}`));
+
+// Recettes ponctuelles (CA en HT).
+export type RevenuGestion = {
+  id: string;
+  libelle: string;
+  type: 'commission' | 'abonnement' | 'refacturation' | 'autre';
+  mandat: string | null;
+  montantHtCents: number;
+  etat: 'prevue' | 'emise' | 'encaissee';
+  date: string;
+  dateEncaissement: string | null;
+  referenceFacture: string | null;
+};
+export type NouveauRevenu = Omit<RevenuGestion, 'id'>;
+export type SyntheseRevenus = { mois: string; aEncaisserCents: number; encaisseCents: number };
+export const fetchRevenus = (slug: string, mois: string) =>
+  getJson<{ synthese: SyntheseRevenus; revenus: RevenuGestion[] }>(
+    inst(slug, `gestion/revenus?mois=${mois}`),
+  );
+export const creerRevenuGestion = (slug: string, r: NouveauRevenu) =>
+  sendJson<RevenuGestion>('POST', inst(slug, 'gestion/revenus'), r);
+export const modifierRevenuGestion = (slug: string, id: string, r: Partial<NouveauRevenu>) =>
+  sendJson<RevenuGestion>('PATCH', inst(slug, `gestion/revenus/${id}`), r);
+export const archiverRevenuGestion = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/revenus/${id}`), {});
