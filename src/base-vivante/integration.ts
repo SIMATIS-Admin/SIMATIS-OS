@@ -339,3 +339,38 @@ export async function lierCrm(
     .set({ ...lien, updatedAt: new Date() })
     .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
 }
+
+// A contact found for a company: it fills the record when this one has no contact yet, and
+// otherwise goes through the same duplicate matching as an import, so a person already known
+// is only completed (never overwritten) and another person gets a record of their own.
+export async function appliquerContact(
+  tx: Tx,
+  instanceId: string,
+  ficheId: string,
+  apport: Apport,
+): Promise<{ id: string; zone: Zone; creee: boolean }> {
+  const f = await charger(tx, instanceId, ficheId);
+  if (!f.nom && !f.prenom) {
+    return { id: ficheId, zone: await enrichir(tx, instanceId, ficheId, apport), creee: false };
+  }
+  const { fiche, avertissements } = normaliserFiche({
+    entreprise: f.entreprise,
+    prenom: apport.prenom,
+    nom: apport.nom,
+    email: apport.email,
+    telephone: apport.telephone,
+    fonction: apport.fonction,
+  });
+  if (avertissements.length > 0) throw new FicheNonHomogene(avertissements.join(', '));
+  const [r] = await integrerFiches(tx, instanceId, [
+    {
+      fiche,
+      provenance: 'Enrichissement IA',
+      mandat: f.mandat,
+      importId: null,
+      collecteLe: null,
+    },
+  ]);
+  if (!r) throw new FicheNonHomogene('Contact non intégré');
+  return { id: r.id, zone: r.zone, creee: !r.fusionnee };
+}

@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { insererFiche } from '../../test/fiche-base.js';
-import { eq } from 'drizzle-orm';
-import { baseVivante } from '../base-vivante/schema.js';
 import { withInstance } from '../db/context.js';
 import { createInstance } from '../instances/service.js';
 import { enrichissementLignes, enrichissementSuggestions, enrichissementTaches } from './schema.js';
@@ -72,7 +70,7 @@ describe('tables de l’enrichissement', () => {
   });
 
   it('supprimer la fiche supprime ses lignes et ses suggestions', async () => {
-    await t.owner.db.delete(baseVivante).where(eq(baseVivante.id, ficheId));
+    await t.owner.pool.query('delete from base_vivante where id = $1', [ficheId]);
     expect(await t.owner.db.select().from(enrichissementLignes)).toHaveLength(0);
     expect(await t.owner.db.select().from(enrichissementSuggestions)).toHaveLength(0);
   });
