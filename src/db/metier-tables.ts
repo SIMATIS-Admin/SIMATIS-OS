@@ -36,9 +36,17 @@ import {
   prospectionSignatures,
   prospectionSuiviFroid,
 } from '../prospection/schema.js';
+import {
+  enrichissementLignes,
+  enrichissementSuggestions,
+  enrichissementTaches,
+} from '../enrichissement/schema.js';
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
+  enrichissementSuggestions,
+  enrichissementLignes,
+  enrichissementTaches,
   gestionTvaMois,
   gestionReglages,
   gestionDepenseExceptions,
