@@ -43,10 +43,18 @@ describe('Gestion', () => {
           ? { synthese, occurrences: [occurrence] }
           : url.includes('gestion/revenus?')
             ? {
-                synthese: { mois: '2026-11', aEncaisserCents: 600_000, encaisseCents: 0 },
+                synthese: {
+                  mois: '2026-11',
+                  aEncaisserCertainCents: 600_000,
+                  aEncaisserIncertainCents: 0,
+                  encaisseCents: 0,
+                  parMandat: [],
+                },
                 revenus: [],
               }
-            : { id: occurrence.depenseId };
+            : url.includes('factures-a-emettre')
+              ? []
+              : { id: occurrence.depenseId, refacturations: [] };
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(corps) });
       }),
     );
@@ -130,6 +138,38 @@ describe('Gestion', () => {
         type: 'commission',
         etat: 'prevue',
         dateEncaissement: null,
+        recurrence: 'aucune',
+        certitude: 'certaine',
+      },
+    });
+  });
+
+  it('crée une refacturation distincte par mandat depuis la dépense, sans réduire celle-ci', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('button', { name: '+ Dépense' }));
+    fireEvent.change(screen.getByPlaceholderText(/abonnement, repas/), {
+      target: { value: 'Outil fictif' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('0,00'), { target: { value: '120' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mensuelle' }));
+    fireEvent.click(screen.getByLabelText(/Refacturable à un client/));
+    fireEvent.change(screen.getByLabelText('Montant HT refacturable à Mandat test'), {
+      target: { value: '50' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(envois).toHaveLength(2));
+    expect(envois[0]).toMatchObject({
+      url: '/api/i/simatis/gestion/depenses',
+      corps: { montantTtcCents: 12_000, refacturable: true },
+    });
+    expect(envois[1]).toMatchObject({
+      url: '/api/i/simatis/gestion/revenus',
+      corps: {
+        type: 'refacturation',
+        mandat: 'mandat-test',
+        montantHtCents: 5_000,
+        recurrence: 'mensuelle',
+        depenseId: occurrence.depenseId,
       },
     });
   });

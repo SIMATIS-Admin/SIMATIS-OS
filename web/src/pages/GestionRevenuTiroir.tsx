@@ -2,10 +2,11 @@ import { useState } from 'react';
 import {
   creerRevenuGestion,
   modifierRevenuGestion,
-  type NouveauRevenu,
+  occurrenceRevenuGestion,
+  reinitialiserOccurrenceRevenu,
   type RevenuGestion,
 } from '../api.js';
-import { aujourdhui, versCents } from '../gestion.js';
+import { aujourdhui, eurCents, versCents, type Cadence } from '../gestion.js';
 import { Drawer } from './Overlay.js';
 
 export const TYPES_REVENU: [RevenuGestion['type'], string][] = [
@@ -19,52 +20,116 @@ export const ETATS_REVENU: [RevenuGestion['etat'], string][] = [
   ['emise', 'Facturée'],
   ['encaissee', 'Encaissée'],
 ];
+const CERTITUDES: [RevenuGestion['certitude'], string][] = [
+  ['certaine', 'Certaine'],
+  ['probable', 'Probable'],
+  ['hypothese', 'Hypothèse'],
+];
+const CADENCES: [Cadence, string][] = [
+  ['aucune', 'Ponctuelle'],
+  ['mensuelle', 'Mensuelle'],
+  ['trimestrielle', 'Trimestrielle'],
+  ['annuelle', 'Annuelle'],
+];
 
-// Saisie d'une recette unique : libellé, montant HT, date et mandat suffisent.
+export type CibleRevenu = {
+  // Série ou recette à modifier (absente : création). `occurrence` : échéance ouverte d'une série.
+  revenu?: RevenuGestion;
+  occurrence?: string;
+  // Raccourci « Marquer facturée » depuis la liste des factures à émettre.
+  etat?: RevenuGestion['etat'];
+};
+
+// Saisie d'une recette : libellé, montant HT, date et mandat suffisent ; fréquence et certitude
+// (pour une commission) sont à un clic.
 export function GestionRevenuTiroir({
   slug,
   mandats,
-  revenu,
+  cible,
   onClose,
   onSaved,
 }: {
   slug: string;
   mandats: { slug: string; nom: string }[];
-  revenu?: RevenuGestion;
+  cible: CibleRevenu;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const revenu = cible.revenu;
+  const echeance = cible.occurrence;
+  const serie = !!revenu && revenu.recurrence !== 'aucune' && !!echeance;
   const [libelle, setLibelle] = useState(revenu?.libelle ?? '');
   const [montant, setMontant] = useState(
     revenu ? String(revenu.montantHtCents / 100).replace('.', ',') : '',
   );
-  const [date, setDate] = useState(revenu?.date ?? aujourdhui());
+  const [date, setDate] = useState(echeance ?? revenu?.date ?? aujourdhui());
   const [mandat, setMandat] = useState(revenu?.mandat ?? '');
   const [type, setType] = useState<RevenuGestion['type']>(revenu?.type ?? 'commission');
-  const [etat, setEtat] = useState<RevenuGestion['etat']>(revenu?.etat ?? 'prevue');
+  const [etat, setEtat] = useState<RevenuGestion['etat']>(cible.etat ?? revenu?.etat ?? 'prevue');
+  const [cadence, setCadence] = useState<Cadence>(revenu?.recurrence ?? 'aucune');
+  const [certitude, setCertitude] = useState<RevenuGestion['certitude']>(
+    revenu?.certitude ?? 'certaine',
+  );
+  const [fin, setFin] = useState(revenu?.dateFin ?? '');
   const [encaisse, setEncaisse] = useState(revenu?.dateEncaissement ?? aujourdhui());
   const [facture, setFacture] = useState(revenu?.referenceFacture ?? '');
+  const [portee, setPortee] = useState<'cette' | 'suivantes'>('cette');
   const [erreur, setErreur] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
+
+  // Une série se règle échéance par échéance : l'état ne se choisit pas à la création.
+  const creeSerie = !revenu && cadence !== 'aucune';
+  const etatVisible = !creeSerie && !(serie && portee === 'suivantes');
 
   const enregistrer = async () => {
     const cents = versCents(montant);
     if (!libelle.trim() || !cents) return setErreur('Libellé et montant HT sont obligatoires.');
-    const donnees: NouveauRevenu = {
+    const commun = {
       libelle: libelle.trim(),
       type,
       mandat: mandat || null,
       montantHtCents: cents,
-      etat,
-      date,
-      dateEncaissement: etat === 'encaissee' ? encaisse : null,
+      certitude,
       referenceFacture: facture.trim() || null,
     };
     setOccupe(true);
     setErreur(null);
     try {
-      if (revenu) await modifierRevenuGestion(slug, revenu.id, donnees);
-      else await creerRevenuGestion(slug, donnees);
+      if (revenu && serie && echeance) {
+        if (portee === 'suivantes') {
+          await occurrenceRevenuGestion(slug, revenu.id, echeance, {
+            portee,
+            serie: { ...commun, dateFin: fin || null },
+          });
+        } else if (etat === 'prevue') {
+          await reinitialiserOccurrenceRevenu(slug, revenu.id, echeance);
+        } else {
+          await occurrenceRevenuGestion(slug, revenu.id, echeance, {
+            portee: 'cette',
+            etat,
+            dateEncaissement: etat === 'encaissee' ? encaisse : null,
+            montantHtCents: cents,
+            referenceFacture: commun.referenceFacture,
+          });
+        }
+      } else if (revenu) {
+        await modifierRevenuGestion(slug, revenu.id, {
+          ...commun,
+          etat,
+          date,
+          dateEncaissement: etat === 'encaissee' ? encaisse : null,
+          dateFin: cadence === 'aucune' ? null : fin || null,
+        });
+      } else {
+        await creerRevenuGestion(slug, {
+          ...commun,
+          etat: creeSerie ? 'prevue' : etat,
+          date,
+          dateEncaissement: !creeSerie && etat === 'encaissee' ? encaisse : null,
+          recurrence: cadence,
+          dateFin: cadence === 'aucune' ? null : fin || null,
+        });
+      }
       onSaved();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e));
@@ -80,7 +145,9 @@ export function GestionRevenuTiroir({
       head={
         <>
           <h2>{revenu ? 'Modifier la recette' : 'Nouvelle recette'}</h2>
-          <div className="small muted">Une recette unique, par exemple une commission.</div>
+          <div className="small muted">
+            Commission, abonnement ou refacturation, ponctuelle ou récurrente.
+          </div>
         </>
       }
     >
@@ -113,11 +180,18 @@ export function GestionRevenuTiroir({
             />
           </label>
           <label className="field">
-            <span>{etat === 'prevue' ? 'Date prévue' : 'Date de facture'}</span>
+            <span>
+              {cadence !== 'aucune'
+                ? 'Première échéance'
+                : etat === 'prevue'
+                  ? 'Date prévue'
+                  : 'Date de facture'}
+            </span>
             <input
               className="input"
               type="date"
               value={date}
+              disabled={serie}
               onChange={(e) => setDate(e.target.value)}
             />
           </label>
@@ -148,26 +222,63 @@ export function GestionRevenuTiroir({
             ))}
           </div>
         </div>
+        {!revenu && (
+          <div className="field">
+            <span>Fréquence</span>
+            <div className="seg adaptable" role="group" aria-label="Fréquence">
+              {CADENCES.map(([k, l]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={cadence === k ? 'on' : ''}
+                  onClick={() => setCadence(k)}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="field">
-          <span>État</span>
-          <div className="seg" role="group" aria-label="État">
-            {ETATS_REVENU.map(([k, l]) => (
+          <span>Certitude</span>
+          <div className="seg" role="group" aria-label="Certitude">
+            {CERTITUDES.map(([k, l]) => (
               <button
                 key={k}
                 type="button"
-                className={etat === k ? 'on' : ''}
-                onClick={() => setEtat(k)}
+                className={certitude === k ? 'on' : ''}
+                onClick={() => setCertitude(k)}
               >
                 {l}
               </button>
             ))}
           </div>
           <div className="small muted">
-            Prévue, facturée et encaissée restent distinctes : seule l’encaissée est de l’argent
-            reçu.
+            Une recette probable ou hypothétique n’est jamais comptée comme certaine.
           </div>
         </div>
-        {etat === 'encaissee' && (
+        {etatVisible && (
+          <div className="field">
+            <span>{serie ? 'État de cette échéance' : 'État'}</span>
+            <div className="seg" role="group" aria-label="État">
+              {ETATS_REVENU.map(([k, l]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={etat === k ? 'on' : ''}
+                  onClick={() => setEtat(k)}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+            <div className="small muted">
+              Prévue, facturée et encaissée restent distinctes : seule l’encaissée est de l’argent
+              reçu.
+            </div>
+          </div>
+        )}
+        {etatVisible && etat === 'encaissee' && (
           <label className="field">
             <span>Date d’encaissement</span>
             <input
@@ -178,15 +289,59 @@ export function GestionRevenuTiroir({
             />
           </label>
         )}
+        {(cadence !== 'aucune' || serie) && portee === 'suivantes' && (
+          <div className="small muted">
+            Le montant saisi s’applique à toutes les échéances suivantes.
+          </div>
+        )}
+        {cadence !== 'aucune' && !serie && (
+          <label className="field">
+            <span>Dernière échéance (facultatif)</span>
+            <input
+              className="input"
+              type="date"
+              value={fin}
+              onChange={(e) => setFin(e.target.value)}
+            />
+          </label>
+        )}
         <label className="field">
           <span>Référence de facture (facultatif)</span>
           <input
             className="input"
             value={facture}
             onChange={(e) => setFacture(e.target.value)}
-            placeholder="Numéro de la facture émise"
+            placeholder="Numéro de la facture émise ailleurs"
           />
         </label>
+        {serie && (
+          <div className="field">
+            <span>Cette modification s’applique à</span>
+            <div className="seg adaptable" role="group" aria-label="Portée">
+              {(
+                [
+                  ['cette', 'Cette échéance seulement'],
+                  ['suivantes', 'Cette échéance et les suivantes'],
+                ] as const
+              ).map(([k, l]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={portee === k ? 'on' : ''}
+                  onClick={() => setPortee(k)}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {creeSerie && montant && versCents(montant) ? (
+          <div className="g-effet">
+            <b>{eurCents(versCents(montant)!)}</b> HT à chaque échéance, facturé échéance par
+            échéance.
+          </div>
+        ) : null}
         {erreur && (
           <div className="alert red" role="alert">
             {erreur}

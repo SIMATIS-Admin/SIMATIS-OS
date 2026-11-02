@@ -1,5 +1,5 @@
 {
-  "id": "691c53a2-17da-42ba-ab8a-15d8de2c8855",
+  "id": "52c1e90a-3242-40d8-a5c4-8c39014141a8",
   "prevId": "18113dc7-31fa-42c0-b2d2-baf26282bc7a",
   "version": "7",
   "dialect": "postgresql",
@@ -4708,6 +4708,155 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.gestion_revenu_exceptions": {
+      "name": "gestion_revenu_exceptions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'natif'"
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revenu_id": {
+          "name": "revenu_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date_origine": {
+          "name": "date_origine",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "etat": {
+          "name": "etat",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date_encaissement": {
+          "name": "date_encaissement",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "montant_ht_cents": {
+          "name": "montant_ht_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference_facture": {
+          "name": "reference_facture",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "gestion_revenu_exceptions_occ_idx": {
+          "name": "gestion_revenu_exceptions_occ_idx",
+          "columns": [
+            {
+              "expression": "revenu_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "date_origine",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "gestion_revenu_exceptions_instance_id_instances_id_fk": {
+          "name": "gestion_revenu_exceptions_instance_id_instances_id_fk",
+          "tableFrom": "gestion_revenu_exceptions",
+          "tableTo": "instances",
+          "columnsFrom": [
+            "instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "gestion_revenu_exceptions_revenu_id_gestion_revenus_id_fk": {
+          "name": "gestion_revenu_exceptions_revenu_id_gestion_revenus_id_fk",
+          "tableFrom": "gestion_revenu_exceptions",
+          "tableTo": "gestion_revenus",
+          "columnsFrom": [
+            "revenu_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "gestion_revenu_exceptions_instance_isolation": {
+          "name": "gestion_revenu_exceptions_instance_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid",
+          "withCheck": "instance_id = nullif(current_setting('app.instance_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.gestion_revenus": {
       "name": "gestion_revenus",
       "schema": "",
@@ -4802,6 +4951,32 @@
           "primaryKey": false,
           "notNull": false
         },
+        "recurrence": {
+          "name": "recurrence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'aucune'"
+        },
+        "date_fin": {
+          "name": "date_fin",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "certitude": {
+          "name": "certitude",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'certaine'"
+        },
+        "depense_id": {
+          "name": "depense_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "archivee_at": {
           "name": "archivee_at",
           "type": "timestamp with time zone",
@@ -4844,6 +5019,19 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "gestion_revenus_depense_id_gestion_depenses_id_fk": {
+          "name": "gestion_revenus_depense_id_gestion_depenses_id_fk",
+          "tableFrom": "gestion_revenus",
+          "tableTo": "gestion_depenses",
+          "columnsFrom": [
+            "depense_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -7274,12 +7462,6 @@
         },
         "note": {
           "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "consigne": {
-          "name": "consigne",
           "type": "text",
           "primaryKey": false,
           "notNull": false

@@ -5703,3 +5703,10 @@ tr:hover .g-act .btn {
   white-space: normal;
   margin-top: 2px;
 }
+.g-ventil {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 6px 10px;
+  align-items: center;
+  font-size: 15px;
+}
