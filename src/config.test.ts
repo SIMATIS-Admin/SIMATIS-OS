@@ -18,6 +18,7 @@ describe('loadConfig', () => {
       backupStatusFile: './backup-status/last.json',
       site: null,
       vmaOsToken: null,
+      vmaRelanceAuto: true,
       relaisUrl: null,
       relaisCleInscription: null,
     });
@@ -36,6 +37,12 @@ describe('loadConfig', () => {
       loadConfig({ ...BASE, RELAIS_CLE_INSCRIPTION: 'cle-fictive' }).relaisCleInscription,
     ).toBe('cle-fictive');
     expect(loadConfig({ ...BASE, RELAIS_CLE_INSCRIPTION: '' }).relaisCleInscription).toBeNull();
+  });
+
+  it('turns the Test de VMA automatic reminders on unless set to off', () => {
+    expect(loadConfig(BASE).vmaRelanceAuto).toBe(true);
+    expect(loadConfig({ ...BASE, VMA_RELANCE_AUTO: '' }).vmaRelanceAuto).toBe(true);
+    expect(loadConfig({ ...BASE, VMA_RELANCE_AUTO: 'off' }).vmaRelanceAuto).toBe(false);
   });
 
   it('reads the Test de VMA invitation token, empty meaning unset', () => {

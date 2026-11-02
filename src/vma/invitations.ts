@@ -88,6 +88,7 @@ export async function creerInvitation(
     type: TypeTestVma;
     contactNom?: string | null;
     contactEmail?: string | null;
+    tutoiement?: boolean;
     // Réponse de Marc à l'alerte du semestre (true = il confirme).
     confirmerSemestre?: boolean;
   },
@@ -131,6 +132,7 @@ export async function creerInvitation(
         entrepriseNom: nom,
         contactNom: p.contactNom?.trim() || null,
         contactEmail: email,
+        tutoiement: p.tutoiement ?? false,
         type: p.type,
         statut: 'envoyee',
         invitationId: id,
@@ -147,38 +149,97 @@ export type EnvoiInvitation = { statut: 'envoye' | 'simule' | 'echec'; raison?: 
 
 const echapper = echapperMail;
 
-// Mail d'invitation : le lien, le nom de l'entreprise et la date d'expiration, rien d'autre.
-export function mailInvitation(p: {
+type ParamsMail = {
   entrepriseNom: string;
   contactNom: string | null;
   lien: string;
   expireLe: Date;
-}): { subject: string; html: string } {
-  const bonjour = salutation(p.contactNom);
+  tutoiement?: boolean;
+};
+
+// Les deux registres d'un même mail : seule la formulation change, jamais le gabarit.
+const registre = (tutoiement?: boolean) =>
+  tutoiement
+    ? { votre: 'ton', lienVoici: 'Voici ton lien', copiez: 'copie' }
+    : { votre: 'votre', lienVoici: 'Voici votre lien', copiez: 'copiez' };
+
+function corpsMail(p: ParamsMail, introduction: string): string {
+  const r = registre(p.tutoiement);
   const lien = echapper(p.lien);
+  return `<tr><td style="padding:26px 32px 4px;">${[
+    paragraphe(salutation(p.contactNom)),
+    paragraphe(introduction),
+    bouton('Passer le test VMA', p.lien),
+    paragraphe(`Le lien expire le ${p.expireLe.toLocaleDateString('fr-FR')}.`),
+    paragraphe(
+      `Si le bouton ne s’ouvre pas, ${r.copiez} ce lien : <a href="${lien}" style="color:${COULEURS.nuit};text-decoration:underline;">${lien}</a>`,
+    ),
+  ].join('')}</td></tr>`;
+}
+
+// Mail d'invitation : le lien, le nom de l'entreprise et la date d'expiration, rien d'autre.
+export function mailInvitation(p: ParamsMail): { subject: string; html: string } {
+  const r = registre(p.tutoiement);
   return {
     subject: `Votre test VMA : ${p.entrepriseNom}`,
     html: habillerMail(
-      `<tr><td style="padding:26px 32px 4px;">${[
-        paragraphe(bonjour),
-        paragraphe(`Voici votre lien pour passer le test VMA de ${echapper(p.entrepriseNom)} :`),
-        bouton('Passer le test VMA', p.lien),
-        paragraphe(`Le lien expire le ${p.expireLe.toLocaleDateString('fr-FR')}.`),
-        paragraphe(
-          `Si le bouton ne s’ouvre pas, copiez ce lien : <a href="${lien}" style="color:${COULEURS.nuit};text-decoration:underline;">${lien}</a>`,
-        ),
-      ].join('')}</td></tr>`,
+      corpsMail(p, `${r.lienVoici} pour passer le test VMA de ${echapper(p.entrepriseNom)} :`),
     ),
   };
 }
 
-// Envoie le mail d'invitation depuis la messagerie de l'instance. Jamais bloquant : l'invitation
-// existe déjà, le résultat dit si le mail est parti, simulé, ou en échec (avec la raison).
+// Relance : même gabarit et même lien, un court rappel en tête.
+export function mailRelance(p: ParamsMail): { subject: string; html: string } {
+  const r = registre(p.tutoiement);
+  return {
+    subject: `Rappel : ${r.votre} test VMA (${p.entrepriseNom})`,
+    html: habillerMail(
+      corpsMail(
+        p,
+        `Je me permets de revenir vers ${p.tutoiement ? 'toi' : 'vous'} au sujet du test VMA de ${echapper(p.entrepriseNom)}, que ${p.tutoiement ? 'tu n’as' : 'vous n’avez'} pas encore passé. ${r.lienVoici} :`,
+      ),
+    ),
+  };
+}
+
+// Envoie un mail de l'invitation depuis la messagerie de l'instance. Jamais bloquant : le résultat
+// dit si le mail est parti, simulé, ou en échec (avec la raison).
+export async function envoyerMail(
+  tx: Tx,
+  instance: Instance,
+  ecriture: ConnexionDeps,
+  p: { to: string | null; message: { subject: string; html: string } },
+): Promise<EnvoiInvitation> {
+  if (!p.to) return { statut: 'echec', raison: 'aucune adresse e-mail' };
+  try {
+    const res = await tx.transaction((sp) =>
+      writeVia(
+        sp,
+        instance,
+        'messagerie',
+        { op: 'message.send', data: { to: p.to, ...p.message } },
+        ecriture,
+      ),
+    );
+    return res.simulation ? { statut: 'simule' } : { statut: 'envoye' };
+  } catch (error) {
+    return {
+      statut: 'echec',
+      raison: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// Envoie le mail d'invitation. Avec `id`, le résultat est consigné sur l'invitation : date du
+// dernier envoi réel, ou raison de l'échec. Une simulation ne change rien.
 export async function envoyerInvitation(
   db: Database,
   instance: Instance,
   ecriture: ConnexionDeps,
-  test: Pick<TestVma, 'entrepriseNom' | 'contactNom' | 'contactEmail' | 'lien' | 'expireLe'>,
+  test: Pick<TestVma, 'entrepriseNom' | 'contactNom' | 'contactEmail' | 'lien' | 'expireLe'> & {
+    id?: string;
+    tutoiement?: boolean;
+  },
 ): Promise<EnvoiInvitation> {
   if (!test.contactEmail) return { statut: 'echec', raison: 'aucune adresse e-mail' };
   const message = mailInvitation({
@@ -186,25 +247,21 @@ export async function envoyerInvitation(
     contactNom: test.contactNom,
     lien: test.lien,
     expireLe: test.expireLe,
+    tutoiement: test.tutoiement,
   });
   return withInstance(db, instance.id, async (tx) => {
-    try {
-      const res = await tx.transaction((sp) =>
-        writeVia(
-          sp,
-          instance,
-          'messagerie',
-          { op: 'message.send', data: { to: test.contactEmail, ...message } },
-          ecriture,
-        ),
-      );
-      return res.simulation ? { statut: 'simule' } : { statut: 'envoye' };
-    } catch (error) {
-      return {
-        statut: 'echec',
-        raison: error instanceof Error ? error.message : String(error),
-      };
+    const envoi = await envoyerMail(tx, instance, ecriture, { to: test.contactEmail, message });
+    if (test.id && envoi.statut !== 'simule') {
+      await tx
+        .update(vmaTests)
+        .set(
+          envoi.statut === 'envoye'
+            ? { envoyeeLe: new Date(), echecEnvoi: null, updatedAt: new Date() }
+            : { echecEnvoi: envoi.raison ?? 'échec', updatedAt: new Date() },
+        )
+        .where(and(eq(vmaTests.instanceId, instance.id), eq(vmaTests.id, test.id)));
     }
+    return envoi;
   });
 }
 

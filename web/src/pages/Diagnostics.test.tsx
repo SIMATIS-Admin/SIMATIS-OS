@@ -40,6 +40,7 @@ const test = (extra: Partial<TestVma>): TestVma =>
     id: 't',
     entrepriseId: null,
     entrepriseNom: 'Entreprise Fictive',
+    relances: [],
     type: 'premier',
     statut: 'utilisee',
     lien: 'https://exemple.invalid/vma/t',

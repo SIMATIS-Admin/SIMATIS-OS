@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { ConnexionDeps } from '../connexions/service.js';
@@ -16,6 +16,7 @@ import {
   TestIntrouvable,
   type InvitationDeps,
 } from './invitations.js';
+import { RelanceImpossible, relancerInvitation } from './relances.js';
 import { TYPES_TEST_VMA, vmaTests, type TestVma } from './schema.js';
 
 export type VmaRoutesDeps = {
@@ -34,8 +35,11 @@ const creationSchema = z.object({
   type: z.enum(TYPES_TEST_VMA),
   contactNom: z.string().trim().max(120).nullish(),
   contactEmail: z.string().trim().max(200).nullish(),
+  tutoiement: z.boolean().optional(),
   confirmerSemestre: z.boolean().optional(),
 });
+
+const relanceSchema = z.object({ tutoiement: z.boolean().optional() });
 
 // Ce que l'écran affiche d'une invitation et de son résultat. Tout reste dans l'instance.
 const vueTest = (t: TestVma) => ({
@@ -44,6 +48,10 @@ const vueTest = (t: TestVma) => ({
   entrepriseNom: t.entrepriseNom,
   contactNom: t.contactNom,
   contactEmail: t.contactEmail,
+  tutoiement: t.tutoiement,
+  envoyeeLe: t.envoyeeLe,
+  relances: t.relances,
+  echecEnvoi: t.echecEnvoi,
   type: t.type,
   statut: t.statut,
   lien: t.lien,
@@ -72,6 +80,7 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
         .send({ error: error.message, code: 'semestre', dernierTest: error.dernier });
     if (error instanceof TestIntrouvable)
       return reply.code(404).send({ error: 'Test introuvable' });
+    if (error instanceof RelanceImpossible) return reply.code(409).send({ error: error.message });
     if (error instanceof InvitationImpossible)
       return reply.code(400).send({ error: error.message });
     return reply.code(503).send({ error: 'Le site ne répond pas : réessayez dans un instant.' });
@@ -113,6 +122,7 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
           type: parsed.data.type,
           contactNom: parsed.data.contactNom ?? null,
           contactEmail: parsed.data.contactEmail ?? null,
+          tutoiement: parsed.data.tutoiement ?? false,
           confirmerSemestre: parsed.data.confirmerSemestre ?? false,
         });
         // Le mail part tout de suite si une adresse est donnée ; son résultat accompagne l'invitation.
@@ -158,6 +168,35 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
           testId: request.params.id,
         });
         return vueTest(test);
+      } catch (error) {
+        return erreur(error, reply);
+      }
+    },
+  );
+
+  app.post<{ Params: { slug: string; id: string }; Body: unknown }>(
+    '/api/i/:slug/vma/tests/:id/relancer',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      if (!UUID.test(request.params.id)) {
+        return reply.code(400).send({ error: 'Invitation invalide' });
+      }
+      const parsed = relanceSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return reply.code(400).send({ error: 'Relance invalide' });
+      try {
+        const envoi = await relancerInvitation(db, instance, deps.connexionDeps, {
+          testId: request.params.id,
+          origine: 'manuelle',
+          ...(parsed.data.tutoiement === undefined ? {} : { tutoiement: parsed.data.tutoiement }),
+        });
+        const [test] = await withInstance(db, instance.id, (tx) =>
+          tx
+            .select()
+            .from(vmaTests)
+            .where(and(eq(vmaTests.instanceId, instance.id), eq(vmaTests.id, request.params.id))),
+        );
+        return { ...vueTest(test!), envoi };
       } catch (error) {
         return erreur(error, reply);
       }

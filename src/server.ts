@@ -7,6 +7,7 @@ import { startPlanification } from './routines/planification.js';
 import { startRelevePartenaires } from './partenaires/releve.js';
 import { startReleveSite } from './site/releve.js';
 import { startReleveVma } from './vma/releve.js';
+import { startRelancesVma } from './vma/relances.js';
 import { appDatabaseUrl, ensureAppRole, lectureRoleOf } from './db/roles.js';
 import { seedDemoIfEmpty } from './demo/seed.js';
 import { runMigrations } from './migrate.js';
@@ -66,6 +67,7 @@ let stopScheduler = () => {};
 let stopPlanification = () => {};
 let stopReleveSite = () => {};
 let stopReleveVma = () => {};
+let stopRelancesVma = () => {};
 let stopRelevePartenaires = () => {};
 try {
   await prepareDatabase();
@@ -108,6 +110,16 @@ try {
       },
       onError: (err) => app.log.warn({ err }, 'test de VMA pass failed'),
     });
+    if (config.vmaRelanceAuto && config.vmaOsToken) {
+      stopRelancesVma = startRelancesVma(db, {
+        ecriture: { secretsDir: config.secretsDir, realWrites: config.realWrites },
+        onResult: (r) => {
+          if (r.relancees + r.simulees + r.echecs > 0)
+            app.log.info(r, 'test de VMA reminders sent');
+        },
+        onError: (err) => app.log.warn({ err }, 'test de VMA reminders failed'),
+      });
+    }
   }
 } catch (err) {
   app.log.fatal({ err }, 'startup failed');
@@ -123,6 +135,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     stopPlanification();
     stopReleveSite();
     stopReleveVma();
+    stopRelancesVma();
     stopRelevePartenaires();
     void app
       .close()

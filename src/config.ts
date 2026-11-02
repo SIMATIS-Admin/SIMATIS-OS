@@ -35,6 +35,8 @@ const schema = z.object({
   SITE_CONTACT_TOKEN: z.preprocess(vide, z.string().min(32, '32 caractères au moins').optional()),
   // Test de VMA : création et révocation des invitations sur le site. Distinct du jeton de relève.
   VMA_OS_TOKEN: z.preprocess(vide, z.string().min(32, '32 caractères au moins').optional()),
+  // Test de VMA : relance automatique des invitations restées sans réponse après 7 jours.
+  VMA_RELANCE_AUTO: z.preprocess(vide, z.enum(['off', 'on']).default('on')),
   // Relais d'agents (os-agents-relay) : absent, le module Partenaires est éteint.
   RELAIS_URL: z.preprocess(
     vide,
@@ -60,6 +62,8 @@ export type Config = {
   site: { url: string; token: string } | null;
   // Jeton des invitations du Test de VMA ; null tant qu'il n'est pas configuré.
   vmaOsToken: string | null;
+  // Relance automatique des invitations du Test de VMA (active par défaut).
+  vmaRelanceAuto: boolean;
   // Relais d'agents des OS partenaires ; null tant qu'il n'est pas configuré.
   relaisUrl: string | null;
   relaisCleInscription: string | null;
@@ -93,6 +97,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     backupStatusFile: e.BACKUP_STATUS_FILE,
     site: siteUrl && siteToken ? { url: siteUrl, token: siteToken } : null,
     vmaOsToken: e.VMA_OS_TOKEN ?? null,
+    vmaRelanceAuto: e.VMA_RELANCE_AUTO === 'on',
     relaisUrl: e.RELAIS_URL ?? null,
     relaisCleInscription: e.RELAIS_CLE_INSCRIPTION ?? null,
   };
