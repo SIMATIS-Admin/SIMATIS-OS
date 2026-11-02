@@ -386,7 +386,7 @@ export type CampagneResume = {
 export async function campagnesRecentes(
   tx: Executor,
   limite = 5,
-): Promise<{ recentes: CampagneResume[]; enCours: string | null }> {
+): Promise<{ recentes: CampagneResume[]; enCours: string | null; nbEnCours: number }> {
   const rows = await tx
     .select()
     .from(prospectionCampagnes)
@@ -417,5 +417,6 @@ export async function campagnesRecentes(
   return {
     recentes: resume.filter((r) => r.statut === 'terminee').slice(0, limite),
     enCours: resume.find((r) => r.statut !== 'terminee')?.id ?? null,
+    nbEnCours: resume.filter((r) => r.statut !== 'terminee').length,
   };
 }

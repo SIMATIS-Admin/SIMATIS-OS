@@ -74,14 +74,21 @@ export async function rapprocherEnvois(
     }
     const miens = messages
       .filter((m) => (m.de ?? '').toLowerCase().includes(compte))
-      .map((m) => ({ date: m.date ? new Date(m.date) : null }))
-      .filter((m): m is { date: Date } => m.date !== null && !Number.isNaN(m.date.getTime()));
+      .map((m) => ({ id: m.id, date: m.date ? new Date(m.date) : null }))
+      .filter(
+        (m): m is { id: string; date: Date } => m.date !== null && !Number.isNaN(m.date.getTime()),
+      );
+    // Un mail parti ne vaut qu'un envoi : un brouillon recréé pour le même contact (campagne
+    // refaite) ne doit pas faire compter deux fois le même mail. Les occurrences arrivent de la
+    // plus récente à la plus ancienne : le mail va au brouillon que Marc vient d'envoyer.
+    const pris = new Set<string>();
     for (const o of occurrences) {
       // Un seul mail de Marc par occurrence : on prend le plus ancien parti depuis la création.
       const parti = miens
-        .filter((m) => m.date.getTime() >= o.creeLe.getTime())
+        .filter((m) => !pris.has(m.id) && m.date.getTime() >= o.creeLe.getTime())
         .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       if (!parti) continue;
+      pris.add(parti.id);
       await tx
         .update(prospectionOccurrences)
         .set({ etat: 'envoye', envoyeAt: parti.date, updatedAt: new Date() })

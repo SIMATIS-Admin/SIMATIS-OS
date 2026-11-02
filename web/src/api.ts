@@ -1788,6 +1788,7 @@ export type VueProspection = {
   signatures: SignatureProspection[];
   recentes: CampagneResume[];
   enCours: string | null;
+  nbEnCours: number;
   froid: { disponibles: number; aRelancer: number };
   // Les deux verrous d'écriture sont ouverts : « Valider et envoyer » est proposé.
   envoiPossible: boolean;
@@ -1922,6 +1923,20 @@ export const reformulerBrouillonCampagne = (
     ),
     { consigne },
   );
+// Même demande pour plusieurs mails d'un coup (`ids`), ou pour tous ceux qui peuvent l'être.
+export const reformulerBrouillonsCampagne = (
+  slug: string,
+  campagneId: string,
+  consigne: string,
+  ids?: string[],
+) =>
+  sendJson<{ reformules: number }>(
+    'POST',
+    inst(slug, `prospection/campagnes/${encodeURIComponent(campagneId)}/reformuler`),
+    { consigne, ...(ids ? { ids } : {}) },
+  );
+export const abandonnerCampagnesEnCours = (slug: string) =>
+  sendJson<{ abandonnees: number }>('DELETE', inst(slug, 'prospection/campagnes-en-cours'), {});
 export const relancerRedaction = (slug: string, id: string) =>
   sendJson<{ ok: true }>(
     'POST',

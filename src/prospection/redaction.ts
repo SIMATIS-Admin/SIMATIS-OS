@@ -1,9 +1,9 @@
-import { and, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt, ne } from 'drizzle-orm';
 import { sansSignature } from '../connecteurs/google/google.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { CampagneIntrouvable, CampagneInvalide } from './campagnes.js';
-import { prospectionBrouillons, prospectionCampagnes } from './schema.js';
+import { prospectionBrouillons, prospectionCampagnes, prospectionOccurrences } from './schema.js';
 
 // Même délai que les demandes de routine et l'Ajout de l'Inbox : au-delà, l'exécuteur est réputé arrêté.
 export const DELAI_PRISE_MS = 15 * 60_000;
@@ -169,14 +169,15 @@ async function annulerReformulations(tx: Executor, campagneId: string): Promise<
   return rows.length;
 }
 
-// Marc demande à Claude de reformuler un seul mail de la relecture : le mail repasse « à rédiger »
-// avec sa demande, la campagne repart chez l'exécuteur, les autres mails ne bougent pas.
-export async function demanderReformulation(
+// Marc demande à Claude de reformuler des mails de la relecture : chaque mail repasse « à rédiger »
+// avec la même demande, la campagne repart chez l'exécuteur, les autres mails ne bougent pas.
+// Sans `ids`, tous les mails encore reformulables sont concernés (ni écartés, ni déjà créés).
+async function reformuler(
   tx: Executor,
   campagneId: string,
-  brouillonId: string,
   consigne: string,
-) {
+  ids?: string[],
+): Promise<number> {
   const demande = consigne.trim();
   if (!demande) throw new CampagneInvalide('Dites à Claude ce que vous voulez changer.');
   if (demande.length > CONSIGNE_MAX) throw new CampagneInvalide('La demande est trop longue.');
@@ -200,7 +201,7 @@ export async function demanderReformulation(
       and(
         eq(prospectionBrouillons.instanceId, currentInstance),
         eq(prospectionBrouillons.campagneId, campagneId),
-        eq(prospectionBrouillons.id, brouillonId),
+        ...(ids ? [inArray(prospectionBrouillons.id, ids)] : []),
         inArray(prospectionBrouillons.etat, ['pret', 'a_verifier']),
         isNotNull(prospectionBrouillons.corps),
       ),
@@ -219,7 +220,25 @@ export async function demanderReformulation(
       updatedAt: new Date(),
     })
     .where(eq(prospectionCampagnes.id, campagneId));
+  return rows.length;
 }
+
+export async function demanderReformulation(
+  tx: Executor,
+  campagneId: string,
+  brouillonId: string,
+  consigne: string,
+) {
+  await reformuler(tx, campagneId, consigne, [brouillonId]);
+}
+
+// Même demande pour plusieurs mails d'un coup (les `ids`, ou tous). Rend le nombre de mails concernés.
+export const demanderReformulations = (
+  tx: Executor,
+  campagneId: string,
+  consigne: string,
+  ids?: string[],
+) => reformuler(tx, campagneId, consigne, ids);
 
 // Fin du travail de l'exécuteur : ce que Claude n'a pas rédigé reste à la main de Marc.
 export async function finirCampagne(tx: Executor, id: string, erreur?: string) {
@@ -318,4 +337,40 @@ export async function abandonnerCampagnes(tx: Executor, maintenant = new Date())
       .where(eq(prospectionCampagnes.id, id));
   }
   return perimees.length;
+}
+
+// Marc renonce aux campagnes qui ne sont pas allées au bout (relecture jamais finie, erreur,
+// rédaction restée en plan) : elles disparaissent avec leurs brouillons de relecture. Les mails
+// déjà partis restent comptés ; les brouillons de messagerie créés par une finalisation incomplète
+// n'ont pas été envoyés, leur occurrence est retirée pour ne pas être confondue avec un envoi futur.
+export async function abandonnerCampagnesEnCours(tx: Executor): Promise<number> {
+  const enCours = await tx
+    .select({ id: prospectionCampagnes.id })
+    .from(prospectionCampagnes)
+    .where(
+      and(
+        eq(prospectionCampagnes.instanceId, currentInstance),
+        ne(prospectionCampagnes.statut, 'terminee'),
+      ),
+    );
+  if (enCours.length === 0) return 0;
+  const ids = enCours.map((c) => c.id);
+  await tx
+    .delete(prospectionOccurrences)
+    .where(
+      and(
+        eq(prospectionOccurrences.instanceId, currentInstance),
+        eq(prospectionOccurrences.etat, 'brouillon'),
+        inArray(prospectionOccurrences.lot, ids),
+      ),
+    );
+  await tx
+    .delete(prospectionCampagnes)
+    .where(
+      and(
+        eq(prospectionCampagnes.instanceId, currentInstance),
+        inArray(prospectionCampagnes.id, ids),
+      ),
+    );
+  return ids.length;
 }

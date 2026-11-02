@@ -11,6 +11,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { ajouterNote, getFiche, modifierNote, updateFiche, type Fiche } from './fiches.js';
+import { prospectionOccurrences } from '../prospection/schema.js';
 import { lierFiches } from './liens.js';
 import { createEntreprise, CrmIndisponible } from './service.js';
 
@@ -91,6 +92,42 @@ describe('Fiches détaillées', () => {
     expect(types.filter((x) => x === 'note')).toHaveLength(1);
     expect(types).toContain('reunion');
     expect(types).toContain('email');
+  });
+
+  it('shows the campaign mails really sent, never the drafts', async () => {
+    const contactId = await id('contacts', '202');
+    const envoyeAt = new Date('2026-10-13T08:00:00Z');
+    await t.owner.db.insert(prospectionOccurrences).values([
+      {
+        instanceId: a.id,
+        mode: 'relance',
+        contactId,
+        contactNom: 'X',
+        theme: 'Test de VMA',
+        touche: 2,
+        etat: 'envoye',
+        envoyeAt,
+      },
+      {
+        instanceId: a.id,
+        mode: 'relance',
+        contactId,
+        contactNom: 'X',
+        theme: 'Test de VMA',
+        touche: 3,
+        etat: 'brouillon',
+      },
+    ]);
+    const f = (await getFiche(t.app.db, a, 'contact', contactId, mercredi))!;
+    const envois = f.historique.filter((e) => e.id.startsWith('prospection-'));
+    expect(envois).toEqual([
+      expect.objectContaining({
+        type: 'email',
+        titre: 'Mail de prospection envoyé · Test de VMA, touche 2',
+        at: envoyeAt.toISOString(),
+        origine: 'os',
+      }),
+    ]);
   });
 
   it('writes a HubSpot deal change to HubSpot first, or only simulates it', async () => {
