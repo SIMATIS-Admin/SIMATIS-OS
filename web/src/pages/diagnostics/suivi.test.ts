@@ -17,23 +17,14 @@ const enCours = (extra: Partial<TestVma> = {}): TestVma =>
 const maintenant = Date.parse('2026-11-02T08:00:00.000Z');
 
 describe('Suivi des invitations du Test de VMA', () => {
-  it('la frise montre l’envoi, les relances et le résultat, le reste grisé', () => {
+  it('la frise ne montre que les étapes atteintes : envoi, relances, résultat', () => {
     const t = enCours({ relances: [{ le: '2026-10-19T08:00:00.000Z', origine: 'auto' }] });
     expect(etapesFrise(t)).toEqual([
-      { libelle: 'Envoyé 12/10', fait: true },
-      { libelle: 'Relancé 19/10 (auto)', fait: true },
-      { libelle: 'Mail ouvert', fait: false },
-      { libelle: 'Lien ouvert', fait: false },
-      { libelle: 'Test passé', fait: false },
+      { libelle: 'Envoyé 12/10' },
+      { libelle: 'Relancé 19/10 (auto)' },
     ]);
-    expect(etapesFrise({ ...t, statut: 'utilisee' }).at(-1)).toEqual({
-      libelle: 'Test passé',
-      fait: true,
-    });
-    expect(etapesFrise(enCours({ envoyeeLe: null }))[0]).toEqual({
-      libelle: 'Envoyé',
-      fait: false,
-    });
+    expect(etapesFrise({ ...t, statut: 'utilisee' }).at(-1)).toEqual({ libelle: 'Test passé' });
+    expect(etapesFrise(enCours({ envoyeeLe: null }))).toEqual([]);
   });
 
   it('la frise date l’ouverture du mail et du lien quand le site les a relevées', () => {
@@ -41,15 +32,15 @@ describe('Suivi des invitations du Test de VMA', () => {
       mailOuvertLe: '2026-10-13T07:00:00.000Z',
       lienOuvertLe: '2026-10-13T09:00:00.000Z',
     });
-    expect(etapesFrise(t).slice(1, 3)).toEqual([
-      { libelle: 'Mail ouvert 13/10', fait: true },
-      { libelle: 'Lien ouvert 13/10', fait: true },
+    expect(etapesFrise(t).slice(1)).toEqual([
+      { libelle: 'Mail ouvert 13/10' },
+      { libelle: 'Lien ouvert 13/10' },
     ]);
   });
 
   it('une relance à la main s’affiche sans mention', () => {
     const t = enCours({ relances: [{ le: '2026-10-20T08:00:00.000Z', origine: 'manuelle' }] });
-    expect(etapesFrise(t)[1]).toEqual({ libelle: 'Relancé 20/10', fait: true });
+    expect(etapesFrise(t)[1]).toEqual({ libelle: 'Relancé 20/10' });
   });
 
   it('le bouton Relancer est réservé aux invitations ouvertes avec une adresse', () => {

@@ -463,6 +463,20 @@ export function Diagnostics({
                               {libelleTest(t)} · {libelleStatut(t)}
                               {t.recueLe ? ` · reçu le ${date(t.recueLe)}` : ''}
                             </span>
+                            {etapesFrise(t).length > 0 && (
+                              <ol className="frise small">
+                                {etapesFrise(t).map((e, i) => (
+                                  <li key={i} className="pastille">
+                                    {e.libelle}
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+                            {t.echecEnvoi && (
+                              <span className="small muted">
+                                Dernier envoi en échec : {t.echecEnvoi}
+                              </span>
+                            )}
                             <span className="dg-actions">
                               {t.statut === 'envoyee' && (
                                 <>
@@ -511,18 +525,6 @@ export function Diagnostics({
                                 <Icon name="trash" />
                               </button>
                             </span>
-                            <ol className="frise small">
-                              {etapesFrise(t).map((e, i) => (
-                                <li key={i} className={e.fait ? 'fait' : 'attente'}>
-                                  {e.libelle}
-                                </li>
-                              ))}
-                            </ol>
-                            {t.echecEnvoi && (
-                              <span className="small muted">
-                                Dernier envoi en échec : {t.echecEnvoi}
-                              </span>
-                            )}
                           </li>
                         ))}
                       </ul>
