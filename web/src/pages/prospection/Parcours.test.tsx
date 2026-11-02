@@ -77,6 +77,20 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     if (body?.suiviDate) b.suiviDate = `${body.suiviDate as string}T08:00:00Z`;
     return json(b);
   }
+  if (url.endsWith('/prospection/campagnes-en-cours') && method === 'DELETE') {
+    vue.enCours = null;
+    vue.nbEnCours = 0;
+    return json({ abandonnees: 1 });
+  }
+  if (/\/campagnes\/[^/]+\/reformuler$/.test(url) && method === 'POST') {
+    const ids = (body as { ids?: string[]; consigne: string }).ids;
+    for (const b of campagne.brouillons) {
+      if (ids?.includes(b.id) ?? true)
+        Object.assign(b, { etat: 'a_rediger', consigne: body?.consigne });
+    }
+    campagne.statut = 'redaction';
+    return json({ reformules: ids?.length ?? campagne.brouillons.length });
+  }
   if (/\/brouillons\/[^/]+\/reformuler$/.test(url) && method === 'POST') {
     const id = url.split('/').at(-2);
     const b = campagne.brouillons.find((x) => x.id === id)!;
@@ -191,6 +205,7 @@ beforeEach(() => {
     signatures: [{ id: 's1', nom: 'Simatis', defaut: true, typeMime: 'image/png' }],
     recentes: [],
     enCours: null,
+    nbEnCours: 0,
     froid: { disponibles: 2, aRelancer: 0 },
     envoiPossible: false,
   };
@@ -648,6 +663,104 @@ describe('Valider et envoyer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Créer les 1 brouillon/ }));
     await screen.findByText('Brouillons créés');
     expect(calls.find((c) => c.url.endsWith('/finaliser'))?.body).toEqual({ mode: 'brouillons' });
+  });
+});
+
+describe('Reformuler plusieurs mails d’un coup', () => {
+  const afficher = (noms = ['Alice', 'Bruno', 'Chloé']) => {
+    campagne.brouillons = noms.map((n, i) => brouillon(`b${i + 1}`, n));
+    render(
+      <Relecture
+        slug="simatis"
+        campagne={campagne}
+        signatures={vue.signatures}
+        intervalleMs={20}
+        onTermine={() => undefined}
+      />,
+    );
+  };
+  const bouton = () =>
+    screen.getByRole('button', { name: /^Faire reformuler (les \d+ mails cochés|le mail coché)/ });
+  const demande = () => screen.getByLabelText('Demande pour les mails cochés');
+
+  it('reste inactif sans mail coché ni demande', () => {
+    afficher();
+    expect(screen.getByRole('button', { name: /Faire reformuler le mail coché/ })).toBeTruthy();
+    expect(bouton().hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByLabelText('Cocher le mail de Alice'));
+    expect(bouton().hasAttribute('disabled')).toBe(true);
+    fireEvent.change(demande(), { target: { value: 'Plus direct' } });
+    expect(bouton().hasAttribute('disabled')).toBe(false);
+  });
+
+  it('envoie la même demande pour les mails cochés seulement', async () => {
+    afficher();
+    fireEvent.click(screen.getByLabelText('Cocher le mail de Alice'));
+    fireEvent.click(screen.getByLabelText('Cocher le mail de Chloé'));
+    fireEvent.change(demande(), { target: { value: 'Ton plus direct' } });
+    fireEvent.click(bouton());
+    expect(await screen.findByText(/Un mail est en cours de reformulation/)).toBeTruthy();
+    expect(calls.find((c) => c.url.endsWith('/campagnes/c1/reformuler'))?.body).toEqual({
+      consigne: 'Ton plus direct',
+      ids: ['b1', 'b3'],
+    });
+    expect(campagne.brouillons.map((b) => b.etat)).toEqual(['a_rediger', 'pret', 'a_rediger']);
+  });
+
+  it('« Tout cocher » prend tous les mails reformulables', async () => {
+    afficher();
+    fireEvent.click(screen.getByLabelText(/Tout cocher \(3\)/));
+    fireEvent.change(demande(), { target: { value: 'Plus court' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Faire reformuler les 3 mails cochés' }));
+    await screen.findByText(/Un mail est en cours de reformulation/);
+    expect(calls.find((c) => c.url.endsWith('/reformuler'))?.body).toEqual({
+      consigne: 'Plus court',
+      ids: ['b1', 'b2', 'b3'],
+    });
+  });
+
+  it('un mail écarté ne peut pas être coché', async () => {
+    afficher();
+    fireEvent.click(screen.getByRole('button', { name: 'Écarter' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Cocher le mail de Alice').hasAttribute('disabled')).toBe(true),
+    );
+    expect(screen.getByLabelText(/Tout cocher \(2\)/)).toBeTruthy();
+  });
+
+  it('affiche une ligne par mail, sans bloc côte à côte', () => {
+    afficher();
+    for (const nom of ['Alice', 'Bruno', 'Chloé']) {
+      const ligne = screen.getByRole('button', { name: `Ouvrir le mail de ${nom}` }).parentElement!;
+      expect(ligne.style.display).toBe('flex');
+    }
+  });
+});
+
+describe('Abandonner la campagne en cours', () => {
+  it('propose d’abandonner, demande confirmation puis fait disparaître la ligne', async () => {
+    vue.enCours = 'c1';
+    vue.nbEnCours = 1;
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<Prospection slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandonner cette campagne' }));
+    await waitFor(() => expect(screen.queryByText('Une campagne est en cours.')).toBeNull());
+    expect(confirmer).toHaveBeenCalled();
+    expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/campagnes-en-cours'))).toBe(
+      true,
+    );
+    confirmer.mockRestore();
+  });
+
+  it('ne fait rien si Marc refuse la confirmation', async () => {
+    vue.enCours = 'c1';
+    vue.nbEnCours = 2;
+    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<Prospection slug="simatis" />);
+    expect(await screen.findByText('2 campagnes sont en cours.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Abandonner ces campagnes' }));
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+    confirmer.mockRestore();
   });
 });
 

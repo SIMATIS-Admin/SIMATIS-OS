@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
 import { connexions } from '../connexions/schema.js';
@@ -13,6 +13,7 @@ import { atelierActif } from '../atelier/service.js';
 import { diagnosticProjets } from '../diagnostic/schema.js';
 import { emailsDuContact, normaliserEmail } from './emails.js';
 import { assurerLiensPrincipaux, lireLiens, type LienFiche } from './liens.js';
+import { prospectionOccurrences } from '../prospection/schema.js';
 import { pipelineSource } from './pipeline.js';
 import { rendezVousDe, type RdvLie } from './rdv-liens.js';
 import { activites, contactEmails, contacts, entreprises, opportunites, taches } from './schema.js';
@@ -151,6 +152,25 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
     .from(taches)
     .where(and(eq(taches.instanceId, currentInstance), isNotNull(taches.faitAt), lie(p, taches)));
   const rdvs = await rendezVousDe(tx, kind, id);
+  // Mails de campagne réellement partis (jamais un brouillon) : une ligne par envoi, au contact.
+  const envois = p.contacts.length
+    ? await tx
+        .select({
+          id: prospectionOccurrences.id,
+          theme: prospectionOccurrences.theme,
+          touche: prospectionOccurrences.touche,
+          envoyeAt: prospectionOccurrences.envoyeAt,
+        })
+        .from(prospectionOccurrences)
+        .where(
+          and(
+            eq(prospectionOccurrences.instanceId, currentInstance),
+            ne(prospectionOccurrences.etat, 'brouillon'),
+            isNotNull(prospectionOccurrences.envoyeAt),
+            inArray(prospectionOccurrences.contactId, p.contacts),
+          ),
+        )
+    : [];
   const historique: Evenement[] = [
     ...notes.map((n) => ({
       id: n.id,
@@ -159,6 +179,14 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
       texte: n.resume,
       at: n.at.toISOString(),
       origine: origine(n.source),
+    })),
+    ...envois.map((o) => ({
+      id: `prospection-${o.id}`,
+      type: 'email' as const,
+      titre: `Mail de prospection envoyé · ${o.theme}, touche ${o.touche}`,
+      texte: null,
+      at: o.envoyeAt?.toISOString() ?? '',
+      origine: 'os' as const,
     })),
     ...faites.map((t) => ({
       id: t.id,

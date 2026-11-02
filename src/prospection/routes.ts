@@ -27,8 +27,10 @@ import { rapprocherInstance } from './rapprochement.js';
 import { creerCampagneReponse, reponseDeSujet } from './reponses.js';
 import {
   abandonnerCampagnes,
+  abandonnerCampagnesEnCours,
   CONSIGNE_MAX,
   demanderReformulation,
+  demanderReformulations,
   relancerCampagne,
 } from './redaction.js';
 import {
@@ -83,6 +85,10 @@ const campagneSchema = z.discriminatedUnion('mode', [
 ]);
 const idsSchema = z.object({ ids: z.array(z.uuid()).max(500) });
 const reformulationSchema = z.object({ consigne: z.string().max(CONSIGNE_MAX) });
+// Sans `ids` : tous les mails de la campagne qui peuvent encore être reformulés.
+const reformulationLotSchema = reformulationSchema.extend({
+  ids: z.array(z.uuid()).min(1).max(500).optional(),
+});
 const finalisationSchema = z.object({ mode: z.enum(['brouillons', 'envoi']).optional() });
 const brouillonSchema = z.object({
   objet: z.string().max(300).optional(),
@@ -303,6 +309,31 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
         return { ok: true };
       });
     },
+  );
+
+  app.post<{ Params: { slug: string; id: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/campagnes/:id/reformuler',
+    (request, reply) => {
+      const p = reformulationLotSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      return dansInstance(request.params.slug, reply, async (tx) => ({
+        reformules: await demanderReformulations(
+          tx,
+          request.params.id,
+          p.data.consigne,
+          p.data.ids,
+        ),
+      }));
+    },
+  );
+
+  // Marc renonce à la campagne restée en cours (et aux autres campagnes inachevées).
+  app.delete<{ Params: { slug: string } }>(
+    '/api/i/:slug/prospection/campagnes-en-cours',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, async (tx) => ({
+        abandonnees: await abandonnerCampagnesEnCours(tx),
+      })),
   );
 
   app.post<{ Params: { slug: string; id: string }; Body: unknown }>(

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  abandonnerCampagnesEnCours,
   creerCampagneFroid,
   creerCampagneRelance,
   fetchCampagne,
@@ -252,6 +253,19 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
     );
   };
 
+  const abandonner = () => {
+    if (
+      !window.confirm(
+        `Abandonner ${vue.nbEnCours > 1 ? 'ces campagnes' : 'cette campagne'} ? Les brouillons de relecture seront supprimés.`,
+      )
+    )
+      return;
+    abandonnerCampagnesEnCours(slug).then(
+      () => void charger(),
+      (e: unknown) => setMessage(messageErreur(e)),
+    );
+  };
+
   return (
     <div className="stack">
       {message && (
@@ -262,9 +276,14 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
       {vue.enCours && (
         <div className="alert blue">
           <div>
-            Une campagne est en cours.{' '}
+            {vue.nbEnCours > 1
+              ? `${vue.nbEnCours} campagnes sont en cours.`
+              : 'Une campagne est en cours.'}{' '}
             <button className="btn sm primary" onClick={reprendre}>
               Reprendre la campagne en cours
+            </button>{' '}
+            <button className="btn sm" onClick={abandonner}>
+              {vue.nbEnCours > 1 ? 'Abandonner ces campagnes' : 'Abandonner cette campagne'}
             </button>
           </div>
         </div>

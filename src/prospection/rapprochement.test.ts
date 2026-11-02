@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import type { Message } from '../connecteurs/google/google.js';
@@ -98,6 +99,35 @@ describe('Rapprochement des envois', () => {
       rapprocherEnvois(tx, boite({ [o.email]: [message(COMPTE, new Date().toUTCString())] })),
     );
     expect((await withInstance(t.app.db, id, (tx) => statsProspection(tx))).jour).toBe(avant + 1);
+  });
+
+  it('ne compte qu’un envoi quand deux brouillons visent le même contact', async () => {
+    const ancien = await occurrence('Gaëlle', new Date(Date.now() - 5 * 3600_000));
+    const [c] = await t.owner.db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.nom, 'Gaëlle'));
+    const [recent] = await t.owner.db
+      .insert(prospectionOccurrences)
+      .values({
+        instanceId: id,
+        mode: 'relance',
+        contactId: c!.id,
+        contactNom: 'Gaëlle',
+        theme: 'Test de VMA',
+        etat: 'brouillon',
+        createdAt: new Date(Date.now() - 2 * 3600_000),
+      })
+      .returning({ id: prospectionOccurrences.id });
+    const n = await withInstance(t.app.db, id, (tx) =>
+      rapprocherEnvois(
+        tx,
+        boite({ [ancien.email]: [message(COMPTE, new Date(Date.now() - 3600_000).toUTCString())] }),
+      ),
+    );
+    expect(n).toBe(1);
+    expect((await etatDe(recent!.id)).etat).toBe('envoye');
+    expect((await etatDe(ancien.id)).etat).toBe('brouillon');
   });
 
   it('ignore les brouillons de plus de 21 jours et ceux déjà envoyés', async () => {

@@ -10,13 +10,15 @@ import {
   attribuerCreneaux,
   campagnesEnAttente,
   demarrerCampagne,
+  abandonnerCampagnesEnCours,
   demanderReformulation,
+  demanderReformulations,
   deposerBrouillons,
   finirCampagne,
   nettoyerCorps,
   relancerCampagne,
 } from './redaction.js';
-import { prospectionBrouillons, prospectionCampagnes } from './schema.js';
+import { prospectionBrouillons, prospectionCampagnes, prospectionOccurrences } from './schema.js';
 
 describe('nettoyerCorps', () => {
   it('retire les scripts, styles, gestionnaires et liens dangereux', () => {
@@ -265,6 +267,41 @@ describe('Rédaction d’une campagne par Claude', () => {
       ).rejects.toThrow(/déjà en cours/i);
     });
 
+    it('une même demande vaut pour plusieurs mails, ou pour tous ceux qui peuvent l’être', async () => {
+      const c = await enRelecture(['Ines', 'Jade', 'Kim']);
+      const [b1, b2, b3] = c.brouillons;
+      await dans(a, (tx) => demanderReformulations(tx, c.id, ' Plus direct ', [b1!.id, b2!.id]));
+      const apres = await dans(a, (tx) => lireCampagne(tx, c.id));
+      expect(apres.statut).toBe('redaction');
+      const etat = (id: string) => apres.brouillons.find((x) => x.id === id)!;
+      expect(etat(b1!.id)).toMatchObject({ etat: 'a_rediger', consigne: 'Plus direct' });
+      expect(etat(b2!.id)).toMatchObject({ etat: 'a_rediger', consigne: 'Plus direct' });
+      expect(etat(b3!.id)).toMatchObject({ etat: 'pret', consigne: null });
+
+      const d = await enRelecture(['Lou', 'Max', 'Nina']);
+      await t.owner.db
+        .update(prospectionBrouillons)
+        .set({ etat: 'ecarte' })
+        .where(eq(prospectionBrouillons.id, d.brouillons[2]!.id));
+      expect(await dans(a, (tx) => demanderReformulations(tx, d.id, 'Plus court'))).toBe(2);
+      const tous = await dans(a, (tx) => lireCampagne(tx, d.id));
+      expect(tous.brouillons.map((x) => x.etat).sort()).toEqual([
+        'a_rediger',
+        'a_rediger',
+        'ecarte',
+      ]);
+    });
+
+    it('refuse une demande en lot sans mail reformulable', async () => {
+      const c = await enRelecture(['Odile']);
+      await expect(dans(a, (tx) => demanderReformulations(tx, c.id, '   '))).rejects.toThrow(
+        /changer/i,
+      );
+      await expect(
+        dans(a, (tx) => demanderReformulations(tx, c.id, 'Plus court', [crypto.randomUUID()])),
+      ).rejects.toThrow(/ne peut pas/i);
+    });
+
     it('refuse un mail d’une autre instance', async () => {
       const c = await enRelecture(['Rita']);
       const autre = await nouvelle(b, ['Samir']);
@@ -313,5 +350,42 @@ describe('Rédaction d’une campagne par Claude', () => {
     const apres = await dans(a, (tx) => lireCampagne(tx, c.id));
     expect(apres.statut).toBe('erreur');
     expect(apres.erreur).toMatch(/exécuteur/i);
+  });
+
+  it('abandonner les campagnes en cours les supprime, sans toucher aux terminées ni aux envois', async () => {
+    const en = await nouvelle(a, ['Pia']);
+    const fin = await nouvelle(a, ['Quincy']);
+    await t.owner.db
+      .update(prospectionCampagnes)
+      .set({ statut: 'terminee' })
+      .where(eq(prospectionCampagnes.id, fin.id));
+    await t.owner.db.insert(prospectionOccurrences).values([
+      {
+        instanceId: a,
+        mode: 'relance',
+        contactNom: 'Pia',
+        theme: 'T',
+        etat: 'brouillon',
+        lot: en.id,
+      },
+      {
+        instanceId: a,
+        mode: 'relance',
+        contactNom: 'Pia',
+        theme: 'T',
+        etat: 'envoye',
+        envoyeAt: new Date(),
+        lot: en.id,
+      },
+    ]);
+    expect(await dans(a, (tx) => abandonnerCampagnesEnCours(tx))).toBeGreaterThanOrEqual(1);
+    await expect(dans(a, (tx) => lireCampagne(tx, en.id))).rejects.toThrow(/introuvable/i);
+    expect((await dans(a, (tx) => lireCampagne(tx, fin.id))).statut).toBe('terminee');
+    const restes = await t.owner.db
+      .select({ etat: prospectionOccurrences.etat })
+      .from(prospectionOccurrences)
+      .where(eq(prospectionOccurrences.lot, en.id));
+    expect(restes.map((r) => r.etat)).toEqual(['envoye']);
+    expect(await dans(a, (tx) => abandonnerCampagnesEnCours(tx))).toBe(0);
   });
 });

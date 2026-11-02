@@ -24,6 +24,7 @@ const avec = (s: StatsProspection): VueProspection => ({
   signatures: [],
   recentes: [],
   enCours: null,
+  nbEnCours: 0,
   froid: { disponibles: 12, aRelancer: 7 },
   envoiPossible: false,
 });

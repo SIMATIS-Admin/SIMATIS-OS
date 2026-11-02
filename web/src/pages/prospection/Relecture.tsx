@@ -4,6 +4,7 @@ import {
   finaliserCampagne,
   modifierBrouillonCampagne,
   reformulerBrouillonCampagne,
+  reformulerBrouillonsCampagne,
   urlImageSignature,
   type BrouillonCampagne,
   type CampagneProspection,
@@ -45,6 +46,8 @@ export function Relecture({
   const [enCours, setEnCours] = useState(false);
   const [confirmerEnvoi, setConfirmerEnvoi] = useState(false);
   const [demandes, setDemandes] = useState<Record<string, string>>({});
+  const [selection, setSelection] = useState<string[]>([]);
+  const [consigneLot, setConsigneLot] = useState('');
 
   const reformulation = brouillons.some((x) => x.etat === 'a_rediger');
   const campagneId = campagne.id;
@@ -99,6 +102,30 @@ export function Relecture({
     }
   };
 
+  // Les mails encore reformulables : ni écartés, ni déjà créés, ni en cours de reformulation.
+  const reformulables = brouillons.filter((x) => x.etat === 'pret' || x.etat === 'a_verifier');
+  const choisis = reformulables.filter((x) => selection.includes(x.id));
+  const basculer = (id: string) =>
+    setSelection((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
+
+  const reformulerLot = async () => {
+    const consigne = consigneLot.trim();
+    if (!consigne || choisis.length === 0) return;
+    const ids = choisis.map((x) => x.id);
+    try {
+      await reformulerBrouillonsCampagne(slug, campagne.id, consigne, ids);
+      setBrouillons((l) =>
+        l.map((x) => (ids.includes(x.id) ? { ...x, etat: 'a_rediger', consigne } : x)),
+      );
+      setSelection([]);
+      setConsigneLot('');
+      setEdition(null);
+      setErreur(null);
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
+
   const finaliser = async (mode: 'brouillons' | 'envoi' = 'brouillons') => {
     setEnCours(true);
     try {
@@ -116,34 +143,105 @@ export function Relecture({
 
   return (
     <>
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(220px,1fr) 2.4fr', gap: 14 }}>
-        <div className="stack">
+      {reformulables.length > 1 && (
+        <div className="panel" style={{ marginBottom: 14 }}>
+          <div className="panel-b">
+            <label className="field">
+              <span className="small">
+                <b>Faire reformuler plusieurs mails par Claude, avec la même demande</b> : cochez
+                les mails dans la liste (ou tous d'un coup), puis dites ce que vous voulez changer
+              </span>
+              <textarea
+                className="input"
+                aria-label="Demande pour les mails cochés"
+                rows={2}
+                maxLength={1000}
+                placeholder="Ex. : ton plus direct, plus court, sans la phrase sur le prix…"
+                disabled={reformulation}
+                value={consigneLot}
+                onChange={(e) => setConsigneLot(e.target.value)}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label className="small">
+                <input
+                  type="checkbox"
+                  checked={choisis.length === reformulables.length}
+                  disabled={reformulation}
+                  onChange={(e) =>
+                    setSelection(e.target.checked ? reformulables.map((x) => x.id) : [])
+                  }
+                />{' '}
+                Tout cocher ({reformulables.length})
+              </label>
+              <button
+                className="btn sm"
+                disabled={reformulation || choisis.length === 0 || !consigneLot.trim()}
+                onClick={() => void reformulerLot()}
+              >
+                Faire reformuler{' '}
+                {choisis.length > 1 ? `les ${choisis.length} mails cochés` : 'le mail coché'}
+              </button>
+              {reformulation && (
+                <span className="small muted">Une reformulation est déjà en cours.</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="grid" style={{ gridTemplateColumns: 'minmax(280px,1fr) 2.4fr', gap: 14 }}>
+        <div className="stack" style={{ alignContent: 'start' }}>
           {brouillons.map((x) => (
-            <button
+            <div
               key={x.id}
               className="panel"
-              aria-label={`Ouvrir le mail de ${x.contactNom}`}
-              aria-current={x.id === b.id}
               style={{
-                textAlign: 'left',
-                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '0 0 0 12px',
                 opacity: x.etat === 'ecarte' ? 0.5 : 1,
                 border: x.id === b.id ? '2px solid var(--navy)' : undefined,
               }}
-              onClick={() => {
-                setCourant(x.id);
-                setEdition(null);
-                setCitee(null);
-              }}
             >
-              <div className="panel-b" style={{ padding: '10px 12px' }}>
-                <b>{x.contactNom}</b> <span className="small muted">{x.societe}</span>
-                <div className="small">
+              {reformulables.length > 1 && (
+                <input
+                  type="checkbox"
+                  aria-label={`Cocher le mail de ${x.contactNom}`}
+                  checked={selection.includes(x.id)}
+                  disabled={reformulation || !reformulables.some((r) => r.id === x.id)}
+                  onChange={() => basculer(x.id)}
+                />
+              )}
+              <button
+                aria-label={`Ouvrir le mail de ${x.contactNom}`}
+                aria-current={x.id === b.id}
+                style={{
+                  all: 'unset',
+                  boxSizing: 'border-box',
+                  flex: 1,
+                  minWidth: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 12px 10px 4px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  setCourant(x.id);
+                  setEdition(null);
+                  setCitee(null);
+                }}
+              >
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <b>{x.contactNom}</b> <span className="small muted">{x.societe}</span>
+                </span>
+                <span className="small" style={{ whiteSpace: 'nowrap' }}>
                   <span className={`badge ${ETATS[x.etat]?.[0] ?? ''}`}>{ETATS[x.etat]?.[1]}</span>{' '}
                   touche {x.touche}
-                </div>
-              </div>
-            </button>
+                </span>
+              </button>
+            </div>
           ))}
         </div>
 
