@@ -2042,6 +2042,7 @@ export type RevenuGestion = {
   date: string;
   dateEncaissement: string | null;
   referenceFacture: string | null;
+  tvaCents: number | null;
   recurrence: 'aucune' | 'mensuelle' | 'trimestrielle' | 'annuelle';
   dateFin: string | null;
   certitude: 'certaine' | 'probable' | 'hypothese';
@@ -2104,3 +2105,87 @@ export const occurrenceRevenuGestion = (
 ) => sendJson<RevenuGestion>('PUT', inst(slug, `gestion/revenus/${id}/occurrences/${date}`), corps);
 export const reinitialiserOccurrenceRevenu = (slug: string, id: string, date: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/revenus/${id}/occurrences/${date}`), {});
+
+// Trésorerie, réglages et TVA (Lot C).
+export type ReglagesGestion = {
+  soldeCents: number | null;
+  soldeDate: string | null;
+  soldeSource: string | null;
+  seuilMode: 'aucun' | 'montant' | 'bfr';
+  seuilCents: number | null;
+  delaiPaiementJours: number | null;
+};
+export type MouvementTresorerie = {
+  date: string;
+  sens: 'entree' | 'sortie';
+  libelle: string;
+  montantCents: number;
+  nature: 'depense' | 'recette';
+  ref: string;
+  estime: boolean;
+  note: string | null;
+};
+export type PeriodeTresorerie = {
+  debut: string;
+  fin: string;
+  entreesCents: number;
+  sortiesCents: number;
+  soldeFinCents: number | null;
+  variationCumuleeCents: number;
+  mouvements: MouvementTresorerie[];
+};
+export type ProjectionTresorerie = {
+  aujourdhui: string;
+  granularite: 'mois' | 'semaine';
+  reglages: ReglagesGestion;
+  seuil: {
+    mode: ReglagesGestion['seuilMode'];
+    cents: number | null;
+    bfr: {
+      creancesCents: number;
+      dettesCents: number;
+      bfrCents: number;
+      seuilCents: number;
+      limites: string[];
+    } | null;
+  };
+  scenarios: {
+    scenario: 'securise' | 'central' | 'ambitieux';
+    periodes: PeriodeTresorerie[];
+    alerte: { debut: string; soldeFinCents: number } | null;
+  }[];
+  avertissements: string[];
+};
+export type SuiviTvaGestion = {
+  mois: string;
+  declaration: 'mensuelle';
+  exigibilite: 'a_confirmer';
+  collecteeCents: number;
+  deductibleCents: number;
+  estimeeCents: number;
+  lignesSansTva: { recettes: number; depenses: number };
+  recettesIncertainesExclues: number;
+  declaree: { montantCents: number | null; note: string | null } | null;
+  avertissements: string[];
+};
+export const fetchTresorerie = (
+  slug: string,
+  p: { horizon: number; granularite: 'mois' | 'semaine'; retard: number },
+) =>
+  getJson<ProjectionTresorerie>(
+    inst(
+      slug,
+      `gestion/tresorerie?horizon=${p.horizon}&granularite=${p.granularite}&retard=${p.retard}`,
+    ),
+  );
+export const fetchReglagesGestion = (slug: string) =>
+  getJson<ReglagesGestion>(inst(slug, 'gestion/reglages'));
+export const saveReglagesGestion = (slug: string, r: ReglagesGestion) =>
+  sendJson<ReglagesGestion>('PUT', inst(slug, 'gestion/reglages'), r);
+export const fetchTva = (slug: string, mois: string) =>
+  getJson<SuiviTvaGestion>(inst(slug, `gestion/tva?mois=${mois}`));
+export const saveTva = (
+  slug: string,
+  mois: string,
+  s: { declareeCents: number | null; note: string | null },
+) => sendJson<SuiviTvaGestion>('PUT', inst(slug, `gestion/tva/${mois}`), s);

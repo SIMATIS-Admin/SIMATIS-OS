@@ -3,6 +3,10 @@ import {
   archiverDepenseGestion,
   archiverRevenuGestion,
   fetchFacturesAEmettre,
+  fetchTresorerie,
+  fetchTva,
+  type ProjectionTresorerie,
+  type SuiviTvaGestion,
   fetchRevenuGestion,
   type OccurrenceRevenu,
   fetchRevenus,
@@ -25,6 +29,8 @@ import {
 } from '../gestion.js';
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
+import { GestionTresorerie, type ParamsTresorerie } from './GestionTresorerie.js';
+import { GestionTva } from './GestionTva.js';
 import {
   ETATS_REVENU,
   GestionRevenuTiroir,
@@ -43,9 +49,7 @@ const ONGLETS: [Onglet, string][] = [
 ];
 // Écrans suivants : annoncés, jamais simulés avec des chiffres.
 const PREVU: Partial<Record<Onglet, [string, string]>> = {
-  tresorerie: ['Lot C', 'Échéancier, scénarios et projection de trésorerie.'],
   ik: ['Lot D', 'Trajets, barème versionné et compte courant d’associé.'],
-  tva: ['Lot C', 'Suivi mensuel de la TVA, exigibilité à confirmer avec le comptable.'],
 };
 type Filtre = 'toutes' | 'recurrentes' | 'ponctuelles' | 'previsionnelles';
 
@@ -74,6 +78,13 @@ export function Gestion({
     synthese: SyntheseRevenus;
     revenus: OccurrenceRevenu[];
   } | null>(null);
+  const [tresorerie, setTresorerie] = useState<ProjectionTresorerie | null>(null);
+  const [paramsTreso, setParamsTreso] = useState<ParamsTresorerie>({
+    horizon: 6,
+    granularite: 'mois',
+    retard: 0,
+  });
+  const [tva, setTva] = useState<SuiviTvaGestion | null>(null);
   const [aFacturer, setAFacturer] = useState<OccurrenceRevenu[]>([]);
   const [tiroirRevenu, setTiroirRevenu] = useState<CibleRevenu | null>(null);
   const [filtre, setFiltre] = useState<Filtre>('toutes');
@@ -86,18 +97,22 @@ export function Gestion({
       setErreur(null);
       const horizon = new Date(`${aujourdhui()}T00:00:00Z`);
       horizon.setUTCDate(horizon.getUTCDate() + 30);
-      const [d, r, f] = await Promise.all([
+      const [d, r, f, t, v] = await Promise.all([
         fetchDepenses(slug, mois),
         fetchRevenus(slug, mois),
         fetchFacturesAEmettre(slug, horizon.toISOString().slice(0, 10)),
+        fetchTresorerie(slug, paramsTreso),
+        fetchTva(slug, mois),
       ]);
+      setTresorerie(t);
+      setTva(v);
       setDonnees(d);
       setRecettes(r);
       setAFacturer(f);
     } catch (e) {
       setErreur(message(e));
     }
-  }, [slug, mois]);
+  }, [slug, mois, paramsTreso]);
 
   useEffect(() => {
     if (autorise) void charger();
@@ -197,6 +212,14 @@ export function Gestion({
     </div>
   );
 
+  // Solde de fin du mois demandé dans le scénario central ; absent tant que le solde n'est pas renseigné.
+  const finMoisCentral = (() => {
+    const p = tresorerie?.scenarios
+      .find((x) => x.scenario === 'central')
+      ?.periodes.find((x) => x.debut.slice(0, 7) === tresorerie.aujourdhui.slice(0, 7));
+    return p?.soldeFinCents ?? null;
+  })();
+
   const vue = (
     <>
       <div className="g-niveaux">
@@ -265,23 +288,56 @@ export function Gestion({
             </a>
           </div>
         </div>
-        {(
-          [
-            ['Trésorerie fin de mois', 'Lot C'],
-            ['TVA du mois', 'Lot C'],
-          ] as const
-        ).map(([k, lot]) => (
-          <div className="panel kpi" key={k}>
-            <span className="g-ic">
-              <Icon name="chart" />
-            </span>
-            <div>
-              <span className="l">{k}</span>
+        <div className="panel kpi">
+          <span className="g-ic">
+            <Icon name="chart" />
+          </span>
+          <div>
+            <span className="l">Trésorerie fin de mois (central)</span>
+            {finMoisCentral == null ? (
               <span className="v vide">Non renseigné</span>
-              <span className="g-maj">Arrive avec le {lot}</span>
-            </div>
+            ) : (
+              <span className="v num">{eurCents(finMoisCentral)}</span>
+            )}
+            <span className="g-maj">
+              {tresorerie?.reglages.soldeCents == null
+                ? 'Solde d’ouverture à renseigner'
+                : `Solde au ${tresorerie.reglages.soldeDate} · ${tresorerie.reglages.soldeSource}`}
+            </span>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                setOnglet('tresorerie');
+              }}
+            >
+              Voir la projection
+            </a>
           </div>
-        ))}
+        </div>
+        <div className="panel kpi">
+          <span className="g-ic">
+            <Icon name="chart" />
+          </span>
+          <div>
+            <span className="l">TVA du mois</span>
+            <span className="v vide">À confirmer</span>
+            <span className="g-maj">
+              {tva
+                ? `Estimation incertaine : ${eurCents(Math.abs(tva.estimeeCents))} ${tva.estimeeCents < 0 ? 'de crédit' : 'à payer'}`
+                : 'Exigibilité à valider'}
+            </span>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                setOnglet('tva');
+              }}
+            >
+              Voir la TVA
+            </a>
+          </div>
+        </div>
       </div>
       <div className="panel" style={{ marginTop: 18 }}>
         <div className="panel-h">
@@ -405,7 +461,7 @@ export function Gestion({
                     <b>{o.libelle}</b>
                     <small>
                       {o.categorie ?? 'Sans catégorie'}
-                      {o.payeur === 'associe' ? ' · avancé par l’associé' : ''}
+                      {o.payeur === 'associe' ? ' · compte d’associé, sans sortie bancaire' : ''}
                     </small>
                   </td>
                   <td>
@@ -737,6 +793,24 @@ export function Gestion({
       {onglet === 'vue' && vue}
       {onglet === 'depenses' && depenses}
       {onglet === 'revenus' && revenus}
+      {onglet === 'tresorerie' && (
+        <GestionTresorerie
+          slug={slug}
+          projection={tresorerie}
+          params={paramsTreso}
+          onParams={setParamsTreso}
+          onReglagesSaved={() => void charger()}
+        />
+      )}
+      {onglet === 'tva' && (
+        <GestionTva
+          slug={slug}
+          mois={mois}
+          suivi={tva}
+          periode={cheminDuMois}
+          onSaved={() => void charger()}
+        />
+      )}
       {prevu && (
         <div className="panel">
           <div className="panel-h">

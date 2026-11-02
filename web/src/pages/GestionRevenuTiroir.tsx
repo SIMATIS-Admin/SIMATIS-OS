@@ -72,6 +72,9 @@ export function GestionRevenuTiroir({
   );
   const [fin, setFin] = useState(revenu?.dateFin ?? '');
   const [encaisse, setEncaisse] = useState(revenu?.dateEncaissement ?? aujourdhui());
+  const [tva, setTva] = useState(
+    revenu?.tvaCents == null ? '' : String(revenu.tvaCents / 100).replace('.', ','),
+  );
   const [facture, setFacture] = useState(revenu?.referenceFacture ?? '');
   const [portee, setPortee] = useState<'cette' | 'suivantes'>('cette');
   const [erreur, setErreur] = useState<string | null>(null);
@@ -84,7 +87,12 @@ export function GestionRevenuTiroir({
   const enregistrer = async () => {
     const cents = versCents(montant);
     if (!libelle.trim() || !cents) return setErreur('Libellé et montant HT sont obligatoires.');
+    // 0 est une TVA valide (exonération) ; vide veut dire non renseignée, jamais un taux supposé.
+    const tvaN = tva.trim() ? Number(tva.replace(/\s/g, '').replace(',', '.')) : null;
+    if (tvaN != null && (!Number.isFinite(tvaN) || tvaN < 0))
+      return setErreur('La TVA doit être un montant en euros.');
     const commun = {
+      tvaCents: tvaN == null ? null : Math.round(tvaN * 100),
       libelle: libelle.trim(),
       type,
       mandat: mandat || null,
@@ -305,6 +313,16 @@ export function GestionRevenuTiroir({
             />
           </label>
         )}
+        <label className="field">
+          <span>TVA comprise dans le montant (€, facultatif)</span>
+          <input
+            className="input num"
+            inputMode="decimal"
+            value={tva}
+            onChange={(e) => setTva(e.target.value)}
+            placeholder="Non renseignée : encaissement estimé en HT"
+          />
+        </label>
         <label className="field">
           <span>Référence de facture (facultatif)</span>
           <input
