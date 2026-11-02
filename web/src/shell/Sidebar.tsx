@@ -27,6 +27,7 @@ type Props = {
 const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
+const QUOTIDIEN = ['brief', 'inbox', 'agenda'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
 const memoriser = (cle: string, valeur: string) => {
@@ -62,6 +63,7 @@ export function Sidebar({
   onMoveFavori,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [espaces, setEspaces] = useState(false);
   // Sections fold and unfold; « Plus tard » starts folded, the others open.
   const [ouverts, setOuverts] = useState(lireOuverts);
   const basculer = (titre: string, ouvert: boolean) => {
@@ -100,6 +102,7 @@ export function Sidebar({
         href={`#/${current.slug}/${it.id}`}
         className={[view === it.id ? 'on' : '', isBuilt(it.id) ? '' : 'soon'].join(' ')}
         title={reduite ? it.label : undefined}
+        aria-current={view === it.id ? 'page' : undefined}
         {...dragProps}
       >
         <Icon name={it.icon} />
@@ -110,6 +113,14 @@ export function Sidebar({
         <span
           className={`fav ${fav ? 'on' : ''}`}
           role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleFavori(it.id);
+            }
+          }}
           title={fav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
           onClick={(e) => {
             e.preventDefault();
@@ -122,7 +133,11 @@ export function Sidebar({
     );
   };
 
+  const quotidien = allItems().filter(
+    (it) => QUOTIDIEN.includes(it.id) && allowed(it, current.modules),
+  );
   const favItems = favoris
+    .filter((id) => !QUOTIDIEN.includes(id))
     .map((id) => allItems().find((it) => it.id === id))
     .filter((it): it is NavItem => !!it && allowed(it, current.modules));
   const isPortefeuille = view === 'portefeuille';
@@ -199,36 +214,61 @@ export function Sidebar({
           </button>
         </div>
       )}
-      <nav className="nav">
+      <nav className="nav" aria-label="Navigation principale">
+        <div className="nav-group quotidien">
+          <span>Mon quotidien</span>
+          {quotidien.map((it) => link(it))}
+        </div>
         {favItems.length > 0 && (
           <div className="nav-group favs">
             <span>
               <Icon name="star" />
-              Favoris
+              Mes raccourcis
             </span>
             {favItems.map((it) => link(it, true))}
           </div>
         )}
-        {NAV.map((g) => {
-          const items = g.items.filter((it) => allowed(it, current.modules));
-          if (items.length === 0) return null;
-          const ouvert = ouverts[g.title] ?? !g.later;
-          return (
-            <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
-              <button
-                className="later-btn"
-                aria-expanded={ouvert}
-                onClick={() => basculer(g.title, ouvert)}
-              >
-                {g.title}
-                <span className={`chev ${ouvert ? 'open' : ''}`}>
-                  <Icon name="down" />
-                </span>
-              </button>
-              {ouvert && items.map((it) => link(it))}
-            </div>
-          );
-        })}
+        <button
+          className="espaces-btn"
+          aria-expanded={espaces}
+          aria-controls="nav-espaces"
+          title="Mes espaces"
+          onClick={() => {
+            setEspaces(!espaces);
+            if (reduite) basculerReduite();
+          }}
+        >
+          <Icon name="panel" />
+          <span>Mes espaces</span>
+          <Icon name="down" />
+        </button>
+        <div id="nav-espaces" hidden={!espaces}>
+          {NAV.map((g) => {
+            const items = g.items.filter(
+              (it) =>
+                allowed(it, current.modules) &&
+                !QUOTIDIEN.includes(it.id) &&
+                !favItems.some((f) => f.id === it.id),
+            );
+            if (items.length === 0) return null;
+            const ouvert = ouverts[g.title] ?? !g.later;
+            return (
+              <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
+                <button
+                  className="later-btn"
+                  aria-expanded={ouvert}
+                  onClick={() => basculer(g.title, ouvert)}
+                >
+                  {g.title}
+                  <span className={`chev ${ouvert ? 'open' : ''}`}>
+                    <Icon name="down" />
+                  </span>
+                </button>
+                {ouvert && items.map((it) => link(it))}
+              </div>
+            );
+          })}
+        </div>
       </nav>
       {current.type === 'propre' &&
         (current.modules.includes('cerveau') || current.modules.includes('gestion')) && (
