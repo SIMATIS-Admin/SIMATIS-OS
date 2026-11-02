@@ -536,3 +536,59 @@ export async function ajouterNote(
     return lire(tx, kind, id, new Date());
   });
 }
+
+// A note of the record's history: an OS note changes in place, a HubSpot one is changed there first
+// (otherwise the next sync would bring the old text back).
+export async function modifierNote(
+  db: Executor,
+  instance: Instance,
+  kind: Kind,
+  id: string,
+  noteId: string,
+  input: { corps: string },
+  deps: ConnexionDeps,
+): Promise<Fiche | SimulationFiche | null> {
+  const corps = input.corps.trim();
+  if (!corps) throw new FicheInvalide('Note vide');
+  return withInstance(db, instance.id, async (tx) => {
+    if (!(await ligne(tx, kind, id))) return null;
+    const p = await portee(tx, kind, id);
+    const [note] = await tx
+      .select()
+      .from(activites)
+      .where(
+        and(
+          eq(activites.instanceId, currentInstance),
+          eq(activites.id, noteId),
+          eq(activites.type, 'note'),
+          lie(p, activites, activites.entrepriseId),
+        ),
+      );
+    if (!note) return null;
+    if (note.source === 'hubspot') {
+      if ((await crm(tx))?.sens !== 'deux_sens')
+        throw new CrmIndisponible('CRM en lecture seule : modifiez la note dans HubSpot.');
+      let result;
+      try {
+        result = await writeVia(
+          tx,
+          instance,
+          'crm',
+          { op: 'note.update', data: { noteId, corps } },
+          deps,
+        );
+      } catch (error) {
+        throw new CrmIndisponible(
+          `Refusé par HubSpot : ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      if (result.simulation) return SIMULATION;
+    }
+    await tx
+      .update(activites)
+      .set({ resume: corps, updatedAt: new Date() })
+      .where(and(eq(activites.instanceId, currentInstance), eq(activites.id, noteId)));
+    await logEvent(tx, { acteur: 'pilote', action: 'Note modifiée', niveau: 'L2' });
+    return lire(tx, kind, id, new Date());
+  });
+}

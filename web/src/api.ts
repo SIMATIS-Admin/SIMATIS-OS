@@ -1049,6 +1049,18 @@ export const noteFiche = (
   id: string,
   note: { corps: string; hubspot: boolean },
 ) => sendJson<FicheDetail | SimulationTache>('POST', `${fiche(slug, kind, id)}/notes`, note);
+export const modifierNoteFiche = (
+  slug: string,
+  kind: KindFiche,
+  id: string,
+  noteId: string,
+  corps: string,
+) =>
+  sendJson<FicheDetail | SimulationTache>(
+    'PATCH',
+    `${fiche(slug, kind, id)}/notes/${encodeURIComponent(noteId)}`,
+    { corps },
+  );
 export type EmailContact = { email: string; principal: boolean };
 const emailsDe = (slug: string, id: string) => `${fiche(slug, 'contact', id)}/emails`;
 export const ajouterEmailContact = (slug: string, id: string, email: string) =>

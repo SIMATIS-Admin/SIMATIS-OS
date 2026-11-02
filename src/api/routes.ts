@@ -144,6 +144,7 @@ import { peutTransferer, UTILISATEUR_PILOTE } from '../transfert/droits.js';
 import { supprimerFiche } from '../crm/suppression.js';
 import {
   ajouterNote,
+  modifierNote,
   FicheInvalide,
   getFiche,
   KINDS,
@@ -1043,6 +1044,32 @@ export function registerApi(
       try {
         const r = await ajouterNote(db, i, kind, request.params.id, parsed.data, connexionDeps);
         return r ?? reply.code(404).send({ error: 'Fiche introuvable' });
+      } catch (error) {
+        return ficheErreur(error, reply);
+      }
+    }),
+  );
+
+  type NoteRoute = FicheRoute & { Params: { noteId: string } };
+  app.patch<NoteRoute>(
+    '/api/i/:slug/fiches/:kind/:id/notes/:noteId',
+    onInstance<NoteRoute>(async (i, request, reply) => {
+      const kind = ficheParams(request.params);
+      if (!kind || !UUID.test(request.params.noteId))
+        return reply.code(404).send({ error: 'Note introuvable' });
+      const parsed = noteSchema.pick({ corps: true }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Note invalide' });
+      try {
+        const r = await modifierNote(
+          db,
+          i,
+          kind,
+          request.params.id,
+          request.params.noteId,
+          parsed.data,
+          connexionDeps,
+        );
+        return r ?? reply.code(404).send({ error: 'Note introuvable' });
       } catch (error) {
         return ficheErreur(error, reply);
       }

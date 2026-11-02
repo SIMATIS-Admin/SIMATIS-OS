@@ -287,6 +287,19 @@ describe('Fiche page', () => {
     });
   });
 
+  it('edits a note of the history and sends the new text', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier la note' }));
+    const champ = screen.getByLabelText<HTMLTextAreaElement>('Modifier la note');
+    expect(champ.value).toBe('Budget validé');
+    fireEvent.change(champ, { target: { value: 'Budget validé en comité' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(patch('/fiches/affaire/o1/notes/n1')).toBeTruthy());
+    expect(patch('/fiches/affaire/o1/notes/n1')?.body).toEqual({
+      corps: 'Budget validé en comité',
+    });
+  });
+
   it('asks the reason before marking the deal lost', async () => {
     render(<Fiche slug="simatis" kind="affaire" id="o1" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Perdue' }));

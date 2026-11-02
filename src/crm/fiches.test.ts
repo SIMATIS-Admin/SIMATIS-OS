@@ -10,7 +10,7 @@ import { configureConnexion, registerConnector, syncConnexion } from '../connexi
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { ajouterNote, getFiche, updateFiche, type Fiche } from './fiches.js';
+import { ajouterNote, getFiche, modifierNote, updateFiche, type Fiche } from './fiches.js';
 import { lierFiches } from './liens.js';
 import { createEntreprise, CrmIndisponible } from './service.js';
 
@@ -175,6 +175,76 @@ describe('Fiches détaillées', () => {
     expect(local.historique[0]).toMatchObject({ texte: 'Pense-bête', origine: 'os' });
   });
 
+  it('edits a note: in place for an OS one, in HubSpot first for a HubSpot one', async () => {
+    const opp = await id('opportunites', '301');
+    const noteHs = (
+      (await ajouterNote(
+        t.app.db,
+        armed,
+        'affaire',
+        opp,
+        { corps: 'Devis envoyé', hubspot: true },
+        on(),
+      )) as Fiche
+    ).historique[0]!;
+    portal.calls.length = 0;
+    const f = (await modifierNote(
+      t.app.db,
+      armed,
+      'affaire',
+      opp,
+      noteHs.id,
+      { corps: 'Devis signé' },
+      on(),
+    )) as Fiche;
+    expect(portal.calls.map((c) => `${c.method} ${c.path.replace(/\/\d+$/, '/:id')}`)).toEqual([
+      'PATCH /crm/v3/objects/notes/:id',
+    ]);
+    expect(portal.calls[0]?.body).toEqual({ properties: { hs_note_body: 'Devis signé' } });
+    expect(f.historique.find((e) => e.id === noteHs.id)).toMatchObject({ texte: 'Devis signé' });
+
+    // Dry run: nothing is written, neither in HubSpot nor locally.
+    portal.calls.length = 0;
+    const essai = await modifierNote(t.app.db, a, 'affaire', opp, noteHs.id, { corps: 'X' }, off());
+    expect(essai).toMatchObject({ simulation: true });
+    expect(portal.calls).toHaveLength(0);
+    const relue = (await getFiche(t.app.db, a, 'affaire', opp))!;
+    expect(relue.historique.find((e) => e.id === noteHs.id)?.texte).toBe('Devis signé');
+
+    const noteOs = (
+      (await ajouterNote(
+        t.app.db,
+        a,
+        'affaire',
+        opp,
+        { corps: 'Pense-bête', hubspot: false },
+        off(),
+      )) as Fiche
+    ).historique[0]!;
+    const g = (await modifierNote(
+      t.app.db,
+      a,
+      'affaire',
+      opp,
+      noteOs.id,
+      { corps: 'Pense-bête corrigé' },
+      off(),
+    )) as Fiche;
+    expect(portal.calls).toHaveLength(0);
+    expect(g.historique.find((e) => e.id === noteOs.id)).toMatchObject({
+      texte: 'Pense-bête corrigé',
+      origine: 'os',
+    });
+    await expect(
+      modifierNote(t.app.db, a, 'affaire', opp, noteOs.id, { corps: '  ' }, off()),
+    ).rejects.toThrow('Note vide');
+    // A note of another record is unknown here.
+    const autre = await id('opportunites', '302');
+    expect(
+      await modifierNote(t.app.db, a, 'affaire', autre, noteOs.id, { corps: 'Z' }, off()),
+    ).toBeNull();
+  });
+
   it('edits an OS company freely, and keeps each instance to itself', async () => {
     const e = (await createEntreprise(t.app.db, natif, { nom: 'Scierie Bonnet' }, off())) as {
       id: string;
@@ -214,6 +284,28 @@ describe('Fiches détaillées', () => {
         payload: { corps: 'Premier contact au salon' },
       });
       expect(ok.statusCode).toBe(200);
+      const noteId = ok.json<Fiche>().historique[0]!.id;
+      const modif = await app.inject({
+        method: 'PATCH',
+        url: `/api/i/fiches-os/fiches/entreprise/${e.id}/notes/${noteId}`,
+        payload: { corps: 'Premier contact au salon de Lyon' },
+      });
+      expect(modif.statusCode).toBe(200);
+      expect(modif.json<Fiche>().historique[0]).toMatchObject({
+        texte: 'Premier contact au salon de Lyon',
+      });
+      const vide = await app.inject({
+        method: 'PATCH',
+        url: `/api/i/fiches-os/fiches/entreprise/${e.id}/notes/${noteId}`,
+        payload: { corps: ' ' },
+      });
+      expect(vide.statusCode).toBe(400);
+      const inconnue = await app.inject({
+        method: 'PATCH',
+        url: `/api/i/fiches-os/fiches/entreprise/${e.id}/notes/00000000-0000-4000-8000-000000000000`,
+        payload: { corps: 'X' },
+      });
+      expect(inconnue.statusCode).toBe(404);
     } finally {
       await app.close();
     }
