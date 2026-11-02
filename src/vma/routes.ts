@@ -52,6 +52,8 @@ const vueTest = (t: TestVma) => ({
   envoyeeLe: t.envoyeeLe,
   relances: t.relances,
   echecEnvoi: t.echecEnvoi,
+  mailOuvertLe: t.mailOuvertLe,
+  lienOuvertLe: t.lienOuvertLe,
   type: t.type,
   statut: t.statut,
   lien: t.lien,

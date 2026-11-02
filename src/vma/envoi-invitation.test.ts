@@ -60,6 +60,18 @@ describe('Registre des mails (vouvoiement / tutoiement)', () => {
     expect(mail.html).not.toContain('<b>');
   });
 
+  it('invitation et relance portent le pixel de suivi, tiré du lien', () => {
+    const pixel =
+      '<img src="https://site.test/api/test-vma/pixel?i=abc" width="1" height="1" alt="" style="display:block;border:0;">';
+    expect(mailInvitation(base).html).toContain(pixel);
+    expect(mailRelance(base).html).toContain(pixel);
+  });
+
+  it('sans lien du test reconnaissable, aucun pixel', () => {
+    const html = mailInvitation({ ...base, lien: 'https://site.test/autre?x=1' }).html;
+    expect(html).not.toContain('<img src="https://site.test/api');
+  });
+
   it('la relance tutoie à la demande', () => {
     const mail = mailRelance({ ...base, tutoiement: true });
     expect(mail.subject).toBe('Rappel : ton test VMA (Atelier Fictif)');

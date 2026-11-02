@@ -147,6 +147,9 @@ export type TestVma = {
   envoyeeLe: string | null;
   relances: { le: string; origine: 'manuelle' | 'auto' }[];
   echecEnvoi: string | null;
+  // Relevés du site : première ouverture du mail (indicatif) et du lien.
+  mailOuvertLe: string | null;
+  lienOuvertLe: string | null;
   type: TestVmaType;
   statut: TestVmaStatut;
   lien: string;
