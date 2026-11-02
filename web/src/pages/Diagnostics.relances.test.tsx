@@ -70,13 +70,13 @@ describe('Diagnostics : relances et suivi des invitations', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => cleanup());
 
-  it('montre la frise : envoi, relance automatique, test pas encore passé', async () => {
+  it('montre la frise : envoi et relance automatique, sans « Test passé » tant qu’il ne l’est pas', async () => {
     await afficher([test({ relances: [{ le: il(3), origine: 'auto' }] })]);
     const jour = (iso: string) =>
       new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
     expect(screen.getByText(`Envoyé ${jour(il(10))}`)).toBeTruthy();
     expect(screen.getByText(`Relancé ${jour(il(3))} (auto)`)).toBeTruthy();
-    expect(screen.getByText('Test passé')).toBeTruthy();
+    expect(screen.queryByText('Test passé')).toBeNull();
   });
 
   it('affiche la raison du dernier envoi en échec', async () => {

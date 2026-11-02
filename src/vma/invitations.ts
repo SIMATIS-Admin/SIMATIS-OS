@@ -198,6 +198,7 @@ export function mailInvitation(p: ParamsMail): { subject: string; html: string }
     subject: `Votre test VMA : ${p.entrepriseNom}`,
     html: habillerMail(
       corpsMail(p, `${r.lienVoici} pour passer le test VMA de ${echapper(p.entrepriseNom)} :`),
+      { tutoiement: p.tutoiement },
     ),
   };
 }
@@ -212,6 +213,7 @@ export function mailRelance(p: ParamsMail): { subject: string; html: string } {
         p,
         `Je me permets de revenir vers ${p.tutoiement ? 'toi' : 'vous'} au sujet du test VMA de ${echapper(p.entrepriseNom)}, que ${p.tutoiement ? 'tu n’as' : 'vous n’avez'} pas encore passé. ${r.lienVoici} :`,
       ),
+      { tutoiement: p.tutoiement },
     ),
   };
 }

@@ -55,26 +55,32 @@ export const bouton = (libelle: string, lien: string) =>
   `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 16px;"><tr><td style="background:${C.marine};border-radius:4px;"><a href="${echapper(lien)}" style="display:inline-block;padding:12px 24px;font:700 16px/1.2 ${POLICE};color:#FFFFFF;text-decoration:none;">${echapper(libelle)}</a></td></tr></table>`;
 
 // Signature : même police, même taille et même couleur que le texte ; seul le nom est en gras.
-export const signature = () =>
-  `<tr><td style="padding:28px 32px 30px;font:16px/1.6 ${POLICE};color:${C.nuit};">${paragraphe('Bien à vous,', 'margin:0 0 10px;')}
+export const signature = (tutoiement = false) =>
+  `<tr><td style="padding:28px 32px 30px;font:16px/1.6 ${POLICE};color:${C.nuit};">${paragraphe(tutoiement ? 'Bien à toi,' : 'Bien à vous,', 'margin:0 0 10px;')}
 <div><strong>Marc Tabouret</strong></div>
 <div>Directeur commercial en mode partagé · SIMATIS</div>
 <div><a href="mailto:marc.tabouret@simatis.fr" style="color:${C.nuit};text-decoration:underline;">marc.tabouret@simatis.fr</a></div></td></tr>`;
 
 // Habille des lignes de tableau (`<tr>…`) : logo, filet menthe, contenu, signature (sauf si le
 // contenu porte la sienne), pied nuit.
-export function habillerMail(lignes: string, options: { signature?: boolean } = {}): string {
+export function habillerMail(
+  lignes: string,
+  options: { signature?: boolean; tutoiement?: boolean } = {},
+): string {
   return `<div style="margin:0;padding:24px 12px;background:${C.glacier};">
 <table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border-radius:8px;overflow:hidden;">
 <tr><td style="padding:22px 32px 18px;border-bottom:4px solid ${C.menthe};"><a href="${SITE}"><img src="${LOGO}" alt="SIMATIS, conseil et formation" width="150" style="display:block;border:0;height:auto;"></a></td></tr>
 ${lignes}
-${options.signature === false ? '' : signature()}
+${options.signature === false ? '' : signature(options.tutoiement)}
 <tr><td style="background:${C.nuit};padding:14px 32px;font:12px/1.5 ${POLICE};color:${C.menthe};text-align:center;"><a href="${SITE}" style="color:${C.menthe};text-decoration:none;">simatis.fr</a></td></tr>
 </table></div>`;
 }
 
 // Mail courant : du HTML libre (déjà échappé) dans une seule cellule du gabarit.
-export const habillerTexte = (html: string, options: { signature?: boolean } = {}) =>
+export const habillerTexte = (
+  html: string,
+  options: { signature?: boolean; tutoiement?: boolean } = {},
+) =>
   habillerMail(
     `<tr><td style="padding:26px 32px 4px;font:16px/1.6 ${POLICE};color:${C.nuit};">${html}</td></tr>`,
     options,

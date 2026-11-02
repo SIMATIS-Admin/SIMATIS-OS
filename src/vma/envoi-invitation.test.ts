@@ -48,6 +48,9 @@ describe('Registre des mails (vouvoiement / tutoiement)', () => {
     expect(tu).toContain('Voici ton lien');
     expect(tu).toContain('copie ce lien');
     expect(tu).not.toContain('votre lien');
+    expect(tu).toContain('Bien à toi,');
+    expect(tu).not.toContain('Bien à vous,');
+    expect(mailInvitation(base).html).toContain('Bien à vous,');
   });
 
   it('la relance reprend le gabarit, le lien et l’expiration', () => {
@@ -76,6 +79,8 @@ describe('Registre des mails (vouvoiement / tutoiement)', () => {
     const mail = mailRelance({ ...base, tutoiement: true });
     expect(mail.subject).toBe('Rappel : ton test VMA (Atelier Fictif)');
     expect(mail.html).not.toContain('votre');
+    expect(mail.html).toContain('Bien à toi,');
+    expect(mail.html).not.toContain('Bien à vous,');
   });
 });
 
