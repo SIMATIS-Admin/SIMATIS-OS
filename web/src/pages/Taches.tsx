@@ -55,19 +55,32 @@ const PERIODES: [CleePeriode | 'plage', string][] = [
   ['plage', 'Plage'],
 ];
 
+const CLE_MASQUES = 'agenda.instances-masquees';
+// Hidden rather than chosen: an instance added later shows up until it is unticked.
+const estMasquee = (t: TacheVue, masques: string[]) =>
+  !!t.instance && masques.includes(t.instance.slug);
+const masquesMemorises = (): string[] => {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(CLE_MASQUES) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
 // Pipedrive list: type toggles and a period of its own, independent of the week shown.
 function Liste({
   slug,
   version,
   hubspot,
-  mandat,
+  masques,
   onOpen,
   onFait,
   onModifier,
 }: {
   slug: string;
   version: number;
-  mandat: string;
+  masques: string[];
   hubspot: boolean;
   onOpen: (t: TacheVue) => void;
   onFait: (t: TacheVue) => void;
@@ -113,7 +126,7 @@ function Liste({
     .filter((t) => (statut === 'faites' ? t.fait : !t.fait))
     .filter((t) => types.has(t.type))
     .filter((t) => origine === 'tout' || t.origine === origine)
-    .filter((t) => !mandat || t.instance?.slug === mandat)
+    .filter((t) => !estMasquee(t, masques))
     .sort(
       (a, b) =>
         (a.echeance ? Date.parse(a.echeance) : Infinity) -
@@ -292,8 +305,18 @@ export function Taches({ slug }: { slug: string }) {
     } else setLundi((l) => plusJours(l, 7 * n));
   };
   const [brut, setData] = useState<SemaineTaches | null>(null);
-  // Mon activité lists its mandates' tasks too: '' is all of them, else one instance.
-  const [mandat, setMandat] = useState('');
+  // Mon activité lists its mandates' tasks too; the unticked instances stay hidden, remembered.
+  const [masques, setMasques] = useState(masquesMemorises);
+  const basculerInstance = (slug: string) =>
+    setMasques((cur) => {
+      const next = cur.includes(slug) ? cur.filter((x) => x !== slug) : [...cur, slug];
+      try {
+        localStorage.setItem(CLE_MASQUES, JSON.stringify(next));
+      } catch {
+        // Private mode: the choice then lasts until the page is closed.
+      }
+      return next;
+    });
   const [message, setMessage] = useState<string | null>(null);
   const [edition, setEdition] = useState<TacheVue | 'nouvelle' | null>(null);
   const [ensuite, setEnsuite] = useState<TacheVue | null>(null);
@@ -347,7 +370,7 @@ export function Taches({ slug }: { slug: string }) {
     load();
   };
 
-  const deMandat = (t: TacheVue) => !mandat || t.instance?.slug === mandat;
+  const deMandat = (t: TacheVue) => !estMasquee(t, masques);
   const data = brut && {
     ...brut,
     taches: brut.taches.filter(deMandat),
@@ -439,19 +462,25 @@ export function Taches({ slug }: { slug: string }) {
         {nav || <span />}
         <div className="ag-barre-d">
           {brut && brut.instances.length > 1 && (
-            <select
-              className="input"
-              aria-label="Instance"
-              value={mandat}
-              onChange={(e) => setMandat(e.target.value)}
-            >
-              <option value="">Toutes</option>
-              {brut.instances.map((i) => (
-                <option key={i.slug} value={i.slug}>
-                  {i.nom}
-                </option>
-              ))}
-            </select>
+            <details className="ag-instances">
+              <summary className="input">
+                {masques.length === 0
+                  ? 'Toutes'
+                  : `${brut.instances.filter((i) => !masques.includes(i.slug)).length} sur ${brut.instances.length}`}
+              </summary>
+              <div className="ag-instances-liste" role="group" aria-label="Instances affichées">
+                {brut.instances.map((i) => (
+                  <label key={i.slug}>
+                    <input
+                      type="checkbox"
+                      checked={!masques.includes(i.slug)}
+                      onChange={() => basculerInstance(i.slug)}
+                    />
+                    {i.nom}
+                  </label>
+                ))}
+              </div>
+            </details>
           )}
           <div className="seg" role="group" aria-label="Affichage de l'agenda">
             {MODES.map(([m, l]) => (
@@ -487,7 +516,7 @@ export function Taches({ slug }: { slug: string }) {
           <Liste
             slug={slug}
             version={version}
-            mandat={mandat}
+            masques={masques}
             hubspot={data.hubspot}
             onOpen={setEdition}
             onModifier={modifier}
