@@ -3,9 +3,26 @@ import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
 import { createInstance } from '../instances/service.js';
 
+type Synthese = {
+  aEncaisserCertainCents: number;
+  aEncaisserIncertainCents: number;
+  encaisseCents: number;
+  parMandat: {
+    mandat: string | null;
+    totalCents: number;
+    aFacturerCents: number;
+    parType: Record<string, number>;
+  }[];
+};
 type Liste = {
-  synthese: { aEncaisserCents: number; encaisseCents: number };
-  revenus: { id: string; libelle: string; mandat: string | null; etat: string }[];
+  synthese: Synthese;
+  revenus: {
+    revenuId: string;
+    cle: string;
+    libelle: string;
+    mandat: string | null;
+    etat: string;
+  }[];
 };
 
 describe('Routes Gestion — recettes ponctuelles', () => {
@@ -53,7 +70,11 @@ describe('Routes Gestion — recettes ponctuelles', () => {
     expect(r.json()).toMatchObject({ type: 'commission', etat: 'prevue', mandat: 'mandat-alpha' });
     const l = await lister('2026-11');
     expect(l.revenus).toHaveLength(1);
-    expect(l.synthese).toEqual({ mois: '2026-11', aEncaisserCents: 600_000, encaisseCents: 0 });
+    expect(l.synthese).toMatchObject({
+      aEncaisserCertainCents: 600_000,
+      aEncaisserIncertainCents: 0,
+      encaisseCents: 0,
+    });
     const dep = await app.inject({
       method: 'GET',
       url: '/api/i/rev-propre/gestion/depenses?mois=2026-11',
@@ -92,7 +113,7 @@ describe('Routes Gestion — recettes ponctuelles', () => {
     expect((await lister('2026-12')).revenus).toHaveLength(0);
     expect((await lister('2027-01')).synthese).toMatchObject({
       encaisseCents: 600_000,
-      aEncaisserCents: 0,
+      aEncaisserCertainCents: 0,
     });
   });
 
@@ -104,5 +125,143 @@ describe('Routes Gestion — recettes ponctuelles', () => {
     expect((await app.inject({ method: 'DELETE', url: `${base}/${id}` })).statusCode).toBe(200);
     expect((await lister('2019-03')).revenus).toHaveLength(0);
     expect((await lister('2026-11', 'rev-autre')).revenus).toHaveLength(0);
+  });
+
+  describe('Lot B : séries, certitude, par mandat, factures à émettre', () => {
+    it('cumule abonnement et commission pour un mandat, sans abonnement fictif ailleurs', async () => {
+      await creer({
+        libelle: 'Abonnement fictif',
+        type: 'abonnement',
+        mandat: 'mandat-b',
+        montantHtCents: 150_000,
+        date: '2030-01-05',
+        recurrence: 'mensuelle',
+      });
+      await creer({
+        libelle: 'Commission fictive B',
+        mandat: 'mandat-b',
+        montantHtCents: 400_000,
+        date: '2030-02-10',
+        certitude: 'probable',
+      });
+      await creer({
+        libelle: 'Commission seule',
+        mandat: 'mandat-c',
+        montantHtCents: 90_000,
+        date: '2030-02-12',
+      });
+      const l = await lister('2030-02');
+      const b = l.synthese.parMandat.find((m) => m.mandat === 'mandat-b')!;
+      expect(b.parType).toEqual({ abonnement: 150_000, commission: 400_000 });
+      expect(l.synthese.parMandat.find((m) => m.mandat === 'mandat-c')!.parType).toEqual({
+        commission: 90_000,
+      });
+      // La commission probable n'est jamais comptée comme certaine.
+      expect(l.synthese.aEncaisserCertainCents).toBe(240_000);
+      expect(l.synthese.aEncaisserIncertainCents).toBe(400_000);
+    });
+
+    it('règle une échéance de série sans toucher aux autres, ni la dupliquer', async () => {
+      const l1 = await lister('2030-03');
+      const abo = l1.revenus.find((r) => r.libelle === 'Abonnement fictif')!;
+      const put = (corps: object) =>
+        app.inject({
+          method: 'PUT',
+          url: `${base}/${abo.revenuId}/occurrences/2030-03-05`,
+          payload: corps,
+        });
+      expect((await put({ etat: 'emise', referenceFacture: 'F-FICTIVE-9' })).statusCode).toBe(200);
+      expect((await put({ etat: 'encaissee' })).statusCode).toBe(400);
+      expect(
+        (await put({ etat: 'encaissee', dateEncaissement: '2030-04-02', montantHtCents: 149_000 }))
+          .statusCode,
+      ).toBe(200);
+      const mars = await lister('2030-03');
+      expect(mars.revenus.filter((r) => r.libelle === 'Abonnement fictif')).toHaveLength(0);
+      const avril = await lister('2030-04');
+      const lignes = avril.revenus.filter((r) => r.libelle === 'Abonnement fictif');
+      expect(lignes.map((r) => r.etat).sort()).toEqual(['encaissee', 'prevue']);
+      expect(avril.synthese.encaisseCents).toBe(149_000);
+    });
+
+    it('liste les factures à émettre : ni hypothèse, ni déjà émise', async () => {
+      await creer({
+        libelle: 'Hypothèse fictive',
+        montantHtCents: 100_000,
+        date: '2030-05-01',
+        certitude: 'hypothese',
+      });
+      await creer({ libelle: 'À émettre fictive', montantHtCents: 80_000, date: '2030-05-02' });
+      const r = await app.inject({
+        method: 'GET',
+        url: '/api/i/rev-propre/gestion/factures-a-emettre?jusqua=2030-05-31',
+      });
+      const libelles = r.json<{ libelle: string; etat: string }[]>().map((o) => o.libelle);
+      expect(libelles).toContain('À émettre fictive');
+      expect(libelles).not.toContain('Hypothèse fictive');
+      expect(r.json<{ etat: string }[]>().every((o) => o.etat === 'prevue')).toBe(true);
+    });
+
+    it('lie une refacturation à une dépense sans jamais la réduire', async () => {
+      const dep = await app.inject({
+        method: 'POST',
+        url: '/api/i/rev-propre/gestion/depenses',
+        payload: {
+          libelle: 'Outil fictif',
+          montantTtcCents: 12_000,
+          statut: 'prevue',
+          recurrence: 'mensuelle',
+          dateDebut: '2031-01-10',
+          refacturable: true,
+        },
+      });
+      const depenseId = dep.json<{ id: string }>().id;
+      for (const mandat of ['mandat-b', 'mandat-c'])
+        expect(
+          (
+            await creer({
+              libelle: 'Refacturation outil',
+              type: 'refacturation',
+              mandat,
+              montantHtCents: 4_000,
+              date: '2031-01-10',
+              recurrence: 'mensuelle',
+              depenseId,
+            })
+          ).statusCode,
+        ).toBe(201);
+      expect(
+        (await creer({ ...commission, depenseId: '11111111-1111-4111-8111-111111111111' }))
+          .statusCode,
+      ).toBe(400);
+      const liste = await app.inject({
+        method: 'GET',
+        url: '/api/i/rev-propre/gestion/depenses?mois=2031-01',
+      });
+      const o = liste.json<{
+        synthese: { totalCents: number };
+        occurrences: { refacturablePrevuCents: number; refactureCents: number }[];
+      }>();
+      expect(o.synthese.totalCents).toBe(12_000);
+      expect(o.occurrences[0]).toMatchObject({ refacturablePrevuCents: 8_000, refactureCents: 0 });
+      // Facturer une des deux refacturations : refacturé réel = 4 000, dépense inchangée.
+      const rev = (await lister('2031-01')).revenus.find(
+        (r) => r.libelle === 'Refacturation outil',
+      )!;
+      await app.inject({
+        method: 'PUT',
+        url: `${base}/${rev.revenuId}/occurrences/2031-01-10`,
+        payload: { etat: 'emise' },
+      });
+      const apres = (
+        await app.inject({ method: 'GET', url: '/api/i/rev-propre/gestion/depenses?mois=2031-01' })
+      ).json<{ occurrences: { refactureCents: number }[]; synthese: { totalCents: number } }>();
+      expect(apres.occurrences[0]!.refactureCents).toBe(4_000);
+      expect(apres.synthese.totalCents).toBe(12_000);
+      const detail = (
+        await app.inject({ method: 'GET', url: `/api/i/rev-propre/gestion/depenses/${depenseId}` })
+      ).json<{ refacturations: unknown[] }>();
+      expect(detail.refacturations).toHaveLength(2);
+    });
   });
 });
