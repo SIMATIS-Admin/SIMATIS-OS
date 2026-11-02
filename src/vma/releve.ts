@@ -8,6 +8,7 @@ import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { echeanceDe } from '../site/releve.js';
 import { brouillonResultat, type EcranDirigeant } from './brouillon.js';
+import { releverInscriptionsVma } from './inscriptions.js';
 import { vmaTests } from './schema.js';
 import { releverSuiviVma } from './suivi.js';
 
@@ -187,6 +188,7 @@ export async function releverTestsVma(
         await tx
           .update(vmaTests)
           .set({
+            statut: 'utilisee',
             resultatId: r.id,
             recueLe: new Date(r.recueLe),
             version: r.version,
@@ -262,7 +264,8 @@ export function startReleveVma(
   const tick = () => {
     if (running) return;
     running = true;
-    releverTestsVma(db, deps)
+    releverInscriptionsVma(db, deps)
+      .then(() => releverTestsVma(db, deps))
       .then((r) => deps.onResult?.(r))
       .then(() => releverSuiviVma(db, deps))
       .catch((error: unknown) => deps.onError?.(error))

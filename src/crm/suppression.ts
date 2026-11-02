@@ -40,6 +40,7 @@ export const REFERENCES: {
   { table: 'sujets', colonne: 'entreprise_id', kind: 'entreprise' },
   { table: 'sujets', colonne: 'contact_id', kind: 'contact' },
   { table: 'vma_tests', colonne: 'entreprise_id', kind: 'entreprise' },
+  { table: 'vma_tests', colonne: 'contact_id', kind: 'contact' },
   { table: 'prospection_occurrences', colonne: 'contact_id', kind: 'contact' },
   { table: 'prospection_brouillons', colonne: 'contact_id', kind: 'contact' },
   { table: 'diagnostic_projets', colonne: 'entreprise_id', kind: 'entreprise' },

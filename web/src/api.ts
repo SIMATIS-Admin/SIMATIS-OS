@@ -238,6 +238,39 @@ export type NouveauTestVma = {
   confirmerSemestre?: boolean;
 };
 
+export type ContactVma = TestVma & {
+  contactId: string | null;
+  contactPrenom: string | null;
+  contactNomFamille: string | null;
+  contactPoste: string | null;
+  contactTelephone: string | null;
+  origine: 'inscription' | 'invitation';
+  consentement: { accepteLe: string; version: string; texte: string; retireLe?: string } | null;
+  contactLie: {
+    id: string;
+    nom: string;
+    email: string | null;
+    fonction: string | null;
+    telephone: string | null;
+    source: string;
+  } | null;
+  entrepriseLiee: { id: string; nom: string; source: string } | null;
+};
+export const fetchContactsVma = (slug: string) => getJson<ContactVma[]>(inst(slug, 'vma/contacts'));
+export const creerLienProspectionVma = (slug: string) =>
+  sendJson<{ lien: string; expireLe: string }>('POST', inst(slug, 'vma/liens-prospection'), {});
+export const rattacherVma = (
+  slug: string,
+  id: string,
+  choix: { entrepriseId?: string | null; contactId?: string | null },
+) => sendJson<{ ok: true }>('PATCH', inst(slug, `vma/tests/${encodeURIComponent(id)}/crm`), choix);
+export const retirerAccordVma = (slug: string, id: string) =>
+  sendJson<{ ok: true }>(
+    'POST',
+    inst(slug, `vma/tests/${encodeURIComponent(id)}/retirer-accord`),
+    {},
+  );
+
 export const fetchTestsVma = (slug: string) => getJson<TestVma[]>(inst(slug, 'vma/tests'));
 // Le mail d'invitation part à la création quand une adresse est donnée : null sans adresse.
 export type EnvoiInvitation = { statut: 'envoye' | 'simule' | 'echec'; raison?: string };
@@ -339,6 +372,7 @@ export const createContact = (
     nom: string;
     fonction?: string;
     email?: string;
+    telephone?: string;
     entrepriseId?: string | null;
     lierA?: RefFiche;
   },

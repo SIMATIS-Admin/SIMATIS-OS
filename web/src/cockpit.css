@@ -228,17 +228,6 @@
   margin-top: 16px;
   text-decoration: none;
 }
-/* La console reste disponible, avec une présence plus discrète lorsqu'elle est repliée. */
-.console:not(.ouverte) {
-  background: #e9efee;
-  color: var(--ink-2);
-  border-top: 1px solid #d4dfdc;
-  box-shadow: none;
-  font-family: var(--f-body);
-}
-.console:not(.ouverte) .console-lien {
-  color: var(--navy);
-}
 @media (min-width: 821px) {
   .side.reduite .espaces-btn {
     justify-content: center;
@@ -283,25 +272,6 @@
   }
 }
 
-.console:not(.ouverte) .console-badge {
-  background: #dbe5ef;
-  color: #315680;
-}
-.console:not(.ouverte) .console-badge.ok {
-  background: #d4eddf;
-  color: #236544;
-}
-.console:not(.ouverte) .console-badge.attention {
-  background: #fae9c7;
-  color: #795400;
-}
-.console:not(.ouverte) .console-badge.erreur {
-  background: #f7ddd7;
-  color: #9a3425;
-}
-.console:not(.ouverte) .console-lien:hover:not(:disabled) {
-  color: var(--navy-3);
-}
 .vq:has(.inbox-sereine) {
   grid-template-columns: minmax(0, 1fr);
 }

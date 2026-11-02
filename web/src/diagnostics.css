@@ -474,3 +474,27 @@
 .dg .dg-introduction h2 {
   color: var(--navy);
 }
+
+/* La liste des destinataires conserve toutes les coordonnées, même sur petit écran. */
+.vma-contacts-table {
+  overflow-x: auto;
+}
+.vma-contacts-table table {
+  width: 100%;
+  min-width: 1150px;
+  border-collapse: collapse;
+}
+.vma-contacts-table th,
+.vma-contacts-table td {
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+.vma-contacts-table th {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.vma-contacts-table td {
+  overflow-wrap: anywhere;
+}
