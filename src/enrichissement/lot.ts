@@ -114,9 +114,21 @@ function demarrer(
   instanceId: string,
   tache: Tache,
 ): void {
-  const fin = traiter(db, client, reglages, instanceId, tache).finally(() =>
-    enCours.delete(tache.id),
-  );
+  // Un lot ne doit jamais laisser un rejet sans écouteur (il arrêterait le serveur) ni une tâche
+  // « en cours » à jamais (elle bloquerait les lancements suivants).
+  const fin = traiter(db, client, reglages, instanceId, tache)
+    .catch(() =>
+      withInstance(db, instanceId, (tx) =>
+        tx
+          .update(enrichissementTaches)
+          .set({ etat: 'interrompue', erreur: 'Erreur interne', updatedAt: new Date() })
+          .where(eq(enrichissementTaches.id, tache.id)),
+      ).then(
+        () => undefined,
+        () => undefined,
+      ),
+    )
+    .finally(() => enCours.delete(tache.id));
   enCours.set(tache.id, fin);
 }
 

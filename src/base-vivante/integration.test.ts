@@ -155,6 +155,29 @@ describe('application d’un contact trouvé par l’enrichissement', () => {
     ]);
   });
 
+  it('un mail générique déjà présent n’est pas écrasé : le contact reçoit sa propre fiche', async () => {
+    const { id } = await integrer(
+      fiche({ entreprise: 'Dépôt Fictif', email: 'info@depot-fictif.test' }),
+    );
+    const r = await appliquer(id, { prenom: 'Zoé', nom: 'Roux', email: 'zoe@depot-fictif.test' });
+    expect(r).toMatchObject({ creee: true, zone: 'prospectable' });
+    expect(await fiches('Dépôt Fictif')).toEqual([
+      expect.objectContaining({ nom: '', email: 'info@depot-fictif.test' }),
+      expect.objectContaining({ nom: 'ROUX', email: 'zoe@depot-fictif.test' }),
+    ]);
+  });
+
+  it('un mail générique est gardé quand le contact n’apporte pas de mail', async () => {
+    const { id } = await integrer(
+      fiche({ entreprise: 'Entrepôt Fictif', email: 'info@entrepot-fictif.test' }),
+    );
+    const r = await appliquer(id, { prenom: 'Paul', nom: 'Petit', telephone: '04 50 12 34 56' });
+    expect(r).toMatchObject({ id, creee: false, zone: 'prospectable' });
+    expect(await fiches('Entrepôt Fictif')).toEqual([
+      expect.objectContaining({ nom: 'PETIT', email: 'info@entrepot-fictif.test' }),
+    ]);
+  });
+
   it('la même personne n’est complétée que dans ses champs vides, jamais écrasée', async () => {
     const { id } = await integrer(
       fiche({

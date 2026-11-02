@@ -3,7 +3,13 @@ import { isDeepStrictEqual } from 'node:util';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { evaluer, type Zone } from './completude.js';
-import { clesDoublon, normaliserFiche, type Fiche } from './nettoyage.js';
+import {
+  clesDoublon,
+  normaliserEmail,
+  normaliserFiche,
+  normaliserTelephone,
+  type Fiche,
+} from './nettoyage.js';
 import {
   baseVivante,
   type Exclusion,
@@ -350,7 +356,13 @@ export async function appliquerContact(
   apport: Apport,
 ): Promise<{ id: string; zone: Zone; creee: boolean }> {
   const f = await charger(tx, instanceId, ficheId);
-  if (!f.nom && !f.prenom) {
+  // « enrichir » remplace ce qu'on lui donne : une fiche sans contact qui porte déjà un autre mail
+  // (souvent générique, info@…) ou un autre téléphone ne doit pas le perdre, le contact a alors sa fiche.
+  const entre = (a: string | null | undefined, b: string | null) => Boolean(a && b && a !== b);
+  const conflit =
+    entre(normaliserEmail(apport.email), f.email) ||
+    entre(normaliserTelephone(apport.telephone), f.telephone);
+  if (!f.nom && !f.prenom && !conflit) {
     return { id: ficheId, zone: await enrichir(tx, instanceId, ficheId, apport), creee: false };
   }
   const { fiche, avertissements } = normaliserFiche({

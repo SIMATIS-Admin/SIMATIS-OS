@@ -263,6 +263,25 @@ describe('traitement d’un lot d’enrichissement', () => {
     expect(appels).toEqual(['Atelier Fictif']);
   });
 
+  it('une panne de base pendant le lot l’interrompt sans rejet non géré', async () => {
+    const id = await fiche('Atelier Fictif');
+    let transactions = 0;
+    const fragile = new Proxy(t.app.db, {
+      get: (cible, prop) =>
+        prop === 'transaction'
+          ? (...args: Parameters<typeof cible.transaction>) =>
+              ++transactions === 2
+                ? Promise.reject(new Error('panne de base'))
+                : cible.transaction(...args)
+          : (Reflect.get(cible, prop) as unknown),
+    });
+    const tache = await lancerLot(fragile, client, REGLAGES, instanceId, params([id]));
+    await expect(attendreLot(tache.id)).resolves.toBeUndefined();
+    const { tache: apres } = await etatLot(t.app.db, instanceId, tache.id);
+    expect(apres).toMatchObject({ etat: 'interrompue', erreur: 'Erreur interne' });
+    await expect(lancer(params([id]))).resolves.toBeDefined();
+  });
+
   it('ne garde jamais la clé dans une raison ou une erreur', async () => {
     const id = await fiche('Atelier Fictif');
     reponse = () => {
