@@ -41,6 +41,10 @@ services:
       VMA_RELANCE_AUTO: ${VMA_RELANCE_AUTO:-}
       RELAIS_URL: ${RELAIS_URL:-}
       RELAIS_CLE_INSCRIPTION: ${RELAIS_CLE_INSCRIPTION:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ENRICHISSEMENT_MODELE: ${ENRICHISSEMENT_MODELE:-}
+      ENRICHISSEMENT_LOT_MAX: ${ENRICHISSEMENT_LOT_MAX:-}
+      ENRICHISSEMENT_BUDGET_JETONS: ${ENRICHISSEMENT_BUDGET_JETONS:-}
       # Grille de scoring du diagnostic : copie dans secrets/ (le conteneur ne voit pas le second cerveau).
       DIAGNOSTIC_GRILLE: /app/secrets/diagnostic/grille-scoring.json
       DIAGNOSTIC_CORRESPONDANCE: /app/secrets/diagnostic/correspondance-rapport.json

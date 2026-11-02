@@ -11,4 +11,15 @@ describe('compose.yaml', () => {
     expect(variables).toContain('RELAIS_CLE_INSCRIPTION');
     for (const v of variables) expect(compose, v).toContain(`${v}: \${${v}:-}`);
   });
+
+  it('transmet au conteneur la clé OpenAI et les réglages de l’enrichissement', async () => {
+    const exemple = await readFile('.env.example', 'utf8');
+    const compose = await readFile('compose.yaml', 'utf8');
+    const variables = [...exemple.matchAll(/^(OPENAI_API_KEY|ENRICHISSEMENT_[A-Z_]+)=/gm)].map(
+      (m) => m[1],
+    );
+    expect(variables).toContain('OPENAI_API_KEY');
+    expect(variables).toHaveLength(4);
+    for (const v of variables) expect(compose, v).toContain(`${v}: \${${v}:-}`);
+  });
 });
