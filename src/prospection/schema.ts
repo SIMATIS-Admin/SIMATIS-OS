@@ -157,6 +157,8 @@ export const prospectionBrouillons = pgTable(
     // HTML sans signature : la signature (image) est ajoutée à la création du brouillon de messagerie.
     corps: text('corps'),
     note: text('note'),
+    // Demande de reformulation de Marc, tant que Claude n'a pas redéposé ce mail (etat `a_rediger`).
+    consigne: text('consigne'),
     threadId: text('thread_id'),
     suiviType: text('suivi_type', { enum: SUIVIS_BROUILLON }).notNull().default('delai'),
     suiviDate: timestamp('suivi_date', { withTimezone: true }),

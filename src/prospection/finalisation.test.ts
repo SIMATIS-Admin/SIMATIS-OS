@@ -18,7 +18,7 @@ import {
 } from './campagnes.js';
 import { finaliserCampagne, modifierBrouillon, suiviDates } from './finalisation.js';
 import { creerCampagneFroid } from './froid.js';
-import { demarrerCampagne, deposerBrouillons } from './redaction.js';
+import { demanderReformulation, demarrerCampagne, deposerBrouillons } from './redaction.js';
 import { prospectionOccurrences, prospectionSuiviFroid, type ReglageCampagne } from './schema.js';
 import { statsProspection } from './stats.js';
 import { ajouterSignature } from './signatures.js';
@@ -131,6 +131,21 @@ describe('Relecture et finalisation d’une campagne', () => {
       brouillons: (await dans((tx) => lireCampagne(tx, campagneId))).brouillons,
     };
   }
+
+  it('pendant la reformulation d’un mail, les autres restent modifiables et la création est bloquée', async () => {
+    const { campagneId, brouillons } = await enRelecture(['Ariane', 'Bastien']);
+    const [reformule, autre] = brouillons;
+    await dans((tx) => demanderReformulation(tx, campagneId, reformule!.id, 'Plus court'));
+    expect(
+      (await dans((tx) => modifierBrouillon(tx, autre!.id, { objet: 'Autre objet' }))).objet,
+    ).toBe('Autre objet');
+    await expect(
+      dans((tx) => modifierBrouillon(tx, reformule!.id, { objet: 'Trop tôt' })),
+    ).rejects.toThrow(/reformuler/i);
+    await expect(
+      finaliserCampagne(t.app.db, instance, campagneId, deps(), { envoi: false }),
+    ).rejects.toBeInstanceOf(CampagneInvalide);
+  });
 
   it('modifie le texte (nettoyé), écarte, et règle le suivi', async () => {
     const { brouillons } = await enRelecture(['Alice']);

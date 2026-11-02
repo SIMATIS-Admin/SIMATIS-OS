@@ -1779,6 +1779,8 @@ export type BrouillonCampagne = {
   objet: string | null;
   corps: string | null;
   note: string | null;
+  // Demande de reformulation en attente de Claude (le mail est alors `a_rediger`).
+  consigne: string | null;
   suiviType: SuiviBrouillon;
   suiviDate: string | null;
 };
@@ -1879,6 +1881,20 @@ export const finaliserCampagne = (
     'POST',
     inst(slug, `prospection/campagnes/${encodeURIComponent(id)}/finaliser`),
     { mode },
+  );
+export const reformulerBrouillonCampagne = (
+  slug: string,
+  campagneId: string,
+  brouillonId: string,
+  consigne: string,
+) =>
+  sendJson<{ ok: true }>(
+    'POST',
+    inst(
+      slug,
+      `prospection/campagnes/${encodeURIComponent(campagneId)}/brouillons/${encodeURIComponent(brouillonId)}/reformuler`,
+    ),
+    { consigne },
   );
 export const relancerRedaction = (slug: string, id: string) =>
   sendJson<{ ok: true }>(

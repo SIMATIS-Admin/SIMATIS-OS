@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  fetchCampagne,
   finaliserCampagne,
   modifierBrouillonCampagne,
+  reformulerBrouillonCampagne,
   urlImageSignature,
   type BrouillonCampagne,
   type CampagneProspection,
@@ -16,7 +18,7 @@ const ETATS: Record<string, [string, string]> = {
   a_verifier: ['amber', 'À vérifier'],
   ecarte: ['', 'Écarté'],
   cree: ['blue', 'Créé'],
-  a_rediger: ['', 'À rédiger'],
+  a_rediger: ['blue', 'Claude reformule…'],
 };
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -25,12 +27,14 @@ export function Relecture({
   campagne,
   signatures,
   envoiPossible = false,
+  intervalleMs = 3000,
   onTermine,
 }: {
   slug: string;
   campagne: CampagneProspection;
   signatures: SignatureProspection[];
   envoiPossible?: boolean;
+  intervalleMs?: number;
   onTermine: (r: ResultatCampagne) => void;
 }) {
   const [brouillons, setBrouillons] = useState<BrouillonCampagne[]>(campagne.brouillons);
@@ -40,6 +44,28 @@ export function Relecture({
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [confirmerEnvoi, setConfirmerEnvoi] = useState(false);
+  const [demandes, setDemandes] = useState<Record<string, string>>({});
+
+  const reformulation = brouillons.some((x) => x.etat === 'a_rediger');
+  const campagneId = campagne.id;
+  // Claude rend le mail reformulé par l'exécuteur du poste : on interroge la campagne jusqu'à son retour.
+  useEffect(() => {
+    if (!reformulation) return;
+    let actif = true;
+    const t = setInterval(() => {
+      fetchCampagne(slug, campagneId).then(
+        (c) => {
+          if (!actif || c.statut === 'redaction') return;
+          setBrouillons(c.brouillons);
+        },
+        (e: unknown) => actif && setErreur(message(e)),
+      );
+    }, intervalleMs);
+    return () => {
+      actif = false;
+      clearInterval(t);
+    };
+  }, [reformulation, slug, campagneId, intervalleMs]);
 
   const b = brouillons.find((x) => x.id === courant) ?? brouillons[0];
   const signature = signatures.find((s) => s.id === campagne.reglage.signatureId);
@@ -56,6 +82,20 @@ export function Relecture({
     } catch (e) {
       setErreur(message(e));
       return false;
+    }
+  };
+
+  const reformuler = async (id: string) => {
+    const consigne = (demandes[id] ?? '').trim();
+    if (!consigne) return;
+    try {
+      await reformulerBrouillonCampagne(slug, campagne.id, id, consigne);
+      setBrouillons((l) => l.map((x) => (x.id === id ? { ...x, etat: 'a_rediger', consigne } : x)));
+      setDemandes((d) => ({ ...d, [id]: '' }));
+      setEdition(null);
+      setErreur(null);
+    } catch (e) {
+      setErreur(message(e));
     }
   };
 
@@ -118,6 +158,7 @@ export function Relecture({
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 className="btn sm"
+                disabled={b.etat === 'a_rediger'}
                 onClick={() =>
                   setEdition(
                     edition ? null : { objet: b.objet ?? '', texte: htmlVersTexte(b.corps ?? '') },
@@ -128,6 +169,7 @@ export function Relecture({
               </button>
               <button
                 className={`btn sm ${b.etat === 'ecarte' ? '' : 'danger'}`}
+                disabled={b.etat === 'a_rediger'}
                 onClick={() =>
                   void modifier(b.id, { etat: b.etat === 'ecarte' ? 'pret' : 'ecarte' })
                 }
@@ -137,6 +179,14 @@ export function Relecture({
             </div>
           </div>
           <div className="panel-b">
+            {b.etat === 'a_rediger' && (
+              <div className="alert blue" style={{ marginBottom: 12 }} role="status">
+                <div>
+                  Claude reformule ce mail : « {b.consigne} ». Comptez environ une minute. Vous
+                  pouvez relire les autres mails en attendant.
+                </div>
+              </div>
+            )}
             {b.etat === 'a_verifier' && (
               <div className="alert amber" style={{ marginBottom: 12 }}>
                 <div>
@@ -193,6 +243,35 @@ export function Relecture({
                   />
                 ) : (
                   <p className="small muted">(sans signature)</p>
+                )}
+              </div>
+            )}
+            {!edition && b.etat !== 'ecarte' && b.etat !== 'cree' && (
+              <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12, marginTop: 12 }}>
+                <label className="field">
+                  <span className="small">
+                    <b>Faire reformuler ce mail par Claude</b> : dites ce que vous voulez changer
+                  </span>
+                  <textarea
+                    className="input"
+                    aria-label="Ce que vous voulez changer"
+                    rows={2}
+                    maxLength={1000}
+                    placeholder="Ex. : plus court, sans la phrase sur le prix, ton plus direct…"
+                    disabled={reformulation}
+                    value={demandes[b.id] ?? ''}
+                    onChange={(e) => setDemandes({ ...demandes, [b.id]: e.target.value })}
+                  />
+                </label>
+                <button
+                  className="btn sm"
+                  disabled={reformulation || !(demandes[b.id] ?? '').trim()}
+                  onClick={() => void reformuler(b.id)}
+                >
+                  Faire reformuler par Claude
+                </button>
+                {reformulation && b.etat !== 'a_rediger' && (
+                  <span className="small muted"> Une reformulation est déjà en cours.</span>
                 )}
               </div>
             )}
@@ -268,7 +347,7 @@ export function Relecture({
       >
         <button
           className="btn primary"
-          disabled={enCours || aVerifier > 0 || prets === 0}
+          disabled={enCours || reformulation || aVerifier > 0 || prets === 0}
           onClick={() => void finaliser('brouillons')}
         >
           {campagne.mode === 'reponse'
@@ -292,7 +371,7 @@ export function Relecture({
           ) : (
             <button
               className="btn go"
-              disabled={enCours || aVerifier > 0 || prets === 0}
+              disabled={enCours || reformulation || aVerifier > 0 || prets === 0}
               onClick={() => setConfirmerEnvoi(true)}
             >
               Valider et envoyer ({prets})
@@ -301,6 +380,12 @@ export function Relecture({
         ) : (
           <span className="small muted">
             Envoi direct indisponible : les deux verrous d'écriture sont fermés.
+          </span>
+        )}
+        {reformulation && (
+          <span className="small" style={{ color: 'var(--amber)' }}>
+            Un mail est en cours de reformulation : attendez son retour avant de créer les
+            brouillons.
           </span>
         )}
         {aVerifier > 0 && (

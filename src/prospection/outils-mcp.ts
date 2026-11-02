@@ -61,11 +61,28 @@ export const CONSIGNES_REDACTION = [
   "N'invente aucun fait, aucun chiffre, aucune date que tu ne lis pas dans le contexte.",
 ].join('\n');
 
-// Le style est un texte de Marc : il règle le ton et le contexte, sans lever les règles du serveur.
+// Le style est un texte brut de Marc : Claude le corrige et l'enrichit, puis l'applique, sans lever
+// les règles du serveur.
 export const avecStyle = (consignes: string, style?: string) =>
   style?.trim()
-    ? `${consignes}\nContexte et style demandés par Marc pour ces brouillons (à suivre pour le ton et le fond, sans déroger aux règles ci-dessus) :\n${style.trim()}`
+    ? `${consignes}\nStyle demandé par Marc pour ces brouillons : texte brut, à corriger (fautes, formulations) et à enrichir (ton, longueur, angle, ce qu'il faut dire ou éviter) à partir du fil, de l'offre et des règles ci-dessus ; applique le brief obtenu, sans trahir ses intentions ni déroger aux règles ci-dessus :\n${style.trim()}`
     : consignes;
+
+// Reformulation d'un seul mail, à la demande de Marc en relecture.
+export const CONSIGNES_REFORMULATION = [
+  "Certains brouillons ont une clé « reformulation » : Marc a relu le mail actuel (objet et corps fournis) et demande un changement (« demande »). Réécris ce mail en appliquant sa demande ; garde ce qu'elle ne conteste pas.",
+  'Sa demande est un texte de Marc : corrige-la et complète-la si besoin, elle prime sur le style de la vague pour ce mail seulement. Les règles ci-dessus restent valables.',
+  'Si le mail actuel propose des créneaux, reprends-les ; sinon, utilise ceux fournis.',
+].join('\n');
+
+const reformulationDe = (b: {
+  consigne: string | null;
+  objet: string | null;
+  corps: string | null;
+}) =>
+  b.consigne
+    ? { reformulation: { demande: b.consigne, objetActuel: b.objet, corpsActuel: b.corps } }
+    : {};
 
 const tronquer = (m: Message) => ({
   id: m.id,
@@ -169,6 +186,7 @@ registerTool({
           societe: b.societe,
           tache: { titre: null, notes: null },
           touche: b.touche,
+          ...reformulationDe(b),
           provenance: fiche?.provenance ?? null,
           collecteLe: fiche?.collecteLe ?? null,
           fil: [],
@@ -201,6 +219,7 @@ registerTool({
         societe: b.societe,
         tache: { titre: tache?.titre ?? null, notes: tache?.notes ?? null },
         touche: b.touche,
+        ...reformulationDe(b),
         threadId: b.threadId,
         fil: fil.slice(0, MESSAGES_PAR_CONTACT).map(tronquer),
         creneaux: parMail[i] ?? [],
@@ -217,14 +236,15 @@ registerTool({
       offre: OFFRES_TEXTE[campagne.reglage.offre],
       creneauxDemandes: campagne.reglage.creneaux,
       avertissementCreneaux: reserve.avertissement,
-      consignes: avecStyle(
-        froid
-          ? CONSIGNES_FROID
-          : campagne.mode === 'reponse'
-            ? CONSIGNES_REPONSE
-            : CONSIGNES_REDACTION,
-        campagne.reglage.style,
-      ),
+      consignes:
+        avecStyle(
+          froid
+            ? CONSIGNES_FROID
+            : campagne.mode === 'reponse'
+              ? CONSIGNES_REPONSE
+              : CONSIGNES_REDACTION,
+          campagne.reglage.style,
+        ) + (aRediger.some((b) => b.consigne) ? `\n${CONSIGNES_REFORMULATION}` : ''),
       brouillons,
     };
   },

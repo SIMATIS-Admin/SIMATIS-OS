@@ -12,6 +12,7 @@ import type {
 } from '../../api.js';
 import { Prospection } from '../Prospection.js';
 import { Attente } from './Attente.js';
+import { Relecture } from './Relecture.js';
 
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
@@ -37,6 +38,7 @@ const brouillon = (
   objet: `Re: ${nom}`,
   corps: `<p>Bonjour ${nom},</p><p>Bien à vous,</p>`,
   note: null,
+  consigne: null,
   suiviType: 'delai',
   suiviDate: null,
   ...o,
@@ -74,6 +76,14 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     Object.assign(b, body);
     if (body?.suiviDate) b.suiviDate = `${body.suiviDate as string}T08:00:00Z`;
     return json(b);
+  }
+  if (/\/brouillons\/[^/]+\/reformuler$/.test(url) && method === 'POST') {
+    const id = url.split('/').at(-2);
+    const b = campagne.brouillons.find((x) => x.id === id)!;
+    b.etat = 'a_rediger';
+    b.consigne = (body as { consigne: string }).consigne;
+    campagne.statut = 'redaction';
+    return json({ ok: true });
   }
   if (url.endsWith('/finaliser')) return json(resultat);
   if (url.endsWith('/relancer')) {
@@ -638,5 +648,98 @@ describe('Valider et envoyer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Créer les 1 brouillon/ }));
     await screen.findByText('Brouillons créés');
     expect(calls.find((c) => c.url.endsWith('/finaliser'))?.body).toEqual({ mode: 'brouillons' });
+  });
+});
+
+describe('Reformuler un mail avec Claude', () => {
+  const afficher = () => {
+    campagne.brouillons = [brouillon('b1', 'Alice'), brouillon('b2', 'Bruno')];
+    render(
+      <Relecture
+        slug="simatis"
+        campagne={campagne}
+        signatures={vue.signatures}
+        intervalleMs={20}
+        onTermine={() => undefined}
+      />,
+    );
+  };
+  const demander = (texte: string) => {
+    fireEvent.change(screen.getByLabelText('Ce que vous voulez changer'), {
+      target: { value: texte },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Faire reformuler par Claude' }));
+  };
+
+  it('le bouton reste inactif tant que la demande est vide', () => {
+    afficher();
+    const bouton = screen.getByRole('button', { name: 'Faire reformuler par Claude' });
+    expect(bouton.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByLabelText('Ce que vous voulez changer'), {
+      target: { value: '  ' },
+    });
+    expect(bouton.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('envoie la demande, verrouille le mail et la création, puis affiche le nouveau texte', async () => {
+    afficher();
+    demander('Plus court, sans le prix');
+    expect(await screen.findByText(/Claude reformule ce mail/)).toBeTruthy();
+    expect(calls.find((c) => c.url.endsWith('/b1/reformuler'))?.body).toEqual({
+      consigne: 'Plus court, sans le prix',
+    });
+    expect(screen.getByRole('button', { name: 'Modifier le texte' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    expect(
+      screen.getByRole('button', { name: /Créer les \d+ brouillons?/ }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.getByText(/Un mail est en cours de reformulation/)).toBeTruthy();
+    // Claude rend le mail : la campagne repasse en relecture avec le nouveau texte.
+    const b = campagne.brouillons[0]!;
+    Object.assign(b, { etat: 'pret', consigne: null, corps: '<p>Version courte</p>' });
+    campagne.statut = 'relecture';
+    expect(await screen.findByText('Version courte')).toBeTruthy();
+    expect(screen.queryByText(/Claude reformule ce mail/)).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /Créer les \d+ brouillons?/ }).hasAttribute('disabled'),
+    ).toBe(false);
+  });
+
+  it('pendant la reformulation, un autre mail se relit mais ne peut pas être reformulé', async () => {
+    afficher();
+    demander('Plus court');
+    await screen.findByText(/Claude reformule ce mail/);
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le mail de Bruno' }));
+    expect(screen.getByText('Bonjour Bruno,')).toBeTruthy();
+    expect(screen.getByText(/Une reformulation est déjà en cours/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Modifier le texte' }).hasAttribute('disabled')).toBe(
+      false,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Faire reformuler par Claude' }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('si Claude échoue, l’ancien texte revient « à vérifier » avec la note', async () => {
+    afficher();
+    demander('Plus court');
+    await screen.findByText(/Claude reformule ce mail/);
+    Object.assign(campagne.brouillons[0]!, {
+      etat: 'a_verifier',
+      consigne: null,
+      note: "La reformulation n'a pas abouti : l'ancien texte est conservé.",
+    });
+    campagne.statut = 'relecture';
+    expect(await screen.findByText(/La reformulation n'a pas abouti/)).toBeTruthy();
+    expect(screen.getByText('Bonjour Alice,')).toBeTruthy();
+  });
+
+  it('affiche le refus du serveur sans verrouiller le mail', async () => {
+    afficher();
+    refus = { url: /reformuler$/, message: 'Une reformulation est déjà en cours.' };
+    demander('Plus court');
+    expect((await screen.findByRole('alert')).textContent).toContain('déjà en cours');
+    expect(screen.queryByText(/Claude reformule ce mail/)).toBeNull();
   });
 });
