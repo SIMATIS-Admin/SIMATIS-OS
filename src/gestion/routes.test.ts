@@ -204,17 +204,35 @@ describe('Routes Gestion — dépenses', () => {
     });
   });
 
+  it('une série « déjà payée » ne compte payées que ses échéances passées', async () => {
+    const r = await creer({
+      libelle: 'Assurance',
+      montantTtcCents: 4_000,
+      statut: 'reelle',
+      recurrence: 'mensuelle',
+      dateDebut: '2020-01-05',
+      affectations: [{ cible: 'kairos' }, { cible: 'mandat', mandat: 'alpha' }],
+    });
+    expect(r.statusCode).toBe(201);
+    expect((await lister('2020-03')).occurrences[0]?.etat).toBe('payee');
+    expect((await lister('2099-03')).occurrences[0]?.etat).toBe('a_venir');
+    expect((await lister('2020-03')).occurrences[0]?.affectations).toEqual([
+      { cible: 'kairos' },
+      { cible: 'mandat', mandat: 'alpha' },
+    ]);
+  });
+
   it('archive sans supprimer et masque la dépense', async () => {
     const r = await creer({
       libelle: 'Abonnement test',
       montantTtcCents: 5_000,
       statut: 'reelle',
-      dateDebut: '2025-03-02',
+      dateDebut: '2019-06-02',
     });
     const id = r.json<{ id: string }>().id;
-    expect((await lister('2025-03')).occurrences).toHaveLength(1);
+    expect((await lister('2019-06')).occurrences).toHaveLength(1);
     expect((await app.inject({ method: 'DELETE', url: `${base}/${id}` })).statusCode).toBe(200);
-    expect((await lister('2025-03')).occurrences).toHaveLength(0);
+    expect((await lister('2019-06')).occurrences).toHaveLength(0);
     expect((await app.inject({ method: 'DELETE', url: `${base}/${id}` })).statusCode).toBe(404);
   });
 

@@ -23,7 +23,8 @@ export type StatutDepense = (typeof STATUTS_DEPENSE)[number];
 export type Recurrence = (typeof RECURRENCES)[number];
 
 // Rattachement analytique : SIMATIS, KAIROS ou un mandat. Ce n'est pas une refacturation.
-export type Affectation = { cible: 'simatis' | 'kairos' | 'mandat'; mandatId?: string };
+// Le mandat est désigné par son identifiant d'espace (slug) : aucun accès à ses données.
+export type Affectation = { cible: 'simatis' | 'kairos' | 'mandat'; mandat?: string };
 
 export const gestionDepenses = pgTable(
   'gestion_depenses',

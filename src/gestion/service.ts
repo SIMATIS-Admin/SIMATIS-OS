@@ -1,6 +1,8 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Executor } from '../db.js';
+import { SLUG } from '../instances/service.js';
+import { jourDe } from '../pilotage/realisees.js';
 import { currentInstance } from '../db/columns.js';
 import { normaliserMensuel, occurrencesEntre, veille } from './recurrence.js';
 import {
@@ -22,7 +24,7 @@ export class DepenseInvalide extends Error {}
 const jour = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const affectation = z.object({
   cible: z.enum(['simatis', 'kairos', 'mandat']),
-  mandatId: z.uuid().optional(),
+  mandat: z.string().regex(SLUG).optional(),
 });
 
 const depenseBase = z.object({
@@ -78,7 +80,7 @@ export type OccurrenceVue = {
 
 const verifierAffectations = (a: Affectation[]) => {
   for (const x of a) {
-    if (x.cible === 'mandat' && !x.mandatId)
+    if (x.cible === 'mandat' && !x.mandat)
       throw new DepenseInvalide('Un mandat doit être précisé pour ce rattachement');
   }
 };
@@ -214,6 +216,7 @@ export async function occurrencesDepenses(
   tx: Executor,
   de: string,
   a: string,
+  aujourdhui: string = jourDe(new Date()),
 ): Promise<OccurrenceVue[]> {
   const series = await tx
     .select()
@@ -232,7 +235,10 @@ export async function occurrencesDepenses(
     for (const date of occurrencesEntre(serieDe(s), de, a)) {
       const cle = `${s.id}|${date}`;
       const ex = parCle.get(cle);
-      const etat = ex?.etat ?? (s.statut === 'reelle' ? 'payee' : 'a_venir');
+      // « Déjà payée » vaut pour une dépense ponctuelle ; dans une série, seules les échéances passées.
+      const payeeParDefaut =
+        s.statut === 'reelle' && (s.recurrence === 'aucune' || date <= aujourdhui);
+      const etat = ex?.etat ?? (payeeParDefaut ? 'payee' : 'a_venir');
       sorties.push({
         depenseId: s.id,
         cle,
