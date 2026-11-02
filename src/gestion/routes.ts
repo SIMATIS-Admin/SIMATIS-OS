@@ -8,7 +8,13 @@ import {
   archiverRevenu,
   creerRevenu,
   lireRevenu,
+  modifierOccurrenceRevenu,
   modifierRevenu,
+  occurrenceRevenuSchema,
+  refacturationsDeDepense,
+  refacturationsParEcheance,
+  reinitialiserOccurrenceRevenu,
+  facturesAEmettre,
   RevenuIntrouvable,
   RevenuInvalide,
   revenuPatchSchema,
@@ -69,10 +75,20 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
     async (request, reply) => {
       const mois = moisSchema.safeParse(request.query.mois);
       if (!mois.success) return invalide(reply);
-      return dansGestion(request.params.slug, reply, async (tx) => ({
-        synthese: await syntheseDepenses(tx, mois.data),
-        occurrences: await occurrencesDepenses(tx, `${mois.data}-01`, `${mois.data}-31`),
-      }));
+      return dansGestion(request.params.slug, reply, async (tx) => {
+        const de = `${mois.data}-01`;
+        const a = `${mois.data}-31`;
+        const refac = await refacturationsParEcheance(tx, de, a);
+        return {
+          synthese: await syntheseDepenses(tx, mois.data),
+          // Refacturable = prévu à refacturer ; refacturé = réellement facturé ou encaissé (recette distincte).
+          occurrences: (await occurrencesDepenses(tx, de, a)).map((o) => ({
+            ...o,
+            refacturablePrevuCents: refac.get(o.cle)?.prevuCents ?? 0,
+            refactureCents: refac.get(o.cle)?.factureCents ?? 0,
+          })),
+        };
+      });
     },
   );
 
@@ -99,7 +115,14 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
     '/api/i/:slug/gestion/depenses/:id',
     async (request, reply) => {
       if (!z.uuid().safeParse(request.params.id).success) return invalide(reply);
-      return dansGestion(request.params.slug, reply, (tx) => lireDepense(tx, request.params.id));
+      return dansGestion(request.params.slug, reply, async (tx) => ({
+        ...(await lireDepense(tx, request.params.id)),
+        refacturations: (await refacturationsDeDepense(tx, request.params.id)).map((r) => ({
+          id: r.id,
+          mandat: r.mandat,
+          montantHtCents: r.montantHtCents,
+        })),
+      }));
     },
   );
 
@@ -248,6 +271,59 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
         });
         return { ok: true };
       });
+    },
+  );
+
+  app.put<{ Params: { slug: string; id: string; date: string } }>(
+    '/api/i/:slug/gestion/revenus/:id/occurrences/:date',
+    async (request, reply) => {
+      const parsed = occurrenceRevenuSchema.safeParse(request.body);
+      if (
+        !parsed.success ||
+        !z.uuid().safeParse(request.params.id).success ||
+        !jourSchema.safeParse(request.params.date).success
+      )
+        return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx, instanceId) => {
+        const l = await modifierOccurrenceRevenu(
+          tx,
+          instanceId,
+          request.params.id,
+          request.params.date,
+          parsed.data,
+        );
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: 'Échéance de recette Gestion modifiée',
+          niveau: 'L2',
+          details: { revenuId: l.id },
+        });
+        return l;
+      });
+    },
+  );
+
+  app.delete<{ Params: { slug: string; id: string; date: string } }>(
+    '/api/i/:slug/gestion/revenus/:id/occurrences/:date',
+    async (request, reply) => {
+      if (
+        !z.uuid().safeParse(request.params.id).success ||
+        !jourSchema.safeParse(request.params.date).success
+      )
+        return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx) => {
+        await reinitialiserOccurrenceRevenu(tx, request.params.id, request.params.date);
+        return { ok: true };
+      });
+    },
+  );
+
+  app.get<{ Params: { slug: string }; Querystring: { jusqua?: string } }>(
+    '/api/i/:slug/gestion/factures-a-emettre',
+    async (request, reply) => {
+      const jusqua = jourSchema.safeParse(request.query.jusqua);
+      if (!jusqua.success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, (tx) => facturesAEmettre(tx, jusqua.data));
     },
   );
 }

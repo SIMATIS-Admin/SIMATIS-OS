@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   archiverDepenseGestion,
   archiverRevenuGestion,
+  fetchFacturesAEmettre,
+  fetchRevenuGestion,
+  type OccurrenceRevenu,
   fetchRevenus,
-  type RevenuGestion,
   type SyntheseRevenus,
   fetchDepenseGestion,
   fetchDepenses,
   occurrenceDepenseGestion,
+  occurrenceRevenuGestion,
   type OccurrenceDepense,
   type SyntheseDepenses,
 } from '../api.js';
@@ -22,7 +25,12 @@ import {
 } from '../gestion.js';
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
-import { ETATS_REVENU, GestionRevenuTiroir, TYPES_REVENU } from './GestionRevenuTiroir.js';
+import {
+  ETATS_REVENU,
+  GestionRevenuTiroir,
+  TYPES_REVENU,
+  type CibleRevenu,
+} from './GestionRevenuTiroir.js';
 
 type Onglet = 'vue' | 'depenses' | 'revenus' | 'tresorerie' | 'ik' | 'tva';
 const ONGLETS: [Onglet, string][] = [
@@ -64,9 +72,10 @@ export function Gestion({
   const [tiroir, setTiroir] = useState<{ cible: CibleTiroir; duplique?: boolean } | null>(null);
   const [recettes, setRecettes] = useState<{
     synthese: SyntheseRevenus;
-    revenus: RevenuGestion[];
+    revenus: OccurrenceRevenu[];
   } | null>(null);
-  const [tiroirRevenu, setTiroirRevenu] = useState<{ revenu?: RevenuGestion } | null>(null);
+  const [aFacturer, setAFacturer] = useState<OccurrenceRevenu[]>([]);
+  const [tiroirRevenu, setTiroirRevenu] = useState<CibleRevenu | null>(null);
   const [filtre, setFiltre] = useState<Filtre>('toutes');
   const [affectation, setAffectation] = useState('');
   const [refacturables, setRefacturables] = useState(false);
@@ -75,9 +84,16 @@ export function Gestion({
   const charger = useCallback(async () => {
     try {
       setErreur(null);
-      const [d, r] = await Promise.all([fetchDepenses(slug, mois), fetchRevenus(slug, mois)]);
+      const horizon = new Date(`${aujourdhui()}T00:00:00Z`);
+      horizon.setUTCDate(horizon.getUTCDate() + 30);
+      const [d, r, f] = await Promise.all([
+        fetchDepenses(slug, mois),
+        fetchRevenus(slug, mois),
+        fetchFacturesAEmettre(slug, horizon.toISOString().slice(0, 10)),
+      ]);
       setDonnees(d);
       setRecettes(r);
+      setAFacturer(f);
     } catch (e) {
       setErreur(message(e));
     }
@@ -227,11 +243,15 @@ export function Gestion({
           <div>
             <span className="l">Revenus à encaisser (HT)</span>
             <span className="v num">
-              {recettes ? eurCents(recettes.synthese.aEncaisserCents) : '–'}
+              {recettes ? eurCents(recettes.synthese.aEncaisserCertainCents) : '–'}
             </span>
             <span className="g-duo">
               <span>
                 <i /> {recettes ? eurCents(recettes.synthese.encaisseCents) : '–'} encaissé
+              </span>
+              <span>
+                <i className="prev" />{' '}
+                {recettes ? eurCents(recettes.synthese.aEncaisserIncertainCents) : '–'} incertain
               </span>
             </span>
             <a
@@ -368,6 +388,7 @@ export function Gestion({
                 <th>État</th>
                 <th>Affectée à</th>
                 <th>Refacturable</th>
+                <th>Refacturé (réel)</th>
                 <th className="r">Montant TTC</th>
                 <th />
               </tr>
@@ -405,12 +426,28 @@ export function Gestion({
                     </span>
                   </td>
                   <td>
-                    {o.refacturable ? (
+                    {o.refacturablePrevuCents ? (
                       <span
                         className="badge blue"
-                        title="Intention de refacturer, pas encore une recette"
+                        title="Montant que vous pouvez refacturer, pas encore une recette"
                       >
+                        Refacturable {eurCents(o.refacturablePrevuCents)}
+                      </span>
+                    ) : o.refacturable ? (
+                      <span className="badge blue" title="Intention de refacturer, sans montant">
                         Refacturable
+                      </span>
+                    ) : (
+                      <span className="muted">–</span>
+                    )}
+                  </td>
+                  <td>
+                    {o.refactureCents ? (
+                      <span
+                        className="badge green"
+                        title="Facturé ou encaissé : une recette distincte"
+                      >
+                        Facturé {eurCents(o.refactureCents)}
                       </span>
                     ) : (
                       <span className="muted">–</span>
@@ -430,7 +467,7 @@ export function Gestion({
                 </tr>
               ))}
               <tr>
-                <td colSpan={5} className="r">
+                <td colSpan={6} className="r">
                   <b>Total affiché</b>
                 </td>
                 <td className="r num">
@@ -471,9 +508,24 @@ export function Gestion({
 
   const nomMandat = (m: string | null) =>
     m ? (mandats.find((x) => x.slug === m)?.nom ?? m) : 'Aucun mandat';
-  const retirerRevenu = async (r: RevenuGestion) => {
+  const dateDe = (r: OccurrenceRevenu) =>
+    r.etat === 'encaissee' && r.dateEncaissement ? r.dateEncaissement : r.date;
+  const ouvrirRevenu = async (r: OccurrenceRevenu, etat?: 'emise') => {
     try {
-      await archiverRevenuGestion(slug, r.id);
+      const revenu = await fetchRevenuGestion(slug, r.revenuId);
+      setTiroirRevenu({ revenu, occurrence: r.recurrente ? r.cle.split('|')[1] : undefined, etat });
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
+  const retirerRevenu = async (r: OccurrenceRevenu) => {
+    try {
+      if (r.recurrente)
+        await occurrenceRevenuGestion(slug, r.revenuId, r.cle.split('|')[1]!, {
+          portee: 'cette',
+          etat: 'ignoree',
+        });
+      else await archiverRevenuGestion(slug, r.revenuId);
       await charger();
     } catch (e) {
       setErreur(message(e));
@@ -483,14 +535,97 @@ export function Gestion({
     <>
       <div className="panel g-bandeau-tri" style={{ marginBottom: 18 }}>
         <div>
-          <span className="small muted">À encaisser (HT)</span>
-          <span className="v">{recettes ? eurCents(recettes.synthese.aEncaisserCents) : '–'}</span>
+          <span className="small muted">À encaisser, certain (HT)</span>
+          <span className="v">
+            {recettes ? eurCents(recettes.synthese.aEncaisserCertainCents) : '–'}
+          </span>
+        </div>
+        <div>
+          <span className="small muted">À encaisser, incertain (HT)</span>
+          <span className="v">
+            {recettes ? eurCents(recettes.synthese.aEncaisserIncertainCents) : '–'}
+          </span>
         </div>
         <div>
           <span className="small muted">Encaissé (HT)</span>
           <span className="v">{recettes ? eurCents(recettes.synthese.encaisseCents) : '–'}</span>
         </div>
       </div>
+      {aFacturer.length > 0 && (
+        <div className="panel" style={{ marginBottom: 18 }}>
+          <div className="panel-h">
+            <h2>Factures à émettre (30 prochains jours)</h2>
+            <span className="badge amber">{aFacturer.length}</span>
+          </div>
+          <table className="tbl">
+            <tbody>
+              {aFacturer.map((r) => (
+                <tr key={r.cle}>
+                  <td className="num">{jourCourt(r.date)}</td>
+                  <td className="g-lib">
+                    <b>{r.libelle}</b>
+                    <small>
+                      {nomMandat(r.mandat)}
+                      {r.certitude === 'probable' ? ' · probable' : ''}
+                    </small>
+                  </td>
+                  <td className="r num">
+                    <b>{eurCents(r.montantHtCents)}</b>
+                  </td>
+                  <td className="g-act">
+                    <button className="btn sm" onClick={() => void ouvrirRevenu(r, 'emise')}>
+                      Marquer facturée
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="small muted" style={{ margin: '8px 18px' }}>
+            Marquer facturée enregistre la référence de la facture émise ailleurs : l’OS ne crée
+            aucune facture comptable.
+          </p>
+        </div>
+      )}
+      {recettes && recettes.synthese.parMandat.length > 0 && (
+        <div className="panel" style={{ marginBottom: 18 }}>
+          <div className="panel-h">
+            <h2>Revenus par mandat</h2>
+          </div>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Mandat</th>
+                {TYPES_REVENU.map(([k, l]) => (
+                  <th key={k} className="r">
+                    {l}
+                  </th>
+                ))}
+                <th className="r">Total HT</th>
+                <th className="r">À facturer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recettes.synthese.parMandat.map((m) => (
+                <tr key={m.mandat ?? 'aucun'}>
+                  <td>
+                    <b>{nomMandat(m.mandat)}</b>
+                  </td>
+                  {TYPES_REVENU.map(([k]) => (
+                    <td key={k} className="r num">
+                      {m.parType[k] ? eurCents(m.parType[k]) : <span className="muted">–</span>}
+                    </td>
+                  ))}
+                  <td className="r num">
+                    <b>{eurCents(m.totalCents)}</b>
+                  </td>
+                  <td className="r num">{eurCents(m.aFacturerCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div className="panel">
         <div className="g-filtres">
           <span style={{ flex: 1 }} />
@@ -510,16 +645,13 @@ export function Gestion({
             </thead>
             <tbody>
               {recettes.revenus.map((r) => (
-                <tr key={r.id} className="click" onClick={() => setTiroirRevenu({ revenu: r })}>
-                  <td className="num">
-                    {jourCourt(
-                      r.etat === 'encaissee' && r.dateEncaissement ? r.dateEncaissement : r.date,
-                    )}
-                  </td>
+                <tr key={r.cle} className="click" onClick={() => void ouvrirRevenu(r)}>
+                  <td className="num">{jourCourt(dateDe(r))}</td>
                   <td className="g-lib">
                     <b>{r.libelle}</b>
                     <small>
                       {TYPES_REVENU.find(([k]) => k === r.type)?.[1]}
+                      {r.recurrente ? ' · récurrente' : ''}
                       {r.referenceFacture ? ` · ${r.referenceFacture}` : ''}
                     </small>
                   </td>
@@ -531,14 +663,19 @@ export function Gestion({
                       className={`badge ${r.etat === 'encaissee' ? 'green' : r.etat === 'emise' ? 'blue' : 'amber'}`}
                     >
                       {ETATS_REVENU.find(([k]) => k === r.etat)?.[1]}
-                    </span>
+                    </span>{' '}
+                    {r.certitude !== 'certaine' && (
+                      <span className="badge">
+                        {r.certitude === 'probable' ? 'Probable' : 'Hypothèse'}
+                      </span>
+                    )}
                   </td>
                   <td className="r num">
                     <b>{eurCents(r.montantHtCents)}</b>
                   </td>
                   <td className="g-act" onClick={(e) => e.stopPropagation()}>
                     <button className="btn ghost sm" onClick={() => void retirerRevenu(r)}>
-                      Supprimer
+                      {r.recurrente ? 'Ignorer' : 'Supprimer'}
                     </button>
                   </td>
                 </tr>
@@ -563,7 +700,8 @@ export function Gestion({
         )}
       </div>
       <p className="small muted" style={{ marginTop: 10 }}>
-        Montants hors taxes. Revenus récurrents, refacturations et factures à émettre : Lot B.
+        Montants hors taxes. Une refacturation se crée depuis la dépense concernée : c’est une
+        recette distincte, elle ne réduit jamais la dépense.
       </p>
     </>
   );
@@ -615,10 +753,10 @@ export function Gestion({
       )}
       {tiroirRevenu && (
         <GestionRevenuTiroir
-          key={tiroirRevenu.revenu?.id ?? 'neuve'}
+          key={`${tiroirRevenu.revenu?.id ?? 'neuve'}-${tiroirRevenu.occurrence ?? ''}-${tiroirRevenu.etat ?? ''}`}
           slug={slug}
           mandats={mandats}
-          revenu={tiroirRevenu.revenu}
+          cible={tiroirRevenu}
           onClose={() => setTiroirRevenu(null)}
           onSaved={() => {
             setTiroirRevenu(null);

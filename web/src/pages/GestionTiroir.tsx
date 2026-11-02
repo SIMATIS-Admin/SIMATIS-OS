@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
+  archiverRevenuGestion,
   creerDepenseGestion,
+  creerRevenuGestion,
+  modifierRevenuGestion,
   modifierDepenseGestion,
   occurrenceDepenseGestion,
   type AffectationGestion,
@@ -23,6 +26,7 @@ export const CATEGORIES = [
   'Assurances',
   'Déplacements',
   'Honoraires',
+  'Loyer versé à l’associé',
   'Marketing',
   'Autres',
 ];
@@ -74,6 +78,14 @@ export function GestionTiroir({
   );
   const [justificatif, setJustificatif] = useState(source?.justificatif ?? '');
   const [fin, setFin] = useState(source?.dateFin ?? '');
+  // Montant HT refacturé à chaque mandat, par échéance de la dépense (recette distincte, Lot B).
+  const [refact, setRefact] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (source?.refacturations ?? [])
+        .filter((r) => r.mandat)
+        .map((r) => [r.mandat!, String(r.montantHtCents / 100).replace('.', ',')]),
+    ),
+  );
   const [portee, setPortee] = useState<'cette' | 'suivantes'>('cette');
   const [erreur, setErreur] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
@@ -97,6 +109,37 @@ export function GestionTiroir({
         : [...l, aff],
     );
 
+  // Une recette de refacturation par mandat, de même cadence que la dépense ; sans montant, elle est
+  // retirée. La dépense elle-même n'est jamais modifiée par la refacturation.
+  const synchroniserRefacturations = async (depenseId: string, d: NouvelleDepense) => {
+    const existantes = source && edition ? (source.refacturations ?? []) : [];
+    const voulues = refacturable
+      ? Object.entries(refact).flatMap(([mandat, saisie]) => {
+          const c = versCents(saisie);
+          return c ? [{ mandat, c }] : [];
+        })
+      : [];
+    for (const e of existantes) {
+      const v = voulues.find((x) => x.mandat === e.mandat);
+      if (!v) await archiverRevenuGestion(slug, e.id);
+      else if (v.c !== e.montantHtCents)
+        await modifierRevenuGestion(slug, e.id, { montantHtCents: v.c });
+    }
+    for (const v of voulues) {
+      if (existantes.some((e) => e.mandat === v.mandat)) continue;
+      await creerRevenuGestion(slug, {
+        libelle: `Refacturation : ${d.libelle}`,
+        type: 'refacturation',
+        mandat: v.mandat,
+        montantHtCents: v.c,
+        date: d.dateDebut,
+        recurrence: d.recurrence,
+        dateFin: d.dateFin,
+        depenseId,
+      });
+    }
+  };
+
   const enregistrer = async (encore: boolean) => {
     const tvaCents = tva.trim() ? versCents(tva) : null;
     if (!libelle.trim() || !cents) return setErreur('Libellé et montant TTC sont obligatoires.');
@@ -118,12 +161,16 @@ export function GestionTiroir({
     setOccupe(true);
     setErreur(null);
     try {
+      let depenseId: string;
+      let synchroniser = true;
       if (edition && source) {
+        depenseId = source.id;
         if (source.recurrence !== 'aucune' && cible.occurrence && portee === 'suivantes') {
           await occurrenceDepenseGestion(slug, source.id, cible.occurrence, {
             portee,
             serie: { ...donnees, dateDebut: undefined },
           });
+          synchroniser = false;
         } else if (source.recurrence !== 'aucune' && cible.occurrence) {
           // Cette échéance seule : seul son montant réel s'écarte de la série.
           await occurrenceDepenseGestion(slug, source.id, cible.occurrence, {
@@ -132,8 +179,10 @@ export function GestionTiroir({
             datePaiement: date,
             montantTtcCents: cents,
           });
+          synchroniser = false;
         } else await modifierDepenseGestion(slug, source.id, donnees);
-      } else await creerDepenseGestion(slug, donnees);
+      } else depenseId = (await creerDepenseGestion(slug, donnees)).id;
+      if (synchroniser) await synchroniserRefacturations(depenseId, donnees);
       onSaved(encore);
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e));
@@ -301,9 +350,34 @@ export function GestionTiroir({
           &nbsp;Refacturable à un client
         </label>
         {refacturable && (
-          <div className="small muted">
-            Indique ce qui pourra être refacturé. La refacturation réelle se suivra dans Revenus et
-            facturation ; elle ne réduit jamais la dépense.
+          <div className="alert blue">
+            <div>
+              Montant HT à refacturer à chaque mandat, à chaque échéance. C’est une recette
+              distincte, suivie dans Revenus et facturation : elle ne réduit jamais la dépense.
+              <div className="g-ventil" style={{ marginTop: 8 }}>
+                {(() => {
+                  const choisis = affectations
+                    .filter((a) => a.cible === 'mandat' && a.mandat)
+                    .map((a) => a.mandat!);
+                  const liste = mandats.filter((m) =>
+                    choisis.length ? choisis.includes(m.slug) : true,
+                  );
+                  return liste.map((m) => (
+                    <label key={m.slug} style={{ display: 'contents' }}>
+                      <span>{m.nom}</span>
+                      <input
+                        className="input num"
+                        inputMode="decimal"
+                        placeholder="0 €"
+                        aria-label={`Montant HT refacturable à ${m.nom}`}
+                        value={refact[m.slug] ?? ''}
+                        onChange={(e) => setRefact({ ...refact, [m.slug]: e.target.value })}
+                      />
+                    </label>
+                  ));
+                })()}
+              </div>
+            </div>
           </div>
         )}
         <details className="g-plus">

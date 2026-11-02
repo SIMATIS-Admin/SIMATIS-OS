@@ -421,6 +421,13 @@
       "when": 1793609775479,
       "tag": "0059_gestion_revenus",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793610915455,
+      "tag": "0060_gestion_lot_b",
+      "breakpoints": true
     }
   ]
 }

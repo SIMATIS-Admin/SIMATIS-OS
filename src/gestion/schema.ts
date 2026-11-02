@@ -83,6 +83,10 @@ export const gestionDepenseExceptions = pgTable(
 export const TYPES_REVENU = ['commission', 'abonnement', 'refacturation', 'autre'] as const;
 export const ETATS_REVENU = ['prevue', 'emise', 'encaissee'] as const;
 export type EtatRevenu = (typeof ETATS_REVENU)[number];
+// Une commission incertaine ne vaut jamais un encaissement certain.
+export const CERTITUDES = ['certaine', 'probable', 'hypothese'] as const;
+export type Certitude = (typeof CERTITUDES)[number];
+export const ETATS_OCCURRENCE_REVENU = ['emise', 'encaissee', 'ignoree'] as const;
 
 export const gestionRevenus = pgTable(
   'gestion_revenus',
@@ -100,10 +104,38 @@ export const gestionRevenus = pgTable(
     dateEncaissement: date('date_encaissement', { mode: 'string' }),
     // Référence de la facture émise ailleurs : jamais une facture fabriquée ici.
     referenceFacture: text('reference_facture'),
+    // Série : première échéance = `date`, dernière éventuelle = `dateFin` ; l'état de chaque échéance
+    // vit alors dans gestion_revenu_exceptions. Ponctuelle (« aucune ») : l'état est celui de la ligne.
+    recurrence: text('recurrence', { enum: RECURRENCES }).notNull().default('aucune'),
+    dateFin: date('date_fin', { mode: 'string' }),
+    certitude: text('certitude', { enum: CERTITUDES }).notNull().default('certaine'),
+    // Refacturation : la recette vient d'une dépense, sans jamais la réduire.
+    depenseId: uuid('depense_id').references(() => gestionDepenses.id, { onDelete: 'set null' }),
     archiveeAt: timestamp('archivee_at', { withTimezone: true }),
   },
   (t) => [
     index('gestion_revenus_instance_idx').on(t.instanceId, t.date),
     instanceIsolation('gestion_revenus'),
+  ],
+);
+
+// Réalisation d'une échéance de recette récurrente (facturée, encaissée ou ignorée).
+export const gestionRevenuExceptions = pgTable(
+  'gestion_revenu_exceptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    revenuId: uuid('revenu_id')
+      .notNull()
+      .references(() => gestionRevenus.id, { onDelete: 'cascade' }),
+    dateOrigine: date('date_origine', { mode: 'string' }).notNull(),
+    etat: text('etat', { enum: ETATS_OCCURRENCE_REVENU }).notNull(),
+    dateEncaissement: date('date_encaissement', { mode: 'string' }),
+    montantHtCents: integer('montant_ht_cents'),
+    referenceFacture: text('reference_facture'),
+  },
+  (t) => [
+    uniqueIndex('gestion_revenu_exceptions_occ_idx').on(t.revenuId, t.dateOrigine),
+    instanceIsolation('gestion_revenu_exceptions'),
   ],
 );
