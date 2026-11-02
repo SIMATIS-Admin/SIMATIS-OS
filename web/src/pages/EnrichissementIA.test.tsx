@@ -161,6 +161,7 @@ describe('validation des suggestions', () => {
     tache = { etat: 'interrompue', erreur: 'Quota OpenAI atteint', jetons: 10 };
     ouvrir();
     expect(await screen.findByText(/Quota OpenAI atteint/)).toBeTruthy();
+    expect(screen.queryByText(/Aucun contact trouvé/)).toBeNull();
   });
 
   it('dit quand rien n’a été trouvé', async () => {

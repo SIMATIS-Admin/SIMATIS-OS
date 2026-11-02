@@ -249,7 +249,7 @@ export function SuggestionsEnrichissement({
       {tache?.etat === 'interrompue' && (
         <p className="error">Enrichissement interrompu : {tache.erreur}</p>
       )}
-      {suggestions && suggestions.length === 0 && tache?.etat !== 'en_cours' && (
+      {suggestions && suggestions.length === 0 && tache?.etat === 'terminee' && (
         <p className="muted">Aucun contact trouvé pour ce lot.</p>
       )}
       {[...parEntreprise].map(([entreprise, liste]) => (
