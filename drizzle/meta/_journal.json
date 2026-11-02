@@ -463,6 +463,13 @@
       "when": 1793619912973,
       "tag": "0065_enrichissement",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1793652437537,
+      "tag": "0066_vma_inscriptions",
+      "breakpoints": true
     }
   ]
 }

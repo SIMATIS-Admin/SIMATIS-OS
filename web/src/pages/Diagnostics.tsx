@@ -12,6 +12,7 @@ import {
   type ProjetDiag,
   type TestVma,
 } from '../api.js';
+import { ContactsVma } from './diagnostics/ContactsVma.js';
 import { Icon } from '../icons.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
@@ -61,6 +62,7 @@ export function Diagnostics({
   // Titre de l'en-tête de l'application : celui de l'outil ouvert, pour ne pas répéter celui de la section.
   onTitre?: (titre: string | null) => void;
 }) {
+  const [contactsOuverts, setContactsOuverts] = useState(false);
   const [entreprises, setEntreprises] = useState<Entreprise[] | null>(null);
   const [projets, setProjets] = useState<ProjetDiag[]>([]);
   const [tests, setTests] = useState<TestVma[]>([]);
@@ -106,11 +108,13 @@ export function Diagnostics({
     }
   };
 
-  const titreOuvert = projetOuvert
-    ? 'Diagnostic d’endurance commerciale'
-    : testOuvert
-      ? 'Test de VMA'
-      : null;
+  const titreOuvert = contactsOuverts
+    ? 'Contacts VMA'
+    : projetOuvert
+      ? 'Diagnostic d’endurance commerciale'
+      : testOuvert
+        ? 'Test de VMA'
+        : null;
   useEffect(() => {
     onTitre?.(titreOuvert);
     return () => onTitre?.(null);
@@ -183,6 +187,17 @@ export function Diagnostics({
     </div>
   );
 
+  if (contactsOuverts)
+    return (
+      <ContactsVma
+        slug={slug}
+        onRetour={() => {
+          setContactsOuverts(false);
+          void charger();
+        }}
+      />
+    );
+
   if (projetOuvert) {
     const projet = projets.find((p) => p.id === projetOuvert);
     if (projet) {
@@ -232,6 +247,9 @@ export function Diagnostics({
             <p className="dg-intro">Chaque entreprise avec son diagnostic et ses tests VMA.</p>
           </div>
           <div className="dg-outils">
+            <button className="btn" type="button" onClick={() => setContactsOuverts(true)}>
+              Contacts VMA
+            </button>
             <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
               Test VMA: module d'essai
             </button>
