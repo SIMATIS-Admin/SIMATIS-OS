@@ -8,6 +8,9 @@ import { startRelevePartenaires } from './partenaires/releve.js';
 import { startReleveSite } from './site/releve.js';
 import { startReleveVma } from './vma/releve.js';
 import { startRelancesVma } from './vma/relances.js';
+import { creerClientOpenAI } from './enrichissement/client.js';
+import { reprendreLotsInterrompus } from './enrichissement/lot.js';
+import { reglagesDe } from './enrichissement/routes.js';
 import { appDatabaseUrl, ensureAppRole, lectureRoleOf } from './db/roles.js';
 import { seedDemoIfEmpty } from './demo/seed.js';
 import { runMigrations } from './migrate.js';
@@ -37,6 +40,7 @@ const app = buildApp({
   realWrites: config.realWrites,
   secretsDir: config.secretsDir,
   vma: config.site && config.vmaOsToken ? { url: config.site.url, token: config.vmaOsToken } : null,
+  enrichissement: config.enrichissement,
   relais: config.relaisUrl
     ? {
         url: config.relaisUrl,
@@ -72,6 +76,13 @@ let stopRelevePartenaires = () => {};
 try {
   await prepareDatabase();
   await app.listen({ host: config.host, port: config.port });
+  // Un enrichissement laissé en cours par l'arrêt précédent repart des fiches non traitées.
+  if (config.enrichissement)
+    void reprendreLotsInterrompus(
+      db,
+      creerClientOpenAI(config.enrichissement),
+      reglagesDe(config.enrichissement),
+    ).catch((err: unknown) => app.log.warn({ err }, 'enrichment resume failed'));
   stopScheduler = startScheduler(db, {
     secretsDir: config.secretsDir,
     realWrites: config.realWrites,
