@@ -21,8 +21,9 @@ async function readOptional(file: string, slug: string): Promise<string | null> 
   }
 }
 
-// `google`: mailbox and agenda; `analytics`: the website audience (its own Google account).
-export type UsageGoogle = 'google' | 'analytics';
+// `google`: mailbox and agenda; `analytics`: the website audience (its own Google account);
+// `lecture2`: a second mailbox, read only.
+export type UsageGoogle = 'google' | 'analytics' | 'lecture2';
 
 export const googleTokenPath = (dir: string, slug: string, usage: UsageGoogle = 'google') => {
   checkSlug(slug);
@@ -88,6 +89,11 @@ export async function loadInstanceSecrets(
   if (analytics) {
     const token = (JSON.parse(analytics) as { refresh_token?: string }).refresh_token;
     if (token) secrets.GOOGLE_ANALYTICS_REFRESH_TOKEN = token;
+  }
+  const lecture2 = await readOptional(googleTokenPath(dir, slug, 'lecture2'), slug);
+  if (lecture2) {
+    const token = (JSON.parse(lecture2) as { refresh_token?: string }).refresh_token;
+    if (token) secrets.GOOGLE_LECTURE2_REFRESH_TOKEN = token;
   }
   const imap = await readOptional(imapPath(dir, slug), slug);
   if (imap) {

@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import {
   ANALYTICS_SCOPES,
+  GMAIL_LECTURE_SCOPES,
   clientSecretValide,
   exchangeCode,
   GOOGLE_CLIENT_ID_APP,
@@ -230,6 +231,7 @@ export function googleWebFlow(deps: { secretsDir: string; fetch?: FetchLike }) {
         state,
         challenge,
         ...(usage === 'analytics' ? { scopes: ANALYTICS_SCOPES } : {}),
+        ...(usage === 'lecture2' ? { scopes: GMAIL_LECTURE_SCOPES } : {}),
       });
     },
 
@@ -262,7 +264,7 @@ export function googleWebFlow(deps: { secretsDir: string; fetch?: FetchLike }) {
         doFetch,
       );
       await writeGoogleToken(deps.secretsDir, p.slug, token, p.usage);
-      // Analytics is read on demand by the Site web screen: no mailbox connection to set up.
+      // Analytics and the second mailbox are read on demand: no connection to set up.
       if (p.usage === 'google') await withInstance(db, instance.id, brancherGoogle);
       return { slug: p.slug, usage: p.usage };
     },

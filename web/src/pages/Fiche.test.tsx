@@ -450,11 +450,13 @@ describe('Fiche page', () => {
           texte: 'Bonjour, je reviens vers vous',
           at: '2026-10-20T08:00:00.000Z',
           origine: 'os',
+          compte: 'marque@exemple.test',
         },
       ],
     };
     render(<Fiche slug="simatis" kind="contact" id="c1" />);
     expect(await screen.findByText('Envoyé · Relance fictive')).toBeTruthy();
+    expect(screen.getByText(/marque@exemple\.test/)).toBeTruthy();
     expect(screen.getByText('Bonjour, je reviens vers vous')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Emails' }));
     expect(screen.getByText('Envoyé · Relance fictive')).toBeTruthy();

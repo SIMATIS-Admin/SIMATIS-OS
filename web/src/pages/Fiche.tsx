@@ -832,6 +832,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                       <div className="small muted">
                         {lbl} · {dateHeure(e.at)}
                         {e.origine === 'hubspot' ? ' · HubSpot' : ''}
+                        {e.compte ? ` · ${e.compte}` : ''}
                       </div>
                       {e.titre && <b>{e.type === 'etape' ? `Étape : ${e.titre}` : e.titre}</b>}
                       {noteEditee?.id === e.id ? (

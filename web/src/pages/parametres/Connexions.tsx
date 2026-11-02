@@ -3,6 +3,7 @@ import {
   brancherHubspot,
   brancherInfomaniak,
   demarrerGoogle,
+  demarrerGoogleLecture,
   enregistrerSecretGoogle,
   fetchAgendas,
   fetchConnexions,
@@ -274,6 +275,45 @@ function ConnecterGoogle({
         Choisissez le compte Google utilisé pour ce mandat : Gmail (brouillons seulement) et Agenda
         sont branchés ensemble.
       </Verrou>
+    </div>
+  );
+}
+
+// A second Gmail account (a brand's own address) whose mails join the first one's on the cards.
+function SecondeBoite({ slug, connectee }: { slug: string; connectee: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const go = () => {
+    setBusy(true);
+    setError(null);
+    demarrerGoogleLecture(slug).then(
+      ({ url }) => location.assign(url),
+      (e: unknown) => {
+        setError(e instanceof Error ? e.message : String(e));
+        setBusy(false);
+      },
+    );
+  };
+  return (
+    <div className="panel">
+      <div className="panel-b stack">
+        <p style={{ margin: 0 }}>
+          <b>Seconde boîte Gmail (lecture seule)</b>
+          {connectee ? ' : connectée.' : ' : non connectée.'} Pour une adresse d'une autre marque
+          utilisée sur ce mandat : ses mails s'ajoutent à l'historique des fiches. L'OS n'y écrit
+          rien.
+        </p>
+        <div>
+          <button className="btn" disabled={busy} onClick={go}>
+            {connectee ? 'Reconnecter la seconde boîte' : 'Connecter une seconde boîte Gmail'}
+          </button>
+        </div>
+        {error && (
+          <p className="small" style={{ color: 'var(--red)' }}>
+            {error}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -762,6 +802,14 @@ export function Connexions({ slug }: { slug: string }) {
         <div className="alert green">
           <div>Compte Google connecté : Gmail et Agenda sont branchés.</div>
         </div>
+      )}
+      {location.hash.includes('boite2=ok') && (
+        <div className="alert green">
+          <div>Seconde boîte connectée : ses mails apparaissent dans l’historique des fiches.</div>
+        </div>
+      )}
+      {data.connexions.some((x) => x.kind === 'messagerie' && x.fournisseur === 'gmail') && (
+        <SecondeBoite slug={slug} connectee={data.secondeBoite} />
       )}
       {data.googleDriveManquant && (
         <div className="panel">

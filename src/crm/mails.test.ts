@@ -49,10 +49,10 @@ describe('Mails échangés avec une fiche', () => {
           ),
         ],
       });
-      const mails = await mailsEchanges(boite, ['a@exemple.test', 'b@exemple.test']);
-      expect(mails.map((m) => [m.id, m.titre, m.type])).toEqual([
-        ['mail-m2', 'Reçu · Re: Relance 1', 'email'],
-        ['mail-m1', 'Envoyé · Relance 1', 'email'],
+      const { mails } = await mailsEchanges([boite], ['a@exemple.test', 'b@exemple.test']);
+      expect(mails.map((m) => [m.texte, m.titre, m.type])).toEqual([
+        ['Extrait m2', 'Reçu · Re: Relance 1', 'email'],
+        ['Extrait m1', 'Envoyé · Relance 1', 'email'],
       ]);
       expect(mails[1]?.texte).toBe('Extrait m1');
     });
@@ -65,8 +65,49 @@ describe('Mails échangés avec une fiche', () => {
           { ...message('m3', 'x@exemple.test', 'Tue, 06 Oct 2026 09:00:00 +0000'), objet: null },
         ],
       });
-      const mails = await mailsEchanges(boite, ['a@exemple.test']);
+      const { mails } = await mailsEchanges([boite], ['a@exemple.test']);
       expect(mails.map((m) => m.titre)).toEqual(['Reçu · (sans objet)']);
+    });
+  });
+
+  describe('deux boîtes', () => {
+    const messageDe = (id: string, de: string) =>
+      message(id, de, 'Tue, 06 Oct 2026 09:00:00 +0000', `Objet ${id}`);
+
+    it('réunit les mails des deux boîtes en indiquant la boîte de chacun', async () => {
+      const simatis = boiteDe(
+        { 'a@exemple.test': [messageDe('m1', 'moi@exemple.test')] },
+        'moi@exemple.test',
+      );
+      const marque = boiteDe(
+        { 'a@exemple.test': [messageDe('m2', 'a@exemple.test')] },
+        'marque@exemple.test',
+      );
+      const { mails, erreurs } = await mailsEchanges([simatis, marque], ['a@exemple.test']);
+      expect(erreurs).toEqual([]);
+      expect(mails.map((m) => [m.texte, m.titre?.split(' · ')[0], m.compte]).sort()).toEqual([
+        ['Extrait m1', 'Envoyé', 'moi@exemple.test'],
+        ['Extrait m2', 'Reçu', 'marque@exemple.test'],
+      ]);
+    });
+
+    it('garde une ligne par boîte quand un même mail est dans les deux', async () => {
+      const commun = messageDe('m1', 'a@exemple.test');
+      const un = boiteDe({ 'a@exemple.test': [commun] }, 'un@exemple.test');
+      const deux = boiteDe({ 'a@exemple.test': [commun] }, 'deux@exemple.test');
+      const { mails } = await mailsEchanges([un, deux], ['a@exemple.test']);
+      expect(mails.map((m) => m.compte).sort()).toEqual(['deux@exemple.test', 'un@exemple.test']);
+    });
+
+    it('une boîte en panne ne cache pas l’autre', async () => {
+      const bonne = boiteDe({ 'a@exemple.test': [messageDe('m1', 'a@exemple.test')] });
+      const cassee: Messagerie = {
+        ...boiteDe({}),
+        compte: () => Promise.reject(new Error('jeton expiré')),
+      };
+      const { mails, erreurs } = await mailsEchanges([cassee, bonne], ['a@exemple.test']);
+      expect(mails).toHaveLength(1);
+      expect(erreurs).toEqual(['jeton expiré']);
     });
   });
 
@@ -100,9 +141,11 @@ describe('Mails échangés avec une fiche', () => {
         'un@exemple.test': [message('m1', 'un@exemple.test', 'Tue, 06 Oct 2026 09:00:00 +0000')],
         'deux@exemple.test': [message('m2', 'moi@exemple.test', 'Wed, 07 Oct 2026 09:00:00 +0000')],
       });
-      const r = await mailsDeFiche(t.app.db, a, 'contact', id, deps, () => Promise.resolve(boite));
+      const r = await mailsDeFiche(t.app.db, a, 'contact', id, deps, () =>
+        Promise.resolve([boite]),
+      );
       expect(r.adresses).toBe(2);
-      expect(r.mails.map((m) => m.id)).toEqual(['mail-m2', 'mail-m1']);
+      expect(r.mails.map((m) => m.texte)).toEqual(['Extrait m2', 'Extrait m1']);
     });
 
     it('une organisation rassemble les mails de ses contacts', async () => {
@@ -122,21 +165,20 @@ describe('Mails échangés avec une fiche', () => {
         'p2@exemple.test': [message('m2', 'p2@exemple.test', 'Wed, 07 Oct 2026 09:00:00 +0000')],
       });
       const r = await mailsDeFiche(t.app.db, a, 'entreprise', entreprise, deps, () =>
-        Promise.resolve(boite),
+        Promise.resolve([boite]),
       );
-      expect(r.mails.map((m) => m.id)).toEqual(['mail-m2', 'mail-m1']);
+      expect(r.mails.map((m) => m.texte)).toEqual(['Extrait m2', 'Extrait m1']);
     });
 
     it('explique pourquoi il n’y a rien : pas d’adresse, pas de messagerie, messagerie en erreur', async () => {
       const sans = await contact(a, 'Sans Adresse', null);
       expect(
-        (await mailsDeFiche(t.app.db, a, 'contact', sans, deps, () => Promise.resolve(null)))
-          .message,
+        (await mailsDeFiche(t.app.db, a, 'contact', sans, deps, () => Promise.resolve([]))).message,
       ).toBe('Aucune adresse email sur cette fiche.');
 
       const id = await contact(a, 'Avec Adresse', 'x@exemple.test');
       const absente = await mailsDeFiche(t.app.db, a, 'contact', id, deps, () =>
-        Promise.resolve(null),
+        Promise.resolve([]),
       );
       expect(absente.mails).toEqual([]);
       expect(absente.message).toMatch(/Aucune messagerie connectée/);
@@ -146,7 +188,7 @@ describe('Mails échangés avec une fiche', () => {
         historique: () => Promise.reject(new Error('jeton expiré')),
       };
       const erreur = await mailsDeFiche(t.app.db, a, 'contact', id, deps, () =>
-        Promise.resolve(cassee),
+        Promise.resolve([cassee]),
       );
       expect(erreur).toMatchObject({ mails: [], message: 'Mails non lus : jeton expiré' });
     });
@@ -161,7 +203,7 @@ describe('Mails échangés avec une fiche', () => {
     it('ne lit jamais les contacts d’une autre instance', async () => {
       const autre = await contact(b, 'Autre', 'autre@exemple.test');
       const r = await mailsDeFiche(t.app.db, a, 'contact', autre, deps, () =>
-        Promise.resolve(boiteDe({})),
+        Promise.resolve([boiteDe({})]),
       );
       expect(r).toMatchObject({ adresses: 0, mails: [] });
     });

@@ -370,6 +370,7 @@ export type ConnexionsReponse = {
   options: { objets: string[]; champs: { cle: string; libelle: string }[] };
   googleClientDisponible: boolean;
   googleDriveManquant: boolean;
+  secondeBoite: boolean;
   ecrituresReelles: boolean;
 };
 
@@ -475,6 +476,8 @@ export const enregistrerSecretGoogle = (secret: string) =>
   sendJson<{ ok: true }>('PUT', '/api/google/secret', { secret });
 export const demarrerGoogle = (slug: string) =>
   sendJson<{ url: string }>('POST', inst(slug, 'connexions/google/start'), {});
+export const demarrerGoogleLecture = (slug: string) =>
+  sendJson<{ url: string }>('POST', inst(slug, 'connexions/google/start-lecture'), {});
 export const syncConnexion = (slug: string, kind: string) =>
   sendJson<{ lus: number; crees: number; maj: number }>(
     'POST',
@@ -1003,6 +1006,7 @@ export type Evenement = {
   texte: string | null;
   at: string;
   origine: 'hubspot' | 'os';
+  compte?: string;
 };
 export type RdvLie = { id: string; titre: string; debut: string | null; compteRendu: boolean };
 export type LienFiche = { id: string; nom: string; principal: boolean };

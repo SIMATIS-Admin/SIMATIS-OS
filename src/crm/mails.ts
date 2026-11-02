@@ -38,7 +38,8 @@ async function adressesDeFiche(db: Database, instance: Instance, kind: Kind, id:
   });
 }
 
-async function boiteDeInstance(db: Database, instance: Instance, deps: ConnexionDeps) {
+// The instance's mailboxes: the connected one, plus the second one (read only) when Gmail has it.
+async function boitesDeInstance(db: Database, instance: Instance, deps: ConnexionDeps) {
   const [c] = await withInstance(db, instance.id, (tx) =>
     tx
       .select({ fournisseur: connexions.fournisseur, etat: connexions.etat })
@@ -46,31 +47,54 @@ async function boiteDeInstance(db: Database, instance: Instance, deps: Connexion
       .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'messagerie'))),
   );
   if (!c || c.etat === 'non_configuree' || !['gmail', 'infomaniak'].includes(c.fournisseur))
-    return null;
+    return [];
   const secrets = await loadInstanceSecrets(deps.secretsDir, instance.slug);
-  return messagerieDe(c.fournisseur, { instance, secrets });
+  const boites = [messagerieDe(c.fournisseur, { instance, secrets })];
+  const seconde = secrets.GOOGLE_LECTURE2_REFRESH_TOKEN;
+  if (c.fournisseur === 'gmail' && seconde)
+    boites.push(
+      messagerieDe('gmail', {
+        instance,
+        secrets: { ...secrets, GOOGLE_REFRESH_TOKEN: seconde },
+      }),
+    );
+  return boites;
 }
 
-// Sent and received mails of the addresses, newest first, one line per message.
-export async function mailsEchanges(boite: Messagerie, adresses: string[]): Promise<Evenement[]> {
-  const compte = (await boite.compte()).toLowerCase();
+// Sent and received mails of the addresses, newest first, one line per message. A mailbox that
+// fails does not hide the others: its error comes back beside what the others read.
+export async function mailsEchanges(
+  boites: Messagerie[],
+  adresses: string[],
+): Promise<{ mails: Evenement[]; erreurs: string[] }> {
   const vus = new Map<string, Evenement>();
-  for (const adresse of adresses) {
-    for (const m of await boite.historique(adresse, { mois: MOIS, max: PAR_ADRESSE })) {
-      const at = m.date ? new Date(m.date) : null;
-      if (!at || Number.isNaN(at.getTime()) || vus.has(m.id)) continue;
-      const envoye = compte !== '' && (m.de ?? '').toLowerCase().includes(compte);
-      vus.set(m.id, {
-        id: `mail-${m.id}`,
-        type: 'email',
-        titre: `${envoye ? 'Envoyé' : 'Reçu'} · ${m.objet?.trim() || '(sans objet)'}`,
-        texte: m.extrait || null,
-        at: at.toISOString(),
-        origine: 'os',
-      });
+  const erreurs: string[] = [];
+  for (const boite of boites) {
+    try {
+      const compte = (await boite.compte()).toLowerCase();
+      for (const adresse of adresses) {
+        for (const m of await boite.historique(adresse, { mois: MOIS, max: PAR_ADRESSE })) {
+          const at = m.date ? new Date(m.date) : null;
+          // The same mail sits in both boxes when both are on it: one line, the first box's.
+          const cle = `${m.id}@${compte}`;
+          if (!at || Number.isNaN(at.getTime()) || vus.has(cle)) continue;
+          const envoye = compte !== '' && (m.de ?? '').toLowerCase().includes(compte);
+          vus.set(cle, {
+            id: `mail-${compte}-${m.id}`,
+            type: 'email',
+            titre: `${envoye ? 'Envoyé' : 'Reçu'} · ${m.objet?.trim() || '(sans objet)'}`,
+            texte: m.extrait || null,
+            at: at.toISOString(),
+            origine: 'os',
+            ...(boites.length > 1 && compte ? { compte } : {}),
+          });
+        }
+      }
+    } catch (error) {
+      erreurs.push(error instanceof Error ? error.message : 'erreur de messagerie');
     }
   }
-  return [...vus.values()].sort((x, y) => y.at.localeCompare(x.at));
+  return { mails: [...vus.values()].sort((x, y) => y.at.localeCompare(x.at)), erreurs };
 }
 
 export async function mailsDeFiche(
@@ -79,29 +103,26 @@ export async function mailsDeFiche(
   kind: Kind,
   id: string,
   deps: ConnexionDeps,
-  boiteDe: (
+  boitesDe: (
     db: Database,
     i: Instance,
     d: ConnexionDeps,
-  ) => Promise<Messagerie | null> = boiteDeInstance,
+  ) => Promise<Messagerie[]> = boitesDeInstance,
 ): Promise<MailsFiche> {
   const adresses = await adressesDeFiche(db, instance, kind, id);
   if (!adresses.length)
     return { mails: [], adresses: 0, message: 'Aucune adresse email sur cette fiche.' };
-  const boite = await boiteDe(db, instance, deps);
-  if (!boite)
+  const boites = await boitesDe(db, instance, deps);
+  if (!boites.length)
     return {
       mails: [],
       adresses: adresses.length,
       message: 'Aucune messagerie connectée à cette instance (Paramètres > Connexions).',
     };
-  try {
-    return { mails: await mailsEchanges(boite, adresses), adresses: adresses.length };
-  } catch (error) {
-    return {
-      mails: [],
-      adresses: adresses.length,
-      message: `Mails non lus : ${error instanceof Error ? error.message : 'erreur de messagerie'}`,
-    };
-  }
+  const { mails, erreurs } = await mailsEchanges(boites, adresses);
+  return {
+    mails,
+    adresses: adresses.length,
+    ...(erreurs.length ? { message: `Mails non lus : ${erreurs.join(' ; ')}` } : {}),
+  };
 }
