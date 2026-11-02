@@ -90,8 +90,11 @@ describe('API de l’enrichissement', () => {
       payload: { accepter: [sugg[0]?.id], refuser: [] },
     });
     expect(validation.json()).toMatchObject({ appliquees: 1, creees: 0 });
-    const { rows } = await t.owner.pool.query('select zone from base_vivante where id = $1', [f]);
-    expect(rows[0].zone).toBe('prospectable');
+    const { rows } = await t.owner.pool.query<{ zone: string }>(
+      'select zone from base_vivante where id = $1',
+      [f],
+    );
+    expect(rows[0]?.zone).toBe('prospectable');
   });
 
   it('dit si la fonction est disponible et la taille maximale d’un lot', async () => {
@@ -112,7 +115,7 @@ describe('API de l’enrichissement', () => {
       payload: { type: 'contacts', profil: ['DRH'], maxParEntreprise: 1, ficheIds: [f] },
     });
     expect(r.statusCode).toBe(409);
-    expect(r.json().error).toMatch(/clé/i);
+    expect(r.json<{ error: string }>().error).toMatch(/clé/i);
   });
 
   it('refuse un lot trop grand et ignore les fiches d’une autre instance', async () => {

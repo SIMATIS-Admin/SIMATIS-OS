@@ -2241,3 +2241,65 @@ export const saveTva = (
   mois: string,
   s: { declareeCents: number | null; note: string | null },
 ) => sendJson<SuiviTvaGestion>('PUT', inst(slug, `gestion/tva/${mois}`), s);
+
+// Enrichissement de listes par IA (voir src/enrichissement).
+export type EtatEnrichissement = {
+  disponible: boolean;
+  lotMax: number;
+  tacheEnCours: string | null;
+};
+export type TacheEnrichissement = {
+  id: string;
+  etat: 'en_cours' | 'terminee' | 'interrompue';
+  jetons: number;
+  erreur: string | null;
+};
+export type LigneEnrichissement = {
+  id: string;
+  ficheId: string;
+  entreprise: string;
+  etat: 'attente' | 'en_cours' | 'terminee' | 'echec' | 'ignoree';
+  raison: string | null;
+};
+export type SuggestionEnrichissement = {
+  id: string;
+  ficheId: string;
+  entreprise: string;
+  contactExistant: string | null;
+  prenom: string | null;
+  nom: string | null;
+  fonction: string | null;
+  email: string | null;
+  telephone: string | null;
+  sourceUrl: string | null;
+  confiance: 'haute' | 'moyenne' | 'basse';
+  modeEmail: 'trouve' | 'deduit' | null;
+  etat: 'a_valider' | 'acceptee' | 'refusee';
+};
+export type LancementEnrichissement = {
+  type: 'contacts' | 'completer';
+  profil: string[];
+  maxParEntreprise: number;
+  ficheIds: string[];
+};
+export const etatEnrichissement = (slug: string) =>
+  getJson<EtatEnrichissement>(inst(slug, 'base/enrichissement'));
+export const lancerEnrichissement = (slug: string, p: LancementEnrichissement) =>
+  sendJson<TacheEnrichissement>('POST', inst(slug, 'base/enrichissement'), p);
+export const lireEnrichissement = (slug: string, tacheId: string) =>
+  getJson<{ tache: TacheEnrichissement; lignes: LigneEnrichissement[] }>(
+    inst(slug, `base/enrichissement/${tacheId}`),
+  );
+export const suggestionsEnrichissement = (slug: string, tacheId: string) =>
+  getJson<SuggestionEnrichissement[]>(inst(slug, `base/enrichissement/${tacheId}/suggestions`));
+export const validerEnrichissement = (
+  slug: string,
+  tacheId: string,
+  accepter: string[],
+  refuser: string[],
+) =>
+  sendJson<{ appliquees: number; creees: number; echecs: number }>(
+    'POST',
+    inst(slug, `base/enrichissement/${tacheId}/valider`),
+    { accepter, refuser },
+  );

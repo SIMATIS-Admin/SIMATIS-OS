@@ -126,7 +126,7 @@ describe('application d’un contact trouvé par l’enrichissement', () => {
     withInstance(t.app.db, instanceId, (tx) => appliquerContact(tx, instanceId, id, apport));
   const fiches = async (entreprise: string) =>
     (
-      await t.owner.pool.query(
+      await t.owner.pool.query<Record<string, string | null>>(
         'select prenom, nom, email, telephone, zone from base_vivante where entreprise = $1 order by created_at',
         [entreprise],
       )

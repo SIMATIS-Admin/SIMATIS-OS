@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { baseVivante } from '../base-vivante/schema.js';
 import { withInstance } from '../db/context.js';
 import type { Executor } from '../db.js';
@@ -221,19 +221,20 @@ export async function etatLot(
   db: Executor,
   instanceId: string,
   tacheId: string,
-): Promise<{ tache: Tache; lignes: Ligne[] }> {
+): Promise<{ tache: Tache; lignes: (Ligne & { entreprise: string })[] }> {
   return withInstance(db, instanceId, async (tx) => {
     const [tache] = await tx
       .select()
       .from(enrichissementTaches)
       .where(eq(enrichissementTaches.id, tacheId));
     if (!tache) throw new LotRefuse('Enrichissement introuvable');
-    const lignes = await tx
-      .select()
+    const rows = await tx
+      .select({ l: enrichissementLignes, entreprise: baseVivante.entreprise })
       .from(enrichissementLignes)
+      .innerJoin(baseVivante, eq(baseVivante.id, enrichissementLignes.ficheId))
       .where(eq(enrichissementLignes.tacheId, tacheId))
       .orderBy(asc(enrichissementLignes.createdAt));
-    return { tache, lignes };
+    return { tache, lignes: rows.map(({ l, entreprise }) => ({ ...l, entreprise })) };
   });
 }
 

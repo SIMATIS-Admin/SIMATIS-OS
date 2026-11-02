@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
   enrichirFicheBase,
+  etatEnrichissement,
   majConformiteBase,
   type AlerteBase,
   type EtatBase,
+  type EtatEnrichissement,
   type ExclusionBase,
   type FicheBase,
   type FiltresBaseWeb,
@@ -11,6 +13,7 @@ import {
   type ZoneBase,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import { LancerEnrichissement, SuggestionsEnrichissement } from './EnrichissementIA.js';
 import { Fenetre } from './Fenetre.js';
 
 export const PAR_PAGE = 50;
@@ -242,7 +245,22 @@ export function BaseTable({
   const [occupe, setOccupe] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [ouverte, setOuverte] = useState<string | null>(null);
+  const [ia, setIa] = useState<EtatEnrichissement | null>(null);
+  const [lancement, setLancement] = useState(false);
+  const [tacheIa, setTacheIa] = useState<string | null>(null);
   const total = etat.compteurs.aEnrichir + etat.compteurs.prospectable;
+
+  // L'enrichissement par IA n'apparaît que si le serveur a une clé OpenAI.
+  useEffect(() => {
+    let actif = true;
+    etatEnrichissement(slug).then(
+      (e) => actif && setIa(e),
+      () => undefined,
+    );
+    return () => {
+      actif = false;
+    };
+  }, [slug, tacheIa]);
 
   // A selection never outlives the rows it was made on.
   useEffect(() => setSelection(new Set()), [etat.fiches]);
@@ -446,11 +464,25 @@ export function BaseTable({
         </div>
       )}
 
+      {ia?.disponible && ia.tacheEnCours && !tacheIa && (
+        <div className="bv-astuce">
+          <Icon name="info" />
+          <span>Un enrichissement est en cours.</span>
+          <button className="btn sm" onClick={() => setTacheIa(ia.tacheEnCours)}>
+            Suivre l'enrichissement
+          </button>
+        </div>
+      )}
       {selection.size > 0 && (
         <div className="bv-selection" role="region" aria-label="Actions sur la sélection">
           <strong>
             {selection.size} sélectionnée{selection.size > 1 ? 's' : ''}
           </strong>
+          {ia?.disponible && (
+            <button className="btn sm" disabled={occupe} onClick={() => setLancement(true)}>
+              Enrichir avec l'IA
+            </button>
+          )}
           <button
             className="btn sm"
             disabled={occupe}
@@ -478,6 +510,29 @@ export function BaseTable({
             ×
           </button>
         </div>
+      )}
+
+      {lancement && ia && (
+        <LancerEnrichissement
+          slug={slug}
+          ficheIds={[...selection]}
+          lotMax={ia.lotMax}
+          onFermer={() => setLancement(false)}
+          onLance={(id) => {
+            setLancement(false);
+            setTacheIa(id);
+          }}
+        />
+      )}
+      {tacheIa && (
+        <SuggestionsEnrichissement
+          slug={slug}
+          tacheId={tacheIa}
+          onFini={() => {
+            setTacheIa(null);
+            onChange();
+          }}
+        />
       )}
 
       {fiche && (

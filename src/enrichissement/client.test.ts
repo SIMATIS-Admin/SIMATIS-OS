@@ -25,7 +25,13 @@ describe('client OpenAI', () => {
     expect(await client.demander(demande)).toEqual({ json: { contacts: [] }, jetons: 150 });
     expect(appel?.url).toBe('https://api.openai.com/v1/responses');
     expect((appel?.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${CLE}`);
-    const corps = JSON.parse(String(appel?.init.body));
+    const corps = JSON.parse(appel?.init.body as string) as {
+      model: string;
+      tools: unknown;
+      text: { format: unknown };
+      instructions: string;
+      input: string;
+    };
     expect(corps.model).toBe('modele-fictif');
     expect(corps.tools).toEqual([{ type: 'web_search' }]);
     expect(corps.text.format).toMatchObject({ type: 'json_schema', strict: true });

@@ -70,7 +70,12 @@ describe('validation des suggestions', () => {
         .where(eq(enrichissementSuggestions.id, id))
     )[0]?.etat;
   const zoneDe = async (id: string) =>
-    (await t.owner.pool.query('select zone, nom from base_vivante where id = $1', [id])).rows[0];
+    (
+      await t.owner.pool.query<{ zone: string; nom: string }>(
+        'select zone, nom from base_vivante where id = $1',
+        [id],
+      )
+    ).rows[0];
 
   it('accepter remplit la fiche à enrichir et marque la suggestion acceptée', async () => {
     const f = await fiche('Atelier Fictif');
@@ -166,7 +171,10 @@ describe('validation des suggestions', () => {
     const f = await fiche('Atelier Fictif');
     const s = await suggestion(f, { modeEmail: 'deduit', confiance: 'basse' });
     await valider(t.app.db, instanceId, tacheId, [s], []);
-    const { rows } = await t.owner.pool.query('select email from base_vivante where id = $1', [f]);
-    expect(rows[0].email).toBe('claire@atelier-fictif.test');
+    const { rows } = await t.owner.pool.query<{ email: string }>(
+      'select email from base_vivante where id = $1',
+      [f],
+    );
+    expect(rows[0]?.email).toBe('claire@atelier-fictif.test');
   });
 });
