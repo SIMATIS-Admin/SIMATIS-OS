@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -14 176 148" fill="none">
+  <title>Diagnostic d’endurance commerciale</title>
+  <desc>Une piste de course continue et une flèche qui avance : tenir le rythme et progresser dans la durée.</desc>
+  <g transform="rotate(-24 80 60)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M104 24H56a36 36 0 0 0 0 72h48a36 36 0 0 0 36-36" stroke="#0c376b" stroke-width="12"/>
+    <path d="M104 41H56a19 19 0 0 0 0 38h48a19 19 0 0 0 19-19" stroke="#41a594" stroke-width="6"/>
+    <path d="M91 24h40" stroke="#41a594" stroke-width="12"/>
+    <path d="m119 10 18 14-18 14" stroke="#41a594" stroke-width="9"/>
+  </g>
+</svg>

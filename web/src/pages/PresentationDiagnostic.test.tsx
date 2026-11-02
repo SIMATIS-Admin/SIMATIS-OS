@@ -14,4 +14,14 @@ describe('Présentation du Diagnostic d’Endurance Commerciale', () => {
     expect(screen.getByText('Ultra-endurant')).toBeTruthy();
     expect(screen.getByText('Restitution et capitalisation')).toBeTruthy();
   });
+  it('introduit les trois dimensions, le logo et la distinction avec le test VMA', () => {
+    render(<PresentationDiagnostic />);
+    expect(
+      screen.getByRole('img', { name: /piste de course et flèche de progression/ }),
+    ).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Outils & méthode' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Stratégie & régularité' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Polyvalence' })).toBeTruthy();
+    expect(screen.getByText('Quelle différence avec le test VMA ?')).toBeTruthy();
+  });
 });

@@ -1,3 +1,6 @@
+import enduranceLogo from '../assets/diagnostic-endurance.svg';
+import './endurance.css';
+
 // Page de démonstration du Diagnostic d'Endurance Commerciale : principes, étapes, livrables.
 // Contenu volontairement général (dépôt public) : ni grille de scoring, ni questionnaire, ni cas réel.
 const PRINCIPES = [
@@ -59,18 +62,89 @@ const LIVRABLES = [
 export function PresentationDiagnostic() {
   return (
     <div className="presentation-diag">
-      <section className="panel">
-        <div className="panel-b">
-          <p className="muted">Présentation pour le réseau KAIROS</p>
-          <h2>Le Diagnostic d’Endurance Commerciale</h2>
+      <header className="pd-hero">
+        <div className="pd-hero-texte">
+          <span className="pd-eyebrow">SIMATIS · DIAGNOSTIC D’ENDURANCE COMMERCIALE</span>
+          <h2>
+            Une organisation commerciale
+            <br />
+            qui tient la distance.
+          </h2>
           <p>
-            Un diagnostic qui dit à un dirigeant si son dispositif commercial tient dans la durée,
-            et ce qu’il faut lui donner pour progresser.
+            Au-delà du résultat du mois, comprendre ce qui permet à votre entreprise de vendre
+            régulièrement, de résister aux à-coups et de progresser dans la durée.
+          </p>
+          <div className="pd-promesses">
+            <span>Un profil collectif</span>
+            <span>Des priorités concrètes</span>
+            <span>Une restitution accompagnée</span>
+          </div>
+        </div>
+        <div className="pd-identite">
+          <img
+            src={enduranceLogo}
+            alt="Logo du diagnostic d’endurance commerciale : piste de course et flèche de progression"
+          />
+          <strong>
+            ENDURANCE
+            <br />
+            <span>COMMERCIALE</span>
+          </strong>
+          <small>Le cap. Le rythme. La durée.</small>
+        </div>
+      </header>
+
+      <section className="pd-ouverture" aria-labelledby="pd-enjeu">
+        <div>
+          <span className="pd-eyebrow">01 · LE POINT DE DÉPART</span>
+          <h2 id="pd-enjeu">Une bonne année ne suffit pas à faire un système solide.</h2>
+        </div>
+        <div>
+          <p>
+            Une équipe peut obtenir de beaux résultats tout en restant dépendante de quelques
+            personnes, de quelques clients ou d’efforts difficiles à répéter. Le diagnostic aide à
+            prendre du recul sur ce fonctionnement.
+          </p>
+          <p>
+            L’objectif : identifier ce qui soutient déjà l’activité, ce qui la fragilise et les
+            prochaines étapes pour installer une dynamique commerciale plus durable.
           </p>
         </div>
       </section>
 
-      <section aria-labelledby="pd-principes">
+      <section aria-labelledby="pd-dimensions" className="pd-section">
+        <span className="pd-eyebrow">02 · LES DIMENSIONS</span>
+        <h2 id="pd-dimensions">Trois dimensions pour comprendre l’ensemble.</h2>
+        <div className="pd-dimensions">
+          <article>
+            <span className="pd-indice">A</span>
+            <h3>Outils &amp; méthode</h3>
+            <p>
+              Comment l’activité est organisée, suivie et rendue reproductible. Les moyens du
+              quotidien pour avancer avec un cadre partagé.
+            </p>
+          </article>
+          <article>
+            <span className="pd-indice">B</span>
+            <h3>Stratégie &amp; régularité</h3>
+            <p>
+              La clarté du cap et la capacité à maintenir l’effort commercial dans le temps, y
+              compris lorsque l’activité devient plus exigeante.
+            </p>
+          </article>
+          <article>
+            <span className="pd-indice">C</span>
+            <h3>Polyvalence</h3>
+            <p>
+              La capacité à adapter son approche et à transposer sa méthode sur un terrain
+              différent, sans repartir de zéro.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="pd-section" aria-labelledby="pd-principes">
+        <span className="pd-eyebrow">03 · LE CADRE</span>
         <h2 id="pd-principes">Les grands principes</h2>
         <div className="grid g2">
           {PRINCIPES.map(([titre, texte]) => (
@@ -82,19 +156,22 @@ export function PresentationDiagnostic() {
         </div>
       </section>
 
-      <section aria-labelledby="pd-profils">
+      <section className="pd-section" aria-labelledby="pd-profils">
+        <span className="pd-eyebrow">04 · VOTRE PROFIL</span>
         <h2 id="pd-profils">Quatre profils, comme en course à pied</h2>
         <ol className="pd-profils">
-          {PROFILS.map(([nom, texte]) => (
+          {PROFILS.map(([nom, texte], i) => (
             <li className="panel panel-b" key={nom}>
-              <b>{nom}</b>
+              <span className="pd-profil-num">0{i + 1}</span>
+              <h3>{nom}</h3>
               <p className="muted">{texte}</p>
             </li>
           ))}
         </ol>
       </section>
 
-      <section aria-labelledby="pd-etapes">
+      <section className="pd-section" aria-labelledby="pd-etapes">
+        <span className="pd-eyebrow">05 · LE PARCOURS</span>
         <h2 id="pd-etapes">Les cinq étapes</h2>
         <ol className="pd-etapes">
           {ETAPES.map(([titre, texte], i) => (
@@ -109,7 +186,8 @@ export function PresentationDiagnostic() {
         </ol>
       </section>
 
-      <section aria-labelledby="pd-livrables">
+      <section className="pd-section" aria-labelledby="pd-livrables">
+        <span className="pd-eyebrow">06 · POUR PASSER À L’ACTION</span>
         <h2 id="pd-livrables">Les livrables</h2>
         <div className="grid g2">
           {LIVRABLES.map(([titre, texte]) => (
@@ -120,6 +198,40 @@ export function PresentationDiagnostic() {
           ))}
         </div>
       </section>
+      <section className="pd-questions" aria-labelledby="pd-questions">
+        <h2 id="pd-questions">Avant de prendre le départ.</h2>
+        <details>
+          <summary>À qui s’adresse ce diagnostic ?</summary>
+          <p>
+            Aux dirigeants qui souhaitent comprendre la solidité du fonctionnement commercial de
+            leur entreprise et dégager des priorités d’amélioration avec un consultant.
+          </p>
+        </details>
+        <details>
+          <summary>Quelle différence avec le test VMA ?</summary>
+          <p>
+            Le test VMA donne une lecture du rythme commercial à partir des informations
+            renseignées. Le diagnostic d’endurance approfondit le fonctionnement collectif, à
+            travers un entretien, un profil et des préconisations relues par le consultant.
+          </p>
+        </details>
+        <details>
+          <summary>Est-ce une évaluation des commerciaux ?</summary>
+          <p>
+            Non : le diagnostic porte sur le dispositif collectif de l’entreprise. Le profil sert de
+            point de départ à une discussion et à un plan d’action.
+          </p>
+        </details>
+      </section>
+      <footer className="pd-conclusion">
+        <img src={enduranceLogo} alt="" />
+        <div>
+          <h2>Le bon rythme, sur la bonne distance.</h2>
+          <p>
+            Comprendre le fonctionnement actuel, choisir les priorités, puis avancer avec méthode.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
