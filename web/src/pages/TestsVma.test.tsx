@@ -2,7 +2,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TestVma } from '../api.js';
-import { fmtEur, libelleStatut, TestsVma } from './TestsVma.js';
+import {
+  etapesFrise,
+  fmtEur,
+  libelleStatut,
+  peutRelancer,
+  sansReponse,
+  TestsVma,
+} from './TestsVma.js';
 
 const api = vi.hoisted(() => {
   class ApiError extends Error {
@@ -19,6 +26,7 @@ const api = vi.hoisted(() => {
     fetchTestsVma: vi.fn(),
     creerTestVma: vi.fn(),
     revoquerTestVma: vi.fn(),
+    relancerTestVma: vi.fn(),
   };
 });
 vi.mock('../api.js', () => api);
@@ -29,6 +37,10 @@ const test = (extra: Partial<TestVma> = {}): TestVma => ({
   entrepriseNom: 'Atelier Fictif',
   contactNom: null,
   contactEmail: null,
+  tutoiement: false,
+  envoyeeLe: null,
+  relances: [],
+  echecEnvoi: null,
   type: 'premier',
   statut: 'envoyee',
   lien: 'https://www.simatis.fr/test-vma?i=abc',
@@ -240,5 +252,93 @@ describe('Tests VMA : écran', () => {
     expect(confirme).toHaveBeenCalled();
     expect(api.creerTestVma.mock.calls[1]?.[1]).toMatchObject({ confirmerSemestre: true });
     confirme.mockRestore();
+  });
+
+  it('la case « Tutoyer » du formulaire part avec l’invitation, décochée par défaut', async () => {
+    api.fetchTestsVma.mockResolvedValue([]);
+    api.creerTestVma.mockResolvedValue({ ...test(), envoi: null });
+    render(<TestsVma slug="mandat-fictif" />);
+    await waitFor(() => expect(screen.getByText('Aucune invitation pour l’instant.')).toBeTruthy());
+    const case_ = screen.getByLabelText<HTMLInputElement>('Tutoyer le dirigeant');
+    expect(case_.checked).toBe(false);
+    fireEvent.change(screen.getByLabelText('Entreprise'), { target: { value: 'Atelier Fictif' } });
+    fireEvent.click(case_);
+    fireEvent.click(screen.getByRole('button', { name: 'Créer l’invitation' }));
+    await waitFor(() => expect(api.creerTestVma).toHaveBeenCalled());
+    expect(api.creerTestVma.mock.calls[0]?.[1]).toMatchObject({ tutoiement: true });
+  });
+});
+
+const enCours = (extra: Partial<TestVma> = {}) =>
+  test({
+    contactEmail: 'jeanne@exemple.test',
+    envoyeeLe: '2026-10-12T08:00:00.000Z',
+    ...extra,
+  });
+
+describe('Tests VMA : suivi des envois', () => {
+  it('la frise montre l’envoi, les relances et le résultat, le reste grisé', () => {
+    const t = enCours({
+      relances: [{ le: '2026-10-19T08:00:00.000Z', origine: 'auto' }],
+    });
+    expect(etapesFrise(t)).toEqual([
+      { libelle: 'Envoyé 12/10', fait: true },
+      { libelle: 'Relancé 19/10 (auto)', fait: true },
+      { libelle: 'Test passé', fait: false },
+    ]);
+    expect(etapesFrise({ ...t, statut: 'utilisee' }).at(-1)).toEqual({
+      libelle: 'Test passé',
+      fait: true,
+    });
+    expect(etapesFrise(test())[0]).toEqual({ libelle: 'Envoyé', fait: false });
+  });
+
+  it('le bouton Relancer est réservé aux invitations ouvertes avec une adresse', () => {
+    const maintenant = Date.parse('2026-11-02T08:00:00.000Z');
+    expect(peutRelancer(enCours(), maintenant)).toBe(true);
+    expect(peutRelancer(enCours({ statut: 'utilisee' }), maintenant)).toBe(false);
+    expect(peutRelancer(enCours({ statut: 'revoquee' }), maintenant)).toBe(false);
+    expect(peutRelancer(enCours({ expireLe: '2026-10-30T00:00:00.000Z' }), maintenant)).toBe(false);
+    expect(peutRelancer(test(), maintenant)).toBe(false);
+  });
+
+  it('le filtre garde les invitations ouvertes envoyées il y a plus de 7 jours', () => {
+    const maintenant = Date.parse('2026-11-02T08:00:00.000Z');
+    expect(sansReponse(enCours(), maintenant)).toBe(true);
+    expect(sansReponse(enCours({ envoyeeLe: '2026-10-30T08:00:00.000Z' }), maintenant)).toBe(false);
+    expect(sansReponse(enCours({ statut: 'utilisee' }), maintenant)).toBe(false);
+    expect(sansReponse(test(), maintenant)).toBe(false);
+  });
+
+  it('relancer demande le registre, préremplit « Tutoyer » et envoie le choix', async () => {
+    api.fetchTestsVma.mockResolvedValue([enCours({ tutoiement: true })]);
+    api.relancerTestVma.mockResolvedValue({ ...enCours(), envoi: { statut: 'envoye' } });
+    render(<TestsVma slug="mandat-fictif" />);
+    await waitFor(() => expect(screen.getByText('Atelier Fictif')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Relancer' }));
+    const tu = screen.getByLabelText<HTMLInputElement>('Tutoyer pour cette relance');
+    expect(tu.checked).toBe(true);
+    fireEvent.click(tu);
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la relance' }));
+    await waitFor(() =>
+      expect(api.relancerTestVma).toHaveBeenCalledWith('mandat-fictif', 't1', false),
+    );
+    await waitFor(() => expect(screen.getByText(/Relance envoyée/)).toBeTruthy());
+  });
+
+  it('le filtre « Sans réponse » masque les invitations récentes ou terminées', async () => {
+    api.fetchTestsVma.mockResolvedValue([
+      enCours({ id: 'ancienne', entrepriseNom: 'Atelier Ancien' }),
+      enCours({
+        id: 'recente',
+        entrepriseNom: 'Atelier Récent',
+        envoyeeLe: new Date().toISOString(),
+      }),
+    ]);
+    render(<TestsVma slug="mandat-fictif" />);
+    await waitFor(() => expect(screen.getByText('Atelier Récent')).toBeTruthy());
+    fireEvent.click(screen.getByLabelText('Sans réponse depuis plus de 7 jours'));
+    expect(screen.queryByText('Atelier Récent')).toBeNull();
+    expect(screen.getByText('Atelier Ancien')).toBeTruthy();
   });
 });

@@ -35,6 +35,7 @@ const creationSchema = z.object({
   type: z.enum(TYPES_TEST_VMA),
   contactNom: z.string().trim().max(120).nullish(),
   contactEmail: z.string().trim().max(200).nullish(),
+  tutoiement: z.boolean().optional(),
   confirmerSemestre: z.boolean().optional(),
 });
 
@@ -47,6 +48,10 @@ const vueTest = (t: TestVma) => ({
   entrepriseNom: t.entrepriseNom,
   contactNom: t.contactNom,
   contactEmail: t.contactEmail,
+  tutoiement: t.tutoiement,
+  envoyeeLe: t.envoyeeLe,
+  relances: t.relances,
+  echecEnvoi: t.echecEnvoi,
   type: t.type,
   statut: t.statut,
   lien: t.lien,
@@ -117,6 +122,7 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
           type: parsed.data.type,
           contactNom: parsed.data.contactNom ?? null,
           contactEmail: parsed.data.contactEmail ?? null,
+          tutoiement: parsed.data.tutoiement ?? false,
           confirmerSemestre: parsed.data.confirmerSemestre ?? false,
         });
         // Le mail part tout de suite si une adresse est donnée ; son résultat accompagne l'invitation.

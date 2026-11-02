@@ -202,4 +202,61 @@ describe('Relance d’une invitation au test VMA', () => {
       expect((await appel('pas-un-uuid')).statusCode).toBe(400);
     });
   });
+
+  describe('champs de suivi et tutoiement à la création', () => {
+    const fetchSite = (() =>
+      Promise.resolve(
+        Response.json(
+          {
+            id: randomBytes(16).toString('hex'),
+            expireLe: new Date(Date.now() + 30 * JOUR).toISOString(),
+          },
+          { status: 201 },
+        ),
+      )) as typeof globalThis.fetch;
+    const serveur = () => {
+      const app = Fastify();
+      registerVmaRoutes(app, {
+        db: t.app.db,
+        connexionDeps: verrouOuvert(),
+        vma: { url: 'https://site.test', token: 'jeton'.padEnd(40, 'k') },
+        fetch: fetchSite,
+      });
+      return app;
+    };
+
+    it('la liste expose le registre, l’envoi, les relances et l’échec', async () => {
+      const relance = { le: '2026-11-01T08:00:00.000Z', origine: 'auto' as const };
+      await inviter({ tutoiement: true, relances: [relance], echecEnvoi: 'boîte hors ligne' });
+      const app = serveur();
+      const rep = await app.inject({ method: 'GET', url: '/api/i/relance-reel/vma/tests' });
+      await app.close();
+      expect(rep.json<TestVma[]>()[0]).toMatchObject({
+        tutoiement: true,
+        relances: [relance],
+        echecEnvoi: 'boîte hors ligne',
+        envoyeeLe: expect.any(String) as string,
+      });
+    });
+
+    it('une invitation créée avec tutoiement tutoie dans son mail et le garde', async () => {
+      const app = serveur();
+      const rep = await app.inject({
+        method: 'POST',
+        url: '/api/i/relance-reel/vma/tests',
+        payload: {
+          entrepriseNom: 'Atelier Fictif',
+          type: 'essai',
+          contactNom: 'Jeanne',
+          contactEmail: 'jeanne@exemple.test',
+          tutoiement: true,
+        },
+      });
+      await app.close();
+      expect(rep.statusCode).toBe(201);
+      expect(rep.json()).toMatchObject({ tutoiement: true, envoi: { statut: 'envoye' } });
+      expect(String(ecrits[0]?.data.html)).toContain('Voici ton lien');
+      expect((await t.owner.db.select().from(vmaTests))[0]?.envoyeeLe).not.toBeNull();
+    });
+  });
 });

@@ -3,6 +3,7 @@ import {
   ApiError,
   creerTestVma,
   fetchTestsVma,
+  relancerTestVma,
   revoquerTestVma,
   type FreinVma,
   type NouveauTestVma,
@@ -10,6 +11,7 @@ import {
   type TestVmaCree,
   type TestVmaType,
 } from '../api.js';
+import type { EnvoiInvitation } from '../api.js';
 import { messageEnvoi } from './diagnostics/envoi.js';
 
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -20,6 +22,52 @@ export const libelleStatut = (t: Pick<TestVma, 'statut' | 'expireLe'>, maintenan
   if (t.statut === 'revoquee') return 'Révoquée';
   return Date.parse(t.expireLe) > maintenant ? 'Envoyée' : 'Expirée';
 };
+
+const JOUR_MS = 24 * 3600 * 1000;
+const jourMois = (iso: string) =>
+  new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+
+// Invitation encore ouverte : ni utilisée, ni révoquée, ni expirée.
+const ouverte = (t: Pick<TestVma, 'statut' | 'expireLe'>, maintenant: number) =>
+  t.statut === 'envoyee' && Date.parse(t.expireLe) > maintenant;
+
+// Le bouton Relancer : une invitation ouverte, avec une adresse où écrire.
+export const peutRelancer = (
+  t: Pick<TestVma, 'statut' | 'expireLe' | 'contactEmail'>,
+  maintenant = Date.now(),
+) => ouverte(t, maintenant) && Boolean(t.contactEmail);
+
+// Filtre « Sans réponse » : ouverte, et envoyée il y a plus de 7 jours.
+export const sansReponse = (
+  t: Pick<TestVma, 'statut' | 'expireLe' | 'envoyeeLe'>,
+  maintenant = Date.now(),
+) =>
+  ouverte(t, maintenant) &&
+  t.envoyeeLe !== null &&
+  maintenant - Date.parse(t.envoyeeLe) > 7 * JOUR_MS;
+
+// La frise d'une invitation : envoi, relances, résultat ; une étape non atteinte reste grisée.
+export function etapesFrise(
+  t: Pick<TestVma, 'statut' | 'envoyeeLe' | 'relances'>,
+): { libelle: string; fait: boolean }[] {
+  return [
+    t.envoyeeLe
+      ? { libelle: `Envoyé ${jourMois(t.envoyeeLe)}`, fait: true }
+      : { libelle: 'Envoyé', fait: false },
+    ...t.relances.map((r) => ({
+      libelle: `Relancé ${jourMois(r.le)}${r.origine === 'auto' ? ' (auto)' : ''}`,
+      fait: true,
+    })),
+    { libelle: 'Test passé', fait: t.statut === 'utilisee' },
+  ];
+}
+
+const messageRelance = (envoi: EnvoiInvitation, email: string | null) =>
+  envoi.statut === 'envoye'
+    ? `Relance envoyée à ${email ?? 'le dirigeant'}.`
+    : envoi.statut === 'simule'
+      ? 'Relance non envoyée : les écritures réelles sont désactivées (simulation).'
+      : `Relance non envoyée${envoi.raison ? ` : ${envoi.raison}` : ''}.`;
 
 const TYPES: [TestVmaType, string][] = [
   ['premier', 'Premier test'],
@@ -48,10 +96,14 @@ export function TestsVma({ slug }: { slug: string }) {
     type: 'premier',
     contactNom: '',
     contactEmail: '',
+    tutoiement: false,
   });
   const [lienCree, setLienCree] = useState<string | null>(null);
   const [mailCree, setMailCree] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
+  const [relance, setRelance] = useState<{ test: TestVma; tu: boolean } | null>(null);
+  const [infoRelance, setInfoRelance] = useState<string | null>(null);
+  const [filtreSansReponse, setFiltreSansReponse] = useState(false);
 
   const charger = () =>
     fetchTestsVma(slug)
@@ -74,6 +126,7 @@ export function TestsVma({ slug }: { slug: string }) {
       type: nouveau.type,
       contactNom: nouveau.contactNom || null,
       contactEmail: nouveau.contactEmail || null,
+      tutoiement: nouveau.tutoiement ?? false,
     };
     try {
       let cree: TestVmaCree;
@@ -87,7 +140,13 @@ export function TestsVma({ slug }: { slug: string }) {
       }
       setLienCree(cree.lien);
       setMailCree(messageEnvoi(cree.envoi, cree.contactEmail));
-      setNouveau({ entrepriseNom: '', type: 'premier', contactNom: '', contactEmail: '' });
+      setNouveau({
+        entrepriseNom: '',
+        type: 'premier',
+        contactNom: '',
+        contactEmail: '',
+        tutoiement: false,
+      });
       await charger();
     } catch (e) {
       setErreur(messageErreur(e));
@@ -103,6 +162,19 @@ export function TestsVma({ slug }: { slug: string }) {
       return;
     try {
       await revoquerTestVma(slug, t.id);
+      await charger();
+    } catch (e) {
+      setErreur(messageErreur(e));
+    }
+  };
+
+  const envoyerRelance = async () => {
+    if (!relance) return;
+    setErreur(null);
+    try {
+      const res = await relancerTestVma(slug, relance.test.id, relance.tu);
+      setInfoRelance(messageRelance(res.envoi ?? { statut: 'echec' }, res.contactEmail));
+      setRelance(null);
       await charger();
     } catch (e) {
       setErreur(messageErreur(e));
@@ -191,6 +263,14 @@ export function TestsVma({ slug }: { slug: string }) {
               onChange={(e) => setNouveau({ ...nouveau, contactEmail: e.target.value })}
             />
           </label>
+          <label className="row">
+            <input
+              type="checkbox"
+              checked={nouveau.tutoiement ?? false}
+              onChange={(e) => setNouveau({ ...nouveau, tutoiement: e.target.checked })}
+            />
+            <span>Tutoyer le dirigeant</span>
+          </label>
           <div className="row">
             <button className="btn go" type="submit" disabled={!peutEnvoyer}>
               Créer l’invitation
@@ -206,38 +286,101 @@ export function TestsVma({ slug }: { slug: string }) {
         <div className="panel-b stack">
           {tests === null && !erreur && <p className="small muted">Chargement…</p>}
           {tests?.length === 0 && <p className="small muted">Aucune invitation pour l’instant.</p>}
-          {tests?.map((t) => (
-            <div key={t.id} className="row">
-              <div className="stack">
-                <strong>{t.entrepriseNom}</strong>
-                <span className="small muted">
-                  {t.type === 'essai' ? 'Essai' : 'Premier test'} · {libelleStatut(t)}
-                  {t.recueLe ? ` · reçu le ${new Date(t.recueLe).toLocaleDateString('fr-FR')}` : ''}
-                </span>
+          {infoRelance && <div className="alert">{infoRelance}</div>}
+          {relance && (
+            <div className="alert stack">
+              <div>
+                Relancer {relance.test.contactNom ?? relance.test.entrepriseNom} (
+                {relance.test.contactEmail}) : un court rappel, avec le même lien.
               </div>
+              <label className="row">
+                <input
+                  type="checkbox"
+                  checked={relance.tu}
+                  onChange={(e) => setRelance({ ...relance, tu: e.target.checked })}
+                />
+                <span>Tutoyer pour cette relance</span>
+              </label>
               <div className="row">
-                {t.statut === 'envoyee' && (
-                  <>
-                    <button className="btn" type="button" onClick={() => copier(t.lien)}>
-                      Copier le lien
-                    </button>
-                    <button className="btn" type="button" onClick={() => void revoquer(t)}>
-                      Révoquer
-                    </button>
-                  </>
-                )}
-                {t.resultat && (
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => setOuvert(ouvert === t.id ? null : t.id)}
-                  >
-                    {ouvert === t.id ? 'Fermer' : 'Voir le résultat'}
-                  </button>
-                )}
+                <button className="btn go" type="button" onClick={() => void envoyerRelance()}>
+                  Envoyer la relance
+                </button>
+                <button className="btn" type="button" onClick={() => setRelance(null)}>
+                  Annuler
+                </button>
               </div>
             </div>
-          ))}
+          )}
+          {tests && tests.length > 0 && (
+            <label className="row small">
+              <input
+                type="checkbox"
+                checked={filtreSansReponse}
+                onChange={(e) => setFiltreSansReponse(e.target.checked)}
+              />
+              <span>Sans réponse depuis plus de 7 jours</span>
+            </label>
+          )}
+          {tests
+            ?.filter((t) => !filtreSansReponse || sansReponse(t))
+            .map((t) => (
+              <div key={t.id} className="stack">
+                <div className="row">
+                  <div className="stack">
+                    <strong>{t.entrepriseNom}</strong>
+                    <span className="small muted">
+                      {t.type === 'essai' ? 'Essai' : 'Premier test'} · {libelleStatut(t)}
+                      {t.recueLe
+                        ? ` · reçu le ${new Date(t.recueLe).toLocaleDateString('fr-FR')}`
+                        : ''}
+                    </span>
+                  </div>
+                  <div className="row">
+                    {t.statut === 'envoyee' && (
+                      <>
+                        {peutRelancer(t) && (
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => {
+                              setInfoRelance(null);
+                              setRelance({ test: t, tu: t.tutoiement });
+                            }}
+                          >
+                            Relancer
+                          </button>
+                        )}
+                        <button className="btn" type="button" onClick={() => copier(t.lien)}>
+                          Copier le lien
+                        </button>
+                        <button className="btn" type="button" onClick={() => void revoquer(t)}>
+                          Révoquer
+                        </button>
+                      </>
+                    )}
+                    {t.resultat && (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => setOuvert(ouvert === t.id ? null : t.id)}
+                      >
+                        {ouvert === t.id ? 'Fermer' : 'Voir le résultat'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <ol className="frise small">
+                  {etapesFrise(t).map((e, i) => (
+                    <li key={i} className={e.fait ? 'fait' : 'attente'}>
+                      {e.libelle}
+                    </li>
+                  ))}
+                </ol>
+                {t.echecEnvoi && (
+                  <span className="small muted">Dernier envoi en échec : {t.echecEnvoi}</span>
+                )}
+              </div>
+            ))}
         </div>
       </div>
 

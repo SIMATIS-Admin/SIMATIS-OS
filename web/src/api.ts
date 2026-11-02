@@ -142,6 +142,11 @@ export type TestVma = {
   entrepriseNom: string;
   contactNom: string | null;
   contactEmail: string | null;
+  // Registre des mails (vouvoiement par défaut) et suivi des envois.
+  tutoiement: boolean;
+  envoyeeLe: string | null;
+  relances: { le: string; origine: 'manuelle' | 'auto' }[];
+  echecEnvoi: string | null;
   type: TestVmaType;
   statut: TestVmaStatut;
   lien: string;
@@ -225,6 +230,7 @@ export type NouveauTestVma = {
   type: TestVmaType;
   contactNom?: string | null;
   contactEmail?: string | null;
+  tutoiement?: boolean;
   // Confirmation de Marc à l'alerte du semestre.
   confirmerSemestre?: boolean;
 };
@@ -235,6 +241,10 @@ export type EnvoiInvitation = { statut: 'envoye' | 'simule' | 'echec'; raison?: 
 export type TestVmaCree = TestVma & { envoi: EnvoiInvitation | null };
 export const creerTestVma = (slug: string, nouveau: NouveauTestVma) =>
   sendJson<TestVmaCree>('POST', inst(slug, 'vma/tests'), nouveau);
+export const relancerTestVma = (slug: string, id: string, tutoiement: boolean) =>
+  sendJson<TestVmaCree>('POST', inst(slug, `vma/tests/${encodeURIComponent(id)}/relancer`), {
+    tutoiement,
+  });
 export const revoquerTestVma = (slug: string, id: string) =>
   sendJson<TestVma>('POST', inst(slug, `vma/tests/${encodeURIComponent(id)}/revoquer`), {});
 
