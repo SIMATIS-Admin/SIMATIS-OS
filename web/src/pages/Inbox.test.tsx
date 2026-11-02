@@ -218,6 +218,29 @@ describe('Inbox screen', () => {
     vi.unstubAllGlobals();
   });
 
+  it('offers a calm empty state with a working return to the brief', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string; body?: string }) =>
+        url.includes('/inbox?')
+          ? Promise.resolve(new Response(JSON.stringify([])))
+          : fakeFetch(url, init),
+      ),
+    );
+    render(<Inbox slug="simatis" />);
+    expect(await screen.findByText('Tout est à jour.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Revenir à mon brief' }).getAttribute('href')).toBe(
+      '#/simatis/brief',
+    );
+    expect(screen.queryByText('Sélectionnez un sujet à gauche.')).toBeNull();
+    expect(posts()).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText("Type d'entrée"), { target: { value: 'mails' } });
+    expect(
+      await screen.findByText('Aucun sujet dans cette sélection. Essaie un autre filtre.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Tout est à jour.')).toBeNull();
+  });
+
   it('runs the Inbox routine, follows it, then reloads the list', async () => {
     statutsExecution = ['en_cours', 'terminee'];
     const onChange = vi.fn();
