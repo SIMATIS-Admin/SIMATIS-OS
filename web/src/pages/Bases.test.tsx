@@ -7,6 +7,7 @@ import { Bases } from './Bases.js';
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let etat: EtatBase;
+let enrichissement: Record<string, unknown> | null = null;
 let mandats: unknown[] = [];
 let rapprochement: unknown = null;
 let reponses: unknown[] = [];
@@ -64,6 +65,11 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (method === 'POST' && url.endsWith('/integrer'))
     return json({ creees: 2, fusionnees: 0, restantes: 1 });
   if (method === 'PUT') return json(apercu);
+  if (method === 'GET' && url.endsWith('/base/enrichissement'))
+    return json(enrichissement ?? { disponible: false, lotMax: 0, tacheEnCours: null });
+  if (url.endsWith('/suggestions') && url.includes('/base/enrichissement/')) return json([]);
+  if (method === 'GET' && url.includes('/base/enrichissement/'))
+    return json({ tache: { id: 't', etat: 'terminee', jetons: 0, erreur: null }, lignes: [] });
   if (url.endsWith('/base/mandats')) return json(mandats);
   if (url.endsWith('/base/rapprochement-mail'))
     return method === 'POST' ? json(rapprochement, 202) : json(rapprochement);
@@ -99,6 +105,7 @@ const remplirDepot = (texte: string) => {
 describe('base vivante : import en trois temps', () => {
   beforeEach(() => {
     calls = [];
+    enrichissement = null;
     mandats = [];
     rapprochement = null;
     reponses = [];
@@ -337,6 +344,28 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
       const patch = calls.find((c) => c.method === 'PATCH');
       expect(patch?.body).toEqual({ opposition: true, exclusion: null });
     });
+  });
+
+  it('propose d’enrichir avec l’IA seulement quand le serveur a une clé OpenAI', async () => {
+    const { unmount } = render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
+    expect(screen.queryByText("Enrichir avec l'IA")).toBeNull();
+    unmount();
+    cleanup();
+    enrichissement = { disponible: true, lotMax: 5, tacheEnCours: null };
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
+    fireEvent.click(await screen.findByText("Enrichir avec l'IA"));
+    expect(await screen.findByLabelText('Fonctions recherchées')).toBeTruthy();
+  });
+
+  it('permet de suivre un enrichissement resté en cours', async () => {
+    enrichissement = { disponible: true, lotMax: 5, tacheEnCours: 'tache-9' };
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText("Suivre l'enrichissement"));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith('/base/enrichissement/tache-9'))).toBe(true),
+    );
   });
 
   it('actualise l’historique depuis les CRM', async () => {

@@ -46,6 +46,14 @@ const schema = z.object({
       .optional(),
   ),
   RELAIS_CLE_INSCRIPTION: z.preprocess(vide, z.string().min(1).optional()),
+  // Enrichissement de listes par IA : sans clé OpenAI, la fonction est éteinte.
+  OPENAI_API_KEY: z.preprocess(vide, z.string().min(1).optional()),
+  ENRICHISSEMENT_MODELE: z.preprocess(vide, z.string().min(1).default('gpt-5-mini')),
+  ENRICHISSEMENT_LOT_MAX: z.preprocess(vide, z.coerce.number().int().min(1).max(50).default(10)),
+  ENRICHISSEMENT_BUDGET_JETONS: z.preprocess(
+    vide,
+    z.coerce.number().int().min(1000).default(400000),
+  ),
 });
 
 export type Config = {
@@ -67,6 +75,8 @@ export type Config = {
   // Relais d'agents des OS partenaires ; null tant qu'il n'est pas configuré.
   relaisUrl: string | null;
   relaisCleInscription: string | null;
+  // Enrichissement de listes par IA ; null sans clé OpenAI.
+  enrichissement: { cle: string; modele: string; lotMax: number; budgetJetons: number } | null;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
@@ -100,5 +110,13 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     vmaRelanceAuto: e.VMA_RELANCE_AUTO === 'on',
     relaisUrl: e.RELAIS_URL ?? null,
     relaisCleInscription: e.RELAIS_CLE_INSCRIPTION ?? null,
+    enrichissement: e.OPENAI_API_KEY
+      ? {
+          cle: e.OPENAI_API_KEY,
+          modele: e.ENRICHISSEMENT_MODELE,
+          lotMax: e.ENRICHISSEMENT_LOT_MAX,
+          budgetJetons: e.ENRICHISSEMENT_BUDGET_JETONS,
+        }
+      : null,
   };
 }

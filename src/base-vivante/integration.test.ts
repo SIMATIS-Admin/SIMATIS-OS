@@ -4,7 +4,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
 import { createInstance } from '../instances/service.js';
-import { FicheNonHomogene, integrerFiches, verifierHomogene } from './integration.js';
+import {
+  appliquerContact,
+  FicheNonHomogene,
+  integrerFiches,
+  verifierHomogene,
+} from './integration.js';
 import { normaliserFiche, type Brut, type Fiche } from './nettoyage.js';
 
 const fiche = (brut: Brut): Fiche => normaliserFiche(brut).fiche;
@@ -96,5 +101,109 @@ describe('point d’entrée unique de la base vivante', () => {
       .filter((f) => !autorises.some((a) => f.endsWith(a)))
       .filter((f) => /\.(insert|update|delete)\(\s*baseVivante\b/.test(readFileSync(f, 'utf8')));
     expect(fautifs).toEqual([]);
+  });
+});
+
+describe('application d’un contact trouvé par l’enrichissement', () => {
+  let t: TestApp;
+  let instanceId: string;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    instanceId = (
+      await createInstance(t.owner.db, { slug: 'bv-apport', nom: 'Apport', type: 'mandat' })
+    ).id;
+  });
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  const integrer = async (f: Fiche) =>
+    (
+      await withInstance(t.app.db, instanceId, (tx) => integrerFiches(tx, instanceId, [item(f)]))
+    )[0]!;
+  const appliquer = (id: string, apport: Parameters<typeof appliquerContact>[3]) =>
+    withInstance(t.app.db, instanceId, (tx) => appliquerContact(tx, instanceId, id, apport));
+  const fiches = async (entreprise: string) =>
+    (
+      await t.owner.pool.query<Record<string, string | null>>(
+        'select prenom, nom, email, telephone, zone from base_vivante where entreprise = $1 order by created_at',
+        [entreprise],
+      )
+    ).rows;
+
+  it('une entreprise sans contact reçoit le contact : même fiche, prospectable', async () => {
+    const { id } = await integrer(fiche({ entreprise: 'Atelier Fictif' }));
+    const r = await appliquer(id, {
+      prenom: 'Claire',
+      nom: 'Martin',
+      email: 'claire@atelier-fictif.test',
+    });
+    expect(r).toMatchObject({ id, zone: 'prospectable', creee: false });
+    expect(await fiches('Atelier Fictif')).toHaveLength(1);
+  });
+
+  it('un second contact de la même entreprise crée une nouvelle fiche, la première intacte', async () => {
+    const { id } = await integrer(fiche({ entreprise: 'Bureau Fictif' }));
+    await appliquer(id, { prenom: 'Claire', nom: 'MARTIN', email: 'claire@bureau-fictif.test' });
+    const r = await appliquer(id, { prenom: 'Paul', nom: 'PETIT', telephone: '04 50 12 34 56' });
+    expect(r).toMatchObject({ creee: true, zone: 'prospectable' });
+    expect(r.id).not.toBe(id);
+    expect(await fiches('Bureau Fictif')).toEqual([
+      expect.objectContaining({ nom: 'MARTIN', email: 'claire@bureau-fictif.test' }),
+      expect.objectContaining({ nom: 'PETIT', telephone: '+33450123456' }),
+    ]);
+  });
+
+  it('un mail générique déjà présent n’est pas écrasé : le contact reçoit sa propre fiche', async () => {
+    const { id } = await integrer(
+      fiche({ entreprise: 'Dépôt Fictif', email: 'info@depot-fictif.test' }),
+    );
+    const r = await appliquer(id, { prenom: 'Zoé', nom: 'Roux', email: 'zoe@depot-fictif.test' });
+    expect(r).toMatchObject({ creee: true, zone: 'prospectable' });
+    expect(await fiches('Dépôt Fictif')).toEqual([
+      expect.objectContaining({ nom: '', email: 'info@depot-fictif.test' }),
+      expect.objectContaining({ nom: 'ROUX', email: 'zoe@depot-fictif.test' }),
+    ]);
+  });
+
+  it('un mail générique est gardé quand le contact n’apporte pas de mail', async () => {
+    const { id } = await integrer(
+      fiche({ entreprise: 'Entrepôt Fictif', email: 'info@entrepot-fictif.test' }),
+    );
+    const r = await appliquer(id, { prenom: 'Paul', nom: 'Petit', telephone: '04 50 12 34 56' });
+    expect(r).toMatchObject({ id, creee: false, zone: 'prospectable' });
+    expect(await fiches('Entrepôt Fictif')).toEqual([
+      expect.objectContaining({ nom: 'PETIT', email: 'info@entrepot-fictif.test' }),
+    ]);
+  });
+
+  it('la même personne n’est complétée que dans ses champs vides, jamais écrasée', async () => {
+    const { id } = await integrer(
+      fiche({
+        entreprise: 'Cabinet Fictif',
+        prenom: 'Claire',
+        nom: 'Martin',
+        email: 'claire@cabinet-fictif.test',
+      }),
+    );
+    const r = await appliquer(id, {
+      prenom: 'Claire',
+      nom: 'Martin',
+      email: 'autre@cabinet-fictif.test',
+      telephone: '04 50 12 34 56',
+    });
+    expect(r).toMatchObject({ id, creee: false });
+    expect(await fiches('Cabinet Fictif')).toEqual([
+      expect.objectContaining({ email: 'claire@cabinet-fictif.test', telephone: '+33450123456' }),
+    ]);
+  });
+
+  it('une personne déjà présente sur une autre fiche de l’entreprise ne crée pas de doublon', async () => {
+    const { id } = await integrer(fiche({ entreprise: 'Garage Fictif' }));
+    await appliquer(id, { prenom: 'Zoé', nom: 'Roux', email: 'zoe@garage-fictif.test' });
+    const r = await appliquer(id, { prenom: 'Zoé', nom: 'Roux', telephone: '04 50 12 34 56' });
+    expect(r.creee).toBe(false);
+    expect(await fiches('Garage Fictif')).toHaveLength(1);
   });
 });

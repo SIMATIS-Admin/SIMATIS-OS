@@ -2,6 +2,9 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import type pg from 'pg';
 import { registerApi } from './api/routes.js';
 import { registerBaseVivanteRoutes } from './base-vivante/routes.js';
+import type { Config } from './config.js';
+import type { ClientIA } from './enrichissement/client.js';
+import { registerEnrichissementRoutes } from './enrichissement/routes.js';
 import type { FetchLike } from './connecteurs/google/oauth.js';
 import type { Database } from './db.js';
 import type { CompteImap } from './secrets.js';
@@ -33,6 +36,9 @@ export type AppDeps = {
   vma?: { url: string; token: string } | null;
   // Relais d'agents des OS partenaires ; null ou absent = module éteint.
   relais?: { url: string; cleInscription?: string; fetch?: typeof fetch } | null;
+  // Enrichissement de listes par IA ; null ou absent = fonction éteinte (pas de clé OpenAI).
+  enrichissement?: Config['enrichissement'];
+  clientIA?: ClientIA;
   logger?: FastifyServerOptions['logger'];
 };
 
@@ -49,6 +55,8 @@ export function buildApp({
   imapServeur,
   vma = null,
   relais = null,
+  enrichissement = null,
+  clientIA,
   logger = false,
 }: AppDeps): FastifyInstance {
   const app = Fastify({ logger });
@@ -57,6 +65,11 @@ export function buildApp({
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
   if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
+  registerEnrichissementRoutes(app, {
+    db,
+    enrichissement,
+    ...(clientIA ? { client: clientIA } : {}),
+  });
   registerGestionRoutes(app, { db });
   registerProspectionRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
   registerAtelierRoutes(app, { db });

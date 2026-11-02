@@ -21,6 +21,7 @@ describe('loadConfig', () => {
       vmaRelanceAuto: true,
       relaisUrl: null,
       relaisCleInscription: null,
+      enrichissement: null,
     });
   });
 
@@ -49,6 +50,24 @@ describe('loadConfig', () => {
     const token = 'y'.repeat(32);
     expect(loadConfig({ ...BASE, VMA_OS_TOKEN: token }).vmaOsToken).toBe(token);
     expect(loadConfig({ ...BASE, VMA_OS_TOKEN: '' }).vmaOsToken).toBeNull();
+  });
+
+  it('enables AI enrichment only with an OpenAI key, with safe defaults and bounded limits', () => {
+    expect(loadConfig({ ...BASE, OPENAI_API_KEY: '' }).enrichissement).toBeNull();
+    expect(loadConfig({ ...BASE, OPENAI_API_KEY: 'cle-fictive' }).enrichissement).toEqual({
+      cle: 'cle-fictive',
+      modele: 'gpt-5-mini',
+      lotMax: 10,
+      budgetJetons: 400000,
+    });
+    expect(
+      loadConfig({ ...BASE, OPENAI_API_KEY: 'cle-fictive', ENRICHISSEMENT_LOT_MAX: '25' })
+        .enrichissement?.lotMax,
+    ).toBe(25);
+    for (const lot of ['0', '51'])
+      expect(() =>
+        loadConfig({ ...BASE, OPENAI_API_KEY: 'cle-fictive', ENRICHISSEMENT_LOT_MAX: lot }),
+      ).toThrow(/ENRICHISSEMENT_LOT_MAX/);
   });
 
   it('reads the website contact settings, empty values meaning unset', () => {
