@@ -2291,6 +2291,135 @@ export const saveTva = (
   s: { declareeCents: number | null; note: string | null },
 ) => sendJson<SuiviTvaGestion>('PUT', inst(slug, `gestion/tva/${mois}`), s);
 
+// Gestion — IK et compte courant d'associé (Lot D).
+export type VehiculeIk = {
+  id: string;
+  libelle: string;
+  categorie: string;
+  puissanceFiscale: number | null;
+};
+export type LieuIk = { id: string; nom: string; distanceKm: number; origine: string };
+export type TrancheIk = {
+  deKm: number;
+  jusquaKm: number | null;
+  tauxDixMilliemes: number;
+  forfaitCents: number;
+};
+export type BaremeIk = {
+  id: string;
+  annee: number;
+  categorie: string;
+  version: number;
+  source: string;
+  valideLe: string | null;
+  tranches: TrancheIk[];
+};
+export type ConfigIk = {
+  vehicules: VehiculeIk[];
+  lieux: LieuIk[];
+  baremes: BaremeIk[];
+  mois: { mois: string; abonnement: boolean }[];
+};
+export type StatutIk = 'brouillon' | 'a_controler' | 'valide' | 'comptabilise' | 'rembourse';
+export type LigneIk = {
+  id: string;
+  date: string;
+  trajet: string;
+  commentaire: string;
+  km: number;
+  statut: StatutIk;
+  cumulKm: number;
+  indemniteCents: number | null;
+};
+export type EtatIk = {
+  mois: string;
+  vehiculeId: string;
+  abonnement: boolean | null;
+  bareme: { annee: number; version: number; source: string; valideLe: string } | null;
+  lignes: LigneIk[];
+  totalKm: number;
+  totalIndemniteCents: number | null;
+  cumulAnnuelKm: number;
+  derniereDateTransmise: string | null;
+  cca: { montantCents: number; ecartCents: number } | null;
+  avertissements: string[];
+};
+export type ActionMoisIk = 'a_controler' | 'valide' | 'rouvrir' | 'comptabilise' | 'rembourse';
+export type MouvementCca = {
+  id: string;
+  date: string;
+  type: string;
+  libelle: string;
+  montantCents: number;
+  etat: 'prevu' | 'comptabilise';
+  source: string | null;
+  derive: boolean;
+  avantOuverture: boolean;
+};
+export type SuiviCcaGestion = {
+  confirmeCents: number | null;
+  estimeCents: number | null;
+  ouverture: { date: string; montantCents: number; source: string | null } | null;
+  mouvements: MouvementCca[];
+  avertissements: string[];
+};
+export const fetchConfigIk = (slug: string) => getJson<ConfigIk>(inst(slug, 'gestion/ik/config'));
+export const fetchEtatIk = (slug: string, mois: string, vehiculeId: string) =>
+  getJson<EtatIk>(inst(slug, `gestion/ik/etat?mois=${mois}&vehiculeId=${vehiculeId}`));
+export const urlExportIk = (slug: string, mois: string, vehiculeId: string) =>
+  inst(slug, `gestion/ik/export.csv?mois=${mois}&vehiculeId=${vehiculeId}`);
+export const creerVehiculeIk = (slug: string, v: Omit<VehiculeIk, 'id'>) =>
+  sendJson<VehiculeIk>('POST', inst(slug, 'gestion/ik/vehicules'), v);
+export const creerLieuIk = (
+  slug: string,
+  l: { nom: string; distanceKm: number; origine: string },
+) => sendJson<LieuIk>('POST', inst(slug, 'gestion/ik/lieux'), l);
+export const archiverLieuIk = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/ik/lieux/${id}`), {});
+export const creerBaremeIk = (
+  slug: string,
+  b: { annee: number; categorie: string; source: string; tranches: TrancheIk[] },
+) => sendJson<BaremeIk>('POST', inst(slug, 'gestion/ik/baremes'), b);
+export const validerBaremeIk = (slug: string, id: string, date: string) =>
+  sendJson<BaremeIk>('POST', inst(slug, `gestion/ik/baremes/${id}/valider`), { date });
+export const poserAbonnementIk = (slug: string, mois: string, abonnement: boolean) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, `gestion/ik/mois/${mois}/abonnement`), { abonnement });
+export const creerTrajetIk = (
+  slug: string,
+  t: {
+    vehiculeId: string;
+    date: string;
+    trajet: string;
+    commentaire: string;
+    kmAllerRetour: number;
+  },
+) => sendJson<{ id: string }>('POST', inst(slug, 'gestion/ik/trajets'), t);
+export const archiverTrajetIk = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/ik/trajets/${id}`), {});
+export const avancerMoisIk = (
+  slug: string,
+  mois: string,
+  e: { vehiculeId: string; action: ActionMoisIk; date?: string; source?: string },
+) => sendJson<EtatIk>('POST', inst(slug, `gestion/ik/mois/${mois}/avancer`), e);
+export const fetchCca = (slug: string) => getJson<SuiviCcaGestion>(inst(slug, 'gestion/cca'));
+export const creerMouvementCca = (
+  slug: string,
+  m: {
+    date: string;
+    type: string;
+    libelle: string;
+    montantCents: number;
+    etat: 'prevu' | 'comptabilise';
+    source: string | null;
+  },
+) => sendJson<SuiviCcaGestion>('POST', inst(slug, 'gestion/cca/mouvements'), m);
+export const comptabiliserMouvementCca = (slug: string, id: string, source: string) =>
+  sendJson<SuiviCcaGestion>('POST', inst(slug, `gestion/cca/mouvements/${id}/comptabiliser`), {
+    source,
+  });
+export const archiverMouvementCca = (slug: string, id: string) =>
+  sendJson<SuiviCcaGestion>('DELETE', inst(slug, `gestion/cca/mouvements/${id}`), {});
+
 // Enrichissement de listes par IA (voir src/enrichissement).
 export type EtatEnrichissement = {
   disponible: boolean;

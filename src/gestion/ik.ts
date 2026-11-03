@@ -473,6 +473,7 @@ const cellule = (v: string | number | null) => {
   if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
+const BOM = String.fromCharCode(0xfeff);
 const euros = (c: number | null) => (c == null ? '' : (c / 100).toFixed(2).replace('.', ','));
 
 export async function exporterCsv(
@@ -529,5 +530,5 @@ export async function exporterCsv(
   const note = cellule(
     "Document de préparation édité par SIMATIS OS : ce n'est pas une pièce fiscale validée. Péages exclus.",
   );
-  return `﻿${[en.map(cellule).join(';'), ...lignes, total, note].join('\r\n')}\r\n`;
+  return `${BOM}${[en.map(cellule).join(';'), ...lignes, total, note].join('\r\n')}\r\n`;
 }

@@ -222,9 +222,11 @@ describe('Routes Gestion — IK et compte courant d’associé', () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.headers['content-type']).toMatch(/text\/csv/);
-    expect(r.body.startsWith('﻿Date;Trajet;Commentaire;Distance A/R (km);Indemnité (€)')).toBe(
-      true,
-    );
+    expect(
+      r.body.startsWith(
+        String.fromCharCode(0xfeff) + 'Date;Trajet;Commentaire;Distance A/R (km);Indemnité (€)',
+      ),
+    ).toBe(true);
     expect(r.body).toContain("'=CMD()");
     expect(r.body).toContain('"Fictif; ""guillemets"""');
     expect(r.body).toContain('Total;;;');

@@ -30,6 +30,7 @@ import {
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
 import { GestionTresorerie, type ParamsTresorerie } from './GestionTresorerie.js';
+import { GestionIk } from './GestionIk.js';
 import { GestionTva } from './GestionTva.js';
 import {
   ETATS_REVENU,
@@ -47,10 +48,6 @@ const ONGLETS: [Onglet, string][] = [
   ['ik', 'IK & compte associé'],
   ['tva', 'TVA'],
 ];
-// Écrans suivants : annoncés, jamais simulés avec des chiffres.
-const PREVU: Partial<Record<Onglet, [string, string]>> = {
-  ik: ['Lot D', 'Trajets, barème versionné et compte courant d’associé.'],
-};
 type Filtre = 'toutes' | 'recurrentes' | 'ponctuelles' | 'previsionnelles';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -762,7 +759,6 @@ export function Gestion({
     </>
   );
 
-  const prevu = PREVU[onglet];
   return (
     <>
       <div className="g-onglets" role="tablist">
@@ -811,20 +807,7 @@ export function Gestion({
           onSaved={() => void charger()}
         />
       )}
-      {prevu && (
-        <div className="panel">
-          <div className="panel-h">
-            <h2>{ONGLETS.find(([id]) => id === onglet)?.[1]}</h2>
-            <span className="badge amber">{prevu[0]}</span>
-          </div>
-          <div className="panel-b">
-            <p className="muted" style={{ margin: 0 }}>
-              {prevu[1]} Pas encore disponible : aucun chiffre n’est affiché tant que la source
-              n’est pas renseignée.
-            </p>
-          </div>
-        </div>
-      )}
+      {onglet === 'ik' && <GestionIk slug={slug} mois={mois} periode={cheminDuMois} />}
       {tiroirRevenu && (
         <GestionRevenuTiroir
           key={`${tiroirRevenu.revenu?.id ?? 'neuve'}-${tiroirRevenu.occurrence ?? ''}-${tiroirRevenu.etat ?? ''}`}
