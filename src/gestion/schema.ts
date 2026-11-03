@@ -180,3 +180,150 @@ export const gestionTvaMois = pgTable(
     instanceIsolation('gestion_tva_mois'),
   ],
 );
+
+// IK et compte courant d'associé (Lot D). Aucune valeur réelle (commune, lieux, distances, taux) n'est
+// dans le code : tout se saisit dans l'OS. Le fichier du comptable n'est jamais modifié.
+export const ORIGINES_DISTANCE = ['calculee', 'convention_comptable', 'saisie'] as const;
+export const STATUTS_IK = [
+  'brouillon',
+  'a_controler',
+  'valide',
+  'comptabilise',
+  'rembourse',
+] as const;
+export type StatutIk = (typeof STATUTS_IK)[number];
+
+export const gestionIkVehicules = pgTable(
+  'gestion_ik_vehicules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    libelle: text('libelle').notNull(),
+    // Catégorie du barème (voiture, deux-roues…) et puissance fiscale : à renseigner par Marc.
+    categorie: text('categorie').notNull(),
+    puissanceFiscale: integer('puissance_fiscale'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  () => [instanceIsolation('gestion_ik_vehicules')],
+);
+
+// Barème versionné par année et catégorie. Il ne sert au calcul qu'une fois validé (`valideLe`).
+export const gestionIkBaremes = pgTable(
+  'gestion_ik_baremes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    annee: integer('annee').notNull(),
+    categorie: text('categorie').notNull(),
+    version: integer('version').notNull(),
+    tranches: jsonb('tranches')
+      .$type<
+        {
+          deKm: number;
+          jusquaKm: number | null;
+          tauxDixMilliemes: number;
+          forfaitCents: number;
+        }[]
+      >()
+      .notNull(),
+    // D'où vient le barème (texte officiel, fichier du comptable) : jamais un taux sans source.
+    source: text('source').notNull(),
+    valideLe: date('valide_le', { mode: 'string' }),
+  },
+  (t) => [
+    uniqueIndex('gestion_ik_baremes_version_idx').on(t.instanceId, t.annee, t.categorie, t.version),
+    instanceIsolation('gestion_ik_baremes'),
+  ],
+);
+
+// Lieux habituels (bureau d'un client…) : distance aller-retour conventionnelle.
+export const gestionIkLieux = pgTable(
+  'gestion_ik_lieux',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    nom: text('nom').notNull(),
+    distanceKm: integer('distance_km').notNull(),
+    origine: text('origine', { enum: ORIGINES_DISTANCE }).notNull().default('saisie'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  () => [instanceIsolation('gestion_ik_lieux')],
+);
+
+// « Abonnement de transport » du mois : demandé à Marc, jamais deviné (absence de ligne = inconnu).
+export const gestionIkMois = pgTable(
+  'gestion_ik_mois',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    mois: text('mois').notNull(),
+    abonnement: boolean('abonnement').notNull(),
+  },
+  (t) => [
+    uniqueIndex('gestion_ik_mois_idx').on(t.instanceId, t.mois),
+    instanceIsolation('gestion_ik_mois'),
+  ],
+);
+
+export const gestionIkTrajets = pgTable(
+  'gestion_ik_trajets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    vehiculeId: uuid('vehicule_id')
+      .notNull()
+      .references(() => gestionIkVehicules.id),
+    date: date('date', { mode: 'string' }).notNull(),
+    trajet: text('trajet').notNull(),
+    // Client, projet ou réunion : motif professionnel.
+    commentaire: text('commentaire').notNull(),
+    kmAllerRetour: integer('km_aller_retour').notNull(),
+    origineDistance: text('origine_distance', { enum: ORIGINES_DISTANCE })
+      .notNull()
+      .default('saisie'),
+    mandat: text('mandat'),
+    justificatif: text('justificatif'),
+    statut: text('statut', { enum: STATUTS_IK }).notNull().default('brouillon'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('gestion_ik_trajets_idx').on(t.instanceId, t.date),
+    instanceIsolation('gestion_ik_trajets'),
+  ],
+);
+
+// Compte courant d'associé : seuls les mouvements `comptabilise` composent le solde confirmé ; les
+// `prevu` restent des estimations. `refSource` rend un mouvement dérivé (IK d'un mois) idempotent.
+export const TYPES_CCA = [
+  'ouverture',
+  'apport',
+  'depense_personnelle',
+  'ik',
+  'loyer',
+  'remboursement',
+  'correction',
+] as const;
+export const ETATS_CCA = ['prevu', 'comptabilise'] as const;
+export type TypeCca = (typeof TYPES_CCA)[number];
+
+export const gestionCcaMouvements = pgTable(
+  'gestion_cca_mouvements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    date: date('date', { mode: 'string' }).notNull(),
+    type: text('type', { enum: TYPES_CCA }).notNull(),
+    libelle: text('libelle').notNull(),
+    // Positif = crédit du compte d'associé (la société doit à l'associé) ; négatif = débit.
+    montantCents: integer('montant_cents').notNull(),
+    etat: text('etat', { enum: ETATS_CCA }).notNull().default('prevu'),
+    // Source du chiffre (relevé, écriture du comptable) : obligatoire pour comptabiliser.
+    source: text('source'),
+    refSource: text('ref_source'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('gestion_cca_ref_idx').on(t.instanceId, t.refSource),
+    instanceIsolation('gestion_cca_mouvements'),
+  ],
+);

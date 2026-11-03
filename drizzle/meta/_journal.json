@@ -470,6 +470,13 @@
       "when": 1793652437537,
       "tag": "0066_vma_inscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793701517182,
+      "tag": "0067_gestion_lot_d",
+      "breakpoints": true
     }
   ]
 }
