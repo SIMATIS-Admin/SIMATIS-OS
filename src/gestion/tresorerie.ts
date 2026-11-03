@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { jourDe } from '../pilotage/realisees.js';
+import { ajouterJours, ajouterMois } from './dates.js';
 import { occurrencesRevenus, type OccurrenceRevenu } from './revenus.js';
 import { gestionReglages, MODES_SEUIL, type ModeSeuil } from './schema.js';
 import { occurrencesDepenses, type OccurrenceVue } from './service.js';
@@ -101,11 +102,7 @@ export type Mouvement = {
   note: string | null;
 };
 
-const ajouterJours = (jourIso: string, n: number) => {
-  const d = new Date(`${jourIso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-};
+export { ajouterMois };
 const plusTard = (a: string, b: string) => (a > b ? a : b);
 
 // Sorties : TTC, à la date de paiement. Une dépense avancée par l'associé ou créditée à son compte
@@ -348,15 +345,6 @@ export type Projection = {
   scenarios: ProjectionScenario[];
   avertissements: string[];
 };
-
-export function ajouterMois(jourIso: string, n: number): string {
-  const [a, m, j] = jourIso.split('-').map(Number) as [number, number, number];
-  const i = a * 12 + (m - 1) + n;
-  const annee = Math.floor(i / 12);
-  const mois = (i % 12) + 1;
-  const dernier = new Date(Date.UTC(annee, mois, 0)).getUTCDate();
-  return `${String(annee).padStart(4, '0')}-${String(mois).padStart(2, '0')}-${String(Math.min(j, dernier)).padStart(2, '0')}`;
-}
 
 export async function projeter(
   tx: Executor,
