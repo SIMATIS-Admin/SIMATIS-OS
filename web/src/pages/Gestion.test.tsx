@@ -365,9 +365,11 @@ describe('Gestion', () => {
         target: { value: '3' },
       });
       await waitFor(() =>
-        expect(vi.mocked(fetch).mock.calls.some(([u]) => String(u).includes('decalage=3'))).toBe(
-          true,
-        ),
+        expect(
+          vi
+            .mocked(fetch)
+            .mock.calls.some(([u]) => typeof u === 'string' && u.includes('decalage=3')),
+        ).toBe(true),
       );
     } finally {
       projection.pipe = { affaires: [], decalageMois: 0 };

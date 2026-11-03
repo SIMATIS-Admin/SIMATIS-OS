@@ -34,7 +34,7 @@ const projection = (
     seuil: { mode: 'montant', cents: p.seuil === undefined ? 1_500_000 : p.seuil, bfr: null },
     scenarios: (['securise', 'central', 'ambitieux'] as const).map((scenario) => ({
       scenario,
-      alerte: alertes[scenario] ? { debut: alertes[scenario]!, soldeFinCents: 100 } : null,
+      alerte: alertes[scenario] ? { debut: alertes[scenario], soldeFinCents: 100 } : null,
       periodes: [periode('2026-11-01', 3_000_000), periode('2026-12-01', 2_000_000)],
     })),
     pipe: { affaires: p.affaires ?? [affaire(), affaire()], decalageMois: 0 },
