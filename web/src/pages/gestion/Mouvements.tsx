@@ -45,7 +45,7 @@ export function Mouvements({
   onDupliquer: (m: Mouvement) => void;
   onRetirer: (m: Mouvement) => void;
   onMarquerFacturee: (r: OccurrenceRevenu) => void;
-  onAjouter: () => void;
+  onAjouter: (filtre: FiltreMouvement) => void;
 }) {
   const [type, setType] = useState<FiltreMouvement>(filtreInitial);
   const [affectation, setAffectation] = useState('');
@@ -86,7 +86,14 @@ export function Mouvements({
                   <td className="num">{jourCourt(r.date)}</td>
                   <td className="g-lib">
                     <b>{r.libelle}</b>
-                    <small>{r.certitude === 'probable' ? 'Probable' : ''}</small>
+                    <small>
+                      {[
+                        r.mandat ? nomAff({ cible: 'mandat', mandat: r.mandat }) : null,
+                        r.certitude === 'probable' ? 'Probable' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </small>
                   </td>
                   <td className="r num">
                     <b>{eurCents(r.montantHtCents)}</b>
@@ -171,6 +178,13 @@ export function Mouvements({
                   <td className="g-lib">
                     <b>{m.libelle}</b>
                     <small>{m.detail}</small>
+                    {m.recette?.mandat && (
+                      <span className="g-aff">
+                        <span className="badge">
+                          {nomAff({ cible: 'mandat', mandat: m.recette.mandat })}
+                        </span>
+                      </span>
+                    )}
                     {m.depense && (
                       <span className="g-aff">
                         {m.depense.affectations.map((a) => (
@@ -211,6 +225,14 @@ export function Mouvements({
                   </td>
                   <td>
                     <span className={`badge ${ETATS[m.etat][1]}`}>{ETATS[m.etat][0]}</span>
+                    {m.recette && m.recette.certitude !== 'certaine' && (
+                      <>
+                        {' '}
+                        <span className="badge">
+                          {m.recette.certitude === 'probable' ? 'Probable' : 'Hypothèse'}
+                        </span>
+                      </>
+                    )}
                   </td>
                   <td className={`r num ${m.sens === 'recette' ? 'g-mv-pos' : 'g-mv-neg'}`}>
                     <b>
@@ -240,7 +262,7 @@ export function Mouvements({
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  onAjouter();
+                  onAjouter(type);
                 }}
               >
                 Ajouter un mouvement

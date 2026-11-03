@@ -369,6 +369,10 @@ export function Gestion({
       valeur: recettes ? eurCents(recettes.synthese.aEncaisserCertainCents) : '–',
     },
     {
+      label: 'À encaisser, incertain (recettes HT)',
+      valeur: recettes ? eurCents(recettes.synthese.aEncaisserIncertainCents) : '–',
+    },
+    {
       label: 'Encaissé (recettes HT)',
       valeur: recettes ? eurCents(recettes.synthese.encaisseCents) : '–',
     },
@@ -427,7 +431,11 @@ export function Gestion({
             role="tab"
             aria-selected={onglet === id}
             className={`chip ${onglet === id ? 'on' : ''}`}
-            onClick={() => setOnglet(id)}
+            onClick={() => {
+              // Un filtre posé par une carte ne doit pas coller à l'onglet.
+              if (id === 'mouvements' && onglet !== 'mouvements') setFiltreMouvement('tout');
+              setOnglet(id);
+            }}
           >
             {l}
           </button>
@@ -474,7 +482,7 @@ export function Gestion({
           onDupliquer={(m) => void ouvrir(m.depense!, true)}
           onRetirer={retirerMouvement}
           onMarquerFacturee={(r) => void ouvrirRevenu(r, 'emise')}
-          onAjouter={() => setTiroir({ cible: {} })}
+          onAjouter={(f) => (f === 'recettes' ? setTiroirRevenu({}) : setTiroir({ cible: {} }))}
         />
       )}
       {onglet === 'tva' && (

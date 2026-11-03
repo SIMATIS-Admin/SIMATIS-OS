@@ -305,4 +305,18 @@ describe('Gestion', () => {
       'true',
     );
   });
+
+  it('quitter Mouvements remet le filtre à Tout', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Voir les recettes' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Pilotage' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Mouvements' }));
+    expect(screen.getByRole('button', { name: 'Tout' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('Mouvements garde le montant à encaisser incertain', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Mouvements' }));
+    expect(await screen.findByText('À encaisser, incertain (recettes HT)')).toBeTruthy();
+  });
 });

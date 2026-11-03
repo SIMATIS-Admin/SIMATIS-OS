@@ -139,4 +139,34 @@ describe('Mouvements', () => {
       expect.objectContaining({ libelle: 'À facturer' }),
     );
   });
+
+  it('signale une recette probable ou hypothétique', () => {
+    monter([], [rec({ cle: 'p', libelle: 'Probable fictive', certitude: 'probable' })]);
+    expect(
+      within(screen.getByText('Probable fictive').closest('tr')!).getByText('Probable', {
+        selector: '.badge',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('affiche le mandat d’une recette, y compris dans les factures à émettre', () => {
+    monter([], [rec({ mandat: 'm1' })], {
+      nomAff: (a) => (a.mandat ? 'Mandat test' : 'SIMATIS'),
+      aFacturer: [rec({ cle: 'f', libelle: 'À facturer', mandat: 'm1' })],
+    });
+    expect(
+      within(screen.getByText('Mission fictive').closest('tr')!).getByText('Mandat test', {
+        selector: '.badge',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByText('À facturer').closest('tr')!).getByText('Mandat test'),
+    ).toBeTruthy();
+  });
+
+  it('« Ajouter un mouvement » transmet le filtre actif', () => {
+    const { onAjouter } = monter([dep()], [], { filtreInitial: 'recettes' });
+    fireEvent.click(screen.getByRole('link', { name: 'Ajouter un mouvement' }));
+    expect(onAjouter).toHaveBeenCalledWith('recettes');
+  });
 });
