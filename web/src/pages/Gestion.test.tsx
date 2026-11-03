@@ -64,6 +64,7 @@ const projection = {
       },
     ],
   })),
+  pipe: { affaires: [], decalageMois: 0 },
   avertissements: ["Solde d'ouverture non renseigné : seules les variations sont affichées."],
 };
 const suiviTva = {

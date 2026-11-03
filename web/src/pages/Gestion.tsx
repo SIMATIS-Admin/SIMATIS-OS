@@ -65,6 +65,8 @@ export function Gestion({
     horizon: 6,
     granularite: 'mois',
     retard: 0,
+    decalage: 0,
+    exclus: [],
   });
   const [tva, setTva] = useState<SuiviTvaGestion | null>(null);
   const [aFacturer, setAFacturer] = useState<OccurrenceRevenu[]>([]);

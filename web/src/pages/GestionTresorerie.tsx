@@ -19,6 +19,9 @@ export type ParamsTresorerie = {
   horizon: number;
   granularite: 'mois' | 'semaine';
   retard: number;
+  // Calculs d'affichage du pipe : décalage des signatures (mois) et affaires que Marc ne veut pas compter.
+  decalage: number;
+  exclus: string[];
 };
 
 const libellePeriode = (p: PeriodeTresorerie, g: 'mois' | 'semaine') =>
