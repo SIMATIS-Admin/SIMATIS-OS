@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AffairePipe } from '../api.js';
 import { Gestion } from './Gestion.js';
 
 const occurrence = {
@@ -64,8 +65,20 @@ const projection = {
       },
     ],
   })),
-  pipe: { affaires: [], decalageMois: 0 },
+  pipe: { affaires: [] as AffairePipe[], decalageMois: 0 },
   avertissements: ["Solde d'ouverture non renseigné : seules les variations sont affichées."],
+};
+const AFFAIRE_PIPE: AffairePipe = {
+  id: '22222222-2222-4222-8222-222222222222',
+  titre: 'Affaire pipe fictive',
+  entreprise: null,
+  probabilite: 60,
+  totalCents: 1_000_000,
+  recurrent: false,
+  mensuelCents: null,
+  dureeMois: 12,
+  signature: '2027-01-15',
+  statut: 'comptee',
 };
 const suiviTva = {
   mois: '2026-11',
@@ -319,5 +332,45 @@ describe('Gestion', () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
     fireEvent.click(await screen.findByRole('tab', { name: 'Mouvements' }));
     expect(await screen.findByText('À encaisser, incertain (recettes HT)')).toBeTruthy();
+  });
+
+  it('affiche le verdict en tête de Pilotage', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    expect(await screen.findByText('Impossible de dire si la trésorerie tient.')).toBeTruthy();
+  });
+
+  it('modifier la date d’une affaire l’envoie à la fiche, sans toucher à HubSpot', async () => {
+    projection.pipe = { decalageMois: 0, affaires: [AFFAIRE_PIPE] };
+    try {
+      render(<Gestion slug="simatis" autorise mandats={mandats} />);
+      fireEvent.change(await screen.findByLabelText('Signature estimée Affaire pipe fictive'), {
+        target: { value: '2027-02-01' },
+      });
+      await waitFor(() => expect(envois).toHaveLength(1));
+      expect(envois[0]).toMatchObject({
+        url: '/api/i/simatis/fiches/affaire/22222222-2222-4222-8222-222222222222',
+        method: 'PATCH',
+        corps: { signatureEstimee: '2027-02-01' },
+      });
+    } finally {
+      projection.pipe = { affaires: [], decalageMois: 0 };
+    }
+  });
+
+  it('le curseur de signature relance la projection avec le décalage', async () => {
+    projection.pipe = { decalageMois: 0, affaires: [AFFAIRE_PIPE] };
+    try {
+      render(<Gestion slug="simatis" autorise mandats={mandats} />);
+      fireEvent.change(await screen.findByLabelText('Décalage des signatures (mois)'), {
+        target: { value: '3' },
+      });
+      await waitFor(() =>
+        expect(vi.mocked(fetch).mock.calls.some(([u]) => String(u).includes('decalage=3'))).toBe(
+          true,
+        ),
+      );
+    } finally {
+      projection.pipe = { affaires: [], decalageMois: 0 };
+    }
   });
 });

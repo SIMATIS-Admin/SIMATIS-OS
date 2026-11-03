@@ -5,6 +5,7 @@ import {
   fetchFacturesAEmettre,
   fetchTresorerie,
   fetchTva,
+  patchFiche,
   type ProjectionTresorerie,
   type SuiviTvaGestion,
   fetchRevenuGestion,
@@ -22,7 +23,9 @@ import { aujourdhui, eurCents, libelleMois, moisDecale, MOIS, MOIS_COURTS } from
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
 import { fusionnerMouvements, type FiltreMouvement, type Mouvement } from './gestion/fusion.js';
+import { GestionPipe, VerdictBandeau } from './gestion/GestionPipe.js';
 import { Mouvements } from './gestion/Mouvements.js';
+import { verdictProjection } from './gestion/verdict.js';
 import { GestionTresorerie, type ParamsTresorerie } from './GestionTresorerie.js';
 import { GestionIk } from './GestionIk.js';
 import { GestionTva } from './GestionTva.js';
@@ -353,6 +356,14 @@ export function Gestion({
       setErreur(message(e));
     }
   };
+  const changerSignature = async (id: string, date: string | null) => {
+    try {
+      await patchFiche(slug, 'affaire', id, { signatureEstimee: date });
+      await charger();
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
   const ouvrirMouvement = (m: Mouvement) =>
     m.depense ? void ouvrir(m.depense) : void ouvrirRevenu(m.recette!);
   const retirerMouvement = (m: Mouvement) =>
@@ -457,6 +468,11 @@ export function Gestion({
       )}
       {onglet === 'pilotage' && (
         <>
+          {tresorerie && (
+            <VerdictBandeau
+              verdict={verdictProjection(tresorerie, paramsTreso.decalage, paramsTreso.exclus)}
+            />
+          )}
           {vue}
           <div style={{ marginTop: 18 }}>
             <GestionTresorerie
@@ -467,6 +483,16 @@ export function Gestion({
               onReglagesSaved={() => void charger()}
             />
           </div>
+          {tresorerie && (
+            <GestionPipe
+              affaires={tresorerie.pipe.affaires}
+              decalage={paramsTreso.decalage}
+              exclus={paramsTreso.exclus}
+              onDecalage={(decalage) => setParamsTreso({ ...paramsTreso, decalage })}
+              onExclus={(exclus) => setParamsTreso({ ...paramsTreso, exclus })}
+              onDate={(id, date) => void changerSignature(id, date)}
+            />
+          )}
           {revenusParMandat}
         </>
       )}
