@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OccurrenceDepense, OccurrenceRevenu } from '../../api.js';
-import { filtrerMouvements, fusionnerMouvements } from './mouvements.js';
+import { filtrerMouvements, fusionnerMouvements } from './fusion.js';
 
 const dep = (p: Partial<OccurrenceDepense> = {}): OccurrenceDepense => ({
   depenseId: 'd1',
