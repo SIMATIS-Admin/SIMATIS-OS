@@ -155,4 +155,27 @@ describe('mouvementsPipe', () => {
     const r = affairesPipe([opp({ probabiliteManuelle: 0 })], proba);
     expect(mouvementsPipe(r, { ...base, scenario: 'central' })).toEqual([]);
   });
+
+  it('une signature passée ne fait pas empiler l’arriéré : l’échéancier démarre aujourd’hui', () => {
+    const r = affairesPipe(
+      [
+        opp({
+          id: 'r',
+          modeFacturation: 'recurrent',
+          montant: 2_000,
+          probabiliteManuelle: 100,
+          signatureEstimee: '2026-05-01',
+        }),
+      ],
+      proba,
+    );
+    const m = mouvementsPipe(r, { ...base, scenario: 'central' });
+    expect(m).toHaveLength(12);
+    expect(m.slice(0, 3).map((x) => [x.date, x.montantCents])).toEqual([
+      ['2026-12-12', 200_000],
+      ['2027-01-12', 200_000],
+      ['2027-02-12', 200_000],
+    ]);
+    expect(m[0]!.note).toContain('dépassée');
+  });
 });

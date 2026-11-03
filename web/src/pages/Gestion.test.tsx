@@ -343,9 +343,9 @@ describe('Gestion', () => {
     projection.pipe = { decalageMois: 0, affaires: [AFFAIRE_PIPE] };
     try {
       render(<Gestion slug="simatis" autorise mandats={mandats} />);
-      fireEvent.change(await screen.findByLabelText('Signature estimée Affaire pipe fictive'), {
-        target: { value: '2027-02-01' },
-      });
+      const champ = await screen.findByLabelText('Signature estimée Affaire pipe fictive');
+      fireEvent.change(champ, { target: { value: '2027-02-01' } });
+      fireEvent.blur(champ);
       await waitFor(() => expect(envois).toHaveLength(1));
       expect(envois[0]).toMatchObject({
         url: '/api/i/simatis/fiches/affaire/22222222-2222-4222-8222-222222222222',
@@ -374,5 +374,46 @@ describe('Gestion', () => {
     } finally {
       projection.pipe = { affaires: [], decalageMois: 0 };
     }
+  });
+
+  it('ignore une projection arrivée en retard après une plus récente', async () => {
+    const reponse = (titre: string) => ({
+      ...projection,
+      pipe: { decalageMois: 0, affaires: [{ ...AFFAIRE_PIPE, titre }] },
+    });
+    const attente = new Map<string, (corps: unknown) => void>();
+    const rapide = vi.mocked(fetch).getMockImplementation()!;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const m = /decalage=(\d)/.exec(url);
+        if (!url.includes('gestion/tresorerie') || !m || m[1] === '0') {
+          return url.includes('gestion/tresorerie')
+            ? Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve(reponse('Affaire initiale')),
+              })
+            : rapide(url, init);
+        }
+        return new Promise((resolve) =>
+          attente.set(m[1]!, (corps) =>
+            resolve({ ok: true, status: 200, json: () => Promise.resolve(corps) }),
+          ),
+        );
+      }),
+    );
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    const curseur = await screen.findByLabelText('Décalage des signatures (mois)');
+    fireEvent.change(curseur, { target: { value: '3' } });
+    await waitFor(() => expect(attente.has('3')).toBe(true));
+    fireEvent.change(curseur, { target: { value: '6' } });
+    await waitFor(() => expect(attente.has('6')).toBe(true));
+    attente.get('6')!(reponse('Après six mois'));
+    expect(await screen.findByText('Après six mois')).toBeTruthy();
+    attente.get('3')!(reponse('Après trois mois'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText('Après trois mois')).toBeNull();
+    expect(screen.getByText('Après six mois')).toBeTruthy();
   });
 });

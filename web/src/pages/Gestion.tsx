@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   archiverDepenseGestion,
   archiverRevenuGestion,
@@ -77,7 +77,10 @@ export function Gestion({
   const [sousOnglet, setSousOnglet] = useState<'tva' | 'ik'>('tva');
   const [filtreMouvement, setFiltreMouvement] = useState<FiltreMouvement>('tout');
 
+  // Chaque chargement porte un numéro : une réponse dépassée par un chargement plus récent est jetée.
+  const sequence = useRef(0);
   const charger = useCallback(async () => {
+    const numero = ++sequence.current;
     try {
       setErreur(null);
       const horizon = new Date(`${aujourdhui()}T00:00:00Z`);
@@ -89,6 +92,7 @@ export function Gestion({
         fetchTresorerie(slug, paramsTreso),
         fetchTva(slug, mois),
       ]);
+      if (numero !== sequence.current) return;
       setTresorerie(t);
       setTva(v);
       setDonnees(d);

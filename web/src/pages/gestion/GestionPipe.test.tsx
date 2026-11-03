@@ -60,9 +60,26 @@ describe('GestionPipe', () => {
     const { onDate } = monter([affaire()]);
     const champ = screen.getByLabelText('Signature estimée Affaire fictive');
     fireEvent.change(champ, { target: { value: '2027-02-01' } });
+    fireEvent.blur(champ);
     expect(onDate).toHaveBeenCalledWith('a1', '2027-02-01');
     fireEvent.change(champ, { target: { value: '' } });
+    fireEvent.blur(champ);
     expect(onDate).toHaveBeenLastCalledWith('a1', null);
+  });
+
+  it('n’enregistre pas pendant la frappe, ni une année absurde', () => {
+    const { onDate } = monter([affaire()]);
+    const champ = screen.getByLabelText('Signature estimée Affaire fictive');
+    fireEvent.change(champ, { target: { value: '0002-02-01' } });
+    expect(onDate).not.toHaveBeenCalled();
+    fireEvent.blur(champ);
+    expect(onDate).not.toHaveBeenCalled();
+  });
+
+  it('prévient que « Compter » n’est pas mémorisé, à cause du double compte', () => {
+    monter([affaire()]);
+    expect(screen.getByText(/ne sont pas mémorisées/)).toBeTruthy();
+    expect(screen.getByText('Valeur pondérée des affaires comptées')).toBeTruthy();
   });
 
   it('décocher Compter exclut l’affaire, recocher la remet', () => {

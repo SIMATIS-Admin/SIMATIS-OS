@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import type { AffairePipe } from '../../api.js';
-import { eurCents, jourCourt } from '../../gestion.js';
+import { eurCents } from '../../gestion.js';
 import type { Verdict } from './verdict.js';
 
 const RAISONS: Partial<Record<AffairePipe['statut'], string>> = {
@@ -7,6 +8,36 @@ const RAISONS: Partial<Record<AffairePipe['statut'], string>> = {
   sans_montant: 'Sans montant',
   sans_probabilite: 'Sans probabilité',
 };
+// La date ne part au serveur qu'une fois la saisie finie (sortie du champ) et plausible : Chrome émet
+// une valeur à chaque chiffre tapé, y compris des années comme 0002.
+function ChampDate({
+  valeur,
+  label,
+  onValider,
+}: {
+  valeur: string | null;
+  label: string;
+  onValider: (date: string | null) => void;
+}) {
+  const [saisie, setSaisie] = useState(valeur ?? '');
+  const valider = () => {
+    if (saisie === (valeur ?? '')) return;
+    if (saisie === '') onValider(null);
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(saisie) && Number(saisie.slice(0, 4)) >= 2000)
+      onValider(saisie);
+    else setSaisie(valeur ?? '');
+  };
+  return (
+    <input
+      className="input"
+      type="date"
+      value={saisie}
+      aria-label={label}
+      onChange={(e) => setSaisie(e.target.value)}
+      onBlur={valider}
+    />
+  );
+}
 const pondere = (a: AffairePipe) => Math.round((a.totalCents * (a.probabilite ?? 0)) / 100);
 
 // Phrase d'ouverture de Pilotage : le serveur a déjà calculé les alertes, on ne fait que les dire.
@@ -123,13 +154,11 @@ export function GestionPipe({
                           : eurCents(a.totalCents)}
                       </td>
                       <td>
-                        <input
-                          className="input"
-                          type="date"
-                          value={a.signature ?? ''}
-                          aria-label={`Signature estimée ${a.titre}`}
-                          title={a.signature ? jourCourt(a.signature) : undefined}
-                          onChange={(e) => onDate(a.id, e.target.value || null)}
+                        <ChampDate
+                          key={`${a.id}-${a.signature ?? ''}`}
+                          valeur={a.signature}
+                          label={`Signature estimée ${a.titre}`}
+                          onValider={(date) => onDate(a.id, date)}
                         />
                       </td>
                       <td className="r num">
@@ -142,7 +171,7 @@ export function GestionPipe({
               <tfoot>
                 <tr>
                   <td colSpan={5} className="r">
-                    <b>Total pondéré pris en compte</b>
+                    <b>Valeur pondérée des affaires comptées</b>
                   </td>
                   <td className="r num" data-testid="total-pipe">
                     <b>{eurCents(total)}</b>
@@ -150,6 +179,10 @@ export function GestionPipe({
                 </tr>
               </tfoot>
             </table>
+            <p className="small muted" style={{ margin: '10px 0 0' }}>
+              Les affaires décochées ne sont pas mémorisées. Si une affaire est déjà facturée dans
+              Gestion, décochez-la pour ne pas la compter deux fois.
+            </p>
             {sansDate > 0 && (
               <p className="small" style={{ margin: '10px 0 0' }}>
                 <span className="badge amber">{sansDate} sans date</span> Elle n’entre pas dans la

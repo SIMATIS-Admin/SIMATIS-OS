@@ -68,8 +68,6 @@ export function affairesPipe(
     });
 }
 
-const plusTard = (a: string, b: string) => (a > b ? a : b);
-
 // Sécurisé : rien. Central : montant × probabilité. Ambitieux : les affaires à 50 % et plus, à 100 %.
 // Encaissement = signature (+ décalage simulé) + délai de paiement ; un ponctuel se règle en deux parts
 // (la seconde 60 jours plus tard), un abonnement mois après mois.
@@ -91,7 +89,11 @@ export function mouvementsPipe(
       continue;
     if (p.scenario === 'ambitieux' && a.probabilite < SEUIL_AFFAIRE_CHAUDE) continue;
     const poids = p.scenario === 'central' ? a.probabilite / 100 : 1;
-    const premiere = ajouterJours(ajouterMois(a.signature, p.decalageMois), p.delaiJours ?? 0);
+    // Une signature déjà passée sur une affaire encore ouverte vaut « au plus tôt aujourd'hui » : tout
+    // l'échéancier démarre alors d'aujourd'hui, au lieu d'empiler l'arriéré à la date du jour.
+    const signee = ajouterMois(a.signature, p.decalageMois);
+    const depassee = signee < p.aujourdhui;
+    const premiere = ajouterJours(depassee ? p.aujourdhui : signee, p.delaiJours ?? 0);
     const echeances: { date: string; cents: number }[] = [];
     if (a.recurrent && a.mensuelCents) {
       for (let k = 0; k < a.dureeMois; k++)
@@ -109,9 +111,8 @@ export function mouvementsPipe(
     }
     for (const e of echeances) {
       if (e.cents <= 0 || e.date > p.fin) continue;
-      const date = plusTard(e.date, p.aujourdhui);
       mouvements.push({
-        date,
+        date: e.date,
         sens: 'entree',
         libelle: `${a.titre} (pipe)`,
         montantCents: e.cents,
@@ -123,7 +124,7 @@ export function mouvementsPipe(
             ? `Pipe : ${a.probabilite} % de ${a.titre}`
             : `Pipe : ${a.titre} à 100 %`,
           p.decalageMois ? `Signature décalée de ${p.decalageMois} mois` : null,
-          date !== e.date ? 'Échéance dépassée, comptée à la date du jour' : null,
+          depassee ? 'Signature estimée dépassée : comptée à partir d’aujourd’hui' : null,
         ]
           .filter((n): n is string => !!n)
           .join(' · '),
