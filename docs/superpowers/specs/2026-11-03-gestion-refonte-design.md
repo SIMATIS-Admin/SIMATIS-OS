@@ -26,7 +26,7 @@ Hors périmètre : API Pennylane (réservée à l'offre Essentiel), écriture ve
 | Navigation | 4 onglets : **Pilotage**, **Mouvements**, **Importer**, **TVA & IK** (au lieu de 6). Les écrans TVA, IK et compte d'associé existants sont conservés tels quels. |
 | Dépenses et recettes | Une seule liste (« Mouvements »), distinguées par signe et couleur. Les tables et services existants restent inchangés ; seule la vue les réunit. |
 | Source des données | Import de fichiers Pennylane (.xlsx et .csv). Pas d'API. |
-| Date de signature estimée | Elle existe déjà : `opportunites.echeance` est la date de clôture prévue (HubSpot `closedate`), éditable dans le Pipeline. On la réutilise, intitulée « Signature estimée » dans Gestion. Aucune nouvelle colonne. |
+| Date de signature estimée | Nouvelle colonne OS-only `signature_estimee` sur les affaires, éditable depuis Gestion et la fiche, jamais envoyée à HubSpot (comme la probabilité manuelle). Repli : `echeance`, la date de clôture prévue HubSpot, qui n'est modifiable après création que par une écriture HubSpot protégée par le double verrou. Correction du 03/11 : la première version de cette spec croyait la date déjà éditable. |
 | Probabilité | `probabiliteManuelle` si renseignée, sinon la probabilité de l'étape. Déjà en place. |
 | Affaire sans date | Exclue de la projection et signalée. Aucune date n'est supposée. |
 | Délai de paiement | Réglage existant `delaiPaiementJours`. Valeur par défaut de la maquette : 30 jours, à confirmer par Marc dans les réglages. |
