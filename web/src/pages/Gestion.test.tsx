@@ -171,7 +171,7 @@ describe('Gestion', () => {
 
   it('distingue refacturable d’une recette : badge, jamais de montant refacturé', async () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Dépenses' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Mouvements' }));
     expect(await screen.findByText('Abonnement fictif')).toBeTruthy();
     expect(screen.getByText('Refacturable', { selector: '.badge' })).toBeTruthy();
     expect(screen.getByText('Mandat test', { selector: '.badge' })).toBeTruthy();
@@ -235,17 +235,15 @@ describe('Gestion', () => {
 
   it('affiche la projection sans solde inventé et rend ses mouvements explicables', async () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Trésorerie' }));
     expect(await screen.findByText(/Solde d'ouverture non renseigné/)).toBeTruthy();
     expect(screen.getByText(/Variation cumulée depuis aujourd’hui/)).toBeTruthy();
-    fireEvent.click(document.querySelector('svg rect')!);
+    fireEvent.click(document.querySelector('svg.g-svg rect')!);
     expect(await screen.findByText('Abonnement fictif')).toBeTruthy();
     expect(screen.getByText('Estimé')).toBeTruthy();
   });
 
   it('enregistre un seuil que Marc fixe, sans valeur par défaut', async () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Trésorerie' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
     fireEvent.click(screen.getByRole('button', { name: 'Montant que je fixe' }));
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -268,7 +266,7 @@ describe('Gestion', () => {
 
   it('saisit la TVA déclarée à la main, avec l’exigibilité à confirmer', async () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'TVA' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'TVA & IK' }));
     expect(await screen.findByText(/exigibilité à confirmer/)).toBeTruthy();
     fireEvent.change(screen.getByPlaceholderText('Non renseigné'), { target: { value: '175' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -278,5 +276,47 @@ describe('Gestion', () => {
       method: 'PUT',
       corps: { declareeCents: 17_500 },
     });
+  });
+
+  it('propose exactement trois onglets', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    const noms = (await screen.findAllByRole('tab')).map((t) => t.textContent);
+    expect(noms).toEqual(['Pilotage', 'Mouvements', 'TVA & IK']);
+  });
+
+  it('« Voir les recettes » ouvre Mouvements filtré sur les recettes', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Voir les recettes' }));
+    expect(screen.getByRole('tab', { name: 'Mouvements' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Recettes' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('TVA & IK : un sélecteur bascule entre TVA et IK sans quitter l’onglet', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'TVA & IK' }));
+    expect(await screen.findByText(/exigibilité à confirmer/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'IK & compte associé' }));
+    expect(screen.queryByText(/exigibilité à confirmer/)).toBeNull();
+    expect(screen.getByRole('tab', { name: 'TVA & IK' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('quitter Mouvements remet le filtre à Tout', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Voir les recettes' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Pilotage' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Mouvements' }));
+    expect(screen.getByRole('button', { name: 'Tout' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('Mouvements garde le montant à encaisser incertain', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Mouvements' }));
+    expect(await screen.findByText('À encaisser, incertain (recettes HT)')).toBeTruthy();
   });
 });
