@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   archiverDepenseGestion,
   archiverRevenuGestion,
   fetchFacturesAEmettre,
   fetchTresorerie,
   fetchTva,
+  patchFiche,
   type ProjectionTresorerie,
   type SuiviTvaGestion,
   fetchRevenuGestion,
@@ -22,7 +23,9 @@ import { aujourdhui, eurCents, libelleMois, moisDecale, MOIS, MOIS_COURTS } from
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
 import { fusionnerMouvements, type FiltreMouvement, type Mouvement } from './gestion/fusion.js';
+import { GestionPipe, VerdictBandeau } from './gestion/GestionPipe.js';
 import { Mouvements } from './gestion/Mouvements.js';
+import { verdictProjection } from './gestion/verdict.js';
 import { GestionTresorerie, type ParamsTresorerie } from './GestionTresorerie.js';
 import { GestionIk } from './GestionIk.js';
 import { GestionTva } from './GestionTva.js';
@@ -65,6 +68,8 @@ export function Gestion({
     horizon: 6,
     granularite: 'mois',
     retard: 0,
+    decalage: 0,
+    exclus: [],
   });
   const [tva, setTva] = useState<SuiviTvaGestion | null>(null);
   const [aFacturer, setAFacturer] = useState<OccurrenceRevenu[]>([]);
@@ -72,7 +77,10 @@ export function Gestion({
   const [sousOnglet, setSousOnglet] = useState<'tva' | 'ik'>('tva');
   const [filtreMouvement, setFiltreMouvement] = useState<FiltreMouvement>('tout');
 
+  // Chaque chargement porte un numéro : une réponse dépassée par un chargement plus récent est jetée.
+  const sequence = useRef(0);
   const charger = useCallback(async () => {
+    const numero = ++sequence.current;
     try {
       setErreur(null);
       const horizon = new Date(`${aujourdhui()}T00:00:00Z`);
@@ -84,6 +92,7 @@ export function Gestion({
         fetchTresorerie(slug, paramsTreso),
         fetchTva(slug, mois),
       ]);
+      if (numero !== sequence.current) return;
       setTresorerie(t);
       setTva(v);
       setDonnees(d);
@@ -351,6 +360,14 @@ export function Gestion({
       setErreur(message(e));
     }
   };
+  const changerSignature = async (id: string, date: string | null) => {
+    try {
+      await patchFiche(slug, 'affaire', id, { signatureEstimee: date });
+      await charger();
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
   const ouvrirMouvement = (m: Mouvement) =>
     m.depense ? void ouvrir(m.depense) : void ouvrirRevenu(m.recette!);
   const retirerMouvement = (m: Mouvement) =>
@@ -455,6 +472,11 @@ export function Gestion({
       )}
       {onglet === 'pilotage' && (
         <>
+          {tresorerie && (
+            <VerdictBandeau
+              verdict={verdictProjection(tresorerie, paramsTreso.decalage, paramsTreso.exclus)}
+            />
+          )}
           {vue}
           <div style={{ marginTop: 18 }}>
             <GestionTresorerie
@@ -465,6 +487,16 @@ export function Gestion({
               onReglagesSaved={() => void charger()}
             />
           </div>
+          {tresorerie && (
+            <GestionPipe
+              affaires={tresorerie.pipe.affaires}
+              decalage={paramsTreso.decalage}
+              exclus={paramsTreso.exclus}
+              onDecalage={(decalage) => setParamsTreso({ ...paramsTreso, decalage })}
+              onExclus={(exclus) => setParamsTreso({ ...paramsTreso, exclus })}
+              onDate={(id, date) => void changerSignature(id, date)}
+            />
+          )}
           {revenusParMandat}
         </>
       )}

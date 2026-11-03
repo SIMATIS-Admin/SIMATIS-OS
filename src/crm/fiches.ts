@@ -358,6 +358,7 @@ export type PatchFiche = {
   dureeEngagementMois?: number;
   taciteReconduction?: boolean;
   probabiliteManuelle?: number | null;
+  signatureEstimee?: string | null;
   echeance?: string | null;
   nom?: string;
   fonction?: string | null;
@@ -379,6 +380,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
     'dureeEngagementMois',
     'taciteReconduction',
     'probabiliteManuelle',
+    'signatureEstimee',
     'echeance',
     'contactId',
     'entrepriseId',
@@ -391,6 +393,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
 // and stay editable when the CRM is read-only.
 const CHAMPS_LOCAUX: (keyof PatchFiche)[] = [
   'probabiliteManuelle',
+  'signatureEstimee',
   'modeFacturation',
   'dureeEngagementMois',
   'taciteReconduction',

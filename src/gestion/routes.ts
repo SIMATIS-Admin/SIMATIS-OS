@@ -377,6 +377,12 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
       .refine((n) => [1, 3, 6, 12, 24].includes(n)),
     granularite: z.enum(['mois', 'semaine']).default('mois'),
     retard: z.coerce.number().int().min(0).max(365).default(0),
+    decalage: z.coerce.number().int().min(0).max(6).default(0),
+    exclus: z
+      .string()
+      .default('')
+      .transform((s) => (s ? s.split(',') : []))
+      .pipe(z.array(z.uuid()).max(200)),
   });
   app.get<{ Params: { slug: string }; Querystring: Record<string, string> }>(
     '/api/i/:slug/gestion/tresorerie',
@@ -388,6 +394,8 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
           horizonMois: q.data.horizon,
           granularite: q.data.granularite,
           retardJours: q.data.retard,
+          decalageMois: q.data.decalage,
+          exclus: q.data.exclus,
         }),
       );
     },

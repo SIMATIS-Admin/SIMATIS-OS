@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AffairePipe } from '../api.js';
 import { Gestion } from './Gestion.js';
 
 const occurrence = {
@@ -64,7 +65,20 @@ const projection = {
       },
     ],
   })),
+  pipe: { affaires: [] as AffairePipe[], decalageMois: 0 },
   avertissements: ["Solde d'ouverture non renseigné : seules les variations sont affichées."],
+};
+const AFFAIRE_PIPE: AffairePipe = {
+  id: '22222222-2222-4222-8222-222222222222',
+  titre: 'Affaire pipe fictive',
+  entreprise: null,
+  probabilite: 60,
+  totalCents: 1_000_000,
+  recurrent: false,
+  mensuelCents: null,
+  dureeMois: 12,
+  signature: '2027-01-15',
+  statut: 'comptee',
 };
 const suiviTva = {
   mois: '2026-11',
@@ -318,5 +332,88 @@ describe('Gestion', () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
     fireEvent.click(await screen.findByRole('tab', { name: 'Mouvements' }));
     expect(await screen.findByText('À encaisser, incertain (recettes HT)')).toBeTruthy();
+  });
+
+  it('affiche le verdict en tête de Pilotage', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    expect(await screen.findByText('Impossible de dire si la trésorerie tient.')).toBeTruthy();
+  });
+
+  it('modifier la date d’une affaire l’envoie à la fiche, sans toucher à HubSpot', async () => {
+    projection.pipe = { decalageMois: 0, affaires: [AFFAIRE_PIPE] };
+    try {
+      render(<Gestion slug="simatis" autorise mandats={mandats} />);
+      const champ = await screen.findByLabelText('Signature estimée Affaire pipe fictive');
+      fireEvent.change(champ, { target: { value: '2027-02-01' } });
+      fireEvent.blur(champ);
+      await waitFor(() => expect(envois).toHaveLength(1));
+      expect(envois[0]).toMatchObject({
+        url: '/api/i/simatis/fiches/affaire/22222222-2222-4222-8222-222222222222',
+        method: 'PATCH',
+        corps: { signatureEstimee: '2027-02-01' },
+      });
+    } finally {
+      projection.pipe = { affaires: [], decalageMois: 0 };
+    }
+  });
+
+  it('le curseur de signature relance la projection avec le décalage', async () => {
+    projection.pipe = { decalageMois: 0, affaires: [AFFAIRE_PIPE] };
+    try {
+      render(<Gestion slug="simatis" autorise mandats={mandats} />);
+      fireEvent.change(await screen.findByLabelText('Décalage des signatures (mois)'), {
+        target: { value: '3' },
+      });
+      await waitFor(() =>
+        expect(
+          vi
+            .mocked(fetch)
+            .mock.calls.some(([u]) => typeof u === 'string' && u.includes('decalage=3')),
+        ).toBe(true),
+      );
+    } finally {
+      projection.pipe = { affaires: [], decalageMois: 0 };
+    }
+  });
+
+  it('ignore une projection arrivée en retard après une plus récente', async () => {
+    const reponse = (titre: string) => ({
+      ...projection,
+      pipe: { decalageMois: 0, affaires: [{ ...AFFAIRE_PIPE, titre }] },
+    });
+    const attente = new Map<string, (corps: unknown) => void>();
+    const rapide = vi.mocked(fetch).getMockImplementation()!;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const m = /decalage=(\d)/.exec(url);
+        if (!url.includes('gestion/tresorerie') || !m || m[1] === '0') {
+          return url.includes('gestion/tresorerie')
+            ? Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve(reponse('Affaire initiale')),
+              })
+            : rapide(url, init);
+        }
+        return new Promise((resolve) =>
+          attente.set(m[1]!, (corps) =>
+            resolve({ ok: true, status: 200, json: () => Promise.resolve(corps) }),
+          ),
+        );
+      }),
+    );
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    const curseur = await screen.findByLabelText('Décalage des signatures (mois)');
+    fireEvent.change(curseur, { target: { value: '3' } });
+    await waitFor(() => expect(attente.has('3')).toBe(true));
+    fireEvent.change(curseur, { target: { value: '6' } });
+    await waitFor(() => expect(attente.has('6')).toBe(true));
+    attente.get('6')!(reponse('Après six mois'));
+    expect(await screen.findByText('Après six mois')).toBeTruthy();
+    attente.get('3')!(reponse('Après trois mois'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText('Après trois mois')).toBeNull();
+    expect(screen.getByText('Après six mois')).toBeTruthy();
   });
 });

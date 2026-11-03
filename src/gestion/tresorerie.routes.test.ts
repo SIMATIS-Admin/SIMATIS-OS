@@ -234,4 +234,66 @@ describe('Routes Gestion — trésorerie, réglages et TVA', () => {
       400,
     );
   });
+
+  describe('pipe', () => {
+    let idOk = '';
+    let idSansDate = '';
+    const pipeDe = (p: Projection, scenario: number) =>
+      p.scenarios[scenario]!.periodes.flatMap((x) => x.mouvements).filter((m) =>
+        m.ref.startsWith('pipe:'),
+      );
+    const somme = (m: { montantCents: number }[]) => m.reduce((t2, x) => t2 + x.montantCents, 0);
+
+    beforeAll(async () => {
+      const inst = (
+        await t.owner.pool.query<{ id: string }>(
+          "select id from instances where slug = 'tre-propre'",
+        )
+      ).rows[0]!.id;
+      const aujourdhui = (await projection()).aujourdhui;
+      const insere = async (titre: string, signature: string | null) =>
+        (
+          await t.owner.pool.query<{ id: string }>(
+            `insert into opportunites (instance_id, titre, etape, montant, probabilite_manuelle, signature_estimee)
+             values ($1, $2, 'proposition', 10000, 60, $3) returning id`,
+            [inst, titre, signature],
+          )
+        ).rows[0]!.id;
+      idOk = await insere('Affaire pipe fictive', ajouterMois(aujourdhui, 2));
+      idSansDate = await insere('Affaire sans date fictive', null);
+    });
+
+    it('le central inclut le pipe pondéré, l’ambitieux à 100 %, le sécurisé rien', async () => {
+      const p = await projection('horizon=12');
+      expect(pipeDe(p, 0)).toHaveLength(0);
+      expect(somme(pipeDe(p, 1))).toBe(600_000);
+      expect(somme(pipeDe(p, 2))).toBe(1_000_000);
+    });
+
+    it('liste les affaires avec leur statut et avertit de celles qui sont écartées', async () => {
+      const p = (await projection('horizon=12')) as Projection & {
+        pipe: { affaires: { id: string; statut: string }[]; decalageMois: number };
+      };
+      expect(p.pipe.affaires.find((a) => a.id === idOk)?.statut).toBe('comptee');
+      expect(p.pipe.affaires.find((a) => a.id === idSansDate)?.statut).toBe('sans_date');
+      expect(p.avertissements.join(' ')).toContain('pipe');
+    });
+
+    it('décale l’encaissement avec decalage, et le retire avec exclus', async () => {
+      const premiere = async (q: string) => pipeDe(await projection(q), 1)[0]?.date;
+      const d0 = (await premiere('horizon=12'))!;
+      const d3 = (await premiere('horizon=12&decalage=3'))!;
+      const jours = (new Date(d3).getTime() - new Date(d0).getTime()) / 86_400_000;
+      expect(jours).toBeGreaterThan(80);
+      expect(jours).toBeLessThan(100);
+      expect(await premiere(`horizon=12&exclus=${idOk}`)).toBeUndefined();
+    });
+
+    it('refuse un décalage hors limites ou une liste d’exclus mal formée', async () => {
+      const code = async (q: string) =>
+        (await app.inject({ method: 'GET', url: `${base}/tresorerie?${q}` })).statusCode;
+      expect(await code('horizon=3&decalage=9')).toBe(400);
+      expect(await code('horizon=3&exclus=pas-un-uuid')).toBe(400);
+    });
+  });
 });

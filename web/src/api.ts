@@ -2235,6 +2235,19 @@ export type PeriodeTresorerie = {
   variationCumuleeCents: number;
   mouvements: MouvementTresorerie[];
 };
+// Affaire ouverte du Pipeline vue par la trésorerie ; `statut` dit pourquoi elle est écartée.
+export type AffairePipe = {
+  id: string;
+  titre: string;
+  entreprise: string | null;
+  probabilite: number | null;
+  totalCents: number;
+  recurrent: boolean;
+  mensuelCents: number | null;
+  dureeMois: number;
+  signature: string | null;
+  statut: 'comptee' | 'sans_date' | 'sans_montant' | 'sans_probabilite';
+};
 export type ProjectionTresorerie = {
   aujourdhui: string;
   granularite: 'mois' | 'semaine';
@@ -2255,6 +2268,7 @@ export type ProjectionTresorerie = {
     periodes: PeriodeTresorerie[];
     alerte: { debut: string; soldeFinCents: number } | null;
   }[];
+  pipe: { affaires: AffairePipe[]; decalageMois: number };
   avertissements: string[];
 };
 export type SuiviTvaGestion = {
@@ -2271,12 +2285,20 @@ export type SuiviTvaGestion = {
 };
 export const fetchTresorerie = (
   slug: string,
-  p: { horizon: number; granularite: 'mois' | 'semaine'; retard: number },
+  p: {
+    horizon: number;
+    granularite: 'mois' | 'semaine';
+    retard: number;
+    decalage?: number;
+    exclus?: string[];
+  },
 ) =>
   getJson<ProjectionTresorerie>(
     inst(
       slug,
-      `gestion/tresorerie?horizon=${p.horizon}&granularite=${p.granularite}&retard=${p.retard}`,
+      `gestion/tresorerie?horizon=${p.horizon}&granularite=${p.granularite}&retard=${p.retard}` +
+        `&decalage=${p.decalage ?? 0}` +
+        (p.exclus?.length ? `&exclus=${p.exclus.join(',')}` : ''),
     ),
   );
 export const fetchReglagesGestion = (slug: string) =>

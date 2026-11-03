@@ -477,6 +477,13 @@
       "when": 1793701517182,
       "tag": "0067_gestion_lot_d",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793718484883,
+      "tag": "0068_signature_estimee",
+      "breakpoints": true
     }
   ]
 }
