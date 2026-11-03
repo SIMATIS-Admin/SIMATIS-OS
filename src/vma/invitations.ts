@@ -310,7 +310,7 @@ export async function revoquerInvitation(
       .from(vmaTests)
       .where(and(eq(vmaTests.instanceId, p.instanceId), eq(vmaTests.id, p.testId)));
     if (!test) throw new InvitationImpossible('Invitation introuvable dans cette instance');
-    if (test.statut !== 'envoyee')
+    if (test.statut !== 'envoyee' || test.recueLe || test.ecran)
       throw new InvitationImpossible('Seule une invitation ouverte peut être révoquée');
 
     const http = deps.fetch ?? fetch;
@@ -344,7 +344,7 @@ export async function supprimerTest(
       .where(and(eq(vmaTests.instanceId, p.instanceId), eq(vmaTests.id, p.testId))),
   );
   if (!test) throw new TestIntrouvable();
-  if (test.statut === 'envoyee') {
+  if (test.statut === 'envoyee' && !test.recueLe && !test.ecran) {
     if (!deps) throw new InvitationImpossible('Test de VMA non configuré (VMA_OS_TOKEN)');
     await revoquerInvitation(db, deps, p);
   }

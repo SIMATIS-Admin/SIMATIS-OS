@@ -70,13 +70,36 @@ describe('Diagnostics : relances et suivi des invitations', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => cleanup());
 
-  it('montre la frise : envoi et relance automatique, sans « Test passé » tant qu’il ne l’est pas', async () => {
+  it('montre les cinq étapes de la frise avec les étapes à venir', async () => {
     await afficher([test({ relances: [{ le: il(3), origine: 'auto' }] })]);
     const jour = (iso: string) =>
       new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-    expect(screen.getByText(`Envoyé ${jour(il(10))}`)).toBeTruthy();
-    expect(screen.getByText(`Relancé ${jour(il(3))} (auto)`)).toBeTruthy();
-    expect(screen.queryByText('Test passé')).toBeNull();
+    expect(screen.getByText('Envoyé')).toBeTruthy();
+    expect(screen.getByText(jour(il(10)))).toBeTruthy();
+    expect(screen.getByText(jour(il(3)))).toBeTruthy();
+    expect(screen.getByText('Résultat reçu')).toBeTruthy();
+    expect(document.querySelectorAll('.frise > li')).toHaveLength(5);
+    expect(document.querySelectorAll('.frise > .a-venir')).toHaveLength(3);
+  });
+
+  it('un résultat reçu retire les actions d’invitation, même avec le statut envoyée', async () => {
+    await afficher([test({ recueLe: il(1) })]);
+    expect(screen.getByText('Terminé')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Relancer' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copier le lien' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Révoquer' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Supprimer le test' })).toBeTruthy();
+  });
+
+  it('distingue deux destinataires de la même entreprise par nom et adresse', async () => {
+    await afficher([
+      test({ id: 'a', contactNom: 'Jeanne Exemple', contactEmail: 'jeanne@exemple.test' }),
+      test({ id: 'b', contactNom: 'Paul Exemple', contactEmail: 'paul@exemple.test' }),
+    ]);
+    expect(screen.getByText('Jeanne Exemple')).toBeTruthy();
+    expect(screen.getByText('Paul Exemple')).toBeTruthy();
+    expect(screen.getByText('jeanne@exemple.test')).toBeTruthy();
+    expect(screen.getByText('paul@exemple.test')).toBeTruthy();
   });
 
   it('affiche la raison du dernier envoi en échec', async () => {

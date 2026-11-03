@@ -33,7 +33,7 @@ export async function relancerInvitation(
       .where(and(eq(vmaTests.instanceId, instance.id), eq(vmaTests.id, p.testId)))
       .for('update');
     if (!test) throw new RelanceImpossible('Invitation introuvable dans cette instance');
-    if (test.statut !== 'envoyee')
+    if (test.statut !== 'envoyee' || test.recueLe || test.ecran)
       throw new RelanceImpossible('Seule une invitation ouverte peut être relancée');
     if (test.expireLe <= maintenant)
       throw new RelanceImpossible('Invitation expirée : créez-en une nouvelle');

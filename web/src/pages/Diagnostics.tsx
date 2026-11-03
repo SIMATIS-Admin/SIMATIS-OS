@@ -18,7 +18,7 @@ import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
 import { Modale, NouveauDiagnostic, NouveauTestVma } from './diagnostics/Creation.js';
 import { messageRelance } from './diagnostics/envoi.js';
-import { etapesFrise, peutRelancer, sansReponse } from './diagnostics/suivi.js';
+import { etapesFrise, peutRelancer, sansReponse, testTermine } from './diagnostics/suivi.js';
 import { libelleStatut, fmtEur } from './TestsVma.js';
 import {
   filtrer,
@@ -295,7 +295,7 @@ export function Diagnostics({
             <input
               type="search"
               aria-label="Rechercher une entreprise"
-              placeholder="Recherche"
+              placeholder="Entreprise, destinataire ou e-mail"
               value={recherche}
               onChange={(e) => {
                 setRecherche(e.target.value);
@@ -334,7 +334,7 @@ export function Diagnostics({
           const cle = cleDe(l);
           const ouverte = ouvertes.has(cle);
           const resume = resumerVma(l.tests);
-          const nbRecus = l.tests.filter((t) => t.recueLe).length;
+          const nbRecus = l.tests.filter(testTermine).length;
           return (
             <div key={cle} className="panel dg-ligne">
               <button
@@ -349,11 +349,15 @@ export function Diagnostics({
                 </div>
                 <div>
                   <div className="dg-label">Diagnostic</div>
-                  <div>{l.diag ? `Étape ${l.diag.etapeMax} sur 5` : 'Pas encore lancé'}</div>
+                  <div className={`dg-compteur ${l.diag ? 'diagnostic' : 'attente'}`}>
+                    {l.diag ? `Étape ${l.diag.etapeMax} sur 5` : 'Pas encore lancé'}
+                  </div>
                 </div>
                 <div>
                   <div className="dg-label">Tests VMA</div>
-                  <div>
+                  <div
+                    className={`dg-compteur ${nbRecus ? 'recu' : l.tests.length ? 'envoye' : 'attente'}`}
+                  >
                     {l.tests.length === 0
                       ? 'Aucun'
                       : `${l.tests.length} test${l.tests.length > 1 ? 's' : ''}${nbRecus ? ` · ${nbRecus} reçu${nbRecus > 1 ? 's' : ''}` : ''}`}
@@ -485,26 +489,46 @@ export function Diagnostics({
                       <ul className="dg-tests">
                         {l.tests.map((t) => (
                           <li key={t.id}>
-                            <span>
-                              {libelleTest(t)} · {libelleStatut(t)}
-                              {t.recueLe ? ` · reçu le ${date(t.recueLe)}` : ''}
+                            <div className="dg-test-identite">
+                              <strong>
+                                {t.contactNom || t.contactEmail || 'Destinataire non renseigné'}
+                              </strong>
+                              {t.contactNom && t.contactEmail && (
+                                <span className="dg-test-email">{t.contactEmail}</span>
+                              )}
+                              <span className="small muted">{libelleTest(t)}</span>
+                            </div>
+                            <span
+                              className={`dg-test-statut ${testTermine(t) ? 'termine' : t.statut === 'revoquee' ? 'inactif' : 'en-attente'}`}
+                            >
+                              {testTermine(t) ? 'Terminé' : libelleStatut(t)}
                             </span>
-                            {etapesFrise(t).length > 0 && (
+                            <div
+                              className="dg-frise-defilement"
+                              role="region"
+                              aria-label={`Suivi du test de ${t.contactNom || t.contactEmail || t.entrepriseNom}`}
+                              tabIndex={0}
+                            >
                               <ol className="frise small">
-                                {etapesFrise(t).map((e, i) => (
-                                  <li key={i} className="pastille">
-                                    {e.libelle}
+                                {etapesFrise(t).map((e) => (
+                                  <li
+                                    key={e.cle}
+                                    className={`${e.atteinte ? 'atteinte' : 'a-venir'} ${e.cle}`}
+                                    title={e.detail}
+                                  >
+                                    <strong>{e.libelle}</strong>
+                                    <span>{e.date ?? (e.atteinte ? 'Reçu' : '—')}</span>
                                   </li>
                                 ))}
                               </ol>
-                            )}
+                            </div>
                             {t.echecEnvoi && (
                               <span className="small muted">
                                 Dernier envoi en échec : {t.echecEnvoi}
                               </span>
                             )}
                             <span className="dg-actions">
-                              {t.statut === 'envoyee' && (
+                              {t.statut === 'envoyee' && !testTermine(t) && (
                                 <>
                                   {peutRelancer(t) && (
                                     <button
@@ -534,6 +558,15 @@ export function Diagnostics({
                                   </button>
                                 </>
                               )}
+                              {t.resultat && (
+                                <button
+                                  className="btn"
+                                  type="button"
+                                  onClick={() => setTestOuvert(t.id)}
+                                >
+                                  Voir le résultat
+                                </button>
+                              )}
                               <button
                                 className="btn carre danger"
                                 aria-label="Supprimer le test"
@@ -542,7 +575,7 @@ export function Diagnostics({
                                 onClick={() =>
                                   setSuppression({
                                     titre: 'Supprimer le test',
-                                    phrase: `Ce test VMA de ${t.entrepriseNom} sera effacé définitivement${t.statut === 'envoyee' ? ' ; son lien cessera de fonctionner' : ''}.`,
+                                    phrase: `Ce test VMA de ${t.entrepriseNom} sera effacé définitivement${t.statut === 'envoyee' && !testTermine(t) ? ' ; son lien cessera de fonctionner' : ''}.`,
                                     projetIds: [],
                                     testIds: [t.id],
                                   })

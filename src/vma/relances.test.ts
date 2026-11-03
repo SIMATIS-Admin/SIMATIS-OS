@@ -92,6 +92,8 @@ describe('Relance d’une invitation au test VMA', () => {
   it.each([
     ['utilisée', { statut: 'utilisee' as const }],
     ['révoquée', { statut: 'revoquee' as const }],
+    ['déjà reçue', { recueLe: new Date() }],
+    ['avec résultat', { ecran: { vma: 1200 } }],
     ['expirée', { expireLe: new Date(Date.now() - JOUR) }],
     ['sans adresse', { contactEmail: null }],
   ])('refuse une invitation %s', async (_nom, extra) => {
