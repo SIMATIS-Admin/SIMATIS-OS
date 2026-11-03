@@ -5915,3 +5915,18 @@ details[open] > .fi-mail-ligne::before {
     margin-left: 0;
   }
 }
+
+/* Gestion : liste unique des mouvements. */
+.g-mv-pos {
+  color: var(--green);
+}
+.g-mv-neg {
+  color: var(--ink);
+}
+.g-mv-totaux {
+  display: flex;
+  justify-content: flex-end;
+  gap: 28px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}

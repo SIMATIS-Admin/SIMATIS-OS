@@ -171,6 +171,40 @@ export function Mouvements({
                   <td className="g-lib">
                     <b>{m.libelle}</b>
                     <small>{m.detail}</small>
+                    {m.depense && (
+                      <span className="g-aff">
+                        {m.depense.affectations.map((a) => (
+                          <span className="badge" key={`${a.cible}${a.mandat ?? ''}`}>
+                            {nomAff(a)}
+                          </span>
+                        ))}
+                        {m.depense.refacturablePrevuCents ? (
+                          <span
+                            className="badge blue"
+                            title="Montant que vous pouvez refacturer, pas encore une recette"
+                          >
+                            Refacturable {eurCents(m.depense.refacturablePrevuCents)}
+                          </span>
+                        ) : (
+                          m.depense.refacturable && (
+                            <span
+                              className="badge blue"
+                              title="Intention de refacturer, sans montant"
+                            >
+                              Refacturable
+                            </span>
+                          )
+                        )}
+                        {m.depense.refactureCents > 0 && (
+                          <span
+                            className="badge green"
+                            title="Facturé ou encaissé : une recette distincte"
+                          >
+                            Facturé {eurCents(m.depense.refactureCents)}
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </td>
                   <td>
                     <span className="badge">{m.origine}</span>
