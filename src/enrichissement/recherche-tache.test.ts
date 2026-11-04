@@ -99,9 +99,9 @@ it('répond 202 avant la fin du travail et retrouve son état par HTTP', async (
     payload: { consignes: 'Test fictif', nombre: 1 },
   });
   expect(lancement.statusCode).toBe(202);
-  expect((await app.inject({ method: 'GET', url })).json().etat).toBe('en_cours');
+  expect((await app.inject({ method: 'GET', url })).json<{ etat: string }>().etat).toBe('en_cours');
   finir({ json: { contacts: [] }, jetons: 0 });
-  await attendreRecherche(lancement.json().id);
-  expect((await app.inject({ method: 'GET', url })).json().etat).toBe('terminee');
+  await attendreRecherche(lancement.json<{ id: string }>().id);
+  expect((await app.inject({ method: 'GET', url })).json<{ etat: string }>().etat).toBe('terminee');
   await app.close();
 });
