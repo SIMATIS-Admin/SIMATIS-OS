@@ -14,6 +14,7 @@ export type CarteCerveau = {
   liens: { de: string; vers: string }[];
   autresFichiers: number;
   fichiers?: string[];
+  moi?: string;
   // Lien du dossier de l'espace partagé sur le kDrive (espace Partagé seulement).
   lienKdrive?: string | null;
   tronquee: boolean;

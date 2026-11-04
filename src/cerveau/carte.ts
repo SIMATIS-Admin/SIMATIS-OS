@@ -24,6 +24,8 @@ export type Carte = {
   autresFichiers: number;
   // Chemins de ces fichiers pour l'espace partagé, afin de les lister avec un lien vers le kDrive.
   fichiers?: string[];
+  // Espace partagé : qui consulte (marc), pour distinguer ses messages de ceux de l'autre.
+  moi?: string;
   tronquee: boolean;
 };
 

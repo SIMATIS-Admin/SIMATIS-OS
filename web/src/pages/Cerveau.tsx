@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchCarteCerveau, operationCerveau, type EspaceCerveau } from '../api.js';
 import { IdeeCerveau, MessagePartage, NoteCerveau } from './NoteCerveau.js';
-import { PartageListes } from './PartageListes.js';
+import { PartageBoite } from './PartageBoite.js';
 import { categorieInfo, disposer, voisins, type CarteCerveau } from '../cerveau.js';
 
 const TAILLE = 1000;
@@ -38,12 +38,16 @@ export function Cerveau({ slug }: { slug: string }) {
           </button>
         ))}
       </div>
-      <CerveauEspace key={`${slug}-${espace}`} slug={slug} espace={espace} />
+      {espace === 'partage' ? (
+        <PartageBoite key={slug} slug={slug} />
+      ) : (
+        <CerveauEspace key={`${slug}-${espace}`} slug={slug} espace={espace} />
+      )}
     </>
   );
 }
 
-function CerveauEspace({ slug, espace }: { slug: string; espace: EspaceCerveau }) {
+export function CerveauEspace({ slug, espace }: { slug: string; espace: EspaceCerveau }) {
   const partage = espace === 'partage';
   const [carte, setCarte] = useState<CarteCerveau | null | undefined>(undefined);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -290,8 +294,6 @@ function CerveauEspace({ slug, espace }: { slug: string; espace: EspaceCerveau }
             </p>
           </div>
         </div>
-
-        {partage && <PartageListes slug={slug} carte={carte} onOuvrir={setOuverte} />}
 
         <div className="panel">
           <div className="panel-b">

@@ -3,6 +3,7 @@ import {
   ajouterDocumentPartage,
   cartePartage,
   chercherPartage,
+  lireMessages,
   deposerMessage,
   ecrirePartage,
   lirePartage,
@@ -209,6 +210,7 @@ describe('cartePartage', () => {
     );
     const carte = await cartePartage(appeler, 'marc');
     expect(carte.fichiers).toEqual(['reference/logo.png']);
+    expect(carte.moi).toBe('marc');
     const q = carte.noeuds.find((n) => n.id.endsWith('christophe-question.md'));
     expect(q).toMatchObject({ genre: 'question', auteur: 'christophe' });
     const r = carte.noeuds.find((n) => n.id.endsWith('marc-re-question.md'));
@@ -233,5 +235,22 @@ describe('chercherPartage', () => {
   it('rend une liste vide quand rien ne correspond, et refuse une requête vide', async () => {
     expect(await chercherPartage(appeler, 'zzz')).toEqual([]);
     await expect(chercherPartage(appeler, '  ')).rejects.toThrow(/mot/);
+  });
+});
+
+describe('lireMessages', () => {
+  it('lit plusieurs messages d’un coup et ignore ceux qui sont illisibles', async () => {
+    const r = await lireMessages(
+      appeler,
+      [
+        'echanges/2026-10-29-1200-christophe-question.md',
+        'echanges/absent.md',
+        'echanges/2026-10-29-1200-christophe-question.md',
+      ],
+      'marc',
+    );
+    expect(Object.keys(r)).toEqual(['echanges/2026-10-29-1200-christophe-question.md']);
+    expect(r['echanges/2026-10-29-1200-christophe-question.md']).toContain('Corps.');
+    expect(appels.filter((a) => a.args.chemin === 'echanges/absent.md')).toHaveLength(1);
   });
 });

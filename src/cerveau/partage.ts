@@ -166,7 +166,23 @@ export async function cartePartage(appeler: AppelerPartage, auteur: string): Pro
     autresFichiers: autres.length,
     fichiers: autres.slice(0, MAX_FICHIERS),
   });
-  return { ...carte, tronquee: md.length > MAX_NOTES };
+  return { ...carte, ...(auteur ? { moi: auteur } : {}), tronquee: md.length > MAX_NOTES };
+}
+
+// Lit plusieurs messages d'un coup (quatre lectures à la fois : l'API kDrive limite le débit) ; un
+// message illisible est simplement absent du résultat.
+export async function lireMessages(appeler: AppelerPartage, chemins: string[], auteur: string) {
+  const file = [...new Set(chemins)].slice(0, 50);
+  const textes: Record<string, string> = {};
+  await Promise.all(
+    Array.from({ length: 4 }, async () => {
+      for (let id = file.shift(); id; id = file.shift()) {
+        const note = await lirePartage(appeler, id, auteur).catch(() => null);
+        if (note) textes[id] = note.contenu;
+      }
+    }),
+  );
+  return textes;
 }
 
 export type ResultatRecherche = { chemin: string; extraits: string[] };
