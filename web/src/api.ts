@@ -2574,7 +2574,10 @@ export const validerEnrichissement = (
 
 export type RechercheEnCours = {
   id: string;
-  etat: 'en_cours' | 'terminee' | 'erreur';
+  etat: 'en_cours' | 'terminee' | 'a_completer' | 'erreur';
+  passage?: number;
+  message?: string;
+  consignes?: string;
   nombre: number;
   debut: string;
   fin?: string;
@@ -2587,3 +2590,16 @@ export const lancerRechercheProspects = (slug: string, consignes: string, nombre
   sendJson<RechercheEnCours>('POST', inst(slug, 'base/recherche/tache'), { consignes, nombre });
 export const effacerRechercheProspects = (slug: string, id: string) =>
   sendJson<{ ok: boolean }>('DELETE', inst(slug, 'base/recherche/tache'), { id });
+
+export const continuerRechercheProspects = (slug: string, consignes?: string) =>
+  sendJson<RechercheEnCours>('POST', inst(slug, 'base/recherche/tache/continuer'), { consignes });
+
+export type OrigineContactBase = {
+  provenance: string;
+  collecteLe: string | null;
+  notes: { date: string; origine: string; texte: string; source: string | null }[];
+};
+export const lireOrigineContactBase = (slug: string, id: string) =>
+  getJson<OrigineContactBase>(inst(slug, `base/fiches/${id}/origine`));
+export const noterContactsRechercheBase = (slug: string, contacts: ProspectRecherche[]) =>
+  sendJson<{ ok: boolean }>('POST', inst(slug, 'base/notes-recherche'), { contacts });

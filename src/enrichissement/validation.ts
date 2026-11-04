@@ -1,7 +1,11 @@
 import { baseVivante } from '../base-vivante/schema.js';
 import { emailGenerique } from '../base-vivante/nettoyage.js';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
-import { appliquerContact, enregistrerEmailEntreprise } from '../base-vivante/integration.js';
+import {
+  appliquerContact,
+  enregistrerEmailEntreprise,
+  ajouterNoteOrigine,
+} from '../base-vivante/integration.js';
 import { withInstance } from '../db/context.js';
 import type { Executor } from '../db.js';
 import { enrichissementSuggestions, type Suggestion } from './schema.js';
@@ -74,6 +78,12 @@ export async function valider(
           linkedin: s.linkedin ?? undefined,
           telephone: s.telephone ?? undefined,
           fonction: s.fonction ?? undefined,
+        });
+        await ajouterNoteOrigine(tx, instanceId, r.id, {
+          date: new Date().toISOString(),
+          origine: 'Enrichissement Codex',
+          texte: `Contact vérifié : ${[s.prenom, s.nom, s.fonction].filter(Boolean).join(' · ')}. Confiance : ${s.confiance}. Email : ${s.modeEmail === 'deduit' ? 'déduit, à vérifier' : 'publié ou non renseigné'}.`,
+          source: s.sourceUrl,
         });
         if (adresseEntreprise) {
           await enregistrerEmailEntreprise(tx, instanceId, r.id, adresseEntreprise);

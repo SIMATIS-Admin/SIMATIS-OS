@@ -106,6 +106,32 @@ export function registerEnrichissementRoutes(
     }),
   );
   app.post<Route>(
+    '/api/i/:slug/base/recherche/tache/continuer',
+    surInstance(async (instanceId, request, reply) => {
+      if (!codex) return reply.code(409).send({ error: 'Codex est indisponible.' });
+      const precedente = await lireRecherche(db, instanceId);
+      if (!precedente || precedente.etat === 'en_cours' || precedente.etat === 'terminee')
+        throw new LotRefuse('Aucune recherche à compléter.');
+      const input = z
+        .object({ consignes: z.string().trim().min(1).max(5000).optional() })
+        .safeParse(request.body ?? {});
+      const consignes = input.success ? (input.data.consignes ?? precedente.consignes) : undefined;
+      if (!consignes) throw new LotRefuse('Précisez les critères pour compléter la recherche.');
+      return reply
+        .code(202)
+        .send(
+          await lancerRecherche(
+            db,
+            codex,
+            instanceId,
+            consignes,
+            precedente.nombre,
+            precedente.contacts ?? [],
+          ),
+        );
+    }),
+  );
+  app.post<Route>(
     '/api/i/:slug/base/recherche/tache',
     surInstance(async (instanceId, request, reply) => {
       if (!codex) return reply.code(409).send({ error: 'Codex est indisponible.' });

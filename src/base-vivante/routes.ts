@@ -1,3 +1,4 @@
+import { lireOrigine, noterContactsRecherches } from './origine.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -321,6 +322,38 @@ export function registerBaseVivanteRoutes(
       if (!corps.success) throw new ImportRefuse('Sélection invalide');
       await supprimerFichesBase(db, instanceId, corps.data.ids);
       return { ok: true };
+    }),
+  );
+
+  app.get<Route>(
+    '/api/i/:slug/base/fiches/:id/origine',
+    surInstance(async (instanceId, request, reply) => {
+      const origine = await lireOrigine(db, instanceId, request.params.id as string);
+      return origine ?? reply.code(404).send({ error: 'Fiche inconnue' });
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/notes-recherche',
+    surInstance(async (instanceId, request) => {
+      const input = z
+        .object({
+          contacts: z
+            .array(
+              z.object({
+                entreprise: z.string().min(1).max(500),
+                prenom: z.string().max(200),
+                nom: z.string().max(200),
+                email: z.string().nullable(),
+                linkedin: z.string().nullable(),
+                qualification: z.string().max(20000),
+                source: z.string().url().startsWith('https://'),
+              }),
+            )
+            .max(100),
+        })
+        .safeParse(request.body);
+      if (!input.success) throw new ImportRefuse('Notes de recherche invalides.');
+      return noterContactsRecherches(db, instanceId, input.data.contacts);
     }),
   );
 

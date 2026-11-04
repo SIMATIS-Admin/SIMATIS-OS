@@ -1,0 +1,1 @@
+ALTER TABLE "base_vivante" ADD COLUMN "notes_origine" jsonb DEFAULT '[]'::jsonb NOT NULL;

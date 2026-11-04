@@ -505,6 +505,13 @@
       "when": 1793775791738,
       "tag": "0071_prospection_lien_vma",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793824809196,
+      "tag": "0072_notes_origine_contacts",
+      "breakpoints": true
     }
   ]
 }

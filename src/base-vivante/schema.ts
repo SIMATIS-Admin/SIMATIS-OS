@@ -89,6 +89,8 @@ export const baseLignesBrutes = pgTable(
   ],
 );
 
+export type NoteOrigine = { date: string; origine: string; texte: string; source: string | null };
+
 // The living base. Only integration.ts writes here (see integration.test.ts).
 export const baseVivante = pgTable(
   'base_vivante',
@@ -108,6 +110,7 @@ export const baseVivante = pgTable(
     linkedin: text('linkedin'),
     domaine: text('domaine'),
     provenance: text('provenance').notNull(),
+    notesOrigine: jsonb('notes_origine').$type<NoteOrigine[]>().notNull().default([]),
     mandat: text('mandat'),
     importId: uuid('import_id').references(() => baseImports.id, { onDelete: 'set null' }),
     collecteLe: date('collecte_le'),
