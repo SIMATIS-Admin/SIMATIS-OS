@@ -13,7 +13,7 @@ export function fileCodex() {
         const delai = setTimeout(() => {
           travaux.delete(id);
           reject(new ErreurIA('Le programme Codex local n’a pas répondu.', true));
-        }, 180_000);
+        }, 600_000);
         travaux.set(id, {
           demande,
           pris: false,
