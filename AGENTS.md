@@ -3,6 +3,8 @@
 
 Système d'exploitation interne de SIMATIS (direction commerciale en mode partagé). Vue d'ensemble et démarrage : `README.md`. Plan de développement : `docs/plan.md`.
 
+Ce fichier est la source de vérité des consignes du dépôt. En cas de divergence avec d'autres consignes du projet, il prévaut.
+
 ## Vérifier son travail
 
     npm run verify      # format, lint, types, tests, build
@@ -44,7 +46,7 @@ Committer seulement un changement vérifié. La CI rejoue ces commandes sur chaq
 ## Tests (règle permanente)
 
 - Chaque nouvelle fonctionnalité arrive avec ses tests, écrits avant ou avec le code, et lancés (`npm run verify`) avant chaque commit.
-- Après chaque push sur une PR : relancer les tests en local et suivre la CI jusqu'au vert.
+- Après chaque push : relancer les tests en local et suivre la CI jusqu'au vert.
 - Jamais de merge avec des tests rouges ou une CI non verte.
 
 ## Confidentialité (règle absolue)
@@ -54,13 +56,11 @@ Ce dépôt est **public** sur GitHub. Ne jamais y écrire, committer ni pousser 
 - noms de clients, prospects, contacts, mandats réels, ni montants, tarifs ou marges réels ;
 - données extraites de HubSpot, Gmail, Google Agenda ou tout autre outil réel ;
 - identifiants, mots de passe, clés d'API, jetons, fichiers `.env` ;
-- méthodes ou contenus propriétaires (questionnaires, grilles de scoring détaillées, trames de rapport) ;
+- méthodes ou contenus propriétaires (questionnaires, grilles de scoring, trames de rapport) ;
 - contenu du second cerveau, en tout ou partie.
 
-Seule exception, décidée par Christophe : l'**ID client** de l'application Google « SIMATIS OS » (type application de bureau) est dans le code (`src/connecteurs/google/oauth.ts`), pour que l'OS marche à l'identique sur tous les postes. Son **secret** n'est jamais commité : il se colle une fois dans Paramètres > Connexions.
-
 Les exemples, tests et démonstrations utilisent **uniquement des données fictives**.
-Un secret poussé une fois reste récupérable dans l'historique : en cas de doute, ne pas committer, demander.
+Un secret poussé une fois reste récupérable dans l'historique : en cas de doute, ne pas committer, demander à Marc.
 
 ## Second cerveau
 
@@ -71,6 +71,7 @@ La configuration locale (chemins, URL, jetons) passe par des variables d'environ
 
 - Toujours vérifier `git branch --show-current` avant de travailler.
 - **Pas de worktree** : on travaille toujours dans le dossier principal du dépôt, en changeant de branche. Un seul agent travaille à la fois dans ce dépôt.
+- Si des modifications non commitées que l'agent n'a pas faites sont présentes, s'arrêter et prévenir Marc.
 - Chaque branche part de `main` à jour : `git fetch` puis `git switch -c feature/nom-court origin/main`.
 - Jamais de travail ni de commit direct sur `main`.
 - Avant de changer de branche, l'arbre de travail doit être propre : committer plutôt que stasher.
@@ -88,9 +89,15 @@ Marc n'est pas développeur : l'agent gère tout git seul, sans demander de conf
 ### Garde-fou confidentialité (avant chaque commit, non négociable)
 
 1. Relire `git diff --staged` en cherchant toute donnée réelle ou secret (voir liste ci-dessus).
-2. Ne jamais utiliser `git add -A` à l'aveugle : ajouter les fichiers explicitement.
+2. Ne jamais utiliser `git add -A` : ajouter les fichiers explicitement.
 3. En cas de doute sur une donnée, ne pas committer et demander à Marc : c'est la seule exception à l'autonomie.
 
 ## Langue
 
 Documentation et interface en français. Code et identifiants techniques en anglais ou français, de façon cohérente.
+
+## Livraison
+
+- Toutes les fonctionnalités terminées doivent être intégrées à `main` après vérification et CI verte. Un déploiement local seul ne clôt pas une livraison.
+- Après un merge : reconstruire l'application et relancer le conteneur depuis `origin/main` à jour.
+- Avant de remplacer le conteneur actif, vérifier que les sources et l'image active n'ont pas changé pendant la construction.

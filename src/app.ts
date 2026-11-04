@@ -1,3 +1,6 @@
+import { tournerBrouillons } from './prospection/quotidienne.js';
+import { tournerRecherche } from './enrichissement/routine.js';
+import { fileCodex } from './enrichissement/codex.js';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type pg from 'pg';
 import { registerApi } from './api/routes.js';
@@ -65,7 +68,46 @@ export function buildApp({
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
   if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
+  const codex = fileCodex();
+  let timerRecherche: ReturnType<typeof setInterval> | undefined;
+  let rechercheEnCours = false;
+  app.addHook('onListen', () => {
+    timerRecherche = setInterval(() => {
+      if (rechercheEnCours) return;
+      rechercheEnCours = true;
+      void tournerRecherche(db, codex.client)
+        .catch((err: unknown) => app.log.error(err, 'Routine de recherche'))
+        .finally(() => {
+          rechercheEnCours = false;
+        });
+    }, 60_000);
+    return Promise.resolve();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(timerRecherche);
+    return Promise.resolve();
+  });
+  let timerBrouillons: ReturnType<typeof setInterval> | undefined;
+  let preparationEnCours = false;
+  app.addHook('onListen', () => {
+    timerBrouillons = setInterval(() => {
+      if (preparationEnCours) return;
+      preparationEnCours = true;
+      void tournerBrouillons(db, vma)
+        .catch((err: unknown) => app.log.error(err, 'Préparation quotidienne'))
+        .finally(() => {
+          preparationEnCours = false;
+        });
+    }, 60_000);
+    return Promise.resolve();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(timerBrouillons);
+    return Promise.resolve();
+  });
+
   registerEnrichissementRoutes(app, {
+    codex: codex.client,
     db,
     enrichissement,
     ...(clientIA ? { client: clientIA } : {}),
@@ -75,7 +117,7 @@ export function buildApp({
   registerAtelierRoutes(app, { db });
   registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
-  registerRunnerApi(app, { db });
+  registerRunnerApi(app, { db, codex });
   registerCerveauRoutes(app, { db });
   registerWeb(app);
   return app;

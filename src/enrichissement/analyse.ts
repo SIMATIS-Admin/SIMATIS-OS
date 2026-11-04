@@ -1,10 +1,25 @@
 import { z } from 'zod';
-import { normaliserEmail, normaliserTelephone, texte } from '../base-vivante/nettoyage.js';
+import {
+  emailGenerique,
+  normaliserEmail,
+  normaliserLinkedin,
+  normaliserTelephone,
+  texte,
+} from '../base-vivante/nettoyage.js';
 import { CONFIANCES, MODES_EMAIL, type Suggestion, type TypeEnrichissement } from './schema.js';
 
 export type Candidat = Pick<
   Suggestion,
-  'prenom' | 'nom' | 'fonction' | 'email' | 'telephone' | 'sourceUrl' | 'confiance' | 'modeEmail'
+  | 'prenom'
+  | 'nom'
+  | 'fonction'
+  | 'linkedin'
+  | 'email'
+  | 'emailEntreprise'
+  | 'telephone'
+  | 'sourceUrl'
+  | 'confiance'
+  | 'modeEmail'
 >;
 
 export type FicheAEnrichir = {
@@ -36,6 +51,8 @@ export const SCHEMA_REPONSE = {
           'nom',
           'fonction',
           'email',
+          'emailEntreprise',
+          'linkedin',
           'telephone',
           'sourceUrl',
           'confiance',
@@ -46,6 +63,8 @@ export const SCHEMA_REPONSE = {
           nom: nullable,
           fonction: nullable,
           email: nullable,
+          emailEntreprise: nullable,
+          linkedin: nullable,
           telephone: nullable,
           sourceUrl: nullable,
           confiance: { type: 'string', enum: [...CONFIANCES] },
@@ -56,7 +75,7 @@ export const SCHEMA_REPONSE = {
   },
 } as const;
 
-const REGLES = `Règles : ne fournis que des informations trouvées sur des pages web publiques, avec l'URL exacte de la page (sourceUrl) ; n'invente jamais un nom, un mail ou un téléphone, mets null à la place. Si tu proposes une adresse mail construite par déduction (prénom.nom@domaine), mets modeEmail à "deduit" ; si elle figure sur une page, mets "trouve". Ne scrape pas LinkedIn : cite seulement les pages publiques que la recherche web remonte. Réponds uniquement par le JSON demandé.`;
+const REGLES = `Règles : ne fournis que des informations trouvées sur des pages web publiques, avec l'URL exacte de la page (sourceUrl) ; n'invente jamais un nom, un mail ou un téléphone, mets null à la place. Si tu proposes une adresse mail construite par déduction (prénom.nom@domaine), mets modeEmail à "deduit" ; si elle figure sur une page, mets "trouve". Cherche systématiquement le téléphone direct, l’adresse professionnelle nominative et le profil LinkedIn nominatif correspondant à la personne et à l’entreprise. Renseigne une adresse générique publique dans emailEntreprise uniquement, jamais dans email. Renseigne linkedin avec l’URL du profil public ou null. Ne scrape pas LinkedIn : cite seulement les pages publiques que la recherche web remonte. Réponds uniquement par le JSON demandé.`;
 
 export function consigne(
   type: TypeEnrichissement,
@@ -91,6 +110,8 @@ const reponseSchema = z.object({
       nom: z.string().nullable(),
       fonction: z.string().nullable(),
       email: z.string().nullable(),
+      emailEntreprise: z.string().nullish(),
+      linkedin: z.string().nullish(),
       telephone: z.string().nullable(),
       sourceUrl: z.string().nullable(),
       confiance: z.enum(CONFIANCES),
@@ -124,12 +145,19 @@ export function analyserReponse(json: unknown, max: number): Candidat[] {
       prenom: texte(brut.prenom),
       nom: texte(brut.nom),
       fonction: texte(brut.fonction),
-      email,
+      email: emailGenerique(email) ? null : email,
+      emailEntreprise: sourcee
+        ? emailGenerique(email)
+          ? email
+          : normaliserEmail(brut.emailEntreprise)
+        : null,
+      linkedin: normaliserLinkedin(brut.linkedin),
       // Sans page https derrière, un téléphone n'est pas retenu et un mail reste une simple déduction.
       telephone: sourcee ? normaliserTelephone(brut.telephone) : null,
       sourceUrl: sourcee ? url : null,
       confiance: sourcee ? brut.confiance : 'basse',
-      modeEmail: !email ? null : sourcee ? (brut.modeEmail ?? 'trouve') : 'deduit',
+      modeEmail:
+        !email || emailGenerique(email) ? null : sourcee ? (brut.modeEmail ?? 'trouve') : 'deduit',
     };
     if (!c.nom && !c.email && !c.telephone) continue;
     const existant = parPersonne.get(cle(c));

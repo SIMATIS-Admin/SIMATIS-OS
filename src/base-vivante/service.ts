@@ -1,3 +1,4 @@
+import { MOTIF_EMAIL_GENERIQUE } from './nettoyage.js';
 import { and, asc, count, desc, eq, gt, ilike, isNotNull, or, sql } from 'drizzle-orm';
 import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
@@ -21,6 +22,7 @@ import {
 } from './historique.js';
 import {
   enrichir,
+  supprimerFiches,
   integrerFiches,
   majConformite,
   type Apport,
@@ -592,7 +594,11 @@ export const FILTRES_ALERTE = [
 ] as const;
 export type FiltreAlerte = (typeof FILTRES_ALERTE)[number];
 
+export const TRIS_BASE = ['entreprise', 'tentatives', 'dernier_contact'] as const;
+
 export type FiltresBase = {
+  tri?: (typeof TRIS_BASE)[number];
+  canal?: 'email' | 'linkedin';
   zone?: Zone;
   statut?: StatutProspection;
   alerte?: FiltreAlerte;
@@ -600,14 +606,45 @@ export type FiltresBase = {
   q?: string;
 };
 
+// A public personal profile is enough for manual outreach, even without CRM-ready details.
+const profilLinkedin = sql`coalesce(${baseVivante.linkedin} ~* '^https://([a-z0-9-]+[.])?linkedin[.]com/in/[^ /]+', false)`;
+const joignableSurLinkedin = sql`trim(${baseVivante.nom}) <> '' and ${profilLinkedin}
+  and not ${baseVivante.opposition} and ${baseVivante.exclusion} is null`;
+// Keep the company record, but stop asking for a first contact once one is reachable.
+const aEnrichir = sql`${baseVivante.zone} = 'a_enrichir' and not (${joignableSurLinkedin})
+  and (trim(${baseVivante.nom}) <> '' or not exists (
+    select 1 from base_vivante contact
+    where contact.instance_id = ${baseVivante.instanceId}
+      and lower(trim(contact.entreprise)) = lower(trim(${baseVivante.entreprise}))
+      and (contact.domaine is null or ${baseVivante.domaine} is null or contact.domaine = ${baseVivante.domaine})
+      and trim(contact.nom) <> ''
+      and not contact.opposition and contact.exclusion is null
+      and (
+        (nullif(trim(contact.email), '') is not null and not contact.email_invalide
+          and trim(contact.email) !~* ${MOTIF_EMAIL_GENERIQUE})
+        or contact.linkedin ~* '^https://([a-z0-9-]+[.])?linkedin[.]com/in/[^ /]+'
+      )
+  ))`;
+
 function conditions(instanceId: string, f: FiltresBase) {
   const recherche = f.q?.trim();
   const motif = recherche ? `%${recherche.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
   const limiteRecontact = new Date();
   limiteRecontact.setMonth(limiteRecontact.getMonth() - MOIS_RECONTACT);
+  const emailExploitable = sql`nullif(trim(${baseVivante.email}), '') is not null and not ${baseVivante.emailInvalide} and trim(${baseVivante.email}) !~* ${MOTIF_EMAIL_GENERIQUE}`;
   return and(
     eq(baseVivante.instanceId, instanceId),
-    f.zone ? eq(baseVivante.zone, f.zone) : undefined,
+    f.canal
+      ? and(
+          eq(baseVivante.opposition, false),
+          sql`${baseVivante.exclusion} is null`,
+          sql`trim(${baseVivante.nom}) <> ''`,
+          f.canal === 'email'
+            ? emailExploitable
+            : sql`not (${emailExploitable}) and ${profilLinkedin}`,
+        )
+      : undefined,
+    f.zone === 'a_enrichir' ? aEnrichir : f.zone ? eq(baseVivante.zone, f.zone) : undefined,
     f.statut ? eq(baseVivante.statutProspection, f.statut) : undefined,
     f.provenance ? eq(baseVivante.provenance, f.provenance) : undefined,
     f.alerte === 'opposition' ? eq(baseVivante.opposition, true) : undefined,
@@ -639,11 +676,23 @@ export async function listerFiches(
       .select()
       .from(baseVivante)
       .where(filtre)
-      .orderBy(asc(baseVivante.entreprise), asc(baseVivante.nom), asc(baseVivante.id))
+      .orderBy(
+        ...(options.tri === 'tentatives' ? [sql`${baseVivante.nbContacts} desc`] : []),
+        ...(options.tri === 'dernier_contact'
+          ? [sql`${baseVivante.dernierContactLe} desc nulls last`]
+          : []),
+        asc(baseVivante.entreprise),
+        asc(baseVivante.nom),
+        asc(baseVivante.id),
+      )
       .limit(Math.min(options.limite ?? 50, 200))
       .offset(options.decalage ?? 0);
     const parZone = await tx
-      .select({ zone: baseVivante.zone, n: count() })
+      .select({
+        zone: baseVivante.zone,
+        n: count(),
+        aEnrichir: sql<number>`count(*) filter (where ${aEnrichir})`.mapWith(Number),
+      })
       .from(baseVivante)
       .where(eq(baseVivante.instanceId, instanceId))
       .groupBy(baseVivante.zone);
@@ -660,7 +709,11 @@ export async function listerFiches(
     return {
       fiches: fiches.map((f): FicheAvecAlertes => ({ ...f, alertes: alertesDe(f) })),
       total,
-      compteurs: { aEnrichir: nombre('a_enrichir'), prospectable: nombre('prospectable') },
+      compteurs: {
+        aEnrichir: parZone.find((p) => p.zone === 'a_enrichir')?.aEnrichir ?? 0,
+        prospectable: nombre('prospectable'),
+        total: parZone.reduce((somme, p) => somme + p.n, 0),
+      },
       provenances: provenances.map((p) => p.provenance),
     };
   });
@@ -756,3 +809,7 @@ export async function enrichirFiche(
 }
 
 export { STATUTS_PROSPECTION };
+
+export async function supprimerFichesBase(db: Executor, instanceId: string, ids: string[]) {
+  await withInstance(db, instanceId, (tx) => supprimerFiches(tx, instanceId, ids));
+}

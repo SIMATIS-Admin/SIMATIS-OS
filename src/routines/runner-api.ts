@@ -1,3 +1,4 @@
+import type { fileCodex } from '../enrichissement/codex.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Database } from '../db.js';
@@ -39,7 +40,10 @@ const UN_QUART_HEURE = 15 * 60_000;
 // API of the local runner (npm run runner): it picks the requested runs, gets a temporary MCP token
 // limited to the run's instance, launches Claude, then reports the end. Only a « runner » token
 // opens it.
-export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }): void {
+export function registerRunnerApi(
+  app: FastifyInstance,
+  { db, codex }: { db: Database; codex?: ReturnType<typeof fileCodex> },
+): void {
   const auth = async (request: FastifyRequest, reply: FastifyReply) => {
     const header = request.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
@@ -50,6 +54,22 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
     }
     return true;
   };
+
+  if (codex) {
+    app.get('/api/runner/codex', async (request, reply) => {
+      if (!(await auth(request, reply))) return reply;
+      return { travail: codex.prendre() };
+    });
+    app.post('/api/runner/codex', async (request, reply) => {
+      if (!(await auth(request, reply))) return reply;
+      const corps = z
+        .object({ id: z.string().uuid(), ok: z.boolean(), resultat: z.unknown() })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Résultat Codex invalide' });
+      codex.finir(corps.data.id, corps.data.resultat, corps.data.ok);
+      return { ok: true };
+    });
+  }
 
   const presence = z.object({
     nom: z.string().trim().min(1).max(200),

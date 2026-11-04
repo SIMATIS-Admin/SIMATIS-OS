@@ -470,6 +470,27 @@
       "when": 1793652437537,
       "tag": "0066_vma_inscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793717873960,
+      "tag": "0067_brainy_punisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793718814725,
+      "tag": "0068_fair_purifiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793775125741,
+      "tag": "0069_amusing_madripoor",
+      "breakpoints": true
     }
   ]
 }

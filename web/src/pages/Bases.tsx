@@ -1,3 +1,5 @@
+import { RoutineProspects } from './RoutineProspects.js';
+import { RechercheProspects } from './RechercheProspects.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   annulerImportBase,
@@ -555,12 +557,18 @@ function FenetreImport({
   );
 }
 
-type Fenetres = null | { quoi: 'import'; etape: 1 | 2 | 3 } | { quoi: 'mail' } | { quoi: 'triage' };
+type Fenetres =
+  | null
+  | { quoi: 'import'; etape: 1 | 2 | 3 }
+  | { quoi: 'mail' }
+  | { quoi: 'triage' }
+  | { quoi: 'recherche' }
+  | { quoi: 'routine-recherche' };
 
 export function Bases({ slug }: { slug: string }) {
   const [etat, setEtat] = useState<EtatBase | null>(null);
   const [apercus, setApercus] = useState<ImportBase[]>([]);
-  const [filtres, setFiltres] = useState<FiltresBaseWeb>({});
+  const [filtres, setFiltres] = useState<FiltresBaseWeb>({ zone: 'a_enrichir' });
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -626,7 +634,7 @@ export function Bases({ slug }: { slug: string }) {
     void charger();
   };
   const integres = etat.imports.filter((i) => i.statut === 'integre');
-  const total = etat.compteurs.aEnrichir + etat.compteurs.prospectable;
+  const total = etat.compteurs.total ?? etat.compteurs.aEnrichir + etat.compteurs.prospectable;
   const fermer = () => {
     setFenetre(null);
     void charger();
@@ -699,6 +707,16 @@ export function Bases({ slug }: { slug: string }) {
               setPage(0);
             }}
           />
+          <button
+            className={filtres.tri ? 'btn primary' : 'btn'}
+            aria-pressed={Boolean(filtres.tri)}
+            onClick={() => {
+              setFiltres({ tri: 'entreprise' });
+              setPage(0);
+            }}
+          >
+            Base complète ({entier(total)})
+          </button>
           <button className="btn" onClick={() => setFenetre({ quoi: 'mail' })}>
             Mettre à jour depuis les mails
           </button>
@@ -713,6 +731,12 @@ export function Bases({ slug }: { slug: string }) {
               </a>
             </div>
           </details>
+          <button className="btn" onClick={() => setFenetre({ quoi: 'routine-recherche' })}>
+            Recherche quotidienne
+          </button>
+          <button className="btn" onClick={() => setFenetre({ quoi: 'recherche' })}>
+            Rechercher de nouveaux prospects
+          </button>
           <button className="btn primary" onClick={() => setFenetre({ quoi: 'import', etape: 1 })}>
             + Importer une liste
           </button>
@@ -755,6 +779,20 @@ export function Bases({ slug }: { slug: string }) {
         onImporter={() => setFenetre({ quoi: 'import', etape: 1 })}
       />
 
+      {fenetre?.quoi === 'routine-recherche' && (
+        <RoutineProspects slug={slug} fermer={() => setFenetre(null)} />
+      )}
+      {fenetre?.quoi === 'recherche' && (
+        <RechercheProspects
+          slug={slug}
+          fermer={() => setFenetre(null)}
+          termine={(bilan) => {
+            setFenetre(null);
+            setInfo(bilan);
+            void charger();
+          }}
+        />
+      )}
       {fenetre?.quoi === 'import' && (
         <FenetreImport
           slug={slug}

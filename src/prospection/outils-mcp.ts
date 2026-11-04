@@ -186,6 +186,7 @@ registerTool({
           societe: b.societe,
           tache: { titre: null, notes: null },
           touche: b.touche,
+          lienVma: b.lienVma,
           ...reformulationDe(b),
           provenance: fiche?.provenance ?? null,
           collecteLe: fiche?.collecteLe ?? null,

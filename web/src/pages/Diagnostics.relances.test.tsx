@@ -67,8 +67,45 @@ const afficher = async (
 };
 
 describe('Diagnostics : relances et suivi des invitations', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
   afterEach(() => cleanup());
+
+  it('conserve un bloc archivé après réouverture et permet de le restaurer', async () => {
+    await afficher([test({})]);
+    fireEvent.click(screen.getByRole('button', { name: 'Archiver ce bloc' }));
+    expect(screen.queryByText('Entreprise Fictive A')).toBeNull();
+
+    cleanup();
+    render(<Diagnostics slug="demo" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Archives (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: /Entreprise Fictive A.*Détail/ }));
+    expect(screen.getByText('jeanne@exemple.test')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Restaurer ce bloc' }));
+    expect(screen.getByText('Aucun bloc archivé.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retour aux blocs actifs' }));
+    expect(screen.getByText('Entreprise Fictive A')).toBeTruthy();
+  });
+
+  it('archive un seul test et laisse les autres tests du bloc visibles', async () => {
+    await afficher([
+      test({ id: 't1', contactNom: 'Premier destinataire' }),
+      test({ id: 't2', contactNom: 'Second destinataire' }),
+    ]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Archiver ce test' })[0]!);
+    expect(screen.queryByText('Premier destinataire')).toBeNull();
+    expect(screen.getByText('Second destinataire')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Archives (1)' }));
+    expect(screen.getByText('Premier destinataire')).toBeTruthy();
+    expect(screen.queryByText('Second destinataire')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Restaurer ce bloc' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Restaurer ce test' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retour aux blocs actifs' }));
+    expect(screen.getByText('Premier destinataire')).toBeTruthy();
+    expect(screen.getByText('Second destinataire')).toBeTruthy();
+  });
 
   it('montre les cinq étapes de la frise avec les étapes à venir', async () => {
     await afficher([test({ relances: [{ le: il(3), origine: 'auto' }] })]);
@@ -117,7 +154,7 @@ describe('Diagnostics : relances et suivi des invitations', () => {
     expect(screen.getAllByRole('button', { name: 'Relancer' })).toHaveLength(1);
   });
 
-  it('relancer préremplit « Tutoyer » depuis l’invitation, envoie le choix et le dit', async () => {
+  it('relancer préremplit « Tutoyer » depuis l’invitation, envoie le choix et ferme la fenêtre', async () => {
     api.relancerTestVma.mockResolvedValue({
       ...test({ tutoiement: false }),
       envoi: { statut: 'envoye' },
@@ -130,17 +167,20 @@ describe('Diagnostics : relances et suivi des invitations', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Envoyer la relance' }));
     await waitFor(() => expect(api.relancerTestVma).toHaveBeenCalledWith('demo', 't1', false));
     await waitFor(() =>
-      expect(screen.getByText('Relance envoyée à jeanne@exemple.test.')).toBeTruthy(),
+      expect(screen.queryByRole('button', { name: 'Envoyer la relance' })).toBeNull(),
     );
-    expect(screen.queryByRole('button', { name: 'Envoyer la relance' })).toBeNull();
+    expect(screen.queryByText(/Relance envoyée à/)).toBeNull();
   });
 
-  it('une simulation est annoncée comme non envoyée', async () => {
+  it('une simulation ferme la fenêtre sans afficher de bandeau', async () => {
     api.relancerTestVma.mockResolvedValue({ ...test({}), envoi: { statut: 'simule' } });
     await afficher([test({})]);
     fireEvent.click(screen.getByRole('button', { name: 'Relancer' }));
     fireEvent.click(screen.getByRole('button', { name: 'Envoyer la relance' }));
-    await waitFor(() => expect(screen.getByText(/Relance non envoyée.*simulation/)).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Envoyer la relance' })).toBeNull(),
+    );
+    expect(screen.queryByText(/Relance non envoyée/)).toBeNull();
   });
 
   it('« Annuler » ne relance rien', async () => {
@@ -184,7 +224,7 @@ describe('Diagnostics : relances et suivi des invitations', () => {
     api.fetchProjetsDiag.mockResolvedValue([]);
     api.fetchTestsVma.mockResolvedValue([]);
     render(<Diagnostics slug="demo" />);
-    await screen.findByText('Aucune entreprise.');
+    await screen.findByText('Aucun bloc actif.');
     fireEvent.click(screen.getByRole('button', { name: '+ Nouveau' }));
     fireEvent.click(screen.getByRole('button', { name: /Nouveau test VMA/ }));
     const tu = screen.getByLabelText<HTMLInputElement>('Tutoyer le dirigeant');

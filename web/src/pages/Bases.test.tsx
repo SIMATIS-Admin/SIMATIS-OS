@@ -346,17 +346,17 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     });
   });
 
-  it('propose d’enrichir avec l’IA seulement quand le serveur a une clé OpenAI', async () => {
+  it('propose d’enrichir avec l’IA quand Codex est disponible', async () => {
     const { unmount } = render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
-    expect(screen.queryByText("Enrichir avec l'IA")).toBeNull();
+    expect(screen.queryByText('Rechercher avec Codex')).toBeNull();
     unmount();
     cleanup();
     enrichissement = { disponible: true, lotMax: 5, tacheEnCours: null };
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
-    fireEvent.click(await screen.findByText("Enrichir avec l'IA"));
-    expect(await screen.findByLabelText('Fonctions recherchées')).toBeTruthy();
+    fireEvent.click(await screen.findByText('Rechercher avec Codex'));
+    expect(await screen.findByText('Lancer sur 1 fiche')).toBeTruthy();
   });
 
   it('permet de suivre un enrichissement resté en cours', async () => {

@@ -1543,6 +1543,7 @@ export type ResumeImportBase = Pick<
   'id' | 'nomFichier' | 'feuille' | 'provenance' | 'mandat' | 'statut' | 'creeLe' | 'rapport'
 > & { compteurs: CompteursImportBase };
 export type FicheBase = {
+  linkedin?: string | null;
   id: string;
   zone: ZoneBase;
   entreprise: string;
@@ -1551,6 +1552,7 @@ export type FicheBase = {
   // Empty while the record only knows its company (« à enrichir »).
   nom: string;
   email: string | null;
+  emailEntreprise?: string | null;
   telephone: string | null;
   fonction: string | null;
   provenance: string;
@@ -1572,6 +1574,8 @@ export type ExclusionBase = 'client' | 'partenaire' | 'concurrent';
 export type AlerteBase =
   'recontact' | 'opposition' | 'email_invalide' | 'exclusion' | 'deja_en_crm';
 export type FiltresBaseWeb = {
+  tri?: 'entreprise' | 'tentatives' | 'dernier_contact';
+  canal?: 'email' | 'linkedin';
   zone?: ZoneBase;
   statut?: StatutProspectionBase;
   alerte?: AlerteBase;
@@ -1581,7 +1585,7 @@ export type FiltresBaseWeb = {
 export type EtatBase = {
   fiches: FicheBase[];
   total: number;
-  compteurs: { aEnrichir: number; prospectable: number };
+  compteurs: { aEnrichir: number; prospectable: number; total?: number };
   provenances: string[];
   imports: ResumeImportBase[];
 };
@@ -1607,11 +1611,61 @@ export const actualiserHistoriqueBase = (slug: string) =>
     inst(slug, 'base/historique/actualiser'),
     {},
   );
+export const supprimerFichesBase = (slug: string, ids: string[]) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, 'base/fiches'), { ids });
 export const majConformiteBase = (
   slug: string,
   id: string,
   patch: { opposition?: boolean; exclusion?: ExclusionBase | null; emailInvalide?: boolean },
 ) => sendJson<{ ok: true }>('PATCH', inst(slug, `base/fiches/${id}`), patch);
+export type RoutineBrouillonsVue = {
+  active: boolean;
+  heure: string;
+  dernierJour?: string;
+  bilan?: string;
+};
+export const lireRoutineBrouillons = (slug: string) =>
+  getJson<RoutineBrouillonsVue>(inst(slug, 'prospection/routine'));
+export const sauverRoutineBrouillons = (slug: string, { active, heure }: RoutineBrouillonsVue) =>
+  sendJson<RoutineBrouillonsVue>('PUT', inst(slug, 'prospection/routine'), { active, heure });
+
+export type RoutineProspectsVue = {
+  active: boolean;
+  consignes: string;
+  nombre: number;
+  heure: string;
+  dernierJour?: string;
+  bilan?: string;
+};
+
+export const lireRoutineProspects = (slug: string) =>
+  getJson<RoutineProspectsVue>(inst(slug, 'base/recherche/routine'));
+
+export const sauverRoutineProspects = (
+  slug: string,
+  { active, consignes, nombre, heure }: RoutineProspectsVue,
+) =>
+  sendJson<RoutineProspectsVue>('PUT', inst(slug, 'base/recherche/routine'), {
+    active,
+    consignes,
+    nombre,
+    heure,
+  });
+
+export type ProspectRecherche = {
+  entreprise: string;
+  prenom: string;
+  nom: string;
+  fonction: string;
+  email: string | null;
+  linkedin: string | null;
+  source: string;
+  qualification: string;
+};
+
+export const rechercherProspectsBase = (slug: string, consignes: string, nombre: number) =>
+  sendJson<ProspectRecherche[]>('POST', inst(slug, 'base/recherche'), { consignes, nombre });
+
 export const creerImportBase = (
   slug: string,
   payload: {
@@ -1651,6 +1705,7 @@ export type ApportContactBase = {
   email?: string;
   telephone?: string;
   fonction?: string;
+  linkedin?: string;
 };
 export const enrichirFicheBase = (slug: string, id: string, apport: ApportContactBase) =>
   sendJson<{ zone: ZoneBase }>('POST', inst(slug, `base/fiches/${id}/enrichir`), apport);
@@ -1837,6 +1892,7 @@ export type CampagneResume = {
   statut: StatutCampagne;
   creeLe: string;
   brouillons: number;
+  envoyes?: number;
   resultat: ResultatCampagne | null;
 };
 export type VueProspection = {
@@ -1990,6 +2046,12 @@ export const reformulerBrouillonsCampagne = (
     'POST',
     inst(slug, `prospection/campagnes/${encodeURIComponent(campagneId)}/reformuler`),
     { consigne, ...(ids ? { ids } : {}) },
+  );
+export const abandonnerCampagne = (slug: string, id: string) =>
+  sendJson<{ abandonnees: number }>(
+    'DELETE',
+    inst(slug, `prospection/campagnes/${encodeURIComponent(id)}`),
+    {},
   );
 export const abandonnerCampagnesEnCours = (slug: string) =>
   sendJson<{ abandonnees: number }>('DELETE', inst(slug, 'prospection/campagnes-en-cours'), {});
@@ -2319,7 +2381,9 @@ export type SuggestionEnrichissement = {
   nom: string | null;
   fonction: string | null;
   email: string | null;
+  emailEntreprise?: string | null;
   telephone: string | null;
+  linkedin?: string | null;
   sourceUrl: string | null;
   confiance: 'haute' | 'moyenne' | 'basse';
   modeEmail: 'trouve' | 'deduit' | null;

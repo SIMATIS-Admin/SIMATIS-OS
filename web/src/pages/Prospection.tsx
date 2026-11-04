@@ -1,6 +1,7 @@
+import { Icon } from '../icons.js';
 import { useEffect, useState } from 'react';
 import {
-  abandonnerCampagnesEnCours,
+  abandonnerCampagne,
   creerCampagneFroid,
   creerCampagneRelance,
   fetchCampagne,
@@ -240,9 +241,8 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
     );
   }
 
-  const reprendre = () => {
-    if (!vue.enCours) return;
-    void fetchCampagne(slug, vue.enCours).then(
+  const reprendre = (id: string) => {
+    void fetchCampagne(slug, id).then(
       (c) =>
         setEtape(
           c.statut === 'relecture' || reformulationEnCours(c)
@@ -253,14 +253,12 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
     );
   };
 
-  const abandonner = () => {
+  const abandonner = (id: string) => {
     if (
-      !window.confirm(
-        `Abandonner ${vue.nbEnCours > 1 ? 'ces campagnes' : 'cette campagne'} ? Les brouillons de relecture seront supprimés.`,
-      )
+      !window.confirm('Abandonner cette campagne ? Ses brouillons de relecture seront supprimés.')
     )
       return;
-    abandonnerCampagnesEnCours(slug).then(
+    abandonnerCampagne(slug, id).then(
       () => void charger(),
       (e: unknown) => setMessage(messageErreur(e)),
     );
@@ -271,21 +269,6 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
       {message && (
         <div className="alert amber">
           <div>{message}</div>
-        </div>
-      )}
-      {vue.enCours && (
-        <div className="alert blue">
-          <div>
-            {vue.nbEnCours > 1
-              ? `${vue.nbEnCours} campagnes sont en cours.`
-              : 'Une campagne est en cours.'}{' '}
-            <button className="btn sm primary" onClick={reprendre}>
-              Reprendre la campagne en cours
-            </button>{' '}
-            <button className="btn sm" onClick={abandonner}>
-              {vue.nbEnCours > 1 ? 'Abandonner ces campagnes' : 'Abandonner cette campagne'}
-            </button>
-          </div>
         </div>
       )}
       <div className="grid g3" style={{ gridTemplateColumns: '1.3fr 1fr 1fr' }}>
@@ -345,6 +328,7 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
         <div className="panel" style={{ border: '2px solid var(--teal)' }}>
           <div className="panel-b">
             <h2 style={{ marginTop: 0 }}>Prospecter à froid</h2>
+            <a href={`#/${slug}/bases`}>Ouvrir la Base vivante</a>
             <p className="small muted">
               Vous tirez un échantillon de la base vivante, l'OS rédige un mail par contact.
             </p>
@@ -363,8 +347,7 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
 
       <div className="panel">
         <div className="panel-h">
-          <h2>Campagnes récentes</h2>
-          <span className="small muted">Ce qui a été lancé, et ce que ça a donné</span>
+          <h2>Campagnes</h2>
         </div>
         <div className="panel-b">
           {vue.recentes.length === 0 ? (
@@ -377,7 +360,10 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
                 <tr>
                   <th>Date</th>
                   <th>Campagne</th>
+                  <th>Statut</th>
                   <th className="r">Brouillons</th>
+                  <th className="r">E-mails envoyés</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -390,22 +376,61 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
                         month: 'short',
                       })}
                     </td>
-                    <td>{c.mode === 'relance' ? 'Relance de tâches' : 'Prospection à froid'}</td>
-                    <td className="r num">{c.resultat?.brouillons ?? c.brouillons}</td>
+                    <td>
+                      {
+                        {
+                          relance: 'Relance de tâches',
+                          froid: 'Prospection à froid',
+                          reponse: 'Réponse',
+                        }[c.mode]
+                      }
+                    </td>
+                    <td>
+                      {
+                        {
+                          redaction: 'En rédaction',
+                          relecture: 'À relire',
+                          terminee: 'Terminée',
+                          erreur: 'En erreur',
+                        }[c.statut]
+                      }
+                    </td>
+                    <td className="r num">
+                      {Math.max(0, (c.resultat?.brouillons ?? c.brouillons) - (c.envoyes ?? 0))}
+                    </td>
+                    <td className="r num">{c.envoyes ?? 0}</td>
+                    <td>
+                      {c.statut !== 'terminee' && (
+                        <>
+                          <button className="btn sm primary" onClick={() => reprendre(c.id)}>
+                            Reprendre la campagne
+                          </button>{' '}
+                          <button
+                            className="btn sm"
+                            style={{ color: '#b42318' }}
+                            aria-label="Abandonner la campagne"
+                            title="Abandonner la campagne"
+                            onClick={() => abandonner(c.id)}
+                          >
+                            <span style={{ display: 'inline-flex', width: 16, height: 16 }}>
+                              <Icon name="trash" />
+                            </span>
+                          </button>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-          <p className="small" style={{ marginBottom: 0 }}>
-            {stats.aConfirmer > 0 ? (
+          {stats.aConfirmer > 0 && (
+            <p className="small" style={{ marginBottom: 0 }}>
               <button className="link strong" onClick={() => setEtape({ nom: 'epuises' })}>
                 Contacts épuisés à confirmer ({stats.aConfirmer})
               </button>
-            ) : (
-              <span className="muted">Aucun contact épuisé à confirmer.</span>
-            )}
-          </p>
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -102,6 +102,7 @@ export const baseVivante = pgTable(
     prenom: text('prenom'),
     nom: text('nom').notNull(),
     email: text('email'),
+    emailEntreprise: text('email_entreprise'),
     telephone: text('telephone'),
     fonction: text('fonction'),
     linkedin: text('linkedin'),

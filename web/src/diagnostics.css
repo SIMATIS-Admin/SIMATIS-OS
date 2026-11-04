@@ -591,7 +591,7 @@
 }
 .vma-contacts-table table {
   width: 100%;
-  min-width: 1150px;
+  min-width: 860px;
   border-collapse: collapse;
 }
 .vma-contacts-table th,
@@ -607,4 +607,124 @@
 }
 .vma-contacts-table td {
   overflow-wrap: anywhere;
+}
+
+.vma-contacts-table th {
+  background: #eef4fa;
+  color: var(--navy);
+}
+.vma-contacts-table tbody tr:nth-child(even) {
+  background: #f7f9fc;
+}
+.vma-contact-nom {
+  white-space: nowrap;
+}
+.vma-statut {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #edf1f5;
+  color: var(--navy);
+  font-size: 0.85rem;
+}
+.vma-statut-recu {
+  background: #dcefe3;
+  color: #206449;
+}
+
+.vma-contact-recherche {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.vma-contact-recherche .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.vma-contact-recherche .btn[aria-expanded='true'] {
+  background: #eef4fa;
+  color: var(--navy);
+}
+.vma-contact-filtres:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  align-items: end;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+.vma-contact-filtres label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.vma-contact-filtres .btn {
+  justify-self: start;
+}
+
+.vma-contact-test {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 9px;
+}
+.vma-contact-test + .vma-contact-test {
+  margin-top: 8px;
+}
+.vma-contact-test .btn {
+  padding: 4px 8px;
+  min-height: 0;
+}
+
+.vma-contacts-table .vma-fiche-crm {
+  display: inline-flex;
+  padding: 4px 10px;
+  min-height: 0;
+  border-radius: 999px;
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+  text-decoration: none;
+}
+.vma-contacts-table .vma-fiche-crm:hover {
+  background: var(--navy-2);
+  color: #fff;
+}
+.vma-contacts-table .vma-occurrences {
+  margin-top: 8px;
+  padding: 4px 8px;
+  min-height: 0;
+}
+
+.vma-contacts-table td.vma-contact-retrait {
+  width: 1%;
+  padding-inline: 4px 8px;
+  white-space: nowrap;
+}
+.vma-contact-corbeille {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #b42318;
+  cursor: pointer;
+}
+.vma-contact-corbeille:hover {
+  background: #fdecea;
+}
+.vma-contact-corbeille svg {
+  width: 15px;
+  height: 15px;
 }

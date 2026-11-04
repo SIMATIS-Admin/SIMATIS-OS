@@ -153,6 +153,7 @@ export const prospectionBrouillons = pgTable(
     societe: text('societe'),
     touche: integer('touche').notNull().default(2),
     etat: text('etat', { enum: ETATS_BROUILLON }).notNull().default('a_rediger'),
+    lienVma: text('lien_vma'),
     objet: text('objet'),
     // HTML sans signature : la signature (image) est ajoutée à la création du brouillon de messagerie.
     corps: text('corps'),
