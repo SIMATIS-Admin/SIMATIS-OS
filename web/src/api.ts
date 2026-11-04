@@ -2571,3 +2571,19 @@ export const validerEnrichissement = (
     inst(slug, `base/enrichissement/${tacheId}/valider`),
     { accepter, refuser },
   );
+
+export type RechercheEnCours = {
+  id: string;
+  etat: 'en_cours' | 'terminee' | 'erreur';
+  nombre: number;
+  debut: string;
+  fin?: string;
+  contacts?: ProspectRecherche[];
+  erreur?: string;
+};
+export const lireRechercheProspects = (slug: string) =>
+  getJson<RechercheEnCours | null>(inst(slug, 'base/recherche/tache'));
+export const lancerRechercheProspects = (slug: string, consignes: string, nombre: number) =>
+  sendJson<RechercheEnCours>('POST', inst(slug, 'base/recherche/tache'), { consignes, nombre });
+export const effacerRechercheProspects = (slug: string, id: string) =>
+  sendJson<{ ok: boolean }>('DELETE', inst(slug, 'base/recherche/tache'), { id });
