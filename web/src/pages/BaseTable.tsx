@@ -1,6 +1,6 @@
 import { OrigineContact } from './OrigineContact.js';
 import { emailGenerique, normaliserLinkedin } from '../../../src/base-vivante/nettoyage.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   enrichirFicheBase,
   etatEnrichissement,
@@ -259,6 +259,7 @@ export function BaseTable({
   onPage,
   onChange,
   onImporter,
+  recherche,
 }: {
   slug: string;
   etat: EtatBase;
@@ -268,11 +269,13 @@ export function BaseTable({
   onPage: (p: number) => void;
   onChange: () => void;
   onImporter: () => void;
+  recherche?: ReactNode;
 }) {
   const [note, setNote] = useState<FicheBase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
+  const fichesPrecedentes = useRef(etat.fiches);
   const [ouverte, setOuverte] = useState<string | null>(null);
   const [ia, setIa] = useState<EtatEnrichissement | null>(null);
   const [lancement, setLancement] = useState(false);
@@ -292,7 +295,10 @@ export function BaseTable({
   }, [slug, tacheIa]);
 
   // A selection never outlives the rows it was made on.
-  useEffect(() => setSelection(new Set()), [etat.fiches]);
+  useEffect(() => {
+    if (fichesPrecedentes.current !== etat.fiches) setSelection(new Set());
+    fichesPrecedentes.current = etat.fiches;
+  }, [etat.fiches]);
 
   const filtrer = (f: FiltresBaseWeb) => {
     onFiltres({ ...filtres, ...f });
@@ -301,7 +307,7 @@ export function BaseTable({
   const baseComplete =
     !filtres.zone && !filtres.canal && (filtres.tri !== undefined || !filtres.statut);
   const actif = baseComplete
-    ? null
+    ? 'tous'
     : (ONGLETS.find(
         (o) => o.zone === filtres.zone && o.statut === filtres.statut && o.canal === filtres.canal,
       )?.id ?? null);
@@ -346,99 +352,168 @@ export function BaseTable({
 
   return (
     <section className="bv-liste" aria-label="Fiches de la base">
-      <div className="bv-onglets" role="tablist">
+      <div className="panel-h bv-liste-entete">
+        <h2>Contacts</h2>
+        <span className="small muted">
+          {entier(etat.total)} fiche{etat.total > 1 ? 's' : ''} affichée{etat.total > 1 ? 's' : ''}
+        </span>
+      </div>
+      <div className="bv-onglets" role="tablist" aria-label="Vues des contacts">
+        <button
+          role="tab"
+          aria-selected={baseComplete}
+          className="bv-onglet"
+          onClick={() => {
+            onFiltres({ tri: 'entreprise' });
+            onPage(0);
+          }}
+        >
+          Base complète ({entier(total)})
+        </button>
         {ONGLETS.map((o) => (
           <button
             key={o.id}
             role="tab"
+            aria-label={o.id === 'email' || o.id === 'linkedin' ? o.libelle : undefined}
             aria-selected={actif === o.id}
             className="bv-onglet"
             onClick={() =>
               filtrer({ zone: o.zone, statut: o.statut, canal: o.canal, tri: undefined })
             }
           >
-            {o.libelle}
+            {o.id === 'email' ? 'E-mail' : o.id === 'linkedin' ? 'LinkedIn' : o.libelle}
             {o.id === 'a_enrichir' && ` (${entier(etat.compteurs.aEnrichir)})`}
           </button>
         ))}
       </div>
       {actif === 'a_enrichir' && (
-        <div className="bv-astuce">
-          <Icon name="info" />
-          <div className="bv-enrichir-guide">
-            <strong>Compléter les fiches à enrichir</strong>
-            <span>{ASTUCE_ENRICHIR}</span>
-          </div>
-          {ia?.disponible && (
-            <button
-              className="btn primary sm"
-              disabled={selection.size === 0 || occupe}
-              onClick={() => setLancement(true)}
-            >
-              Rechercher avec Codex
-            </button>
-          )}
-        </div>
+        <details className="bv-aide">
+          <summary>
+            <Icon name="info" />
+            Comment enrichir les fiches ?
+          </summary>
+          <p>{ASTUCE_ENRICHIR}</p>
+        </details>
       )}
       <div className="bv-outils">
-        {baseComplete && (
-          <>
+        {recherche}
+        <details className="bv-filtres">
+          <summary className="btn sm">
+            <Icon name="sliders" />
+            Filtres et tri
+            {filtres.alerte || filtres.provenance || (baseComplete && filtres.statut)
+              ? ' · actifs'
+              : ''}
+          </summary>
+          <div className="bv-filtres-options">
+            {baseComplete && (
+              <>
+                <select
+                  className="input"
+                  aria-label="Trier les fiches"
+                  value={filtres.tri ?? 'entreprise'}
+                  onChange={(e) => filtrer({ tri: e.target.value as FiltresBaseWeb['tri'] })}
+                >
+                  <option value="entreprise">Entreprise (A–Z)</option>
+                  <option value="tentatives">Plus de tentatives</option>
+                  <option value="dernier_contact">Dernier contact récent</option>
+                </select>
+                <select
+                  className="input"
+                  aria-label="Filtrer par statut de prospection"
+                  value={filtres.statut ?? ''}
+                  onChange={(e) =>
+                    filtrer({ statut: (e.target.value || undefined) as StatutProspectionBase })
+                  }
+                >
+                  <option value="">Tous les statuts</option>
+                  {Object.entries(LIBELLE_STATUT).map(([valeur, libelle]) => (
+                    <option key={valeur} value={valeur}>
+                      {libelle}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
             <select
               className="input"
-              aria-label="Trier les fiches"
-              value={filtres.tri ?? 'entreprise'}
-              onChange={(e) => filtrer({ tri: e.target.value as FiltresBaseWeb['tri'] })}
+              aria-label="Filtrer par alerte"
+              value={filtres.alerte ?? ''}
+              onChange={(e) => filtrer({ alerte: (e.target.value || undefined) as AlerteBase })}
             >
-              <option value="entreprise">Entreprise (A–Z)</option>
-              <option value="tentatives">Plus de tentatives</option>
-              <option value="dernier_contact">Dernier contact récent</option>
-            </select>
-            <select
-              className="input"
-              aria-label="Filtrer par statut de prospection"
-              value={filtres.statut ?? ''}
-              onChange={(e) =>
-                filtrer({ statut: (e.target.value || undefined) as StatutProspectionBase })
-              }
-            >
-              <option value="">Tous les statuts</option>
-              {Object.entries(LIBELLE_STATUT).map(([valeur, libelle]) => (
-                <option key={valeur} value={valeur}>
+              {ALERTES.map(([v, libelle]) => (
+                <option key={libelle} value={v ?? ''}>
                   {libelle}
                 </option>
               ))}
             </select>
-          </>
-        )}
-        <select
-          className="input"
-          aria-label="Filtrer par alerte"
-          value={filtres.alerte ?? ''}
-          onChange={(e) => filtrer({ alerte: (e.target.value || undefined) as AlerteBase })}
-        >
-          {ALERTES.map(([v, libelle]) => (
-            <option key={libelle} value={v ?? ''}>
-              {libelle}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
-          aria-label="Filtrer par source"
-          value={filtres.provenance ?? ''}
-          onChange={(e) => filtrer({ provenance: e.target.value || undefined })}
-        >
-          <option value="">Toutes sources</option>
-          {etat.provenances.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        <span className="bv-compte small muted">
-          {entier(etat.total)} fiche{etat.total > 1 ? 's' : ''}
-        </span>
+            <select
+              className="input"
+              aria-label="Filtrer par source"
+              value={filtres.provenance ?? ''}
+              onChange={(e) => filtrer({ provenance: e.target.value || undefined })}
+            >
+              <option value="">Toutes sources</option>
+              {etat.provenances.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+        </details>
       </div>
+      {selection.size > 0 && (
+        <div className="bv-selection" role="region" aria-label="Actions sur la sélection">
+          <strong>
+            {selection.size} sélectionnée{selection.size > 1 ? 's' : ''}
+          </strong>
+          {ia?.disponible && (
+            <button className="btn sm" disabled={occupe} onClick={() => setLancement(true)}>
+              Rechercher avec Codex
+            </button>
+          )}
+          <button
+            className="btn sm"
+            disabled={occupe}
+            onClick={() => void conformite([...selection], 'opposition')}
+          >
+            Ne plus contacter
+          </button>
+          <button
+            className="btn sm"
+            disabled={occupe}
+            onClick={() =>
+              supprimer(
+                [...selection],
+                `Supprimer les fiches sélectionnées (${selection.size}) de la Base vivante ?`,
+              )
+            }
+          >
+            Supprimer la sélection
+          </button>
+          <select
+            className="input"
+            aria-label="Exclure la sélection comme"
+            value=""
+            disabled={occupe}
+            onChange={(e) => e.target.value && void conformite([...selection], e.target.value)}
+          >
+            <option value="">Exclure comme…</option>
+            <option value="exclusion:client">Client</option>
+            <option value="exclusion:partenaire">Partenaire</option>
+            <option value="exclusion:concurrent">Concurrent</option>
+          </select>
+          <button
+            className="bv-fermer clair"
+            aria-label="Désélectionner"
+            onClick={() => setSelection(new Set())}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="alert amber">
           <Icon name="info" />
@@ -504,16 +579,18 @@ export function BaseTable({
                     <button className="bv-lien" onClick={() => setOuverte(f.id)}>
                       {nomComplet(f)}
                     </button>
-                    <div className="small muted">{f.fonction ?? ''}</div>
+                    <div className="small muted bv-fonction" title={f.fonction ?? undefined}>
+                      {f.fonction ?? ''}
+                    </div>
                     <button
-                      className="btn sm"
+                      className="bv-note"
                       aria-label={`Note d’origine de ${nomComplet(f)}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         setNote(f);
                       }}
                     >
-                      Note d’origine
+                      <Icon name="info" /> Note d’origine
                     </button>
                   </td>
                   <td>{f.entreprise}</td>
@@ -585,57 +662,6 @@ export function BaseTable({
           </button>
         </div>
       )}
-      {selection.size > 0 && (
-        <div className="bv-selection" role="region" aria-label="Actions sur la sélection">
-          <strong>
-            {selection.size} sélectionnée{selection.size > 1 ? 's' : ''}
-          </strong>
-          {ia?.disponible && actif !== 'a_enrichir' && (
-            <button className="btn sm" disabled={occupe} onClick={() => setLancement(true)}>
-              Rechercher avec Codex
-            </button>
-          )}
-          <button
-            className="btn sm"
-            disabled={occupe}
-            onClick={() => void conformite([...selection], 'opposition')}
-          >
-            Ne plus contacter
-          </button>
-          <button
-            className="btn sm"
-            disabled={occupe}
-            onClick={() =>
-              supprimer(
-                [...selection],
-                `Supprimer les fiches sélectionnées (${selection.size}) de la Base vivante ?`,
-              )
-            }
-          >
-            Supprimer la sélection
-          </button>
-          <select
-            className="input"
-            aria-label="Exclure la sélection comme"
-            value=""
-            disabled={occupe}
-            onChange={(e) => e.target.value && void conformite([...selection], e.target.value)}
-          >
-            <option value="">Exclure comme…</option>
-            <option value="exclusion:client">Client</option>
-            <option value="exclusion:partenaire">Partenaire</option>
-            <option value="exclusion:concurrent">Concurrent</option>
-          </select>
-          <button
-            className="bv-fermer clair"
-            aria-label="Désélectionner"
-            onClick={() => setSelection(new Set())}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       {lancement && ia && (
         <LancerEnrichissement
           slug={slug}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EtatBase, ImportBase } from '../api.js';
 import { Bases } from './Bases.js';
@@ -252,10 +252,39 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
 
   const lectures = () => calls.filter((c) => c.method === 'GET').map((c) => c.url);
 
+  it('sépare les parcours d’ajout des outils de la liste et ouvre la base complète', async () => {
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    expect(screen.getByRole('tab', { name: /Base complète/ }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(
+      within(screen.getByRole('region', { name: 'Trouver des prospects' })).getByRole('button', {
+        name: 'Rechercher de nouveaux prospects',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByRole('region', { name: 'Importer des contacts' })).getByRole('button', {
+        name: '+ Importer une liste',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByRole('region', { name: 'Fiches de la base' })).getByLabelText(
+        'Rechercher dans la base',
+      ),
+    ).toBeTruthy();
+    const menu = screen.getByText('Gérer la base').closest('details');
+    expect(menu?.open).toBe(false);
+    fireEvent.click(screen.getByText('Gérer la base'));
+    expect(menu?.open).toBe(true);
+    expect(within(menu!).getByText('Mettre à jour depuis les mails')).toBeTruthy();
+    expect(within(menu!).getByText('Exporter en CSV')).toBeTruthy();
+  });
+
   it('montre le dernier contact et les alertes de chaque fiche', async () => {
     render(<Bases slug="simatis" />);
     expect(await screen.findByText('Atelier Fictif')).toBeTruthy();
-    expect(screen.getByText('Contacté')).toBeTruthy();
+    expect(within(screen.getByRole('table')).getByText('Contacté')).toBeTruthy();
     expect(screen.getByText(/Contacté le 15\/09\/2026/)).toBeTruthy();
     expect(screen.getByText(/2 contacts · Mandat A/)).toBeTruthy();
   });

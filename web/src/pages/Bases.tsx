@@ -568,7 +568,7 @@ type Fenetres =
 export function Bases({ slug }: { slug: string }) {
   const [etat, setEtat] = useState<EtatBase | null>(null);
   const [apercus, setApercus] = useState<ImportBase[]>([]);
-  const [filtres, setFiltres] = useState<FiltresBaseWeb>({ zone: 'a_enrichir' });
+  const [filtres, setFiltres] = useState<FiltresBaseWeb>({ tri: 'entreprise' });
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -695,41 +695,23 @@ export function Bases({ slug }: { slug: string }) {
 
   return (
     <div className="bv">
-      <div className="bv-tete">
+      <div className="bv-tete bv-entete">
         <p className="muted">
-          Toutes vos listes de prospection au même endroit, propres et sans doublons.
-          {total > 0 &&
-            ` ${entier(total)} fiches : ${entier(etat.compteurs.prospectable)} prospectables, ${entier(etat.compteurs.aEnrichir)} à enrichir.`}
+          Vos contacts, leurs sources et leur historique, prêts pour la prospection.
         </p>
-        <div className="bv-actions">
-          <input
-            ref={recherche}
-            className="input bv-recherche"
-            type="search"
-            aria-label="Rechercher dans la base"
-            placeholder="Entreprise, nom, email…   ( / )"
-            value={filtres.q ?? ''}
-            onChange={(e) => {
-              setFiltres({ ...filtres, q: e.target.value });
-              setPage(0);
-            }}
-          />
-          <button
-            className={filtres.tri ? 'btn primary' : 'btn'}
-            aria-pressed={Boolean(filtres.tri)}
-            onClick={() => {
-              setFiltres({ tri: 'entreprise' });
-              setPage(0);
-            }}
-          >
-            Base complète ({entier(total)})
-          </button>
-          <button className="btn" onClick={() => setFenetre({ quoi: 'mail' })}>
-            Mettre à jour depuis les mails
-          </button>
+        <div className="bv-entete-liens">
+          <a className="link" href={`#/${slug}/prospection`}>
+            Ouvrir Prospection
+          </a>
           <details className="bv-menu">
-            <summary className="btn">Autres actions</summary>
+            <summary className="btn sm">
+              <Icon name="gear" />
+              Gérer la base
+            </summary>
             <div className="bv-menu-liste">
+              <button className="btn ghost" onClick={() => setFenetre({ quoi: 'mail' })}>
+                Mettre à jour depuis les mails
+              </button>
               <button className="btn ghost" disabled={total === 0} onClick={actualiser}>
                 Actualiser l'historique
               </button>
@@ -738,28 +720,70 @@ export function Bases({ slug }: { slug: string }) {
               </a>
             </div>
           </details>
-          <button className="btn" onClick={() => setFenetre({ quoi: 'routine-recherche' })}>
-            Recherche quotidienne
-          </button>
-          <button className="btn" onClick={() => setFenetre({ quoi: 'recherche' })}>
-            Rechercher de nouveaux prospects
-          </button>
-          <button className="btn primary" onClick={() => setFenetre({ quoi: 'import', etape: 1 })}>
-            + Importer une liste
-          </button>
         </div>
       </div>
 
-      {total > 0 && (
-        <div
-          className="bv-barre"
-          role="img"
-          aria-label={`${entier(etat.compteurs.prospectable)} prospectables, ${entier(etat.compteurs.aEnrichir)} à enrichir`}
-        >
-          <i className="prospectable" style={{ flex: etat.compteurs.prospectable }} />
-          <i className="a-enrichir" style={{ flex: etat.compteurs.aEnrichir }} />
+      <div className="grid g3 bv-reperes" aria-label="Vue d’ensemble de la base">
+        <div className="panel">
+          <div className="panel-b">
+            <div className="small muted">DANS LA BASE</div>
+            <strong className="num bv-chiffre">{entier(total)}</strong>
+            <span className="small muted">fiches réunies, sans doublons</span>
+          </div>
         </div>
-      )}
+        <div className="panel">
+          <div className="panel-b">
+            <div className="small muted">COORDONNÉES COMPLÈTES</div>
+            <strong className="num bv-chiffre">{entier(etat.compteurs.prospectable)}</strong>
+            <span className="small muted">contacts avec e-mail ou téléphone</span>
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-b">
+            <div className="small muted">À ENRICHIR</div>
+            <strong className="num bv-chiffre">{entier(etat.compteurs.aEnrichir)}</strong>
+            <span className="small muted">fiches à compléter</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid g2 bv-parcours">
+        <section className="panel bv-parcours-recherche" aria-label="Trouver des prospects">
+          <div className="panel-b">
+            <h2>Trouver de nouveaux prospects</h2>
+            <p className="small muted">
+              Définissez votre cible, puis retrouvez les contacts vérifiés et leurs sources avant de
+              les ajouter à la base.
+            </p>
+            <div className="bv-parcours-actions">
+              <button className="btn primary" onClick={() => setFenetre({ quoi: 'recherche' })}>
+                Rechercher de nouveaux prospects
+              </button>
+              <button
+                className="link small"
+                onClick={() => setFenetre({ quoi: 'routine-recherche' })}
+              >
+                Recherche quotidienne
+              </button>
+            </div>
+          </div>
+        </section>
+        <section className="panel bv-parcours-import" aria-label="Importer des contacts">
+          <div className="panel-b">
+            <h2>Importer vos contacts</h2>
+            <p className="small muted">
+              Ajoutez un fichier ou des lignes copiées. Vérifiez les colonnes et les doublons avant
+              l’intégration.
+            </p>
+            <div className="bv-parcours-actions">
+              <button className="btn go" onClick={() => setFenetre({ quoi: 'import', etape: 1 })}>
+                + Importer une liste
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
       {info && <div className="small muted">{info}</div>}
 
       {taches.length > 0 && (
@@ -784,6 +808,20 @@ export function Bases({ slug }: { slug: string }) {
         onPage={setPage}
         onChange={() => void charger()}
         onImporter={() => setFenetre({ quoi: 'import', etape: 1 })}
+        recherche={
+          <input
+            ref={recherche}
+            className="input bv-recherche"
+            type="search"
+            aria-label="Rechercher dans la base"
+            placeholder="Rechercher une entreprise, un nom, un e-mail…"
+            value={filtres.q ?? ''}
+            onChange={(e) => {
+              setFiltres({ ...filtres, q: e.target.value });
+              setPage(0);
+            }}
+          />
+        }
       />
 
       {fenetre?.quoi === 'routine-recherche' && (
