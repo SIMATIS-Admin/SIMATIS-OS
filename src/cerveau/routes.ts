@@ -28,6 +28,7 @@ const carteSchema = z.object({
   liens: z.array(z.object({ de: z.string().max(500), vers: z.string().max(500) })).max(100_000),
   autresFichiers: z.number().int().min(0),
   fichiers: z.array(z.string().max(500)).max(1000).optional(),
+  moi: z.string().max(50).optional(),
   tronquee: z.boolean(),
 });
 
@@ -61,6 +62,11 @@ const operationSchema = z.discriminatedUnion('type', [
     type: z.literal('chercher'),
     requete: z.string().trim().min(1).max(200),
   }),
+  z.object({
+    espace: z.literal('partage'),
+    type: z.literal('lire_messages'),
+    chemins: z.array(z.string().max(300)).min(1).max(50),
+  }),
 ]);
 
 const resultatSchema = z.union([
@@ -74,6 +80,7 @@ const resultatSchema = z.union([
       .array(z.object({ chemin: z.string().max(500), extraits: z.array(z.string().max(1000)) }))
       .max(200)
       .optional(),
+    textes: z.record(z.string(), z.string().max(500_000)).optional(),
   }),
   z.object({ ok: z.literal(false), erreur: z.string().max(1000), conflit: z.boolean().optional() }),
 ]);

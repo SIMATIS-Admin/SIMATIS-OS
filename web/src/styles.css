@@ -6004,3 +6004,167 @@ tr.off td {
 tr.sans td {
   background: var(--amber-bg);
 }
+
+/* Espace partagé en boîte de réception : rubriques, liste, lecture. */
+.pb {
+  display: grid;
+  grid-template-columns: 190px 300px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.pb-large {
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+.pb-nav {
+  display: grid;
+  gap: 6px;
+}
+.pb-nav input[type='search'] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  margin-bottom: 6px;
+}
+.pb-rub {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  text-align: left;
+}
+.pb-rub:hover {
+  background: var(--line-2);
+}
+.pb-rub.on {
+  background: var(--blue-bg);
+  color: var(--navy);
+}
+.pb-rub b {
+  font-family: var(--f-num);
+  font-weight: 500;
+  font-size: 12px;
+}
+.pb-liste,
+.pb-lecture {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+.pb-liste {
+  padding: 0;
+}
+.pb-liste > .cerveau-note {
+  padding: 12px;
+}
+.pb-liste .cerveau-idee {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-2);
+}
+.pb-lecture {
+  padding: 16px;
+}
+.pb-titre {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 13px;
+}
+.pb-ligne {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+div.pb-ligne {
+  cursor: default;
+}
+.pb-ligne:hover,
+.pb-ligne.on {
+  background: var(--blue-bg);
+}
+.pb-ligne > button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--navy-3);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.pb-ligne .cerveau-note {
+  margin: 0;
+}
+.pb-ligne .badge {
+  justify-self: start;
+}
+.pb-sujet {
+  font-weight: 500;
+}
+.pb-fil h3 {
+  margin: 0;
+}
+.pb-bulles {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+.pb-bulle {
+  padding: 10px 12px;
+  border-radius: var(--r-m);
+  background: var(--line-2);
+  margin-right: 48px;
+}
+.pb-bulle.moi {
+  background: var(--blue-bg);
+  margin: 0 0 0 48px;
+}
+.pb-bulle p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+.pb-repondre textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  font: inherit;
+}
+/* Étroit : la conversation remplace la liste, avec un retour. */
+.pb-retour {
+  display: none;
+  margin-bottom: 8px;
+}
+@media (max-width: 1100px) {
+  .pb {
+    grid-template-columns: 170px minmax(0, 1fr);
+  }
+  .pb-ouvert .pb-liste {
+    display: none;
+  }
+  .pb-retour {
+    display: inline-block;
+  }
+}
+@media (max-width: 700px) {
+  .pb,
+  .pb-large {
+    grid-template-columns: 1fr;
+  }
+  .pb-liste,
+  .pb-lecture {
+    max-height: none;
+  }
+}

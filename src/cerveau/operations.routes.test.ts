@@ -291,6 +291,16 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
       );
     });
 
+    it('lit plusieurs messages en une opération', async () => {
+      const res = await demander('op-ok', {
+        espace: 'partage',
+        type: 'lire_messages',
+        chemins: ['reference/offre.md', 'inconnu.md'],
+      });
+      expect(res.statusCode).toBe(200);
+      expect(Object.keys(res.json<{ textes: object }>().textes)).toEqual(['reference/offre.md']);
+    });
+
     it('explique quand le serveur « partage » est absent du poste', async () => {
       partageFaux = null;
       const res = await demander('op-ok', { espace: 'partage', type: 'lire', chemin: 'index.md' });
