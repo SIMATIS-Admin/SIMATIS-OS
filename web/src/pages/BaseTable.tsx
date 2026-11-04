@@ -1,3 +1,5 @@
+import { OrigineContact } from './OrigineContact.js';
+import { emailGenerique, normaliserLinkedin } from '../../../src/base-vivante/nettoyage.js';
 import { useEffect, useState } from 'react';
 import {
   enrichirFicheBase,
@@ -11,7 +13,6 @@ import {
   type FicheBase,
   type FiltresBaseWeb,
   type StatutProspectionBase,
-  type ZoneBase,
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { LancerEnrichissement, SuggestionsEnrichissement } from './EnrichissementIA.js';
@@ -62,8 +63,14 @@ const LIBELLE_RESULTAT: Record<string, string> = {
 const ASTUCE_ENRICHIR =
   "Ces fiches n'ont pas encore de contact (nom et email ou téléphone). Ouvrez une fiche pour le renseigner : une fiche à enrichir n'entre jamais dans un CRM, et devient prête à contacter dès qu'elle a un nom et un moyen de contact valide.";
 
-const libelleZone = (zone: ZoneBase) =>
-  zone === 'prospectable' ? (
+export const libelleZone = (
+  f: Pick<FicheBase, 'zone' | 'nom' | 'linkedin' | 'email' | 'emailInvalide'>,
+) =>
+  f.nom &&
+  normaliserLinkedin(f.linkedin) &&
+  (!f.email || f.emailInvalide || emailGenerique(f.email)) ? (
+    <span className="badge linkedin">LinkedIn</span>
+  ) : f.zone === 'prospectable' ? (
     <span className="badge green">Prospectable</span>
   ) : (
     <span className="badge amber">À enrichir</span>
@@ -207,7 +214,7 @@ function FicheTiroir({
     >
       <dl className="bv-fiche">
         <dt>Zone</dt>
-        <dd>{libelleZone(f.zone)}</dd>
+        <dd>{libelleZone(f)}</dd>
         <dt>Email</dt>
         <dd>{f.email ?? '—'}</dd>
         {f.emailEntreprise && (
@@ -262,6 +269,7 @@ export function BaseTable({
   onChange: () => void;
   onImporter: () => void;
 }) {
+  const [note, setNote] = useState<FicheBase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
@@ -497,6 +505,16 @@ export function BaseTable({
                       {nomComplet(f)}
                     </button>
                     <div className="small muted">{f.fonction ?? ''}</div>
+                    <button
+                      className="btn sm"
+                      aria-label={`Note d’origine de ${nomComplet(f)}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNote(f);
+                      }}
+                    >
+                      Note d’origine
+                    </button>
                   </td>
                   <td>{f.entreprise}</td>
                   <td>
@@ -520,7 +538,7 @@ export function BaseTable({
                   </td>
                   {baseComplete && <td>{entier(f.nbContacts)}</td>}
                   <td>
-                    {libelleZone(f.zone)}
+                    {libelleZone(f)}
                     {f.alertes.map((a) => (
                       <div key={a.code}>
                         <span className={`badge ${a.bloquante ? 'red' : 'amber'}`}>
@@ -641,6 +659,14 @@ export function BaseTable({
         />
       )}
 
+      {note && (
+        <OrigineContact
+          slug={slug}
+          id={note.id}
+          nom={nomComplet(note)}
+          fermer={() => setNote(null)}
+        />
+      )}
       {fiche && (
         <FicheTiroir
           slug={slug}

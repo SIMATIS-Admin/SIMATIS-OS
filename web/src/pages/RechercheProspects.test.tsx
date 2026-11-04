@@ -35,3 +35,31 @@ it('permet de fermer pendant la recherche, puis de retrouver les résultats depu
   fireEvent.click(await screen.findByRole('button', { name: 'Voir les résultats' }));
   expect(await screen.findByText('0 contact(s) retenu(s) sur 10 visés.')).toBeTruthy();
 });
+
+it('affiche la progression réelle et propose de poursuivre un résultat incomplet', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) =>
+      Promise.resolve(
+        Response.json(
+          url.endsWith('/routine')
+            ? { consignes: 'Test fictif' }
+            : {
+                id: 'fictif',
+                etat: 'a_completer',
+                nombre: 10,
+                debut: '2026-01-01T09:00:00Z',
+                passage: 2,
+                contacts: [],
+                message: 'Recherche à compléter.',
+              },
+        ),
+      ),
+    ),
+  );
+  render(<RechercheProspects slug="fictif" fermer={vi.fn()} termine={vi.fn()} />);
+  const barre = await screen.findByRole('progressbar', { name: 'Contacts vérifiés' });
+  expect(barre.getAttribute('max')).toBe('10');
+  expect(barre.getAttribute('value')).toBe('0');
+  expect(await screen.findByRole('button', { name: 'Poursuivre la recherche' })).toBeTruthy();
+});

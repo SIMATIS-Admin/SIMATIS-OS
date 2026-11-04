@@ -1,10 +1,13 @@
+import { ProgressionRecherche } from './ProgressionRecherche.js';
 import { useRecherche, signalRecherche } from './useRecherche.js';
 import { useEffect, useState } from 'react';
 import {
   lireRoutineProspects,
+  noterContactsRechercheBase,
   creerImportBase,
   integrerImportBase,
   lancerRechercheProspects,
+  continuerRechercheProspects,
   effacerRechercheProspects,
   type ProspectRecherche,
 } from '../api.js';
@@ -60,7 +63,12 @@ export function RechercheProspects({
   useEffect(() => {
     if (!tache) return;
     setNombre(tache.nombre);
-    if (tache.etat === 'terminee') {
+    if (tache.consignes) setConsignes(tache.consignes);
+    if (
+      tache.etat === 'terminee' ||
+      tache.etat === 'a_completer' ||
+      (tache.etat === 'erreur' && tache.contacts?.length)
+    ) {
       setContacts(tache.contacts ?? []);
       setSelection((tache.contacts ?? []).map((_, i) => i));
     }
@@ -101,6 +109,7 @@ export function RechercheProspects({
         creees += bilan.creees;
         fusionnees += bilan.fusionnees;
       }
+      await noterContactsRechercheBase(slug, lignes);
       if (tache) await effacerRechercheProspects(slug, tache.id);
       signalRecherche();
       termine(`${creees} fiche(s) ajoutée(s), ${fusionnees} fiche(s) rapprochée(s).`);
@@ -126,7 +135,7 @@ export function RechercheProspects({
                 !charge ||
                 !consignes.trim() ||
                 !Number.isInteger(nombre) ||
-                nombre < 1 ||
+                nombre < 10 ||
                 nombre > 100
               }
               onClick={() => void rechercher()}
@@ -163,7 +172,7 @@ export function RechercheProspects({
             <input
               className="input"
               type="number"
-              min={1}
+              min={10}
               max={100}
               disabled={occupe || enRecherche}
               value={nombre}
@@ -210,6 +219,38 @@ export function RechercheProspects({
             </div>
           ))}
         </>
+      )}
+      {tache && <ProgressionRecherche tache={tache} />}
+      {tache?.message && <p role="status">{tache.message}</p>}
+      {tache && (tache.etat === 'a_completer' || tache.etat === 'erreur') && (
+        <label className="bv-champ">
+          Critères pour compléter
+          <textarea
+            className="input"
+            rows={4}
+            maxLength={5000}
+            value={consignes}
+            onChange={(e) => setConsignes(e.target.value)}
+            disabled={occupe}
+          />
+        </label>
+      )}
+      {tache && (tache.etat === 'a_completer' || tache.etat === 'erreur') && (
+        <button
+          className="btn primary"
+          disabled={occupe}
+          onClick={() =>
+            void agir(async () => {
+              const suite = await continuerRechercheProspects(slug, consignes);
+              setContacts(null);
+              setImports([]);
+              setTache(suite);
+              signalRecherche();
+            })
+          }
+        >
+          Poursuivre la recherche
+        </button>
       )}
       {enRecherche && (
         <p role="status">

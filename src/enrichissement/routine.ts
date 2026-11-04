@@ -1,3 +1,4 @@
+import { noterContactsRecherches } from '../base-vivante/origine.js';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { creerImports, integrerImport } from '../base-vivante/service.js';
@@ -108,6 +109,7 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
           fusionnees += resultat.fusionnees;
         }
       }
+      await noterContactsRecherches(db, instanceId, contacts);
       bilan = `${creees} fiche(s) ajoutée(s), ${fusionnees} rapprochée(s), sur ${routine.nombre} contacts visés.`;
     } catch {
       bilan = 'Recherche interrompue. Vérifiez la connexion de Codex sur le Mac.';

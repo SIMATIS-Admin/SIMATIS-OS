@@ -411,3 +411,21 @@ export async function enregistrerEmailEntreprise(
     .set({ emailEntreprise: normaliserEmail(email), updatedAt: new Date() })
     .where(and(eq(baseVivante.instanceId, instanceId), eq(baseVivante.id, id)));
 }
+
+export async function ajouterNoteOrigine(
+  tx: Tx,
+  instanceId: string,
+  ficheId: string,
+  note: import('./schema.js').NoteOrigine,
+) {
+  await tx
+    .update(baseVivante)
+    .set({ notesOrigine: sql`${baseVivante.notesOrigine} || ${JSON.stringify([note])}::jsonb` })
+    .where(
+      and(
+        eq(baseVivante.instanceId, instanceId),
+        eq(baseVivante.id, ficheId),
+        sql`not exists (select 1 from jsonb_array_elements(${baseVivante.notesOrigine}) n where n->>'texte' = ${note.texte} and n->>'origine' = ${note.origine} and coalesce(n->>'source', '') = ${note.source ?? ''})`,
+      ),
+    );
+}

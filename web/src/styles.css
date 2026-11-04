@@ -6181,3 +6181,25 @@ div.pb-ligne {
   background: var(--bg, #f1f6f8);
   flex-wrap: wrap;
 }
+
+.recherche-progression {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+.recherche-progression progress {
+  width: 100%;
+  accent-color: #277b79;
+  height: 12px;
+}
+
+.badge.linkedin {
+  background: #0a66c2;
+  color: white;
+}
+.origine-note {
+  border-top: 1px solid #d5e0e7;
+  padding-top: 12px;
+  margin-top: 16px;
+}
