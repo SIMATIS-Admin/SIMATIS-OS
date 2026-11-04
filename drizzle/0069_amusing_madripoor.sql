@@ -1,1 +1,0 @@
-ALTER TABLE "prospection_brouillons" ADD COLUMN "lien_vma" text;

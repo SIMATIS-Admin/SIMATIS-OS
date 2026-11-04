@@ -78,6 +78,9 @@ export const opportunites = pgTable(
     // Hand-set win probability for this deal only (0-100); null = the stage's standard one. OS-only
     // like the billing terms: never sent to HubSpot.
     probabiliteManuelle: integer('probabilite_manuelle'),
+    // Estimated signing date, hand-set; OS-only like the probability. Falls back on `echeance` (the
+    // HubSpot close date) when empty. Drives the pipe's cash projection in Gestion.
+    signatureEstimee: date('signature_estimee'),
     montant: integer('montant'),
     echeance: date('echeance'),
     clos: text('clos', { enum: ['gagne', 'perdu'] }),

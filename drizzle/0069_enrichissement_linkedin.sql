@@ -1,0 +1,1 @@
+ALTER TABLE "enrichissement_suggestions" ADD COLUMN IF NOT EXISTS "linkedin" text;

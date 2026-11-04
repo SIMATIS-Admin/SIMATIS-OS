@@ -1,1 +1,0 @@
-ALTER TABLE "enrichissement_suggestions" ADD COLUMN "linkedin" text;

@@ -474,22 +474,36 @@
     {
       "idx": 67,
       "version": "7",
-      "when": 1793717873960,
-      "tag": "0067_brainy_punisher",
+      "when": 1793701517182,
+      "tag": "0067_gestion_lot_d",
       "breakpoints": true
     },
     {
       "idx": 68,
       "version": "7",
-      "when": 1793718814725,
-      "tag": "0068_fair_purifiers",
+      "when": 1793718484883,
+      "tag": "0068_signature_estimee",
       "breakpoints": true
     },
     {
       "idx": 69,
       "version": "7",
-      "when": 1793775125741,
-      "tag": "0069_amusing_madripoor",
+      "when": 1793775791736,
+      "tag": "0069_enrichissement_linkedin",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1793775791737,
+      "tag": "0070_email_entreprise",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793775791738,
+      "tag": "0071_prospection_lien_vma",
       "breakpoints": true
     }
   ]

@@ -1,8 +1,12 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Executor } from '../db.js';
+import { pipelineSource } from '../crm/pipeline.js';
+import { entreprises, opportunites } from '../crm/schema.js';
+import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { jourDe } from '../pilotage/realisees.js';
+import { ajouterJours, ajouterMois } from './dates.js';
+import { affairesPipe, mouvementsPipe, type AffairePipe } from './pipe.js';
 import { occurrencesRevenus, type OccurrenceRevenu } from './revenus.js';
 import { gestionReglages, MODES_SEUIL, type ModeSeuil } from './schema.js';
 import { occurrencesDepenses, type OccurrenceVue } from './service.js';
@@ -101,11 +105,7 @@ export type Mouvement = {
   note: string | null;
 };
 
-const ajouterJours = (jourIso: string, n: number) => {
-  const d = new Date(`${jourIso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-};
+export { ajouterMois };
 const plusTard = (a: string, b: string) => (a > b ? a : b);
 
 // Sorties : TTC, à la date de paiement. Une dépense avancée par l'associé ou créditée à son compte
@@ -346,24 +346,19 @@ export type Projection = {
   reglages: Reglages;
   seuil: Seuil;
   scenarios: ProjectionScenario[];
+  // Affaires ouvertes du Pipeline, comptées ou écartées (avec la raison), et le décalage simulé.
+  pipe: { affaires: AffairePipe[]; decalageMois: number };
   avertissements: string[];
 };
 
-export function ajouterMois(jourIso: string, n: number): string {
-  const [a, m, j] = jourIso.split('-').map(Number) as [number, number, number];
-  const i = a * 12 + (m - 1) + n;
-  const annee = Math.floor(i / 12);
-  const mois = (i % 12) + 1;
-  const dernier = new Date(Date.UTC(annee, mois, 0)).getUTCDate();
-  return `${String(annee).padStart(4, '0')}-${String(mois).padStart(2, '0')}-${String(Math.min(j, dernier)).padStart(2, '0')}`;
-}
-
 export async function projeter(
-  tx: Executor,
+  tx: Tx,
   p: {
     horizonMois: number;
     granularite: Granularite;
     retardJours: number;
+    decalageMois?: number;
+    exclus?: string[];
     aujourdhui?: string;
   },
 ): Promise<Projection> {
@@ -374,6 +369,34 @@ export async function projeter(
   const depenses = await occurrencesDepenses(tx, depart, fin, aujourdhui);
   const recettes = await occurrencesRevenus(tx, depart, fin);
   const sorties = mouvementsDepenses(depenses, reglages.soldeDate, aujourdhui);
+  const src = await pipelineSource(tx);
+  const probaEtape = new Map(src.etapes.map((e) => [e.id, e.probabilite ?? null]));
+  const ouvertes = await tx
+    .select({
+      id: opportunites.id,
+      titre: opportunites.titre,
+      entreprise: entreprises.nom,
+      etape: opportunites.etape,
+      clos: opportunites.clos,
+      montant: opportunites.montant,
+      modeFacturation: opportunites.modeFacturation,
+      dureeEngagementMois: opportunites.dureeEngagementMois,
+      probabiliteManuelle: opportunites.probabiliteManuelle,
+      signatureEstimee: opportunites.signatureEstimee,
+      echeance: opportunites.echeance,
+    })
+    .from(opportunites)
+    .leftJoin(
+      entreprises,
+      and(
+        eq(entreprises.id, opportunites.entrepriseId),
+        eq(entreprises.instanceId, currentInstance),
+      ),
+    )
+    .where(and(eq(opportunites.instanceId, currentInstance), isNull(opportunites.clos)));
+  const affaires = affairesPipe(ouvertes, probaEtape);
+  const decalageMois = p.decalageMois ?? 0;
+  const exclus = new Set(p.exclus ?? []);
 
   const bfr =
     reglages.seuilMode === 'bfr'
@@ -395,6 +418,11 @@ export async function projeter(
     avertissements.push(
       `${sorties.ignorees} échéance(s) de dépense antérieure(s) au solde non confirmée(s) : ignorée(s).`,
     );
+  const ecartees = affaires.filter((a) => a.statut !== 'comptee').length;
+  if (ecartees)
+    avertissements.push(
+      `${ecartees} affaire(s) du pipe sans montant, sans probabilité ou sans date de signature : non comptée(s).`,
+    );
   if (reglages.seuilMode === 'aucun')
     avertissements.push("Aucun seuil d'alerte réglé : aucune alerte n'est calculée.");
 
@@ -406,7 +434,15 @@ export async function projeter(
       delaiJours: reglages.delaiPaiementJours,
       retardJours: p.retardJours,
     });
-    const periodes = agreger([...sorties.mouvements, ...entrees.mouvements], {
+    const pipe = mouvementsPipe(affaires, {
+      scenario,
+      delaiJours: reglages.delaiPaiementJours,
+      decalageMois,
+      exclus,
+      aujourdhui,
+      fin,
+    });
+    const periodes = agreger([...sorties.mouvements, ...entrees.mouvements, ...pipe], {
       solde: reglages.soldeCents,
       soldeDate: reglages.soldeDate,
       debut: aujourdhui,
@@ -429,6 +465,7 @@ export async function projeter(
     reglages,
     seuil: { mode: reglages.seuilMode, cents: seuilCents, bfr },
     scenarios,
+    pipe: { affaires, decalageMois },
     avertissements,
   };
 }

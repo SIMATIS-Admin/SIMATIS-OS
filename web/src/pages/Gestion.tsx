@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   archiverDepenseGestion,
   archiverRevenuGestion,
   fetchFacturesAEmettre,
   fetchTresorerie,
   fetchTva,
+  patchFiche,
   type ProjectionTresorerie,
   type SuiviTvaGestion,
   fetchRevenuGestion,
@@ -18,40 +19,24 @@ import {
   type OccurrenceDepense,
   type SyntheseDepenses,
 } from '../api.js';
-import {
-  aujourdhui,
-  eurCents,
-  jourCourt,
-  libelleMois,
-  moisDecale,
-  MOIS,
-  MOIS_COURTS,
-} from '../gestion.js';
+import { aujourdhui, eurCents, libelleMois, moisDecale, MOIS, MOIS_COURTS } from '../gestion.js';
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
+import { fusionnerMouvements, type FiltreMouvement, type Mouvement } from './gestion/fusion.js';
+import { GestionPipe, VerdictBandeau } from './gestion/GestionPipe.js';
+import { Mouvements } from './gestion/Mouvements.js';
+import { verdictProjection } from './gestion/verdict.js';
 import { GestionTresorerie, type ParamsTresorerie } from './GestionTresorerie.js';
+import { GestionIk } from './GestionIk.js';
 import { GestionTva } from './GestionTva.js';
-import {
-  ETATS_REVENU,
-  GestionRevenuTiroir,
-  TYPES_REVENU,
-  type CibleRevenu,
-} from './GestionRevenuTiroir.js';
+import { GestionRevenuTiroir, TYPES_REVENU, type CibleRevenu } from './GestionRevenuTiroir.js';
 
-type Onglet = 'vue' | 'depenses' | 'revenus' | 'tresorerie' | 'ik' | 'tva';
+type Onglet = 'pilotage' | 'mouvements' | 'tva';
 const ONGLETS: [Onglet, string][] = [
-  ['vue', 'Vue d’ensemble'],
-  ['depenses', 'Dépenses'],
-  ['revenus', 'Revenus & facturation'],
-  ['tresorerie', 'Trésorerie'],
-  ['ik', 'IK & compte associé'],
-  ['tva', 'TVA'],
+  ['pilotage', 'Pilotage'],
+  ['mouvements', 'Mouvements'],
+  ['tva', 'TVA & IK'],
 ];
-// Écrans suivants : annoncés, jamais simulés avec des chiffres.
-const PREVU: Partial<Record<Onglet, [string, string]>> = {
-  ik: ['Lot D', 'Trajets, barème versionné et compte courant d’associé.'],
-};
-type Filtre = 'toutes' | 'recurrentes' | 'ponctuelles' | 'previsionnelles';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -66,7 +51,7 @@ export function Gestion({
   autorise: boolean;
   mandats: { slug: string; nom: string }[];
 }) {
-  const [onglet, setOnglet] = useState<Onglet>('vue');
+  const [onglet, setOnglet] = useState<Onglet>('pilotage');
   const [mois, setMois] = useState(() => aujourdhui().slice(0, 7));
   const [donnees, setDonnees] = useState<{
     synthese: SyntheseDepenses;
@@ -83,16 +68,19 @@ export function Gestion({
     horizon: 6,
     granularite: 'mois',
     retard: 0,
+    decalage: 0,
+    exclus: [],
   });
   const [tva, setTva] = useState<SuiviTvaGestion | null>(null);
   const [aFacturer, setAFacturer] = useState<OccurrenceRevenu[]>([]);
   const [tiroirRevenu, setTiroirRevenu] = useState<CibleRevenu | null>(null);
-  const [filtre, setFiltre] = useState<Filtre>('toutes');
-  const [affectation, setAffectation] = useState('');
-  const [refacturables, setRefacturables] = useState(false);
-  const [recherche, setRecherche] = useState('');
+  const [sousOnglet, setSousOnglet] = useState<'tva' | 'ik'>('tva');
+  const [filtreMouvement, setFiltreMouvement] = useState<FiltreMouvement>('tout');
 
+  // Chaque chargement porte un numéro : une réponse dépassée par un chargement plus récent est jetée.
+  const sequence = useRef(0);
   const charger = useCallback(async () => {
+    const numero = ++sequence.current;
     try {
       setErreur(null);
       const horizon = new Date(`${aujourdhui()}T00:00:00Z`);
@@ -104,6 +92,7 @@ export function Gestion({
         fetchTresorerie(slug, paramsTreso),
         fetchTva(slug, mois),
       ]);
+      if (numero !== sequence.current) return;
       setTresorerie(t);
       setTva(v);
       setDonnees(d);
@@ -144,22 +133,10 @@ export function Gestion({
     [mandats],
   );
 
-  const visibles = useMemo(() => {
-    const q = recherche.trim().toLowerCase();
-    return (donnees?.occurrences ?? []).filter((o) => {
-      if (filtre === 'recurrentes' && !o.recurrente) return false;
-      if (filtre === 'ponctuelles' && o.recurrente) return false;
-      if (filtre === 'previsionnelles' && o.etat !== 'a_venir') return false;
-      if (affectation && !o.affectations.some((a) => nomAff(a) === affectation)) return false;
-      if (refacturables && !o.refacturable) return false;
-      return (
-        !q ||
-        `${o.libelle} ${o.categorie ?? ''} ${o.affectations.map(nomAff).join(' ')}`
-          .toLowerCase()
-          .includes(q)
-      );
-    });
-  }, [donnees, filtre, affectation, refacturables, recherche, nomAff]);
+  const mouvements = useMemo(
+    () => fusionnerMouvements(donnees?.occurrences ?? [], recettes?.revenus ?? []),
+    [donnees, recettes],
+  );
 
   if (!autorise)
     return <p className="empty">Cette section n’est pas disponible dans cet espace.</p>;
@@ -251,8 +228,8 @@ export function Gestion({
               href="#"
               onClick={(e) => {
                 e.preventDefault();
-                setFiltre('recurrentes');
-                setOnglet('depenses');
+                setFiltreMouvement('recurrents');
+                setOnglet('mouvements');
               }}
             >
               Voir les récurrentes
@@ -281,7 +258,8 @@ export function Gestion({
               href="#"
               onClick={(e) => {
                 e.preventDefault();
-                setOnglet('revenus');
+                setFiltreMouvement('recettes');
+                setOnglet('mouvements');
               }}
             >
               Voir les recettes
@@ -304,15 +282,6 @@ export function Gestion({
                 ? 'Solde d’ouverture à renseigner'
                 : `Solde au ${tresorerie.reglages.soldeDate} · ${tresorerie.reglages.soldeSource}`}
             </span>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                setOnglet('tresorerie');
-              }}
-            >
-              Voir la projection
-            </a>
           </div>
         </div>
         <div className="panel kpi">
@@ -331,6 +300,7 @@ export function Gestion({
               href="#"
               onClick={(e) => {
                 e.preventDefault();
+                setSousOnglet('tva');
                 setOnglet('tva');
               }}
             >
@@ -367,205 +337,8 @@ export function Gestion({
     </>
   );
 
-  const depenses = (
-    <>
-      <div className="panel g-bandeau-tri" style={{ marginBottom: 18 }}>
-        <div>
-          <span className="small muted">Payé en {MOIS[Number(mois.slice(5)) - 1]}</span>
-          <span className="v num">{s ? eurCents(s.payeCents) : '–'}</span>
-        </div>
-        <div>
-          <span className="small muted">À venir d’ici fin de mois</span>
-          <span className="v num">{s ? eurCents(s.aVenirCents) : '–'}</span>
-        </div>
-        <div>
-          <span className="small muted">Total TTC du mois</span>
-          <span className="v num">{s ? eurCents(s.totalCents) : '–'}</span>
-        </div>
-        <div>
-          <span className="small muted">Charges récurrentes / mois</span>
-          <span className="v num">{s ? eurCents(s.recurrentMensuelCents) : '–'}</span>
-        </div>
-      </div>
-      <div className="panel">
-        <div className="g-filtres">
-          {(
-            [
-              ['toutes', 'Toutes'],
-              ['recurrentes', 'Récurrentes'],
-              ['ponctuelles', 'Ponctuelles'],
-              ['previsionnelles', 'Prévisionnelles'],
-            ] as const
-          ).map(([k, l]) => (
-            <button
-              key={k}
-              className={`chip ${filtre === k ? 'on' : ''}`}
-              onClick={() => setFiltre(k)}
-            >
-              {l}
-            </button>
-          ))}
-          <span className="g-sep" />
-          <select
-            className="input"
-            aria-label="Affectation"
-            value={affectation}
-            onChange={(e) => setAffectation(e.target.value)}
-          >
-            <option value="">Toutes les affectations</option>
-            {['SIMATIS', 'KAIROS', ...mandats.map((m) => m.nom)].map((a) => (
-              <option key={a}>{a}</option>
-            ))}
-          </select>
-          <button
-            className={`chip ${refacturables ? 'on' : ''}`}
-            aria-pressed={refacturables}
-            onClick={() => setRefacturables(!refacturables)}
-          >
-            Refacturables
-          </button>
-          <span style={{ flex: 1 }} />
-          {cheminDuMois}
-          <input
-            className="input"
-            type="search"
-            placeholder="Rechercher une dépense"
-            aria-label="Rechercher"
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-          />
-        </div>
-        {visibles.length ? (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Dépense</th>
-                <th>État</th>
-                <th>Affectée à</th>
-                <th>Refacturable</th>
-                <th>Refacturé (réel)</th>
-                <th className="r">Montant TTC</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {visibles.map((o) => (
-                <tr
-                  key={o.cle}
-                  className={`click ${o.etat === 'ignoree' ? 'muted' : ''}`}
-                  onClick={() => void ouvrir(o)}
-                >
-                  <td className="num">{jourCourt(o.date)}</td>
-                  <td className="g-lib">
-                    <b>{o.libelle}</b>
-                    <small>
-                      {o.categorie ?? 'Sans catégorie'}
-                      {o.payeur === 'associe' ? ' · compte d’associé, sans sortie bancaire' : ''}
-                    </small>
-                  </td>
-                  <td>
-                    <span
-                      className={`badge ${o.etat === 'payee' ? 'green' : o.etat === 'ignoree' ? '' : 'amber'}`}
-                    >
-                      {o.etat === 'payee' ? 'Payée' : o.etat === 'ignoree' ? 'Ignorée' : 'Prévue'}
-                    </span>{' '}
-                    {o.recurrente && <span className="badge">Récurrente</span>}
-                  </td>
-                  <td>
-                    <span className="g-aff">
-                      {o.affectations.map((a) => (
-                        <span className="badge" key={`${a.cible}${a.mandat ?? ''}`}>
-                          {nomAff(a)}
-                        </span>
-                      ))}
-                    </span>
-                  </td>
-                  <td>
-                    {o.refacturablePrevuCents ? (
-                      <span
-                        className="badge blue"
-                        title="Montant que vous pouvez refacturer, pas encore une recette"
-                      >
-                        Refacturable {eurCents(o.refacturablePrevuCents)}
-                      </span>
-                    ) : o.refacturable ? (
-                      <span className="badge blue" title="Intention de refacturer, sans montant">
-                        Refacturable
-                      </span>
-                    ) : (
-                      <span className="muted">–</span>
-                    )}
-                  </td>
-                  <td>
-                    {o.refactureCents ? (
-                      <span
-                        className="badge green"
-                        title="Facturé ou encaissé : une recette distincte"
-                      >
-                        Facturé {eurCents(o.refactureCents)}
-                      </span>
-                    ) : (
-                      <span className="muted">–</span>
-                    )}
-                  </td>
-                  <td className="r num">
-                    <b>{eurCents(o.montantTtcCents)}</b>
-                  </td>
-                  <td className="g-act" onClick={(e) => e.stopPropagation()}>
-                    <button className="btn ghost sm" onClick={() => void ouvrir(o, true)}>
-                      Dupliquer
-                    </button>
-                    <button className="btn ghost sm" onClick={() => void ignorer(o)}>
-                      {o.recurrente ? 'Ignorer' : 'Supprimer'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              <tr>
-                <td colSpan={6} className="r">
-                  <b>Total affiché</b>
-                </td>
-                <td className="r num">
-                  <b>
-                    {eurCents(
-                      visibles
-                        .filter((o) => o.etat !== 'ignoree')
-                        .reduce((t, o) => t + o.montantTtcCents, 0),
-                    )}
-                  </b>
-                </td>
-                <td />
-              </tr>
-            </tbody>
-          </table>
-        ) : (
-          <div className="panel-b">
-            <p className="muted" style={{ margin: 0 }}>
-              Aucune dépense ne correspond.{' '}
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setTiroir({ cible: {} });
-                }}
-              >
-                Ajouter une dépense
-              </a>
-            </p>
-          </div>
-        )}
-      </div>
-      <p className="small muted" style={{ marginTop: 10 }}>
-        Cliquer une ligne pour la modifier. Touche <b>N</b> : nouvelle dépense.
-      </p>
-    </>
-  );
-
   const nomMandat = (m: string | null) =>
     m ? (mandats.find((x) => x.slug === m)?.nom ?? m) : 'Aucun mandat';
-  const dateDe = (r: OccurrenceRevenu) =>
-    r.etat === 'encaissee' && r.dateEncaissement ? r.dateEncaissement : r.date;
   const ouvrirRevenu = async (r: OccurrenceRevenu, etat?: 'emise') => {
     try {
       const revenu = await fetchRevenuGestion(slug, r.revenuId);
@@ -587,62 +360,43 @@ export function Gestion({
       setErreur(message(e));
     }
   };
-  const revenus = (
+  const changerSignature = async (id: string, date: string | null) => {
+    try {
+      await patchFiche(slug, 'affaire', id, { signatureEstimee: date });
+      await charger();
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
+  const ouvrirMouvement = (m: Mouvement) =>
+    m.depense ? void ouvrir(m.depense) : void ouvrirRevenu(m.recette!);
+  const retirerMouvement = (m: Mouvement) =>
+    m.depense ? void ignorer(m.depense) : void retirerRevenu(m.recette!);
+  const bandeauMouvements = [
+    {
+      label: `Payé en ${MOIS[Number(mois.slice(5)) - 1]} (dépenses TTC)`,
+      valeur: s ? eurCents(s.payeCents) : '–',
+    },
+    {
+      label: 'À venir d’ici fin de mois (dépenses TTC)',
+      valeur: s ? eurCents(s.aVenirCents) : '–',
+    },
+    {
+      label: 'À encaisser, certain (recettes HT)',
+      valeur: recettes ? eurCents(recettes.synthese.aEncaisserCertainCents) : '–',
+    },
+    {
+      label: 'À encaisser, incertain (recettes HT)',
+      valeur: recettes ? eurCents(recettes.synthese.aEncaisserIncertainCents) : '–',
+    },
+    {
+      label: 'Encaissé (recettes HT)',
+      valeur: recettes ? eurCents(recettes.synthese.encaisseCents) : '–',
+    },
+  ];
+
+  const revenusParMandat = (
     <>
-      <div className="panel g-bandeau-tri" style={{ marginBottom: 18 }}>
-        <div>
-          <span className="small muted">À encaisser, certain (HT)</span>
-          <span className="v">
-            {recettes ? eurCents(recettes.synthese.aEncaisserCertainCents) : '–'}
-          </span>
-        </div>
-        <div>
-          <span className="small muted">À encaisser, incertain (HT)</span>
-          <span className="v">
-            {recettes ? eurCents(recettes.synthese.aEncaisserIncertainCents) : '–'}
-          </span>
-        </div>
-        <div>
-          <span className="small muted">Encaissé (HT)</span>
-          <span className="v">{recettes ? eurCents(recettes.synthese.encaisseCents) : '–'}</span>
-        </div>
-      </div>
-      {aFacturer.length > 0 && (
-        <div className="panel" style={{ marginBottom: 18 }}>
-          <div className="panel-h">
-            <h2>Factures à émettre (30 prochains jours)</h2>
-            <span className="badge amber">{aFacturer.length}</span>
-          </div>
-          <table className="tbl">
-            <tbody>
-              {aFacturer.map((r) => (
-                <tr key={r.cle}>
-                  <td className="num">{jourCourt(r.date)}</td>
-                  <td className="g-lib">
-                    <b>{r.libelle}</b>
-                    <small>
-                      {nomMandat(r.mandat)}
-                      {r.certitude === 'probable' ? ' · probable' : ''}
-                    </small>
-                  </td>
-                  <td className="r num">
-                    <b>{eurCents(r.montantHtCents)}</b>
-                  </td>
-                  <td className="g-act">
-                    <button className="btn sm" onClick={() => void ouvrirRevenu(r, 'emise')}>
-                      Marquer facturée
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="small muted" style={{ margin: '8px 18px' }}>
-            Marquer facturée enregistre la référence de la facture émise ailleurs : l’OS ne crée
-            aucune facture comptable.
-          </p>
-        </div>
-      )}
       {recettes && recettes.synthese.parMandat.length > 0 && (
         <div className="panel" style={{ marginBottom: 18 }}>
           <div className="panel-h">
@@ -682,87 +436,9 @@ export function Gestion({
           </table>
         </div>
       )}
-      <div className="panel">
-        <div className="g-filtres">
-          <span style={{ flex: 1 }} />
-          {cheminDuMois}
-        </div>
-        {recettes?.revenus.length ? (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Recette</th>
-                <th>Mandat</th>
-                <th>État</th>
-                <th className="r">Montant HT</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {recettes.revenus.map((r) => (
-                <tr key={r.cle} className="click" onClick={() => void ouvrirRevenu(r)}>
-                  <td className="num">{jourCourt(dateDe(r))}</td>
-                  <td className="g-lib">
-                    <b>{r.libelle}</b>
-                    <small>
-                      {TYPES_REVENU.find(([k]) => k === r.type)?.[1]}
-                      {r.recurrente ? ' · récurrente' : ''}
-                      {r.referenceFacture ? ` · ${r.referenceFacture}` : ''}
-                    </small>
-                  </td>
-                  <td>
-                    <span className="badge">{nomMandat(r.mandat)}</span>
-                  </td>
-                  <td>
-                    <span
-                      className={`badge ${r.etat === 'encaissee' ? 'green' : r.etat === 'emise' ? 'blue' : 'amber'}`}
-                    >
-                      {ETATS_REVENU.find(([k]) => k === r.etat)?.[1]}
-                    </span>{' '}
-                    {r.certitude !== 'certaine' && (
-                      <span className="badge">
-                        {r.certitude === 'probable' ? 'Probable' : 'Hypothèse'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="r num">
-                    <b>{eurCents(r.montantHtCents)}</b>
-                  </td>
-                  <td className="g-act" onClick={(e) => e.stopPropagation()}>
-                    <button className="btn ghost sm" onClick={() => void retirerRevenu(r)}>
-                      {r.recurrente ? 'Ignorer' : 'Supprimer'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="panel-b">
-            <p className="muted" style={{ margin: 0 }}>
-              Aucune recette ce mois-ci.{' '}
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setTiroirRevenu({});
-                }}
-              >
-                Ajouter une recette
-              </a>
-            </p>
-          </div>
-        )}
-      </div>
-      <p className="small muted" style={{ marginTop: 10 }}>
-        Montants hors taxes. Une refacturation se crée depuis la dépense concernée : c’est une
-        recette distincte, elle ne réduit jamais la dépense.
-      </p>
     </>
   );
 
-  const prevu = PREVU[onglet];
   return (
     <>
       <div className="g-onglets" role="tablist">
@@ -772,7 +448,11 @@ export function Gestion({
             role="tab"
             aria-selected={onglet === id}
             className={`chip ${onglet === id ? 'on' : ''}`}
-            onClick={() => setOnglet(id)}
+            onClick={() => {
+              // Un filtre posé par une carte ne doit pas coller à l'onglet.
+              if (id === 'mouvements' && onglet !== 'mouvements') setFiltreMouvement('tout');
+              setOnglet(id);
+            }}
           >
             {l}
           </button>
@@ -790,40 +470,84 @@ export function Gestion({
           {erreur}
         </div>
       )}
-      {onglet === 'vue' && vue}
-      {onglet === 'depenses' && depenses}
-      {onglet === 'revenus' && revenus}
-      {onglet === 'tresorerie' && (
-        <GestionTresorerie
-          slug={slug}
-          projection={tresorerie}
-          params={paramsTreso}
-          onParams={setParamsTreso}
-          onReglagesSaved={() => void charger()}
+      {onglet === 'pilotage' && (
+        <>
+          {tresorerie && (
+            <VerdictBandeau
+              verdict={verdictProjection(tresorerie, paramsTreso.decalage, paramsTreso.exclus)}
+            />
+          )}
+          {vue}
+          <div style={{ marginTop: 18 }}>
+            <GestionTresorerie
+              slug={slug}
+              projection={tresorerie}
+              params={paramsTreso}
+              onParams={setParamsTreso}
+              onReglagesSaved={() => void charger()}
+            />
+          </div>
+          {tresorerie && (
+            <GestionPipe
+              affaires={tresorerie.pipe.affaires}
+              decalage={paramsTreso.decalage}
+              exclus={paramsTreso.exclus}
+              onDecalage={(decalage) => setParamsTreso({ ...paramsTreso, decalage })}
+              onExclus={(exclus) => setParamsTreso({ ...paramsTreso, exclus })}
+              onDate={(id, date) => void changerSignature(id, date)}
+            />
+          )}
+          {revenusParMandat}
+        </>
+      )}
+      {onglet === 'mouvements' && (
+        <Mouvements
+          key={filtreMouvement}
+          mouvements={mouvements}
+          aFacturer={aFacturer}
+          bandeau={bandeauMouvements}
+          periode={cheminDuMois}
+          mandats={mandats.map((m) => m.nom)}
+          nomAff={nomAff}
+          filtreInitial={filtreMouvement}
+          onOuvrir={ouvrirMouvement}
+          onDupliquer={(m) => void ouvrir(m.depense!, true)}
+          onRetirer={retirerMouvement}
+          onMarquerFacturee={(r) => void ouvrirRevenu(r, 'emise')}
+          onAjouter={(f) => (f === 'recettes' ? setTiroirRevenu({}) : setTiroir({ cible: {} }))}
         />
       )}
       {onglet === 'tva' && (
-        <GestionTva
-          slug={slug}
-          mois={mois}
-          suivi={tva}
-          periode={cheminDuMois}
-          onSaved={() => void charger()}
-        />
-      )}
-      {prevu && (
-        <div className="panel">
-          <div className="panel-h">
-            <h2>{ONGLETS.find(([id]) => id === onglet)?.[1]}</h2>
-            <span className="badge amber">{prevu[0]}</span>
+        <>
+          <div className="g-filtres" style={{ marginBottom: 14 }}>
+            {(
+              [
+                ['tva', 'TVA'],
+                ['ik', 'IK & compte associé'],
+              ] as const
+            ).map(([k, l]) => (
+              <button
+                key={k}
+                className={`chip ${sousOnglet === k ? 'on' : ''}`}
+                aria-pressed={sousOnglet === k}
+                onClick={() => setSousOnglet(k)}
+              >
+                {l}
+              </button>
+            ))}
           </div>
-          <div className="panel-b">
-            <p className="muted" style={{ margin: 0 }}>
-              {prevu[1]} Pas encore disponible : aucun chiffre n’est affiché tant que la source
-              n’est pas renseignée.
-            </p>
-          </div>
-        </div>
+          {sousOnglet === 'tva' ? (
+            <GestionTva
+              slug={slug}
+              mois={mois}
+              suivi={tva}
+              periode={cheminDuMois}
+              onSaved={() => void charger()}
+            />
+          ) : (
+            <GestionIk slug={slug} mois={mois} periode={cheminDuMois} />
+          )}
+        </>
       )}
       {tiroirRevenu && (
         <GestionRevenuTiroir
