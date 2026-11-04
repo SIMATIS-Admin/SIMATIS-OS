@@ -1086,14 +1086,14 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
   return attentes.length;
 }
 
-async function tourCodex(opts: RunnerOptions, binaire: string) {
+export async function tourCodex(opts: RunnerOptions, binaire: string) {
   const api = clientOs(opts);
   const { travail } = await api<{
     travail: { id: string; demande: import('../enrichissement/client.js').DemandeIA } | null;
   }>('/api/runner/codex');
   if (!travail) return;
   const dossier = await mkdtemp(path.join(tmpdir(), 'simatis-codex-'));
-  let resultat: unknown;
+  let resultat: unknown = null;
   let ok = false;
   try {
     const schema = path.join(dossier, 'schema.json');
@@ -1119,7 +1119,7 @@ async function tourCodex(opts: RunnerOptions, binaire: string) {
           sortie,
           '-',
         ],
-        { cwd: dossier, env, timeout: 150_000 },
+        { cwd: dossier, env, timeout: 540_000 },
         (erreur) => (erreur ? reject(new Error(erreur.message)) : resolve()),
       );
       enfant.stdin?.on('error', (err: Error) => reject(err));
