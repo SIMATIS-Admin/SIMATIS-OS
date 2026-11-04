@@ -41,6 +41,7 @@ const app = buildApp({
   secretsDir: config.secretsDir,
   vma: config.site && config.vmaOsToken ? { url: config.site.url, token: config.vmaOsToken } : null,
   enrichissement: config.enrichissement,
+  partageKdriveUrl: config.partageKdriveUrl,
   relais: config.relaisUrl
     ? {
         url: config.relaisUrl,

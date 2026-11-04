@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ajouterDocumentPartage,
   cartePartage,
+  chercherPartage,
   deposerMessage,
   ecrirePartage,
   lirePartage,
@@ -30,6 +31,19 @@ const appeler: AppelerPartage = (outil, args) => {
   if (outil === 'publier_document') {
     fichiers.set(String(args.chemin), String(args.contenu).replace(/\s*$/, '\n'));
     return Promise.resolve(JSON.stringify({ fait: true, chemin: args.chemin }));
+  }
+  if (outil === 'chercher_partage') {
+    const req = String(args.requete).toLowerCase();
+    const trouves = [...fichiers].filter(([, c]) => c.toLowerCase().includes(req));
+    return Promise.resolve(
+      trouves.length
+        ? trouves
+            .map(
+              ([p, c]) => `- ${p}\n    ${c.split('\n').find((l) => l.toLowerCase().includes(req))}`,
+            )
+            .join('\n')
+        : 'aucun résultat',
+    );
   }
   if (outil === 'deposer_message')
     return Promise.resolve(
@@ -186,5 +200,38 @@ describe('cartePartage', () => {
     expect(par['reference/offre.md']?.categorie).toBe('reference');
     expect(carte.liens).toEqual([{ de: 'index.md', vers: 'reference/offre.md' }]);
     expect(carte.autresFichiers).toBe(1);
+  });
+
+  it('liste les fichiers non texte et lit genre, date et réponse des messages', async () => {
+    fichiers.set(
+      'echanges/2026-10-30-0900-marc-re-question.md',
+      '---\nde: marc\ndate: 2026-10-30T09:00:00+01:00\ntype: reponse\nsujet: "Re"\nen_reponse_a: 2026-10-29-1200-christophe-question.md\n---\n\nOui.\n',
+    );
+    const carte = await cartePartage(appeler, 'marc');
+    expect(carte.fichiers).toEqual(['reference/logo.png']);
+    const q = carte.noeuds.find((n) => n.id.endsWith('christophe-question.md'));
+    expect(q).toMatchObject({ genre: 'question', auteur: 'christophe' });
+    const r = carte.noeuds.find((n) => n.id.endsWith('marc-re-question.md'));
+    expect(r).toMatchObject({
+      genre: 'reponse',
+      auteur: 'marc',
+      date: '2026-10-30T09:00:00+01:00',
+      reponseA: 'echanges/2026-10-29-1200-christophe-question.md',
+    });
+  });
+});
+
+describe('chercherPartage', () => {
+  it('rend les fichiers trouvés avec leurs extraits', async () => {
+    fichiers.set('reference/offre.md', '# Offre fictive\n\nTarif unique de démonstration.\n');
+    const r = await chercherPartage(appeler, 'tarif');
+    expect(r).toEqual([
+      { chemin: 'reference/offre.md', extraits: ['Tarif unique de démonstration.'] },
+    ]);
+  });
+
+  it('rend une liste vide quand rien ne correspond, et refuse une requête vide', async () => {
+    expect(await chercherPartage(appeler, 'zzz')).toEqual([]);
+    await expect(chercherPartage(appeler, '  ')).rejects.toThrow(/mot/);
   });
 });

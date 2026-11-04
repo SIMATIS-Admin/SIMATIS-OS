@@ -31,6 +31,8 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
           ? Promise.reject(new Error('échec : introuvable'))
           : Promise.resolve(`[${String(args.chemin)} · modifié par Marc]\n\n${c}`);
       }
+      if (outil === 'chercher_partage')
+        return Promise.resolve('- index.md\n    Une ligne fictive trouvée');
       if (outil === 'publier_document') {
         kdrive.set(String(args.chemin), String(args.contenu));
         return Promise.resolve('{"fait":true}');
@@ -40,7 +42,7 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
   });
   const f = () => {
     const app = Fastify();
-    registerCerveauRoutes(app, { db: t.app.db });
+    registerCerveauRoutes(app, { db: t.app.db, lienKdrive: 'https://kdrive.example/dossier' });
     return app;
   };
   let app: ReturnType<typeof f>;
@@ -266,6 +268,27 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
       expect(carte.json<{ noeuds: unknown[] }>().noeuds).toHaveLength(2);
       const simatis = await app.inject({ method: 'GET', url: '/api/i/op-ok/cerveau/carte' });
       expect(simatis.json()).toBeNull();
+    });
+
+    it('cherche dans le contenu de l’espace partagé et donne le lien du dossier kDrive', async () => {
+      const res = await demander('op-ok', {
+        espace: 'partage',
+        type: 'chercher',
+        requete: 'fictive',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ resultats: unknown[] }>().resultats).toEqual([
+        { chemin: 'index.md', extraits: ['Une ligne fictive trouvée'] },
+      ]);
+      const vide = await demander('op-ok', { espace: 'partage', type: 'chercher', requete: ' ' });
+      expect(vide.statusCode).toBe(400);
+      const carte = await app.inject({
+        method: 'GET',
+        url: '/api/i/op-ok/cerveau/carte?espace=partage',
+      });
+      expect(carte.json<{ lienKdrive: string }>().lienKdrive).toBe(
+        'https://kdrive.example/dossier',
+      );
     });
 
     it('explique quand le serveur « partage » est absent du poste', async () => {

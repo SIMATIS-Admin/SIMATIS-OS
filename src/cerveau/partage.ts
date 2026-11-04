@@ -12,6 +12,7 @@ export type AppelerPartage = (outil: string, args: Record<string, unknown>) => P
 // Qui publie où : copie de la règle du serveur, pour griser l'édition. Le serveur refuse de toute façon.
 const DOSSIERS: Record<string, string> = { reference: 'christophe', prospection: 'marc' };
 const MAX_NOTES = 200;
+const MAX_FICHIERS = 500;
 
 const empreinteDe = (contenu: string) => createHash('sha256').update(contenu).digest('hex');
 
@@ -160,6 +161,30 @@ export async function cartePartage(appeler: AppelerPartage, auteur: string): Pro
     }),
   );
   lus.sort((a, b) => a.id.localeCompare(b.id));
-  const carte = carteDepuisNotes(lus, { autresFichiers: fichiers.length - md.length });
+  const autres = fichiers.filter((f) => !f.endsWith('.md'));
+  const carte = carteDepuisNotes(lus, {
+    autresFichiers: autres.length,
+    fichiers: autres.slice(0, MAX_FICHIERS),
+  });
   return { ...carte, tronquee: md.length > MAX_NOTES };
+}
+
+export type ResultatRecherche = { chemin: string; extraits: string[] };
+
+// Recherche dans le contenu des fichiers (« - chemin » suivi d'extraits en retrait).
+export async function chercherPartage(
+  appeler: AppelerPartage,
+  requete: string,
+): Promise<ResultatRecherche[]> {
+  const mot = requete.trim();
+  if (!mot) throw new ErreurCerveau('Tapez au moins un mot à chercher.');
+  const texte = await appeler('chercher_partage', { requete: mot }).catch((e: unknown) => {
+    throw echec(e);
+  });
+  const resultats: ResultatRecherche[] = [];
+  for (const ligne of texte.split('\n')) {
+    if (ligne.startsWith('- ')) resultats.push({ chemin: ligne.slice(2).trim(), extraits: [] });
+    else if (/^\s+\S/.test(ligne)) resultats.at(-1)?.extraits.push(ligne.trim());
+  }
+  return resultats;
 }

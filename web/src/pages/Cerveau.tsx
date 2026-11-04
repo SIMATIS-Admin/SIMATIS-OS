@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchCarteCerveau, operationCerveau, type EspaceCerveau } from '../api.js';
 import { IdeeCerveau, MessagePartage, NoteCerveau } from './NoteCerveau.js';
+import { PartageListes } from './PartageListes.js';
 import { categorieInfo, disposer, voisins, type CarteCerveau } from '../cerveau.js';
 
 const TAILLE = 1000;
@@ -289,6 +290,8 @@ function CerveauEspace({ slug, espace }: { slug: string; espace: EspaceCerveau }
             </p>
           </div>
         </div>
+
+        {partage && <PartageListes slug={slug} carte={carte} onOuvrir={setOuverte} />}
 
         <div className="panel">
           <div className="panel-b">

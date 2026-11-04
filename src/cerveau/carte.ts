@@ -9,6 +9,12 @@ export type Noeud = {
   statut: string | null;
   // Sujet auquel une idée se rapporte (« os » : le développement de l'OS), lu dans l'en-tête.
   concerne?: string | null | undefined;
+  // Messages de l'espace partagé (echanges/) : lus dans l'en-tête, pour les lister et repérer les
+  // questions restées sans réponse.
+  genre?: string | null | undefined;
+  auteur?: string | null | undefined;
+  date?: string | null | undefined;
+  reponseA?: string | null | undefined;
 };
 export type Lien = { de: string; vers: string };
 export type Carte = {
@@ -16,6 +22,8 @@ export type Carte = {
   liens: Lien[];
   // Fichiers qui ne sont pas des notes Markdown (pièces jointes, présentations) : comptés seulement.
   autresFichiers: number;
+  // Chemins de ces fichiers pour l'espace partagé, afin de les lister avec un lien vers le kDrive.
+  fichiers?: string[];
   tronquee: boolean;
 };
 
@@ -66,7 +74,7 @@ const titreDe = (texte: string, id: string) => {
 // Carte à partir de notes déjà lues : le dossier du Drive et l'espace partagé s'y ramènent.
 export function carteDepuisNotes(
   toutes: { id: string; texte: string }[],
-  options: { max?: number; autresFichiers?: number } = {},
+  options: { max?: number; autresFichiers?: number; fichiers?: string[] } = {},
 ): Carte {
   const max = options.max ?? MAX_NOTES;
   const notes = toutes.slice(0, max);
@@ -85,12 +93,22 @@ export function carteDepuisNotes(
   };
 
   for (const { id, texte } of notes) {
+    const echange = id.startsWith('echanges/');
+    const reponseA = echange ? champDe(texte, 'en_reponse_a') : null;
     noeuds.push({
       id,
       titre: titreDe(texte, id),
       categorie: categorieDe(id),
       statut: statutDe(texte),
       concerne: champDe(texte, 'concerne'),
+      ...(echange
+        ? {
+            genre: champDe(texte, 'type'),
+            auteur: champDe(texte, 'de'),
+            date: champDe(texte, 'date'),
+            reponseA: reponseA ? `echanges/${reponseA}` : null,
+          }
+        : {}),
     });
     const corps = sansCode(texte);
     for (const m of corps.matchAll(/\[\[([^\]|#]+)[^\]]*\]\]/g)) {
@@ -118,6 +136,7 @@ export function carteDepuisNotes(
     noeuds,
     liens: [...liens.values()],
     autresFichiers: options.autresFichiers ?? 0,
+    ...(options.fichiers ? { fichiers: options.fichiers } : {}),
     tronquee: toutes.length > notes.length,
   };
 }
