@@ -46,6 +46,14 @@ const schema = z.object({
       .optional(),
   ),
   RELAIS_CLE_INSCRIPTION: z.preprocess(vide, z.string().min(1).optional()),
+  // Lien du dossier de l'espace partagé AlpesIA sur le kDrive, pour ouvrir les fichiers non texte.
+  PARTAGE_KDRIVE_URL: z.preprocess(
+    vide,
+    z
+      .string()
+      .refine((value) => /^https?:\/\//.test(value), 'doit commencer par http:// ou https://')
+      .optional(),
+  ),
   // Enrichissement de listes par IA : sans clé OpenAI, la fonction est éteinte.
   OPENAI_API_KEY: z.preprocess(vide, z.string().min(1).optional()),
   ENRICHISSEMENT_MODELE: z.preprocess(vide, z.string().min(1).default('gpt-5-mini')),
@@ -75,6 +83,8 @@ export type Config = {
   // Relais d'agents des OS partenaires ; null tant qu'il n'est pas configuré.
   relaisUrl: string | null;
   relaisCleInscription: string | null;
+  // Lien du dossier de l'espace partagé sur le kDrive ; null tant qu'il n'est pas configuré.
+  partageKdriveUrl: string | null;
   // Enrichissement de listes par IA ; null sans clé OpenAI.
   enrichissement: { cle: string; modele: string; lotMax: number; budgetJetons: number } | null;
 };
@@ -110,6 +120,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     vmaRelanceAuto: e.VMA_RELANCE_AUTO === 'on',
     relaisUrl: e.RELAIS_URL ?? null,
     relaisCleInscription: e.RELAIS_CLE_INSCRIPTION ?? null,
+    partageKdriveUrl: e.PARTAGE_KDRIVE_URL ?? null,
     enrichissement: e.OPENAI_API_KEY
       ? {
           cle: e.OPENAI_API_KEY,

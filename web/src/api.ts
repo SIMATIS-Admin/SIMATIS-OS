@@ -309,7 +309,8 @@ export type OperationCerveau =
       corps: string;
       enReponseA?: string;
     }
-  | { espace: 'partage'; type: 'actualiser' };
+  | { espace: 'partage'; type: 'actualiser' }
+  | { espace: 'partage'; type: 'chercher'; requete: string };
 // Lire, enregistrer une note, ajouter une idée, déposer un message : exécuté sur le dossier du Drive
 // (SIMATIS) ou dans l'espace partagé kDrive (Partagé).
 export const operationCerveau = (slug: string, operation: OperationCerveau) =>
@@ -318,6 +319,7 @@ export const operationCerveau = (slug: string, operation: OperationCerveau) =>
     contenu?: string;
     empreinte?: string;
     lectureSeule?: string | null;
+    resultats?: { chemin: string; extraits: string[] }[];
   }>('POST', inst(slug, 'cerveau/operations'), operation);
 export const fetchConsole = (slug: string) => getJson<ConsoleOS>(inst(slug, 'console'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));

@@ -39,6 +39,8 @@ export type AppDeps = {
   vma?: { url: string; token: string } | null;
   // Relais d'agents des OS partenaires ; null ou absent = module éteint.
   relais?: { url: string; cleInscription?: string; fetch?: typeof fetch } | null;
+  // Lien du dossier de l'espace partagé sur le kDrive ; null ou absent = pas de lien affiché.
+  partageKdriveUrl?: string | null;
   // Enrichissement de listes par IA ; null ou absent = fonction éteinte (pas de clé OpenAI).
   enrichissement?: Config['enrichissement'];
   clientIA?: ClientIA;
@@ -58,6 +60,7 @@ export function buildApp({
   imapServeur,
   vma = null,
   relais = null,
+  partageKdriveUrl = null,
   enrichissement = null,
   clientIA,
   logger = false,
@@ -118,7 +121,7 @@ export function buildApp({
   registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
   registerRunnerApi(app, { db, codex });
-  registerCerveauRoutes(app, { db });
+  registerCerveauRoutes(app, { db, lienKdrive: partageKdriveUrl });
   registerWeb(app);
   return app;
 }
