@@ -9,7 +9,13 @@ const candidat = z.object({
   fonction: z.string(),
   email: z.string().nullable(),
   linkedin: z.string().nullable(),
-  source: z.string().url().startsWith('https://'),
+  source: z.preprocess(
+    (valeur) =>
+      typeof valeur === 'string'
+        ? (valeur.match(/\[[^\]]*\]\((https:\/\/[^\s)]+)\)/)?.[1] ?? valeur.trim())
+        : valeur,
+    z.string().url().startsWith('https://'),
+  ),
   qualification: z.string(),
 });
 
@@ -21,11 +27,11 @@ export async function chercherProspects(client: ClientIA, consignes: string, nom
     fonction: { type: 'string' },
     email: { type: ['string', 'null'] },
     linkedin: { type: ['string', 'null'] },
-    source: { type: 'string' },
+    source: { type: 'string', format: 'uri' },
     qualification: { type: 'string' },
   };
   const { json } = await client.demander({
-    consigne: `Recherche jusqu’à ${nombre} nouveaux prospects dans des sources publiques. Vérifie le poste actuel. Pour chaque personne, cherche LinkedIn et un e-mail professionnel nominatif effectivement publié. Laisse les coordonnées non vérifiées à null. Donne une URL de source et résume effectif, CA daté, évolution financière et reprise lorsqu’ils sont documentés. Écarte les candidats sans canal nominatif.`,
+    consigne: `Recherche jusqu’à ${nombre} nouveaux prospects dans des sources publiques. Vérifie le poste actuel. Pour chaque personne, cherche LinkedIn et un e-mail professionnel nominatif effectivement publié. Laisse les coordonnées non vérifiées à null. Donne une URL HTTPS brute comme source, sans Markdown ni texte autour, et résume effectif, CA daté, évolution financière et reprise lorsqu’ils sont documentés. Écarte les candidats sans canal nominatif.`,
     entree: consignes,
     schema: {
       type: 'object',
