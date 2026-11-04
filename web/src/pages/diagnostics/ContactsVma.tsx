@@ -12,18 +12,116 @@ import {
   type ContactVma,
   type Entreprise,
 } from '../../api.js';
+import { Icon } from '../../icons.js';
 import { Modale } from './Creation.js';
 import { libelleStatut } from '../TestsVma.js';
 
 const erreurDe = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const normaliser = (s: string) => s.trim().toLocaleLowerCase('fr');
+const normaliser = (s: string) =>
+  s.normalize('NFD').replace(/\p{M}/gu, '').trim().toLocaleLowerCase('fr');
+const jour = (s: string) => new Date(s).toLocaleDateString('fr-FR');
 const date = (s: string) => new Date(s).toLocaleString('fr-FR');
 
-export function ContactsVma({ slug, onRetour }: { slug: string; onRetour: () => void }) {
+function identite(t: ContactVma) {
+  const complet = t.contactNom?.trim() ?? '';
+  const prenom = t.contactPrenom?.trim() ?? '';
+  const nom = t.contactNomFamille?.trim() ?? '';
+  if (prenom)
+    return {
+      prenom,
+      nom:
+        nom ||
+        (complet.startsWith(prenom + ' ')
+          ? complet.slice(prenom.length + 1)
+          : complet === prenom
+            ? ''
+            : complet),
+    };
+  if (nom) {
+    return {
+      prenom: complet.endsWith(' ' + nom) ? complet.slice(0, -nom.length - 1) : '',
+      nom,
+    };
+  }
+  // Les anciennes invitations saisissent « Prénom et nom » dans un seul champ.
+  const morceaux = complet.split(/\s+/);
+  if (morceaux.length < 2 || morceaux.some((mot) => !/^[\p{L}'’.-]+$/u.test(mot))) {
+    return { prenom: '', nom: complet };
+  }
+  return { prenom: morceaux[0]!, nom: morceaux.slice(1).join(' ') };
+}
+
+const statutTest = (t: ContactVma) =>
+  t.recueLe
+    ? 'Test réalisé'
+    : !t.envoyeeLe && t.statut === 'envoyee' && Date.parse(t.expireLe) > Date.now()
+      ? 'En attente d’envoi'
+      : libelleStatut(t);
+
+const tris = {
+  entreprise: 'Entreprise',
+  nom: 'Nom',
+  prenom: 'Prénom',
+  date: 'Date de création',
+  statut: 'Statut du test',
+} as const;
+type Tri = keyof typeof tris;
+const comparer = new Intl.Collator('fr', { sensitivity: 'base', numeric: true }).compare;
+
+type TestSupprime = { id: string; nom: string | null; entreprise: string; date: string };
+
+export function ContactsVma({
+  slug,
+  onRetour,
+  accesTest,
+  testsSupprimesCle,
+}: {
+  slug: string;
+  onRetour: () => void;
+  accesTest?: (test: ContactVma) => { archive: boolean; ouvrir: () => void } | null;
+  testsSupprimesCle?: string;
+}) {
+  const [supprimes] = useState<TestSupprime[]>(() => {
+    try {
+      const valeur: unknown = JSON.parse(
+        testsSupprimesCle ? (localStorage.getItem(testsSupprimesCle) ?? '[]') : '[]',
+      );
+      return Array.isArray(valeur) ? (valeur as TestSupprime[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [lignes, setLignes] = useState<ContactVma[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [recherche, setRecherche] = useState('');
-  const [filtre, setFiltre] = useState('tous');
+  const [filtresOuverts, setFiltresOuverts] = useState(false);
+  const [origine, setOrigine] = useState('');
+  const [statut, setStatut] = useState('');
+  const [crm, setCrm] = useState('');
+  const [tri, setTri] = useState<Tri>('entreprise');
+  const [inverse, setInverse] = useState(false);
+  const cleRetires = `diagnostics.contacts-retires.${slug}`;
+  const [retires, setRetires] = useState<string[]>(() => {
+    try {
+      const valeur: unknown = JSON.parse(localStorage.getItem(cleRetires) ?? '[]');
+      return Array.isArray(valeur)
+        ? valeur.filter((id): id is string => typeof id === 'string')
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const [voirRetires, setVoirRetires] = useState(false);
+  const basculerRetire = (cle: string) => {
+    const suivants = retires.includes(cle) ? retires.filter((id) => id !== cle) : [...retires, cle];
+    try {
+      localStorage.setItem(cleRetires, JSON.stringify(suivants));
+      setRetires(suivants);
+    } catch {
+      setErreur('Impossible d’enregistrer ce choix dans ce navigateur.');
+    }
+  };
+  const [historiques, setHistoriques] = useState<Set<string>>(new Set());
   const [choix, setChoix] = useState<ContactVma | null>(null);
   const [lien, setLien] = useState('');
   const [copie, setCopie] = useState(false);
@@ -54,31 +152,70 @@ export function ContactsVma({ slug, onRetour }: { slug: string; onRetour: () => 
       setCreationLien(false);
     }
   };
-  const visibles = lignes?.filter((t) => {
-    const q = normaliser(recherche);
-    return (
-      (!q ||
-        normaliser(
-          [
-            t.entrepriseNom,
-            t.contactPrenom,
-            t.contactNom,
-            t.contactPoste,
-            t.contactEmail,
-            t.contactTelephone,
-          ].join(' '),
-        ).includes(q)) &&
-      (filtre !== 'a_lier' || !t.contactId || !t.entrepriseId) &&
-      (filtre !== 'realises' || Boolean(t.recueLe)) &&
-      (filtre !== 'inscriptions' || t.origine === 'inscription')
-    );
-  });
+  const filtresActifs = [origine, statut, crm].filter(Boolean).length;
+  const q = normaliser(recherche);
+  const fiches = (lignes ?? []).map((t) => ({
+    ...t,
+    ...identite(t),
+    statutAffiche: statutTest(t),
+    lie: Boolean(t.contactId && t.entrepriseId),
+  }));
+  const statuts = [...new Set(fiches.map((t) => t.statutAffiche))].sort(comparer);
+  const visibles = fiches
+    .filter(
+      (t) =>
+        (!q ||
+          normaliser(
+            [
+              t.entrepriseNom,
+              t.prenom,
+              t.nom,
+              t.contactNom,
+              t.contactPoste || t.contactLie?.fonction,
+              t.contactEmail,
+              t.contactTelephone || t.contactLie?.telephone,
+            ].join(' '),
+          ).includes(q)) &&
+        (!origine || t.origine === origine) &&
+        (!statut || t.statutAffiche === statut) &&
+        (!crm || t.lie === (crm === 'lie')),
+    )
+    .sort((a, b) => {
+      const valeur = (t: typeof a) =>
+        ({
+          entreprise: t.entrepriseNom,
+          nom: t.nom,
+          prenom: t.prenom,
+          date: t.creeLe,
+          statut: t.statutAffiche,
+        })[tri];
+      return (inverse ? -1 : 1) * comparer(valeur(a), valeur(b));
+    });
+  const groupes = new Map<string, (typeof visibles)[number][]>();
+  for (const t of visibles) {
+    const cle =
+      t.prenom && t.nom
+        ? `nom:${normaliser(t.prenom + ' ' + t.nom)}`
+        : t.contactId
+          ? `crm:${t.contactId}`
+          : t.contactEmail
+            ? `email:${normaliser(t.contactEmail)}`
+            : `test:${t.id}`;
+    const groupe = groupes.get(cle);
+    if (groupe) groupe.push(t);
+    else groupes.set(cle, [t]);
+  }
+  const groupesAffiches = [...groupes].filter(([cle]) => retires.includes(cle) === voirRetires);
+  const nombreOccurrences = groupesAffiches.reduce(
+    (total, [, invitations]) => total + invitations.length,
+    0,
+  );
   return (
     <div className="stack dg">
       <div className="panel">
         <div className="panel-h">
           <div>
-            <h2>Contacts VMA</h2>
+            <h2>Contacts</h2>
             <p className="small muted">
               Vos invitations et les inscriptions depuis les liens personnels, avec leur
               rattachement au CRM.
@@ -105,26 +242,99 @@ export function ContactsVma({ slug, onRetour }: { slug: string; onRetour: () => 
               </a>
             </p>
           )}
-          <div className="dg-outils">
+          {(retires.length > 0 || voirRetires) && (
+            <button
+              className="btn vma-occurrences"
+              type="button"
+              onClick={() => setVoirRetires(!voirRetires)}
+            >
+              {voirRetires ? 'Retour aux contacts' : `Lignes retirées (${retires.length})`}
+            </button>
+          )}
+          <div className="vma-contact-recherche">
             <input
               className="input"
               type="search"
-              aria-label="Rechercher un contact VMA"
+              aria-label="Rechercher un contact"
               placeholder="Entreprise, nom, mail…"
               value={recherche}
               onChange={(e) => setRecherche(e.target.value)}
             />
-            <select
-              className="input"
-              aria-label="Filtrer les contacts VMA"
-              value={filtre}
-              onChange={(e) => setFiltre(e.target.value)}
+            <button
+              type="button"
+              className="btn"
+              aria-expanded={filtresOuverts}
+              aria-controls="vma-contact-filtres"
+              onClick={() => setFiltresOuverts(!filtresOuverts)}
             >
-              <option value="tous">Tous les contacts</option>
-              <option value="a_lier">À rattacher au CRM</option>
-              <option value="realises">Test réalisé</option>
-              <option value="inscriptions">Inscription par lien</option>
-            </select>
+              Filtres et tri{filtresActifs ? ` (${filtresActifs})` : ''}
+              <span aria-hidden="true">{filtresOuverts ? '▴' : '▾'}</span>
+            </button>
+          </div>
+          <div id="vma-contact-filtres" className="vma-contact-filtres" hidden={!filtresOuverts}>
+            <label>
+              <span>Origine du contact</span>
+              <select
+                className="input"
+                aria-label="Origine du contact"
+                value={origine}
+                onChange={(e) => setOrigine(e.target.value)}
+              >
+                <option value="">Toutes les origines</option>
+                <option value="invitation">Invitation SIMATIS</option>
+                <option value="inscription">Inscription par lien</option>
+              </select>
+            </label>
+            <label>
+              <span>Statut du test</span>
+              <select
+                className="input"
+                aria-label="Statut du test"
+                value={statut}
+                onChange={(e) => setStatut(e.target.value)}
+              >
+                <option value="">Tous les statuts</option>
+                {statuts.map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Rattachement CRM</span>
+              <select
+                className="input"
+                aria-label="Rattachement CRM"
+                value={crm}
+                onChange={(e) => setCrm(e.target.value)}
+              >
+                <option value="">Tous les rattachements</option>
+                <option value="a_lier">À rattacher au CRM</option>
+                <option value="lie">Rattachés au CRM</option>
+              </select>
+            </label>
+            <label>
+              <span>Trier par</span>
+              <select
+                className="input"
+                aria-label="Trier par"
+                value={tri}
+                onChange={(e) => setTri(e.target.value as Tri)}
+              >
+                {Object.entries(tris).map(([cle, titre]) => (
+                  <option key={cle} value={cle}>
+                    {titre}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn"
+              aria-label="Inverser le tri"
+              onClick={() => setInverse(!inverse)}
+            >
+              {inverse ? '↓ Décroissant' : '↑ Croissant'}
+            </button>
           </div>
         </div>
       </div>
@@ -140,93 +350,159 @@ export function ContactsVma({ slug, onRetour }: { slug: string; onRetour: () => 
           ) : (
             <>
               <p className="small muted">
-                {visibles?.length} invitation(s) · Les coordonnées déclarées sont conservées même
-                après rattachement.
+                {groupesAffiches.length} contact(s) · {nombreOccurrences} invitation(s) ou
+                inscription(s)
               </p>
               <table>
                 <thead>
                   <tr>
-                    {[
-                      'Entreprise',
-                      'Prénom',
-                      'Nom',
-                      'Poste',
-                      'Mail',
-                      'Téléphone',
-                      'Suivi du test',
-                      'CRM',
-                      'Accord commercial',
-                      'Actions',
-                    ].map((t) => (
-                      <th key={t}>{t}</th>
-                    ))}
+                    {['Contact', 'Entreprise', 'Coordonnées', 'Suivi du test', 'Actions'].map(
+                      (t) => (
+                        <th key={t} scope="col">
+                          {t}
+                        </th>
+                      ),
+                    )}
+                    <th scope="col" aria-label="Visibilité de la ligne" />
                   </tr>
                 </thead>
                 <tbody>
-                  {visibles?.map((t) => (
-                    <tr key={t.id}>
-                      <td>
-                        {t.entrepriseNom}
-                        <div className="small muted">
-                          {t.origine === 'inscription'
-                            ? 'Inscription par lien'
-                            : 'Invitation SIMATIS'}
-                        </div>
-                      </td>
-                      <td>{t.contactPrenom || '—'}</td>
-                      <td>{t.contactNomFamille || t.contactNom || '—'}</td>
-                      <td>{t.contactPoste || t.contactLie?.fonction || '—'}</td>
-                      <td>{t.contactEmail || '—'}</td>
-                      <td>{t.contactTelephone || t.contactLie?.telephone || '—'}</td>
-                      <td>
-                        {t.recueLe
-                          ? 'Test réalisé'
-                          : !t.envoyeeLe &&
-                              t.statut === 'envoyee' &&
-                              Date.parse(t.expireLe) > Date.now()
-                            ? 'En attente d’envoi'
-                            : libelleStatut(t)}
-                        <div className="small muted">
-                          {t.envoyeeLe
-                            ? `Mail envoyé le ${date(t.envoyeeLe)}`
-                            : t.echecEnvoi
-                              ? `Échec : ${t.echecEnvoi}`
-                              : 'Mail non envoyé'}
-                          {t.recueLe && ` · Résultat reçu le ${date(t.recueLe)}`}
-                        </div>
-                      </td>
-                      <td>
-                        {t.contactLie ? (
-                          <a href={`#/${slug}/contacts/${t.contactLie.id}`}>{t.contactLie.nom}</a>
-                        ) : (
-                          <span>Contact non lié</span>
-                        )}
-                        <br />
-                        {t.entrepriseLiee ? (
-                          <a href={`#/${slug}/entreprises/${t.entrepriseLiee.id}`}>
-                            {t.entrepriseLiee.nom}
-                          </a>
-                        ) : (
-                          <span>Organisation non liée</span>
-                        )}
-                      </td>
-                      <td>
-                        {t.consentement
-                          ? t.consentement.retireLe
-                            ? `Retiré le ${date(t.consentement.retireLe)}`
-                            : `Accepté le ${date(t.consentement.accepteLe)}`
-                          : 'Non recueilli ici'}
-                      </td>
-                      <td>
-                        <button className="btn" onClick={() => setChoix(t)}>
-                          Gérer les fiches CRM
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {!visibles?.length && (
+                  {groupesAffiches.map(([cle, invitations]) => {
+                    const chronologie = [...invitations].sort((a, b) =>
+                      b.creeLe.localeCompare(a.creeLe),
+                    );
+                    const t = chronologie[0]!;
+                    const ouvert = historiques.has(cle);
+                    const occurrences = ouvert ? chronologie : [t];
+                    const entreprises = [
+                      ...new Set(occurrences.map((invitation) => invitation.entrepriseNom)),
+                    ];
+                    const emails = [
+                      ...new Set(
+                        occurrences.map((invitation) => invitation.contactEmail).filter(Boolean),
+                      ),
+                    ];
+                    return (
+                      <tr key={cle}>
+                        <td>
+                          <strong className="vma-contact-nom">
+                            {t.prenom && <span>{t.prenom}</span>}
+                            {t.prenom && t.nom && ' '}
+                            {t.nom && <span>{t.nom}</span>}
+                            {!t.prenom && !t.nom && 'Nom non renseigné'}
+                          </strong>
+                          <div className="small muted">
+                            {t.contactPoste || t.contactLie?.fonction}
+                          </div>
+                        </td>
+                        <td>{entreprises.join(' · ')}</td>
+                        <td>
+                          {emails.map((email) => (
+                            <div key={email}>{email}</div>
+                          ))}
+                          <div>{t.contactTelephone || t.contactLie?.telephone}</div>
+                        </td>
+                        <td>
+                          {occurrences.map((invitation) => {
+                            const acces = accesTest?.(invitation);
+                            return (
+                              <div className="vma-contact-test" key={invitation.id}>
+                                <span
+                                  className={
+                                    invitation.recueLe ? 'vma-statut vma-statut-recu' : 'vma-statut'
+                                  }
+                                >
+                                  {invitation.statutAffiche}
+                                </span>
+                                <span className="small muted">
+                                  {jour(
+                                    invitation.recueLe || invitation.envoyeeLe || invitation.creeLe,
+                                  )}
+                                </span>
+                                {entreprises.length > 1 && <span>{invitation.entrepriseNom}</span>}
+                                {acces && (
+                                  <button className="btn" type="button" onClick={acces.ouvrir}>
+                                    {acces.archive ? 'Voir dans les archives' : 'Voir le test'}
+                                  </button>
+                                )}
+                                {acces === null && (
+                                  <span className="small muted">Test indisponible</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {invitations.length > 1 && (
+                            <button
+                              className="btn vma-occurrences"
+                              type="button"
+                              aria-expanded={ouvert}
+                              onClick={() =>
+                                setHistoriques((avant) => {
+                                  const suivantes = new Set(avant);
+                                  if (suivantes.has(cle)) suivantes.delete(cle);
+                                  else suivantes.add(cle);
+                                  return suivantes;
+                                })
+                              }
+                            >
+                              {ouvert
+                                ? 'Masquer les occurrences'
+                                : `Voir les ${invitations.length} occurrences`}
+                            </button>
+                          )}
+                        </td>
+                        <td>
+                          {[
+                            ...new Map(
+                              occurrences.flatMap((invitation) =>
+                                invitation.contactLie
+                                  ? [[invitation.contactLie.id, invitation.contactLie] as const]
+                                  : [],
+                              ),
+                            ).values(),
+                          ].map((contact) => (
+                            <a
+                              className="btn vma-fiche-crm"
+                              key={contact.id}
+                              href={`#/${slug}/contacts/${contact.id}`}
+                            >
+                              Fiche CRM
+                            </a>
+                          ))}
+                          {occurrences
+                            .filter((invitation) => !invitation.contactLie)
+                            .map((invitation) => (
+                              <div key={invitation.id} className="vma-contact-test">
+                                <button
+                                  className="btn"
+                                  type="button"
+                                  onClick={() => setChoix(invitation)}
+                                >
+                                  Rattacher au CRM
+                                </button>
+                                {occurrences.length > 1 && (
+                                  <span className="small muted">{jour(invitation.creeLe)}</span>
+                                )}
+                              </div>
+                            ))}
+                        </td>
+                        <td className="vma-contact-retrait">
+                          <button
+                            className={voirRetires ? 'btn' : 'vma-contact-corbeille'}
+                            type="button"
+                            aria-label={voirRetires ? 'Réafficher la ligne' : 'Retirer la ligne'}
+                            title={voirRetires ? 'Réafficher la ligne' : 'Retirer la ligne'}
+                            onClick={() => basculerRetire(cle)}
+                          >
+                            {voirRetires ? 'Réafficher' : <Icon name="trash" />}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!groupesAffiches.length && (
                     <tr>
-                      <td colSpan={10}>Aucun contact ne correspond à ces critères.</td>
+                      <td colSpan={6}>Aucun contact ne correspond à ces critères.</td>
                     </tr>
                   )}
                 </tbody>
@@ -235,6 +511,21 @@ export function ContactsVma({ slug, onRetour }: { slug: string; onRetour: () => 
           )}
         </div>
       </div>
+      {supprimes.some((t) => !q || normaliser(`${t.nom ?? ''} ${t.entreprise}`).includes(q)) && (
+        <details className="panel panel-b">
+          <summary>Tests supprimés</summary>
+          <ul>
+            {supprimes
+              .filter((t) => !q || normaliser(`${t.nom ?? ''} ${t.entreprise}`).includes(q))
+              .map((t) => (
+                <li key={t.id}>
+                  {t.nom ? `${t.nom} · ` : ''}
+                  {t.entreprise} · {jour(t.date)} · Supprimé
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
       {choix && (
         <Rattachement
           key={choix.id}
@@ -278,6 +569,22 @@ function Rattachement({
       .then(([e, c]) => {
         setEntreprises(e);
         setContacts(c);
+        const correspondances = test.contactEmail
+          ? c.filter(
+              (contact) =>
+                contact.email && normaliser(contact.email) === normaliser(test.contactEmail!),
+            )
+          : [];
+        const contact = correspondances.length === 1 ? correspondances[0] : undefined;
+        const organisations = e.filter(
+          (organisation) => normaliser(organisation.nom) === normaliser(test.entrepriseNom),
+        );
+        setContactId(test.contactId ?? contact?.id ?? '');
+        setEntrepriseId(
+          test.entrepriseId ??
+            contact?.entrepriseId ??
+            (organisations.length === 1 ? organisations[0]!.id : ''),
+        );
         setCharge(true);
       })
       .catch((e: unknown) => setErreur(erreurDe(e)));
@@ -341,10 +648,6 @@ function Rattachement({
       }}
     >
       <div className="stack">
-        <p className="small muted">
-          Choisissez les fiches existantes ou créez-les avec les coordonnées de l’invitation. Aucune
-          affaire ne sera créée.
-        </p>
         {erreur && (
           <p role="alert" className="alert amber">
             {erreur}
@@ -396,83 +699,96 @@ function Rattachement({
                 contactId: contactId || null,
                 entrepriseId: entrepriseId || null,
               });
-              setInfo('Rattachement enregistré.');
+              onFermer();
             })
           }
         >
           Enregistrer le rattachement
         </button>
-        <hr />
-        <label className="field">
-          Nom de l’organisation à créer
-          <input
-            className="input"
-            value={nomEntreprise}
-            onChange={(e) => setNomEntreprise(e.target.value)}
-          />
-        </label>
-        {doublonEntreprise && (
-          <p className="small">
-            Organisation de même nom trouvée :{' '}
-            <button className="btn" onClick={() => setEntrepriseId(doublonEntreprise.id)}>
-              Sélectionner {doublonEntreprise.nom}
-            </button>
-          </p>
+        {charge && !entrepriseId && (
+          <details>
+            <summary>Créer une organisation</summary>
+            <div className="stack">
+              <label className="field">
+                Nom de l’organisation à créer
+                <input
+                  className="input"
+                  value={nomEntreprise}
+                  onChange={(e) => setNomEntreprise(e.target.value)}
+                />
+              </label>
+              {doublonEntreprise && (
+                <p className="small">
+                  Organisation de même nom trouvée :{' '}
+                  <button className="btn" onClick={() => setEntrepriseId(doublonEntreprise.id)}>
+                    Sélectionner {doublonEntreprise.nom}
+                  </button>
+                </p>
+              )}
+              <button
+                className="btn"
+                disabled={enCours || !charge || !nomEntreprise.trim() || Boolean(doublonEntreprise)}
+                onClick={() => void creerOrganisation()}
+              >
+                Créer et lier l’organisation
+              </button>
+            </div>
+          </details>
         )}
-        <button
-          className="btn"
-          disabled={enCours || !charge || !nomEntreprise.trim() || Boolean(doublonEntreprise)}
-          onClick={() => void creerOrganisation()}
-        >
-          Créer et lier l’organisation
-        </button>
-        <label className="field">
-          Prénom et nom du contact à créer
-          <input className="input" value={nom} onChange={(e) => setNom(e.target.value)} />
-        </label>
-        <label className="field">
-          Poste
-          <input className="input" value={poste} onChange={(e) => setPoste(e.target.value)} />
-        </label>
-        <label className="field">
-          Mail
-          <input
-            className="input"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          Téléphone
-          <input
-            className="input"
-            type="tel"
-            value={telephone}
-            onChange={(e) => setTelephone(e.target.value)}
-          />
-        </label>
-        {doublonContact && (
-          <p className="small">
-            Cette adresse existe déjà :{' '}
-            <button
-              className="btn"
-              onClick={() => {
-                setContactId(doublonContact.id);
-                if (doublonContact.entrepriseId) setEntrepriseId(doublonContact.entrepriseId);
-              }}
-            >
-              Sélectionner {doublonContact.nom}
-            </button>
-          </p>
+        {charge && !contactId && (
+          <details>
+            <summary>Créer un contact</summary>
+            <div className="stack">
+              <label className="field">
+                Prénom et nom du contact à créer
+                <input className="input" value={nom} onChange={(e) => setNom(e.target.value)} />
+              </label>
+              <label className="field">
+                Poste
+                <input className="input" value={poste} onChange={(e) => setPoste(e.target.value)} />
+              </label>
+              <label className="field">
+                Mail
+                <input
+                  className="input"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+              <label className="field">
+                Téléphone
+                <input
+                  className="input"
+                  type="tel"
+                  value={telephone}
+                  onChange={(e) => setTelephone(e.target.value)}
+                />
+              </label>
+              {doublonContact && (
+                <p className="small">
+                  Cette adresse existe déjà :{' '}
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      setContactId(doublonContact.id);
+                      if (doublonContact.entrepriseId) setEntrepriseId(doublonContact.entrepriseId);
+                    }}
+                  >
+                    Sélectionner {doublonContact.nom}
+                  </button>
+                </p>
+              )}
+              <button
+                className="btn"
+                disabled={enCours || !charge || !nom.trim() || Boolean(doublonContact)}
+                onClick={() => void creerPersonne()}
+              >
+                Créer et lier le contact
+              </button>
+            </div>
+          </details>
         )}
-        <button
-          className="btn"
-          disabled={enCours || !charge || !nom.trim() || Boolean(doublonContact)}
-          onClick={() => void creerPersonne()}
-        >
-          Créer et lier le contact
-        </button>
         {test.consentement && (
           <details>
             <summary>Accord commercial</summary>

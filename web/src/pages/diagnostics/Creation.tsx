@@ -55,7 +55,7 @@ export function NouveauDiagnostic({
   projets: ProjetDiag[];
   preselect?: string;
   onFermer: () => void;
-  onCree: () => void;
+  onCree: (entrepriseId?: string | null) => void;
 }) {
   const [entrepriseId, setEntrepriseId] = useState(preselect ?? entreprises[0]?.id ?? '');
   const [activite, setActivite] = useState<string>(ACTIVITES[0][0]);
@@ -74,7 +74,7 @@ export function NouveauDiagnostic({
     setErreur(null);
     try {
       await creerProjetDiag(slug, choisie.nom, activite, choisie.id);
-      onCree();
+      onCree(choisie.id);
     } catch (e) {
       setErreur(messageErreur(e));
     } finally {
@@ -146,7 +146,7 @@ export function NouveauTestVma({
   entreprises: Entreprise[];
   preselect?: string;
   onFermer: () => void;
-  onCree: () => void;
+  onCree: (entrepriseId?: string | null) => void;
 }) {
   const [entrepriseId, setEntrepriseId] = useState(preselect ?? '');
   const [nouvelle, setNouvelle] = useState('');
@@ -168,7 +168,7 @@ export function NouveauTestVma({
       setSemestre(null);
       setLien(cree.lien);
       setMail(messageEnvoi(cree.envoi, cree.contactEmail));
-      onCree();
+      onCree(demande.entrepriseId);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.corps.code === 'semestre') {
         setSemestre({ message: e.message, demande });

@@ -12,6 +12,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
 import { CampagneIntrouvable, CampagneInvalide, type BrouillonVue } from './campagnes.js';
+import { destinataireFroidToujoursEligible } from './froid.js';
 import { nettoyerCorps } from './redaction.js';
 import {
   prospectionBrouillons,
@@ -240,6 +241,17 @@ export async function finaliserCampagne(
     };
 
     for (const b of prets) {
+      if (
+        froid &&
+        (!b.baseId || !(await destinataireFroidToujoursEligible(tx, { ...b, baseId: b.baseId })))
+      ) {
+        resultat.echecs += 1;
+        await tx
+          .update(prospectionBrouillons)
+          .set({ note: 'Le destinataire n’est plus éligible ou son adresse a changé.' })
+          .where(eq(prospectionBrouillons.id, b.id));
+        continue;
+      }
       let ecrit;
       try {
         ecrit = await writeVia(
@@ -288,8 +300,8 @@ export async function finaliserCampagne(
           societe: b.societe,
           theme: themeDe(r.offre),
           touche: b.touche,
-          etat: envoi ? 'envoye' : 'brouillon',
-          ...(envoi ? { envoyeAt: new Date() } : {}),
+          etat: envoi || campagne.mode === 'relance' ? 'envoye' : 'brouillon',
+          ...(envoi || campagne.mode === 'relance' ? { envoyeAt: new Date() } : {}),
           threadId: b.threadId,
           lot: campagneId,
         });

@@ -28,7 +28,9 @@ import {
   FILTRES_ALERTE,
   listerFiches,
   modifierConformite,
+  supprimerFichesBase,
   type FiltresBase,
+  TRIS_BASE,
   listerImports,
   reglerCorrespondance,
 } from './service.js';
@@ -76,6 +78,12 @@ const apportSchema = z.object({
   email: z.string().max(200).optional(),
   telephone: z.string().max(60).optional(),
   fonction: z.string().max(200).optional(),
+  linkedin: z
+    .string()
+    .trim()
+    .max(300)
+    .regex(/^(?:https:\/\/(?:[a-z0-9-]+\.)?linkedin\.com\/in\/[^\s/]+.*)?$/i)
+    .optional(),
 });
 
 const validationSchema = z.object({ classe: z.enum(CLASSES).optional() });
@@ -132,6 +140,8 @@ export function registerBaseVivanteRoutes(
   type Route = {
     Params: { slug: string; id?: string; numero?: string; mandat?: string };
     Querystring: {
+      canal?: string;
+      tri?: string;
       zone?: string;
       q?: string;
       page?: string;
@@ -256,6 +266,8 @@ export function registerBaseVivanteRoutes(
   );
 
   const filtresDe = (q: Route['Querystring']): FiltresBase => ({
+    tri: TRIS_BASE.find((tri) => tri === q.tri),
+    canal: q.canal === 'email' || q.canal === 'linkedin' ? q.canal : undefined,
     zone: ZONES.find((z) => z === q.zone),
     statut: STATUTS_PROSPECTION.find((s) => s === q.statut),
     alerte: FILTRES_ALERTE.find((a) => a === q.alerte),
@@ -297,6 +309,26 @@ export function registerBaseVivanteRoutes(
       const corps = apportSchema.safeParse(request.body);
       if (!corps.success) throw new ImportRefuse('Contact invalide');
       return enrichirFiche(db, instanceId, request.params.id as string, corps.data);
+    }),
+  );
+
+  app.delete<Route>(
+    '/api/i/:slug/base/fiches',
+    surInstance(async (instanceId, request) => {
+      const corps = z
+        .object({ ids: z.array(z.string().uuid()).min(1).max(200) })
+        .safeParse(request.body);
+      if (!corps.success) throw new ImportRefuse('Sélection invalide');
+      await supprimerFichesBase(db, instanceId, corps.data.ids);
+      return { ok: true };
+    }),
+  );
+
+  app.delete<Route>(
+    '/api/i/:slug/base/fiches/:id',
+    surInstance(async (instanceId, request) => {
+      await supprimerFichesBase(db, instanceId, [request.params.id as string]);
+      return { ok: true };
     }),
   );
 

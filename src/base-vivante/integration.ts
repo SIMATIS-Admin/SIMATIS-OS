@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { evaluer, type Zone } from './completude.js';
 import {
@@ -285,6 +285,7 @@ export type Apport = {
   email?: string;
   telephone?: string;
   fonction?: string;
+  linkedin?: string;
 };
 
 // A contact found for a record « à enrichir »: fills what is given, through the same
@@ -306,7 +307,7 @@ export async function enrichir(
     email: neuf(apport.email, f.email),
     telephone: neuf(apport.telephone, f.telephone),
     fonction: neuf(apport.fonction, f.fonction),
-    linkedin: f.linkedin,
+    linkedin: neuf(apport.linkedin, f.linkedin),
   });
   if (avertissements.length > 0) throw new FicheNonHomogene(avertissements.join(', '));
   const emailChange = fiche.email !== f.email;
@@ -322,6 +323,7 @@ export async function enrichir(
       email: fiche.email,
       telephone: fiche.telephone,
       fonction: fiche.fonction,
+      linkedin: fiche.linkedin,
       domaine: fiche.domaine ?? f.domaine,
       emailInvalide: emailChange ? false : f.emailInvalide,
       cles: [...new Set([...f.cles, ...clesDoublon(fiche)])],
@@ -372,6 +374,7 @@ export async function appliquerContact(
     email: apport.email,
     telephone: apport.telephone,
     fonction: apport.fonction,
+    linkedin: apport.linkedin,
   });
   if (avertissements.length > 0) throw new FicheNonHomogene(avertissements.join(', '));
   const [r] = await integrerFiches(tx, instanceId, [
@@ -385,4 +388,26 @@ export async function appliquerContact(
   ]);
   if (!r) throw new FicheNonHomogene('Contact non intégré');
   return { id: r.id, zone: r.zone, creee: !r.fusionnee };
+}
+
+export async function supprimerFiches(tx: Tx, instanceId: string, ids: string[]) {
+  const uniques = [...new Set(ids)];
+  const supprimees = await tx
+    .delete(baseVivante)
+    .where(and(eq(baseVivante.instanceId, instanceId), inArray(baseVivante.id, uniques)))
+    .returning({ id: baseVivante.id });
+  if (supprimees.length !== uniques.length) throw new FicheIntrouvable();
+}
+
+export async function enregistrerEmailEntreprise(
+  tx: Tx,
+  instanceId: string,
+  id: string,
+  email: string,
+) {
+  await charger(tx, instanceId, id);
+  await tx
+    .update(baseVivante)
+    .set({ emailEntreprise: normaliserEmail(email), updatedAt: new Date() })
+    .where(and(eq(baseVivante.instanceId, instanceId), eq(baseVivante.id, id)));
 }

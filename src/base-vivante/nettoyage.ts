@@ -70,6 +70,12 @@ const FOURNISSEURS = new Set([
 
 const EMAIL = /^[a-z0-9._%+'-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/;
 
+export const MOTIF_EMAIL_GENERIQUE =
+  '^(contact|info|accueil|bonjour|hello|office|sales|commercial|service[._-]?client|support|admin|direction|secretariat|compta|recrutement|communication|contactez[._-]?nous)@';
+
+export const emailGenerique = (email: string | null | undefined): boolean =>
+  new RegExp(MOTIF_EMAIL_GENERIQUE, 'i').test(email?.trim() ?? '');
+
 export function normaliserEmail(valeur: string | null | undefined): string | null {
   const t = texte(valeur);
   if (!t) return null;

@@ -67,6 +67,8 @@ export const enrichissementSuggestions = pgTable(
     nom: text('nom'),
     fonction: text('fonction'),
     email: text('email'),
+    emailEntreprise: text('email_entreprise'),
+    linkedin: text('linkedin'),
     telephone: text('telephone'),
     sourceUrl: text('source_url'),
     confiance: text('confiance', { enum: CONFIANCES }).notNull(),

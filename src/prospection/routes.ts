@@ -1,3 +1,8 @@
+import {
+  lireRoutineBrouillons,
+  sauverRoutineBrouillons,
+  schemaRoutineBrouillons,
+} from './quotidienne.js';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { ConnexionDeps } from '../connexions/service.js';
@@ -127,6 +132,25 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
       return erreur(e, reply);
     }
   }
+
+  app.get<{ Params: { slug: string } }>(
+    '/api/i/:slug/prospection/routine',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      return lireRoutineBrouillons(db, instance.id);
+    },
+  );
+  app.put<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/routine',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      const r = schemaRoutineBrouillons.safeParse(request.body);
+      if (!r.success) return reply.code(400).send({ error: 'Réglages invalides' });
+      return sauverRoutineBrouillons(db, instance.id, r.data);
+    },
+  );
 
   app.get<{ Params: { slug: string } }>('/api/i/:slug/prospection', async (request, reply) => {
     const instance = await getInstanceBySlug(db, request.params.slug);
@@ -333,6 +357,14 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
     (request, reply) =>
       dansInstance(request.params.slug, reply, async (tx) => ({
         abandonnees: await abandonnerCampagnesEnCours(tx),
+      })),
+  );
+
+  app.delete<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/prospection/campagnes/:id',
+    (request, reply) =>
+      dansInstance(request.params.slug, reply, async (tx) => ({
+        abandonnees: await abandonnerCampagnesEnCours(tx, request.params.id),
       })),
   );
 

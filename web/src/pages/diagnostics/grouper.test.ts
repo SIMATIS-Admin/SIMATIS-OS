@@ -94,6 +94,20 @@ describe('Diagnostics : recherche et pagination', () => {
     expect(filtrer(lignes, 'ATELIER').map((l) => l.id)).toEqual(['e2']);
   });
 
+  it('retrouve une entreprise par le nom ou l’adresse du destinataire', () => {
+    const lignes = [
+      {
+        id: 'e1',
+        nom: 'Atelier Fictif',
+        diag: null,
+        tests: [test({ contactNom: 'Élodie Exemple', contactEmail: 'elodie@exemple.test' })],
+      },
+    ];
+    expect(filtrer(lignes, 'elodie exemple')).toHaveLength(1);
+    expect(filtrer(lignes, 'elodie@exemple.test')).toHaveLength(1);
+    expect(filtrer(lignes, 'inconnu')).toHaveLength(0);
+  });
+
   it('pagine 5 par page et borne la page demandée', () => {
     const liste = Array.from({ length: 6 }, (_, i) => i + 1);
     expect(paginer(liste, 2, 5)).toEqual({ items: [6], page: 2, pages: 2 });

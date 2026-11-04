@@ -67,44 +67,22 @@ describe('lancement d’un enrichissement', () => {
     return onLance;
   };
 
-  it('envoie le type, les fonctions saisies et le maximum par entreprise', async () => {
+  it('lance une recherche unique pour les fiches sélectionnées', async () => {
     const onLance = ouvrir();
-    expect(screen.getByText(/envoyés à OpenAI/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Fonctions recherchées'), {
-      target: { value: 'Responsable achats, DRH' },
-    });
-    fireEvent.change(screen.getByLabelText('Contacts maximum par entreprise'), {
-      target: { value: '2' },
-    });
+    expect(screen.getByText(/Codex recherche sur le web public/)).toBeTruthy();
     fireEvent.click(screen.getByText('Lancer sur 2 fiches'));
     await waitFor(() => expect(onLance).toHaveBeenCalledWith('tache-1'));
     expect(appels.find((a) => a.method === 'POST')?.body).toEqual({
       type: 'contacts',
-      profil: ['Responsable achats', 'DRH'],
-      maxParEntreprise: 2,
+      profil: ['Dirigeant'],
+      maxParEntreprise: 1,
       ficheIds: ['f1', 'f2'],
     });
-  });
-
-  it('propose des fonctions types en un clic', () => {
-    ouvrir();
-    fireEvent.click(screen.getByText('DRH'));
-    expect(screen.getByLabelText<HTMLInputElement>('Fonctions recherchées').value).toBe('DRH');
-    fireEvent.click(screen.getByText('DRH'));
-    expect(screen.getByLabelText<HTMLInputElement>('Fonctions recherchées').value).toBe('');
-  });
-
-  it('désactive le lancement sans fonction, sauf pour compléter les coordonnées', () => {
-    ouvrir();
-    expect(screen.getByText<HTMLButtonElement>('Lancer sur 2 fiches').disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText(/Compléter les mails et téléphones/));
-    expect(screen.getByText<HTMLButtonElement>('Lancer sur 2 fiches').disabled).toBe(false);
   });
 
   it('refuse une sélection plus grande que le lot maximal', () => {
     ouvrir({ ficheIds: ['a', 'b', 'c', 'd', 'e', 'f'] });
     expect(screen.getByText(/limité à 5 fiches/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Fonctions recherchées'), { target: { value: 'DRH' } });
     expect(screen.getByText<HTMLButtonElement>('Lancer sur 6 fiches').disabled).toBe(true);
   });
 });

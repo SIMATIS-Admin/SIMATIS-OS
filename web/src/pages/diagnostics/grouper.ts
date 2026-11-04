@@ -57,7 +57,11 @@ export function lignesSuivies(lignes: LigneEntreprise[]): LigneEntreprise[] {
 export function filtrer(lignes: LigneEntreprise[], recherche: string): LigneEntreprise[] {
   const q = normaliser(recherche);
   if (!q) return lignes;
-  return lignes.filter((l) => normaliser(l.nom).includes(q));
+  return lignes.filter(
+    (l) =>
+      normaliser(l.nom).includes(q) ||
+      l.tests.some((t) => normaliser(`${t.contactNom ?? ''} ${t.contactEmail ?? ''}`).includes(q)),
+  );
 }
 
 // La page demandée est bornée à [1, pages] : une recherche qui réduit la liste ne laisse pas une page vide.

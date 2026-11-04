@@ -4,36 +4,63 @@ const JOUR_MS = 24 * 3600 * 1000;
 const jourMois = (iso: string) =>
   new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
 
-// Invitation encore ouverte : ni utilisée, ni révoquée, ni expirée.
-const ouverte = (t: Pick<TestVma, 'statut' | 'expireLe'>, maintenant: number) =>
-  t.statut === 'envoyee' && Date.parse(t.expireLe) > maintenant;
+type Reception = Pick<TestVma, 'statut'> & Partial<Pick<TestVma, 'recueLe' | 'resultat'>>;
 
-// Le bouton Relancer : une invitation ouverte, avec une adresse où écrire.
+// Certains résultats anciens ont été reçus sans mise à jour du statut de l'invitation.
+export const testTermine = (t: Reception) =>
+  t.statut === 'utilisee' || Boolean(t.recueLe || t.resultat);
+
+const ouverte = (t: Reception & Pick<TestVma, 'expireLe'>, maintenant: number) =>
+  !testTermine(t) && t.statut === 'envoyee' && Date.parse(t.expireLe) > maintenant;
+
 export const peutRelancer = (
-  t: Pick<TestVma, 'statut' | 'expireLe' | 'contactEmail'>,
+  t: Reception & Pick<TestVma, 'expireLe' | 'contactEmail'>,
   maintenant = Date.now(),
 ) => ouverte(t, maintenant) && Boolean(t.contactEmail);
 
-// Filtre « Sans réponse » : ouverte, et envoyée il y a plus de 7 jours.
 export const sansReponse = (
-  t: Pick<TestVma, 'statut' | 'expireLe' | 'envoyeeLe'>,
+  t: Reception & Pick<TestVma, 'expireLe' | 'envoyeeLe'>,
   maintenant = Date.now(),
 ) =>
   ouverte(t, maintenant) &&
   t.envoyeeLe !== null &&
   maintenant - Date.parse(t.envoyeeLe) > 7 * JOUR_MS;
 
-// La frise d'une invitation : seulement les étapes atteintes, chacune datée, dans l'ordre.
+type EtapeFrise = {
+  cle: string;
+  libelle: string;
+  date: string | null;
+  atteinte: boolean;
+  detail?: string;
+};
+
+// Cinq emplacements stables : une étape absente ne décale pas les suivantes.
 export function etapesFrise(
-  t: Pick<TestVma, 'statut' | 'envoyeeLe' | 'relances' | 'mailOuvertLe' | 'lienOuvertLe'>,
-): { libelle: string }[] {
-  const etapes: string[] = [];
-  if (t.envoyeeLe) etapes.push(`Envoyé ${jourMois(t.envoyeeLe)}`);
-  for (const r of t.relances)
-    etapes.push(`Relancé ${jourMois(r.le)}${r.origine === 'auto' ? ' (auto)' : ''}`);
-  // L'ouverture du mail est indicative : certaines messageries chargent les images sans que le mail soit lu.
-  if (t.mailOuvertLe) etapes.push(`Mail ouvert ${jourMois(t.mailOuvertLe)}`);
-  if (t.lienOuvertLe) etapes.push(`Lien ouvert ${jourMois(t.lienOuvertLe)}`);
-  if (t.statut === 'utilisee') etapes.push('Test passé');
-  return etapes.map((libelle) => ({ libelle }));
+  t: Reception & Pick<TestVma, 'envoyeeLe' | 'relances' | 'mailOuvertLe' | 'lienOuvertLe'>,
+): EtapeFrise[] {
+  const relances = [...t.relances].sort((a, b) => a.le.localeCompare(b.le));
+  const derniere = relances.at(-1);
+  const etape = (cle: string, libelle: string, le: string | null | undefined): EtapeFrise => ({
+    cle,
+    libelle,
+    date: le ? jourMois(le) : null,
+    atteinte: Boolean(le),
+  });
+  return [
+    etape('envoi', 'Envoyé', t.envoyeeLe),
+    {
+      ...etape('relance', 'Relancé', derniere?.le),
+      detail: relances.length
+        ? relances
+            .map((r) => `${jourMois(r.le)}${r.origine === 'auto' ? ' (auto)' : ''}`)
+            .join(' · ')
+        : undefined,
+    },
+    {
+      ...etape('mail', 'Mail ouvert', t.mailOuvertLe),
+      detail: 'Ouverture indicative : certaines messageries chargent les images automatiquement.',
+    },
+    etape('lien', 'Lien ouvert', t.lienOuvertLe),
+    { ...etape('resultat', 'Résultat reçu', t.recueLe), atteinte: testTermine(t) },
+  ];
 }

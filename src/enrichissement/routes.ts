@@ -1,10 +1,12 @@
+import { enregistrerRoutineRecherche, lireRoutineRecherche, reglagesRecherche } from './routine.js';
+import { chercherProspects } from './recherche.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Config } from '../config.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
-import { creerClientOpenAI, type ClientIA } from './client.js';
+import { creerClientOpenAI, ErreurIA, type ClientIA } from './client.js';
 import { etatLot, lancerLot, LotRefuse, type ReglagesLot } from './lot.js';
 import { enrichissementTaches, TYPES_ENRICHISSEMENT } from './schema.js';
 import { suggestionsDeLaTache, valider } from './validation.js';
@@ -29,6 +31,7 @@ export type EnrichissementRoutesDeps = {
   enrichissement: Config['enrichissement'];
   // Remplaçable par un faux dans les tests ; sinon construit depuis la clé configurée.
   client?: ClientIA;
+  codex?: ClientIA;
 };
 
 export const reglagesDe = (cfg: NonNullable<Config['enrichissement']>): ReglagesLot => ({
@@ -39,9 +42,16 @@ export const reglagesDe = (cfg: NonNullable<Config['enrichissement']>): Reglages
 
 export function registerEnrichissementRoutes(
   app: FastifyInstance,
-  { db, enrichissement, client }: EnrichissementRoutesDeps,
+  { db, enrichissement, client, codex }: EnrichissementRoutesDeps,
 ) {
-  const ia = client ?? (enrichissement ? creerClientOpenAI(enrichissement) : null);
+  const ia = client ?? codex ?? (enrichissement ? creerClientOpenAI(enrichissement) : null);
+
+  const reglages =
+    codex && !client
+      ? { lotMax: 10, budgetJetons: Infinity, parallelisme: 1 }
+      : enrichissement
+        ? reglagesDe(enrichissement)
+        : null;
 
   type Route = { Params: { slug: string; tacheId?: string }; Body: unknown };
   const surInstance =
@@ -69,6 +79,41 @@ export function registerEnrichissementRoutes(
   const racine = '/api/i/:slug/base/enrichissement';
 
   app.get<Route>(
+    '/api/i/:slug/base/recherche/routine',
+    surInstance((instanceId) => lireRoutineRecherche(db, instanceId)),
+  );
+  app.put<Route>(
+    '/api/i/:slug/base/recherche/routine',
+    surInstance((instanceId, request) => {
+      const resultat = reglagesRecherche.safeParse(request.body);
+      if (!resultat.success) throw new LotRefuse('Réglages de recherche invalides.');
+      return enregistrerRoutineRecherche(db, instanceId, resultat.data);
+    }),
+  );
+
+  app.post<Route>(
+    '/api/i/:slug/base/recherche',
+    surInstance(async (_instanceId, request, reply) => {
+      if (!codex) return reply.code(409).send({ error: 'Codex est indisponible.' });
+      const input = z
+        .object({
+          consignes: z.string().trim().min(1).max(5000),
+          nombre: z.number().int().min(1).max(100),
+        })
+        .safeParse(request.body);
+      if (!input.success)
+        throw new LotRefuse('Indiquez des consignes et un nombre de contacts entre 1 et 100.');
+      try {
+        return await chercherProspects(codex, input.data.consignes, input.data.nombre);
+      } catch (error) {
+        throw new LotRefuse(
+          error instanceof ErreurIA ? error.message : 'Réponse de recherche Codex invalide.',
+        );
+      }
+    }),
+  );
+
+  app.get<Route>(
     racine,
     surInstance(async (instanceId) => {
       const [actif] = await withInstance(db, instanceId, (tx) =>
@@ -84,8 +129,8 @@ export function registerEnrichissementRoutes(
           .orderBy(desc(enrichissementTaches.createdAt)),
       );
       return {
-        disponible: enrichissement !== null,
-        lotMax: enrichissement?.lotMax ?? 0,
+        disponible: reglages !== null,
+        lotMax: reglages?.lotMax ?? 0,
         tacheEnCours: actif?.id ?? null,
       };
     }),
@@ -94,11 +139,11 @@ export function registerEnrichissementRoutes(
   app.post<Route>(
     racine,
     surInstance(async (instanceId, request, reply) => {
-      if (!enrichissement || !ia)
+      if (!reglages || !ia)
         return reply.code(409).send({ error: 'Clé OpenAI absente : enrichissement indisponible' });
       const corps = lancementSchema.safeParse(request.body);
       if (!corps.success) throw new LotRefuse('Paramètres d’enrichissement invalides');
-      const tache = await lancerLot(db, ia, reglagesDe(enrichissement), instanceId, corps.data);
+      const tache = await lancerLot(db, ia, reglages, instanceId, corps.data);
       return reply.code(202).send(tache);
     }),
   );

@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
-import { appliquerContact } from '../base-vivante/integration.js';
 import { baseVivante } from '../base-vivante/schema.js';
+import { emailGenerique } from '../base-vivante/nettoyage.js';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { appliquerContact, enregistrerEmailEntreprise } from '../base-vivante/integration.js';
 import { withInstance } from '../db/context.js';
 import type { Executor } from '../db.js';
 import { enrichissementSuggestions, type Suggestion } from './schema.js';
@@ -65,13 +66,18 @@ export async function valider(
   for (const s of await aTraiter(accepter)) {
     try {
       await withInstance(db, instanceId, async (tx) => {
+        const adresseEntreprise = s.emailEntreprise ?? (emailGenerique(s.email) ? s.email : null);
         const r = await appliquerContact(tx, instanceId, s.ficheId, {
           prenom: s.prenom ?? undefined,
           nom: s.nom ?? undefined,
-          email: s.email ?? undefined,
+          email: emailGenerique(s.email) ? undefined : (s.email ?? undefined),
+          linkedin: s.linkedin ?? undefined,
           telephone: s.telephone ?? undefined,
           fonction: s.fonction ?? undefined,
         });
+        if (adresseEntreprise) {
+          await enregistrerEmailEntreprise(tx, instanceId, r.id, adresseEntreprise);
+        }
         await tx
           .update(enrichissementSuggestions)
           .set({ etat: 'acceptee', updatedAt: new Date() })

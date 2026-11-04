@@ -59,6 +59,18 @@ describe('analyse de la réponse', () => {
     expect(r[0]).toMatchObject({ email: 'claire.martin@atelier-fictif.test', modeEmail: 'trouve' });
   });
 
+  it('sépare une adresse générique du mail de prospection', () => {
+    const [c] = analyserReponse(
+      { contacts: [contact({ email: 'contact@atelier-fictif.test' })] },
+      1,
+    );
+    expect(c).toMatchObject({
+      email: null,
+      modeEmail: null,
+      emailEntreprise: 'contact@atelier-fictif.test',
+    });
+  });
+
   it('une réponse sans contact est valide', () => {
     expect(analyserReponse({ contacts: [] }, 3)).toEqual([]);
   });

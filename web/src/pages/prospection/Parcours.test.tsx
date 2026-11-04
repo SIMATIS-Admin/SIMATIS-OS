@@ -66,7 +66,22 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     epuises = epuises.filter((e) => !((body as { ids: string[] }).ids ?? []).includes(e.id));
     return json({ modifies: 1 });
   }
-  if (url.endsWith('/prospection') && method === 'GET') return json(vue);
+  if (url.endsWith('/prospection') && method === 'GET')
+    return json({
+      ...vue,
+      recentes: vue.enCours
+        ? [
+            {
+              id: vue.enCours,
+              mode: campagne.mode,
+              statut: campagne.statut,
+              creeLe: '2026-11-03T09:00:00Z',
+              brouillons: campagne.brouillons.length,
+              resultat: null,
+            },
+          ]
+        : vue.recentes,
+    });
   if (url.endsWith('/prospection/campagnes') && method === 'POST') {
     return json({ campagneId: campagne.id, refusees: [] }, 201);
   }
@@ -77,7 +92,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     if (body?.suiviDate) b.suiviDate = `${body.suiviDate as string}T08:00:00Z`;
     return json(b);
   }
-  if (url.endsWith('/prospection/campagnes-en-cours') && method === 'DELETE') {
+  if (/\/prospection\/campagnes\/[^/]+$/.test(url) && method === 'DELETE') {
     vue.enCours = null;
     vue.nbEnCours = 0;
     return json({ abandonnees: 1 });
@@ -383,7 +398,7 @@ describe('Relecture et fin', () => {
   async function relecture() {
     vue.enCours = 'c1';
     render(<Prospection slug="simatis" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la campagne en cours' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la campagne' }));
     await screen.findByText('Objet : Re: Alice');
   }
 
@@ -597,7 +612,8 @@ describe('Contacts épuisés', () => {
 
   it('n’affiche pas le lien quand il n’y a rien à confirmer', async () => {
     render(<Prospection slug="simatis" />);
-    expect(await screen.findByText('Aucun contact épuisé à confirmer.')).toBeTruthy();
+    await screen.findByText('Campagnes');
+    expect(screen.queryByText('Aucun contact épuisé à confirmer.')).toBeNull();
   });
 });
 
@@ -625,7 +641,7 @@ describe('Valider et envoyer', () => {
     campagne.brouillons = [brouillon('b1', 'Alice')];
     vue.enCours = 'c1';
     render(<Prospection slug="simatis" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la campagne en cours' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reprendre la campagne' }));
     await screen.findByText('Objet : Re: Alice');
   }
 
@@ -743,12 +759,12 @@ describe('Abandonner la campagne en cours', () => {
     vue.nbEnCours = 1;
     const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<Prospection slug="simatis" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Abandonner cette campagne' }));
-    await waitFor(() => expect(screen.queryByText('Une campagne est en cours.')).toBeNull());
-    expect(confirmer).toHaveBeenCalled();
-    expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/campagnes-en-cours'))).toBe(
-      true,
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandonner la campagne' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Abandonner la campagne' })).toBeNull(),
     );
+    expect(confirmer).toHaveBeenCalled();
+    expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/campagnes/c1'))).toBe(true);
     confirmer.mockRestore();
   });
 
@@ -757,8 +773,8 @@ describe('Abandonner la campagne en cours', () => {
     vue.nbEnCours = 2;
     const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<Prospection slug="simatis" />);
-    expect(await screen.findByText('2 campagnes sont en cours.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Abandonner ces campagnes' }));
+    await screen.findByRole('button', { name: 'Reprendre la campagne' });
+    fireEvent.click(screen.getByRole('button', { name: 'Abandonner la campagne' }));
     expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
     confirmer.mockRestore();
   });

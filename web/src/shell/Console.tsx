@@ -70,9 +70,12 @@ export function Console({ slug }: { slug: string }) {
         () => vivant && setPanne(true),
       );
     void charger();
+    const actualiser = () => void charger();
+    window.addEventListener('console:actualiser', actualiser);
     const minuteur = window.setInterval(() => void charger(), ouverte ? 5_000 : 30_000);
     return () => {
       vivant = false;
+      window.removeEventListener('console:actualiser', actualiser);
       window.clearInterval(minuteur);
     };
   }, [slug, ouverte]);

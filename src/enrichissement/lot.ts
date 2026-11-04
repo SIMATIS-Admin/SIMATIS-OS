@@ -170,7 +170,11 @@ async function traiter(
     if (!fiche) return; // supprimée entre-temps : la ligne a disparu avec elle
     try {
       const reponse = await client.demander({
-        consigne: consigne(tache.type, tache.profil, tache.maxParEntreprise),
+        consigne: consigne(
+          fiche.nom ? 'completer' : 'contacts',
+          tache.profil.length ? tache.profil : ['Dirigeant'],
+          fiche.nom ? 1 : tache.maxParEntreprise,
+        ),
         entree: entree({
           entreprise: fiche.entreprise,
           domaine: fiche.domaine,

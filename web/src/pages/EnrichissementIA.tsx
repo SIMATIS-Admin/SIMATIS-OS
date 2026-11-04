@@ -11,13 +11,6 @@ import {
 import { Fenetre } from './Fenetre.js';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const FONCTIONS_TYPES = ['Dirigeant', 'DRH', 'Responsable achats', 'Directeur commercial'];
-const decouper = (texte: string) =>
-  texte
-    .split(',')
-    .map((x) => x.trim())
-    .filter(Boolean);
-
 export function LancerEnrichissement({
   slug,
   ficheIds,
@@ -31,30 +24,19 @@ export function LancerEnrichissement({
   onFermer: () => void;
   onLance: (tacheId: string) => void;
 }) {
-  const [type, setType] = useState<'contacts' | 'completer'>('contacts');
-  const [fonctions, setFonctions] = useState('');
-  const [max, setMax] = useState('2');
   const [occupe, setOccupe] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const profil = decouper(fonctions);
   const trop = ficheIds.length > lotMax;
-  const pret = !trop && (type === 'completer' || profil.length > 0);
-
-  const basculer = (f: string) =>
-    setFonctions(
-      profil.some((p) => p.toLowerCase() === f.toLowerCase())
-        ? profil.filter((p) => p.toLowerCase() !== f.toLowerCase()).join(', ')
-        : [...profil, f].join(', '),
-    );
+  const pret = !trop && ficheIds.length > 0;
 
   const lancer = async () => {
     setOccupe(true);
     setError(null);
     try {
       const tache = await lancerEnrichissement(slug, {
-        type,
-        profil: type === 'contacts' ? profil : [],
-        maxParEntreprise: Number(max),
+        type: 'contacts',
+        profil: ['Dirigeant'],
+        maxParEntreprise: 1,
         ficheIds,
       });
       onLance(tache.id);
@@ -80,65 +62,22 @@ export function LancerEnrichissement({
       }
     >
       <div className="bv-enrichir">
-        <label className="bv-radio">
-          <input type="radio" checked={type === 'contacts'} onChange={() => setType('contacts')} />
-          Trouver des contacts dans ces entreprises
-        </label>
-        <label className="bv-radio">
-          <input
-            type="radio"
-            checked={type === 'completer'}
-            onChange={() => setType('completer')}
-          />
-          Compléter les mails et téléphones des contacts connus
-        </label>
-        {type === 'contacts' && (
-          <>
-            <label className="bv-champ">
-              <span className="small muted">Fonctions recherchées</span>
-              <input
-                className="input"
-                aria-label="Fonctions recherchées"
-                placeholder="Séparées par des virgules"
-                value={fonctions}
-                onChange={(e) => setFonctions(e.target.value)}
-              />
-            </label>
-            <div className="bv-puces">
-              {FONCTIONS_TYPES.map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  className={`bv-puce${profil.some((p) => p.toLowerCase() === f.toLowerCase()) ? ' actif' : ''}`}
-                  onClick={() => basculer(f)}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        <label className="bv-champ">
-          <span className="small muted">Contacts maximum par entreprise</span>
-          <select
-            className="input"
-            aria-label="Contacts maximum par entreprise"
-            value={max}
-            onChange={(e) => setMax(e.target.value)}
-          >
-            {[1, 2, 3, 4, 5].map((n) => (
-              <option key={n}>{n}</option>
-            ))}
-          </select>
-        </label>
+        <p>
+          Codex recherche un dirigeant si la fiche contient uniquement une entreprise. Si un contact
+          figure déjà sur la fiche, Codex recherche les coordonnées de cette personne.
+        </p>
+        <p>
+          Pour chaque contact, Codex cherche son e-mail professionnel, son téléphone et son profil
+          LinkedIn.
+        </p>
         {trop && (
           <p className="error">
             Un lot est limité à {lotMax} fiches : désélectionnez-en {ficheIds.length - lotMax}.
           </p>
         )}
         <p className="small muted">
-          Les noms d'entreprises sont envoyés à OpenAI, qui cherche sur le web public. Rien n'entre
-          dans vos fiches sans votre validation.
+          Codex recherche sur le web public depuis le Mac connecté. Vous choisissez ensuite les
+          suggestions à appliquer à vos fiches.
         </p>
         {error && <p className="error">{error}</p>}
       </div>
@@ -284,7 +223,18 @@ export function SuggestionsEnrichissement({
                       {s.modeEmail === 'deduit' && <span className="badge amber">déduit</span>}
                     </span>
                   )}
+                  {s.emailEntreprise && (
+                    <span> · E-mail de l’entreprise : {s.emailEntreprise}</span>
+                  )}
                   {s.telephone && <span> · {s.telephone}</span>}
+                  {s.linkedin && (
+                    <>
+                      {' · '}
+                      <a href={s.linkedin} target="_blank" rel="noopener noreferrer">
+                        Profil LinkedIn
+                      </a>
+                    </>
+                  )}
                   {s.sourceUrl ? (
                     <>
                       {' · '}
