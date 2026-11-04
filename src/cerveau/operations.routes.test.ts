@@ -201,6 +201,20 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
   });
 
   describe('espace partagé', () => {
+    it('s’ouvre à un mandat qui a le module, sans lui donner le cerveau SIMATIS, et jamais à une démo', async () => {
+      const lu = await demander('op-mandat', {
+        espace: 'partage',
+        type: 'lire',
+        chemin: 'reference/offre.md',
+      });
+      expect(lu.statusCode).toBe(200);
+      const carte = (slug: string, espace: string) =>
+        app.inject({ method: 'GET', url: `/api/i/${slug}/cerveau/carte?espace=${espace}` });
+      expect((await carte('op-mandat', 'partage')).statusCode).toBe(200);
+      expect((await carte('op-mandat', 'simatis')).statusCode).toBe(403);
+      expect((await carte('op-demo', 'partage')).statusCode).toBe(403);
+    });
+
     it('lit une note du dossier de Christophe en lecture seule, et la sienne modifiable', async () => {
       const autre = await demander('op-ok', {
         espace: 'partage',

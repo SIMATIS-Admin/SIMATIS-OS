@@ -224,7 +224,9 @@ export function App() {
       case 'tableau':
         return <Tableau key={current.slug} slug={current.slug} />;
       case 'cerveau':
-        return <Cerveau key={current.slug} slug={current.slug} />;
+        return (
+          <Cerveau key={current.slug} slug={current.slug} seulPartage={current.type !== 'propre'} />
+        );
       case 'gestion':
         return (
           <Gestion

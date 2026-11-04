@@ -71,7 +71,7 @@ afterEach(() => {
 
 const ouvrirPartage = async () => {
   render(<Cerveau slug="x" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Partagé' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Alpes IA' }));
   await screen.findByRole('button', { name: /^Échanges/ });
 };
 

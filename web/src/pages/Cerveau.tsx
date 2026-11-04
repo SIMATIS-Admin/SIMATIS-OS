@@ -15,29 +15,32 @@ const dateParis = (iso: string) =>
     minute: '2-digit',
   });
 
-// Deux cerveaux : SIMATIS (le dossier du Drive) et Partagé (l'espace partagé avec Christophe), chacun
-// avec sa carte et son édition.
-export function Cerveau({ slug }: { slug: string }) {
-  const [espace, setEspace] = useState<EspaceCerveau>('simatis');
+// Deux cerveaux : SIMATIS (le dossier du Drive) et Alpes IA (l'espace partagé avec Christophe),
+// chacun avec sa carte et son édition. L'instance d'un partenaire (seulPartage) ne voit que le sien.
+export function Cerveau({ slug, seulPartage = false }: { slug: string; seulPartage?: boolean }) {
+  const [choix, setEspace] = useState<EspaceCerveau>('simatis');
+  const espace = seulPartage ? 'partage' : choix;
   return (
     <>
-      <div className="seg" style={{ marginBottom: 14 }}>
-        {(
-          [
-            ['simatis', 'SIMATIS'],
-            ['partage', 'Partagé'],
-          ] as const
-        ).map(([id, libelle]) => (
-          <button
-            key={id}
-            className={espace === id ? 'on' : ''}
-            aria-pressed={espace === id}
-            onClick={() => setEspace(id)}
-          >
-            {libelle}
-          </button>
-        ))}
-      </div>
+      {!seulPartage && (
+        <div className="seg" style={{ marginBottom: 14 }}>
+          {(
+            [
+              ['simatis', 'SIMATIS'],
+              ['partage', 'Alpes IA'],
+            ] as const
+          ).map(([id, libelle]) => (
+            <button
+              key={id}
+              className={espace === id ? 'on' : ''}
+              aria-pressed={espace === id}
+              onClick={() => setEspace(id)}
+            >
+              {libelle}
+            </button>
+          ))}
+        </div>
+      )}
       {espace === 'partage' ? (
         <PartageBoite key={slug} slug={slug} />
       ) : (
