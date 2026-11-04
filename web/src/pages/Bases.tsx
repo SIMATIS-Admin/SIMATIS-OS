@@ -593,6 +593,13 @@ export function Bases({ slug }: { slug: string }) {
     [slug, filtres, page],
   );
   useEffect(() => void charger(), [charger]);
+  useEffect(() => {
+    const actualiser = () => {
+      void charger();
+    };
+    window.addEventListener('recherche-importee', actualiser);
+    return () => window.removeEventListener('recherche-importee', actualiser);
+  }, [charger]);
 
   const chargerReponses = useCallback(
     () => fetchReponsesBase(slug).then(setReponses, () => undefined),

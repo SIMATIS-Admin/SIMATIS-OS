@@ -1,9 +1,11 @@
+import { useRecherche, signalRecherche } from './useRecherche.js';
 import { useEffect, useState } from 'react';
 import {
   lireRoutineProspects,
   creerImportBase,
   integrerImportBase,
-  rechercherProspectsBase,
+  lancerRechercheProspects,
+  effacerRechercheProspects,
   type ProspectRecherche,
 } from '../api.js';
 import { Fenetre } from './Fenetre.js';
@@ -21,6 +23,8 @@ export function RechercheProspects({
   fermer: () => void;
   termine: (message: string) => void;
 }) {
+  const { tache, setTache, charge, erreurSuivi } = useRecherche(slug);
+  const enRecherche = tache?.etat === 'en_cours';
   const [consignes, setConsignes] = useState(CIBLE);
   useEffect(() => {
     let actif = true;
@@ -53,12 +57,21 @@ export function RechercheProspects({
     }
   };
 
+  useEffect(() => {
+    if (!tache) return;
+    setNombre(tache.nombre);
+    if (tache.etat === 'terminee') {
+      setContacts(tache.contacts ?? []);
+      setSelection((tache.contacts ?? []).map((_, i) => i));
+    }
+  }, [tache?.id, tache?.etat]);
+
   const rechercher = () =>
     agir(async () => {
       setContacts(null);
-      const resultats = await rechercherProspectsBase(slug, consignes, nombre);
-      setContacts(resultats);
-      setSelection(resultats.map((_, i) => i));
+      const resultat = await lancerRechercheProspects(slug, consignes, nombre);
+      setTache(resultat);
+      signalRecherche();
     });
 
   const integrer = () =>
@@ -88,6 +101,8 @@ export function RechercheProspects({
         creees += bilan.creees;
         fusionnees += bilan.fusionnees;
       }
+      if (tache) await effacerRechercheProspects(slug, tache.id);
+      signalRecherche();
       termine(`${creees} fiche(s) ajoutée(s), ${fusionnees} fiche(s) rapprochée(s).`);
     });
 
@@ -100,13 +115,15 @@ export function RechercheProspects({
       pied={
         <>
           <button className="btn" disabled={occupe} onClick={fermer}>
-            Fermer
+            {enRecherche ? 'Mettre en arrière-plan' : 'Fermer'}
           </button>
           {contacts === null ? (
             <button
               className="btn primary"
               disabled={
                 occupe ||
+                enRecherche ||
+                !charge ||
                 !consignes.trim() ||
                 !Number.isInteger(nombre) ||
                 nombre < 1 ||
@@ -136,7 +153,7 @@ export function RechercheProspects({
               className="input"
               rows={8}
               maxLength={5000}
-              disabled={occupe}
+              disabled={occupe || enRecherche}
               value={consignes}
               onChange={(e) => setConsignes(e.target.value)}
             />
@@ -148,7 +165,7 @@ export function RechercheProspects({
               type="number"
               min={1}
               max={100}
-              disabled={occupe}
+              disabled={occupe || enRecherche}
               value={nombre}
               onChange={(e) => setNombre(e.target.valueAsNumber || 0)}
             />
@@ -194,10 +211,39 @@ export function RechercheProspects({
           ))}
         </>
       )}
+      {enRecherche && (
+        <p role="status">
+          Recherche en cours depuis{' '}
+          {new Date(tache.debut).toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+          . Vous pouvez continuer à utiliser l’application. Les résultats resteront disponibles ici.
+        </p>
+      )}
+      {tache?.etat === 'erreur' && <p role="alert">{tache.erreur}</p>}
+      {erreurSuivi && <p role="alert">{erreurSuivi}</p>}
       {occupe && (
         <p role="status">
           {contacts === null ? 'Codex recherche les contacts…' : 'Ajout en cours…'}
         </p>
+      )}
+      {contacts !== null && (
+        <button
+          className="btn"
+          disabled={occupe}
+          onClick={() =>
+            void agir(async () => {
+              if (tache) await effacerRechercheProspects(slug, tache.id);
+              setTache(null);
+              setContacts(null);
+              setImports([]);
+              signalRecherche();
+            })
+          }
+        >
+          Nouvelle recherche
+        </button>
       )}
       {erreur && <p role="alert">{erreur}</p>}
     </Fenetre>

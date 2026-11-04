@@ -1,3 +1,4 @@
+import { lancerRecherche, lireRecherche, effacerRecherche } from './recherche-tache.js';
 import { enregistrerRoutineRecherche, lireRoutineRecherche, reglagesRecherche } from './routine.js';
 import { chercherProspects } from './recherche.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -88,6 +89,39 @@ export function registerEnrichissementRoutes(
       const resultat = reglagesRecherche.safeParse(request.body);
       if (!resultat.success) throw new LotRefuse('Réglages de recherche invalides.');
       return enregistrerRoutineRecherche(db, instanceId, resultat.data);
+    }),
+  );
+
+  app.get<Route>(
+    '/api/i/:slug/base/recherche/tache',
+    surInstance((instanceId) => lireRecherche(db, instanceId)),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/recherche/tache',
+    surInstance(async (instanceId, request) => {
+      const input = z.object({ id: z.string().uuid() }).safeParse(request.body);
+      if (!input.success) throw new LotRefuse('Recherche invalide.');
+      await effacerRecherche(db, instanceId, input.data.id);
+      return { ok: true };
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/recherche/tache',
+    surInstance(async (instanceId, request, reply) => {
+      if (!codex) return reply.code(409).send({ error: 'Codex est indisponible.' });
+      const input = z
+        .object({
+          consignes: z.string().trim().min(1).max(5000),
+          nombre: z.number().int().min(1).max(100),
+        })
+        .safeParse(request.body);
+      if (!input.success)
+        throw new LotRefuse('Indiquez des consignes et un nombre de contacts entre 1 et 100.');
+      return reply
+        .code(202)
+        .send(
+          await lancerRecherche(db, codex, instanceId, input.data.consignes, input.data.nombre),
+        );
     }),
   );
 

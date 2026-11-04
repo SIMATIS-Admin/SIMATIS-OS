@@ -6168,3 +6168,16 @@ div.pb-ligne {
     max-height: none;
   }
 }
+
+.recherche-suivi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 24px 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line, #d5e0e7);
+  border-radius: 10px;
+  background: var(--bg, #f1f6f8);
+  flex-wrap: wrap;
+}

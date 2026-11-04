@@ -1,3 +1,4 @@
+import type { RechercheTache } from '../enrichissement/recherche-tache.js';
 import type { RoutineBrouillons } from '../prospection/quotidienne.js';
 import type { RoutineRecherche } from '../enrichissement/routine.js';
 import { jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
@@ -9,6 +10,7 @@ export const preferences = pgTable('preferences', {
   options: jsonb('options')
     .$type<{
       ensuite?: boolean;
+      rechercheManuelle?: RechercheTache;
       rechercheBase?: RoutineRecherche;
       brouillons?: RoutineBrouillons;
     }>()
