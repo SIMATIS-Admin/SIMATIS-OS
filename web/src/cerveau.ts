@@ -15,7 +15,7 @@ export type CarteCerveau = {
   autresFichiers: number;
   fichiers?: string[];
   moi?: string;
-  // Lien du dossier de l'espace partagé sur le kDrive (espace Partagé seulement).
+  // Lien du dossier de l'espace partagé sur le kDrive (espace Alpes IA seulement).
   lienKdrive?: string | null;
   tronquee: boolean;
   misAJour: string;

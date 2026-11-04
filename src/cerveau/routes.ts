@@ -108,11 +108,13 @@ export function registerCerveauRoutes(
     return { ok: true };
   });
 
-  // Réservé aux espaces SIMATIS qui ont le module : jamais une démo, qui ne doit rien voir du vrai.
-  const acces = async (slug: string, reply: FastifyReply) => {
+  // Jamais une démo, qui ne doit rien voir du vrai. Le cerveau SIMATIS est réservé à Mon activité ;
+  // l'espace d'un partenaire s'ouvre aussi à un mandat qui a le module (il ne voit que cet espace).
+  const acces = async (slug: string, reply: FastifyReply, partage: boolean) => {
     const instance = await getInstanceBySlug(db, slug);
     if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
-    if (instance.type !== 'propre' || !(instance.config.modules ?? []).includes('cerveau'))
+    const typeAutorise = instance.type === 'propre' || (partage && instance.type === 'mandat');
+    if (!typeAutorise || !(instance.config.modules ?? []).includes('cerveau'))
       return reply.code(403).send({ error: "Le second cerveau n'est pas activé dans cet espace." });
     return null;
   };
@@ -120,9 +122,9 @@ export function registerCerveauRoutes(
   app.get<{ Params: { slug: string }; Querystring: { espace?: string } }>(
     '/api/i/:slug/cerveau/carte',
     async (request, reply) => {
-      const refuse = await acces(request.params.slug, reply);
-      if (refuse) return refuse;
       const partage = request.query.espace === 'partage';
+      const refuse = await acces(request.params.slug, reply, partage);
+      if (refuse) return refuse;
       const carte = lireCarte(partage ? 'partage' : 'simatis');
       // Lien du dossier partagé sur le kDrive : une configuration de l'OS, pas un contenu de la carte.
       return carte && partage ? { ...carte, lienKdrive } : carte;
@@ -133,10 +135,10 @@ export function registerCerveauRoutes(
   app.post<{ Params: { slug: string }; Body: unknown }>(
     '/api/i/:slug/cerveau/operations',
     async (request, reply) => {
-      const refuse = await acces(request.params.slug, reply);
-      if (refuse) return refuse;
       const parsed = operationSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Demande invalide' });
+      const refuse = await acces(request.params.slug, reply, parsed.data.espace === 'partage');
+      if (refuse) return refuse;
       try {
         const resultat = await demander(parsed.data);
         if (resultat.ok) return resultat;

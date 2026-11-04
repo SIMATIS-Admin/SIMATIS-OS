@@ -313,7 +313,7 @@ export type OperationCerveau =
   | { espace: 'partage'; type: 'chercher'; requete: string }
   | { espace: 'partage'; type: 'lire_messages'; chemins: string[] };
 // Lire, enregistrer une note, ajouter une idée, déposer un message : exécuté sur le dossier du Drive
-// (SIMATIS) ou dans l'espace partagé kDrive (Partagé).
+// (SIMATIS) ou dans l'espace partagé kDrive (Alpes IA).
 export const operationCerveau = (slug: string, operation: OperationCerveau) =>
   sendJson<{
     chemin?: string;

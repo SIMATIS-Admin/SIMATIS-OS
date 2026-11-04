@@ -227,7 +227,7 @@ describe('Cerveau : espace partagé', () => {
   const ouvrirPartage = async () => {
     render(<Cerveau slug="x" />);
     await screen.findByLabelText('Légende');
-    fireEvent.click(screen.getByRole('button', { name: 'Partagé' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Alpes IA' }));
     await screen.findByRole('button', { name: /^Échanges/ });
   };
 
@@ -238,6 +238,15 @@ describe('Cerveau : espace partagé', () => {
     expect(screen.queryByLabelText('Légende')).toBeNull();
     expect(screen.getAllByTestId('fil')[0]?.textContent).toContain('Question fictive');
     expect(screen.getByRole('button', { name: 'Nouveau message' })).toBeTruthy();
+  });
+
+  it('l’instance d’un partenaire ne voit que son espace, sans le cerveau SIMATIS', async () => {
+    brancher(() => json({}));
+    render(<Cerveau slug="x" seulPartage />);
+    await screen.findByRole('button', { name: /^Échanges/ });
+    expect(screen.queryByRole('button', { name: 'SIMATIS' })).toBeNull();
+    expect(appels.every((a) => !a.url.includes('espace=simatis'))).toBe(true);
+    expect(appels.some((a) => a.url.includes('cerveau/carte?espace=partage'))).toBe(true);
   });
 
   it('la carte reste disponible comme rubrique', async () => {
