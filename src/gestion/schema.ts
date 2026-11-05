@@ -183,6 +183,21 @@ export const gestionImportCles = pgTable(
   ],
 );
 
+// Réglages propres à un mandat : le délai de paiement de ses factures (repli sur le délai général).
+export const gestionMandatReglages = pgTable(
+  'gestion_mandat_reglages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    mandat: text('mandat').notNull(),
+    delaiPaiementJours: integer('delai_paiement_jours'),
+  },
+  (t) => [
+    uniqueIndex('gestion_mandat_reglages_idx').on(t.instanceId, t.mandat),
+    instanceIsolation('gestion_mandat_reglages'),
+  ],
+);
+
 // TVA mensuelle : la déclaration est mensuelle (confirmé), l'exigibilité reste à confirmer. Le montant
 // déclaré est saisi à la main, jamais transmis.
 export const gestionTvaMois = pgTable(
@@ -301,6 +316,8 @@ export const gestionIkTrajets = pgTable(
       .notNull()
       .default('saisie'),
     mandat: text('mandat'),
+    // Refacturé au mandat en plus d'alimenter le compte d'associé ; exige un mandat.
+    refacturer: boolean('refacturer').notNull().default(false),
     justificatif: text('justificatif'),
     statut: text('statut', { enum: STATUTS_IK }).notNull().default('brouillon'),
     archiveeAt: timestamp('archivee_at', { withTimezone: true }),
