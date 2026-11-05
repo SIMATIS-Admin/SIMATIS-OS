@@ -9,10 +9,12 @@ import {
   demanderRapport,
   enregistrerRapport,
   importerRapport,
+  marquerVersionFinale,
   rapportPret,
   versionDuNom,
 } from './rapport.js';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { diagnosticProjets } from './schema.js';
 import { SupportInvalide } from './support.js';
 import { withInstance } from '../db/context.js';
 
@@ -253,5 +255,95 @@ describe('Enregistrement du rapport', () => {
       }),
     ).rejects.toThrow('Word');
     expect((await relire(p.id)).aRapport).toBe(false);
+  });
+});
+
+describe('Version finale du rapport', () => {
+  let t: TestApp;
+  let simatis: Instance;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    simatis = await createInstance(t.owner.db, {
+      slug: 'simatis-rapport-finale',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+  });
+
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  const doc = (n: number) => `https://docs.google.com/document/d/doc-${n}/edit`;
+  const artifact = 'https://claude.ai/artifact/abc';
+
+  // Projet fictif dont le rapport a déjà trois liens : deux Google Docs de la version 3 (double
+  // envoi), un Doc de la version 4 et un ancien artifact.
+  const projetAvecLiens = async (nom: string, statut: 'pret' | 'en_cours' = 'pret') => {
+    const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+    await withInstance(t.app.db, simatis.id, (tx) =>
+      tx
+        .update(diagnosticProjets)
+        .set({
+          rapportLienStatut: statut,
+          rapportLiens: [
+            { lien: doc(4), le: '2026-10-29T10:00:00.000Z', version: 4 },
+            { lien: doc(3), le: '2026-10-28T14:23:00.000Z', version: 3 },
+            { lien: doc(2), le: '2026-10-28T14:21:00.000Z', version: 3 },
+            { lien: artifact, le: '2026-10-22T15:39:00.000Z' },
+          ],
+        })
+        .where(eq(diagnosticProjets.id, p.id)),
+    );
+    return p.id;
+  };
+
+  const finales = async (id: string) =>
+    (await listProjets(t.app.db, simatis))
+      .find((p) => p.id === id)!
+      .rapportLiens.filter((l) => l.finale)
+      .map((l) => l.lien);
+
+  it('cocher un Google Doc le rend final', async () => {
+    const id = await projetAvecLiens('Finale Fictif A');
+    const vue = await marquerVersionFinale(t.app.db, simatis, id, doc(4), true);
+    expect(vue.rapportLiens.find((l) => l.lien === doc(4))?.finale).toBe(true);
+  });
+
+  it('une seule finale par projet : la nouvelle remplace la précédente', async () => {
+    const id = await projetAvecLiens('Finale Fictif B');
+    await marquerVersionFinale(t.app.db, simatis, id, doc(4), true);
+    await marquerVersionFinale(t.app.db, simatis, id, doc(3), true);
+    expect(await finales(id)).toEqual([doc(3)]);
+  });
+
+  it('deux entrées de même version : cocher l une laisse l autre intacte', async () => {
+    const id = await projetAvecLiens('Finale Fictif C');
+    await marquerVersionFinale(t.app.db, simatis, id, doc(2), true);
+    expect(await finales(id)).toEqual([doc(2)]);
+  });
+
+  it('décocher retire la finale', async () => {
+    const id = await projetAvecLiens('Finale Fictif D');
+    await marquerVersionFinale(t.app.db, simatis, id, doc(4), true);
+    await marquerVersionFinale(t.app.db, simatis, id, doc(4), false);
+    expect(await finales(id)).toEqual([]);
+  });
+
+  it('refuse un lien artifact, un lien étranger au projet, et une production en cours', async () => {
+    const id = await projetAvecLiens('Finale Fictif E');
+    await expect(marquerVersionFinale(t.app.db, simatis, id, artifact, true)).rejects.toThrow(
+      ChatIndisponible,
+    );
+    await expect(marquerVersionFinale(t.app.db, simatis, id, doc(99), true)).rejects.toThrow(
+      ChatIndisponible,
+    );
+    const enCours = await projetAvecLiens('Finale Fictif F', 'en_cours');
+    await expect(marquerVersionFinale(t.app.db, simatis, enCours, doc(4), true)).rejects.toThrow(
+      ChatIndisponible,
+    );
+    expect(await finales(id)).toEqual([]);
+    expect(await finales(enCours)).toEqual([]);
   });
 });
