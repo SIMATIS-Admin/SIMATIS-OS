@@ -9,6 +9,7 @@ import {
   type FicheRegles,
 } from './schema.js';
 import { ProjetIntrouvable } from './service.js';
+import { SupportInvalide } from './support.js';
 
 // Un changement que Claude a fait dans une fiche de règles, déclaré à l'OS pour le journal.
 export type ChangementRegle = {
@@ -113,4 +114,55 @@ export async function marquerReglesAnnulee(
     origine: `annulation de l'entrée du ${entree.createdAt.toISOString().slice(0, 10)}`,
     statut: 'annule',
   });
+}
+
+const LIBELLE_MAX = 200;
+const CHANGEMENTS_MAX = 20;
+
+// Claude déclare ce qu'il a changé dans les fiches de règles (ou le résultat d'une annulation) : l'OS
+// le garde au journal. Seule une demande de règles en cours ouvre l'écriture, et un libellé ne cite
+// jamais l'entreprise du projet : c'est une consigne de style, pas un extrait de rapport.
+export async function enregistrerReglesRapport(
+  tx: Tx,
+  projetId: string,
+  charge: {
+    changements?: ChangementRegle[];
+    annulation?: { journalId: string; effectuee: boolean; motif?: string };
+  },
+): Promise<void> {
+  const [projet] = await tx
+    .select()
+    .from(diagnosticProjets)
+    .where(eq(diagnosticProjets.id, projetId));
+  if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+  if (charge.annulation) {
+    if (projet.demande !== 'regles_annuler')
+      throw new SupportInvalide("Le pilote n'a pas demandé d'annulation de règle.");
+    const { journalId, effectuee, motif } = charge.annulation;
+    await marquerReglesAnnulee(
+      tx,
+      journalId,
+      effectuee ? null : (motif ?? 'Annulation impossible.'),
+    );
+  }
+  const changements = charge.changements ?? [];
+  if (changements.length === 0) return;
+  if (projet.demande !== 'regles_rapport')
+    throw new SupportInvalide("Le pilote n'a pas demandé de capitalisation des règles.");
+  if (changements.length > CHANGEMENTS_MAX)
+    throw new SupportInvalide(`Trop de changements d'un coup (${CHANGEMENTS_MAX} au plus).`);
+  const nom = projet.nom.trim().toLowerCase();
+  for (const c of changements) {
+    if (c.libelle.length > LIBELLE_MAX)
+      throw new SupportInvalide(`Libellé trop long (${LIBELLE_MAX} caractères au plus).`);
+    if (nom && c.libelle.toLowerCase().includes(nom))
+      throw new SupportInvalide("Un libellé de règle ne cite jamais l'entreprise du projet.");
+  }
+  const finale = projet.rapportLiens.find((l) => l.finale);
+  await ajouterChangementsRegles(
+    tx,
+    projetId,
+    finale?.version ? `version finale ${finale.version}` : 'version finale',
+    changements,
+  );
 }

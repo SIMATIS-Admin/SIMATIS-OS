@@ -43,6 +43,10 @@ export const DEMANDES = [
   'entretien',
   'capitalisation_proposer',
   'capitalisation_enregistrer',
+  // Capitalisation des règles de rédaction à la version finale du rapport, et son annulation. Pas de
+  // préfixe « capitalisation_ » : il déclenche la capitalisation de la restitution.
+  'regles_rapport',
+  'regles_annuler',
 ] as const;
 // Capitalisation de la restitution (étape 5) : 'en_cours' tant que Claude propose, 'propose' une fois
 // sa proposition dans le chat, 'enregistre' quand le pilote l'a validée et que Claude l'a écrite.

@@ -6,11 +6,13 @@ import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import {
   ajouterChangementsRegles,
+  enregistrerReglesRapport,
   listerJournalRegles,
   marquerReglesAnnulee,
   type ChangementRegle,
 } from './regles.js';
-import { diagnosticProjets } from './schema.js';
+import { diagnosticProjets, type Demande } from './schema.js';
+import { SupportInvalide } from './support.js';
 import { createProjet } from './service.js';
 
 const regle = (
@@ -109,5 +111,102 @@ describe('Journal des règles de rédaction', () => {
     expect(apres.id).toBe(entree!.id);
     expect(apres.statut).toBe('actif');
     expect(apres.motifRefus).toBe('La fiche a changé depuis.');
+  });
+
+  describe('enregistrerReglesRapport', () => {
+    const doc = 'https://docs.google.com/document/d/doc-regles/edit';
+    const projetEn = async (nom: string, demande: Demande | null) => {
+      const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        tx
+          .update(diagnosticProjets)
+          .set({
+            demande,
+            rapportLiens: [{ lien: doc, le: '2026-11-01T08:00:00.000Z', version: 4, finale: true }],
+          })
+          .where(eq(diagnosticProjets.id, p.id)),
+      );
+      return p.id;
+    };
+    const enregistrer = (id: string, charge: Parameters<typeof enregistrerReglesRapport>[2]) =>
+      withInstance(t.app.db, simatis.id, (tx) => enregistrerReglesRapport(tx, id, charge));
+
+    it('écrit les changements avec l origine « version finale N »', async () => {
+      const id = await projetEn('Atelier Outil A', 'regles_rapport');
+      await enregistrer(id, { changements: [regle('Pas de proposition dans le rapport')] });
+      const [e] = await listerJournalRegles(t.app.db, simatis, 1);
+      expect(e).toMatchObject({ libelle: 'Pas de proposition dans le rapport', projetId: id });
+      expect(e!.origine).toBe('version finale 4');
+    });
+
+    it('refuse hors demande de règles, sans rien écrire', async () => {
+      const id = await projetEn('Atelier Outil B', null);
+      await expect(enregistrer(id, { changements: [regle('Règle hors demande')] })).rejects.toThrow(
+        SupportInvalide,
+      );
+      const liste = await listerJournalRegles(t.app.db, simatis, 50);
+      expect(liste.map((e) => e.libelle)).not.toContain('Règle hors demande');
+    });
+
+    it('refuse un libellé qui contient le nom du projet, quelle que soit la casse', async () => {
+      const id = await projetEn('Atelier Outil C', 'regles_rapport');
+      await expect(
+        enregistrer(id, {
+          changements: [regle('Comme chez ATELIER outil c, ouvrir par le profil')],
+        }),
+      ).rejects.toThrow(SupportInvalide);
+    });
+
+    it('refuse un libellé trop long et plus de 20 changements', async () => {
+      const id = await projetEn('Atelier Outil D', 'regles_rapport');
+      await expect(enregistrer(id, { changements: [regle('x'.repeat(201))] })).rejects.toThrow(
+        SupportInvalide,
+      );
+      const trop = Array.from({ length: 21 }, (_, n) => regle(`Règle fictive ${n}`));
+      await expect(enregistrer(id, { changements: trop })).rejects.toThrow(SupportInvalide);
+    });
+
+    it('annulation effectuée : l entrée passe à annulée', async () => {
+      const id = await projetEn('Atelier Outil E', 'regles_rapport');
+      await enregistrer(id, { changements: [regle('Règle à retirer')] });
+      const [entree] = await listerJournalRegles(t.app.db, simatis, 1);
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        tx
+          .update(diagnosticProjets)
+          .set({ demande: 'regles_annuler' })
+          .where(eq(diagnosticProjets.id, id)),
+      );
+      await enregistrer(id, { annulation: { journalId: entree!.id, effectuee: true } });
+      const liste = await listerJournalRegles(t.app.db, simatis, 5);
+      expect(liste.find((e) => e.id === entree!.id)?.statut).toBe('annule');
+    });
+
+    it('annulation impossible : l entrée reste active avec son motif', async () => {
+      const id = await projetEn('Atelier Outil F', 'regles_rapport');
+      await enregistrer(id, { changements: [regle('Règle déjà modifiée')] });
+      const [entree] = await listerJournalRegles(t.app.db, simatis, 1);
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        tx
+          .update(diagnosticProjets)
+          .set({ demande: 'regles_annuler' })
+          .where(eq(diagnosticProjets.id, id)),
+      );
+      await enregistrer(id, {
+        annulation: { journalId: entree!.id, effectuee: false, motif: 'La fiche a changé.' },
+      });
+      const apres = (await listerJournalRegles(t.app.db, simatis, 5)).find(
+        (e) => e.id === entree!.id,
+      )!;
+      expect(apres).toMatchObject({ statut: 'actif', motifRefus: 'La fiche a changé.' });
+    });
+
+    it('une annulation exige la demande d annulation, pas celle de capitalisation', async () => {
+      const id = await projetEn('Atelier Outil G', 'regles_rapport');
+      await enregistrer(id, { changements: [regle('Règle protégée')] });
+      const [entree] = await listerJournalRegles(t.app.db, simatis, 1);
+      await expect(
+        enregistrer(id, { annulation: { journalId: entree!.id, effectuee: true } }),
+      ).rejects.toThrow(SupportInvalide);
+    });
   });
 });
