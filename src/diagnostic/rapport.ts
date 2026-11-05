@@ -174,9 +174,11 @@ export function marquerVersionFinale(
     const [row] = await tx
       .update(diagnosticProjets)
       .set({
-        rapportLiens: projet.rapportLiens.map(({ finale: _ancienne, ...l }) =>
-          finale && l.lien === lien ? { ...l, finale: true } : l,
-        ),
+        rapportLiens: projet.rapportLiens.map((l) => {
+          const autre = { ...l };
+          delete autre.finale;
+          return finale && l.lien === lien ? { ...autre, finale: true } : autre;
+        }),
         updatedAt: new Date(),
       })
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
