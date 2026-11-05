@@ -68,4 +68,19 @@ describe('Rapport Word', () => {
   it('refuse un contenu incomplet', () => {
     expect(contenuRapportSchema.safeParse({ entreprise: 'X' }).success).toBe(false);
   });
+
+  it('omet les passages de proposition quand le contenu n en a pas', () => {
+    const { proposition: _p, ...essentiel } = contenuRapportFictif.essentiel;
+    const {
+      propositionTitre: _t,
+      proposition: _q,
+      ...conclusion
+    } = contenuRapportFictif.conclusion;
+    const sans = { ...contenuRapportFictif, essentiel, conclusion };
+    expect(contenuRapportSchema.safeParse(sans).success).toBe(true);
+    const xml = strFromU8(ouvrir(contenuRapportSchema.parse(sans))['word/document.xml']!);
+    expect(xml).not.toContain('Ma proposition');
+    expect(xml).not.toContain('De Sprinteur à Marathonien');
+    expect(xml).toContain('Conclusion et prochaine étape');
+  });
 });

@@ -6,6 +6,7 @@ import {
   depuisDerniereProduction,
   outilsCapitalisation,
   outilsEntretien,
+  FICHE_REGLES_RAPPORT,
   outilsRapport,
   outilsExportRestitution,
   outilsRestitution,
@@ -55,6 +56,8 @@ const attente: AttenteDiag = {
   rapportVersion: null,
   rapportContenu: null,
   rapportNom: null,
+  relireFinaux: true,
+  rapportsFinaux: [],
   restitutionLien: null,
   restitutionAvecProposition: true,
   proposition: null,
@@ -564,8 +567,60 @@ describe('Rapport par le runner', () => {
     expect(outils).not.toContain('Artifact');
     const avec = outilsRapport('/cerveau-fictif', ['/travail']);
     expect(avec).toContain('Read(//cerveau-fictif/**)');
-    // Le second cerveau se lit seulement pour le rapport : aucune règle Edit dessus.
+    // Le second cerveau se lit pour le rapport ; l'écriture est limitée au dossier du diagnostic
+    // (amorçage de la fiche de règles), jamais au second cerveau entier.
     expect(avec).not.toContain('Edit(//cerveau-fictif/**)');
+    expect(avec).toContain(
+      'Edit(//cerveau-fictif/brain/methodes/diagnostic-endurance-commerciale/**)',
+    );
+    expect(outilsRapport(null, ['/travail'])).not.toContain('cerveau');
+  });
+
+  const finaux = [
+    { nom: 'Rapport final 1', version: 5, texte: 'Texte fictif du premier finaux.' },
+    { nom: 'Rapport final 2', version: 4, texte: 'Texte fictif du second final.' },
+  ];
+
+  it('joint les rapports finaux comme modèle de structure, jamais de faits', () => {
+    const texte = promptRapport({ ...rapport, rapportsFinaux: finaux }, '/cerveau-fictif');
+    expect(texte).toContain('Texte fictif du premier finaux.');
+    expect(texte).toContain('Texte fictif du second final.');
+    expect(texte).toContain('structure');
+    expect(texte).toMatch(/jamais.*(fait|nom|chiffre)/);
+  });
+
+  it('réglage désactivé : plus de bloc des finaux, les règles restent', () => {
+    const texte = promptRapport(
+      { ...rapport, relireFinaux: false, rapportsFinaux: finaux },
+      '/cerveau-fictif',
+    );
+    expect(texte).not.toContain('Texte fictif du premier finaux.');
+    expect(texte).toContain(FICHE_REGLES_RAPPORT);
+  });
+
+  it('texte d un final indisponible, et un seul final trouvé : le dit sans afficher null', () => {
+    const texte = promptRapport(
+      { ...rapport, rapportsFinaux: [{ nom: 'Rapport final 1', version: 5, texte: null }] },
+      '/cerveau-fictif',
+    );
+    expect(texte).toContain('texte indisponible');
+    expect(texte).toMatch(/un seul|1 rapport final/);
+    expect(texte).not.toMatch(/null|undefined/);
+  });
+
+  it('la fiche de règles : règles fermes impératives, amorçage si absente avec deux finaux', () => {
+    const texte = promptRapport({ ...rapport, rapportsFinaux: finaux }, '/cerveau-fictif');
+    expect(texte).toContain(FICHE_REGLES_RAPPORT);
+    expect(texte).toMatch(/règles fermes.*impératives/);
+    expect(texte).toMatch(/priment/);
+    expect(texte).toMatch(/n'existe pas.*crée/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+  });
+
+  it('sans second cerveau : pas de consigne sur la fiche', () => {
+    const texte = promptRapport({ ...rapport, rapportsFinaux: finaux }, null);
+    expect(texte).toContain('Second cerveau non accessible');
+    expect(texte).not.toContain(FICHE_REGLES_RAPPORT);
   });
 });
 
