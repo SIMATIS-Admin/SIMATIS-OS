@@ -33,6 +33,8 @@ const api = vi.hoisted(() => ({
   reglagesDiagnostic: vi.fn(),
   journalReglesDiag: vi.fn(),
   capitaliserSupportDiag: vi.fn(),
+  capitaliserDeckDiag: vi.fn(),
+  marquerDeckFinalDiag: vi.fn(),
   capitaliserAnalyseDiag: vi.fn(),
   preparerRevueDiag: vi.fn(),
   capitaliserRapportDiag: vi.fn(),
@@ -1523,6 +1525,149 @@ describe("Support d'ouverture : règles apprises", () => {
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     expect(await screen.findByText(/règles du support/)).toBeTruthy();
+  });
+});
+
+describe('Deck de restitution : règles apprises', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const L1 = 'https://claude.ai/artifact/DeckFictifUn';
+  const L2 = 'https://claude.ai/artifact/DeckFictifDeux';
+  const reglages = { relireFinaux: true, relireSupports: true, relireRestitutions: true };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 5,
+        etapeMax: 5,
+        dims,
+        aRapport: true,
+        restitutionStatut: 'pret',
+        restitutionLien: L2,
+        restitutionLiens: [
+          { lien: L2, le: '2026-10-26T08:00:00.000Z' },
+          { lien: L1, le: '2026-10-25T08:00:00.000Z' },
+        ],
+        ...extra,
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+
+  it('cocher « Version finale » sur le deck affiché appelle l API, décocher aussi', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.marquerDeckFinalDiag.mockResolvedValue(projet({ etape: 5, etapeMax: 5 }));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Version finale : deck affiché' }));
+    await waitFor(() =>
+      expect(api.marquerDeckFinalDiag).toHaveBeenCalledWith('simatis', 'p1', L2, true),
+    );
+    cleanup();
+    await ouvrir({
+      restitutionLiens: [
+        { lien: L2, le: '2026-10-26T08:00:00.000Z', finale: true },
+        { lien: L1, le: '2026-10-25T08:00:00.000Z' },
+      ],
+    });
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Version finale : deck affiché',
+    });
+    expect(c.checked).toBe(true);
+    fireEvent.click(c);
+    await waitFor(() =>
+      expect(api.marquerDeckFinalDiag).toHaveBeenCalledWith('simatis', 'p1', L2, false),
+    );
+  });
+
+  it('un deck précédent se coche aussi, et une seule case est cochée', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.marquerDeckFinalDiag.mockResolvedValue(projet({ etape: 5, etapeMax: 5 }));
+    await ouvrir({
+      restitutionLiens: [
+        { lien: L2, le: '2026-10-26T08:00:00.000Z' },
+        { lien: L1, le: '2026-10-25T08:00:00.000Z', finale: true },
+      ],
+    });
+    fireEvent.click(await screen.findByText(/Decks précédents/));
+    const cochees = (await screen.findAllByRole<HTMLInputElement>('checkbox')).filter(
+      (c) => c.checked && /Version finale/.test(c.getAttribute('aria-label') ?? ''),
+    );
+    expect(cochees).toHaveLength(1);
+    expect(
+      screen.getByRole<HTMLInputElement>('checkbox', { name: /Version finale : deck du/ }).checked,
+    ).toBe(true);
+  });
+
+  it('la case de réglage est cochée par défaut et enregistre le réglage du deck seul', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.majReglagesDiagnostic.mockResolvedValue({ ...reglages, relireRestitutions: false });
+    await ouvrir();
+    const libelle = /Relire les deux derniers decks finaux/;
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
+    await waitFor(() => expect(c.checked).toBe(true));
+    fireEvent.click(c);
+    await waitFor(() =>
+      expect(api.majReglagesDiagnostic).toHaveBeenCalledWith('simatis', {
+        relireRestitutions: false,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLInputElement>('checkbox', { name: libelle }).checked).toBe(false),
+    );
+  });
+
+  it('« Capitaliser ce deck » : absent sans deck final, actif ensuite, désactivé si Claude travaille', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    await ouvrir();
+    await screen.findByRole('checkbox', { name: 'Version finale : deck affiché' });
+    expect(screen.queryByRole('button', { name: 'Capitaliser ce deck' })).toBeNull();
+    cleanup();
+    api.capitaliserDeckDiag.mockResolvedValue(projet({ etape: 5, etapeMax: 5 }));
+    const finaux = [
+      { lien: L2, le: '2026-10-26T08:00:00.000Z', finale: true },
+      { lien: L1, le: '2026-10-25T08:00:00.000Z' },
+    ];
+    await ouvrir({ restitutionLiens: finaux });
+    fireEvent.click(await screen.findByRole('button', { name: 'Capitaliser ce deck' }));
+    await waitFor(() => expect(api.capitaliserDeckDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    await ouvrir({ restitutionLiens: finaux, statutChat: 'attente_claude' });
+    expect(
+      (await screen.findByRole<HTMLButtonElement>('button', { name: 'Capitaliser ce deck' }))
+        .disabled,
+    ).toBe(true);
+  });
+
+  it('affiche le message de l API en cas de refus', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.marquerDeckFinalDiag.mockRejectedValue(new Error('Ce deck n’appartient pas à ce projet.'));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Version finale : deck affiché' }));
+    expect(await screen.findByText(/n’appartient pas à ce projet/)).toBeTruthy();
+  });
+
+  it('le journal nomme la fiche « règles du deck de restitution »', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.journalReglesDiag.mockResolvedValue([
+      {
+        id: 'e10',
+        le: '2026-11-05T10:00:00.000Z',
+        projetId: 'p1',
+        fiche: 'restitution',
+        action: 'ajoutée',
+        libelle: 'Placer les options en dernière diapositive',
+        avant: null,
+        apres: 'R',
+        origine: 'deck final',
+        statut: 'actif',
+        motifRefus: null,
+      },
+    ]);
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 } }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/règles du deck de restitution/)).toBeTruthy();
   });
 });
 
