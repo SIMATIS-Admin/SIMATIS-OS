@@ -14,6 +14,15 @@ import {
   mouvementSchema,
   suiviCca,
 } from './cca.js';
+import {
+  emettreFacture,
+  emettreSchema,
+  encaisserFacture,
+  encaisserSchema,
+  FactureIntrouvable,
+  FactureInvalide,
+  lireFacturesEmises,
+} from './factures-emission.js';
 import { facturesParMandat } from './factures.js';
 import { delaiMandatSchema, ecrireDelaiMandat, lireDelaisMandats } from './mandats.js';
 import {
@@ -113,6 +122,8 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
       if (e instanceof IkIntrouvable) return reply.code(404).send({ error: e.message });
       if (e instanceof IkInvalide) return reply.code(400).send({ error: e.message });
       if (e instanceof DepenseInvalide) return reply.code(400).send({ error: e.message });
+      if (e instanceof FactureIntrouvable) return reply.code(404).send({ error: e.message });
+      if (e instanceof FactureInvalide) return reply.code(400).send({ error: e.message });
       if (e instanceof ImportInvalide || e instanceof FichierIllisible)
         return reply.code(400).send({ error: e.message });
       throw e;
@@ -470,6 +481,49 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
 
   app.get<{ Params: { slug: string } }>('/api/i/:slug/gestion/factures', async (req, rep) =>
     dansGestion(req.params.slug, rep, (tx) => facturesParMandat(tx)),
+  );
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/gestion/factures/emises', async (req, rep) =>
+    dansGestion(req.params.slug, rep, (tx) => lireFacturesEmises(tx)),
+  );
+  app.post<{ Params: { slug: string } }>(
+    '/api/i/:slug/gestion/factures/emettre',
+    async (request, reply) => {
+      const p = emettreSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply);
+      reply.code(201);
+      return dansGestion(request.params.slug, reply, async (tx, instanceId) => {
+        const emise = await emettreFacture(tx, instanceId, p.data);
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: 'Facture de mandat émise dans Gestion',
+          niveau: 'L2',
+          details: { factureId: emise.id },
+        });
+        return emise;
+      });
+    },
+  );
+  app.post<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/gestion/factures/:id/encaisser',
+    async (request, reply) => {
+      const p = encaisserSchema.safeParse(request.body);
+      if (!p.success || !z.uuid().safeParse(request.params.id).success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx, instanceId) => {
+        const f = await encaisserFacture(
+          tx,
+          instanceId,
+          request.params.id,
+          p.data.dateEncaissement,
+        );
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: 'Facture de mandat encaissée dans Gestion',
+          niveau: 'L2',
+          details: { factureId: f.id },
+        });
+        return f;
+      });
+    },
   );
   app.get<{ Params: { slug: string } }>('/api/i/:slug/gestion/mandats/reglages', async (req, rep) =>
     dansGestion(req.params.slug, rep, async (tx) =>
