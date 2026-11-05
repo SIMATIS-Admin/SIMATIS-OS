@@ -1444,7 +1444,7 @@ export type EntreeReglesDiag = {
   id: string;
   le: string;
   projetId: string;
-  fiche: 'rapport' | 'communes';
+  fiche: 'rapport' | 'communes' | 'support' | 'analyse';
   action: 'ajoutée' | 'durcie' | 'modifiée' | 'signalée' | 'annulée';
   libelle: string;
   avant: string | null;

@@ -33,6 +33,7 @@ const api = vi.hoisted(() => ({
   reglagesDiagnostic: vi.fn(),
   journalReglesDiag: vi.fn(),
   capitaliserSupportDiag: vi.fn(),
+  capitaliserAnalyseDiag: vi.fn(),
   capitaliserRapportDiag: vi.fn(),
   annulerRegleDiag: vi.fn(),
   majReglagesDiagnostic: vi.fn(),
@@ -1521,5 +1522,60 @@ describe("Support d'ouverture : règles apprises", () => {
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     expect(await screen.findByText(/règles du support/)).toBeTruthy();
+  });
+});
+
+describe("Revue : règles d'analyse", () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 3, etapeMax: 3, dims, profil: 'Joggeur', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const bouton = { name: 'Capitaliser cette analyse' };
+
+  it('absent sans revue ou en brouillon, actif sur une revue validée', async () => {
+    api.capitaliserAnalyseDiag.mockResolvedValue(projet({ etape: 3, etapeMax: 3, dims }));
+    await ouvrir({ revue: { statut: 'brouillon' } });
+    await screen.findByText('Valider la revue');
+    expect(screen.queryByRole('button', bouton)).toBeNull();
+    cleanup();
+    await ouvrir({ revue: { statut: 'validée' } });
+    fireEvent.click(await screen.findByRole('button', bouton));
+    await waitFor(() => expect(api.capitaliserAnalyseDiag).toHaveBeenCalledWith('simatis', 'p1'));
+  });
+
+  it('désactivé pendant que Claude travaille, message de l API en cas de refus', async () => {
+    api.capitaliserAnalyseDiag.mockRejectedValue(new Error('Validez d’abord la revue.'));
+    await ouvrir({ revue: { statut: 'validée' } });
+    fireEvent.click(await screen.findByRole('button', bouton));
+    expect(await screen.findByText(/Validez d’abord la revue/)).toBeTruthy();
+    cleanup();
+    await ouvrir({ revue: { statut: 'validée' }, statutChat: 'attente_claude' });
+    expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
+  });
+
+  it('le journal nomme la fiche d analyse « règles d analyse »', async () => {
+    api.journalReglesDiag.mockResolvedValue([
+      {
+        id: 'e7',
+        le: '2026-11-05T10:00:00.000Z',
+        projetId: 'p1',
+        fiche: 'analyse',
+        action: 'ajoutée',
+        libelle: 'Garder le plan d’action tel quel',
+        avant: null,
+        apres: 'R',
+        origine: 'analyse validée',
+        statut: 'actif',
+        motifRefus: null,
+      },
+    ]);
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 4, etapeMax: 4, dims })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/règles d’analyse/)).toBeTruthy();
   });
 });
