@@ -1,4 +1,4 @@
-# Diagnostic : versions finales du rapport et règles de rédaction continues
+# Diagnostic : versions finales et règles de rédaction continues (rapport, restitution, diagnostic complet)
 
 Date : 2026-11-05. Statut : conception validée dans la conversation, spec à relire.
 
@@ -26,7 +26,10 @@ Quand un rapport est finalisé, la manière de rédiger les suivants s'enrichit 
 - Chaque changement de règle est visible dans l'OS et annulable.
 - Aucun contenu de rapport, nom de client ou règle propriétaire dans le dépôt.
 
-Hors périmètre : préparation du deck, calcul du score, restitution, capitalisation des préconisations
+Le même mécanisme vaut pour la **restitution** (deck de l'étape 5) et pour le **diagnostic complet**
+une fois terminé (voir « Extension »).
+
+Hors périmètre : préparation du deck d'ouverture (étape 1), calcul du score, restitution, capitalisation des préconisations
 (livraison existante), modification du texte du rapport depuis l'OS.
 
 ## Décisions prises
@@ -113,6 +116,31 @@ règle à son état antérieur dans la fiche.
 **Outil MCP** (réservé au jeton de la demande) : `enregistrer_regles_rapport`, qui reçoit les
 changements et écrit le journal. Le runner fait l'écriture dans la fiche du second cerveau.
 
+## Extension : restitution et diagnostic complet
+
+Le mécanisme (version finale cochée, fiche de règles dans le second cerveau, règles fermes à 2
+constats, mode de démarrage « relire les finaux », journal annulable) est écrit une fois, pour un
+**type de livrable**, et réutilisé :
+
+| Type | Version finale | Fiche de règles | Quand la capitalisation part |
+| --- | --- | --- | --- |
+| `rapport` | Google Doc coché (livraisons 1 à 3) | règles de rédaction du rapport | à la case cochée |
+| `restitution` | version du deck de l'étape 5 cochée (liste `restitutionLiens`) | règles de construction du deck de restitution (plan, durée, ton, place des options) | à la case cochée |
+| `diagnostic` | le projet entier, une fois terminé | règles de conduite du diagnostic de bout en bout (enchaînement des étapes, ce qui a été corrigé entre le brouillon de Claude et le livrable remis, délais) | quand le pilote clôt le diagnostic (étape 5 terminée) |
+
+**Livraison 4, restitution** : la case « Version finale » et la relecture des deux derniers decks
+finaux s'ajoutent à l'étape 5, sur le même modèle que le rapport. Le texte du deck final est lu
+par Claude comme aujourd'hui (le texte du deck n'est lu qu'à la demande), puis résumé en règles. Le
+réglage « Relire les finaux » est propre à chaque type.
+
+**Livraison 5, diagnostic complet** : à la clôture, une demande de capitalisation globale relit le
+projet (revue, rapport final, deck final, compte rendu de la restitution déjà capitalisé) et met à
+jour la fiche de règles du diagnostic. Elle complète la capitalisation de la restitution existante
+(`capitalisation.ts`), qui continue d'alimenter le second cerveau avec ce que dit le client : la
+nouvelle capitalisation porte, elle, sur la manière de conduire et de rédiger.
+
+Le journal et l'annulation sont communs, avec une colonne « type de livrable ».
+
 ## Erreurs
 
 - Cocher un lien non Google Doc ou étranger au projet : refus avec message, rien n'est modifié.
@@ -137,6 +165,8 @@ changements et écrit le journal. Le runner fait l'écriture dans la fiche du se
 1. Version finale (données, service, API, interface).
 2. Production à partir des finaux et des règles, avec amorçage.
 3. Capitalisation automatique et journal.
+4. La même chose pour la restitution (deck de l'étape 5).
+5. Capitalisation du diagnostic complet à la clôture.
 
 La livraison 2 apporte déjà le gain principal : un rapport en cours se refait avec les règles et les
 modèles. La 3 évite d'avoir à tenir les règles à la main.
@@ -145,4 +175,7 @@ modèles. La 3 évite d'avoir à tenir les règles à la main.
 
 - Conversion du Word exporté en texte : réutiliser `lecture-pdf.ts` ou l'import existant si possible.
 - Droits d'écriture du runner sur le dossier du second cerveau pour une demande de type rapport.
+- Restitution : le deck est un artifact claude.ai ; confirmer avec le pilote comment il en fixe la
+  version finale (artifact retouché ou fichier PowerPoint exporté), et comment l'OS en lit le texte.
+- Clôture du diagnostic : repérer l'événement qui marque « diagnostic terminé » (étape 5 validée).
 - Emplacement exact de la fiche des règles dans le second cerveau, à fixer avec le pilote.
