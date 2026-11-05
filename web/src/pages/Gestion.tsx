@@ -3,6 +3,9 @@ import {
   archiverDepenseGestion,
   archiverRevenuGestion,
   fetchFacturesAEmettre,
+  fetchFactures,
+  poserDelaiMandat,
+  type FacturesAEmettre,
   fetchTresorerie,
   fetchTva,
   patchFiche,
@@ -23,6 +26,7 @@ import { aujourdhui, eurCents, libelleMois, moisDecale, MOIS, MOIS_COURTS } from
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
 import { fusionnerMouvements, type FiltreMouvement, type Mouvement } from './gestion/fusion.js';
+import { Factures } from './gestion/Factures.js';
 import { GestionImport } from './gestion/GestionImport.js';
 import { GestionPipe, VerdictBandeau } from './gestion/GestionPipe.js';
 import { Mouvements } from './gestion/Mouvements.js';
@@ -32,10 +36,11 @@ import { GestionIk } from './GestionIk.js';
 import { GestionTva } from './GestionTva.js';
 import { GestionRevenuTiroir, TYPES_REVENU, type CibleRevenu } from './GestionRevenuTiroir.js';
 
-type Onglet = 'pilotage' | 'mouvements' | 'importer' | 'tva';
+type Onglet = 'pilotage' | 'mouvements' | 'factures' | 'importer' | 'tva';
 const ONGLETS: [Onglet, string][] = [
   ['pilotage', 'Pilotage'],
   ['mouvements', 'Mouvements'],
+  ['factures', 'Factures'],
   ['importer', 'Importer'],
   ['tva', 'TVA & IK'],
 ];
@@ -75,6 +80,7 @@ export function Gestion({
   });
   const [tva, setTva] = useState<SuiviTvaGestion | null>(null);
   const [aFacturer, setAFacturer] = useState<OccurrenceRevenu[]>([]);
+  const [factures, setFactures] = useState<FacturesAEmettre | null>(null);
   const [tiroirRevenu, setTiroirRevenu] = useState<CibleRevenu | null>(null);
   const [sousOnglet, setSousOnglet] = useState<'tva' | 'ik'>('tva');
   const [filtreMouvement, setFiltreMouvement] = useState<FiltreMouvement>('tout');
@@ -87,12 +93,13 @@ export function Gestion({
       setErreur(null);
       const horizon = new Date(`${aujourdhui()}T00:00:00Z`);
       horizon.setUTCDate(horizon.getUTCDate() + 30);
-      const [d, r, f, t, v] = await Promise.all([
+      const [d, r, f, t, v, fm] = await Promise.all([
         fetchDepenses(slug, mois),
         fetchRevenus(slug, mois),
         fetchFacturesAEmettre(slug, horizon.toISOString().slice(0, 10)),
         fetchTresorerie(slug, paramsTreso),
         fetchTva(slug, mois),
+        fetchFactures(slug),
       ]);
       if (numero !== sequence.current) return;
       setTresorerie(t);
@@ -100,6 +107,7 @@ export function Gestion({
       setDonnees(d);
       setRecettes(r);
       setAFacturer(f);
+      setFactures(fm);
     } catch (e) {
       setErreur(message(e));
     }
@@ -370,6 +378,14 @@ export function Gestion({
       setErreur(message(e));
     }
   };
+  const changerDelai = async (mandat: string, jours: number | null) => {
+    try {
+      await poserDelaiMandat(slug, mandat, jours);
+      await charger();
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
   const ouvrirMouvement = (m: Mouvement) =>
     m.depense ? void ouvrir(m.depense) : void ouvrirRevenu(m.recette!);
   const retirerMouvement = (m: Mouvement) =>
@@ -516,7 +532,15 @@ export function Gestion({
           onDupliquer={(m) => void ouvrir(m.depense!, true)}
           onRetirer={retirerMouvement}
           onMarquerFacturee={(r) => void ouvrirRevenu(r, 'emise')}
+          onVoirFactures={() => setOnglet('factures')}
           onAjouter={(f) => (f === 'recettes' ? setTiroirRevenu({}) : setTiroir({ cible: {} }))}
+        />
+      )}
+      {onglet === 'factures' && factures && (
+        <Factures
+          donnees={factures}
+          mandats={mandats}
+          onDelai={(m, j) => void changerDelai(m, j)}
         />
       )}
       {onglet === 'importer' && <GestionImport slug={slug} onImporte={() => void charger()} />}
@@ -548,7 +572,13 @@ export function Gestion({
               onSaved={() => void charger()}
             />
           ) : (
-            <GestionIk slug={slug} mois={mois} periode={cheminDuMois} />
+            <GestionIk
+              slug={slug}
+              mois={mois}
+              periode={cheminDuMois}
+              mandats={mandats}
+              onModifie={() => void charger()}
+            />
           )}
         </>
       )}

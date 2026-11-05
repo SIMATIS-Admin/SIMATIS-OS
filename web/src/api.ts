@@ -2335,6 +2335,34 @@ export const fetchRevenuGestion = (slug: string, id: string) =>
   getJson<RevenuGestion>(inst(slug, `gestion/revenus/${id}`));
 export const fetchFacturesAEmettre = (slug: string, jusqua: string) =>
   getJson<OccurrenceRevenu[]>(inst(slug, `gestion/factures-a-emettre?jusqua=${jusqua}`));
+export type SorteLigneFacture = 'recurrent' | 'commission' | 'frais' | 'ik';
+export type LigneFacture = {
+  cle: string;
+  sorte: SorteLigneFacture;
+  libelle: string;
+  date: string;
+  montantHtCents: number | null;
+  tvaCents: number | null;
+  certitude: 'certaine' | 'probable' | 'hypothese' | null;
+  avertissement: string | null;
+};
+export type FactureAEmettre = {
+  mandat: string;
+  emissionPrevue: string;
+  delaiJours: number | null;
+  delaiMandatJours: number | null;
+  encaissementAttendu: string | null;
+  totalHtCents: number;
+  lignes: LigneFacture[];
+  avertissements: string[];
+};
+export type FacturesAEmettre = { factures: FactureAEmettre[]; sansMandat: LigneFacture[] };
+export const fetchFactures = (slug: string) =>
+  getJson<FacturesAEmettre>(inst(slug, 'gestion/factures'));
+export const poserDelaiMandat = (slug: string, mandat: string, delaiPaiementJours: number | null) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, `gestion/mandats/${mandat}/reglages`), {
+    delaiPaiementJours,
+  });
 export const creerRevenuGestion = (slug: string, r: Partial<NouveauRevenu>) =>
   sendJson<RevenuGestion>('POST', inst(slug, 'gestion/revenus'), r);
 export const modifierRevenuGestion = (slug: string, id: string, r: Partial<NouveauRevenu>) =>
@@ -2547,6 +2575,8 @@ export type LigneIk = {
   statut: StatutIk;
   cumulKm: number;
   indemniteCents: number | null;
+  mandat: string | null;
+  refacturer: boolean;
 };
 export type EtatIk = {
   mois: string;
@@ -2609,8 +2639,15 @@ export const creerTrajetIk = (
     trajet: string;
     commentaire: string;
     kmAllerRetour: number;
+    mandat?: string | null;
+    refacturer?: boolean;
   },
 ) => sendJson<{ id: string }>('POST', inst(slug, 'gestion/ik/trajets'), t);
+export const modifierTrajetIk = (
+  slug: string,
+  id: string,
+  patch: { refacturer?: boolean; mandat?: string | null },
+) => sendJson<{ id: string }>('PATCH', inst(slug, `gestion/ik/trajets/${id}`), patch);
 export const archiverTrajetIk = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/ik/trajets/${id}`), {});
 export const avancerMoisIk = (

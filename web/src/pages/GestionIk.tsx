@@ -9,6 +9,7 @@ import {
   creerLieuIk,
   creerMouvementCca,
   creerTrajetIk,
+  modifierTrajetIk,
   creerVehiculeIk,
   fetchCca,
   fetchConfigIk,
@@ -65,10 +66,15 @@ export function GestionIk({
   slug,
   mois,
   periode,
+  mandats,
+  onModifie,
 }: {
   slug: string;
   mois: string;
   periode: React.ReactNode;
+  mandats: { slug: string; nom: string }[];
+  // Appelé après un changement qui touche les factures à émettre (mandat ou case Refacturer).
+  onModifie?: () => void;
 }) {
   const [config, setConfig] = useState<ConfigIk | null>(null);
   const [vehiculeId, setVehiculeId] = useState('');
@@ -117,7 +123,14 @@ export function GestionIk({
     source: '',
     tranches: [{ jusqua: '', taux: '', forfait: '' }],
   });
-  const [traj, setTraj] = useState({ date: `${mois}-01`, trajet: '', km: '', commentaire: '' });
+  const [traj, setTraj] = useState({
+    date: `${mois}-01`,
+    trajet: '',
+    km: '',
+    commentaire: '',
+    mandat: '',
+    refacturer: false,
+  });
   const [mvt, setMvt] = useState({
     date: aujourdhui(),
     type: 'apport',
@@ -279,6 +292,8 @@ export function GestionIk({
                     <th className="num">km A/R</th>
                     <th className="num">Cumul annuel</th>
                     <th className="num">Indemnité</th>
+                    <th>Mandat</th>
+                    <th>Refacturer</th>
                     <th>Statut</th>
                     <th />
                   </tr>
@@ -293,6 +308,26 @@ export function GestionIk({
                       <td className="num">{l.cumulKm}</td>
                       <td className="num">
                         {l.indemniteCents == null ? '–' : eurCents(l.indemniteCents)}
+                      </td>
+                      <td>
+                        {l.mandat
+                          ? (mandats.find((m) => m.slug === l.mandat)?.nom ?? l.mandat)
+                          : '–'}
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Refacturer le trajet du ${l.date}`}
+                          checked={l.refacturer}
+                          disabled={!l.mandat}
+                          onChange={(e) =>
+                            void attraper(async () => {
+                              await modifierTrajetIk(slug, l.id, { refacturer: e.target.checked });
+                              await charger();
+                              onModifie?.();
+                            })
+                          }
+                        />
                       </td>
                       <td>{STATUTS[l.statut]}</td>
                       <td>
@@ -315,7 +350,7 @@ export function GestionIk({
                   ))}
                   {etat && etat.lignes.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="muted">
+                      <td colSpan={10} className="muted">
                         Aucun trajet ce mois-ci.
                       </td>
                     </tr>
@@ -332,7 +367,7 @@ export function GestionIk({
                           ? 'Barème à valider'
                           : eurCents(etat.totalIndemniteCents)}
                       </th>
-                      <th colSpan={2} />
+                      <th colSpan={4} />
                     </tr>
                   </tfoot>
                 )}
@@ -446,9 +481,12 @@ export function GestionIk({
                       trajet: traj.trajet,
                       commentaire: traj.commentaire,
                       kmAllerRetour: Math.round(km),
+                      mandat: traj.mandat || null,
+                      refacturer: traj.refacturer && !!traj.mandat,
                     });
-                    setTraj({ ...traj, trajet: '', km: '', commentaire: '' });
+                    setTraj({ ...traj, trajet: '', km: '', commentaire: '', refacturer: false });
                     await charger();
+                    onModifie?.();
                   });
                 }}
               >
@@ -502,7 +540,37 @@ export function GestionIk({
                       onChange={(e) => setTraj({ ...traj, commentaire: e.target.value })}
                     />
                   </label>
+                  <label className="field">
+                    <span>Mandat du trajet</span>
+                    <select
+                      className="input"
+                      value={traj.mandat}
+                      onChange={(e) =>
+                        setTraj({
+                          ...traj,
+                          mandat: e.target.value,
+                          refacturer: e.target.value ? traj.refacturer : false,
+                        })
+                      }
+                    >
+                      <option value="">Aucun mandat</option>
+                      {mandats.map((m) => (
+                        <option key={m.slug} value={m.slug}>
+                          {m.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    disabled={!traj.mandat}
+                    checked={traj.refacturer}
+                    onChange={(e) => setTraj({ ...traj, refacturer: e.target.checked })}
+                  />
+                  &nbsp;Refacturer ce trajet
+                </label>
                 <button className="btn primary" type="submit">
                   Ajouter le trajet
                 </button>

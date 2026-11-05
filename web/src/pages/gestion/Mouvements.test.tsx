@@ -50,6 +50,7 @@ function monter(
     onDupliquer: vi.fn(),
     onRetirer: vi.fn(),
     onMarquerFacturee: vi.fn(),
+    onVoirFactures: vi.fn(),
     onAjouter: vi.fn(),
   };
   render(
@@ -70,6 +71,12 @@ function monter(
 afterEach(cleanup);
 
 describe('Mouvements', () => {
+  it('renvoie vers l’onglet Factures depuis la liste des factures à émettre', () => {
+    const { onVoirFactures } = monter([], [], { aFacturer: [rec({ libelle: 'À facturer' })] });
+    fireEvent.click(screen.getByRole('button', { name: 'Voir par mandat' }));
+    expect(onVoirFactures).toHaveBeenCalled();
+  });
+
   it('affiche chaque montant signé avec sa base', () => {
     monter([dep()], [rec()]);
     const ligneD = screen.getByText('Abonnement fictif').closest('tr')!;

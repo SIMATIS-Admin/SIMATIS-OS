@@ -55,9 +55,16 @@ export const trajetSchema = z.object({
   kmAllerRetour: z.number().int().min(1).max(5000),
   origineDistance: z.enum(ORIGINES_DISTANCE).default('saisie'),
   mandat: z.string().regex(SLUG).nullish(),
+  refacturer: z.boolean().default(false),
   justificatif: z.string().trim().max(500).nullish(),
 });
-export const trajetPatchSchema = trajetSchema.partial();
+// Le défaut de `refacturer` ne vaut qu'à la création : une modification partielle ne doit jamais le
+// réappliquer (elle décocherait la case sans que personne ne l'ait demandé). Même chose pour
+// `origineDistance`, qui retombait sur « saisie » à chaque modification.
+export const trajetPatchSchema = trajetSchema.partial().extend({
+  refacturer: z.boolean().optional(),
+  origineDistance: z.enum(ORIGINES_DISTANCE).optional(),
+});
 export const aboSchema = z.object({ abonnement: z.boolean() });
 
 const visible = <T extends { instanceId: unknown; archiveeAt: unknown }>(t: T) =>
@@ -194,11 +201,16 @@ async function verifierDoublon(
     throw new IkInvalide('Ce trajet existe déjà à cette date pour ce véhicule.');
 }
 
+const verifierRefacturation = (t: { refacturer?: boolean; mandat?: string | null }) => {
+  if (t.refacturer && !t.mandat) throw new IkInvalide('Un trajet refacturé doit avoir un mandat.');
+};
+
 export async function creerTrajet(
   tx: Executor,
   instanceId: string,
   t: z.infer<typeof trajetSchema>,
 ) {
+  verifierRefacturation(t);
   await verifierDoublon(tx, t);
   const [l] = await tx
     .insert(gestionIkTrajets)
@@ -215,10 +227,13 @@ export async function modifierTrajet(
   patch: z.infer<typeof trajetPatchSchema>,
 ) {
   const actuel = await lireTrajet(tx, id);
-  if (FIGES.includes(actuel.statut))
+  // Cocher « refacturer » ne change aucun chiffre transmis : permis même sur un trajet figé.
+  const seulementRefacturer = Object.keys(patch).every((k) => k === 'refacturer');
+  if (FIGES.includes(actuel.statut) && !seulementRefacturer)
     throw new IkInvalide(
       'Un trajet validé pour transmission ne se modifie plus : rouvrez le mois.',
     );
+  verifierRefacturation({ ...actuel, ...patch });
   await verifierDoublon(tx, { ...actuel, ...patch }, id);
   const [l] = await tx
     .update(gestionIkTrajets)
@@ -246,6 +261,7 @@ export type LigneIk = {
   km: number;
   origineDistance: string;
   mandat: string | null;
+  refacturer: boolean;
   justificatif: string | null;
   statut: StatutIk;
   cumulKm: number;
@@ -333,6 +349,7 @@ export async function etatIkMois(
     km: t.kmAllerRetour,
     origineDistance: t.origineDistance,
     mandat: t.mandat,
+    refacturer: t.refacturer,
     justificatif: t.justificatif,
     statut: t.statut,
     cumulKm: calcul
