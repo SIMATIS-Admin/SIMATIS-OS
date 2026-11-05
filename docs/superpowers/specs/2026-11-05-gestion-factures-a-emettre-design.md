@@ -45,8 +45,10 @@ repli sur le délai général de Gestion). Unique `(instance_id, mandat)`, isola
 cadence est fixée à « fin de mois » pour l'instant ; elle n'est pas stockée.
 
 ### 3.3 Factures émises (livraison 2)
-Table `gestion_factures` : `id`, `mandat`, `numero`, `date_emission`, `total_ht_cents`, `etat`
-(`emise` | `encaissee`), `date_encaissement`, `lignes` (jsonb, photographie figée).
+Table `gestion_factures` : `id`, `mandat`, `numero`, `date_emission`, `total_ht_cents`, `delai_jours`
+(délai effectif au moment de l'émission, nullable), `etat` (`emise` | `encaissee`),
+`date_encaissement`, `lignes` (jsonb, photographie figée : clé, sorte, libellé, date, montant HT, TVA).
+Unique `(instance_id, numero)`.
 
 ## 4. Calcul d'une facture à émettre
 
