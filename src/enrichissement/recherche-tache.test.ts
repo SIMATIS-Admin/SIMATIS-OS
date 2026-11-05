@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import {
   lancerRecherche,
@@ -10,6 +10,11 @@ import {
 import type { ReponseIA } from './client.js';
 
 let t: TestApp;
+// Le travail de fond écrit d'abord son état en base, puis appelle l'IA : tant que l'IA n'a pas été
+// appelée, une écriture de fond peut encore arriver et écraser ce que le test vient de faire (ou
+// `finir` n'existe pas encore). On attend donc que la recherche soit réellement en cours.
+const attendreAppel = (appele: () => unknown) =>
+  vi.waitFor(() => expect(appele()).toBeTypeOf('function'));
 beforeAll(async () => {
   t = await setupTestApp();
 });
@@ -33,6 +38,7 @@ it('rend la main sans attendre, isole les instances, refuse un doublon et conser
   );
   await effacerRecherche(t.app.db, 'fictif-a', job.id);
   expect((await lireRecherche(t.app.db, 'fictif-a'))?.etat).toBe('en_cours');
+  await attendreAppel(() => finir);
   finir({ json: { contacts: [] }, jetons: 0 });
   await attendreRecherche(job.id);
   expect((await lireRecherche(t.app.db, 'fictif-a'))?.contacts).toEqual([]);
@@ -56,6 +62,7 @@ it('signale une interruption après redémarrage et protège la nouvelle recherc
     'Test',
     1,
   );
+  await attendreAppel(() => finir);
   await interrompreRecherches(t.app.db);
   expect((await lireRecherche(t.app.db, 'fictif-c'))?.etat).toBe('erreur');
   const nouveau = await lancerRecherche(
@@ -100,6 +107,7 @@ it('répond 202 avant la fin du travail et retrouve son état par HTTP', async (
   });
   expect(lancement.statusCode).toBe(202);
   expect((await app.inject({ method: 'GET', url })).json<{ etat: string }>().etat).toBe('en_cours');
+  await attendreAppel(() => finir);
   finir({ json: { contacts: [] }, jetons: 0 });
   await attendreRecherche(lancement.json<{ id: string }>().id);
   expect((await app.inject({ method: 'GET', url })).json<{ etat: string }>().etat).toBe(
