@@ -8,6 +8,7 @@ import {
   outilsEntretien,
   FICHE_REGLES_COMMUNES,
   FICHE_REGLES_RAPPORT,
+  FICHE_REGLES_SUPPORT,
   outilsRapport,
   outilsRegles,
   outilsExportRestitution,
@@ -19,6 +20,7 @@ import {
   promptAnnulerRegle,
   promptRapport,
   promptReglesRapport,
+  promptReglesSupport,
   promptExportRestitution,
   promptRestitution,
   promptSupport,
@@ -65,6 +67,9 @@ const attente: AttenteDiag = {
   rapportFinalTexte: null,
   rapportBrouillon: null,
   regleAAnnuler: null,
+  relireSupports: true,
+  supportsFinaux: [],
+  supportFinalTexte: null,
   restitutionLien: null,
   restitutionAvecProposition: true,
   proposition: null,
@@ -849,5 +854,97 @@ describe('Capitalisation des règles de rédaction par le runner', () => {
   it('le rapport lit aussi les règles communes', () => {
     const texte = promptRapport({ ...regles, demande: 'rapport' }, '/cerveau-fictif');
     expect(texte).toContain(FICHE_REGLES_COMMUNES);
+  });
+});
+
+describe("Règles de rédaction du support d'ouverture par le runner", () => {
+  const finaux = [
+    { nom: 'Support final 1', texte: 'Diapositive 1 : Premier modèle fictif' },
+    { nom: 'Support final 2', texte: 'Diapositive 1 : Second modèle fictif' },
+  ];
+  const preparer: AttenteDiag = {
+    ...attente,
+    etape: 1,
+    etapeMessage: 1,
+    demande: 'preparer_support',
+    supportsFinaux: finaux,
+  };
+
+  it('la préparation lit les deux fiches et les supports finaux comme modèles', () => {
+    const texte = promptSupport(preparer, null, '/cerveau-fictif');
+    expect(texte).toContain(FICHE_REGLES_SUPPORT);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/règles fermes.*impératives/);
+    expect(texte).toContain('Premier modèle fictif');
+    expect(texte).toContain('Second modèle fictif');
+    expect(texte).toMatch(/jamais.*(fait|nom|chiffre)/);
+  });
+
+  it('sans second cerveau : ni fiche, mais les modèles restent', () => {
+    const texte = promptSupport(preparer, null, null);
+    expect(texte).not.toContain(FICHE_REGLES_SUPPORT);
+    expect(texte).toContain('Premier modèle fictif');
+  });
+
+  it('réglage désactivé, ou autre demande : pas de supports finaux, les règles restent', () => {
+    const coupe = promptSupport({ ...preparer, relireSupports: false }, null, '/cerveau-fictif');
+    expect(coupe).not.toContain('Premier modèle fictif');
+    expect(coupe).toContain(FICHE_REGLES_SUPPORT);
+    const chat = promptSupport({ ...preparer, demande: null }, null, '/cerveau-fictif');
+    expect(chat).not.toContain('Premier modèle fictif');
+  });
+
+  it('un texte absent ne s affiche pas comme null ou undefined', () => {
+    const texte = promptSupport(
+      { ...preparer, supportsFinaux: [{ nom: 'Support final 1', texte: '' }] },
+      null,
+      '/cerveau-fictif',
+    );
+    expect(texte).toContain('texte indisponible');
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  const regles: AttenteDiag = {
+    ...attente,
+    etape: 1,
+    etapeMessage: 1,
+    demande: 'regles_support',
+    supportFinalTexte: 'Diapositive 1 : Titre final fictif',
+    supportsFinaux: finaux,
+  };
+
+  it('la capitalisation donne le support final, les précédents, les fiches et les règles du jeu', () => {
+    const texte = promptReglesSupport(regles);
+    expect(texte).toContain('Titre final fictif');
+    expect(texte).toContain('Premier modèle fictif');
+    expect(texte).toContain(FICHE_REGLES_SUPPORT);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/au moins deux supports finaux/);
+    expect(texte).toMatch(/ne la supprime jamais/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+    expect(texte).toContain(`projetId ${regles.id}`);
+    expect(texte).toContain('enregistrer_regles_rapport');
+    expect(texte).toMatch(/fiche « support »/);
+  });
+
+  it('sans support précédent, le dit sans afficher null', () => {
+    const texte = promptReglesSupport({ ...regles, supportsFinaux: [] });
+    expect(texte).toMatch(/Aucun autre support final/);
+    expect(texte).not.toMatch(/null|undefined/);
+  });
+
+  it('l annulation d une règle de la fiche du support cite cette fiche', () => {
+    const texte = promptAnnulerRegle({
+      ...regles,
+      demande: 'regles_annuler',
+      regleAAnnuler: {
+        id: '00000000-0000-4000-8000-0000000000bb',
+        libelle: 'Libellé fictif',
+        avant: null,
+        apres: 'Texte fictif',
+        fiche: 'support',
+      },
+    });
+    expect(texte).toContain(FICHE_REGLES_SUPPORT);
   });
 });
