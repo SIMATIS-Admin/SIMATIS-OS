@@ -5848,12 +5848,11 @@ tr:hover .g-act .btn {
   gap: 12px;
   cursor: pointer;
 }
-.fi-mail-ligne::before {
-  content: '▸';
-  flex: 0 0 auto;
+.fi-mail-ligne {
+  list-style: none;
 }
-details[open] > .fi-mail-ligne::before {
-  content: '▾';
+.fi-mail-ligne::-webkit-details-marker {
+  display: none;
 }
 .fi-mail-ligne b {
   overflow: hidden;

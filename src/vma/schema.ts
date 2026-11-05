@@ -1,5 +1,5 @@
 import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { contacts, entreprises } from '../crm/schema.js';
+import { contacts, entreprises, opportunites } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
 // Test de VMA : auto-diagnostic envoyé par invitation depuis le site. Une ligne par invitation ;
@@ -18,6 +18,7 @@ export const vmaTests = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     ...metierColumns(),
     entrepriseId: uuid('entreprise_id').references(() => entreprises.id),
+    opportuniteId: uuid('opportunite_id').references(() => opportunites.id),
     entrepriseNom: text('entreprise_nom').notNull(),
     contactId: uuid('contact_id').references(() => contacts.id),
     contactPrenom: text('contact_prenom'),

@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
-import { contacts, entreprises } from '../crm/schema.js';
+import { contacts, entreprises, opportunites } from '../crm/schema.js';
 import { vmaTests } from './schema.js';
 
 export class RattachementImpossible extends Error {}
@@ -31,7 +31,7 @@ export async function rattacherContactVma(
   db: Database,
   instanceId: string,
   id: string,
-  choix: { contactId?: string | null; entrepriseId?: string | null },
+  choix: { contactId?: string | null; entrepriseId?: string | null; opportuniteId?: string | null },
 ) {
   return withInstance(db, instanceId, async (tx) => {
     const [test] = await tx
@@ -43,6 +43,7 @@ export async function rattacherContactVma(
     for (const [table, valeur] of [
       [contacts, choix.contactId],
       [entreprises, choix.entrepriseId],
+      [opportunites, choix.opportuniteId],
     ] as const) {
       if (!valeur) continue;
       const [fiche] = await tx
