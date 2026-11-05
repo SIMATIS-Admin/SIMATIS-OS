@@ -43,6 +43,10 @@ export const DEMANDES = [
   'entretien',
   'capitalisation_proposer',
   'capitalisation_enregistrer',
+  // Capitalisation des règles de rédaction à la version finale du rapport, et son annulation. Pas de
+  // préfixe « capitalisation_ » : il déclenche la capitalisation de la restitution.
+  'regles_rapport',
+  'regles_annuler',
 ] as const;
 // Capitalisation de la restitution (étape 5) : 'en_cours' tant que Claude propose, 'propose' une fois
 // sa proposition dans le chat, 'enregistre' quand le pilote l'a validée et que Claude l'a écrite.
@@ -164,3 +168,37 @@ export const diagnosticProjets = pgTable(
 );
 
 export type Projet = typeof diagnosticProjets.$inferSelect;
+
+export const ACTIONS_REGLE = ['ajoutée', 'durcie', 'modifiée', 'signalée', 'annulée'] as const;
+export type ActionRegle = (typeof ACTIONS_REGLE)[number];
+export const FICHES_REGLES = ['rapport', 'communes'] as const;
+export type FicheRegles = (typeof FICHES_REGLES)[number];
+
+// Journal des changements de règles de rédaction faits par Claude dans le second cerveau. Pas de clé
+// étrangère vers le projet : le journal survit à la suppression d'un projet. Un libellé est une
+// consigne de style générique, jamais un extrait de rapport.
+export const diagnosticReglesJournal = pgTable(
+  'diagnostic_regles_journal',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    projetId: uuid('projet_id').notNull(),
+    fiche: text('fiche', { enum: FICHES_REGLES }).notNull(),
+    action: text('action', { enum: ACTIONS_REGLE }).notNull(),
+    libelle: text('libelle').notNull(),
+    // Texte de la règle avant et après le changement : de quoi l'annuler.
+    avant: text('avant'),
+    apres: text('apres'),
+    // Ce qui a déclenché le changement (« version finale 4 »).
+    origine: text('origine').notNull(),
+    statut: text('statut', { enum: ['actif', 'annule'] })
+      .notNull()
+      .default('actif'),
+    // Pourquoi une annulation demandée n'a pas pu se faire.
+    motifRefus: text('motif_refus'),
+  },
+  (t) => [
+    index('diagnostic_regles_journal_instance_idx').on(t.instanceId, t.createdAt),
+    instanceIsolation('diagnostic_regles_journal'),
+  ],
+);

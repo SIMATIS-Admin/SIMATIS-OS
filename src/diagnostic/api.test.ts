@@ -7,7 +7,7 @@ import { buildApp } from '../app.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import { eq } from 'drizzle-orm';
 import { entreprises } from '../crm/schema.js';
-import { diagnosticProjets } from './schema.js';
+import { diagnosticProjets, diagnosticReglesJournal } from './schema.js';
 import { createInstance, getInstanceBySlug } from '../instances/service.js';
 
 // Routes HTTP de l'entretien : import du PDF (corps plus grand que la limite par défaut) et correction.
@@ -196,6 +196,49 @@ describe('Entretien : API', () => {
     expect(remis.json()).toEqual({ relireFinaux: true });
     const invalide = await app.inject({ method: 'PUT', url, payload: { relireFinaux: 'oui' } });
     expect(invalide.statusCode).toBe(400);
+  });
+
+  it('journal des règles : liste vide, capitaliser sans finale, annuler une entrée', async () => {
+    const simatis = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
+    const vide = await app.inject({
+      method: 'GET',
+      url: '/api/i/simatis/diagnostic/regles-journal',
+    });
+    expect(vide.statusCode).toBe(200);
+    expect(vide.json()).toEqual([]);
+    const projet = await creerProjet('Journal API');
+    const base = `/api/i/simatis/diagnostic/projets/${projet.id}`;
+    const sansFinale = await app.inject({ method: 'POST', url: `${base}/rapport/capitaliser` });
+    expect(sansFinale.statusCode).toBe(409);
+    await t.owner.db.insert(diagnosticReglesJournal).values({
+      instanceId: simatis.id,
+      projetId: projet.id,
+      fiche: 'rapport',
+      action: 'ajoutée',
+      libelle: 'Règle fictive',
+      avant: null,
+      apres: 'Règle fictive complète',
+      origine: 'version finale 4',
+    });
+    const [entree] = (
+      await app.inject({ method: 'GET', url: '/api/i/simatis/diagnostic/regles-journal' })
+    ).json<{ id: string }[]>();
+    const annule = await app.inject({
+      method: 'POST',
+      url: `${base}/regles-journal/${entree!.id}/annuler`,
+    });
+    expect(annule.statusCode).toBe(200);
+    expect(annule.json<{ demande: string }>().demande).toBe('regles_annuler');
+    const inconnue = await app.inject({
+      method: 'POST',
+      url: `${base}/regles-journal/00000000-0000-4000-8000-000000000099/annuler`,
+    });
+    expect(inconnue.statusCode).toBe(409);
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: `${base}/regles-journal/pas-un-uuid/annuler`,
+    });
+    expect(mauvais.statusCode).toBe(400);
   });
 
   it('refuse un identifiant de projet mal formé', async () => {

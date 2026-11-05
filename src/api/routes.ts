@@ -16,7 +16,10 @@ import {
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
 import { exporterRapportDrive } from '../diagnostic/drive.js';
+import { listerJournalRegles } from '../diagnostic/regles.js';
 import {
+  demanderAnnulationRegle,
+  demanderCapitalisationRapport,
   demanderRapport,
   importerRapport,
   marquerVersionFinale,
@@ -619,6 +622,42 @@ export function registerApi(
         return diagnosticErreur(error, reply);
       }
     }),
+  );
+  // Règles de rédaction apprises : journal, capitalisation à la demande, annulation d'une règle.
+  app.get<SlugParams>(
+    '/api/i/:slug/diagnostic/regles-journal',
+    onInstance((i) => listerJournalRegles(db, i)),
+  );
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/capitaliser',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderCapitalisationRapport(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.post<{ Params: { slug: string; id: string; entree: string } }>(
+    '/api/i/:slug/diagnostic/projets/:id/regles-journal/:entree/annuler',
+    onInstance<{ Params: { slug: string; id: string; entree: string } }>(
+      async (i, request, reply) => {
+        const { id, entree } = request.params;
+        if (!UUID.test(id) || !UUID.test(entree))
+          return reply.code(400).send({ error: 'Identifiant invalide' });
+        try {
+          return await demanderAnnulationRegle(db, i, id, entree);
+        } catch (error) {
+          if (error instanceof ChatIndisponible)
+            return reply.code(409).send({ error: error.message });
+          return diagnosticErreur(error, reply);
+        }
+      },
+    ),
   );
   // Restitution : le pilote demande le deck de présentation du rapport (étape 5).
   app.post<ProjetRoute>(

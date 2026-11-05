@@ -6,15 +6,19 @@ import {
   depuisDerniereProduction,
   outilsCapitalisation,
   outilsEntretien,
+  FICHE_REGLES_COMMUNES,
   FICHE_REGLES_RAPPORT,
   outilsRapport,
+  outilsRegles,
   outilsExportRestitution,
   outilsRestitution,
   outilsSupport,
   promptCapitalisation,
   promptDiagnostic,
   promptEntretien,
+  promptAnnulerRegle,
   promptRapport,
+  promptReglesRapport,
   promptExportRestitution,
   promptRestitution,
   promptSupport,
@@ -58,6 +62,9 @@ const attente: AttenteDiag = {
   rapportNom: null,
   relireFinaux: true,
   rapportsFinaux: [],
+  rapportFinalTexte: null,
+  rapportBrouillon: null,
+  regleAAnnuler: null,
   restitutionLien: null,
   restitutionAvecProposition: true,
   proposition: null,
@@ -761,5 +768,86 @@ describe('Capitalisation de la restitution par le runner', () => {
     } finally {
       await rm(dossier, { recursive: true, force: true });
     }
+  });
+});
+
+describe('Capitalisation des règles de rédaction par le runner', () => {
+  const regles: AttenteDiag = {
+    ...attente,
+    etape: 4,
+    etapeMessage: 4,
+    demande: 'regles_rapport',
+    rapportFinalTexte: 'Texte fictif de la version finale.',
+    rapportBrouillon: { entreprise: 'Atelier Fictif', note: 'brouillon fictif' },
+    rapportsFinaux: [
+      { nom: 'Rapport final 1', version: 4, texte: 'Texte fictif d un final précédent.' },
+    ],
+  };
+
+  it('donne la finale, le brouillon et les finaux précédents comme données à lire', () => {
+    const texte = promptReglesRapport(regles);
+    expect(texte).toContain('Texte fictif de la version finale.');
+    expect(texte).toContain('brouillon fictif');
+    expect(texte).toContain('Texte fictif d un final précédent.');
+    expect(texte).toContain(FICHE_REGLES_RAPPORT);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toContain(`projetId ${regles.id}`);
+    expect(texte).toContain('enregistrer_regles_rapport');
+  });
+
+  it('pose les règles du jeu : deux constats, contradiction signalée, aucun nom', () => {
+    const texte = promptReglesRapport(regles);
+    expect(texte).toMatch(/au moins deux rapports finaux/);
+    expect(texte).toMatch(/ne la supprime jamais/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+    expect(texte).toMatch(/règles communes/);
+  });
+
+  it('sans brouillon de l OS, le dit', () => {
+    const texte = promptReglesRapport({ ...regles, rapportBrouillon: null });
+    expect(texte).toMatch(/Aucun brouillon/);
+    expect(texte).not.toMatch(/null|undefined/);
+  });
+
+  it('une finale illisible est signalée et le travail continue sans elle', () => {
+    const texte = promptReglesRapport({ ...regles, rapportFinalTexte: null });
+    expect(texte).toMatch(/texte de la version finale.*indisponible/i);
+  });
+
+  it('l annulation donne l ancien et le nouveau texte, et la condition du rétablissement', () => {
+    const texte = promptAnnulerRegle({
+      ...regles,
+      demande: 'regles_annuler',
+      regleAAnnuler: {
+        id: '00000000-0000-4000-8000-0000000000aa',
+        libelle: 'Libellé fictif',
+        avant: 'Ancien texte fictif',
+        apres: 'Nouveau texte fictif',
+        fiche: 'communes',
+      },
+    });
+    expect(texte).toContain('Ancien texte fictif');
+    expect(texte).toContain('Nouveau texte fictif');
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/seulement si.*contient encore/);
+    expect(texte).toContain('effectuee');
+    expect(texte).toContain('00000000-0000-4000-8000-0000000000aa');
+  });
+
+  it('écrit seulement dans le dossier du diagnostic, jamais dans tout le second cerveau', () => {
+    const outils = outilsRegles('/cerveau-fictif', ['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_regles_rapport');
+    expect(outils).toContain('mcp__simatis__repondre_diagnostic');
+    expect(outils).toContain('Read(//cerveau-fictif/**)');
+    expect(outils).toContain(
+      'Edit(//cerveau-fictif/brain/methodes/diagnostic-endurance-commerciale/**)',
+    );
+    expect(outils).not.toContain('Edit(//cerveau-fictif/**)');
+    expect(outils).not.toContain('enregistrer_rapport,');
+  });
+
+  it('le rapport lit aussi les règles communes', () => {
+    const texte = promptRapport({ ...regles, demande: 'rapport' }, '/cerveau-fictif');
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
   });
 });

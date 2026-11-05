@@ -5,7 +5,9 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { rapportsFinauxPour } from './finaux.js';
-import type { DriveDeps } from './drive.js';
+import { exporterDocParLien, type DriveDeps } from './drive.js';
+import { texteDuDocx } from './docx-texte.js';
+import { DEBUT_MESSAGE_ANNULATION, lireEntreeJournal } from './regles.js';
 import { diagnosticProjets, type Demande, type MessageDiag, type Projet } from './schema.js';
 import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
 
@@ -201,13 +203,53 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
             )
           : [];
       const relireFinaux = instance.config.diagnostic?.relireFinaux !== false;
+      // La capitalisation compare toujours aux finaux précédents, réglage actif ou non.
       const rapportsFinaux =
-        drive && relireFinaux && p.demande === 'rapport'
+        drive && ((relireFinaux && p.demande === 'rapport') || p.demande === 'regles_rapport')
           ? await rapportsFinauxPour(db, instance, p.id, drive)
           : [];
+      const finale = p.rapportLiens.find((l) => l.finale);
+      let rapportFinalTexte: string | null = null;
+      if (drive && finale && p.demande === 'regles_rapport') {
+        try {
+          rapportFinalTexte =
+            texteDuDocx(await exporterDocParLien(instance, finale.lien, drive))?.slice(0, 30_000) ??
+            null;
+        } catch {
+          rapportFinalTexte = null;
+        }
+      }
+      // Dernière version rédigée par Claude avant la finale, sinon la dernière : de quoi mesurer
+      // l'écart avec ce que le pilote a validé.
+      const brouillon =
+        (finale?.version
+          ? [...p.rapportVersions].reverse().find((v) => v.version < finale.version!)
+          : undefined) ?? p.rapportVersions.at(-1);
+      const idAnnulation =
+        p.demande === 'regles_annuler'
+          ? [...p.conversation]
+              .reverse()
+              .find((m) => m.de === 'pilote' && m.texte.startsWith(`${DEBUT_MESSAGE_ANNULATION} `))
+              ?.texte.slice(DEBUT_MESSAGE_ANNULATION.length + 1)
+              .replace(/\.$/, '')
+          : undefined;
+      const entreeAnnulee = idAnnulation
+        ? await lireEntreeJournal(db, instance, idAnnulation)
+        : null;
       sorties.push({
         relireFinaux,
         rapportsFinaux,
+        rapportFinalTexte,
+        rapportBrouillon: p.demande === 'regles_rapport' ? (brouillon?.contenu ?? null) : null,
+        regleAAnnuler: entreeAnnulee
+          ? {
+              id: entreeAnnulee.id,
+              libelle: entreeAnnulee.libelle,
+              avant: entreeAnnulee.avant,
+              apres: entreeAnnulee.apres,
+              fiche: entreeAnnulee.fiche,
+            }
+          : null,
         compteRendu: rdv?.compteRendu ?? null,
         capitalisationProposition:
           p.demande === 'capitalisation_enregistrer'

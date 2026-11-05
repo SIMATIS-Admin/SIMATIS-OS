@@ -4,6 +4,8 @@ import { enregistrerCapitalisation } from './capitalisation.js';
 import { repondreClaude } from './chat.js';
 import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
 import { enregistrerRapport } from './rapport.js';
+import { enregistrerReglesRapport } from './regles.js';
+import { ACTIONS_REGLE, FICHES_REGLES } from './schema.js';
 import { contenuRapportSchema } from './rapport-word.js';
 import {
   autoriserSiRestitution,
@@ -92,6 +94,59 @@ registerTool({
     });
     // Claude en tient compte dans sa réponse : le lien Google Doc, ou pourquoi il n'y en a pas.
     return { ok: true, drive };
+  },
+});
+
+// Règles de rédaction : Claude déclare ce qu'il a changé dans les fiches du second cerveau (ou le
+// résultat d'une annulation) ; l'OS le garde au journal.
+registerTool({
+  name: 'enregistrer_regles_rapport',
+  description:
+    "Déclare au journal de l'OS les changements que tu viens de faire dans les fiches de règles de rédaction du second cerveau (une consigne de style générique par changement, sans nom d'entreprise), ou le résultat d'une annulation de règle demandée par le pilote.",
+  input: z.object({
+    projetId: z.uuid(),
+    changements: z
+      .array(
+        z.object({
+          fiche: z.enum(FICHES_REGLES),
+          action: z.enum(
+            ACTIONS_REGLE.filter((a) => a !== 'annulée') as [
+              'ajoutée',
+              'durcie',
+              'modifiée',
+              'signalée',
+            ],
+          ),
+          libelle: z.string().trim().min(1).max(200),
+          avant: z.string().max(2000).nullable(),
+          apres: z.string().max(2000).nullable(),
+        }),
+      )
+      .max(20)
+      .optional(),
+    annulation: z
+      .object({
+        journalId: z.uuid(),
+        effectuee: z.boolean(),
+        motif: z.string().trim().max(500).optional(),
+      })
+      .optional(),
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, changements, annulation }) => {
+    await enregistrerReglesRapport(tx, projetId, {
+      ...(changements ? { changements } : {}),
+      ...(annulation
+        ? {
+            annulation: {
+              journalId: annulation.journalId,
+              effectuee: annulation.effectuee,
+              ...(annulation.motif ? { motif: annulation.motif } : {}),
+            },
+          }
+        : {}),
+    });
+    return { ok: true };
   },
 });
 

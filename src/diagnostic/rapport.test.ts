@@ -6,6 +6,10 @@ import { ChatIndisponible, demarrerAttente, finirAttente } from './chat.js';
 import { createProjet, listProjets, rapportDe, updateProjet } from './service.js';
 import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
 import {
+  DEBUT_MESSAGE_ANNULATION,
+  DEBUT_MESSAGE_REGLES,
+  demanderAnnulationRegle,
+  demanderCapitalisationRapport,
   demanderRapport,
   enregistrerRapport,
   importerRapport,
@@ -15,6 +19,7 @@ import {
 } from './rapport.js';
 import { eq, sql } from 'drizzle-orm';
 import { diagnosticProjets } from './schema.js';
+import { ajouterChangementsRegles, listerJournalRegles } from './regles.js';
 import { SupportInvalide } from './support.js';
 import { withInstance } from '../db/context.js';
 
@@ -345,5 +350,84 @@ describe('Version finale du rapport', () => {
     );
     expect(await finales(id)).toEqual([]);
     expect(await finales(enCours)).toEqual([]);
+  });
+
+  describe('capitalisation à la version finale', () => {
+    const relire = async (id: string) =>
+      (await listProjets(t.app.db, simatis)).find((p) => p.id === id)!;
+
+    it('cocher une finale lance la demande de règles', async () => {
+      const id = await projetAvecLiens('Capitalisation Fictif A');
+      await marquerVersionFinale(t.app.db, simatis, id, doc(4), true);
+      const p = await relire(id);
+      expect(p.demande).toBe('regles_rapport');
+      expect(p.statutChat).toBe('attente_claude');
+      expect(p.conversation.at(-1)).toMatchObject({
+        de: 'pilote',
+        etape: 4,
+        texte: `${DEBUT_MESSAGE_REGLES} version 4.`,
+      });
+    });
+
+    it('décocher ne lance rien', async () => {
+      const id = await projetAvecLiens('Capitalisation Fictif B');
+      await marquerVersionFinale(t.app.db, simatis, id, doc(4), false);
+      expect((await relire(id)).demande).toBeNull();
+    });
+
+    it('cocher pendant que Claude répond garde la finale sans erreur', async () => {
+      const id = await projetAvecLiens('Capitalisation Fictif C');
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        tx
+          .update(diagnosticProjets)
+          .set({ statutChat: 'attente_claude' })
+          .where(eq(diagnosticProjets.id, id)),
+      );
+      await marquerVersionFinale(t.app.db, simatis, id, doc(4), true);
+      expect(await finales(id)).toEqual([doc(4)]);
+      expect((await relire(id)).demande).toBeNull();
+    });
+
+    it('la relance à la main exige une version finale', async () => {
+      const id = await projetAvecLiens('Capitalisation Fictif D');
+      await expect(demanderCapitalisationRapport(t.app.db, simatis, id)).rejects.toThrow(
+        ChatIndisponible,
+      );
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        tx
+          .update(diagnosticProjets)
+          .set({
+            rapportLiens: [
+              { lien: doc(4), le: '2026-10-29T10:00:00.000Z', version: 4, finale: true },
+            ],
+          })
+          .where(eq(diagnosticProjets.id, id)),
+      );
+      await demanderCapitalisationRapport(t.app.db, simatis, id);
+      expect((await relire(id)).demande).toBe('regles_rapport');
+    });
+
+    it('demande d annulation : lance la demande, refuse une entrée déjà annulée ou inconnue', async () => {
+      const id = await projetAvecLiens('Capitalisation Fictif E');
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        ajouterChangementsRegles(tx, id, 'version finale 4', [
+          {
+            fiche: 'rapport',
+            action: 'ajoutée',
+            libelle: 'Règle fictive',
+            avant: null,
+            apres: 'R',
+          },
+        ]),
+      );
+      const [entree] = await listerJournalRegles(t.app.db, simatis, 1);
+      await demanderAnnulationRegle(t.app.db, simatis, id, entree!.id);
+      const p = await relire(id);
+      expect(p.demande).toBe('regles_annuler');
+      expect(p.conversation.at(-1)?.texte).toBe(`${DEBUT_MESSAGE_ANNULATION} ${entree!.id}.`);
+      await expect(
+        demanderAnnulationRegle(t.app.db, simatis, id, '00000000-0000-4000-8000-000000000099'),
+      ).rejects.toThrow(ChatIndisponible);
+    });
   });
 });
