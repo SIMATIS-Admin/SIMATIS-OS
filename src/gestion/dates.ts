@@ -13,3 +13,10 @@ export function ajouterMois(jourIso: string, n: number): string {
   const dernier = new Date(Date.UTC(annee, mois, 0)).getUTCDate();
   return `${String(annee).padStart(4, '0')}-${String(mois).padStart(2, '0')}-${String(Math.min(j, dernier)).padStart(2, '0')}`;
 }
+
+// Cadence unique pour l'instant : une facture par mandat, en fin de mois (dernier jour du mois de `jour`).
+export function dateEmissionPrevue(jour: string): string {
+  const [a, m] = jour.split('-').map(Number) as [number, number];
+  const dernier = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  return `${jour.slice(0, 7)}-${String(dernier).padStart(2, '0')}`;
+}
