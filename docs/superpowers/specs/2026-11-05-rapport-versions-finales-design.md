@@ -198,4 +198,4 @@ modèles. La 3 évite d'avoir à tenir les règles à la main.
   le pilote, et le recouvrement avec la bibliothèque générique tenue par la skill de capitalisation.
 - Restitution : le deck est un artifact claude.ai ; confirmer avec le pilote comment il en fixe la
   version finale (artifact retouché ou fichier PowerPoint exporté), et comment l'OS en lit le texte.
-- Emplacement exact de la fiche des règles dans le second cerveau, à fixer avec le pilote.
+- Emplacement de la fiche des règles : fixé, `brain/methodes/diagnostic-endurance-commerciale/regles-redaction-rapport.md`, déjà créée et amorcée.

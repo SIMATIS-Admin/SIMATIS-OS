@@ -16,7 +16,7 @@ Ce plan couvre les livraisons 1 et 2 du spec. Écart avec le spec : aucune migra
 
 - Dépôt public : tests et exemples avec des données **fictives uniquement** (« Atelier Fictif », « Bureau Fictif »). Aucun nom de client, contenu de rapport ou règle propriétaire dans le code, les tests, les commentaires ou les commits.
 - Une seule version finale par projet ; seul un lien Google Doc (`estGoogleDoc`) peut être final ; refus pendant `rapportLienStatut === 'en_cours'`.
-- Les règles vivent dans le second cerveau, jamais dans le dépôt ni en base. Fiche de règles : « règles de rédaction du rapport » (emplacement exact à fixer avec Marc, voir Task 6).
+- Les règles vivent dans le second cerveau, jamais dans le dépôt ni en base. Fiche de règles : `brain/methodes/diagnostic-endurance-commerciale/regles-redaction-rapport.md` (déjà créée, amorcée).
 - Réglage `diagnostic.relireFinaux` : actif par défaut ; désactivé, seules les règles restent dans le prompt.
 - Deux finaux au plus relus, texte tronqué à 30 000 caractères chacun (même borne que les autres contenus du prompt).
 - Si moins de deux finaux existent, ou si un export Drive échoue, la production continue et le dit dans le prompt.
@@ -147,7 +147,7 @@ Ce plan couvre les livraisons 1 et 2 du spec. Écart avec le spec : aucune migra
 
 **Interfaces:**
 - Consumes: `relireFinaux`, `rapportsFinaux` de l'attente (Task 5).
-- Produces: `AttenteDiag` étendu de `relireFinaux: boolean` et `rapportsFinaux: { nom: string; version: number | null; texte: string | null }[]`. Constante exportée `FICHE_REGLES_RAPPORT = 'règles de rédaction du rapport'` (nom de la fiche du second cerveau).
+- Produces: `AttenteDiag` étendu de `relireFinaux: boolean` et `rapportsFinaux: { nom: string; version: number | null; texte: string | null }[]`. Constante exportée `FICHE_REGLES_RAPPORT = 'brain/methodes/diagnostic-endurance-commerciale/regles-redaction-rapport.md'` (chemin de la fiche dans le second cerveau).
 
 - [ ] **Step 1: Write the failing tests** (modèle des tests `promptRapport` existants, attente fictive) :
   - `avec finaux` : le prompt contient « Rapports finaux » et le texte fictif de chaque finale, présenté comme modèle de structure, de vocabulaire et de longueur.
@@ -158,7 +158,7 @@ Ce plan couvre les livraisons 1 et 2 du spec. Écart avec le spec : aucune migra
   - `sans second cerveau` : `cerveau === null` → la phrase existante « Second cerveau non accessible » reste, aucune consigne d'écriture.
   - `outilsRapport` : avec cerveau, `Edit` autorisé sur le seul dossier du second cerveau pour permettre l'amorçage ; sans cerveau, aucun accès.
 - [ ] **Step 2: Run** `npx vitest run src/runner/diagnostic.test.ts` — Expected: FAIL.
-- [ ] **Step 3: Implement** : étendre `AttenteDiag` (et la fixture `attente` du test) ; dans `promptRapport`, ajouter après la ligne « Rapport précédent » un bloc des finaux (texte tronqué par `.slice(0, 30_000)`) et la consigne sur la fiche ; `outilsRapport` ajoute `Edit(/${cerveau}/**)` quand `cerveau` existe. **À fixer avec Marc avant de merger** : le sous-dossier exact de la fiche dans le second cerveau ; en attendant, la consigne dit à Claude de la chercher par son titre via `Glob`/`Grep`, et de la créer à la racine du dossier des outils si absente.
+- [ ] **Step 3: Implement** : étendre `AttenteDiag` (et la fixture `attente` du test) ; dans `promptRapport`, ajouter après la ligne « Rapport précédent » un bloc des finaux (texte tronqué par `.slice(0, 30_000)`) et la consigne sur la fiche ; `outilsRapport` ajoute `Edit(/${cerveau}/**)` quand `cerveau` existe. **Emplacement fixé** : la fiche existe dans le second cerveau, `brain/methodes/diagnostic-endurance-commerciale/regles-redaction-rapport.md` (titre « règles de rédaction du rapport »). La consigne donne ce chemin relatif au dossier du second cerveau et demande à Claude de mettre à jour la fiche, sans jamais citer de nom d'entreprise.
 - [ ] **Step 4: Run** le fichier — Expected: PASS.
 - [ ] **Step 5: Commit** `feat(runner): rédiger le rapport à partir des finaux et des règles`.
 
