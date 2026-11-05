@@ -57,6 +57,12 @@ describe('Routes Gestion — délai de paiement par mandat', () => {
     expect((await poser('Pas%20Un%20Slug', { delaiPaiementJours: 10 })).statusCode).toBe(400);
   });
 
+  it('expose les factures à émettre (rien à facturer au départ)', async () => {
+    const r = await app.inject({ method: 'GET', url: '/api/i/mdt-propre/gestion/factures' });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ factures: [], sansMandat: [] });
+  });
+
   it('refuse hors de « Mon activité »', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/i/mdt-a/gestion/mandats/reglages' });
     expect(r.statusCode).toBe(403);

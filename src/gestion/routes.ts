@@ -14,6 +14,7 @@ import {
   mouvementSchema,
   suiviCca,
 } from './cca.js';
+import { facturesParMandat } from './factures.js';
 import { delaiMandatSchema, ecrireDelaiMandat, lireDelaisMandats } from './mandats.js';
 import {
   aboSchema,
@@ -467,6 +468,9 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
     });
   });
 
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/gestion/factures', async (req, rep) =>
+    dansGestion(req.params.slug, rep, (tx) => facturesParMandat(tx)),
+  );
   app.get<{ Params: { slug: string } }>('/api/i/:slug/gestion/mandats/reglages', async (req, rep) =>
     dansGestion(req.params.slug, rep, async (tx) =>
       [...(await lireDelaisMandats(tx))].map(([mandat, delaiPaiementJours]) => ({
