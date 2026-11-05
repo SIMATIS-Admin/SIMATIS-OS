@@ -17,6 +17,7 @@ import {
   capitaliserAnalyseDiag,
   capitaliserRapportDiag,
   capitaliserSupportDiag,
+  preparerRevueDiag,
   journalReglesDiag,
   majReglagesDiagnostic,
   marquerRapportFinal,
@@ -862,6 +863,13 @@ function Revue({
   onChange: (p: ProjetDiag) => void;
   onErreur: (m: string) => void;
 }) {
+  const preparer = async () => {
+    try {
+      onChange(await preparerRevueDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const capitaliser = async () => {
     try {
       onChange(await capitaliserAnalyseDiag(slug, projet.id));
@@ -902,6 +910,25 @@ function Revue({
           })}
         </div>
       </div>
+      {projet.revue?.statut !== 'validée' && (
+        <div className="panel">
+          <div className="panel-b stack">
+            <div className="row">
+              <button
+                className="btn go"
+                disabled={projet.statutChat !== 'repos'}
+                onClick={() => void preparer()}
+              >
+                Préparer la revue avec Claude
+              </button>
+            </div>
+            <p className="small muted" style={{ margin: 0 }}>
+              Claude propose des textes d’après la bibliothèque, vos revues validées et les règles
+              apprises ; vos choix et vos textes ne sont jamais modifiés.
+            </p>
+          </div>
+        </div>
+      )}
       {projet.revue ? (
         <>
           <div className="row">
@@ -926,7 +953,8 @@ function Revue({
         </>
       ) : (
         <div className="panel empty">
-          Pas encore de formulaire de revue. Il se saisit ici, comme dans l’artefact.
+          Pas encore de formulaire de revue. Faites-le préparer par Claude ci-dessus, ou
+          saisissez-le ici comme dans l’artefact.
         </div>
       )}
     </div>

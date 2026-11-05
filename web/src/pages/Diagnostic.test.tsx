@@ -34,6 +34,7 @@ const api = vi.hoisted(() => ({
   journalReglesDiag: vi.fn(),
   capitaliserSupportDiag: vi.fn(),
   capitaliserAnalyseDiag: vi.fn(),
+  preparerRevueDiag: vi.fn(),
   capitaliserRapportDiag: vi.fn(),
   annulerRegleDiag: vi.fn(),
   majReglagesDiagnostic: vi.fn(),
@@ -1577,5 +1578,51 @@ describe("Revue : règles d'analyse", () => {
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     expect(await screen.findByText(/règles d’analyse/)).toBeTruthy();
+  });
+});
+
+describe('Revue : préparer avec Claude', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 3, etapeMax: 3, dims, profil: 'Joggeur', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const bouton = { name: 'Préparer la revue avec Claude' };
+
+  it('présent sans revue et sur un brouillon, avec son texte d aide', async () => {
+    await ouvrir({ revue: null });
+    expect(await screen.findByRole('button', bouton)).toBeTruthy();
+    expect(screen.getByText(/vos choix et vos textes ne sont jamais modifiés/)).toBeTruthy();
+    cleanup();
+    await ouvrir({ revue: { statut: 'brouillon' } });
+    expect(await screen.findByRole('button', bouton)).toBeTruthy();
+  });
+
+  it('absent sur une revue validée, et sans résultat saisi', async () => {
+    await ouvrir({ revue: { statut: 'validée' } });
+    await screen.findByText('Valider la revue');
+    expect(screen.queryByRole('button', bouton)).toBeNull();
+    cleanup();
+    await ouvrir({ dims: null, profil: null });
+    await screen.findByText(/Pas encore de résultat/);
+    expect(screen.queryByRole('button', bouton)).toBeNull();
+  });
+
+  it('appelle l API, désactivé pendant que Claude travaille, message de l API en cas de refus', async () => {
+    api.preparerRevueDiag.mockResolvedValue(projet({ etape: 3, etapeMax: 3, dims }));
+    await ouvrir({ revue: null });
+    fireEvent.click(await screen.findByRole('button', bouton));
+    await waitFor(() => expect(api.preparerRevueDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    api.preparerRevueDiag.mockRejectedValue(new Error('La revue est validée : modifiez-la.'));
+    await ouvrir({ revue: null });
+    fireEvent.click(await screen.findByRole('button', bouton));
+    expect(await screen.findByText(/modifiez-la/)).toBeTruthy();
+    cleanup();
+    await ouvrir({ revue: null, statutChat: 'attente_claude' });
+    expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
   });
 });
