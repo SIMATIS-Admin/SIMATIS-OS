@@ -23,6 +23,7 @@ import { aujourdhui, eurCents, libelleMois, moisDecale, MOIS, MOIS_COURTS } from
 import { Icon } from '../icons.js';
 import { GestionTiroir, type CibleTiroir } from './GestionTiroir.js';
 import { fusionnerMouvements, type FiltreMouvement, type Mouvement } from './gestion/fusion.js';
+import { GestionImport } from './gestion/GestionImport.js';
 import { GestionPipe, VerdictBandeau } from './gestion/GestionPipe.js';
 import { Mouvements } from './gestion/Mouvements.js';
 import { verdictProjection } from './gestion/verdict.js';
@@ -31,10 +32,11 @@ import { GestionIk } from './GestionIk.js';
 import { GestionTva } from './GestionTva.js';
 import { GestionRevenuTiroir, TYPES_REVENU, type CibleRevenu } from './GestionRevenuTiroir.js';
 
-type Onglet = 'pilotage' | 'mouvements' | 'tva';
+type Onglet = 'pilotage' | 'mouvements' | 'importer' | 'tva';
 const ONGLETS: [Onglet, string][] = [
   ['pilotage', 'Pilotage'],
   ['mouvements', 'Mouvements'],
+  ['importer', 'Importer'],
   ['tva', 'TVA & IK'],
 ];
 
@@ -517,6 +519,7 @@ export function Gestion({
           onAjouter={(f) => (f === 'recettes' ? setTiroirRevenu({}) : setTiroir({ cible: {} }))}
         />
       )}
+      {onglet === 'importer' && <GestionImport slug={slug} onImporte={() => void charger()} />}
       {onglet === 'tva' && (
         <>
           <div className="g-filtres" style={{ marginBottom: 14 }}>

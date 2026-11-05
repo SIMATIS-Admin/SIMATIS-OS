@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { FichierIllisible, lireFichier, type Feuille } from '../base-vivante/lecture.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
+import { analyserImport, validerImport } from './import.js';
+import { ImportInvalide } from './import-pennylane.js';
 import {
   archiverMouvement,
   comptabiliserMouvement,
@@ -108,6 +111,8 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
       if (e instanceof IkIntrouvable) return reply.code(404).send({ error: e.message });
       if (e instanceof IkInvalide) return reply.code(400).send({ error: e.message });
       if (e instanceof DepenseInvalide) return reply.code(400).send({ error: e.message });
+      if (e instanceof ImportInvalide || e instanceof FichierIllisible)
+        return reply.code(400).send({ error: e.message });
       throw e;
     }
   }
@@ -398,6 +403,49 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
           exclus: q.data.exclus,
         }),
       );
+    },
+  );
+
+  // Import des transactions bancaires : le fichier (Excel ou CSV) voyage en base64 dans le JSON, comme
+  // les autres imports de l'OS. Les deux routes relisent le fichier : rien n'est conservé entre elles.
+  const importSchema = z.object({
+    nomFichier: z.string().trim().min(1).max(200),
+    contenuBase64: z.string().min(1),
+    decisions: z.record(z.string(), z.enum(['importer', 'rapprocher', 'ignorer'])).default({}),
+  });
+  const feuilleDe = async (nom: string, contenuBase64: string): Promise<Feuille> => {
+    const [premiere] = await lireFichier(nom, Buffer.from(contenuBase64, 'base64'));
+    if (!premiere) throw new ImportInvalide('Ce fichier ne contient aucune ligne.');
+    return premiere;
+  };
+  app.post<{ Params: { slug: string } }>(
+    '/api/i/:slug/gestion/import/analyse',
+    { bodyLimit: 14_000_000 },
+    async (request, reply) => {
+      const corps = importSchema.safeParse(request.body);
+      if (!corps.success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx) =>
+        analyserImport(tx, await feuilleDe(corps.data.nomFichier, corps.data.contenuBase64)),
+      );
+    },
+  );
+  app.post<{ Params: { slug: string } }>(
+    '/api/i/:slug/gestion/import/valider',
+    { bodyLimit: 14_000_000 },
+    async (request, reply) => {
+      const corps = importSchema.safeParse(request.body);
+      if (!corps.success) return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx, instanceId) => {
+        const feuille = await feuilleDe(corps.data.nomFichier, corps.data.contenuBase64);
+        const r = await validerImport(tx, instanceId, feuille, corps.data.decisions);
+        if (r.importees + r.rapprochees + r.ignorees > 0)
+          await logEvent(tx, {
+            acteur: 'pilote',
+            action: `Transactions bancaires importées (${r.importees} nouvelles, ${r.rapprochees} rapprochées, ${r.ignorees} ignorées)`,
+            niveau: 'L2',
+          });
+        return r;
+      });
     },
   );
 

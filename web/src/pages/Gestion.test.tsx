@@ -292,10 +292,10 @@ describe('Gestion', () => {
     });
   });
 
-  it('propose exactement trois onglets', async () => {
+  it('propose exactement quatre onglets', async () => {
     render(<Gestion slug="simatis" autorise mandats={mandats} />);
     const noms = (await screen.findAllByRole('tab')).map((t) => t.textContent);
-    expect(noms).toEqual(['Pilotage', 'Mouvements', 'TVA & IK']);
+    expect(noms).toEqual(['Pilotage', 'Mouvements', 'Importer', 'TVA & IK']);
   });
 
   it('« Voir les recettes » ouvre Mouvements filtré sur les recettes', async () => {
@@ -415,5 +415,12 @@ describe('Gestion', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByText('Après trois mois')).toBeNull();
     expect(screen.getByText('Après six mois')).toBeTruthy();
+  });
+
+  it('l’onglet Importer affiche le chemin dans Pennylane et le choix du fichier', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Importer' }));
+    expect(screen.getByText(/Plus › Exports/)).toBeTruthy();
+    expect(screen.getByLabelText('Fichier Pennylane')).toBeTruthy();
   });
 });

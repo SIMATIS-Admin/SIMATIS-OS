@@ -2435,6 +2435,51 @@ export const fetchTresorerie = (
         (p.exclus?.length ? `&exclus=${p.exclus.join(',')}` : ''),
     ),
   );
+// Import des transactions bancaires Pennylane (voir src/gestion/import.ts).
+export type RapprochementImport = {
+  type: 'depense' | 'recette';
+  id: string;
+  recurrente: boolean;
+  dejaCompte: boolean;
+  dateOrigine: string;
+  libelle: string;
+  date: string;
+  montantCents: number;
+};
+export type LigneImportAnalysee = {
+  rang: number;
+  cle: string;
+  date: string;
+  libelle: string;
+  montantCents: number;
+  compte: string;
+  sens: 'sortie' | 'entree';
+  issue: 'nouvelle' | 'deja' | 'a_verifier';
+  raison: string | null;
+  rapprochement: RapprochementImport | null;
+};
+export type AnalyseImport = {
+  lignes: LigneImportAnalysee[];
+  compteurs: { nouvelles: number; deja: number; aVerifier: number; nonFinalisees: number };
+  avertissements: string[];
+};
+export type DecisionImport = 'importer' | 'rapprocher' | 'ignorer';
+export const analyserImport = (slug: string, nomFichier: string, contenuBase64: string) =>
+  sendJson<AnalyseImport>('POST', inst(slug, 'gestion/import/analyse'), {
+    nomFichier,
+    contenuBase64,
+  });
+export const validerImport = (
+  slug: string,
+  nomFichier: string,
+  contenuBase64: string,
+  decisions: Record<string, DecisionImport>,
+) =>
+  sendJson<{ importees: number; rapprochees: number; ignorees: number }>(
+    'POST',
+    inst(slug, 'gestion/import/valider'),
+    { nomFichier, contenuBase64, decisions },
+  );
 export const fetchReglagesGestion = (slug: string) =>
   getJson<ReglagesGestion>(inst(slug, 'gestion/reglages'));
 export const saveReglagesGestion = (slug: string, r: ReglagesGestion) =>
