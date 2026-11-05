@@ -140,7 +140,7 @@ describe('GestionIk', () => {
     it('le formulaire propose un mandat ; la case Refacturer attend qu’il soit choisi', async () => {
       monter(true);
       const mandat = await screen.findByLabelText('Mandat du trajet');
-      const case_ = screen.getByLabelText('Refacturer ce trajet') as HTMLInputElement;
+      const case_ = screen.getByLabelText<HTMLInputElement>('Refacturer ce trajet');
       expect(case_.disabled).toBe(true);
       fireEvent.change(mandat, { target: { value: 'mandat-a' } });
       expect(case_.disabled).toBe(false);
@@ -173,9 +173,9 @@ describe('GestionIk', () => {
 
     it('cocher Refacturer sur une ligne appelle le serveur ; désactivée sans mandat', async () => {
       monter(true);
-      const sans = (await screen.findByLabelText(
+      const sans = await screen.findByLabelText<HTMLInputElement>(
         'Refacturer le trajet du 2026-11-04',
-      )) as HTMLInputElement;
+      );
       expect(sans.disabled).toBe(true);
       fireEvent.click(screen.getByLabelText('Refacturer le trajet du 2026-11-05'));
       await waitFor(() => expect(envois).toHaveLength(1));
