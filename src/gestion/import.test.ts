@@ -65,8 +65,12 @@ describe('proposerRapprochements', () => {
     expect(loin.size).toBe(0);
   });
 
-  it('ne propose jamais une occurrence ignorée, payée ou avancée par l’associé', () => {
-    for (const d of [dep({ etat: 'ignoree' }), dep({ etat: 'payee' }), dep({ payeur: 'associe' })])
+  it('ne propose jamais une occurrence ignorée ou avancée par l’associé', () => {
+    for (const d of [
+      dep({ etat: 'ignoree' }),
+      dep({ etat: 'payee', payeur: 'associe' }),
+      dep({ payeur: 'associe' }),
+    ])
       expect(proposerRapprochements([ligne({ cle: 'a' })], [d], []).size).toBe(0);
   });
 
@@ -94,6 +98,49 @@ describe('proposerRapprochements', () => {
     ).toBe(0);
     expect(
       proposerRapprochements([l], [], [rec({ tvaCents: 10_000, etat: 'encaissee' })]).size,
+    ).toBe(0);
+  });
+
+  it('rapproche aussi une dépense déjà payée (saisie en réelle) : déjà comptée, pas un doublon', () => {
+    const r = proposerRapprochements(
+      [ligne({ cle: 'a' })],
+      [dep({ etat: 'payee', statut: 'reelle' })],
+      [],
+    );
+    expect(r.get('a')).toMatchObject({ type: 'depense', dejaCompte: true });
+  });
+
+  it('préfère une échéance à venir à une dépense déjà payée', () => {
+    const r = proposerRapprochements(
+      [ligne({ cle: 'a' })],
+      [
+        dep({ depenseId: 'payee', cle: 'payee|2026-10-15', etat: 'payee', date: '2026-10-15' }),
+        dep({ depenseId: 'avenir', cle: 'avenir|2026-10-10', date: '2026-10-10' }),
+      ],
+      [],
+    );
+    expect(r.get('a')).toMatchObject({ id: 'avenir', dejaCompte: false });
+  });
+
+  it('ignore une dépense déjà créée par un import précédent', () => {
+    const r = proposerRapprochements(
+      [ligne({ cle: 'a' })],
+      [dep({ etat: 'payee' })],
+      [],
+      new Set(['d1']),
+    );
+    expect(r.size).toBe(0);
+  });
+
+  it('rapproche une recette déjà encaissée, à sa date d’encaissement, à 7 jours près', () => {
+    const l = ligne({ cle: 'e', montantCents: 50_000, date: '2026-10-20' });
+    const encaissee = rec({ etat: 'encaissee', dateEncaissement: '2026-10-18' });
+    expect(proposerRapprochements([l], [], [encaissee]).get('e')).toMatchObject({
+      type: 'recette',
+      dejaCompte: true,
+    });
+    expect(
+      proposerRapprochements([l], [], [{ ...encaissee, dateEncaissement: '2026-09-01' }]).size,
     ).toBe(0);
   });
 
@@ -442,5 +489,30 @@ describe('validerImport', () => {
     );
     expect(await compter(inst, 'gestion_depenses')).toBe(0);
     expect(await compter(inst, 'gestion_import_cles')).toBe(0);
+  });
+
+  it('une dépense saisie en réelle n’est pas importée en double : déjà comptée, rien n’est modifié', async () => {
+    const { inst, ids } = await monter({
+      depense: {
+        libelle: 'Abonnement fictif',
+        montantTtcCents: 4900,
+        statut: 'reelle',
+        recurrence: 'mensuelle',
+        dateDebut: '2026-09-14',
+      },
+    });
+    const feuille = f(['2026-10-15', 'PRLV fictif', '-49']);
+    const [l] = (await analyse(inst, feuille)).lignes;
+    expect(l).toMatchObject({ issue: 'a_verifier' });
+    expect(l!.rapprochement).toMatchObject({ id: ids.depense, dejaCompte: true });
+    expect(l!.raison).toContain('Déjà comptée');
+    expect(await valider(inst, feuille, { [l!.cle]: 'rapprocher' })).toEqual({
+      importees: 0,
+      rapprochees: 1,
+      ignorees: 0,
+    });
+    expect(await compter(inst, 'gestion_depenses')).toBe(1);
+    expect(await compter(inst, 'gestion_depense_exceptions')).toBe(0);
+    expect((await analyse(inst, feuille)).lignes[0]!.issue).toBe('deja');
   });
 });

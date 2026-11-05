@@ -26,9 +26,10 @@ function enBase64(fichier: File): Promise<string> {
   });
 }
 
-// Décision proposée au départ : le rapprochement s'il existe, sinon on importe la ligne telle quelle.
-const parDefaut = (l: LigneImportAnalysee): DecisionImport =>
-  l.rapprochement ? 'rapprocher' : 'importer';
+// Décision proposée au départ : le rapprochement s'il existe ; une ligne nouvelle s'importe ; une ligne à
+// vérifier sans correspondance (une entrée inconnue) attend le choix de Marc, jamais importée sans lui.
+const parDefaut = (l: LigneImportAnalysee): DecisionImport | null =>
+  l.rapprochement ? 'rapprocher' : l.issue === 'nouvelle' ? 'importer' : null;
 
 const pluriel = (n: number, un: string, plusieurs: string) => `${n} ${n > 1 ? plusieurs : un}`;
 
@@ -63,7 +64,10 @@ export function GestionImport({ slug, onImporte }: { slug: string; onImporte: ()
       setAnalyse(a);
       setDecisions(
         Object.fromEntries(
-          a.lignes.filter((l) => l.issue !== 'deja').map((l) => [l.cle, parDefaut(l)]),
+          a.lignes.flatMap((l) => {
+            const d = l.issue === 'deja' ? null : parDefaut(l);
+            return d ? [[l.cle, d]] : [];
+          }),
         ),
       );
     } catch (e) {
@@ -217,7 +221,7 @@ export function GestionImport({ slug, onImporte }: { slug: string; onImporte: ()
                         <select
                           className="input"
                           aria-label={`Décision pour ${l.libelle}`}
-                          value={decisions[l.cle]}
+                          value={decisions[l.cle] ?? ''}
                           onChange={(e) =>
                             setDecisions({
                               ...decisions,
@@ -225,9 +229,16 @@ export function GestionImport({ slug, onImporte }: { slug: string; onImporte: ()
                             })
                           }
                         >
+                          {!decisions[l.cle] && (
+                            <option value="" disabled>
+                              À décider
+                            </option>
+                          )}
                           {l.rapprochement && (
                             <option value="rapprocher">
-                              Rapprocher avec « {l.rapprochement.libelle} »
+                              {l.rapprochement.dejaCompte
+                                ? `C’est la même : « ${l.rapprochement.libelle} » (déjà comptée)`
+                                : `Rapprocher avec « ${l.rapprochement.libelle} »`}
                             </option>
                           )}
                           <option value="importer">

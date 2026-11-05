@@ -116,4 +116,16 @@ describe('lireTransactions', () => {
   it('une feuille vide ou sans ligne de données renvoie zéro ligne', () => {
     expect(lireTransactions(feuille()).lignes).toEqual([]);
   });
+
+  it('tronque un libellé de plus de 200 caractères pour la cible, la clé gardant le texte entier', () => {
+    const long = 'A'.repeat(300);
+    const [x] = lireTransactions(feuille(l('2026-10-15', long, '-5'))).lignes;
+    expect(x!.libelle).toHaveLength(200);
+    expect(x!.cle).toContain('a'.repeat(300));
+  });
+
+  it('remplace un libellé vide par « (sans libellé) » au lieu de refuser le fichier', () => {
+    const [x] = lireTransactions(feuille(l('2026-10-15', '  ', '-5'))).lignes;
+    expect(x!.libelle).toBe('(sans libellé)');
+  });
 });

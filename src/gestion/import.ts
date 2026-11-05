@@ -31,6 +31,8 @@ export type Rapprochement = {
   id: string;
   // Une série se rapproche occurrence par occurrence ; une ligne unique change d'état.
   recurrente: boolean;
+  // Cible déjà payée ou encaissée (saisie en « réelle ») : la ligne du relevé la confirme, elle ne la crée pas.
+  dejaCompte: boolean;
   // Date de l'échéance d'origine dans la série (clé de l'occurrence), pas la date éventuellement déplacée.
   dateOrigine: string;
   libelle: string;
@@ -54,23 +56,34 @@ export function proposerRapprochements(
   lignes: LigneImport[],
   depenses: OccurrenceVue[],
   recettes: OccurrenceRevenu[],
+  // Dépenses et recettes créées par un import précédent : une autre ligne ne s'y rapproche pas.
+  dejaImportes: Set<string> = new Set(),
 ): Map<string, Rapprochement> {
-  const candidats: { cle: string; ecart: number; cible: string; r: Rapprochement }[] = [];
+  const candidats: {
+    cle: string;
+    priorite: number;
+    ecart: number;
+    cible: string;
+    r: Rapprochement;
+  }[] = [];
   for (const l of lignes) {
     if (l.montantCents < 0) {
       for (const d of depenses) {
-        if (d.etat !== 'a_venir' || d.payeur !== 'societe') continue;
+        const payee = d.etat === 'payee' && !dejaImportes.has(d.depenseId);
+        if ((d.etat !== 'a_venir' && !payee) || d.payeur !== 'societe') continue;
         if (d.montantTtcCents !== -l.montantCents) continue;
         const ecart = ecartJours(l.date, d.date);
         if (ecart > FENETRE_SORTIE_JOURS) continue;
         candidats.push({
           cle: l.cle,
+          priorite: payee ? 1 : 0,
           ecart,
           cible: `depense|${d.cle}`,
           r: {
             type: 'depense',
             id: d.depenseId,
             recurrente: d.recurrente,
+            dejaCompte: payee,
             dateOrigine: d.cle.split('|')[1] ?? d.date,
             libelle: d.libelle,
             date: d.date,
@@ -80,19 +93,22 @@ export function proposerRapprochements(
       }
     } else {
       for (const r of recettes) {
-        if (r.etat !== 'prevue' && r.etat !== 'emise') continue;
+        const encaissee = r.etat === 'encaissee' && !dejaImportes.has(r.revenuId);
+        if (r.etat !== 'prevue' && r.etat !== 'emise' && !encaissee) continue;
         const montant = r.montantHtCents + (r.tvaCents ?? 0);
         if (montant !== l.montantCents) continue;
-        const ecart = ecartJours(l.date, r.date);
-        if (ecart > FENETRE_ENTREE_JOURS) continue;
+        const ecart = ecartJours(l.date, encaissee ? (r.dateEncaissement ?? r.date) : r.date);
+        if (ecart > (encaissee ? FENETRE_SORTIE_JOURS : FENETRE_ENTREE_JOURS)) continue;
         candidats.push({
           cle: l.cle,
+          priorite: encaissee ? 1 : 0,
           ecart,
           cible: `recette|${r.cle}`,
           r: {
             type: 'recette',
             id: r.revenuId,
             recurrente: r.recurrente,
+            dejaCompte: encaissee,
             dateOrigine: r.cle.split('|')[1] ?? r.date,
             libelle: r.libelle,
             date: r.date,
@@ -102,7 +118,9 @@ export function proposerRapprochements(
       }
     }
   }
-  candidats.sort((a, b) => a.ecart - b.ecart || a.cle.localeCompare(b.cle));
+  candidats.sort(
+    (a, b) => a.priorite - b.priorite || a.ecart - b.ecart || a.cle.localeCompare(b.cle),
+  );
   const lignesPrises = new Set<string>();
   const ciblesPrises = new Set<string>();
   const resultat = new Map<string, Rapprochement>();
@@ -152,10 +170,24 @@ export async function analyserImport(tx: Executor, f: Feuille): Promise<AnalyseI
   const de = ajouterJours(dates[0]!, -FENETRE_ENTREE_JOURS);
   const a = ajouterJours(dates.at(-1)!, FENETRE_ENTREE_JOURS);
   const nouvelles = lignes.filter((l) => !connues.has(l.cle));
+  const dejaImportes = new Set(
+    (
+      await tx
+        .select({ id: gestionImportCles.cibleId })
+        .from(gestionImportCles)
+        .where(
+          and(
+            eq(gestionImportCles.instanceId, currentInstance),
+            eq(gestionImportCles.decision, 'importee'),
+          ),
+        )
+    ).flatMap((r) => (r.id ? [r.id] : [])),
+  );
   const rapprochements = proposerRapprochements(
     nouvelles,
     await occurrencesDepenses(tx, de, a),
     await occurrencesRevenus(tx, de, a),
+    dejaImportes,
   );
 
   const analysees = lignes.map((l): LigneAnalysee => {
@@ -168,7 +200,9 @@ export async function analyserImport(tx: Executor, f: Feuille): Promise<AnalyseI
         ...l,
         sens,
         issue: 'a_verifier',
-        raison: `Ressemble à « ${rapprochement.libelle} » prévu le ${rapprochement.date}`,
+        raison: rapprochement.dejaCompte
+          ? `Déjà comptée : « ${rapprochement.libelle} » du ${rapprochement.date}`
+          : `Ressemble à « ${rapprochement.libelle} » prévu le ${rapprochement.date}`,
         rapprochement,
       };
     if (sens === 'entree')
@@ -253,7 +287,10 @@ export async function validerImport(
       resultat.importees += 1;
     } else {
       const r = l.rapprochement!;
-      if (r.type === 'depense') {
+      // Déjà payée ou encaissée : le relevé la confirme, on n'y touche pas.
+      if (r.dejaCompte) {
+        // rien à modifier
+      } else if (r.type === 'depense') {
         if (r.recurrente)
           await modifierOccurrence(tx, instanceId, r.id, r.dateOrigine, {
             portee: 'cette',

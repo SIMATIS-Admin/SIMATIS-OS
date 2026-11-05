@@ -2440,6 +2440,7 @@ export type RapprochementImport = {
   type: 'depense' | 'recette';
   id: string;
   recurrente: boolean;
+  dejaCompte: boolean;
   dateOrigine: string;
   libelle: string;
   date: string;

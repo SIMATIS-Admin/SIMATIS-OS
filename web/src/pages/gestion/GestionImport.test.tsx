@@ -27,6 +27,7 @@ const analyse: AnalyseImport = {
       issue: 'a_verifier',
       raison: 'Ressemble à « Abonnement fictif » prévu le 2026-10-14',
       rapprochement: {
+        dejaCompte: false,
         type: 'depense',
         id: 'd1',
         recurrente: true,
@@ -124,12 +125,21 @@ describe('GestionImport', () => {
     expect(screen.getByText(/Aucune recette prévue ne correspond/)).toBeTruthy();
   });
 
-  it('le bouton compte les lignes retenues et envoie les décisions', async () => {
-    const surImporte = await choisir();
+  it('une entrée sans correspondance attend le choix de Marc : ni importée ni comptée', async () => {
+    await choisir();
+    const choix = screen.getByLabelText<HTMLSelectElement>('Décision pour VIR fictif');
+    expect(choix.value).toBe('');
+    expect(screen.getByRole('button', { name: 'Importer 2 lignes' })).toBeTruthy();
+    fireEvent.change(choix, { target: { value: 'importer' } });
     expect(screen.getByRole('button', { name: 'Importer 3 lignes' })).toBeTruthy();
+  });
+
+  it('le bouton compte les lignes retenues et envoie les décisions choisies', async () => {
+    const surImporte = await choisir();
     fireEvent.change(screen.getByLabelText('Décision pour VIR fictif'), {
       target: { value: 'ignorer' },
     });
+    expect(screen.getByRole('button', { name: 'Importer 2 lignes' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Importer 2 lignes' }));
     await screen.findByText(/2 nouvelles, 1 rapprochée/);
     const v = appels.find((a) => a.url.endsWith('/valider'))!;

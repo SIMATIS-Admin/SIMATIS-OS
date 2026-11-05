@@ -4,6 +4,7 @@ import { normaliserEntete } from '../base-vivante/colonnes.js';
 // Export « Transactions bancaires » de Pennylane. Il ne porte ni identifiant de transaction ni solde :
 // chaque ligne reçoit donc une clé calculée, stable d'un export à l'autre.
 export const MAX_LIGNES_IMPORT = 5000;
+const MAX_LIBELLE = 200;
 
 export class ImportInvalide extends Error {}
 
@@ -83,9 +84,11 @@ export function lireTransactions(f: Feuille): { lignes: LigneImport[]; nonFinali
     if (!date) throw new ImportInvalide(`Date illisible à la ligne ${numero}.`);
     const cents = montantCents(cellules[iMontant] ?? '');
     if (cents === null) throw new ImportInvalide(`Montant illisible à la ligne ${numero}.`);
-    const libelle = (cellules[iLibelle] ?? '').trim();
+    // La clé garde le libellé entier ; la dépense ou la recette créée en reçoit 200 caractères au plus.
+    const libelleComplet = (cellules[iLibelle] ?? '').trim();
+    const libelle = libelleComplet.slice(0, MAX_LIBELLE) || '(sans libellé)';
     const compte = iCompte >= 0 ? (cellules[iCompte] ?? '').trim() : '';
-    const base = `pennylane|${compte}|${date}|${cents}|${libelle.toLowerCase().replace(/\s+/g, ' ')}`;
+    const base = `pennylane|${compte}|${date}|${cents}|${libelleComplet.toLowerCase().replace(/\s+/g, ' ')}`;
     const rang = (vues.get(base) ?? 0) + 1;
     vues.set(base, rang);
     lignes.push({ rang, cle: `${base}|${rang}`, date, libelle, montantCents: cents, compte });
