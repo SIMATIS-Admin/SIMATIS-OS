@@ -32,6 +32,7 @@ const api = vi.hoisted(() => ({
   marquerRapportFinal: vi.fn(),
   reglagesDiagnostic: vi.fn(),
   journalReglesDiag: vi.fn(),
+  capitaliserSupportDiag: vi.fn(),
   capitaliserRapportDiag: vi.fn(),
   annulerRegleDiag: vi.fn(),
   majReglagesDiagnostic: vi.fn(),
@@ -1441,5 +1442,84 @@ describe('Rapport : règles apprises', () => {
       (await screen.findByRole<HTMLButtonElement>('button', { name: 'Capitaliser cette version' }))
         .disabled,
     ).toBe(true);
+  });
+});
+
+describe("Support d'ouverture : règles apprises", () => {
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 1, etapeMax: 1, ...extra })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const libelle = /Relire les deux derniers supports finaux/;
+
+  it('la case est cochée par défaut et enregistre le réglage du support seul', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    api.majReglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: false });
+    await ouvrir();
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
+    await waitFor(() => expect(c.checked).toBe(true));
+    fireEvent.click(c);
+    await waitFor(() =>
+      expect(api.majReglagesDiagnostic).toHaveBeenCalledWith('simatis', { relireSupports: false }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLInputElement>('checkbox', { name: libelle }).checked).toBe(false),
+    );
+  });
+
+  it('« Capitaliser ce support » : absent avant l archivage, actif ensuite', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    await ouvrir({ supportStatut: 'pret', supportLien: 'https://claude.ai/artifact/AbCdEfGh12' });
+    await screen.findByText(/Support d’ouverture/);
+    expect(screen.queryByRole('button', { name: 'Capitaliser ce support' })).toBeNull();
+    cleanup();
+    api.capitaliserSupportDiag.mockResolvedValue(projet({ etape: 1, etapeMax: 1 }));
+    await ouvrir({ supportStatut: 'final', supportLien: 'https://claude.ai/artifact/AbCdEfGh12' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Capitaliser ce support' }));
+    await waitFor(() => expect(api.capitaliserSupportDiag).toHaveBeenCalledWith('simatis', 'p1'));
+  });
+
+  it('désactivé pendant que Claude travaille, et message de l API en cas de refus', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    api.capitaliserSupportDiag.mockRejectedValue(new Error('Archivez d’abord le support final.'));
+    await ouvrir({ supportStatut: 'final', supportLien: 'https://claude.ai/artifact/AbCdEfGh12' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Capitaliser ce support' }));
+    expect(await screen.findByText(/Archivez d’abord le support final/)).toBeTruthy();
+    cleanup();
+    await ouvrir({
+      supportStatut: 'final',
+      supportLien: 'https://claude.ai/artifact/AbCdEfGh12',
+      statutChat: 'attente_claude',
+    });
+    expect(
+      (await screen.findByRole<HTMLButtonElement>('button', { name: 'Capitaliser ce support' }))
+        .disabled,
+    ).toBe(true);
+  });
+
+  it('le journal nomme la fiche du support « règles du support »', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    api.journalReglesDiag.mockResolvedValue([
+      {
+        id: 'e9',
+        le: '2026-11-05T10:00:00.000Z',
+        projetId: 'p1',
+        fiche: 'support',
+        action: 'ajoutée',
+        libelle: 'Ouvrir par le cadre de la séance',
+        avant: null,
+        apres: 'R',
+        origine: 'support final',
+        statut: 'actif',
+        motifRefus: null,
+      },
+    ]);
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 } }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/règles du support/)).toBeTruthy();
   });
 });
