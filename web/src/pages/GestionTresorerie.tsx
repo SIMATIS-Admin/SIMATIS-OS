@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   saveReglagesGestion,
+  type HypothesePipe,
   type PeriodeTresorerie,
   type ProjectionTresorerie,
   type ReglagesGestion,
+  type RemunerationGestion,
 } from '../api.js';
 import { eurCents, jourCourt, libelleMois, versCents } from '../gestion.js';
+import { decrireScenario, NOMS_CERTITUDES, NOMS_PIPE } from './gestion/scenarios.js';
 
 const HORIZONS = [1, 3, 6, 12, 24];
 const SCENARIOS: [ProjectionTresorerie['scenarios'][number]['scenario'], string, string][] = [
@@ -13,6 +16,53 @@ const SCENARIOS: [ProjectionTresorerie['scenarios'][number]['scenario'], string,
   ['central', 'Central', 'var(--teal)'],
   ['ambitieux', 'Ambitieux', 'var(--teal-mid, #7cc4b8)'],
 ];
+const SCENARIOS_VIDES: ReglagesGestion['scenarios'] = {
+  securise: { certitudes: ['certaine'], pipe: 'aucun' },
+  central: { certitudes: ['certaine', 'probable'], pipe: 'pondere' },
+  ambitieux: { certitudes: ['certaine', 'probable', 'hypothese'], pipe: 'chaud' },
+};
+const LIBELLES_BASE: Record<RemunerationGestion['base'], string> = {
+  brut: 'Brut',
+  net: 'Net versé',
+  cout: 'Coût total pour la société',
+};
+type SaisieRemuneration = {
+  actif: boolean;
+  base: RemunerationGestion['base'];
+  montant: string;
+  tauxSalarial: string;
+  tauxPatronal: string;
+  periodicite: RemunerationGestion['periodicite'];
+};
+const nombre = (n: number) => String(n).replace('.', ',');
+const depuisRemuneration = (r: RemunerationGestion | null): SaisieRemuneration => ({
+  actif: r?.actif ?? false,
+  base: r?.base ?? 'brut',
+  montant: r ? nombre(r.montantCents / 100) : '',
+  tauxSalarial: r ? nombre(r.tauxSalarial) : '',
+  tauxPatronal: r ? nombre(r.tauxPatronal) : '',
+  periodicite: r?.periodicite ?? 'mensuelle',
+});
+// null = rien de réglé ; « invalide » = saisie incomplète ou incohérente (aucun taux n'est deviné).
+function versRemuneration(s: SaisieRemuneration): RemunerationGestion | null | 'invalide' {
+  if (!s.montant.trim() && !s.tauxSalarial.trim() && !s.tauxPatronal.trim() && !s.actif)
+    return null;
+  const montantCents = versCents(s.montant);
+  const taux = (t: string) => (t.trim() ? Number(t.replace(',', '.')) : NaN);
+  const ts = taux(s.tauxSalarial);
+  const tp = taux(s.tauxPatronal);
+  if (montantCents == null || montantCents < 1) return 'invalide';
+  if (!Number.isFinite(ts) || !Number.isFinite(tp)) return 'invalide';
+  if (ts < 0 || ts >= 100 || tp < 0 || tp > 100) return 'invalide';
+  return {
+    actif: s.actif,
+    base: s.base,
+    montantCents,
+    tauxSalarial: ts,
+    tauxPatronal: tp,
+    periodicite: s.periodicite,
+  };
+}
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export type ParamsTresorerie = {
@@ -22,6 +72,11 @@ export type ParamsTresorerie = {
   // Calculs d'affichage du pipe : décalage des signatures (mois) et affaires que Marc ne veut pas compter.
   decalage: number;
   exclus: string[];
+  // Simulation du pipe : inclus ou non, pondéré ou au total, montants et probabilités réglés à la main.
+  pipe: boolean;
+  // Compter la rémunération réglée dans la projection.
+  remuneration: boolean;
+  hypotheses: Record<string, HypothesePipe>;
 };
 
 const libellePeriode = (p: PeriodeTresorerie, g: 'mois' | 'semaine') =>
@@ -34,12 +89,14 @@ export function GestionTresorerie({
   params,
   onParams,
   onReglagesSaved,
+  onAjouterRevenu,
 }: {
   slug: string;
   projection: ProjectionTresorerie | null;
   params: ParamsTresorerie;
   onParams: (p: ParamsTresorerie) => void;
   onReglagesSaved: () => void;
+  onAjouterRevenu: () => void;
 }) {
   const [scenario, setScenario] = useState<(typeof SCENARIOS)[number][0]>('central');
   const [choisie, setChoisie] = useState<number | null>(null);
@@ -124,6 +181,9 @@ export function GestionTresorerie({
                 </button>
               ))}
             </div>
+            <button type="button" className="btn sm" onClick={onAjouterRevenu}>
+              Ajouter un revenu
+            </button>
           </div>
         </div>
         <div className="panel-b">
@@ -203,6 +263,39 @@ export function GestionTresorerie({
                   supposée sont marqués « estimé ».
                 </div>
               </div>
+              <dl className="g-scenarios" aria-label="Ce que retient chaque scénario">
+                {SCENARIOS.map(([k, l, c]) => (
+                  <div key={k}>
+                    <dt>
+                      <i style={{ background: c }} /> {l}
+                    </dt>
+                    <dd className="small muted">
+                      {decrireScenario(projection.reglages.scenarios[k])}
+                    </dd>
+                  </div>
+                ))}
+                <p className="small muted" style={{ margin: '6px 0 0' }}>
+                  Les dépenses sont les mêmes dans les trois scénarios. Les règles de chaque
+                  scénario se modifient dans les réglages de trésorerie, plus bas.
+                </p>
+              </dl>
+              {projection.remuneration && (
+                <div className="g-seuil">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={params.remuneration}
+                      onChange={(e) => onParams({ ...params, remuneration: e.target.checked })}
+                    />{' '}
+                    Compter ma rémunération : net versé {eurCents(projection.remuneration.netCents)}{' '}
+                    + URSSAF {eurCents(projection.remuneration.urssafCents)} par mois
+                  </label>
+                  <span className="small muted">
+                    Brut {eurCents(projection.remuneration.brutCents)} · coût pour la société{' '}
+                    {eurCents(projection.remuneration.coutCents)}.
+                  </span>
+                </div>
+              )}
               <div className="g-seuil">
                 <label>
                   Simuler un retard de paiement des clients (jours) :{' '}
@@ -310,10 +403,14 @@ function ReglagesTresorerie({
   const [delai, setDelai] = useState(
     r?.delaiPaiementJours == null ? '' : String(r.delaiPaiementJours),
   );
+  const [scenarios, setScenarios] = useState(r?.scenarios ?? SCENARIOS_VIDES);
+  const [salaire, setSalaire] = useState(depuisRemuneration(r?.remuneration ?? null));
   const [erreur, setErreur] = useState<string | null>(null);
 
   useEffect(() => {
     if (!r) return;
+    setScenarios(r.scenarios);
+    setSalaire(depuisRemuneration(r.remuneration));
     setSolde(cents(r.soldeCents));
     setDate(r.soldeDate ?? '');
     setSource(r.soldeSource ?? '');
@@ -333,6 +430,11 @@ function ReglagesTresorerie({
     const delaiN = delai.trim() ? Number(delai) : null;
     if (delaiN != null && (!Number.isInteger(delaiN) || delaiN < 0 || delaiN > 365))
       return setErreur('Le délai est un nombre de jours entre 0 et 365.');
+    const remuneration = versRemuneration(salaire);
+    if (remuneration === 'invalide')
+      return setErreur(
+        'Rémunération : indiquez un montant, et des taux entre 0 et 100 % (salarial sous 100 %).',
+      );
     try {
       await saveReglagesGestion(slug, {
         soldeCents: soldeC,
@@ -341,6 +443,8 @@ function ReglagesTresorerie({
         seuilMode: mode,
         seuilCents: seuilC,
         delaiPaiementJours: delaiN,
+        scenarios,
+        remuneration,
       });
       setErreur(null);
       onSaved();
@@ -384,6 +488,14 @@ function ReglagesTresorerie({
               Délai de paiement des clients :{' '}
               <b>
                 {r?.delaiPaiementJours == null ? 'non défini' : `${r.delaiPaiementJours} jours`}
+              </b>
+            </span>
+            <span>
+              Rémunération :{' '}
+              <b>
+                {r?.remuneration
+                  ? `${r.remuneration.actif ? '' : '(désactivée) '}${LIBELLES_BASE[r.remuneration.base]} ${eurCents(r.remuneration.montantCents)}, URSSAF ${r.remuneration.periodicite}`
+                  : 'non réglée'}
               </b>
             </span>
             {projection?.seuil.bfr && (
@@ -482,6 +594,147 @@ function ReglagesTresorerie({
                 placeholder="Non défini : encaissement à la date de facture"
               />
             </label>
+            <div className="field">
+              <span>Ce que retient chaque scénario</span>
+              <div className="small muted">
+                Les recettes déjà facturées ou encaissées comptent toujours. Choisissez en plus
+                quelles prévisions et quel pipe entrent dans chaque scénario.
+              </div>
+              {SCENARIOS.map(([k, l]) => (
+                <div key={k} className="g-ligne" style={{ gap: 12, flexWrap: 'wrap' }}>
+                  <b style={{ minWidth: 80 }}>{l}</b>
+                  {(['certaine', 'probable', 'hypothese'] as const).map((c) => (
+                    <label key={c}>
+                      <input
+                        type="checkbox"
+                        aria-label={`${l} : prévisions ${NOMS_CERTITUDES[c]}`}
+                        checked={scenarios[k].certitudes.includes(c)}
+                        onChange={(e) =>
+                          setScenarios({
+                            ...scenarios,
+                            [k]: {
+                              ...scenarios[k],
+                              certitudes: e.target.checked
+                                ? [...scenarios[k].certitudes, c]
+                                : scenarios[k].certitudes.filter((x) => x !== c),
+                            },
+                          })
+                        }
+                      />{' '}
+                      {NOMS_CERTITUDES[c]}
+                    </label>
+                  ))}
+                  <select
+                    className="input"
+                    aria-label={`${l} : pipe`}
+                    value={scenarios[k].pipe}
+                    onChange={(e) =>
+                      setScenarios({
+                        ...scenarios,
+                        [k]: {
+                          ...scenarios[k],
+                          pipe: e.target.value as (typeof scenarios)[typeof k]['pipe'],
+                        },
+                      })
+                    }
+                  >
+                    {(Object.keys(NOMS_PIPE) as (keyof typeof NOMS_PIPE)[]).map((m) => (
+                      <option key={m} value={m}>
+                        {NOMS_PIPE[m]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="field">
+              <span>Ma rémunération (net versé + cotisations URSSAF)</span>
+              <div className="small muted">
+                Aucun taux n’est supposé : vous saisissez les vôtres. Si votre rémunération est déjà
+                saisie parmi les dépenses, ne la réglez pas ici pour ne pas la compter deux fois.
+              </div>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={salaire.actif}
+                  onChange={(e) => setSalaire({ ...salaire, actif: e.target.checked })}
+                />{' '}
+                Compter ma rémunération dans la projection
+              </label>
+              <div className="g-champs2">
+                <label className="field">
+                  <span>Le montant saisi est</span>
+                  <select
+                    className="input"
+                    aria-label="Nature du montant de rémunération"
+                    value={salaire.base}
+                    onChange={(e) =>
+                      setSalaire({
+                        ...salaire,
+                        base: e.target.value as RemunerationGestion['base'],
+                      })
+                    }
+                  >
+                    {(Object.keys(LIBELLES_BASE) as RemunerationGestion['base'][]).map((b) => (
+                      <option key={b} value={b}>
+                        {LIBELLES_BASE[b]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Montant mensuel (€)</span>
+                  <input
+                    className="input num"
+                    inputMode="decimal"
+                    aria-label="Montant mensuel de rémunération"
+                    value={salaire.montant}
+                    onChange={(e) => setSalaire({ ...salaire, montant: e.target.value })}
+                  />
+                </label>
+              </div>
+              <div className="g-champs2">
+                <label className="field">
+                  <span>Cotisations salariales (% du brut)</span>
+                  <input
+                    className="input num"
+                    inputMode="decimal"
+                    aria-label="Taux de cotisations salariales"
+                    value={salaire.tauxSalarial}
+                    onChange={(e) => setSalaire({ ...salaire, tauxSalarial: e.target.value })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Cotisations patronales (% du brut)</span>
+                  <input
+                    className="input num"
+                    inputMode="decimal"
+                    aria-label="Taux de cotisations patronales"
+                    value={salaire.tauxPatronal}
+                    onChange={(e) => setSalaire({ ...salaire, tauxPatronal: e.target.value })}
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Paiement de l’URSSAF</span>
+                <select
+                  className="input"
+                  aria-label="Périodicité de l'URSSAF"
+                  value={salaire.periodicite}
+                  onChange={(e) =>
+                    setSalaire({
+                      ...salaire,
+                      periodicite: e.target.value as RemunerationGestion['periodicite'],
+                    })
+                  }
+                >
+                  <option value="mensuelle">Chaque mois (le 15 du mois suivant)</option>
+                  <option value="trimestrielle">
+                    Chaque trimestre (le 15 du mois suivant le trimestre)
+                  </option>
+                </select>
+              </label>
+            </div>
             {erreur && (
               <div className="alert red" role="alert">
                 {erreur}

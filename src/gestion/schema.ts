@@ -157,6 +157,9 @@ export const gestionReglages = pgTable(
     seuilMode: text('seuil_mode', { enum: MODES_SEUIL }).notNull().default('aucun'),
     seuilCents: integer('seuil_cents'),
     delaiPaiementJours: integer('delai_paiement_jours'),
+    // Hypothèses du modèle de projection : ce que retient chaque scénario et la rémunération du dirigeant.
+    // Validé à la lecture par zod (tresorerie.ts) : une valeur absente retombe sur les réglages d'origine.
+    modele: jsonb('modele'),
   },
   (t) => [
     uniqueIndex('gestion_reglages_instance_idx').on(t.instanceId),

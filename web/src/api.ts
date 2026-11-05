@@ -2393,6 +2393,23 @@ export type ReglagesGestion = {
   seuilMode: 'aucun' | 'montant' | 'bfr';
   seuilCents: number | null;
   delaiPaiementJours: number | null;
+  scenarios: Record<ScenarioTresorerie, ConfigScenarioTresorerie>;
+  remuneration: RemunerationGestion | null;
+};
+export type ScenarioTresorerie = 'securise' | 'central' | 'ambitieux';
+export type CertitudeTresorerie = 'certaine' | 'probable' | 'hypothese';
+// Ce que retient un scénario : les prévisions de recettes selon leur certitude, et le pipe.
+export type ConfigScenarioTresorerie = {
+  certitudes: CertitudeTresorerie[];
+  pipe: 'aucun' | 'pondere' | 'total' | 'chaud';
+};
+export type RemunerationGestion = {
+  actif: boolean;
+  base: 'brut' | 'net' | 'cout';
+  montantCents: number;
+  tauxSalarial: number;
+  tauxPatronal: number;
+  periodicite: 'mensuelle' | 'trimestrielle';
 };
 export type MouvementTresorerie = {
   date: string;
@@ -2424,6 +2441,7 @@ export type AffairePipe = {
   mensuelCents: number | null;
   dureeMois: number;
   signature: string | null;
+  surcharge: boolean;
   statut: 'comptee' | 'sans_date' | 'sans_montant' | 'sans_probabilite';
 };
 export type ProjectionTresorerie = {
@@ -2447,6 +2465,15 @@ export type ProjectionTresorerie = {
     alerte: { debut: string; soldeFinCents: number } | null;
   }[];
   pipe: { affaires: AffairePipe[]; decalageMois: number };
+  remuneration: {
+    brutCents: number;
+    netCents: number;
+    salarialCents: number;
+    patronalCents: number;
+    urssafCents: number;
+    coutCents: number;
+    inclus: boolean;
+  } | null;
   avertissements: string[];
 };
 export type SuiviTvaGestion = {
@@ -2461,6 +2488,14 @@ export type SuiviTvaGestion = {
   declaree: { montantCents: number | null; note: string | null } | null;
   avertissements: string[];
 };
+// Hypothèses de simulation d'une affaire : montant en euros (mensualité pour un abonnement), probabilité en %.
+export type HypothesePipe = { montant?: number | null; probabilite?: number | null };
+const hypParam = (h?: Record<string, HypothesePipe>) => {
+  const l = Object.entries(h ?? {})
+    .filter(([, x]) => x.montant != null || x.probabilite != null)
+    .map(([id, x]) => `${id}:${x.montant ?? ''}:${x.probabilite ?? ''}`);
+  return l.length ? `&hyp=${l.join(',')}` : '';
+};
 export const fetchTresorerie = (
   slug: string,
   p: {
@@ -2469,6 +2504,9 @@ export const fetchTresorerie = (
     retard: number;
     decalage?: number;
     exclus?: string[];
+    pipe?: boolean;
+    remuneration?: boolean;
+    hypotheses?: Record<string, HypothesePipe>;
   },
 ) =>
   getJson<ProjectionTresorerie>(
@@ -2476,7 +2514,10 @@ export const fetchTresorerie = (
       slug,
       `gestion/tresorerie?horizon=${p.horizon}&granularite=${p.granularite}&retard=${p.retard}` +
         `&decalage=${p.decalage ?? 0}` +
-        (p.exclus?.length ? `&exclus=${p.exclus.join(',')}` : ''),
+        (p.exclus?.length ? `&exclus=${p.exclus.join(',')}` : '') +
+        (p.pipe === false ? '&pipe=0' : '') +
+        (p.remuneration === false ? '&remuneration=0' : '') +
+        hypParam(p.hypotheses),
     ),
   );
 // Import des transactions bancaires Pennylane (voir src/gestion/import.ts).
