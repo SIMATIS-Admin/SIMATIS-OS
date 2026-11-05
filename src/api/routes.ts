@@ -556,10 +556,17 @@ export function registerApi(
   // Réglages du module Diagnostic : relire les deux derniers rapports finaux (ou supports finaux)
   // avant de rédiger. Actifs par défaut.
   const reglagesDiag = (i: {
-    config: { diagnostic?: { relireFinaux?: boolean; relireSupports?: boolean } };
+    config: {
+      diagnostic?: {
+        relireFinaux?: boolean;
+        relireSupports?: boolean;
+        relireRestitutions?: boolean;
+      };
+    };
   }) => ({
     relireFinaux: i.config.diagnostic?.relireFinaux !== false,
     relireSupports: i.config.diagnostic?.relireSupports !== false,
+    relireRestitutions: i.config.diagnostic?.relireRestitutions !== false,
   });
   app.get<SlugParams>(
     '/api/i/:slug/diagnostic/reglages',
@@ -569,8 +576,12 @@ export function registerApi(
     '/api/i/:slug/diagnostic/reglages',
     onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
       const parsed = z
-        .object({ relireFinaux: z.boolean().optional(), relireSupports: z.boolean().optional() })
-        .refine((r) => r.relireFinaux !== undefined || r.relireSupports !== undefined)
+        .object({
+          relireFinaux: z.boolean().optional(),
+          relireSupports: z.boolean().optional(),
+          relireRestitutions: z.boolean().optional(),
+        })
+        .refine((r) => Object.values(r).some((v) => v !== undefined))
         .safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Réglage invalide' });
       const diagnostic = { ...i.config.diagnostic, ...parsed.data };

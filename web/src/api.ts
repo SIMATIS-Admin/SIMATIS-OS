@@ -1420,7 +1420,11 @@ export const marquerRapportFinal = (slug: string, id: string, lien: string, fina
     { lien, finale },
   );
 // Réglage du module Diagnostic : relire les deux derniers rapports finaux avant de rédiger.
-export type ReglagesDiag = { relireFinaux: boolean; relireSupports: boolean };
+export type ReglagesDiag = {
+  relireFinaux: boolean;
+  relireSupports: boolean;
+  relireRestitutions: boolean;
+};
 export const reglagesDiagnostic = (slug: string) =>
   getJson<ReglagesDiag>(inst(slug, 'diagnostic/reglages'));
 export const majReglagesDiagnostic = (slug: string, reglage: Partial<ReglagesDiag>) =>

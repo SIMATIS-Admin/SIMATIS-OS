@@ -221,21 +221,42 @@ describe('Entretien : API', () => {
     expect((await app.inject({ method: 'GET', url })).json()).toEqual({
       relireFinaux: true,
       relireSupports: true,
+      relireRestitutions: true,
     });
     const coupe = await app.inject({ method: 'PUT', url, payload: { relireFinaux: false } });
     expect(coupe.statusCode).toBe(200);
-    expect(coupe.json()).toEqual({ relireFinaux: false, relireSupports: true });
+    expect(coupe.json()).toEqual({
+      relireFinaux: false,
+      relireSupports: true,
+      relireRestitutions: true,
+    });
     expect((await app.inject({ method: 'GET', url })).json()).toEqual({
       relireFinaux: false,
       relireSupports: true,
+      relireRestitutions: true,
     });
     const apres = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     expect(apres.config.modules).toEqual(avant.config.modules);
     expect(apres.config.ecrituresReelles).toEqual(avant.config.ecrituresReelles);
     const remis = await app.inject({ method: 'PUT', url, payload: { relireFinaux: true } });
-    expect(remis.json()).toEqual({ relireFinaux: true, relireSupports: true });
+    expect(remis.json()).toEqual({
+      relireFinaux: true,
+      relireSupports: true,
+      relireRestitutions: true,
+    });
     const supports = await app.inject({ method: 'PUT', url, payload: { relireSupports: false } });
-    expect(supports.json()).toEqual({ relireFinaux: true, relireSupports: false });
+    expect(supports.json()).toEqual({
+      relireFinaux: true,
+      relireSupports: false,
+      relireRestitutions: true,
+    });
+    const decks = await app.inject({ method: 'PUT', url, payload: { relireRestitutions: false } });
+    expect(decks.json()).toEqual({
+      relireFinaux: true,
+      relireSupports: false,
+      relireRestitutions: false,
+    });
+    await app.inject({ method: 'PUT', url, payload: { relireRestitutions: true } });
     const vide = await app.inject({ method: 'PUT', url, payload: {} });
     expect(vide.statusCode).toBe(400);
     await app.inject({ method: 'PUT', url, payload: { relireSupports: true } });
