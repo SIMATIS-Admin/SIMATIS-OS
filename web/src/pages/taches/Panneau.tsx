@@ -143,7 +143,7 @@ export function Panneau({
   return (
     <aside className="panel ag-panneau" aria-label="Tâches">
       <div className="panel-h">
-        <h2>Tâches</h2>
+        <h2>Mes actions</h2>
       </div>
       {enRetard.length > 0 && (
         <section className="ag-groupe retard" aria-label="En retard">

@@ -83,7 +83,7 @@ describe('Sidebar', () => {
     const groups = container.querySelectorAll('.nav-group');
     expect(groups[0]?.classList.contains('quotidien')).toBe(true);
     const labels = [...(groups[1]?.querySelectorAll('.lbl') ?? [])].map((n) => n.textContent);
-    expect(labels).toEqual(['Pipeline']);
+    expect(labels).toEqual(['Agenda', 'Pipeline', 'Contacts', 'Entreprises', 'Rendez-vous']);
     expect(screen.getAllByText('Brief du jour')).toHaveLength(1);
     expect(screen.getAllByText('Pipeline')).toHaveLength(1);
   });
@@ -155,7 +155,7 @@ describe('Sidebar', () => {
 
   it('opens all spaces explicitly and exposes tools without duplicated shortcuts', () => {
     renderSidebar(simatis, ['pipeline']);
-    expect(screen.queryByRole('link', { name: /Contacts/ })).toBeNull();
+    expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Mes espaces' }));
     expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /Pipeline/ })).toHaveLength(1);

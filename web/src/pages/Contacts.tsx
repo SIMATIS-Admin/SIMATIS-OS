@@ -10,7 +10,14 @@ import {
 } from '../api.js';
 import { Modal } from './Overlay.js';
 import { fusionnerDeux, supprimerEnLot } from './listes/lots.js';
-import { jour, Tableau } from './listes/Tableau.js';
+import { Tableau } from './listes/Tableau.js';
+import {
+  EnteteCommercial,
+  Identite,
+  ProchaineActivite,
+  useChoixCommercial,
+} from './commercial/commun.js';
+import { ApercuCommercial, type ReferenceCommerciale } from './commercial/Apercu.js';
 import { SearchBox } from './SearchBox.js';
 
 // Simulated creation (no id) or created-but-not-linked answer: what to tell the person.
@@ -107,7 +114,9 @@ export function NouveauContact({
 }
 
 export function Contacts({ slug }: { slug: string }) {
-  const [q, setQ] = useState('');
+  const [q, setQ] = useChoixCommercial(`${slug}.contacts.recherche`, '');
+  const [filtre, setFiltre] = useChoixCommercial(`${slug}.contacts.filtre`, 'tous');
+  const [apercu, setApercu] = useState<ReferenceCommerciale | null>(null);
   const [list, setList] = useState<Contact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -134,14 +143,30 @@ export function Contacts({ slug }: { slug: string }) {
     };
   }, [slug, q, version]);
 
+  const visibles = list?.filter((c) =>
+    filtre === 'affaires' ? c.oppsOuvertes > 0 : filtre === 'sans' ? !c.prochaineActivite : true,
+  );
   return (
-    <>
-      <div className="page-actions">
+    <section className="commercial-page com-contacts">
+      <EnteteCommercial description="Vos contacts, leur entreprise et la prochaine action, au même endroit.">
         <button className="btn primary" onClick={() => setCreating(true)}>
           Nouveau contact
         </button>
-      </div>
-      <div className="panel">
+      </EnteteCommercial>
+      <nav className="com-onglets" aria-label="Vues des contacts">
+        {(
+          [
+            ['tous', 'Tous'],
+            ['affaires', 'Avec une affaire'],
+            ['sans', 'Sans activité'],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} aria-pressed={filtre === id} onClick={() => setFiltre(id)}>
+            {label}
+          </button>
+        ))}
+      </nav>
+      <div className="panel com-repertoire">
         <div className="panel-h">
           <SearchBox
             value={q}
@@ -149,7 +174,9 @@ export function Contacts({ slug }: { slug: string }) {
             placeholder="Rechercher un nom, une fonction, une entreprise"
           />
           <span className="small muted">
-            {list ? `${list.length} contact${list.length > 1 ? 's' : ''}` : ''}
+            {list
+              ? `${visibles?.length ?? 0} contact${(visibles?.length ?? 0) > 1 ? 's' : ''}`
+              : ''}
           </span>
         </div>
         {error && <p className="empty">{error}</p>}
@@ -161,9 +188,10 @@ export function Contacts({ slug }: { slug: string }) {
         {list && (
           <Tableau
             cle="contacts"
-            lignes={list}
+            lignes={visibles ?? []}
+            outilsRepliables
             titre={(c) => c.nom}
-            onOuvrir={(c) => (location.hash = `#/${slug}/fiche/contact/${c.id}`)}
+            onOuvrir={(c) => setApercu({ kind: 'contact', id: c.id })}
             onModifier={(c, champ, v) => modifier(c.id, champ, v)}
             onSupprimer={supprimerEnLot(slug, 'contact', () => setVersion((n) => n + 1))}
             onFusionner={fusionnerDeux(slug, 'contact', () => setVersion((n) => n + 1))}
@@ -172,40 +200,84 @@ export function Contacts({ slug }: { slug: string }) {
                 cle: 'nom',
                 label: 'Contact',
                 valeur: (c) => c.nom,
-                affiche: (c) => <b>{c.nom}</b>,
+                affiche: (c) => (
+                  <button
+                    className="com-ouvrir"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setApercu({ kind: 'contact', id: c.id });
+                    }}
+                  >
+                    <Identite nom={c.nom} detail={c.fonction} />
+                  </button>
+                ),
               },
-              { cle: 'entreprise', label: 'Organisation', valeur: (c) => c.entreprise },
+              {
+                cle: 'entreprise',
+                label: 'Entreprise',
+                valeur: (c) => c.entreprise,
+                affiche: (c) =>
+                  c.entrepriseId ? (
+                    <button
+                      className="com-texte-lien"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setApercu({ kind: 'entreprise', id: c.entrepriseId! });
+                      }}
+                    >
+                      {c.entreprise}
+                    </button>
+                  ) : (
+                    <span className="muted">{c.entreprise ?? '—'}</span>
+                  ),
+              },
               {
                 cle: 'fonction',
                 label: 'Fonction',
                 valeur: (c) => c.fonction,
                 edition: { champ: 'fonction' },
+                masquee: true,
               },
               {
                 cle: 'email',
                 label: 'Email',
                 valeur: (c) => c.email,
                 edition: { champ: 'email', type: 'email' },
+                masquee: true,
               },
               {
                 cle: 'telephone',
                 label: 'Téléphone',
                 valeur: (c) => c.telephone,
                 edition: { champ: 'telephone' },
+                masquee: true,
               },
-              { cle: 'opps', label: 'Affaires ouvertes', valeur: (c) => c.oppsOuvertes },
+              {
+                cle: 'opps',
+                label: 'Affaires ouvertes',
+                valeur: (c) => c.oppsOuvertes,
+                masquee: true,
+              },
               {
                 cle: 'prochaine',
                 label: 'Prochaine activité',
                 valeur: (c) => c.prochaineActivite,
-                affiche: (c) => jour(c.prochaineActivite),
+                affiche: (c) => <ProchaineActivite date={c.prochaineActivite} />,
               },
               { cle: 'role', label: 'Rôle', valeur: (c) => c.role, masquee: true },
             ]}
           />
         )}
-        {list?.length === 0 && <p className="empty">Aucun contact ne correspond.</p>}
+        {visibles?.length === 0 && <p className="empty">Aucun contact ne correspond.</p>}
       </div>
+      {apercu && (
+        <ApercuCommercial
+          key={`${apercu.kind}-${apercu.id}`}
+          slug={slug}
+          reference={apercu}
+          onFermer={() => setApercu(null)}
+        />
+      )}
       {creating && (
         <NouveauContact
           slug={slug}
@@ -217,6 +289,6 @@ export function Contacts({ slug }: { slug: string }) {
           }}
         />
       )}
-    </>
+    </section>
   );
 }

@@ -14,7 +14,8 @@ import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { NouveauContact } from './Contacts.js';
 import { NouvelleEntreprise } from './Entreprises.js';
 import { LierExistant } from './liens/CarteLiens.js';
-import { quand } from './RendezVous.js';
+import { OutilsConnexes } from './commercial/OutilsConnexes.js';
+import { PreparationPanel, quand } from './RendezVous.js';
 
 // A calendar block treated as a client meeting: sorted by the pilot, linked to companies, contacts
 // and deals, with its compte rendu. Same layout as the other records (links left, content right).
@@ -291,6 +292,7 @@ function CompteRendu({
 export function FicheRdv({ slug, id }: { slug: string; id: string }) {
   const [rdv, setRdv] = useState<RdvFiche | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [rubrique, setRubrique] = useState('compte-rendu');
   const load = useCallback(() => {
     fetchRdv(slug, id).then(setRdv, (e: unknown) => setMessage(erreurDe(e)));
   }, [slug, id]);
@@ -300,7 +302,7 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
   const trier = (statut: StatutRdv) =>
     void trierRdv(slug, id, statut).then(load, (e: unknown) => setMessage(erreurDe(e)));
   return (
-    <>
+    <section className="commercial-fiche commercial-rdv" data-rubrique={rubrique}>
       <div className="fi-entete">
         <div>
           <a
@@ -355,6 +357,19 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
           <div>{message}</div>
         </div>
       )}
+      <nav className="com-onglets" aria-label="Rubriques du rendez-vous">
+        {(
+          [
+            ['compte-rendu', 'Compte rendu'],
+            ['preparation', 'Préparation'],
+            ['liens', 'Liens'],
+          ] as const
+        ).map(([cle, label]) => (
+          <button key={cle} aria-pressed={rubrique === cle} onClick={() => setRubrique(cle)}>
+            {label}
+          </button>
+        ))}
+      </nav>
       <div className="fi-corps">
         <div className="fi-gauche">
           <Groupe
@@ -382,17 +397,44 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
             onMessage={setMessage}
           />
           <Participants slug={slug} rdv={rdv} onChange={load} onMessage={setMessage} />
-        </div>
-        <div className="fi-droite">
-          <CompteRendu
-            key={rdv.compteRendu?.at ?? 'nouveau'}
+          <OutilsConnexes
             slug={slug}
-            rdv={rdv}
-            onDone={load}
-            onMessage={setMessage}
+            references={[
+              ...rdv.entreprises.map((e) => ({ kind: 'entreprise' as const, id: e.id })),
+              ...rdv.contacts.map((c) => ({ kind: 'contact' as const, id: c.id })),
+              ...rdv.affaires.map((a) => ({ kind: 'affaire' as const, id: a.id })),
+            ]}
           />
         </div>
+        <div className="fi-droite">
+          {rubrique === 'preparation' && (
+            <section className="panel">
+              <div className="panel-h">
+                <h2>Préparer l’échange</h2>
+              </div>
+              <div className="panel-b">
+                <PreparationPanel
+                  slug={slug}
+                  rdv={{
+                    opportunite: rdv.affaires[0]
+                      ? { id: rdv.affaires[0].id, titre: rdv.affaires[0].nom }
+                      : null,
+                  }}
+                />
+              </div>
+            </section>
+          )}
+          <div hidden={rubrique === 'preparation'}>
+            <CompteRendu
+              key={rdv.compteRendu?.at ?? 'nouveau'}
+              slug={slug}
+              rdv={rdv}
+              onDone={load}
+              onMessage={setMessage}
+            />
+          </div>
+        </div>
       </div>
-    </>
+    </section>
   );
 }

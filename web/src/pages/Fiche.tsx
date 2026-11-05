@@ -29,6 +29,7 @@ import { CarteLiens, type LigneLien } from './liens/CarteLiens.js';
 import { Cloture } from './Pipeline.js';
 import { ACTIVITES } from './taches/commun.js';
 import { EditionTache } from './taches/Edition.js';
+import { OutilsConnexes, referencesLiees } from './commercial/OutilsConnexes.js';
 import { estSimulation } from './Taches.js';
 
 // Pipedrive-like detail page: summary and editable details on the left, note / activity composer
@@ -334,6 +335,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
   const [noteEditee, setNoteEditee] = useState<{ id: string; corps: string } | null>(null);
   const [versHubspot, setVersHubspot] = useState(true);
   const [filtre, setFiltre] = useState('tout');
+  const [rubrique, setRubrique] = useState('ensemble');
   const [cloture, setCloture] = useState<'gagne' | 'perdu' | null>(null);
   const [reduits, setReduits] = useState<Set<string>>(new Set());
   const [planifier, setPlanifier] = useState(false);
@@ -391,7 +393,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
   const etapeCourante = data.etapes?.find((e) => e.id === f.etape);
 
   return (
-    <>
+    <section className="commercial-fiche" data-rubrique={rubrique}>
       <div className="fi-entete">
         <div>
           <a
@@ -431,6 +433,10 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
             />
           </div>
         </div>
+        <button className="btn primary com-planifier" onClick={() => setPlanifier(true)}>
+          <Icon name="cal" />
+          Nouvelle activité
+        </button>
         <ActionsFiche
           slug={slug}
           kind={kind}
@@ -479,6 +485,27 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
           <div>{message}</div>
         </div>
       )}
+      <nav className="com-onglets com-fiche-onglets" aria-label="Rubriques de la fiche">
+        {(
+          [
+            ['ensemble', 'Vue d’ensemble'],
+            ['mails', 'Mails'],
+            ['activites', 'Activités'],
+            ['liens', 'Liens'],
+          ] as const
+        ).map(([cle, label]) => (
+          <button
+            key={cle}
+            aria-pressed={rubrique === cle}
+            onClick={() => {
+              setRubrique(cle);
+              setFiltre(cle === 'mails' ? 'emails' : cle === 'activites' ? 'activites' : 'tout');
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
       <div className="fi-corps">
         <div className="fi-gauche">
           {kind === 'affaire' && (
@@ -533,7 +560,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
               </div>
             </section>
           )}
-          <section className="panel">
+          <section className="panel com-informations">
             <div className="panel-h">
               <h2>Détails</h2>
             </div>
@@ -632,89 +659,99 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
           {kind === 'affaire' && data.mandat !== undefined && (
             <Mandat slug={slug} id={id} mandat={data.mandat} onChange={load} />
           )}
-          {data.diagnostics && (
-            <CarteOutils
-              slug={slug}
-              type="diagnostic"
-              titre="Diagnostics"
-              de={{ kind, id }}
-              lignes={data.diagnostics.map((d) => ({
-                id: d.id,
-                nom: d.nom,
-                detail: `Étape ${d.etape}${d.statut ? `, ${d.statut}` : ''}`,
-                href: `#/${slug}/diagnostics/ouvrir/${d.id}`,
-              }))}
-              onChange={load}
-              onMessage={setMessage}
-            />
-          )}
-          {data.testsVma && (
-            <CarteOutils
-              slug={slug}
-              type="vma"
-              titre="Tests VMA"
-              de={{ kind, id }}
-              lignes={data.testsVma.map((t) => ({
-                id: t.id,
-                nom: t.nom,
-                detail: t.date ? dateHeure(t.date) : 'En attente de réponse',
-                href: `#/${slug}/diagnostics/test/${t.id}`,
-              }))}
-              onChange={load}
-              onMessage={setMessage}
-            />
-          )}
-          {data.ateliers && (
-            <section className="panel">
-              <div className="panel-h">
-                <h2>Ateliers stratégiques ({data.ateliers.length})</h2>
-              </div>
-              <ul className="panel-b fi-liste">
-                {data.ateliers.length === 0 && <li className="muted small">Aucun atelier lié.</li>}
-                {data.ateliers.map((a) => (
-                  <li key={a.id} className="fi-ligne">
-                    <span className="fi-ident">
-                      <span>
-                        <a href={`#/${slug}/atelier/ouvrir/${a.id}`}>{a.titre}</a>
-                        <span className="small muted"> Étape {a.etape} sur 6</span>
+          <div className="com-fiche-liens">
+            {data.diagnostics && (
+              <CarteOutils
+                slug={slug}
+                type="diagnostic"
+                titre="Diagnostics"
+                de={{ kind, id }}
+                lignes={data.diagnostics.map((d) => ({
+                  id: d.id,
+                  nom: d.nom,
+                  detail: `Étape ${d.etape}${d.statut ? `, ${d.statut}` : ''}`,
+                  href: `#/${slug}/diagnostics/ouvrir/${d.id}`,
+                }))}
+                onChange={load}
+                onMessage={setMessage}
+              />
+            )}
+            {data.testsVma && (
+              <CarteOutils
+                slug={slug}
+                type="vma"
+                titre="Tests VMA"
+                de={{ kind, id }}
+                lignes={data.testsVma.map((t) => ({
+                  id: t.id,
+                  nom: t.nom,
+                  detail: t.date ? dateHeure(t.date) : 'En attente de réponse',
+                  href: `#/${slug}/diagnostics/test/${t.id}`,
+                }))}
+                onChange={load}
+                onMessage={setMessage}
+              />
+            )}
+            {data.ateliers && (
+              <section className="panel">
+                <div className="panel-h">
+                  <h2>Ateliers stratégiques ({data.ateliers.length})</h2>
+                </div>
+                <ul className="panel-b fi-liste">
+                  {data.ateliers.length === 0 && (
+                    <li className="muted small">Aucun atelier lié.</li>
+                  )}
+                  {data.ateliers.map((a) => (
+                    <li key={a.id} className="fi-ligne">
+                      <span className="fi-ident">
+                        <span>
+                          <a href={`#/${slug}/atelier/ouvrir/${a.id}`}>{a.titre}</a>
+                          <span className="small muted"> Étape {a.etape} sur 6</span>
+                        </span>
                       </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          <CarteOutils
-            slug={slug}
-            type="rdv"
-            titre="Rendez-vous"
-            de={{ kind, id }}
-            lignes={data.rendezVous.map((r) => ({
-              id: r.id,
-              nom: r.titre || 'Rendez-vous',
-              detail: `${r.debut ? dateHeure(r.debut) : ''}${r.compteRendu ? ' · compte rendu fait' : ''}`,
-              href: lien(slug, 'rdv', r.id),
-            }))}
-            onChange={load}
-            onMessage={setMessage}
-          />
-          {cartes.map((c) => (
-            <CarteLiens
-              key={c.titre}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            <CarteOutils
               slug={slug}
-              titre={c.titre}
-              kind={c.kind}
+              type="rdv"
+              titre="Rendez-vous"
               de={{ kind, id }}
-              lignes={c.lignes}
-              ecrit={data.ecrit}
-              principalGerable={c.principalGerable}
+              lignes={data.rendezVous.map((r) => ({
+                id: r.id,
+                nom: r.titre || 'Rendez-vous',
+                detail: `${r.debut ? dateHeure(r.debut) : ''}${r.compteRendu ? ' · compte rendu fait' : ''}`,
+                href: lien(slug, 'rdv', r.id),
+              }))}
               onChange={load}
               onMessage={setMessage}
             />
-          ))}
+            <OutilsConnexes
+              slug={slug}
+              fiche={data}
+              references={referencesLiees(data)}
+              inclureDirect={false}
+            />
+            {cartes.map((c) => (
+              <CarteLiens
+                key={c.titre}
+                slug={slug}
+                titre={c.titre}
+                kind={c.kind}
+                de={{ kind, id }}
+                lignes={c.lignes}
+                ecrit={data.ecrit}
+                principalGerable={c.principalGerable}
+                onChange={load}
+                onMessage={setMessage}
+              />
+            ))}
+          </div>
         </div>
         <div className="fi-droite">
-          <section className="panel">
+          <section className="panel com-composeur">
             <div className="seg fi-onglets">
               <button className={onglet === 'note' ? 'on' : ''} onClick={() => setOnglet('note')}>
                 Note
@@ -772,7 +809,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
               )}
             </div>
           </section>
-          <section className="panel">
+          <section className="panel com-a-venir">
             <div className="panel-h">
               <h2>À venir</h2>
             </div>
@@ -794,9 +831,15 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
               ))}
             </ul>
           </section>
-          <section className="panel">
+          <section className="panel com-historique">
             <div className="panel-h">
-              <h2>Historique</h2>
+              <h2>
+                {rubrique === 'mails'
+                  ? 'Conversations mail'
+                  : rubrique === 'activites'
+                    ? 'Activités terminées'
+                    : 'Historique'}
+              </h2>
             </div>
             <div className="vq-filter">
               {FILTRES.map(([k, l]) => (
@@ -948,6 +991,6 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
           }}
         />
       )}
-    </>
+    </section>
   );
 }
