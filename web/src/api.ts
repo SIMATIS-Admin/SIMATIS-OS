@@ -2574,6 +2574,8 @@ export type LigneIk = {
   statut: StatutIk;
   cumulKm: number;
   indemniteCents: number | null;
+  mandat: string | null;
+  refacturer: boolean;
 };
 export type EtatIk = {
   mois: string;
@@ -2636,8 +2638,15 @@ export const creerTrajetIk = (
     trajet: string;
     commentaire: string;
     kmAllerRetour: number;
+    mandat?: string | null;
+    refacturer?: boolean;
   },
 ) => sendJson<{ id: string }>('POST', inst(slug, 'gestion/ik/trajets'), t);
+export const modifierTrajetIk = (
+  slug: string,
+  id: string,
+  patch: { refacturer?: boolean; mandat?: string | null },
+) => sendJson<{ id: string }>('PATCH', inst(slug, `gestion/ik/trajets/${id}`), patch);
 export const archiverTrajetIk = (slug: string, id: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/ik/trajets/${id}`), {});
 export const avancerMoisIk = (
