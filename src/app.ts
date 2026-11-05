@@ -120,7 +120,11 @@ export function buildApp({
   registerAtelierRoutes(app, { db });
   registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
-  registerRunnerApi(app, { db, codex });
+  registerRunnerApi(app, {
+    db,
+    codex,
+    drive: { secretsDir, realWrites, ...(googleFetch ? { fetch: googleFetch } : {}) },
+  });
   registerCerveauRoutes(app, { db, lienKdrive: partageKdriveUrl });
   registerWeb(app);
   return app;

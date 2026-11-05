@@ -80,6 +80,19 @@ export async function envoyerRapportSurDrive(
   }
 }
 
+// Le Word d'un Google Doc de rapport, par son lien : exporté par Drive, donc avec les retouches
+// faites à la main dans Google Docs.
+export async function exporterDocParLien(
+  instance: Instance,
+  lien: string,
+  deps: DriveDeps,
+): Promise<Buffer> {
+  const docId = IDENTIFIANT_DOC.exec(lien)?.[1];
+  if (!docId) throw new ProjetIntrouvable('Aucun Google Doc pour ce lien');
+  const secrets = await loadInstanceSecrets(deps.secretsDir, instance.slug);
+  return exporterDocx({ secrets, instance }, docId, deps.fetch ? { fetch: deps.fetch } : {});
+}
+
 // La version courante du Doc, ou celle d'un numéro : exportée en Word par Drive, donc avec les
 // retouches faites à la main dans Google Docs.
 export async function exporterRapportDrive(
@@ -110,12 +123,7 @@ export async function exporterRapportDrive(
   const lien = version === undefined ? projet.lien : entree?.lien;
   const docId = lien ? IDENTIFIANT_DOC.exec(lien)?.[1] : undefined;
   if (!docId) throw new ProjetIntrouvable('Aucun Google Doc pour cette version du rapport');
-  const secrets = await loadInstanceSecrets(deps.secretsDir, instance.slug);
-  const contenu = await exporterDocx(
-    { secrets, instance },
-    docId,
-    deps.fetch ? { fetch: deps.fetch } : {},
-  );
+  const contenu = await exporterDocParLien(instance, lien!, deps);
   const nom =
     version === undefined && projet.nomWord
       ? projet.nomWord

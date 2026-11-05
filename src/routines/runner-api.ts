@@ -14,6 +14,7 @@ import {
   demarrerAttente,
   finirAttente,
 } from '../diagnostic/chat.js';
+import type { DriveDeps } from '../diagnostic/drive.js';
 import { and, eq } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
 import { CampagneInvalide } from '../prospection/campagnes.js';
@@ -42,7 +43,7 @@ const UN_QUART_HEURE = 15 * 60_000;
 // opens it.
 export function registerRunnerApi(
   app: FastifyInstance,
-  { db, codex }: { db: Database; codex?: ReturnType<typeof fileCodex> },
+  { db, codex, drive }: { db: Database; codex?: ReturnType<typeof fileCodex>; drive?: DriveDeps },
 ): void {
   const auth = async (request: FastifyRequest, reply: FastifyReply) => {
     const header = request.headers.authorization ?? '';
@@ -171,7 +172,7 @@ export function registerRunnerApi(
   // Conversations du diagnostic en attente de Claude (un projet à la fois, comme l'Inbox).
   app.get('/api/runner/diagnostic/attentes', async (request, reply) => {
     if (!(await auth(request, reply))) return reply;
-    return attentesClaude(db);
+    return attentesClaude(db, drive);
   });
 
   app.post<Route>('/api/runner/diagnostic/attentes/:id/demarrer', async (request, reply) => {

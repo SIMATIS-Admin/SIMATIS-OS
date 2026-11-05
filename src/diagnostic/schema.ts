@@ -53,6 +53,9 @@ export const STATUTS_RAPPORT = ['aucun', 'en_cours', 'pret'] as const;
 export type Demande = (typeof DEMANDES)[number];
 // Une version du rapport : son contenu structuré, d'où le Word se régénère et que Claude révise.
 export type VersionRapport = { version: number; le: string; contenu: ContenuRapport };
+// Une version du rapport sur Drive. `finale` : la version que le pilote a validée comme référence de
+// rédaction pour les rapports suivants (une seule par projet).
+export type LienRapport = { lien: string; le: string; version?: number; finale?: boolean };
 export type Diapositive = { titre: string; texte: string; notes: string };
 
 // Un projet de diagnostic, pour une entreprise prospect de SIMATIS. Étapes : 1 préparation,
@@ -83,10 +86,7 @@ export const diagnosticProjets = pgTable(
       .notNull()
       .default('aucun'),
     rapportLien: text('rapport_lien'),
-    rapportLiens: jsonb('rapport_liens')
-      .$type<{ lien: string; le: string; version?: number }[]>()
-      .notNull()
-      .default([]),
+    rapportLiens: jsonb('rapport_liens').$type<LienRapport[]>().notNull().default([]),
     // Dossier Drive du diagnostic (Google Docs du rapport) : créé à la première version envoyée.
     driveDossierId: text('drive_dossier_id'),
     // Versions du rapport rédigées par Claude (la dernière est le Word affiché). Un Word importé

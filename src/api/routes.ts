@@ -19,6 +19,7 @@ import { exporterRapportDrive } from '../diagnostic/drive.js';
 import {
   demanderRapport,
   importerRapport,
+  marquerVersionFinale,
   renvoyerRapportSurDrive,
 } from '../diagnostic/rapport.js';
 import {
@@ -526,6 +527,30 @@ export function registerApi(
       }
     }),
   );
+  // Réglage du module Diagnostic : relire les deux derniers rapports finaux avant de rédiger.
+  app.get<SlugParams>(
+    '/api/i/:slug/diagnostic/reglages',
+    onInstance((i) =>
+      Promise.resolve({ relireFinaux: i.config.diagnostic?.relireFinaux !== false }),
+    ),
+  );
+  app.put<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/diagnostic/reglages',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = z.object({ relireFinaux: z.boolean() }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Réglage invalide' });
+      await withInstance(db, i.id, (tx) =>
+        tx
+          .update(instances)
+          .set({
+            config: { ...i.config, diagnostic: { ...i.config.diagnostic, ...parsed.data } },
+            updatedAt: new Date(),
+          })
+          .where(eq(instances.id, i.id)),
+      );
+      return parsed.data;
+    }),
+  );
   // Rapport : le pilote demande sa rédaction par Claude (étape 4, revue validée).
   app.post<ProjetRoute>(
     '/api/i/:slug/diagnostic/projets/:id/rapport/produire',
@@ -569,6 +594,25 @@ export function registerApi(
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
       try {
         return await renvoyerRapportSurDrive(db, i, id, driveDeps);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Version finale du rapport : le pilote désigne le Google Doc qui servira de référence de rédaction.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/finale',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z
+        .object({ lien: z.string().trim().min(1).max(500), finale: z.boolean() })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Lien et choix attendus' });
+      try {
+        return await marquerVersionFinale(db, i, id, corps.data.lien, corps.data.finale);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });

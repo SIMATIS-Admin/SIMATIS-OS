@@ -4,6 +4,8 @@ import { rendezVous } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
+import { rapportsFinauxPour } from './finaux.js';
+import type { DriveDeps } from './drive.js';
 import { diagnosticProjets, type Demande, type MessageDiag, type Projet } from './schema.js';
 import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
 
@@ -176,7 +178,10 @@ export async function finirAttente(
 }
 
 // Messages en attente sur toutes les instances SIMATIS (le runner ne traite que l'espace SIMATIS).
-export async function attentesClaude(db: Executor) {
+//
+// `drive` permet de joindre à une demande de rapport les deux derniers rapports finaux (exportés de
+// Drive) ; sans lui, ou si le réglage de l'instance les désactive, la liste reste vide.
+export async function attentesClaude(db: Executor, drive?: DriveDeps) {
   const sorties = [];
   for (const instance of (await listInstances(db)).filter((i) => i.type === 'propre')) {
     const rows = await withInstance(db, instance.id, (tx) =>
@@ -195,7 +200,14 @@ export async function attentesClaude(db: Executor) {
                 .where(eq(rendezVous.id, p.capitalisationRdvId!)),
             )
           : [];
+      const relireFinaux = instance.config.diagnostic?.relireFinaux !== false;
+      const rapportsFinaux =
+        drive && relireFinaux && p.demande === 'rapport'
+          ? await rapportsFinauxPour(db, instance, p.id, drive)
+          : [];
       sorties.push({
+        relireFinaux,
+        rapportsFinaux,
         compteRendu: rdv?.compteRendu ?? null,
         capitalisationProposition:
           p.demande === 'capitalisation_enregistrer'

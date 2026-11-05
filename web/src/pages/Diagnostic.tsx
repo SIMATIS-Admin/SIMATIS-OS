@@ -13,6 +13,9 @@ import {
   importerEntretienDiag,
   envoyerRapportDriveDiag,
   importerRapportDiag,
+  majReglagesDiagnostic,
+  marquerRapportFinal,
+  reglagesDiagnostic,
   demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
@@ -912,7 +915,30 @@ function Rapport({
       onErreur(messageErreur(err));
     }
   };
-  const docGoogle = /docs\.google\.com\/document\//.test(projet.rapportLien ?? '');
+  // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
+  const [relireFinaux, setRelireFinaux] = useState(true);
+  useEffect(() => {
+    void Promise.resolve(reglagesDiagnostic(slug))
+      .then((r) => r && setRelireFinaux(r.relireFinaux))
+      .catch(() => undefined);
+  }, [slug]);
+  const changerRelire = async (valeur: boolean) => {
+    try {
+      setRelireFinaux((await majReglagesDiagnostic(slug, valeur)).relireFinaux);
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const marquerFinale = async (lien: string, finale: boolean) => {
+    try {
+      onChange(await marquerRapportFinal(slug, projet.id, lien, finale));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const estDoc = (lien: string) => /docs\.google\.com\/document\//.test(lien);
+  const versionsDrive = projet.rapportLiens.filter((r) => estDoc(r.lien));
+  const docGoogle = estDoc(projet.rapportLien ?? '');
   const precedents = projet.rapportLiens.slice(1);
   const versionsPrecedentes = projet.rapportVersions.slice(0, -1).reverse();
   return (
@@ -999,6 +1025,42 @@ function Rapport({
               ))}
             </ul>
           </details>
+        )}
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={relireFinaux}
+            onChange={(e) => void changerRelire(e.target.checked)}
+          />{' '}
+          Relire les deux derniers rapports finaux avant de rédiger
+        </label>
+        {versionsDrive.length > 0 && (
+          <div className="stack">
+            <span className="small muted">
+              Cochez la version finale : c’est elle qui servira de modèle pour rédiger les prochains
+              rapports.
+            </span>
+            <ul className="small">
+              {versionsDrive.map((r) => (
+                <li key={r.lien}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={r.finale === true}
+                      disabled={enCours}
+                      aria-label={`Version finale : ${r.version ? `version ${r.version}` : 'rapport'} du ${new Date(r.le).toLocaleDateString('fr-FR')}`}
+                      onChange={(e) => void marquerFinale(r.lien, e.target.checked)}
+                    />{' '}
+                    <a href={r.lien} target="_blank" rel="noreferrer">
+                      {r.version ? `Version ${r.version}` : 'Rapport'} du{' '}
+                      {new Date(r.le).toLocaleDateString('fr-FR')}
+                    </a>
+                    {r.finale && <span className="badge green"> Version finale</span>}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {precedents.length > 0 && (
           <details>

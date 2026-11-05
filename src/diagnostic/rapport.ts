@@ -3,7 +3,7 @@ import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { ChatIndisponible, envoyerMessage } from './chat.js';
-import { envoyerRapportSurDrive, type DriveDeps, type EnvoiDrive } from './drive.js';
+import { envoyerRapportSurDrive, estGoogleDoc, type DriveDeps, type EnvoiDrive } from './drive.js';
 import { diagnosticProjets, type Projet } from './schema.js';
 import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
 import {
@@ -146,6 +146,44 @@ export async function renvoyerRapportSurDrive(
       throw new ChatIndisponible(`Drive a refusé l’envoi : ${envoi.message ?? 'erreur inconnue'}`);
     const [apres] = await tx.select().from(diagnosticProjets).where(eq(diagnosticProjets.id, id));
     return vue(apres!);
+  });
+}
+
+// Le pilote désigne la version finale d'un rapport : celle qu'il a retravaillée et validée. Une seule
+// par projet. Seul un Google Doc peut l'être : l'OS doit pouvoir le relire plus tard.
+export function marquerVersionFinale(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  lien: string,
+  finale: boolean,
+): Promise<ProjetVue> {
+  verifierEspace(instance);
+  return withInstance(db, instance.id, async (tx) => {
+    const [projet] = await tx
+      .select()
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
+    if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    if (projet.rapportLienStatut === 'en_cours')
+      throw new ChatIndisponible('Un rapport est en cours de rédaction : attendez sa fin.');
+    if (!projet.rapportLiens.some((l) => l.lien === lien))
+      throw new ChatIndisponible("Cette version n'appartient pas à ce projet.");
+    if (!estGoogleDoc(lien))
+      throw new ChatIndisponible('Seule une version envoyée sur Google Docs peut être finale.');
+    const [row] = await tx
+      .update(diagnosticProjets)
+      .set({
+        rapportLiens: projet.rapportLiens.map((l) => {
+          const autre = { ...l };
+          delete autre.finale;
+          return finale && l.lien === lien ? { ...autre, finale: true } : autre;
+        }),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
+      .returning();
+    return vue(row!);
   });
 }
 

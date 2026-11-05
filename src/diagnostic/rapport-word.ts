@@ -23,7 +23,8 @@ export const contenuRapportSchema = z.object({
       .array(z.object({ quand: texte(60), objectif: texte(300), enPlace: texte(500) }))
       .min(1)
       .max(4),
-    proposition: texte(2000),
+    // Facultatif : une règle de rédaction peut retirer toute proposition du rapport.
+    proposition: texte(2000).optional(),
   }),
   contexte: paragraphes,
   resultats: z.object({
@@ -61,8 +62,8 @@ export const contenuRapportSchema = z.object({
   }),
   conclusion: z.object({
     paragraphes,
-    propositionTitre: texte(200),
-    proposition: paragraphes,
+    propositionTitre: texte(200).optional(),
+    proposition: paragraphes.optional(),
   }),
 });
 export type ContenuRapport = z.infer<typeof contenuRapportSchema>;
@@ -267,8 +268,7 @@ function corpsDocument(c: ContenuRapport) {
       ['QUAND', 'OBJECTIF', 'CE QUI SERA EN PLACE'],
       e.plan.map((p) => [p.quand, p.objectif, p.enPlace]),
     ),
-    h2('Ma proposition'),
-    para(e.proposition),
+    ...(e.proposition ? [h2('Ma proposition'), para(e.proposition)] : []),
   );
   b.push(demarche());
   b.push(h1(`Le contexte ${deEntreprise(c.entreprise)}`), ...c.contexte.map((t) => para(t)));
@@ -304,7 +304,11 @@ function corpsDocument(c: ContenuRapport) {
   if (c.plan.nePasFaire.length > 0)
     b.push(h2('Ce que l’entreprise ne fera pas'), ...c.plan.nePasFaire.map((t) => corps(t)));
   b.push(h1('Conclusion et prochaine étape'), ...c.conclusion.paragraphes.map((t) => para(t)));
-  b.push(h2(c.conclusion.propositionTitre), ...c.conclusion.proposition.map((t) => corps(t, 200)));
+  if (c.conclusion.propositionTitre && c.conclusion.proposition)
+    b.push(
+      h2(c.conclusion.propositionTitre),
+      ...c.conclusion.proposition.map((t) => corps(t, 200)),
+    );
   b.push(
     `<w:p><w:pPr><w:spacing w:after="200" w:before="120" w:line="300"/></w:pPr>${run('Bien à vous,')}</w:p>`,
     `<w:p><w:pPr><w:spacing w:after="40"/></w:pPr>${run('Marc Tabouret', { color: '0C376B', sz: 24, b: true })}</w:p>`,

@@ -5,7 +5,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
+import { eq } from 'drizzle-orm';
 import { entreprises } from '../crm/schema.js';
+import { diagnosticProjets } from './schema.js';
 import { createInstance, getInstanceBySlug } from '../instances/service.js';
 
 // Routes HTTP de l'entretien : import du PDF (corps plus grand que la limite par défaut) et correction.
@@ -148,6 +150,52 @@ describe('Entretien : API', () => {
       url: '/api/i/simatis/diagnostic/projets/pas-un-uuid',
     });
     expect(mauvais.statusCode).toBe(400);
+  });
+
+  it('version finale du rapport : cocher, refuser un lien étranger, refuser un corps invalide', async () => {
+    const simatis = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
+    const projet = await creerProjet('Version finale API');
+    const lien = 'https://docs.google.com/document/d/doc-api-1/edit';
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({ rapportLiens: [{ lien, le: '2026-10-29T10:00:00.000Z', version: 4 }] })
+      .where(eq(diagnosticProjets.id, projet.id));
+    expect(simatis.slug).toBe('simatis');
+    const url = `/api/i/simatis/diagnostic/projets/${projet.id}/rapport/finale`;
+    const ok = await app.inject({ method: 'POST', url, payload: { lien, finale: true } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json<{ rapportLiens: { finale?: boolean }[] }>().rapportLiens[0]?.finale).toBe(true);
+    const etranger = await app.inject({
+      method: 'POST',
+      url,
+      payload: { lien: 'https://docs.google.com/document/d/autre/edit', finale: true },
+    });
+    expect(etranger.statusCode).toBe(409);
+    const invalide = await app.inject({ method: 'POST', url, payload: { lien } });
+    expect(invalide.statusCode).toBe(400);
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/rapport/finale',
+      payload: { lien, finale: true },
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
+  it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
+    const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
+    const url = '/api/i/simatis/diagnostic/reglages';
+    expect((await app.inject({ method: 'GET', url })).json()).toEqual({ relireFinaux: true });
+    const coupe = await app.inject({ method: 'PUT', url, payload: { relireFinaux: false } });
+    expect(coupe.statusCode).toBe(200);
+    expect(coupe.json()).toEqual({ relireFinaux: false });
+    expect((await app.inject({ method: 'GET', url })).json()).toEqual({ relireFinaux: false });
+    const apres = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
+    expect(apres.config.modules).toEqual(avant.config.modules);
+    expect(apres.config.ecrituresReelles).toEqual(avant.config.ecrituresReelles);
+    const remis = await app.inject({ method: 'PUT', url, payload: { relireFinaux: true } });
+    expect(remis.json()).toEqual({ relireFinaux: true });
+    const invalide = await app.inject({ method: 'PUT', url, payload: { relireFinaux: 'oui' } });
+    expect(invalide.statusCode).toBe(400);
   });
 
   it('refuse un identifiant de projet mal formé', async () => {
