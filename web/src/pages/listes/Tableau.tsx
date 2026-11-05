@@ -124,7 +124,9 @@ export function Tableau<T extends { id: string }>({
   onModifier,
   onSupprimer,
   onFusionner,
+  outilsRepliables = false,
 }: {
+  outilsRepliables?: boolean;
   cle: string;
   lignes: T[];
   colonnes: Colonne<T>[];
@@ -142,6 +144,7 @@ export function Tableau<T extends { id: string }>({
       colonnes.filter((c) => c.masquee).map((c) => c.cle),
     ),
   );
+  const [outilsOuverts, setOutilsOuverts] = useState(false);
   const [choix, setChoix] = useState(false);
   const [tri, setTri] = useState<{ cle: string; sens: 1 | -1 } | null>(null);
   const [filtre, setFiltre] = useState<Filtre>({ champ: '', valeur: '' });
@@ -275,7 +278,19 @@ export function Tableau<T extends { id: string }>({
           <div>{bilan}</div>
         </div>
       )}
-      <div className="tb-outils">
+      {outilsRepliables && (
+        <div className="com-outils-barre">
+          <button
+            className="btn sm"
+            aria-expanded={outilsOuverts}
+            onClick={() => setOutilsOuverts(!outilsOuverts)}
+          >
+            <Icon name="sliders" />
+            Filtres et colonnes{filtre.champ && filtre.valeur ? ' · filtre actif' : ''}
+          </button>
+        </div>
+      )}
+      <div className="tb-outils" hidden={outilsRepliables && !outilsOuverts}>
         <select
           className="input"
           aria-label="Filtres enregistrés"

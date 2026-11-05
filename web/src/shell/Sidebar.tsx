@@ -27,7 +27,8 @@ type Props = {
 const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
-const QUOTIDIEN = ['brief', 'inbox', 'agenda'];
+const QUOTIDIEN = ['brief', 'inbox'];
+const COMMERCIAL = ['agenda', 'pipeline', 'contacts', 'entreprises', 'rendez-vous'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
 const memoriser = (cle: string, valeur: string) => {
@@ -137,9 +138,12 @@ export function Sidebar({
     (it) => QUOTIDIEN.includes(it.id) && allowed(it, current.modules),
   );
   const favItems = favoris
-    .filter((id) => !QUOTIDIEN.includes(id))
+    .filter((id) => !QUOTIDIEN.includes(id) && !COMMERCIAL.includes(id))
     .map((id) => allItems().find((it) => it.id === id))
     .filter((it): it is NavItem => !!it && allowed(it, current.modules));
+  const commercial = COMMERCIAL.map((id) => allItems().find((it) => it.id === id)).filter(
+    (it): it is NavItem => !!it && allowed(it, current.modules),
+  );
   const isPortefeuille = view === 'portefeuille';
 
   return (
@@ -219,6 +223,10 @@ export function Sidebar({
           <span>Mon quotidien</span>
           {quotidien.map((it) => link(it))}
         </div>
+        <div className="nav-group commercial">
+          <span>Relation commerciale</span>
+          {commercial.map((it) => link(it))}
+        </div>
         {favItems.length > 0 && (
           <div className="nav-group favs">
             <span>
@@ -248,6 +256,7 @@ export function Sidebar({
               (it) =>
                 allowed(it, current.modules) &&
                 !QUOTIDIEN.includes(it.id) &&
+                !COMMERCIAL.includes(it.id) &&
                 !favItems.some((f) => f.id === it.id),
             );
             if (items.length === 0) return null;

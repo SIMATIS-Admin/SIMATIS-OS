@@ -274,11 +274,20 @@ export function App() {
   };
 
   return (
-    <div className="app">
+    <div className="app" data-view={view}>
       <Sidebar
         instances={instances}
         current={current}
-        view={view}
+        view={
+          view === 'fiche'
+            ? ({
+                contact: 'contacts',
+                entreprise: 'entreprises',
+                affaire: 'pipeline',
+                rdv: 'rendez-vous',
+              }[route.kind ?? ''] ?? view)
+            : view
+        }
         open={menuOpen}
         favoris={favoris}
         compteurs={compteurs}
