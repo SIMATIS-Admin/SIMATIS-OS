@@ -1,4 +1,4 @@
-# Diagnostic : versions finales et règles de rédaction continues (analyse, rapport, restitution, diagnostic complet)
+# Diagnostic : versions finales et règles de rédaction continues (support, analyse, rapport, restitution, diagnostic complet)
 
 Date : 2026-11-05. Statut : conception validée dans la conversation, spec à relire.
 
@@ -26,10 +26,10 @@ Quand un rapport est finalisé, la manière de rédiger les suivants s'enrichit 
 - Chaque changement de règle est visible dans l'OS et annulable.
 - Aucun contenu de rapport, nom de client ou règle propriétaire dans le dépôt.
 
-Le même mécanisme vaut pour l'**analyse des résultats** (revue de l'étape 3), la **restitution** (deck
+Le même mécanisme vaut pour le **support d'ouverture**, l'**analyse des résultats** (revue de l'étape 3), la **restitution** (deck
 de l'étape 5) et le **diagnostic complet** une fois terminé (voir « Extension »).
 
-Hors périmètre : préparation du deck d'ouverture (étape 1), calcul du score, restitution, capitalisation des préconisations
+Hors périmètre : calcul du score, restitution, capitalisation des préconisations
 (livraison existante), modification du texte du rapport depuis l'OS.
 
 ## Décisions prises
@@ -124,12 +124,18 @@ constats, mode de démarrage « relire les finaux », journal annulable) est éc
 
 | Type | Version finale | Fiche de règles | Quand la capitalisation part |
 | --- | --- | --- | --- |
+| `support` | support d'ouverture archivé comme final (action « Support final archivé » qui existe déjà : `supportFinalLe`) | règles du support d'ouverture (structure, durée, ton, présentation du modèle) | à l'archivage du support final |
 | `analyse` | revue de l'étape 3 validée par le pilote (commentaires, préconisations, plan d'action) | règles d'analyse : formulation des constats, niveau de détail des préconisations, construction du plan d'action | à la validation de la revue |
 | `rapport` | Google Doc coché (livraisons 1 à 3) | règles de rédaction du rapport | à la case cochée |
 | `restitution` | version du deck de l'étape 5 cochée (liste `restitutionLiens`) | règles de construction du deck de restitution (plan, durée, ton, place des options) | à la case cochée |
 | `diagnostic` | le projet entier, une fois terminé | règles de conduite du diagnostic de bout en bout (enchaînement des étapes, ce qui a été corrigé entre le brouillon de Claude et le livrable remis, délais) | quand le pilote clôt le diagnostic (étape 5 terminée) |
 
-**Livraison 4, analyse des résultats** : à l'étape 3, Claude prépare la revue d'un nouveau projet à
+**Livraison 4, support d'ouverture** : l'OS a déjà une notion de support final archivé
+(`supportFinalLe`) : elle sert de version finale, sans nouvelle case. Le texte du support (`supportTexte`)
+est déjà stocké dans l'OS, ce qui évite l'export Drive. À la préparation d'un nouveau support, Claude
+reçoit les règles et, tant que le réglage est actif, les deux derniers supports finaux.
+
+**Livraison 5, analyse des résultats** : à l'étape 3, Claude prépare la revue d'un nouveau projet à
 partir des deux dernières analyses finalisées (revues validées) : il propose commentaires,
 préconisations et plan d'action dans le style et le niveau de détail déjà validés, au lieu de partir
 de zéro. Le pilote corrige, puis valide la revue (action « Valider la revue », qui pose la version
@@ -137,12 +143,12 @@ finale de l'analyse). Les préconisations retenues alimentent aussi la biblioth�
 skill de capitalisation existante : cette livraison s'y ajoute sans la remplacer. Les propositions de
 Claude sont toujours des suggestions modifiables : rien n'est inventé hors des données du projet.
 
-**Livraison 5, restitution** : la case « Version finale » et la relecture des deux derniers decks
+**Livraison 6, restitution** : la case « Version finale » et la relecture des deux derniers decks
 finaux s'ajoutent à l'étape 5, sur le même modèle que le rapport. Le texte du deck final est lu
 par Claude comme aujourd'hui (le texte du deck n'est lu qu'à la demande), puis résumé en règles. Le
 réglage « Relire les finaux » est propre à chaque type.
 
-**Livraison 6, diagnostic complet** : à la clôture, une demande de capitalisation globale relit le
+**Livraison 7, diagnostic complet** : à la clôture, une demande de capitalisation globale relit le
 projet (revue, rapport final, deck final, compte rendu de la restitution déjà capitalisé) et met à
 jour la fiche de règles du diagnostic. Elle complète la capitalisation de la restitution existante
 (`capitalisation.ts`), qui continue d'alimenter le second cerveau avec ce que dit le client : la
@@ -174,9 +180,10 @@ Le journal et l'annulation sont communs, avec une colonne « type de livrable »
 1. Version finale (données, service, API, interface).
 2. Production à partir des finaux et des règles, avec amorçage.
 3. Capitalisation automatique et journal.
-4. Analyse des résultats (étape 3) : réutilisation des analyses finalisées.
-5. La même chose pour la restitution (deck de l'étape 5).
-6. Capitalisation du diagnostic complet à la clôture.
+4. Support d'ouverture : règles et supports finaux déjà archivés.
+5. Analyse des résultats (étape 3) : réutilisation des analyses finalisées.
+6. La même chose pour la restitution (deck de l'étape 5).
+7. Capitalisation du diagnostic complet à la clôture.
 
 La livraison 2 apporte déjà le gain principal : un rapport en cours se refait avec les règles et les
 modèles. La 3 évite d'avoir à tenir les règles à la main.
@@ -185,6 +192,8 @@ modèles. La 3 évite d'avoir à tenir les règles à la main.
 
 - Conversion du Word exporté en texte : réutiliser `lecture-pdf.ts` ou l'import existant si possible.
 - Droits d'écriture du runner sur le dossier du second cerveau pour une demande de type rapport.
+- Support d'ouverture : il est à l'étape 1 dans l'OS ; confirmer la numérotation avec le pilote, et
+  si les supports déjà archivés comptent comme finaux.
 - Analyse : la revue porte aujourd'hui un champ `revue.statut` (« brouillon » par défaut) et l'action
   « Valider la revue » n'existe pas encore dans le code ; confirmer la forme exacte de la revue avec
   le pilote, et le recouvrement avec la bibliothèque générique tenue par la skill de capitalisation.
