@@ -7,6 +7,26 @@ import { LOGO_PNG_BASE64, MODELE } from './modele-word.js';
 const texte = (max: number) => z.string().trim().min(1).max(max);
 const paragraphes = z.array(texte(3000)).min(1).max(12);
 
+// Tableau libre (2 à 4 colonnes) et section libre : l'OS ne fige ni les thèmes ni les annexes, qui
+// varient d'un client à l'autre. Une section sans paragraphe, puce ni tableau reste un simple titre.
+const tableauSchema = z
+  .object({
+    entetes: z.array(texte(60)).min(2).max(4),
+    lignes: z
+      .array(z.array(texte(1500)).min(2).max(4))
+      .min(1)
+      .max(12),
+  })
+  .refine((t) => t.lignes.every((l) => l.length === t.entetes.length), {
+    message: 'Chaque ligne du tableau doit avoir autant de cellules que d’en-têtes',
+  });
+const sectionSchema = z.object({
+  titre: texte(200),
+  paragraphes: z.array(texte(3000)).max(12).default([]),
+  puces: z.array(texte(1500)).max(12).default([]),
+  tableau: tableauSchema.optional(),
+});
+
 export const contenuRapportSchema = z.object({
   entreprise: texte(120),
   dateDiagnostic: texte(60), // « 13 octobre 2026 »
@@ -28,15 +48,25 @@ export const contenuRapportSchema = z.object({
   contexte: paragraphes,
   resultats: z.object({
     intro: texte(1500),
+    // Un thème par ligne : les trois dimensions et, selon le diagnostic, les thèmes de l'entretien.
     dimensions: z
       .array(z.object({ nom: texte(80), note: texte(8), constat: texte(600) }))
-      .length(3),
+      .min(1)
+      .max(10),
     profil: z.object({ nom: texte(40), scores: texte(200), paragraphes }),
   }),
   preconisations: z.object({
     intro: texte(1500),
     items: z
-      .array(z.object({ etiquette: texte(20), titre: texte(200), paragraphes }))
+      .array(
+        z.object({
+          etiquette: texte(20),
+          titre: texte(200),
+          // Renseigné, il alimente le tableau récapitulatif placé avant les cartes.
+          potentiel: texte(300).optional(),
+          paragraphes,
+        }),
+      )
       .min(1)
       .max(10),
   }),
@@ -49,7 +79,14 @@ export const contenuRapportSchema = z.object({
           titre: texte(200),
           objectif: texte(500),
           actions: z
-            .array(z.object({ bloc: texte(100), action: texte(1500) }))
+            .array(
+              z.object({
+                quand: texte(60).optional(),
+                bloc: texte(100).optional(),
+                action: texte(1500),
+                resultat: texte(1000).optional(),
+              }),
+            )
             .min(1)
             .max(8),
         }),
@@ -58,12 +95,17 @@ export const contenuRapportSchema = z.object({
       .max(4),
     indicateurs: paragraphes,
     nePasFaire: z.array(texte(1500)).max(6).default([]),
+    conditions: z.array(texte(1500)).max(8).default([]),
   }),
   conclusion: z.object({
     paragraphes,
     propositionTitre: texte(200),
     proposition: paragraphes,
+    // Suite de la proposition : intervention, répartition des rôles, premier cycle…
+    blocs: z.array(sectionSchema).max(6).default([]),
   }),
+  // « Pour aller plus loin » : une annexe par sujet, lettrée A, B, C… dans l'ordre.
+  annexes: z.array(sectionSchema).max(12).default([]),
 });
 export type ContenuRapport = z.infer<typeof contenuRapportSchema>;
 
@@ -121,6 +163,55 @@ function tableau(largeurs: number[], entetes: string[], lignes: string[][]) {
     o += '</w:tr>';
   });
   return `${o}</w:tbl>`;
+}
+
+const LARGEURS_TABLEAU: Record<number, number[]> = {
+  2: [3000, 6638],
+  3: [2300, 3669, 3669],
+  4: [1900, 2700, 2700, 2338],
+};
+
+// Puce simple (sans titre en gras) : indicateurs, conditions, listes des annexes.
+const puceTexte = (t: string) =>
+  `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="3"/></w:numPr><w:spacing w:after="80" w:line="300"/></w:pPr>${run(t)}</w:p>`;
+
+type Section = z.infer<typeof sectionSchema>;
+function section(s: Section, titre: string) {
+  return [
+    h2(titre),
+    ...s.paragraphes.map((t) => corps(t)),
+    ...s.puces.map(puceTexte),
+    ...(s.tableau
+      ? [
+          tableau(
+            LARGEURS_TABLEAU[s.tableau.entetes.length]!,
+            s.tableau.entetes.map((h) => h.toUpperCase()),
+            s.tableau.lignes,
+          ),
+          espace,
+        ]
+      : []),
+  ];
+}
+
+// Colonnes du tableau d'actions d'un horizon : seules celles renseignées apparaissent, l'action
+// prenant la largeur restante.
+type Action = ContenuRapport['plan']['horizons'][number]['actions'][number];
+type Colonne = { titre: string; largeur: number; valeur: (a: Action) => string | undefined };
+function tableauActions(actions: Action[]) {
+  const toutes: Colonne[] = [
+    { titre: 'QUAND', largeur: 1700, valeur: (a) => a.quand },
+    { titre: 'BLOC DE LA MÉTHODE', largeur: 2700, valeur: (a) => a.bloc },
+    { titre: 'ACTION', largeur: 0, valeur: (a) => a.action },
+    { titre: 'RÉSULTAT ATTENDU', largeur: 3000, valeur: (a) => a.resultat },
+  ];
+  const colonnes = toutes.filter((c) => c.titre === 'ACTION' || actions.some((a) => c.valeur(a)));
+  const fixe = colonnes.reduce((total, c) => total + c.largeur, 0);
+  return tableau(
+    colonnes.map((c) => c.largeur || 9638 - fixe),
+    colonnes.map((c) => c.titre),
+    actions.map((a) => colonnes.map((c) => c.valeur(a) ?? '')),
+  );
 }
 
 function tuiles(notes: ContenuRapport['essentiel']['notes'], verrou: number) {
@@ -277,41 +368,51 @@ function corpsDocument(c: ContenuRapport) {
     para(c.resultats.intro),
     tableau(
       [2700, 1100, 5838],
-      ['DIMENSION', 'NOTE', 'CE QUE NOUS AVONS CONSTATÉ'],
+      ['THÈME', 'NOTE', 'CE QUE NOUS AVONS CONSTATÉ'],
       c.resultats.dimensions.map((d) => [d.nom, d.note, d.constat]),
     ),
     espace,
     encartProfil(c.resultats.profil),
   );
   b.push(h1('Préconisations'), para(c.preconisations.intro));
+  if (c.preconisations.items.some((p) => p.potentiel)) {
+    b.push(
+      tableau(
+        [1900, 5200, 2538],
+        ['DÉMARRAGE', 'PRÉCONISATION', 'POTENTIEL'],
+        c.preconisations.items.map((p) => [p.etiquette, p.titre, p.potentiel ?? '']),
+      ),
+      espace,
+    );
+  }
   c.preconisations.items.forEach((p, n) =>
     b.push(carte(n + 1, p.etiquette, p.titre, p.paragraphes), espace),
   );
   b.push(h1('Plan d’action commercial'), ...c.plan.intro.map((t) => para(t)));
   for (const h of c.plan.horizons) {
-    b.push(
-      surtitre(h.quand),
-      h2(h.titre),
-      note(h.objectif),
-      tableau(
-        [2700, 6938],
-        ['BLOC DE LA MÉTHODE', 'ACTION'],
-        h.actions.map((a) => [a.bloc, a.action]),
-      ),
-    );
+    b.push(surtitre(h.quand), h2(h.titre), note(h.objectif), tableauActions(h.actions));
   }
-  b.push(h2('Les indicateurs à suivre'), ...c.plan.indicateurs.map((t) => corps(t)));
+  b.push(h2('Les indicateurs à suivre'), ...c.plan.indicateurs.map(puceTexte));
   if (c.plan.nePasFaire.length > 0)
     b.push(h2('Ce que l’entreprise ne fera pas'), ...c.plan.nePasFaire.map((t) => corps(t)));
+  if (c.plan.conditions.length > 0)
+    b.push(h2('Les conditions de réussite'), ...c.plan.conditions.map(puceTexte));
   b.push(h1('Conclusion et prochaine étape'), ...c.conclusion.paragraphes.map((t) => para(t)));
   b.push(h2(c.conclusion.propositionTitre), ...c.conclusion.proposition.map((t) => corps(t, 200)));
+  for (const bloc of c.conclusion.blocs) b.push(...section(bloc, bloc.titre));
   b.push(
     `<w:p><w:pPr><w:spacing w:after="200" w:before="120" w:line="300"/></w:pPr>${run('Bien à vous,')}</w:p>`,
     `<w:p><w:pPr><w:spacing w:after="40"/></w:pPr>${run('Marc Tabouret', { color: '0C376B', sz: 24, b: true })}</w:p>`,
     `<w:p><w:pPr><w:spacing w:after="20"/></w:pPr>${run('Directeur Commercial à temps partagé', { color: '5B7180', sz: 20 })}</w:p>`,
     `<w:p>${run('SIMATIS Conseil & Formation', { color: '5B7180', sz: 20 })}</w:p>`,
-    MODELE.sectFinale,
   );
+  if (c.annexes.length > 0) {
+    b.push(h1('Pour aller plus loin'));
+    c.annexes.forEach((a, n) =>
+      b.push(...section(a, `${String.fromCharCode(65 + n)}. ${a.titre}`)),
+    );
+  }
+  b.push(MODELE.sectFinale);
   return b.join('');
 }
 
