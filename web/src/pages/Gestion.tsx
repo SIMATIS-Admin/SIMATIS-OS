@@ -390,8 +390,10 @@ export function Gestion({
     try {
       await emettreFacture(slug, e);
       await charger();
+      return true;
     } catch (err) {
       setErreur(message(err));
+      return false;
     }
   };
   const encaisser = async (id: string, date: string) => {
@@ -566,7 +568,7 @@ export function Gestion({
           mandats={mandats}
           onDelai={(m, j) => void changerDelai(m, j)}
           emises={emises}
-          onEmettre={(e) => void emettre(e)}
+          onEmettre={(e) => emettre(e)}
           onEncaisser={(id, d) => void encaisser(id, d)}
         />
       )}

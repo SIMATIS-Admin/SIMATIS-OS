@@ -226,6 +226,15 @@ describe('mouvementsRecettes — recettes d’un mandat', () => {
     expect(r.mouvements[0]!.date).toBe('2027-01-14');
   });
 
+  it('une recette de mandat antérieure au solde reste à facturer : comptée à la fin du mois courant', () => {
+    const r = mouvementsRecettes(
+      [rec({ date: '2026-10-20', montantHtCents: 100_000, mandat: 'm1' })],
+      { ...p, delaisMandat },
+    );
+    expect(r.mouvements[0]!.date).toBe('2027-01-14');
+    expect(r.ignorees).toBe(0);
+  });
+
   it('sans mandat, la date reste celle de la recette + le délai général', () => {
     const r = mouvementsRecettes([rec({ date: '2026-11-10', montantHtCents: 100_000 })], {
       ...p,

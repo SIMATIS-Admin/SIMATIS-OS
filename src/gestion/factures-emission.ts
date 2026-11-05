@@ -3,11 +3,18 @@ import { z } from 'zod';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { SLUG } from '../instances/service.js';
+import { dateEmissionPrevue } from './dates.js';
 import { facturesParMandat } from './factures.js';
 import { lireFacturesEmises, vueFacture as vue, type FactureEmise } from './factures-lecture.js';
 
 export { lireFacturesEmises, type FactureEmise };
-import { lireRevenu, modifierOccurrenceRevenu, modifierRevenu } from './revenus.js';
+import {
+  lireRevenu,
+  modifierOccurrenceRevenu,
+  modifierRevenu,
+  RevenuIntrouvable,
+  RevenuInvalide,
+} from './revenus.js';
 import { gestionFactures, gestionIkTrajets, type LigneFigee } from './schema.js';
 
 export class FactureInvalide extends Error {}
@@ -17,7 +24,7 @@ export class FactureIntrouvable extends Error {
   }
 }
 
-const jour = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const jour = z.iso.date();
 export const emettreSchema = z.object({
   mandat: z.string().regex(SLUG),
   numero: z.string().trim().min(1).max(100),
@@ -40,22 +47,32 @@ async function propagerAuxRecettes(
   for (const l of lignes) {
     if (!l.cle.startsWith('revenu:')) continue;
     const [id, date] = l.cle.slice('revenu:'.length).split('|') as [string, string];
-    const serie = await lireRevenu(tx, id);
-    if (serie.recurrence === 'aucune')
-      await modifierRevenu(
-        tx,
-        id,
-        etat === 'emise'
-          ? { etat, referenceFacture: numero }
-          : { etat, dateEncaissement, referenceFacture: numero },
-      );
-    else
-      await modifierOccurrenceRevenu(tx, instanceId, id, date, {
-        portee: 'cette',
-        etat,
-        dateEncaissement,
-        referenceFacture: numero,
-      });
+    try {
+      const serie = await lireRevenu(tx, id);
+      if (serie.recurrence === 'aucune')
+        await modifierRevenu(
+          tx,
+          id,
+          etat === 'emise'
+            ? { etat, referenceFacture: numero }
+            : { etat, dateEncaissement, referenceFacture: numero },
+        );
+      else
+        await modifierOccurrenceRevenu(tx, instanceId, id, date, {
+          portee: 'cette',
+          etat,
+          dateEncaissement,
+          referenceFacture: numero,
+          // Le montant figé de la facture : l'exception ne doit jamais ramener celui de la série.
+          montantHtCents: l.montantHtCents,
+        });
+    } catch (e) {
+      // À l'encaissement, une recette archivée ou une série coupée depuis l'émission ne doit pas
+      // rendre la facture impossible à encaisser. À l'émission, elles ne peuvent pas se produire.
+      if (etat === 'encaissee' && (e instanceof RevenuIntrouvable || e instanceof RevenuInvalide))
+        continue;
+      throw e;
+    }
   }
 }
 
@@ -74,7 +91,8 @@ export async function emettreFacture(
     );
   if (pris) throw new FactureInvalide(`Le numéro ${numero} est déjà utilisé.`);
 
-  const calcul = await facturesParMandat(tx, e.dateEmission, e.dateEmission);
+  // Toutes les lignes jusqu'à la fin du mois d'émission, comme la carte les affiche.
+  const calcul = await facturesParMandat(tx, e.dateEmission, dateEmissionPrevue(e.dateEmission));
   const facture = calcul.factures.find((f) => f.mandat === e.mandat);
   const lignes: LigneFigee[] = (facture?.lignes ?? [])
     .filter((l) => !e.exclure.includes(l.cle) && l.montantHtCents != null)

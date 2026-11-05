@@ -187,7 +187,8 @@ export function mouvementsRecettes(
     if (!retenues.includes(o.certitude)) continue;
     // Une facture émise reste due même avant la date du solde ; une simple prévision ancienne, non.
     const apres = p.soldeDate ?? ajouterJours(p.aujourdhui, -1);
-    if (o.etat === 'prevue' && o.date <= apres) {
+    // Une recette de mandat reste à facturer tant qu'elle n'est pas émise, quelle que soit son ancienneté.
+    if (o.etat === 'prevue' && o.mandat == null && o.date <= apres) {
       ignorees += 1;
       continue;
     }

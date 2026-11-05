@@ -14,6 +14,7 @@ import { facturesParMandat } from './factures.js';
 import { creerBareme, creerTrajet, creerVehicule, trajetSchema, validerBareme } from './ik.js';
 import { ecrireDelaiMandat } from './mandats.js';
 import {
+  archiverRevenu,
   creerRevenu,
   lireRevenu,
   modifierRevenu,
@@ -206,7 +207,40 @@ describe('Émission et encaissement d’une facture de mandat', () => {
     expect(l.map((f) => f.numero)[0]).toBe('F-004');
   });
 
+  it('inclut toutes les lignes du mois de l’émission, pas seulement celles d’avant la date choisie', async () => {
+    await dans(async (tx) => {
+      await creerRevenu(
+        tx,
+        inst,
+        revenuSchema.parse({
+          libelle: 'Échéance du 25',
+          type: 'refacturation',
+          mandat: 'emi-b',
+          montantHtCents: 7_000,
+          date: '2026-11-25',
+        }),
+      );
+    });
+    const f = await dans((tx) =>
+      emettreFacture(tx, inst, {
+        mandat: 'emi-b',
+        numero: 'F-MOIS',
+        dateEmission: '2026-11-05',
+        exclure: [],
+      }),
+    );
+    expect(f.totalHtCents).toBe(7_000);
+  });
+
   describe('encaissement', () => {
+    it('encaisse même si une recette de la facture a été archivée depuis', async () => {
+      const ids = await preparer();
+      const f = await emettre('F-ARCH');
+      await dans((tx) => archiverRevenu(tx, ids.fraisId));
+      const e = await dans((tx) => encaisserFacture(tx, inst, f.id, '2026-12-22'));
+      expect(e.etat).toBe('encaissee');
+    });
+
     it('passe la facture et ses recettes à encaissée', async () => {
       const ids = await preparer();
       const f = await emettre('F-005');

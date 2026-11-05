@@ -90,7 +90,8 @@ function FormulaireEmission({
   onFermer,
 }: {
   facture: FactureAEmettre;
-  onEmettre: (e: EmissionFacture) => void;
+  // `false` = refusée : le formulaire reste ouvert avec ce qui a été saisi.
+  onEmettre: (e: EmissionFacture) => Promise<boolean> | void;
   onFermer: () => void;
 }) {
   const [numero, setNumero] = useState('');
@@ -104,13 +105,15 @@ function FormulaireEmission({
       onSubmit={(e) => {
         e.preventDefault();
         if (!numero.trim()) return;
-        onEmettre({
-          mandat: facture.mandat,
-          numero: numero.trim(),
-          dateEmission,
-          exclure: exclues,
-        });
-        onFermer();
+        void (async () => {
+          const ok = await onEmettre({
+            mandat: facture.mandat,
+            numero: numero.trim(),
+            dateEmission,
+            exclure: exclues,
+          });
+          if (ok !== false) onFermer();
+        })();
       }}
     >
       <div className="g-champs2">
@@ -211,7 +214,7 @@ export function Factures({
   mandats: { slug: string; nom: string }[];
   onDelai: (mandat: string, jours: number | null) => void;
   emises: FactureEmise[];
-  onEmettre: (e: EmissionFacture) => void;
+  onEmettre: (e: EmissionFacture) => Promise<boolean> | void;
   onEncaisser: (id: string, date: string) => void;
 }) {
   const nom = (slug: string) => mandats.find((m) => m.slug === slug)?.nom ?? slug;

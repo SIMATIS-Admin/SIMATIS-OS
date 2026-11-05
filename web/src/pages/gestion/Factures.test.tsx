@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FactureAEmettre, FactureEmise, FacturesAEmettre, LigneFacture } from '../../api.js';
 import { Factures } from './Factures.js';
@@ -47,7 +47,11 @@ const emise = (o: Partial<FactureEmise> = {}): FactureEmise => ({
 const rendre = (
   donnees: FacturesAEmettre,
   onDelai = vi.fn(),
-  extra: { emises?: FactureEmise[]; onEmettre?: () => void; onEncaisser?: () => void } = {},
+  extra: {
+    emises?: FactureEmise[];
+    onEmettre?: () => Promise<boolean> | void;
+    onEncaisser?: () => void;
+  } = {},
 ) =>
   render(
     <Factures
@@ -168,6 +172,20 @@ describe('Factures', () => {
         target: { value: 'F-2026-02' },
       });
       expect(valider.disabled).toBe(false);
+    });
+
+    it('garde le formulaire ouvert si l’émission est refusée', async () => {
+      const onEmettre = vi.fn(() => Promise.resolve(false));
+      rendre({ factures: [facture()], sansMandat: [] }, vi.fn(), { onEmettre });
+      fireEvent.click(screen.getByRole('button', { name: 'Émettre la facture' }));
+      fireEvent.change(screen.getByLabelText('Numéro de la facture'), {
+        target: { value: 'F-DOUBLON' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Émettre' }));
+      await waitFor(() => expect(onEmettre).toHaveBeenCalled());
+      expect(screen.getByLabelText<HTMLInputElement>('Numéro de la facture').value).toBe(
+        'F-DOUBLON',
+      );
     });
 
     it('une ligne sans montant n’a pas de case', () => {

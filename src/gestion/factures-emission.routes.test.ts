@@ -44,6 +44,19 @@ describe('Routes Gestion — émission et encaissement des factures', () => {
     expect((await post('/factures/emettre', emission, 'emr-mandat')).statusCode).toBe(403);
   });
 
+  it('refuse une date impossible, sans erreur serveur', async () => {
+    expect(
+      (await post('/factures/emettre', { ...emission, dateEmission: '2026-02-30' })).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await post('/factures/00000000-0000-4000-8000-000000000000/encaisser', {
+          dateEncaissement: '2026-13-01',
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+
   it('refuse une requête invalide', async () => {
     expect((await post('/factures/emettre', { ...emission, numero: '' })).statusCode).toBe(400);
     expect((await post('/factures/emettre', { mandat: 'Pas Un Slug' })).statusCode).toBe(400);
