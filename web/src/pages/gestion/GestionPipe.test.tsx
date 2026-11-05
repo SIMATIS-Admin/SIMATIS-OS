@@ -14,13 +14,31 @@ const affaire = (p: Partial<AffairePipe> = {}): AffairePipe => ({
   mensuelCents: null,
   dureeMois: 12,
   signature: '2027-01-15',
+  surcharge: false,
   statut: 'comptee',
   ...p,
 });
 
 function monter(affaires: AffairePipe[], extra: Partial<Parameters<typeof GestionPipe>[0]> = {}) {
-  const actions = { onDecalage: vi.fn(), onExclus: vi.fn(), onDate: vi.fn() };
-  render(<GestionPipe affaires={affaires} decalage={0} exclus={[]} {...actions} {...extra} />);
+  const actions = {
+    onDecalage: vi.fn(),
+    onExclus: vi.fn(),
+    onDate: vi.fn(),
+    onInclure: vi.fn(),
+    onHypothese: vi.fn(),
+    onReinitialiser: vi.fn(),
+  };
+  render(
+    <GestionPipe
+      affaires={affaires}
+      decalage={0}
+      exclus={[]}
+      inclure
+      hypotheses={{}}
+      {...actions}
+      {...extra}
+    />,
+  );
   return actions;
 }
 afterEach(cleanup);
@@ -29,15 +47,16 @@ describe('GestionPipe', () => {
   it('affiche probabilité, montant, signature et valeur pondérée, avec le total', () => {
     monter([affaire()]);
     const ligne = screen.getByText('Affaire fictive').closest('tr')!;
-    expect(within(ligne).getByText('60 %')).toBeTruthy();
-    expect(within(ligne).getByText(/10\s?000 €/)).toBeTruthy();
+    expect(within(ligne).getByLabelText<HTMLInputElement>(/Probabilité/).value).toBe('60');
+    expect(within(ligne).getByLabelText<HTMLInputElement>(/Montant/).value).toBe('10000');
     expect(within(ligne).getByText(/6\s?000 €/)).toBeTruthy();
     expect(screen.getByTestId('total-pipe').textContent).toMatch(/6\s?000 €/);
   });
 
   it('un abonnement affiche sa mensualité', () => {
     monter([affaire({ recurrent: true, mensuelCents: 250_000, totalCents: 3_000_000 })]);
-    expect(screen.getByText(/2\s?500 € \/ mois/)).toBeTruthy();
+    expect(screen.getByLabelText<HTMLInputElement>(/Montant/).value).toBe('2500');
+    expect(screen.getByText('€ / mois')).toBeTruthy();
   });
 
   it('le total ignore les affaires décochées', () => {
@@ -106,5 +125,52 @@ describe('GestionPipe', () => {
   it('sans affaire : invite à renseigner le Pipeline', () => {
     monter([]);
     expect(screen.getByText(/Aucune affaire ouverte/)).toBeTruthy();
+  });
+
+  it('affiche côte à côte le total pondéré et le montant total', () => {
+    monter([affaire(), affaire({ id: 'b', titre: 'Autre', totalCents: 500_000, probabilite: 20 })]);
+    expect(screen.getByTestId('total-pipe').textContent).toMatch(/7\s?000 €/);
+    expect(screen.getByTestId('total-brut-pipe').textContent).toMatch(/15\s?000 €/);
+  });
+
+  it('l’interrupteur prévient le parent ; pipe exclu, le tableau le dit', () => {
+    const { onInclure } = monter([affaire()]);
+    fireEvent.click(screen.getByLabelText(/Inclure le pipe/));
+    expect(onInclure).toHaveBeenCalledWith(false);
+    cleanup();
+    monter([affaire()], { inclure: false });
+    expect(screen.getByText('pipe exclu')).toBeTruthy();
+  });
+
+  it('modifier probabilité et montant envoie l’hypothèse, en gardant l’autre champ', () => {
+    const { onHypothese } = monter([affaire()], { hypotheses: { a1: { montant: 8000 } } });
+    const proba = screen.getByLabelText(/Probabilité/);
+    fireEvent.change(proba, { target: { value: '35' } });
+    fireEvent.blur(proba);
+    expect(onHypothese).toHaveBeenCalledWith('a1', { montant: 8000, probabilite: 35 });
+    const montant = screen.getByLabelText(/Montant/);
+    fireEvent.change(montant, { target: { value: '12000' } });
+    fireEvent.blur(montant);
+    expect(onHypothese).toHaveBeenLastCalledWith('a1', { montant: 12000 });
+  });
+
+  it('vider les deux champs supprime l’hypothèse ; une probabilité > 100 est refusée', () => {
+    const { onHypothese } = monter([affaire()], { hypotheses: { a1: { probabilite: 30 } } });
+    const proba = screen.getByLabelText(/Probabilité/);
+    fireEvent.change(proba, { target: { value: '150' } });
+    fireEvent.blur(proba);
+    expect(onHypothese).not.toHaveBeenCalled();
+    fireEvent.change(proba, { target: { value: '' } });
+    fireEvent.blur(proba);
+    expect(onHypothese).toHaveBeenCalledWith('a1', null);
+  });
+
+  it('signale une affaire modifiée et propose de réinitialiser', () => {
+    const { onReinitialiser } = monter([affaire({ surcharge: true })], {
+      hypotheses: { a1: { montant: 5000 } },
+    });
+    expect(screen.getByText('modifié')).toBeTruthy();
+    fireEvent.click(screen.getByText('Réinitialiser les hypothèses'));
+    expect(onReinitialiser).toHaveBeenCalled();
   });
 });

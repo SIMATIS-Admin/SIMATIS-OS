@@ -1,0 +1,1 @@
+ALTER TABLE "gestion_reglages" ADD COLUMN "modele" jsonb;

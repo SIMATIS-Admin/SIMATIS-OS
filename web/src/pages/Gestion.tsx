@@ -82,6 +82,9 @@ export function Gestion({
     retard: 0,
     decalage: 0,
     exclus: [],
+    pipe: true,
+    remuneration: true,
+    hypotheses: {},
   });
   const [tva, setTva] = useState<SuiviTvaGestion | null>(null);
   const [aFacturer, setAFacturer] = useState<OccurrenceRevenu[]>([]);
@@ -529,6 +532,7 @@ export function Gestion({
               params={paramsTreso}
               onParams={setParamsTreso}
               onReglagesSaved={() => void charger()}
+              onAjouterRevenu={() => setTiroirRevenu({})}
             />
           </div>
           {tresorerie && (
@@ -538,6 +542,17 @@ export function Gestion({
               exclus={paramsTreso.exclus}
               onDecalage={(decalage) => setParamsTreso({ ...paramsTreso, decalage })}
               onExclus={(exclus) => setParamsTreso({ ...paramsTreso, exclus })}
+              inclure={paramsTreso.pipe}
+              hypotheses={paramsTreso.hypotheses}
+              onInclure={(pipe) => setParamsTreso({ ...paramsTreso, pipe })}
+              onHypothese={(id, h) => {
+                const reste = Object.entries(paramsTreso.hypotheses).filter(([k]) => k !== id);
+                setParamsTreso({
+                  ...paramsTreso,
+                  hypotheses: Object.fromEntries(h ? [...reste, [id, h]] : reste),
+                });
+              }}
+              onReinitialiser={() => setParamsTreso({ ...paramsTreso, hypotheses: {} })}
               onDate={(id, date) => void changerSignature(id, date)}
             />
           )}

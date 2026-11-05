@@ -12,6 +12,7 @@ const affaire = (statut: AffairePipe['statut'] = 'comptee'): AffairePipe => ({
   mensuelCents: null,
   dureeMois: 12,
   signature: '2027-01-15',
+  surcharge: false,
   statut,
 });
 const periode = (debut: string, solde: number | null) => ({

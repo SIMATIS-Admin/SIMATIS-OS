@@ -178,4 +178,59 @@ describe('mouvementsPipe', () => {
     ]);
     expect(m[0]!.note).toContain('dépassée');
   });
+
+  it('mode total : toutes les affaires retenues à 100 %, même sous 50 %, dans les deux scénarios', () => {
+    const r = affairesPipe([opp({ probabiliteManuelle: 30 })], proba);
+    for (const scenario of ['central', 'ambitieux'] as const) {
+      const m = mouvementsPipe(r, { ...base, scenario, mode: 'total' });
+      expect(m.map((x) => x.montantCents)).toEqual([500_000, 500_000]);
+      expect(m[0]!.note).toContain('100 %');
+    }
+  });
+
+  it('mode pondéré : l’ambitieux pondère aussi, sans seuil à 50 %', () => {
+    const r = affairesPipe([opp({ probabiliteManuelle: 30 })], proba);
+    const m = mouvementsPipe(r, { ...base, scenario: 'ambitieux', mode: 'pondere' });
+    expect(m.map((x) => x.montantCents)).toEqual([150_000, 150_000]);
+  });
+
+  it('inclure à faux retire tout le pipe, quel que soit le mode', () => {
+    for (const mode of ['pondere', 'total'] as const)
+      expect(mouvementsPipe(a(), { ...base, scenario: 'central', mode, inclure: false })).toEqual(
+        [],
+      );
+  });
+
+  it('une hypothèse remplace montant et probabilité, et le signale', () => {
+    const [x] = affairesPipe(
+      [opp()],
+      proba,
+      new Map([['a1', { montant: 20_000, probabilite: 25 }]]),
+    );
+    expect(x).toMatchObject({ totalCents: 2_000_000, probabilite: 25, surcharge: true });
+    const [sans] = affairesPipe([opp()], proba);
+    expect(sans!.surcharge).toBe(false);
+    const m = mouvementsPipe([x!], { ...base, scenario: 'central' });
+    expect(m.map((e) => e.montantCents)).toEqual([250_000, 250_000]);
+  });
+
+  it('une hypothèse de montant fait entrer une affaire sans montant ; 0 % est une vraie valeur', () => {
+    const [x] = affairesPipe(
+      [opp({ montant: null })],
+      proba,
+      new Map([['a1', { montant: 4_000 }]]),
+    );
+    expect(x).toMatchObject({ statut: 'comptee', totalCents: 400_000, surcharge: true });
+    const [z] = affairesPipe([opp()], proba, new Map([['a1', { probabilite: 0 }]]));
+    expect(z).toMatchObject({ probabilite: 0, surcharge: true });
+  });
+
+  it('l’hypothèse de montant d’un abonnement est la mensualité', () => {
+    const [x] = affairesPipe(
+      [opp({ modeFacturation: 'recurrent', montant: 1_000 })],
+      proba,
+      new Map([['a1', { montant: 3_000 }]]),
+    );
+    expect(x).toMatchObject({ mensuelCents: 300_000, totalCents: 3_600_000 });
+  });
 });

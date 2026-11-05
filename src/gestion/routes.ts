@@ -58,6 +58,7 @@ import {
   ReglagesInvalides,
   reglagesSchema,
 } from './tresorerie.js';
+import { type Hypothese } from './pipe.js';
 import {
   archiverRevenu,
   creerRevenu,
@@ -401,6 +402,34 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
       .default('')
       .transform((s) => (s ? s.split(',') : []))
       .pipe(z.array(z.uuid()).max(200)),
+    pipe: z.enum(['0', '1']).default('1'),
+    remuneration: z.enum(['0', '1']).default('1'),
+    // Hypothèses « id:montant:probabilité », l'un des deux pouvant rester vide.
+    hyp: z
+      .string()
+      .default('')
+      .transform((s) => (s ? s.split(',') : []))
+      .pipe(
+        z
+          .array(
+            z
+              .string()
+              .regex(/^[0-9a-f-]{36}:(\d{1,9}(\.\d{1,2})?)?:(\d{1,3})?$/)
+              .refine((x) => (x.split(':')[2] ? Number(x.split(':')[2]) <= 100 : true)),
+          )
+          .max(200),
+      )
+      .transform((l) => {
+        const m = new Map<string, Hypothese>();
+        for (const x of l) {
+          const [id, montant, proba] = x.split(':') as [string, string, string];
+          m.set(id, {
+            montant: montant ? Number(montant) : null,
+            probabilite: proba ? Number(proba) : null,
+          });
+        }
+        return m;
+      }),
   });
   app.get<{ Params: { slug: string }; Querystring: Record<string, string> }>(
     '/api/i/:slug/gestion/tresorerie',
@@ -414,6 +443,9 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
           retardJours: q.data.retard,
           decalageMois: q.data.decalage,
           exclus: q.data.exclus,
+          inclurePipe: q.data.pipe === '1',
+          inclureRemuneration: q.data.remuneration === '1',
+          hypotheses: q.data.hyp,
         }),
       );
     },

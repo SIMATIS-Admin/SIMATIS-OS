@@ -10,19 +10,56 @@ import type { FactureEmise } from './factures-lecture.js';
 import { lireFacturesEmises } from './factures-lecture.js';
 import { trajetsRefacturables, type IkRefacturable } from './ik.js';
 import { lireDelaisMandats } from './mandats.js';
-import { affairesPipe, mouvementsPipe, type AffairePipe } from './pipe.js';
+import {
+  affairesPipe,
+  MODE_PIPE_PAR_SCENARIO,
+  MODES_PIPE,
+  mouvementsPipe,
+  type AffairePipe,
+  type Hypothese,
+} from './pipe.js';
+import {
+  decomposer,
+  mouvementsRemuneration,
+  remunerationSchema,
+  type DecompositionRemuneration,
+  type Remuneration,
+} from './remuneration.js';
 import { occurrencesRevenus, type OccurrenceRevenu } from './revenus.js';
 import { gestionReglages, MODES_SEUIL, type ModeSeuil } from './schema.js';
 import { occurrencesDepenses, type OccurrenceVue } from './service.js';
 
+type Certitude = 'certaine' | 'probable' | 'hypothese';
 export const SCENARIOS = ['securise', 'central', 'ambitieux'] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 // Quelles recettes entrent dans chaque scénario : le sécurisé ne retient que le certain.
-const CERTITUDES_RETENUES: Record<Scenario, string[]> = {
+const CERTITUDES_RETENUES: Record<Scenario, Certitude[]> = {
   securise: ['certaine'],
   central: ['certaine', 'probable'],
   ambitieux: ['certaine', 'probable', 'hypothese'],
 };
+
+export type ConfigScenario = { certitudes: Certitude[]; pipe: (typeof MODES_PIPE)[number] };
+export type ConfigScenarios = Record<Scenario, ConfigScenario>;
+export const SCENARIOS_PAR_DEFAUT: ConfigScenarios = {
+  securise: { certitudes: CERTITUDES_RETENUES.securise, pipe: MODE_PIPE_PAR_SCENARIO.securise },
+  central: { certitudes: CERTITUDES_RETENUES.central, pipe: MODE_PIPE_PAR_SCENARIO.central },
+  ambitieux: { certitudes: CERTITUDES_RETENUES.ambitieux, pipe: MODE_PIPE_PAR_SCENARIO.ambitieux },
+};
+const configScenario = z.object({
+  // Les recettes déjà encaissées ou facturées comptent toujours : ce réglage ne porte que sur les prévisions.
+  certitudes: z.array(z.enum(['certaine', 'probable', 'hypothese'])).max(3),
+  pipe: z.enum(MODES_PIPE),
+});
+export const scenariosSchema = z.object({
+  securise: configScenario,
+  central: configScenario,
+  ambitieux: configScenario,
+});
+const modeleSchema = z.object({
+  scenarios: scenariosSchema.optional(),
+  remuneration: remunerationSchema.nullable().optional(),
+});
 
 export type Reglages = {
   soldeCents: number | null;
@@ -31,6 +68,8 @@ export type Reglages = {
   seuilMode: ModeSeuil;
   seuilCents: number | null;
   delaiPaiementJours: number | null;
+  scenarios: ConfigScenarios;
+  remuneration: Remuneration | null;
 };
 export const REGLAGES_VIDES: Reglages = {
   soldeCents: null,
@@ -39,6 +78,8 @@ export const REGLAGES_VIDES: Reglages = {
   seuilMode: 'aucun',
   seuilCents: null,
   delaiPaiementJours: null,
+  scenarios: SCENARIOS_PAR_DEFAUT,
+  remuneration: null,
 };
 
 export class ReglagesInvalides extends Error {}
@@ -51,6 +92,8 @@ export const reglagesSchema = z.object({
   seuilMode: z.enum(MODES_SEUIL),
   seuilCents: z.number().int().min(0).nullable(),
   delaiPaiementJours: z.number().int().min(0).max(365).nullable(),
+  scenarios: scenariosSchema.default(SCENARIOS_PAR_DEFAUT),
+  remuneration: remunerationSchema.nullable().default(null),
 });
 
 function verifierReglages(r: Reglages) {
@@ -71,6 +114,8 @@ export async function lireReglages(tx: Executor): Promise<Reglages> {
     .from(gestionReglages)
     .where(eq(gestionReglages.instanceId, currentInstance));
   if (!l) return { ...REGLAGES_VIDES };
+  // Un modèle illisible ou absent retombe sur les réglages d'origine, jamais sur une erreur.
+  const modele = modeleSchema.safeParse(l.modele ?? {});
   return {
     soldeCents: l.soldeCents,
     soldeDate: l.soldeDate,
@@ -78,12 +123,19 @@ export async function lireReglages(tx: Executor): Promise<Reglages> {
     seuilMode: l.seuilMode,
     seuilCents: l.seuilCents,
     delaiPaiementJours: l.delaiPaiementJours,
+    scenarios: (modele.success && modele.data.scenarios) || SCENARIOS_PAR_DEFAUT,
+    remuneration: (modele.success && modele.data.remuneration) || null,
   };
 }
 
 export async function ecrireReglages(tx: Executor, instanceId: string, r: Reglages) {
   verifierReglages(r);
-  const valeurs = { ...r, seuilCents: r.seuilMode === 'montant' ? r.seuilCents : null };
+  const { scenarios, remuneration, ...simples } = r;
+  const valeurs = {
+    ...simples,
+    seuilCents: r.seuilMode === 'montant' ? r.seuilCents : null,
+    modele: { scenarios, remuneration },
+  };
   await tx
     .insert(gestionReglages)
     .values({ instanceId, ...valeurs })
@@ -170,11 +222,12 @@ export function mouvementsRecettes(
     // Délai de paiement propre à chaque mandat, et factures émises (clé d'échéance → émission figée).
     delaisMandat?: Map<string, number | null>;
     factures?: Map<string, { dateEmission: string; delaiJours: number | null }>;
+    certitudes?: string[];
   },
 ): { mouvements: Mouvement[]; ignorees: number } {
   const mouvements: Mouvement[] = [];
   let ignorees = 0;
-  const retenues = CERTITUDES_RETENUES[p.scenario];
+  const retenues = p.certitudes ?? CERTITUDES_RETENUES[p.scenario];
   for (const o of occ) {
     if (o.etat === 'ignoree') continue;
     const montant = o.montantHtCents + (o.tvaCents ?? 0);
@@ -422,6 +475,8 @@ export type Projection = {
   scenarios: ProjectionScenario[];
   // Affaires ouvertes du Pipeline, comptées ou écartées (avec la raison), et le décalage simulé.
   pipe: { affaires: AffairePipe[]; decalageMois: number };
+  // Rémunération réglée : sa décomposition et si la simulation la compte ; null tant qu'elle n'est pas réglée.
+  remuneration: (DecompositionRemuneration & { inclus: boolean }) | null;
   avertissements: string[];
 };
 
@@ -433,6 +488,10 @@ export async function projeter(
     retardJours: number;
     decalageMois?: number;
     exclus?: string[];
+    // Simulation du pipe : tout retirer, pondérer ou prendre au total, régler montant et probabilité.
+    inclurePipe?: boolean;
+    inclureRemuneration?: boolean;
+    hypotheses?: Map<string, Hypothese>;
     aujourdhui?: string;
   },
 ): Promise<Projection> {
@@ -486,7 +545,7 @@ export async function projeter(
       ),
     )
     .where(and(eq(opportunites.instanceId, currentInstance), isNull(opportunites.clos)));
-  const affaires = affairesPipe(ouvertes, probaEtape);
+  const affaires = affairesPipe(ouvertes, probaEtape, p.hypotheses);
   const decalageMois = p.decalageMois ?? 0;
   const exclus = new Set(p.exclus ?? []);
 
@@ -510,13 +569,26 @@ export async function projeter(
     avertissements.push(
       `${sorties.ignorees} échéance(s) de dépense antérieure(s) au solde non confirmée(s) : ignorée(s).`,
     );
-  const ecartees = affaires.filter((a) => a.statut !== 'comptee').length;
+  const ecartees = (p.inclurePipe === false ? [] : affaires).filter(
+    (a) => a.statut !== 'comptee',
+  ).length;
   if (ecartees)
     avertissements.push(
       `${ecartees} affaire(s) du pipe sans montant, sans probabilité ou sans date de signature : non comptée(s).`,
     );
   if (reglages.seuilMode === 'aucun')
     avertissements.push("Aucun seuil d'alerte réglé : aucune alerte n'est calculée.");
+
+  const remuneration = reglages.remuneration?.actif ? reglages.remuneration : null;
+  const inclureRemuneration = p.inclureRemuneration !== false;
+  const salaire =
+    remuneration && inclureRemuneration
+      ? mouvementsRemuneration(remuneration, { soldeDate: reglages.soldeDate, aujourdhui, fin })
+      : [];
+  if (remuneration && inclureRemuneration)
+    avertissements.push(
+      'Rémunération projetée : si elle figure déjà parmi vos dépenses, ne la comptez qu’une fois.',
+    );
 
   const scenarios: ProjectionScenario[] = SCENARIOS.map((scenario) => {
     const entrees = mouvementsRecettes(recettes, {
@@ -527,6 +599,7 @@ export async function projeter(
       retardJours: p.retardJours,
       delaisMandat,
       factures: parEcheance,
+      certitudes: reglages.scenarios[scenario].certitudes,
     });
     const ik = mouvementsFacturesIk({
       ik: ikAFacturer,
@@ -544,14 +617,19 @@ export async function projeter(
       exclus,
       aujourdhui,
       fin,
+      inclure: p.inclurePipe,
+      mode: reglages.scenarios[scenario].pipe,
     });
-    const periodes = agreger([...sorties.mouvements, ...entrees.mouvements, ...ik, ...pipe], {
-      solde: reglages.soldeCents,
-      soldeDate: reglages.soldeDate,
-      debut: aujourdhui,
-      fin,
-      g: p.granularite,
-    });
+    const periodes = agreger(
+      [...sorties.mouvements, ...salaire, ...entrees.mouvements, ...ik, ...pipe],
+      {
+        solde: reglages.soldeCents,
+        soldeDate: reglages.soldeDate,
+        debut: aujourdhui,
+        fin,
+        g: p.granularite,
+      },
+    );
     const sous =
       seuilCents == null
         ? undefined
@@ -569,6 +647,9 @@ export async function projeter(
     seuil: { mode: reglages.seuilMode, cents: seuilCents, bfr },
     scenarios,
     pipe: { affaires, decalageMois },
+    remuneration: remuneration
+      ? { ...decomposer(remuneration), inclus: inclureRemuneration }
+      : null,
     avertissements,
   };
 }

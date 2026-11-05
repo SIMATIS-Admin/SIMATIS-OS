@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AffairePipe } from '../../api.js';
+import type { AffairePipe, HypothesePipe } from '../../api.js';
 import { eurCents } from '../../gestion.js';
 import type { Verdict } from './verdict.js';
 
@@ -38,6 +38,40 @@ function ChampDate({
     />
   );
 }
+// Nombre saisi pour la simulation : validé à la sortie du champ, vide = retour à la valeur du Pipeline.
+function ChampNombre({
+  valeur,
+  label,
+  max,
+  onValider,
+}: {
+  valeur: number | null;
+  label: string;
+  max: number;
+  onValider: (n: number | null) => void;
+}) {
+  const [saisie, setSaisie] = useState(valeur == null ? '' : String(valeur));
+  const valider = () => {
+    const n = saisie.trim() === '' ? null : Number(saisie.replace(',', '.'));
+    if (n === valeur) return;
+    if (n === null || (Number.isFinite(n) && n >= 0 && n <= max)) onValider(n);
+    else setSaisie(valeur == null ? '' : String(valeur));
+  };
+  return (
+    <input
+      className="input"
+      type="number"
+      min={0}
+      max={max}
+      step="any"
+      style={{ width: 110 }}
+      value={saisie}
+      aria-label={label}
+      onChange={(e) => setSaisie(e.target.value)}
+      onBlur={valider}
+    />
+  );
+}
 const pondere = (a: AffairePipe) => Math.round((a.totalCents * (a.probabilite ?? 0)) / 100);
 
 // Phrase d'ouverture de Pilotage : le serveur a déjà calculé les alertes, on ne fait que les dire.
@@ -62,6 +96,11 @@ export function GestionPipe({
   onDecalage,
   onExclus,
   onDate,
+  inclure,
+  hypotheses,
+  onInclure,
+  onHypothese,
+  onReinitialiser,
 }: {
   affaires: AffairePipe[];
   decalage: number;
@@ -69,9 +108,20 @@ export function GestionPipe({
   onDecalage: (mois: number) => void;
   onExclus: (ids: string[]) => void;
   onDate: (id: string, date: string | null) => void;
+  inclure: boolean;
+  hypotheses: Record<string, HypothesePipe>;
+  onInclure: (inclure: boolean) => void;
+  onHypothese: (id: string, h: HypothesePipe | null) => void;
+  onReinitialiser: () => void;
 }) {
   const compte = (a: AffairePipe) => a.statut === 'comptee' && !exclus.includes(a.id);
   const total = affaires.filter(compte).reduce((t, a) => t + pondere(a), 0);
+  const totalBrut = affaires.filter(compte).reduce((t, a) => t + a.totalCents, 0);
+  // Une hypothèse vide retombe sur la valeur du Pipeline : on ne garde que les champs réglés.
+  const regler = (id: string, champ: keyof HypothesePipe, n: number | null) => {
+    const h = { ...hypotheses[id], [champ]: n };
+    onHypothese(id, h.montant == null && h.probabilite == null ? null : h);
+  };
   const sansDate = affaires.filter((a) => a.statut === 'sans_date').length;
   return (
     <div className="panel" style={{ marginTop: 18 }}>
@@ -87,10 +137,32 @@ export function GestionPipe({
         ) : (
           <>
             <p className="muted small" style={{ margin: '0 0 10px' }}>
-              Chaque affaire compte pour <b>montant × probabilité</b>, encaissée après sa signature
-              et le délai de paiement. La date de signature est propre à l’OS : la modifier ne
-              change rien dans HubSpot.
+              Chaque affaire est encaissée après sa signature et le délai de paiement. Chaque
+              scénario la compte à sa façon (pondérée, au montant total, ou pas du tout) : voir les
+              réglages de trésorerie. La date, le montant et la probabilité sont propres à la
+              simulation : les modifier ne change rien dans HubSpot ni dans le Pipeline.
             </p>
+            <div className="g-whatif">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={inclure}
+                  onChange={(e) => onInclure(e.target.checked)}
+                />{' '}
+                <b>Inclure le pipe dans la projection</b>
+              </label>
+              {Object.keys(hypotheses).length > 0 && (
+                <button type="button" className="btn" onClick={onReinitialiser}>
+                  Réinitialiser les hypothèses
+                </button>
+              )}
+            </div>
+            {!inclure && (
+              <p className="small" style={{ margin: '0 0 10px' }}>
+                <span className="badge amber">pipe exclu</span> La projection ne compte que le
+                facturé, les récurrents et les dépenses.
+              </p>
+            )}
             <div className="g-whatif">
               <b>Et si les signatures glissent ?</b>
               <input
@@ -147,11 +219,39 @@ export function GestionPipe({
                           )}
                         </small>
                       </td>
-                      <td className="num">{a.probabilite == null ? '–' : `${a.probabilite} %`}</td>
+                      <td>
+                        <ChampNombre
+                          key={`${a.id}-p-${a.probabilite ?? ''}`}
+                          valeur={a.probabilite}
+                          label={`Probabilité ${a.titre} (%)`}
+                          max={100}
+                          onValider={(n) => regler(a.id, 'probabilite', n)}
+                        />{' '}
+                        %
+                      </td>
                       <td className="r num">
-                        {a.recurrent && a.mensuelCents
-                          ? `${eurCents(a.mensuelCents)} / mois`
-                          : eurCents(a.totalCents)}
+                        <ChampNombre
+                          key={`${a.id}-m-${a.recurrent ? a.mensuelCents : a.totalCents}`}
+                          valeur={
+                            a.recurrent
+                              ? a.mensuelCents == null
+                                ? null
+                                : a.mensuelCents / 100
+                              : a.totalCents
+                                ? a.totalCents / 100
+                                : null
+                          }
+                          label={`Montant ${a.titre} (€${a.recurrent ? ' / mois' : ''})`}
+                          max={999_999_999}
+                          onValider={(n) => regler(a.id, 'montant', n)}
+                        />{' '}
+                        €{a.recurrent ? ' / mois' : ''}
+                        {a.surcharge && (
+                          <>
+                            {' '}
+                            <span className="badge amber">modifié</span>
+                          </>
+                        )}
                       </td>
                       <td>
                         <ChampDate
@@ -175,6 +275,14 @@ export function GestionPipe({
                   </td>
                   <td className="r num" data-testid="total-pipe">
                     <b>{eurCents(total)}</b>
+                  </td>
+                </tr>
+                <tr>
+                  <td colSpan={5} className="r">
+                    <b>Montant total des affaires comptées</b>
+                  </td>
+                  <td className="r num" data-testid="total-brut-pipe">
+                    <b>{eurCents(totalBrut)}</b>
                   </td>
                 </tr>
               </tfoot>
