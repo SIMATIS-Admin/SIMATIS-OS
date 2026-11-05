@@ -586,6 +586,29 @@ describe('Rapport par le runner', () => {
     expect(texte).toContain('Second cerveau non accessible');
   });
 
+  it('donne la revue sous forme lisible, avec les commentaires du pilote, sans la couper', () => {
+    const revue = {
+      statut: 'validée',
+      preconisations: {
+        p1: {
+          titre: 'Cadencer la prospection',
+          texte: 'Texte proposé fictif',
+          choix: 'remplacer',
+          detail: 'Ma version fictive',
+        },
+      },
+      planAction: { court: { libre: 'Commentaire libre fictif du pilote', blocs: {} } },
+      indicateurs: 'Indicateur fictif ' + 'x'.repeat(25_000),
+    };
+    const texte = promptRapport({ ...rapport, revue }, null);
+    expect(texte).toContain('choix : remplacer');
+    expect(texte).toContain('texte du pilote : Ma version fictive');
+    expect(texte).toContain('Court terme · commentaire libre : Commentaire libre fictif du pilote');
+    expect(texte).not.toContain('"preconisations"');
+    expect(texte).toMatch(/chaque commentaire/i);
+    expect(texte.length).toBeGreaterThan(25_000);
+  });
+
   it('ne donne que l outil du rapport, jamais celui du support', () => {
     const outils = outilsRapport(null, ['/travail']);
     expect(outils).toContain('mcp__simatis__enregistrer_rapport');
