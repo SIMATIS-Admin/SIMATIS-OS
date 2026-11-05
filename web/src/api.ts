@@ -2335,6 +2335,33 @@ export const fetchRevenuGestion = (slug: string, id: string) =>
   getJson<RevenuGestion>(inst(slug, `gestion/revenus/${id}`));
 export const fetchFacturesAEmettre = (slug: string, jusqua: string) =>
   getJson<OccurrenceRevenu[]>(inst(slug, `gestion/factures-a-emettre?jusqua=${jusqua}`));
+export type SorteLigneFacture = 'recurrent' | 'commission' | 'frais' | 'ik';
+export type LigneFacture = {
+  cle: string;
+  sorte: SorteLigneFacture;
+  libelle: string;
+  date: string;
+  montantHtCents: number | null;
+  tvaCents: number | null;
+  certitude: 'certaine' | 'probable' | 'hypothese' | null;
+  avertissement: string | null;
+};
+export type FactureAEmettre = {
+  mandat: string;
+  emissionPrevue: string;
+  delaiJours: number | null;
+  encaissementAttendu: string | null;
+  totalHtCents: number;
+  lignes: LigneFacture[];
+  avertissements: string[];
+};
+export type FacturesAEmettre = { factures: FactureAEmettre[]; sansMandat: LigneFacture[] };
+export const fetchFactures = (slug: string) =>
+  getJson<FacturesAEmettre>(inst(slug, 'gestion/factures'));
+export const poserDelaiMandat = (slug: string, mandat: string, delaiPaiementJours: number | null) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, `gestion/mandats/${mandat}/reglages`), {
+    delaiPaiementJours,
+  });
 export const creerRevenuGestion = (slug: string, r: Partial<NouveauRevenu>) =>
   sendJson<RevenuGestion>('POST', inst(slug, 'gestion/revenus'), r);
 export const modifierRevenuGestion = (slug: string, id: string, r: Partial<NouveauRevenu>) =>
