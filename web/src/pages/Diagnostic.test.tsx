@@ -30,6 +30,8 @@ const api = vi.hoisted(() => ({
   importerRapportDiag: vi.fn(),
   envoyerRapportDriveDiag: vi.fn(),
   marquerRapportFinal: vi.fn(),
+  reglagesDiagnostic: vi.fn(),
+  majReglagesDiagnostic: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
   urlExportRapportDiag: (slug: string, id: string) =>
@@ -1306,5 +1308,42 @@ describe('Rapport : version finale', () => {
     await ouvrir(enEtape4());
     fireEvent.click((await screen.findAllByRole('checkbox', { name: /Version finale/ }))[0]!);
     expect(await screen.findByText(/n’appartient pas à ce projet/)).toBeTruthy();
+  });
+});
+
+describe('Rapport : réglage Relire les finaux', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const libelle = /Relire les deux derniers rapports finaux/;
+
+  it('la case est cochée par défaut', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true });
+    await ouvrir();
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
+    await waitFor(() => expect(c.checked).toBe(true));
+  });
+
+  it('décocher enregistre le réglage', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true });
+    api.majReglagesDiagnostic.mockResolvedValue({ relireFinaux: false });
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('checkbox', { name: libelle }));
+    await waitFor(() => expect(api.majReglagesDiagnostic).toHaveBeenCalledWith('simatis', false));
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLInputElement>('checkbox', { name: libelle }).checked).toBe(false),
+    );
+  });
+
+  it('un réglage décoché au chargement s affiche décoché', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: false });
+    await ouvrir();
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
+    await waitFor(() => expect(c.checked).toBe(false));
   });
 });

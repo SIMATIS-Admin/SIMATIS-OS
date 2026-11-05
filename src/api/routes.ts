@@ -527,6 +527,30 @@ export function registerApi(
       }
     }),
   );
+  // Réglage du module Diagnostic : relire les deux derniers rapports finaux avant de rédiger.
+  app.get<SlugParams>(
+    '/api/i/:slug/diagnostic/reglages',
+    onInstance((i) =>
+      Promise.resolve({ relireFinaux: i.config.diagnostic?.relireFinaux !== false }),
+    ),
+  );
+  app.put<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/diagnostic/reglages',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = z.object({ relireFinaux: z.boolean() }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Réglage invalide' });
+      await withInstance(db, i.id, (tx) =>
+        tx
+          .update(instances)
+          .set({
+            config: { ...i.config, diagnostic: { ...i.config.diagnostic, ...parsed.data } },
+            updatedAt: new Date(),
+          })
+          .where(eq(instances.id, i.id)),
+      );
+      return parsed.data;
+    }),
+  );
   // Rapport : le pilote demande sa rédaction par Claude (étape 4, revue validée).
   app.post<ProjetRoute>(
     '/api/i/:slug/diagnostic/projets/:id/rapport/produire',

@@ -13,7 +13,9 @@ import {
   importerEntretienDiag,
   envoyerRapportDriveDiag,
   importerRapportDiag,
+  majReglagesDiagnostic,
   marquerRapportFinal,
+  reglagesDiagnostic,
   demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
@@ -913,6 +915,20 @@ function Rapport({
       onErreur(messageErreur(err));
     }
   };
+  // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
+  const [relireFinaux, setRelireFinaux] = useState(true);
+  useEffect(() => {
+    void Promise.resolve(reglagesDiagnostic(slug))
+      .then((r) => r && setRelireFinaux(r.relireFinaux))
+      .catch(() => undefined);
+  }, [slug]);
+  const changerRelire = async (valeur: boolean) => {
+    try {
+      setRelireFinaux((await majReglagesDiagnostic(slug, valeur)).relireFinaux);
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const marquerFinale = async (lien: string, finale: boolean) => {
     try {
       onChange(await marquerRapportFinal(slug, projet.id, lien, finale));
@@ -1010,6 +1026,14 @@ function Rapport({
             </ul>
           </details>
         )}
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={relireFinaux}
+            onChange={(e) => void changerRelire(e.target.checked)}
+          />{' '}
+          Relire les deux derniers rapports finaux avant de rédiger
+        </label>
         {versionsDrive.length > 0 && (
           <div className="stack">
             <span className="small muted">

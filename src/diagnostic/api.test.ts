@@ -181,6 +181,23 @@ describe('Entretien : API', () => {
     expect(mauvais.statusCode).toBe(400);
   });
 
+  it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
+    const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
+    const url = '/api/i/simatis/diagnostic/reglages';
+    expect((await app.inject({ method: 'GET', url })).json()).toEqual({ relireFinaux: true });
+    const coupe = await app.inject({ method: 'PUT', url, payload: { relireFinaux: false } });
+    expect(coupe.statusCode).toBe(200);
+    expect(coupe.json()).toEqual({ relireFinaux: false });
+    expect((await app.inject({ method: 'GET', url })).json()).toEqual({ relireFinaux: false });
+    const apres = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
+    expect(apres.config.modules).toEqual(avant.config.modules);
+    expect(apres.config.ecrituresReelles).toEqual(avant.config.ecrituresReelles);
+    const remis = await app.inject({ method: 'PUT', url, payload: { relireFinaux: true } });
+    expect(remis.json()).toEqual({ relireFinaux: true });
+    const invalide = await app.inject({ method: 'PUT', url, payload: { relireFinaux: 'oui' } });
+    expect(invalide.statusCode).toBe(400);
+  });
+
   it('refuse un identifiant de projet mal formé', async () => {
     const r = await app.inject({
       method: 'POST',

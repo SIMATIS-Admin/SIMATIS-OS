@@ -1419,6 +1419,12 @@ export const marquerRapportFinal = (slug: string, id: string, lien: string, fina
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/finale`),
     { lien, finale },
   );
+// Réglage du module Diagnostic : relire les deux derniers rapports finaux avant de rédiger.
+export type ReglagesDiag = { relireFinaux: boolean };
+export const reglagesDiagnostic = (slug: string) =>
+  getJson<ReglagesDiag>(inst(slug, 'diagnostic/reglages'));
+export const majReglagesDiagnostic = (slug: string, relireFinaux: boolean) =>
+  sendJson<ReglagesDiag>('PUT', inst(slug, 'diagnostic/reglages'), { relireFinaux });
 // Correction d'une réponse lue : le profil se recalcule côté OS.
 export const corrigerReponseDiag = (
   slug: string,
