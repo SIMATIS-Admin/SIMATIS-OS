@@ -1,4 +1,8 @@
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import type { Tx } from '../db.js';
+import { diagnosticProjets } from './schema.js';
+import { ProjetIntrouvable } from './service.js';
 import { SupportInvalide } from './support.js';
 
 // Clés courtes des formulaires de revue existants (`r1`, `b3`, `b1l`).
@@ -102,4 +106,25 @@ export function fusionnerPropositions(
       libre: vide(conclusion.libre),
     },
   };
+}
+
+// Claude déclare ses propositions : seule une demande de préparation en cours ouvre l'écriture, et la
+// fusion refuse une revue validée. Le statut reste « brouillon » : c'est le pilote qui valide.
+export async function enregistrerRevueProposee(
+  tx: Tx,
+  projetId: string,
+  propositions: PropositionsRevue,
+): Promise<void> {
+  const [projet] = await tx
+    .select()
+    .from(diagnosticProjets)
+    .where(eq(diagnosticProjets.id, projetId));
+  if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+  if (projet.demande !== 'revue_preparer')
+    throw new SupportInvalide("Le pilote n'a pas demandé de préparation de la revue.");
+  const revue = fusionnerPropositions(projet.revue, propositions);
+  await tx
+    .update(diagnosticProjets)
+    .set({ revue, updatedAt: new Date() })
+    .where(eq(diagnosticProjets.id, projetId));
 }

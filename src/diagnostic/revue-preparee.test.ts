@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { setupTestApp, type TestApp } from '../../test/database.js';
+import { withInstance } from '../db/context.js';
+import type { Instance } from '../instances/schema.js';
+import { createInstance } from '../instances/service.js';
+import { diagnosticProjets, type Demande } from './schema.js';
+import { createProjet, listProjets } from './service.js';
 import {
+  enregistrerRevueProposee,
   fusionnerPropositions,
   propositionsRevueSchema,
   type PropositionsRevue,
@@ -192,5 +200,79 @@ describe('propositionsRevueSchema', () => {
     expect(
       accepte({ ...base, planAction: { ...base.planAction, court: { dimension: 'd', blocs } } }),
     ).toBe(false);
+  });
+});
+
+describe('enregistrerRevueProposee', () => {
+  let t: TestApp;
+  let simatis: Instance;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    simatis = await createInstance(t.owner.db, {
+      slug: 'simatis-revue-prep',
+      nom: 'S',
+      type: 'propre',
+    });
+  });
+
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  const projet = async (
+    nom: string,
+    demande: Demande | null,
+    revue: Record<string, unknown> | null,
+  ) => {
+    const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+    await withInstance(t.app.db, simatis.id, (tx) =>
+      tx.update(diagnosticProjets).set({ demande, revue }).where(eq(diagnosticProjets.id, p.id)),
+    );
+    return p.id;
+  };
+  const enregistrer = (id: string, p: PropositionsRevue) =>
+    withInstance(t.app.db, simatis.id, (tx) => enregistrerRevueProposee(tx, id, p));
+  const revueDe = async (id: string) =>
+    (await listProjets(t.app.db, simatis)).find((x) => x.id === id)!.revue;
+
+  it('écrit la revue en brouillon pendant la demande de préparation', async () => {
+    const id = await projet('Prep A', 'revue_preparer', null);
+    await enregistrer(id, propositions());
+    const revue = (await revueDe(id)) as unknown as Revue;
+    expect(revue.statut).toBe('brouillon');
+    expect(revue.preconisations.r1!.texte).toBe('Proposition a');
+    expect(revue.preconisations.r1!.choix).toBe('');
+  });
+
+  it('garde les choix et les textes du pilote sur un brouillon', async () => {
+    const id = await projet('Prep B', 'revue_preparer', {
+      statut: 'brouillon',
+      preconisations: {
+        r1: { titre: 'Ancien', texte: 'Ancienne', choix: 'remplacer', detail: 'Mon texte' },
+      },
+    });
+    await enregistrer(id, propositions('b'));
+    const revue = (await revueDe(id)) as unknown as Revue;
+    expect(revue.preconisations.r1).toMatchObject({
+      texte: 'Proposition b',
+      choix: 'remplacer',
+      detail: 'Mon texte',
+    });
+  });
+
+  it('refuse hors demande de préparation, sans rien écrire', async () => {
+    for (const demande of [null, 'regles_analyse', 'rapport'] as const) {
+      const id = await projet(`Prep C ${demande}`, demande, null);
+      await expect(enregistrer(id, propositions())).rejects.toThrow(SupportInvalide);
+      expect(await revueDe(id)).toBeNull();
+    }
+  });
+
+  it('refuse une revue validée et la laisse inchangée', async () => {
+    const validee = { statut: 'validée', preconisations: { r1: { texte: 'X', choix: 'garder' } } };
+    const id = await projet('Prep D', 'revue_preparer', validee);
+    await expect(enregistrer(id, propositions())).rejects.toThrow(SupportInvalide);
+    expect(await revueDe(id)).toEqual(validee);
   });
 });
