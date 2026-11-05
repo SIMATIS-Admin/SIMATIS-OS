@@ -18,6 +18,7 @@ import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnost
 import { exporterRapportDrive } from '../diagnostic/drive.js';
 import {
   demanderCapitalisationAnalyse,
+  demanderPreparationRevue,
   revueVientDEtreValidee,
   statutRevueDe,
 } from '../diagnostic/analyse.js';
@@ -642,6 +643,21 @@ export function registerApi(
       if (!corps.success) return reply.code(400).send({ error: 'Lien et choix attendus' });
       try {
         return await marquerVersionFinale(db, i, id, corps.data.lien, corps.data.finale);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Préparation de la revue par Claude (étape 3) : propositions de textes, choix du pilote intacts.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/revue/preparer',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderPreparationRevue(db, i, id);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });

@@ -225,7 +225,12 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
       const revueValideeTexte =
         p.demande === 'regles_analyse' && p.revue ? resumeRevue(p.revue) : null;
       const revuesValidees =
-        p.demande === 'regles_analyse' ? await revuesValideesPour(db, instance, p.id) : [];
+        p.demande === 'regles_analyse' || p.demande === 'revue_preparer'
+          ? await revuesValideesPour(db, instance, p.id)
+          : [];
+      // Préparation : la revue déjà commencée, pour que Claude n'écrase pas le travail du pilote.
+      const revueEnCoursTexte =
+        p.demande === 'revue_preparer' && p.revue ? resumeRevue(p.revue) : null;
       const finale = p.rapportLiens.find((l) => l.finale);
       let rapportFinalTexte: string | null = null;
       if (drive && finale && p.demande === 'regles_rapport') {
@@ -255,6 +260,7 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         ? await lireEntreeJournal(db, instance, idAnnulation)
         : null;
       sorties.push({
+        revueEnCoursTexte,
         revueValideeTexte,
         revuesValidees,
         relireSupports,

@@ -1425,6 +1425,13 @@ export const reglagesDiagnostic = (slug: string) =>
   getJson<ReglagesDiag>(inst(slug, 'diagnostic/reglages'));
 export const majReglagesDiagnostic = (slug: string, reglage: Partial<ReglagesDiag>) =>
   sendJson<ReglagesDiag>('PUT', inst(slug, 'diagnostic/reglages'), reglage);
+// Préparation de la revue par Claude (étape 3) : il propose des textes, le pilote garde ses choix.
+export const preparerRevueDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/revue/preparer`),
+    {},
+  );
 // Capitalisation des règles à partir de la revue validée (étape 3).
 export const capitaliserAnalyseDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(
