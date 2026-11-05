@@ -540,13 +540,6 @@
       "when": 1793912343008,
       "tag": "0076_mute_slyde",
       "breakpoints": true
-    },
-    {
-      "idx": 77,
-      "version": "7",
-      "when": 1793914872382,
-      "tag": "0077_charming_vivisector",
-      "breakpoints": true
     }
   ]
 }
