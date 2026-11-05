@@ -32,7 +32,7 @@ function dateIso(brut: string): string | null {
 
 // « -23.99 », « -23,99 », « 1 234,50 » : le dernier séparateur est la décimale, l'autre sépare les milliers.
 function montantCents(brut: string): number | null {
-  let t = brut.replace(/[\s  ]/g, '');
+  let t = brut.replace(/\s/g, '');
   const virgule = t.lastIndexOf(',');
   const point = t.lastIndexOf('.');
   t =

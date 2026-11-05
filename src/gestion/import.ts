@@ -3,10 +3,24 @@ import type { Feuille } from '../base-vivante/lecture.js';
 import { currentInstance } from '../db/columns.js';
 import type { Executor } from '../db.js';
 import { ajouterJours } from './dates.js';
-import { lireTransactions, type LigneImport } from './import-pennylane.js';
-import { occurrencesRevenus, type OccurrenceRevenu } from './revenus.js';
+import { ImportInvalide, lireTransactions, type LigneImport } from './import-pennylane.js';
+import {
+  creerRevenu,
+  modifierOccurrenceRevenu,
+  modifierRevenu,
+  occurrencesRevenus,
+  revenuSchema,
+  type OccurrenceRevenu,
+} from './revenus.js';
 import { gestionImportCles } from './schema.js';
-import { occurrencesDepenses, type OccurrenceVue } from './service.js';
+import {
+  creerDepense,
+  depenseSchema,
+  modifierOccurrence,
+  modifierSerie,
+  occurrencesDepenses,
+  type OccurrenceVue,
+} from './service.js';
 
 // Import des transactions bancaires : on propose, Marc décide. Rien n'est écrit tant qu'il n'a pas validé.
 const FENETRE_SORTIE_JOURS = 7;
@@ -15,6 +29,8 @@ const FENETRE_ENTREE_JOURS = 45;
 export type Rapprochement = {
   type: 'depense' | 'recette';
   id: string;
+  // Une série se rapproche occurrence par occurrence ; une ligne unique change d'état.
+  recurrente: boolean;
   // Date de l'échéance d'origine dans la série (clé de l'occurrence), pas la date éventuellement déplacée.
   dateOrigine: string;
   libelle: string;
@@ -54,6 +70,7 @@ export function proposerRapprochements(
           r: {
             type: 'depense',
             id: d.depenseId,
+            recurrente: d.recurrente,
             dateOrigine: d.cle.split('|')[1] ?? d.date,
             libelle: d.libelle,
             date: d.date,
@@ -75,6 +92,7 @@ export function proposerRapprochements(
           r: {
             type: 'recette',
             id: r.revenuId,
+            recurrente: r.recurrente,
             dateOrigine: r.cle.split('|')[1] ?? r.date,
             libelle: r.libelle,
             date: r.date,
@@ -174,4 +192,100 @@ export async function analyserImport(tx: Executor, f: Feuille): Promise<AnalyseI
     },
     avertissements,
   };
+}
+
+export type Decision = 'importer' | 'rapprocher' | 'ignorer';
+
+// Applique les décisions de Marc. Le fichier est relu et ré-analysé : on ne fait jamais confiance à une
+// liste de lignes venue du navigateur. Une ligne « nouvelle » sans décision est importée ; une ligne « à
+// vérifier » sans décision reste de côté. Tout ou rien : une décision impossible annule l'ensemble.
+export async function validerImport(
+  tx: Executor,
+  instanceId: string,
+  f: Feuille,
+  decisions: Record<string, Decision>,
+): Promise<{ importees: number; rapprochees: number; ignorees: number }> {
+  const { lignes } = await analyserImport(tx, f);
+  const aTraiter = lignes.flatMap((l) => {
+    if (l.issue === 'deja') return [];
+    const d = decisions[l.cle] ?? (l.issue === 'nouvelle' ? 'importer' : null);
+    if (!d) return [];
+    if (d === 'rapprocher' && !l.rapprochement)
+      throw new ImportInvalide(`Aucun rapprochement possible pour « ${l.libelle} » (${l.date}).`);
+    return [{ l, d }];
+  });
+
+  const resultat = { importees: 0, rapprochees: 0, ignorees: 0 };
+  for (const { l, d } of aTraiter) {
+    let cible: { type: 'depense' | 'recette'; id: string } | null = null;
+    if (d === 'ignorer') {
+      resultat.ignorees += 1;
+    } else if (d === 'importer') {
+      if (l.sens === 'sortie') {
+        const depense = await creerDepense(
+          tx,
+          instanceId,
+          depenseSchema.parse({
+            libelle: l.libelle,
+            montantTtcCents: -l.montantCents,
+            statut: 'reelle',
+            dateDebut: l.date,
+            affectations: [{ cible: 'simatis' }],
+          }),
+        );
+        cible = { type: 'depense', id: depense.id };
+      } else {
+        // Le relevé donne le TTC encaissé sans le détail de la TVA : repris tel quel, TVA non renseignée.
+        const revenu = await creerRevenu(
+          tx,
+          instanceId,
+          revenuSchema.parse({
+            libelle: l.libelle,
+            type: 'autre',
+            montantHtCents: l.montantCents,
+            etat: 'encaissee',
+            date: l.date,
+            dateEncaissement: l.date,
+          }),
+        );
+        cible = { type: 'recette', id: revenu.id };
+      }
+      resultat.importees += 1;
+    } else {
+      const r = l.rapprochement!;
+      if (r.type === 'depense') {
+        if (r.recurrente)
+          await modifierOccurrence(tx, instanceId, r.id, r.dateOrigine, {
+            portee: 'cette',
+            etat: 'payee',
+            datePaiement: l.date,
+            montantTtcCents: -l.montantCents,
+          });
+        else
+          await modifierSerie(tx, r.id, {
+            statut: 'reelle',
+            dateDebut: l.date,
+            montantTtcCents: -l.montantCents,
+          });
+      } else if (r.recurrente) {
+        await modifierOccurrenceRevenu(tx, instanceId, r.id, r.dateOrigine, {
+          portee: 'cette',
+          etat: 'encaissee',
+          dateEncaissement: l.date,
+        });
+      } else {
+        await modifierRevenu(tx, r.id, { etat: 'encaissee', dateEncaissement: l.date });
+      }
+      cible = { type: r.type, id: r.id };
+      resultat.rapprochees += 1;
+    }
+    await tx.insert(gestionImportCles).values({
+      instanceId,
+      cle: l.cle,
+      decision: d === 'importer' ? 'importee' : d === 'rapprocher' ? 'rapprochee' : 'ignoree',
+      cibleType: cible?.type ?? null,
+      cibleId: cible?.id ?? null,
+    });
+  }
+  return resultat;
 }
