@@ -49,6 +49,8 @@ export const DEMANDES = [
   'regles_annuler',
   // Capitalisation des règles du support d'ouverture à l'archivage du support final.
   'regles_support',
+  // Capitalisation des règles d'analyse à la validation de la revue (étape 3).
+  'regles_analyse',
 ] as const;
 // Capitalisation de la restitution (étape 5) : 'en_cours' tant que Claude propose, 'propose' une fois
 // sa proposition dans le chat, 'enregistre' quand le pilote l'a validée et que Claude l'a écrite.
@@ -173,7 +175,7 @@ export type Projet = typeof diagnosticProjets.$inferSelect;
 
 export const ACTIONS_REGLE = ['ajoutée', 'durcie', 'modifiée', 'signalée', 'annulée'] as const;
 export type ActionRegle = (typeof ACTIONS_REGLE)[number];
-export const FICHES_REGLES = ['rapport', 'communes', 'support'] as const;
+export const FICHES_REGLES = ['rapport', 'communes', 'support', 'analyse'] as const;
 export type FicheRegles = (typeof FICHES_REGLES)[number];
 
 // Journal des changements de règles de rédaction faits par Claude dans le second cerveau. Pas de clé
