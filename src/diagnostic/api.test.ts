@@ -181,6 +181,40 @@ describe('Entretien : API', () => {
     expect(mauvais.statusCode).toBe(400);
   });
 
+  it('version finale du deck : cocher, relancer la capitalisation, refuser un lien étranger ou un corps invalide', async () => {
+    const projet = await creerProjet('Deck final API');
+    const lien = 'https://claude.ai/artifact/DeckApiFictif01';
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({ restitutionLiens: [{ lien, le: '2026-10-29T10:00:00.000Z' }] })
+      .where(eq(diagnosticProjets.id, projet.id));
+    const base = `/api/i/simatis/diagnostic/projets/${projet.id}/restitution`;
+    const sansFinale = await app.inject({ method: 'POST', url: `${base}/regles` });
+    expect(sansFinale.statusCode).toBe(409);
+    const ok = await app.inject({
+      method: 'POST',
+      url: `${base}/finale`,
+      payload: { lien, finale: true },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(
+      ok.json<{ restitutionLiens: { finale?: boolean }[] }>().restitutionLiens[0]?.finale,
+    ).toBe(true);
+    const etranger = await app.inject({
+      method: 'POST',
+      url: `${base}/finale`,
+      payload: { lien: 'https://claude.ai/artifact/Autre', finale: true },
+    });
+    expect(etranger.statusCode).toBe(409);
+    const invalide = await app.inject({ method: 'POST', url: `${base}/finale`, payload: { lien } });
+    expect(invalide.statusCode).toBe(400);
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/restitution/regles',
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
   it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
     const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     const url = '/api/i/simatis/diagnostic/reglages';

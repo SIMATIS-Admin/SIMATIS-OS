@@ -1313,7 +1313,7 @@ export type ProjetDiag = {
   rapportVersions: { version: number; le: string }[];
   restitutionStatut: 'aucun' | 'en_cours' | 'pret';
   restitutionLien: string | null;
-  restitutionLiens: { lien: string; le: string }[];
+  restitutionLiens: { lien: string; le: string; finale?: boolean }[];
   restitutionAvecProposition: boolean;
   // PowerPoint exporté depuis le deck : disponible au téléchargement, avec la date de l'export.
   aPptx: boolean;
@@ -1466,6 +1466,18 @@ export const capitaliserRapportDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/capitaliser`),
+    {},
+  );
+export const marquerDeckFinalDiag = (slug: string, id: string, lien: string, finale: boolean) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/finale`),
+    { lien, finale },
+  );
+export const capitaliserDeckDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/regles`),
     {},
   );
 export const annulerRegleDiag = (slug: string, id: string, entree: string) =>
