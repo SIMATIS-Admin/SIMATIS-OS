@@ -1309,7 +1309,7 @@ export type ProjetDiag = {
   rapportNom: string | null;
   rapportLienStatut: 'aucun' | 'en_cours' | 'pret';
   rapportLien: string | null;
-  rapportLiens: { lien: string; le: string; version?: number }[];
+  rapportLiens: { lien: string; le: string; version?: number; finale?: boolean }[];
   rapportVersions: { version: number; le: string }[];
   restitutionStatut: 'aucun' | 'en_cours' | 'pret';
   restitutionLien: string | null;
@@ -1411,6 +1411,13 @@ export const importerRapportDiag = (
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/importer`),
     word,
+  );
+// Version finale du rapport : le Google Doc coché sert de référence pour rédiger les suivants.
+export const marquerRapportFinal = (slug: string, id: string, lien: string, finale: boolean) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/finale`),
+    { lien, finale },
   );
 // Correction d'une réponse lue : le profil se recalcule côté OS.
 export const corrigerReponseDiag = (

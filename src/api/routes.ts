@@ -19,6 +19,7 @@ import { exporterRapportDrive } from '../diagnostic/drive.js';
 import {
   demanderRapport,
   importerRapport,
+  marquerVersionFinale,
   renvoyerRapportSurDrive,
 } from '../diagnostic/rapport.js';
 import {
@@ -569,6 +570,25 @@ export function registerApi(
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
       try {
         return await renvoyerRapportSurDrive(db, i, id, driveDeps);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Version finale du rapport : le pilote désigne le Google Doc qui servira de référence de rédaction.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/finale',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z
+        .object({ lien: z.string().trim().min(1).max(500), finale: z.boolean() })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Lien et choix attendus' });
+      try {
+        return await marquerVersionFinale(db, i, id, corps.data.lien, corps.data.finale);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
