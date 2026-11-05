@@ -16,10 +16,12 @@ import {
   annulerRegleDiag,
   capitaliserAnalyseDiag,
   capitaliserRapportDiag,
+  capitaliserDeckDiag,
   capitaliserSupportDiag,
   preparerRevueDiag,
   journalReglesDiag,
   majReglagesDiagnostic,
+  marquerDeckFinalDiag,
   marquerRapportFinal,
   reglagesDiagnostic,
   demandeSupportDiag,
@@ -561,6 +563,7 @@ const NOMS_FICHES_REGLES = {
   communes: 'règles communes',
   support: 'règles du support',
   analyse: 'règles d’analyse',
+  restitution: 'règles du deck de restitution',
 } as const;
 
 function Support({
@@ -1469,6 +1472,49 @@ function RestitutionDeck({
     }
   };
   const precedents = projet.restitutionLiens.slice(1);
+  const aDeckFinal = projet.restitutionLiens.some((l) => l.finale);
+  const occupe = projet.statutChat !== 'repos' || enCours;
+  // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
+  const [relireRestitutions, setRelireRestitutions] = useState(true);
+  useEffect(() => {
+    void Promise.resolve(reglagesDiagnostic(slug))
+      .then((r) => r && setRelireRestitutions(r.relireRestitutions))
+      .catch(() => undefined);
+  }, [slug]);
+  const changerRelire = async (valeur: boolean) => {
+    try {
+      setRelireRestitutions(
+        (await majReglagesDiagnostic(slug, { relireRestitutions: valeur })).relireRestitutions,
+      );
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const marquerFinal = async (lien: string, finale: boolean) => {
+    try {
+      onChange(await marquerDeckFinalDiag(slug, projet.id, lien, finale));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const capitaliser = async () => {
+    try {
+      onChange(await capitaliserDeckDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const caseFinale = (r: { lien: string; le: string; finale?: boolean }, nom: string) => (
+    <label className="small">
+      <input
+        type="checkbox"
+        aria-label={`Version finale : ${nom}`}
+        checked={r.finale === true}
+        onChange={(e) => void marquerFinal(r.lien, e.target.checked)}
+      />{' '}
+      Version finale
+    </label>
+  );
   return (
     <div className="panel">
       <div className="panel-h">
@@ -1551,6 +1597,24 @@ function RestitutionDeck({
             {raison}
           </p>
         )}
+        {projet.restitutionLiens[0] && (
+          <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+            {caseFinale(projet.restitutionLiens[0], 'deck affiché')}
+            {aDeckFinal && (
+              <button className="btn" disabled={occupe} onClick={() => void capitaliser()}>
+                Capitaliser ce deck
+              </button>
+            )}
+          </div>
+        )}
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={relireRestitutions}
+            onChange={(e) => void changerRelire(e.target.checked)}
+          />{' '}
+          Relire les deux derniers decks finaux avant de produire
+        </label>
         {precedents.length > 0 && (
           <details>
             <summary className="small">Decks précédents ({precedents.length})</summary>
@@ -1559,7 +1623,8 @@ function RestitutionDeck({
                 <li key={r.lien}>
                   <a href={r.lien} target="_blank" rel="noreferrer">
                     Deck du {new Date(r.le).toLocaleDateString('fr-FR')}
-                  </a>
+                  </a>{' '}
+                  {caseFinale(r, `deck du ${new Date(r.le).toLocaleDateString('fr-FR')}`)}
                 </li>
               ))}
             </ul>

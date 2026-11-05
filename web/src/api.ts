@@ -1313,7 +1313,7 @@ export type ProjetDiag = {
   rapportVersions: { version: number; le: string }[];
   restitutionStatut: 'aucun' | 'en_cours' | 'pret';
   restitutionLien: string | null;
-  restitutionLiens: { lien: string; le: string }[];
+  restitutionLiens: { lien: string; le: string; finale?: boolean }[];
   restitutionAvecProposition: boolean;
   // PowerPoint exporté depuis le deck : disponible au téléchargement, avec la date de l'export.
   aPptx: boolean;
@@ -1420,7 +1420,11 @@ export const marquerRapportFinal = (slug: string, id: string, lien: string, fina
     { lien, finale },
   );
 // Réglage du module Diagnostic : relire les deux derniers rapports finaux avant de rédiger.
-export type ReglagesDiag = { relireFinaux: boolean; relireSupports: boolean };
+export type ReglagesDiag = {
+  relireFinaux: boolean;
+  relireSupports: boolean;
+  relireRestitutions: boolean;
+};
 export const reglagesDiagnostic = (slug: string) =>
   getJson<ReglagesDiag>(inst(slug, 'diagnostic/reglages'));
 export const majReglagesDiagnostic = (slug: string, reglage: Partial<ReglagesDiag>) =>
@@ -1466,6 +1470,18 @@ export const capitaliserRapportDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/capitaliser`),
+    {},
+  );
+export const marquerDeckFinalDiag = (slug: string, id: string, lien: string, finale: boolean) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/finale`),
+    { lien, finale },
+  );
+export const capitaliserDeckDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/regles`),
     {},
   );
 export const annulerRegleDiag = (slug: string, id: string, entree: string) =>

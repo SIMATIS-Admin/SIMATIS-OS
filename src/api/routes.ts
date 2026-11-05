@@ -38,7 +38,9 @@ import {
 } from '../diagnostic/capitalisation.js';
 import {
   demanderExportRestitution,
+  demanderReglesRestitution,
   demanderRestitution,
+  marquerDeckFinal,
   pptxRestitutionDe,
 } from '../diagnostic/restitution.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
@@ -554,10 +556,17 @@ export function registerApi(
   // Réglages du module Diagnostic : relire les deux derniers rapports finaux (ou supports finaux)
   // avant de rédiger. Actifs par défaut.
   const reglagesDiag = (i: {
-    config: { diagnostic?: { relireFinaux?: boolean; relireSupports?: boolean } };
+    config: {
+      diagnostic?: {
+        relireFinaux?: boolean;
+        relireSupports?: boolean;
+        relireRestitutions?: boolean;
+      };
+    };
   }) => ({
     relireFinaux: i.config.diagnostic?.relireFinaux !== false,
     relireSupports: i.config.diagnostic?.relireSupports !== false,
+    relireRestitutions: i.config.diagnostic?.relireRestitutions !== false,
   });
   app.get<SlugParams>(
     '/api/i/:slug/diagnostic/reglages',
@@ -567,8 +576,12 @@ export function registerApi(
     '/api/i/:slug/diagnostic/reglages',
     onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
       const parsed = z
-        .object({ relireFinaux: z.boolean().optional(), relireSupports: z.boolean().optional() })
-        .refine((r) => r.relireFinaux !== undefined || r.relireSupports !== undefined)
+        .object({
+          relireFinaux: z.boolean().optional(),
+          relireSupports: z.boolean().optional(),
+          relireRestitutions: z.boolean().optional(),
+        })
+        .refine((r) => Object.values(r).some((v) => v !== undefined))
         .safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Réglage invalide' });
       const diagnostic = { ...i.config.diagnostic, ...parsed.data };
@@ -692,6 +705,39 @@ export function registerApi(
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
       try {
         return await demanderCapitalisationRapport(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Version finale du deck de restitution, et relance de la capitalisation de ses règles.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/finale',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z
+        .object({ lien: z.string().trim().min(1).max(500), finale: z.boolean() })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Lien et choix attendus' });
+      try {
+        return await marquerDeckFinal(db, i, id, corps.data.lien, corps.data.finale);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/regles',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderReglesRestitution(db, i, id);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });

@@ -181,27 +181,82 @@ describe('Entretien : API', () => {
     expect(mauvais.statusCode).toBe(400);
   });
 
+  it('version finale du deck : cocher, relancer la capitalisation, refuser un lien étranger ou un corps invalide', async () => {
+    const projet = await creerProjet('Deck final API');
+    const lien = 'https://claude.ai/artifact/DeckApiFictif01';
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({ restitutionLiens: [{ lien, le: '2026-10-29T10:00:00.000Z' }] })
+      .where(eq(diagnosticProjets.id, projet.id));
+    const base = `/api/i/simatis/diagnostic/projets/${projet.id}/restitution`;
+    const sansFinale = await app.inject({ method: 'POST', url: `${base}/regles` });
+    expect(sansFinale.statusCode).toBe(409);
+    const ok = await app.inject({
+      method: 'POST',
+      url: `${base}/finale`,
+      payload: { lien, finale: true },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(
+      ok.json<{ restitutionLiens: { finale?: boolean }[] }>().restitutionLiens[0]?.finale,
+    ).toBe(true);
+    const etranger = await app.inject({
+      method: 'POST',
+      url: `${base}/finale`,
+      payload: { lien: 'https://claude.ai/artifact/Autre', finale: true },
+    });
+    expect(etranger.statusCode).toBe(409);
+    const invalide = await app.inject({ method: 'POST', url: `${base}/finale`, payload: { lien } });
+    expect(invalide.statusCode).toBe(400);
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/restitution/regles',
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
   it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
     const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     const url = '/api/i/simatis/diagnostic/reglages';
     expect((await app.inject({ method: 'GET', url })).json()).toEqual({
       relireFinaux: true,
       relireSupports: true,
+      relireRestitutions: true,
     });
     const coupe = await app.inject({ method: 'PUT', url, payload: { relireFinaux: false } });
     expect(coupe.statusCode).toBe(200);
-    expect(coupe.json()).toEqual({ relireFinaux: false, relireSupports: true });
+    expect(coupe.json()).toEqual({
+      relireFinaux: false,
+      relireSupports: true,
+      relireRestitutions: true,
+    });
     expect((await app.inject({ method: 'GET', url })).json()).toEqual({
       relireFinaux: false,
       relireSupports: true,
+      relireRestitutions: true,
     });
     const apres = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     expect(apres.config.modules).toEqual(avant.config.modules);
     expect(apres.config.ecrituresReelles).toEqual(avant.config.ecrituresReelles);
     const remis = await app.inject({ method: 'PUT', url, payload: { relireFinaux: true } });
-    expect(remis.json()).toEqual({ relireFinaux: true, relireSupports: true });
+    expect(remis.json()).toEqual({
+      relireFinaux: true,
+      relireSupports: true,
+      relireRestitutions: true,
+    });
     const supports = await app.inject({ method: 'PUT', url, payload: { relireSupports: false } });
-    expect(supports.json()).toEqual({ relireFinaux: true, relireSupports: false });
+    expect(supports.json()).toEqual({
+      relireFinaux: true,
+      relireSupports: false,
+      relireRestitutions: true,
+    });
+    const decks = await app.inject({ method: 'PUT', url, payload: { relireRestitutions: false } });
+    expect(decks.json()).toEqual({
+      relireFinaux: true,
+      relireSupports: false,
+      relireRestitutions: false,
+    });
+    await app.inject({ method: 'PUT', url, payload: { relireRestitutions: true } });
     const vide = await app.inject({ method: 'PUT', url, payload: {} });
     expect(vide.statusCode).toBe(400);
     await app.inject({ method: 'PUT', url, payload: { relireSupports: true } });

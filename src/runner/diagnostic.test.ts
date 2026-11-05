@@ -10,9 +10,11 @@ import {
   FICHE_REGLES_ANALYSE,
   FICHE_REGLES_COMMUNES,
   FICHE_REGLES_RAPPORT,
+  FICHE_REGLES_RESTITUTION,
   FICHE_REGLES_SUPPORT,
   outilsRapport,
   outilsRegles,
+  outilsReglesRestitution,
   outilsRevue,
   outilsExportRestitution,
   outilsRestitution,
@@ -25,6 +27,7 @@ import {
   promptReglesAnalyse,
   promptRevue,
   promptReglesRapport,
+  promptReglesRestitution,
   promptReglesSupport,
   promptExportRestitution,
   promptRestitution,
@@ -75,6 +78,9 @@ const attente: AttenteDiag = {
   relireSupports: true,
   supportsFinaux: [],
   supportFinalTexte: null,
+  relireRestitutions: true,
+  restitutionsFinales: [],
+  restitutionFinaleLien: null,
   revueValideeTexte: null,
   revuesValidees: [],
   revueEnCoursTexte: null,
@@ -954,6 +960,110 @@ describe("Règles de rédaction du support d'ouverture par le runner", () => {
       },
     });
     expect(texte).toContain(FICHE_REGLES_SUPPORT);
+  });
+});
+
+describe('Règles du deck de restitution par le runner', () => {
+  const decks = [
+    { nom: 'Deck final 1', lien: 'https://claude.ai/artifact/PremierDeckFictif' },
+    { nom: 'Deck final 2', lien: 'https://claude.ai/artifact/SecondDeckFictif' },
+  ];
+  const production: AttenteDiag = {
+    ...attente,
+    etape: 5,
+    etapeMessage: 5,
+    demande: 'restitution',
+    restitutionsFinales: decks,
+  };
+  const date = new Date('2026-10-25T08:00:00Z');
+
+  it('la production lit les deux fiches et les liens des decks finaux comme modèles', () => {
+    const texte = promptRestitution(production, date, '/cerveau-fictif');
+    expect(texte).toContain(FICHE_REGLES_RESTITUTION);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/règles fermes.*impératives/);
+    expect(texte).toContain('PremierDeckFictif');
+    expect(texte).toContain('SecondDeckFictif');
+    expect(texte).toMatch(/jamais un fait, un nom, un chiffre ni un tarif/);
+  });
+
+  it('sans second cerveau : ni fiche, mais les modèles restent', () => {
+    const texte = promptRestitution(production, date, null);
+    expect(texte).not.toContain(FICHE_REGLES_RESTITUTION);
+    expect(texte).toContain('PremierDeckFictif');
+  });
+
+  it('réglage désactivé : pas de deck final, les règles restent', () => {
+    const texte = promptRestitution(
+      { ...production, relireRestitutions: false },
+      date,
+      '/cerveau-fictif',
+    );
+    expect(texte).not.toContain('PremierDeckFictif');
+    expect(texte).not.toContain('Aucun deck de restitution final');
+    expect(texte).toContain(FICHE_REGLES_RESTITUTION);
+  });
+
+  it('sans deck final, le dit sans afficher null', () => {
+    const texte = promptRestitution(
+      { ...production, restitutionsFinales: [] },
+      date,
+      '/cerveau-fictif',
+    );
+    expect(texte).toMatch(/Aucun deck de restitution final/);
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  const regles: AttenteDiag = {
+    ...production,
+    demande: 'regles_restitution',
+    restitutionFinaleLien: 'https://claude.ai/artifact/DeckFinalFictif',
+  };
+
+  it('la capitalisation donne le deck final, les précédents, les fiches et les règles du jeu', () => {
+    const texte = promptReglesRestitution(regles);
+    expect(texte).toContain('DeckFinalFictif');
+    expect(texte).toContain('PremierDeckFictif');
+    expect(texte).toContain(FICHE_REGLES_RESTITUTION);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/au moins deux decks finaux/);
+    expect(texte).toMatch(/ne la supprime jamais/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+    expect(texte).toMatch(/aucun montant ni tarif/);
+    expect(texte).toContain(`projetId ${regles.id}`);
+    expect(texte).toContain('enregistrer_regles_rapport');
+    expect(texte).toMatch(/fiche « restitution »/);
+  });
+
+  it('sans deck précédent, le dit sans afficher null', () => {
+    const texte = promptReglesRestitution({ ...regles, restitutionsFinales: [] });
+    expect(texte).toMatch(/Aucun autre deck final/);
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  it('les outils lisent les decks, écrivent seulement dans le dossier des règles, ne publient pas', () => {
+    const outils = outilsReglesRestitution('/cerveau-fictif', ['/travail']);
+    expect(outils).toContain('Artifact');
+    expect(outils).toContain(
+      'Edit(//cerveau-fictif/brain/methodes/diagnostic-endurance-commerciale/**)',
+    );
+    expect(outils).not.toContain('Edit(//cerveau-fictif/**)');
+    expect(outils).not.toContain('enregistrer_restitution');
+  });
+
+  it('l annulation d une règle de la fiche du deck cite cette fiche', () => {
+    const texte = promptAnnulerRegle({
+      ...regles,
+      demande: 'regles_annuler',
+      regleAAnnuler: {
+        id: '00000000-0000-4000-8000-0000000000cc',
+        libelle: 'Libellé fictif',
+        avant: null,
+        apres: 'Texte fictif',
+        fiche: 'restitution',
+      },
+    });
+    expect(texte).toContain(FICHE_REGLES_RESTITUTION);
   });
 });
 

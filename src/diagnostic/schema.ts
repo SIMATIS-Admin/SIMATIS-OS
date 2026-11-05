@@ -51,6 +51,8 @@ export const DEMANDES = [
   'regles_support',
   // Capitalisation des règles d'analyse à la validation de la revue (étape 3).
   'regles_analyse',
+  // Capitalisation des règles de construction du deck à la version finale de la restitution.
+  'regles_restitution',
   // Préparation de la revue (étape 3) : Claude propose les textes, jamais les choix du pilote.
   'revue_preparer',
 ] as const;
@@ -66,6 +68,9 @@ export type VersionRapport = { version: number; le: string; contenu: ContenuRapp
 // Une version du rapport sur Drive. `finale` : la version que le pilote a validée comme référence de
 // rédaction pour les rapports suivants (une seule par projet).
 export type LienRapport = { lien: string; le: string; version?: number; finale?: boolean };
+// Une version du deck de restitution. `finale` : le deck que le pilote a validé comme référence pour
+// les suivants (un seul par projet).
+export type LienRestitution = { lien: string; le: string; finale?: boolean };
 export type Diapositive = { titre: string; texte: string; notes: string };
 
 // Un projet de diagnostic, pour une entreprise prospect de SIMATIS. Étapes : 1 préparation,
@@ -108,10 +113,7 @@ export const diagnosticProjets = pgTable(
       .notNull()
       .default('aucun'),
     restitutionLien: text('restitution_lien'),
-    restitutionLiens: jsonb('restitution_liens')
-      .$type<{ lien: string; le: string }[]>()
-      .notNull()
-      .default([]),
+    restitutionLiens: jsonb('restitution_liens').$type<LienRestitution[]>().notNull().default([]),
     restitutionAvecProposition: boolean('restitution_avec_proposition').notNull().default(true),
     // Dernier export du deck : Claude relit le deck publié et en rend les diapositives, l'OS en
     // fait le fichier PowerPoint. Le texte du deck n'est lu qu'à la demande du pilote.
@@ -177,7 +179,7 @@ export type Projet = typeof diagnosticProjets.$inferSelect;
 
 export const ACTIONS_REGLE = ['ajoutée', 'durcie', 'modifiée', 'signalée', 'annulée'] as const;
 export type ActionRegle = (typeof ACTIONS_REGLE)[number];
-export const FICHES_REGLES = ['rapport', 'communes', 'support', 'analyse'] as const;
+export const FICHES_REGLES = ['rapport', 'communes', 'support', 'analyse', 'restitution'] as const;
 export type FicheRegles = (typeof FICHES_REGLES)[number];
 
 // Journal des changements de règles de rédaction faits par Claude dans le second cerveau. Pas de clé

@@ -6,6 +6,7 @@ import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { rapportsFinauxPour } from './finaux.js';
 import { resumeRevue, revuesValideesPour } from './revues-validees.js';
+import { restitutionsFinalesPour } from './restitutions-finales.js';
 import { supportsFinauxPour, texteDuSupport } from './supports-finaux.js';
 import { exporterDocParLien, type DriveDeps } from './drive.js';
 import { texteDuDocx } from './docx-texte.js';
@@ -221,6 +222,17 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         p.demande === 'regles_support' && p.supportTexte && p.supportTexte.length > 0
           ? texteDuSupport(p.supportTexte)
           : null;
+      // Decks de restitution : relus à la production si le réglage est actif, toujours comparés à la
+      // capitalisation ; le lien du deck final du projet n'est utile qu'à celle-ci.
+      const relireRestitutions = instance.config.diagnostic?.relireRestitutions !== false;
+      const restitutionsFinales =
+        (relireRestitutions && p.demande === 'restitution') || p.demande === 'regles_restitution'
+          ? await restitutionsFinalesPour(db, instance, p.id)
+          : [];
+      const restitutionFinaleLien =
+        p.demande === 'regles_restitution'
+          ? (p.restitutionLiens.find((l) => l.finale)?.lien ?? null)
+          : null;
       // Analyse : la revue validée du projet et les deux précédentes, pour la capitalisation.
       const revueValideeTexte =
         p.demande === 'regles_analyse' && p.revue ? resumeRevue(p.revue) : null;
@@ -263,6 +275,9 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         revueEnCoursTexte,
         revueValideeTexte,
         revuesValidees,
+        relireRestitutions,
+        restitutionsFinales,
+        restitutionFinaleLien,
         relireSupports,
         supportsFinaux,
         supportFinalTexte,

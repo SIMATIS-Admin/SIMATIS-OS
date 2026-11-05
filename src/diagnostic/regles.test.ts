@@ -232,6 +232,17 @@ describe('Journal des règles de rédaction', () => {
       expect(e!.origine).toBe('analyse validée');
     });
 
+    it('une demande de règles du deck écrit avec l origine « deck final »', async () => {
+      const id = await projetEn('Atelier Outil L', 'regles_restitution');
+      await enregistrer(id, {
+        changements: [
+          { ...regle('Placer les options en dernière diapositive'), fiche: 'restitution' },
+        ],
+      });
+      const [e] = await listerJournalRegles(t.app.db, simatis, 1);
+      expect(e).toMatchObject({ fiche: 'restitution', origine: 'deck final' });
+    });
+
     it('refuse sans aucune des demandes de règles', async () => {
       const id = await projetEn('Atelier Outil J', 'support_final');
       await expect(
