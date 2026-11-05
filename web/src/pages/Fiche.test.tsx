@@ -332,10 +332,10 @@ describe('Fiche page', () => {
     expect(await screen.findByText('agathe@perso.example')).toBeTruthy();
     expect(screen.getByText('Principale')).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText('Ajouter une adresse'), {
+    fireEvent.change(screen.getByLabelText('Nouvelle adresse email'), {
       target: { value: 'nouvelle@exemple.test' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une adresse email' }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/c1/emails'))?.body).toEqual({
         email: 'nouvelle@exemple.test',

@@ -39,7 +39,11 @@ it('réduit et réaffiche un compte rendu sans masquer son titre', async () => {
     ),
   );
   render(<Fiche slug="demo" kind="entreprise" id="e" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Réduire le compte rendu' }));
+  const bouton = await screen.findByRole('button', { name: 'Réduire le compte rendu' });
+  expect(bouton.textContent).toBe('');
+  expect(bouton.getAttribute('aria-expanded')).toBe('true');
+  fireEvent.click(bouton);
+  expect(bouton.getAttribute('aria-expanded')).toBe('false');
   expect(screen.queryByText('Contenu fictif du compte rendu')).toBeNull();
   expect(screen.getByText('Réunion fictive')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Afficher le compte rendu' }));

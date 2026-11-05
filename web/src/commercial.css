@@ -383,7 +383,7 @@
   margin-top: 10px;
 }
 .commercial-fiche .fi-corps {
-  grid-template-columns: minmax(250px, 0.85fr) minmax(0, 2fr);
+  grid-template-columns: minmax(320px, 1.1fr) minmax(0, 1.8fr);
   gap: 20px;
 }
 .commercial-fiche .fi-gauche,
@@ -820,5 +820,107 @@
   .com-planning-liste {
     padding: 15px;
     gap: 15px;
+  }
+}
+
+/* Les coordonnées et actions restent lisibles dans leur carte, y compris en zoom. */
+.commercial-fiche .fi-champ > *,
+.fi-valeur,
+.fi-valeur > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fi-valeur > span {
+  flex: 1;
+}
+.fi-valeur > .btn {
+  flex: none;
+}
+.commercial-fiche .fi-champ .input {
+  min-width: 0;
+  width: 100%;
+}
+.commercial-fiche .fi-champ-large,
+.commercial-fiche .fi-champ-action,
+.commercial-fiche .fi-emails {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fi-champ-action .btn {
+  white-space: normal;
+  justify-self: start;
+  text-align: left;
+}
+.fi-emails .fi-liste {
+  padding: 0;
+}
+.fi-emails .fi-ligne {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fi-email-adresse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.fi-email-adresse > span:first-child {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.fi-email-ajout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.fi-email-ajout .btn {
+  white-space: normal;
+}
+.fi-engagement {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  margin-top: 14px;
+  border-radius: 12px;
+  background: #e7f5ef;
+  border-left: 4px solid #379d91;
+}
+.fi-engagement strong {
+  font-size: 22px;
+  color: #216d60;
+}
+.fi-deplier {
+  border: 1px solid var(--line);
+  cursor: pointer;
+  flex: none;
+}
+.fi-deplier[aria-expanded='true'],
+.fi-mail-conversation details[open] > summary .fi-ico {
+  background: #d7f2e9;
+  color: #176d5c;
+  box-shadow: 0 0 0 2px #379d9140;
+}
+.fi-deplier:hover {
+  background: #e7f5ef;
+}
+.fi-deplier:focus-visible {
+  outline: 2px solid #176d5c;
+  outline-offset: 3px;
+}
+.com-actions .seg button[aria-pressed='true'] {
+  background: #176d5c;
+  color: white;
+  box-shadow: 0 2px 5px #176d5c30;
+}
+.commercial-page .panel-h,
+.commercial-fiche .panel-h {
+  background: linear-gradient(110deg, #eaf5f1, #f5f8fc);
+  border-radius: 16px 16px 0 0;
+}
+@media (max-width: 1150px) {
+  .commercial-fiche .fi-champ {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
 }

@@ -80,7 +80,7 @@ export function NouvelleEntreprise({
 export function Entreprises({ slug }: { slug: string }) {
   const [q, setQ] = useChoixCommercial(`${slug}.entreprises.recherche`, '');
   const [filtre, setFiltre] = useChoixCommercial(`${slug}.entreprises.filtre`, 'toutes');
-  const [vue, setVue] = useChoixCommercial(`${slug}.entreprises.vue`, 'cartes');
+  const [vue, setVue] = useChoixCommercial(`${slug}.entreprises.vue.v2`, 'liste');
   const [apercu, setApercu] = useState<ReferenceCommerciale | null>(null);
   const [list, setList] = useState<Entreprise[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +109,15 @@ export function Entreprises({ slug }: { slug: string }) {
   }, [slug, q, version]);
 
   const visibles = list?.filter((e) =>
-    filtre === 'affaires' ? e.oppsOuvertes > 0 : filtre === 'sans' ? !e.prochaineActivite : true,
+    filtre === 'affaires'
+      ? e.oppsOuvertes > 0
+      : filtre === 'sans'
+        ? !e.prochaineActivite
+        : filtre === 'sans-contact'
+          ? e.nbContacts === 0
+          : filtre === 'sans-nom'
+            ? /^Entreprise HubSpot \d+$/.test(e.nom)
+            : true,
   );
   return (
     <section className="commercial-page com-entreprises">
@@ -137,6 +145,8 @@ export function Entreprises({ slug }: { slug: string }) {
             ['toutes', 'Toutes'],
             ['affaires', 'Avec une affaire'],
             ['sans', 'Sans activité'],
+            ['sans-contact', 'Sans contact'],
+            ['sans-nom', 'Nom à renseigner'],
           ] as const
         ).map(([id, label]) => (
           <button key={id} aria-pressed={filtre === id} onClick={() => setFiltre(id)}>
