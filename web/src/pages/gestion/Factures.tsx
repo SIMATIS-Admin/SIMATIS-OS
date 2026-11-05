@@ -16,10 +16,12 @@ function Lignes({ lignes }: { lignes: LigneFacture[] }) {
         {lignes.map((l) => (
           <tr key={l.cle}>
             <td className="num">{jourCourt(l.date)}</td>
-            <td className="g-lib">
+            <td className="g-lib" style={{ textAlign: 'left' }}>
               <b>{l.libelle}</b>
-              {l.avertissement && <small className="badge amber">{l.avertissement}</small>}
-              {l.certitude === 'probable' && <small className="badge">Probable</small>}
+              {l.avertissement && (
+                <small style={{ color: 'var(--amber-ink, #92400e)' }}>{l.avertissement}</small>
+              )}
+              {l.certitude === 'probable' && <small>Probable</small>}
             </td>
             <td className="r num">
               {l.montantHtCents == null ? (
