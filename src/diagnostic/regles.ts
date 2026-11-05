@@ -164,7 +164,8 @@ export async function enregistrerReglesRapport(
   if (
     projet.demande !== 'regles_rapport' &&
     projet.demande !== 'regles_support' &&
-    projet.demande !== 'regles_analyse'
+    projet.demande !== 'regles_analyse' &&
+    projet.demande !== 'regles_restitution'
   )
     throw new SupportInvalide("Le pilote n'a pas demandé de capitalisation des règles.");
   if (changements.length > CHANGEMENTS_MAX)
@@ -184,9 +185,11 @@ export async function enregistrerReglesRapport(
       ? 'support final'
       : projet.demande === 'regles_analyse'
         ? 'analyse validée'
-        : finale?.version
-          ? `version finale ${finale.version}`
-          : 'version finale',
+        : projet.demande === 'regles_restitution'
+          ? 'deck final'
+          : finale?.version
+            ? `version finale ${finale.version}`
+            : 'version finale',
     changements,
   );
 }
