@@ -29,6 +29,7 @@ const api = vi.hoisted(() => ({
   importerEntretienDiag: vi.fn(),
   importerRapportDiag: vi.fn(),
   envoyerRapportDriveDiag: vi.fn(),
+  marquerRapportFinal: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
   urlExportRapportDiag: (slug: string, id: string) =>
@@ -1223,5 +1224,87 @@ describe('Affaire du projet de diagnostic', () => {
     await waitFor(() =>
       expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', { opportuniteId: 'o1' }),
     );
+  });
+});
+
+describe('Rapport : version finale', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const doc = (n: number) => `https://docs.google.com/document/d/doc-${n}/edit`;
+  const enEtape4 = (extra: Partial<ProjetDiag> = {}) =>
+    projet({
+      etape: 4,
+      etapeMax: 4,
+      dims,
+      profil: 'Joggeur',
+      aRapport: true,
+      rapportNom: 'Rapport - v4.docx',
+      rapportLienStatut: 'pret',
+      rapportLien: doc(4),
+      rapportLiens: [
+        { lien: doc(4), le: '2026-10-29T08:00:00.000Z', version: 4 },
+        { lien: doc(3), le: '2026-10-28T08:00:00.000Z', version: 3 },
+        { lien: 'https://claude.ai/artifact/AncienFictif', le: '2026-10-22T08:00:00.000Z' },
+      ],
+      ...extra,
+    });
+  const ouvrir = async (p: ProjetDiag) => {
+    api.fetchProjetsDiag.mockResolvedValue([p]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+
+  it('une case par Google Doc, aucune pour un artifact', async () => {
+    await ouvrir(enEtape4());
+    expect(await screen.findAllByRole('checkbox', { name: /Version finale/ })).toHaveLength(2);
+  });
+
+  it('cocher appelle l API et met en évidence la version finale', async () => {
+    const p = enEtape4();
+    api.marquerRapportFinal.mockResolvedValue({
+      ...p,
+      rapportLiens: p.rapportLiens.map((l) => (l.lien === doc(4) ? { ...l, finale: true } : l)),
+    });
+    await ouvrir(p);
+    const cases = await screen.findAllByRole('checkbox', { name: /Version finale/ });
+    fireEvent.click(cases[0]!);
+    await waitFor(() =>
+      expect(api.marquerRapportFinal).toHaveBeenCalledWith('simatis', 'p1', doc(4), true),
+    );
+    await waitFor(() =>
+      expect(
+        (screen.getAllByRole('checkbox', { name: /Version finale/ })[0] as HTMLInputElement)
+          .checked,
+      ).toBe(true),
+    );
+  });
+
+  it('décocher la version finale', async () => {
+    const p = enEtape4({
+      rapportLiens: [{ lien: doc(4), le: '2026-10-29T08:00:00.000Z', version: 4, finale: true }],
+    });
+    api.marquerRapportFinal.mockResolvedValue({
+      ...p,
+      rapportLiens: [{ lien: doc(4), le: '2026-10-29T08:00:00.000Z', version: 4 }],
+    });
+    await ouvrir(p);
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Version finale/ }));
+    await waitFor(() =>
+      expect(api.marquerRapportFinal).toHaveBeenCalledWith('simatis', 'p1', doc(4), false),
+    );
+  });
+
+  it('cases désactivées pendant la production', async () => {
+    await ouvrir(enEtape4({ rapportLienStatut: 'en_cours' }));
+    const cases = await screen.findAllByRole('checkbox', { name: /Version finale/ });
+    expect(cases.every((c) => (c as HTMLInputElement).disabled)).toBe(true);
+  });
+
+  it('affiche le message de l API quand le choix est refusé', async () => {
+    api.marquerRapportFinal.mockRejectedValue(
+      new Error('Cette version n’appartient pas à ce projet.'),
+    );
+    await ouvrir(enEtape4());
+    fireEvent.click((await screen.findAllByRole('checkbox', { name: /Version finale/ }))[0]!);
+    expect(await screen.findByText(/n’appartient pas à ce projet/)).toBeTruthy();
   });
 });

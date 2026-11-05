@@ -13,6 +13,7 @@ import {
   importerEntretienDiag,
   envoyerRapportDriveDiag,
   importerRapportDiag,
+  marquerRapportFinal,
   demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
@@ -912,7 +913,16 @@ function Rapport({
       onErreur(messageErreur(err));
     }
   };
-  const docGoogle = /docs\.google\.com\/document\//.test(projet.rapportLien ?? '');
+  const marquerFinale = async (lien: string, finale: boolean) => {
+    try {
+      onChange(await marquerRapportFinal(slug, projet.id, lien, finale));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const estDoc = (lien: string) => /docs\.google\.com\/document\//.test(lien);
+  const versionsDrive = projet.rapportLiens.filter((r) => estDoc(r.lien));
+  const docGoogle = estDoc(projet.rapportLien ?? '');
   const precedents = projet.rapportLiens.slice(1);
   const versionsPrecedentes = projet.rapportVersions.slice(0, -1).reverse();
   return (
@@ -999,6 +1009,34 @@ function Rapport({
               ))}
             </ul>
           </details>
+        )}
+        {versionsDrive.length > 0 && (
+          <div className="stack">
+            <span className="small muted">
+              Cochez la version finale : c’est elle qui servira de modèle pour rédiger les prochains
+              rapports.
+            </span>
+            <ul className="small">
+              {versionsDrive.map((r) => (
+                <li key={r.lien}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={r.finale === true}
+                      disabled={enCours}
+                      aria-label={`Version finale : ${r.version ? `version ${r.version}` : 'rapport'} du ${new Date(r.le).toLocaleDateString('fr-FR')}`}
+                      onChange={(e) => void marquerFinale(r.lien, e.target.checked)}
+                    />{' '}
+                    <a href={r.lien} target="_blank" rel="noreferrer">
+                      {r.version ? `Version ${r.version}` : 'Rapport'} du{' '}
+                      {new Date(r.le).toLocaleDateString('fr-FR')}
+                    </a>
+                    {r.finale && <span className="badge green"> Version finale</span>}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {precedents.length > 0 && (
           <details>
