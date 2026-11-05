@@ -164,6 +164,25 @@ export const gestionReglages = pgTable(
   ],
 );
 
+// Registre des lignes importées d'un export bancaire : la clé d'une ligne ne se réimporte jamais.
+// Le fichier lui-même n'est pas conservé ; on garde la clé, la décision et ce qu'elle a produit.
+export const DECISIONS_IMPORT = ['importee', 'rapprochee', 'ignoree'] as const;
+export const gestionImportCles = pgTable(
+  'gestion_import_cles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    cle: text('cle').notNull(),
+    decision: text('decision', { enum: DECISIONS_IMPORT }).notNull(),
+    cibleType: text('cible_type', { enum: ['depense', 'recette'] }),
+    cibleId: uuid('cible_id'),
+  },
+  (t) => [
+    uniqueIndex('gestion_import_cles_idx').on(t.instanceId, t.cle),
+    instanceIsolation('gestion_import_cles'),
+  ],
+);
+
 // TVA mensuelle : la déclaration est mensuelle (confirmé), l'exigibilité reste à confirmer. Le montant
 // déclaré est saisi à la main, jamais transmis.
 export const gestionTvaMois = pgTable(
