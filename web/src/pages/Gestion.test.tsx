@@ -37,7 +37,14 @@ const projection = {
     seuilMode: 'aucun',
     seuilCents: null,
     delaiPaiementJours: null,
+    scenarios: {
+      securise: { certitudes: ['certaine'], pipe: 'aucun' },
+      central: { certitudes: ['certaine', 'probable'], pipe: 'pondere' },
+      ambitieux: { certitudes: ['certaine', 'probable', 'hypothese'], pipe: 'chaud' },
+    },
+    remuneration: null as null | Record<string, unknown>,
   },
+  remuneration: null as null | Record<string, unknown>,
   seuil: { mode: 'aucun', cents: null, bfr: null },
   scenarios: ['securise', 'central', 'ambitieux'].map((scenario) => ({
     scenario,
@@ -78,6 +85,7 @@ const AFFAIRE_PIPE: AffairePipe = {
   mensuelCents: null,
   dureeMois: 12,
   signature: '2027-01-15',
+  surcharge: false,
   statut: 'comptee',
 };
 const suiviTva = {
@@ -276,6 +284,90 @@ describe('Gestion', () => {
       method: 'PUT',
       corps: { seuilMode: 'montant', seuilCents: 600_000, soldeCents: null },
     });
+  });
+
+  it('explique ce que retient chaque scénario', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    const legende = await screen.findByLabelText('Ce que retient chaque scénario');
+    expect(legende.textContent).toContain('Sécurisé');
+    expect(legende.textContent).toContain('prévisions certaines ; pipe non compté');
+    expect(legende.textContent).toContain('prévisions certaines, probables ; pipe pondéré');
+    expect(legende.textContent).toContain('pipe des affaires à 50 % et plus');
+  });
+
+  it('« Ajouter un revenu » ouvre le formulaire de recette depuis Pilotage', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter un revenu' }));
+    expect(await screen.findByPlaceholderText(/commission sur contrat/)).toBeTruthy();
+  });
+
+  it('enregistre les règles des scénarios et la rémunération saisies à la main', async () => {
+    render(<Gestion slug="simatis" autorise mandats={mandats} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
+    fireEvent.click(screen.getByLabelText('Sécurisé : prévisions probables'));
+    fireEvent.change(screen.getByLabelText('Ambitieux : pipe'), { target: { value: 'total' } });
+    // Sans montant ni taux, une rémunération activée est refusée : aucun taux n'est deviné.
+    fireEvent.click(screen.getByLabelText('Compter ma rémunération dans la projection'));
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(envois).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText('Montant mensuel de rémunération'), {
+      target: { value: '4 000' },
+    });
+    fireEvent.change(screen.getByLabelText('Taux de cotisations salariales'), {
+      target: { value: '22' },
+    });
+    fireEvent.change(screen.getByLabelText('Taux de cotisations patronales'), {
+      target: { value: '42,5' },
+    });
+    fireEvent.change(screen.getByLabelText("Périodicité de l'URSSAF"), {
+      target: { value: 'trimestrielle' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(envois).toHaveLength(1));
+    expect(envois[0]).toMatchObject({
+      url: '/api/i/simatis/gestion/reglages',
+      method: 'PUT',
+      corps: {
+        scenarios: {
+          securise: { certitudes: ['certaine', 'probable'], pipe: 'aucun' },
+          ambitieux: { pipe: 'total' },
+        },
+        remuneration: {
+          actif: true,
+          base: 'brut',
+          montantCents: 400_000,
+          tauxSalarial: 22,
+          tauxPatronal: 42.5,
+          periodicite: 'trimestrielle',
+        },
+      },
+    });
+  });
+
+  it('propose de décompter la rémunération et relance la projection sans elle', async () => {
+    projection.remuneration = {
+      brutCents: 400_000,
+      netCents: 320_000,
+      salarialCents: 80_000,
+      patronalCents: 160_000,
+      urssafCents: 240_000,
+      coutCents: 560_000,
+      inclus: true,
+    };
+    try {
+      render(<Gestion slug="simatis" autorise mandats={mandats} />);
+      fireEvent.click(await screen.findByLabelText(/Compter ma rémunération : net versé/));
+      await waitFor(() =>
+        expect(
+          vi
+            .mocked(fetch)
+            .mock.calls.some(([u]) => typeof u === 'string' && u.includes('remuneration=0')),
+        ).toBe(true),
+      );
+    } finally {
+      projection.remuneration = null;
+    }
   });
 
   it('saisit la TVA déclarée à la main, avec l’exigibilité à confirmer', async () => {
