@@ -69,10 +69,12 @@ function lireArchives(slug: string): string[] {
 export function Diagnostics({
   slug,
   ouvrir,
+  ouvrirTest,
   onTitre,
 }: {
   slug: string;
   ouvrir?: string;
+  ouvrirTest?: string;
   // Titre de l'en-tête de l'application : celui de l'outil ouvert, pour ne pas répéter celui de la section.
   onTitre?: (titre: string | null) => void;
 }) {
@@ -106,8 +108,8 @@ export function Diagnostics({
   const [page, setPage] = useState(1);
   const [ouvertes, setOuvertes] = useState<Set<string>>(new Set());
   const [projetOuvert, setProjetOuvert] = useState<string | null>(ouvrir ?? null);
-  const [testCible, setTestCible] = useState<string | null>(null);
-  const [testOuvert, setTestOuvert] = useState<string | null>(null);
+  const [testCible, setTestCible] = useState<string | null>(ouvrirTest ?? null);
+  const [testOuvert, setTestOuvert] = useState<string | null>(ouvrirTest ?? null);
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [modale, setModale] = useState<{ type: 'diag' | 'vma'; preselect?: string } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);

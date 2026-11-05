@@ -24,6 +24,7 @@ import { Icon } from '../icons.js';
 import { ActionsFiche } from './liens/ActionsFiche.js';
 import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { AdressesEmail } from './liens/AdressesEmail.js';
+import { CarteOutils } from './liens/CarteOutils.js';
 import { CarteLiens, type LigneLien } from './liens/CarteLiens.js';
 import { Cloture } from './Pipeline.js';
 import { ACTIVITES } from './taches/commun.js';
@@ -67,7 +68,7 @@ const CHAMPS: Record<KindFiche, Champ[]> = {
 const EVENEMENTS: Record<Evenement['type'], [string, string]> = {
   note: ['edit', 'Note'],
   appel: ['phone', 'Appel'],
-  email: ['send', 'Email'],
+  email: ['mail', 'Email'],
   reunion: ['users', 'Réunion'],
   compte_rendu: ['file', 'Compte rendu'],
   activite: ['check', 'Activité faite'],
@@ -334,6 +335,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
   const [versHubspot, setVersHubspot] = useState(true);
   const [filtre, setFiltre] = useState('tout');
   const [cloture, setCloture] = useState<'gagne' | 'perdu' | null>(null);
+  const [reduits, setReduits] = useState<Set<string>>(new Set());
   const [planifier, setPlanifier] = useState(false);
   // Mails come from the mailbox, after the card: a slow or failed read never hides the rest.
   const [mails, setMails] = useState<{ mails: Evenement[]; message?: string } | 'chargement'>(
@@ -631,30 +633,36 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
             <Mandat slug={slug} id={id} mandat={data.mandat} onChange={load} />
           )}
           {data.diagnostics && (
-            <section className="panel">
-              <div className="panel-h">
-                <h2>Diagnostics ({data.diagnostics.length})</h2>
-              </div>
-              <ul className="panel-b fi-liste">
-                {data.diagnostics.length === 0 && (
-                  <li className="muted small">Aucun diagnostic lié.</li>
-                )}
-                {data.diagnostics.map((d) => (
-                  <li key={d.id} className="fi-ligne">
-                    <span className="fi-ident">
-                      <span>
-                        <a href={`#/${slug}/diagnostics/ouvrir/${d.id}`}>{d.nom}</a>
-                        <span className="small muted">
-                          {' '}
-                          Étape {d.etape}
-                          {d.statut ? `, ${d.statut}` : ''}
-                        </span>
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <CarteOutils
+              slug={slug}
+              type="diagnostic"
+              titre="Diagnostics"
+              de={{ kind, id }}
+              lignes={data.diagnostics.map((d) => ({
+                id: d.id,
+                nom: d.nom,
+                detail: `Étape ${d.etape}${d.statut ? `, ${d.statut}` : ''}`,
+                href: `#/${slug}/diagnostics/ouvrir/${d.id}`,
+              }))}
+              onChange={load}
+              onMessage={setMessage}
+            />
+          )}
+          {data.testsVma && (
+            <CarteOutils
+              slug={slug}
+              type="vma"
+              titre="Tests VMA"
+              de={{ kind, id }}
+              lignes={data.testsVma.map((t) => ({
+                id: t.id,
+                nom: t.nom,
+                detail: t.date ? dateHeure(t.date) : 'En attente de réponse',
+                href: `#/${slug}/diagnostics/test/${t.id}`,
+              }))}
+              onChange={load}
+              onMessage={setMessage}
+            />
           )}
           {data.ateliers && (
             <section className="panel">
@@ -676,32 +684,20 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
               </ul>
             </section>
           )}
-          <section className="panel">
-            <div className="panel-h">
-              <h2>Rendez-vous ({data.rendezVous.length})</h2>
-            </div>
-            <ul className="panel-b fi-liste">
-              {data.rendezVous.length === 0 && (
-                <li className="muted small">Aucun rendez-vous lié.</li>
-              )}
-              {data.rendezVous.map((r) => (
-                <li key={r.id} className="fi-ligne">
-                  <span className="fi-ident">
-                    <span className="fi-av carre" aria-hidden="true">
-                      <Icon name="cal" />
-                    </span>
-                    <span>
-                      <a href={lien(slug, 'rdv', r.id)}>{r.titre || 'Rendez-vous'}</a>
-                      <span className="small muted">
-                        {r.debut ? ` ${dateHeure(r.debut)}` : ''}
-                        {r.compteRendu ? ' · compte rendu fait' : ''}
-                      </span>
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <CarteOutils
+            slug={slug}
+            type="rdv"
+            titre="Rendez-vous"
+            de={{ kind, id }}
+            lignes={data.rendezVous.map((r) => ({
+              id: r.id,
+              nom: r.titre || 'Rendez-vous',
+              detail: `${r.debut ? dateHeure(r.debut) : ''}${r.compteRendu ? ' · compte rendu fait' : ''}`,
+              href: lien(slug, 'rdv', r.id),
+            }))}
+            onChange={load}
+            onMessage={setMessage}
+          />
           {cartes.map((c) => (
             <CarteLiens
               key={c.titre}
@@ -847,6 +843,24 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                         {e.origine === 'hubspot' ? ' · HubSpot' : ''}
                         {e.compte ? ` · ${e.compte}` : ''}
                       </div>
+                      {e.type === 'compte_rendu' && (
+                        <button
+                          className="btn ghost sm"
+                          aria-expanded={!reduits.has(e.id)}
+                          onClick={() =>
+                            setReduits((avant) => {
+                              const apres = new Set(avant);
+                              if (apres.has(e.id)) apres.delete(e.id);
+                              else apres.add(e.id);
+                              return apres;
+                            })
+                          }
+                        >
+                          {reduits.has(e.id)
+                            ? 'Afficher le compte rendu'
+                            : 'Réduire le compte rendu'}
+                        </button>
+                      )}
                       {e.titre && <b>{e.type === 'etape' ? `Étape : ${e.titre}` : e.titre}</b>}
                       {noteEditee?.id === e.id ? (
                         <>
@@ -879,7 +893,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                           </div>
                         </>
                       ) : (
-                        e.texte && <p>{e.texte}</p>
+                        e.texte && !reduits.has(e.id) && <p>{e.texte}</p>
                       )}
                     </div>
                     {e.type === 'note' &&

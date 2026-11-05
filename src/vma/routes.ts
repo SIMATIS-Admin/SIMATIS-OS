@@ -52,6 +52,7 @@ const relanceSchema = z.object({ tutoiement: z.boolean().optional() });
 const vueTest = (t: TestVma) => ({
   id: t.id,
   entrepriseId: t.entrepriseId,
+  opportuniteId: t.opportuniteId,
   entrepriseNom: t.entrepriseNom,
   contactNom: t.contactNom,
   contactEmail: t.contactEmail,
@@ -135,6 +136,7 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
       const parsed = z
         .object({
           contactId: z.uuid().nullable().optional(),
+          opportuniteId: z.uuid().nullable().optional(),
           entrepriseId: z.uuid().nullable().optional(),
         })
         .strict()

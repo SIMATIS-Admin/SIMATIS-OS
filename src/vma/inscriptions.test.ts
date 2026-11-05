@@ -7,7 +7,8 @@ import { configureConnexion, registerConnector } from '../connexions/service.js'
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { contacts, entreprises } from '../crm/schema.js';
+import { contacts, entreprises, opportunites } from '../crm/schema.js';
+import { getFiche } from '../crm/fiches.js';
 import { contactsVma, rattacherContactVma, retirerAccordVma } from './contacts.js';
 import { releverInscriptionsVma } from './inscriptions.js';
 import { creerLienProspectionVma, envoyerInvitation, mailInvitation } from './invitations.js';
@@ -163,6 +164,29 @@ describe('Inscriptions VMA et rattachements CRM', () => {
       contactId: c!.id,
       entrepriseId: e!.id,
     });
+    const [affaire] = await t.owner.db
+      .insert(opportunites)
+      .values({ instanceId: instance.id, titre: 'Affaire fictive', etape: 'detection' })
+      .returning();
+    const [externe] = await t.owner.db
+      .insert(opportunites)
+      .values({ instanceId: autre.id, titre: 'Autre affaire fictive', etape: 'detection' })
+      .returning();
+    await expect(
+      rattacherContactVma(t.app.db, instance.id, test.id, { opportuniteId: externe!.id }),
+    ).rejects.toThrow('cette instance');
+    await rattacherContactVma(t.app.db, instance.id, test.id, { opportuniteId: affaire!.id });
+    for (const [kind, id] of [
+      ['affaire', affaire!.id],
+      ['contact', c!.id],
+      ['entreprise', e!.id],
+    ] as const) {
+      expect((await getFiche(t.app.db, instance, kind, id))?.testsVma?.map((t) => t.id)).toEqual([
+        test.id,
+      ]);
+    }
+    await rattacherContactVma(t.app.db, instance.id, test.id, { opportuniteId: null });
+    expect((await getFiche(t.app.db, instance, 'affaire', affaire!.id))?.testsVma).toEqual([]);
     await retirerAccordVma(t.app.db, instance.id, test.id);
     const apres = (await contactsVma(t.app.db, instance.id))[0]!;
     expect(apres.contactLie?.id).toBe(c!.id);

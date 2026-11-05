@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Icon } from '../icons.js';
 import DOMPurify from 'dompurify';
 import { fetchMailsFiche, type Evenement, type KindFiche } from '../api.js';
 
@@ -207,6 +208,9 @@ export function ConversationMail({
     <li className="fi-mail-conversation">
       <details open={ouvert} onToggle={(e) => setOuvert(e.currentTarget.open)}>
         <summary className="fi-mail-ligne">
+          <span className="fi-ico" title="Email">
+            <Icon name="mail" />
+          </span>
           <b>{texteMail(mail.objet.replace(/^(?:(?:re|tr|fwd?)\s*:\s*)+/i, ''))}</b>
           <span className="fi-mail-personne muted">{interlocuteurs || 'Email'}</span>
           <span className="small">

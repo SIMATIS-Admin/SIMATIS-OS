@@ -137,6 +137,8 @@ export type FreinVma = {
   signe?: string;
 };
 export type TestVma = {
+  contactId?: string | null;
+  opportuniteId?: string | null;
   id: string;
   entrepriseId: string | null;
   entrepriseNom: string;
@@ -262,7 +264,7 @@ export const creerLienProspectionVma = (slug: string) =>
 export const rattacherVma = (
   slug: string,
   id: string,
-  choix: { entrepriseId?: string | null; contactId?: string | null },
+  choix: { entrepriseId?: string | null; contactId?: string | null; opportuniteId?: string | null },
 ) => sendJson<{ ok: true }>('PATCH', inst(slug, `vma/tests/${encodeURIComponent(id)}/crm`), choix);
 export const retirerAccordVma = (slug: string, id: string) =>
   sendJson<{ ok: true }>(
@@ -1086,6 +1088,7 @@ export type FicheDetail = {
   aVenir: TacheVue[];
   rendezVous: RdvLie[];
   // Espace SIMATIS, organisation ou contact seulement.
+  testsVma?: { id: string; nom: string; date: string | null }[];
   diagnostics?: {
     id: string;
     nom: string;

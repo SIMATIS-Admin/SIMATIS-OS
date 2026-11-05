@@ -197,6 +197,13 @@ export const EXTERNES: Externe[] = [
   {
     nom: 'test de VMA',
     table: vmaTests,
+    colonne: 'opportuniteId',
+    vers: 'affaire',
+    nullable: true,
+  },
+  {
+    nom: 'test de VMA',
+    table: vmaTests,
     colonne: 'entrepriseId',
     vers: 'entreprise',
     nullable: true,

@@ -192,8 +192,9 @@ export function App() {
       case 'diagnostics':
         return (
           <Diagnostics
-            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            key={`${current.slug}-${route.id ?? ''}`}
             slug={current.slug}
+            ouvrirTest={route.kind === 'test' ? route.id : undefined}
             ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
             onTitre={setTitreOutil}
           />
