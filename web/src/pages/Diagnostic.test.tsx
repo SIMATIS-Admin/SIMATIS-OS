@@ -1326,25 +1326,27 @@ describe('Rapport : réglage Relire les finaux', () => {
   const libelle = /Relire les deux derniers rapports finaux/;
 
   it('la case est cochée par défaut', async () => {
-    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true });
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
     await ouvrir();
     const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
     await waitFor(() => expect(c.checked).toBe(true));
   });
 
   it('décocher enregistre le réglage', async () => {
-    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true });
-    api.majReglagesDiagnostic.mockResolvedValue({ relireFinaux: false });
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    api.majReglagesDiagnostic.mockResolvedValue({ relireFinaux: false, relireSupports: true });
     await ouvrir();
     fireEvent.click(await screen.findByRole('checkbox', { name: libelle }));
-    await waitFor(() => expect(api.majReglagesDiagnostic).toHaveBeenCalledWith('simatis', false));
+    await waitFor(() =>
+      expect(api.majReglagesDiagnostic).toHaveBeenCalledWith('simatis', { relireFinaux: false }),
+    );
     await waitFor(() =>
       expect(screen.getByRole<HTMLInputElement>('checkbox', { name: libelle }).checked).toBe(false),
     );
   });
 
   it('un réglage décoché au chargement s affiche décoché', async () => {
-    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: false });
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: false, relireSupports: true });
     await ouvrir();
     const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
     await waitFor(() => expect(c.checked).toBe(false));

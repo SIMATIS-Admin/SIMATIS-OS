@@ -928,7 +928,7 @@ function Rapport({
   }, [slug]);
   const changerRelire = async (valeur: boolean) => {
     try {
-      setRelireFinaux((await majReglagesDiagnostic(slug, valeur)).relireFinaux);
+      setRelireFinaux((await majReglagesDiagnostic(slug, { relireFinaux: valeur })).relireFinaux);
     } catch (err) {
       onErreur(messageErreur(err));
     }

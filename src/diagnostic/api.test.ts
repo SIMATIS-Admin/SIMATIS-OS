@@ -184,16 +184,27 @@ describe('Entretien : API', () => {
   it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
     const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     const url = '/api/i/simatis/diagnostic/reglages';
-    expect((await app.inject({ method: 'GET', url })).json()).toEqual({ relireFinaux: true });
+    expect((await app.inject({ method: 'GET', url })).json()).toEqual({
+      relireFinaux: true,
+      relireSupports: true,
+    });
     const coupe = await app.inject({ method: 'PUT', url, payload: { relireFinaux: false } });
     expect(coupe.statusCode).toBe(200);
-    expect(coupe.json()).toEqual({ relireFinaux: false });
-    expect((await app.inject({ method: 'GET', url })).json()).toEqual({ relireFinaux: false });
+    expect(coupe.json()).toEqual({ relireFinaux: false, relireSupports: true });
+    expect((await app.inject({ method: 'GET', url })).json()).toEqual({
+      relireFinaux: false,
+      relireSupports: true,
+    });
     const apres = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     expect(apres.config.modules).toEqual(avant.config.modules);
     expect(apres.config.ecrituresReelles).toEqual(avant.config.ecrituresReelles);
     const remis = await app.inject({ method: 'PUT', url, payload: { relireFinaux: true } });
-    expect(remis.json()).toEqual({ relireFinaux: true });
+    expect(remis.json()).toEqual({ relireFinaux: true, relireSupports: true });
+    const supports = await app.inject({ method: 'PUT', url, payload: { relireSupports: false } });
+    expect(supports.json()).toEqual({ relireFinaux: true, relireSupports: false });
+    const vide = await app.inject({ method: 'PUT', url, payload: {} });
+    expect(vide.statusCode).toBe(400);
+    await app.inject({ method: 'PUT', url, payload: { relireSupports: true } });
     const invalide = await app.inject({ method: 'PUT', url, payload: { relireFinaux: 'oui' } });
     expect(invalide.statusCode).toBe(400);
   });
