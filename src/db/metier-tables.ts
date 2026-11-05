@@ -47,9 +47,11 @@ import {
   enrichissementSuggestions,
   enrichissementTaches,
 } from '../enrichissement/schema.js';
+import { diagnosticReglesJournal } from '../diagnostic/schema.js';
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
+  diagnosticReglesJournal,
   enrichissementSuggestions,
   enrichissementLignes,
   enrichissementTaches,
