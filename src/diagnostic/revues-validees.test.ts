@@ -137,4 +137,34 @@ describe('Revues validées relues', () => {
     expect(b.revueValideeTexte).toBeNull();
     expect(b.revuesValidees).toEqual([]);
   });
+
+  it('l attente d une demande revue_preparer porte la revue en cours et les revues validées', async () => {
+    const id = await projetAvec('Revues préparation', {
+      revue: {
+        statut: 'brouillon',
+        preconisations: { r1: { titre: 'En cours fictive', choix: 'garder' } },
+      },
+      demande: 'revue_preparer',
+      statutChat: 'attente_claude',
+    });
+    const a = (await attentesClaude(t.app.db)).find((x) => x.id === id)!;
+    expect(a.revueEnCoursTexte).toContain('En cours fictive');
+    expect(a.revuesValidees.length).toBeGreaterThan(0);
+    const sansRevue = await projetAvec('Revues préparation vide', {
+      demande: 'revue_preparer',
+      statutChat: 'attente_claude',
+    });
+    const b = (await attentesClaude(t.app.db)).find((x) => x.id === sansRevue)!;
+    expect(b.revueEnCoursTexte).toBeNull();
+  });
+
+  it('une autre demande ne porte pas la revue en cours', async () => {
+    const id = await projetAvec('Revues autre demande', {
+      revue: { statut: 'brouillon' },
+      demande: 'rapport',
+      statutChat: 'attente_claude',
+    });
+    const a = (await attentesClaude(t.app.db)).find((x) => x.id === id)!;
+    expect(a.revueEnCoursTexte).toBeNull();
+  });
 });

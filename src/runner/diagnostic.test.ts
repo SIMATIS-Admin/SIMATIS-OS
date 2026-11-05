@@ -6,12 +6,14 @@ import {
   depuisDerniereProduction,
   outilsCapitalisation,
   outilsEntretien,
+  BIBLIOTHEQUE_PRECONISATIONS,
   FICHE_REGLES_ANALYSE,
   FICHE_REGLES_COMMUNES,
   FICHE_REGLES_RAPPORT,
   FICHE_REGLES_SUPPORT,
   outilsRapport,
   outilsRegles,
+  outilsRevue,
   outilsExportRestitution,
   outilsRestitution,
   outilsSupport,
@@ -21,6 +23,7 @@ import {
   promptAnnulerRegle,
   promptRapport,
   promptReglesAnalyse,
+  promptRevue,
   promptReglesRapport,
   promptReglesSupport,
   promptExportRestitution,
@@ -74,6 +77,7 @@ const attente: AttenteDiag = {
   supportFinalTexte: null,
   revueValideeTexte: null,
   revuesValidees: [],
+  revueEnCoursTexte: null,
   restitutionLien: null,
   restitutionAvecProposition: true,
   proposition: null,
@@ -1020,5 +1024,59 @@ describe("Règles d'analyse de la revue par le runner", () => {
     expect(promptRapport({ ...regles, demande: 'rapport' }, '/cerveau-fictif')).toContain(
       FICHE_REGLES_ANALYSE,
     );
+  });
+});
+
+describe('Préparation de la revue par le runner', () => {
+  const preparer: AttenteDiag = {
+    ...attente,
+    etape: 3,
+    etapeMessage: 3,
+    demande: 'revue_preparer',
+    contexte: 'Contexte fictif du projet.',
+    revueEnCoursTexte: 'Préconisation en cours fictive — choix : garder',
+    revuesValidees: [
+      { nom: 'Revue validée 1', texte: 'Préconisation modèle fictive — choix : remplacer' },
+    ],
+  };
+
+  it('donne le projet, la revue en cours, les revues validées et les trois fiches à lire', () => {
+    const texte = promptRevue(preparer, '/cerveau-fictif');
+    expect(texte).toContain('Contexte fictif du projet.');
+    expect(texte).toContain('Préconisation en cours fictive');
+    expect(texte).toContain('Préconisation modèle fictive');
+    expect(texte).toContain(BIBLIOTHEQUE_PRECONISATIONS);
+    expect(texte).toContain(FICHE_REGLES_ANALYSE);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/règles fermes.*impératives/);
+    expect(texte).toContain(`projetId ${preparer.id}`);
+    expect(texte).toContain('enregistrer_revue_proposee');
+  });
+
+  it('interdit de fixer les choix, de citer un nom d entreprise ou de proposer un accompagnement', () => {
+    const texte = promptRevue(preparer, '/cerveau-fictif');
+    expect(texte).toMatch(/ne fixe jamais.*choix.*detail/is);
+    expect(texte).toMatch(/jamais un fait, un nom ni un chiffre/);
+    expect(texte).toMatch(/conclusion.*aucune proposition d'accompagnement/is);
+    expect(texte).toContain('sept blocs');
+  });
+
+  it('sans revue en cours ni revue validée, le dit sans afficher null', () => {
+    const texte = promptRevue(
+      { ...preparer, revueEnCoursTexte: null, revuesValidees: [] },
+      '/cerveau-fictif',
+    );
+    expect(texte).toMatch(/Aucune revue n'est encore commencée/);
+    expect(texte).toMatch(/Aucune revue validée précédente/);
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  it('outils : lecture du second cerveau, jamais d écriture dessus', () => {
+    const outils = outilsRevue('/cerveau-fictif', ['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_revue_proposee');
+    expect(outils).toContain('mcp__simatis__repondre_diagnostic');
+    expect(outils).toContain('Read(//cerveau-fictif/**)');
+    expect(outils).not.toMatch(/Edit\(\/\/cerveau-fictif/);
+    expect(outils).not.toContain('enregistrer_rapport,');
   });
 });

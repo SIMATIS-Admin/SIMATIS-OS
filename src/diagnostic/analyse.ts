@@ -26,6 +26,28 @@ export function demanderCapitalisationAnalyse(
   });
 }
 
+// Début du message qui lance la préparation de la revue par Claude.
+export const DEBUT_MESSAGE_PREPARER_REVUE = 'Préparer la revue';
+
+// Claude propose les textes de la revue (préconisations, plan d'action, conclusion) à partir de la
+// bibliothèque, des revues validées et des règles d'analyse ; les choix du pilote ne sont jamais
+// touchés. Il faut un résultat saisi, et une revue qui n'est pas déjà validée.
+export function demanderPreparationRevue(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<ProjetVue> {
+  return envoyerMessage(db, instance, id, `${DEBUT_MESSAGE_PREPARER_REVUE}.`, {
+    type: 'revue_preparer',
+    etape: 3,
+    verifier: (projet) => {
+      if (!projet.dims) throw new ChatIndisponible("Saisissez d'abord le résultat à l'étape 2.");
+      if (projet.revue?.statut === 'validée')
+        throw new ChatIndisponible('La revue est validée : modifiez-la avant de la préparer.');
+    },
+  });
+}
+
 // Une capitalisation par validation : ni une modification de la revue, ni une revue qui reste validée.
 export const revueVientDEtreValidee = (avant: unknown, apres: unknown): boolean =>
   apres === 'validée' && avant !== 'validée';

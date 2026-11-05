@@ -5,7 +5,9 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import {
+  DEBUT_MESSAGE_PREPARER_REVUE,
   DEBUT_MESSAGE_REGLES_ANALYSE,
+  demanderPreparationRevue,
   demanderCapitalisationAnalyse,
   revueVientDEtreValidee,
 } from './analyse.js';
@@ -78,5 +80,47 @@ describe('Capitalisation de l analyse', () => {
     await expect(demanderCapitalisationAnalyse(t.app.db, simatis, occupe)).rejects.toThrow(
       ChatIndisponible,
     );
+  });
+
+  describe('préparation de la revue', () => {
+    const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+    const projetAvec = async (nom: string, maj: Partial<typeof diagnosticProjets.$inferInsert>) => {
+      const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+      if (Object.keys(maj).length > 0)
+        await withInstance(t.app.db, simatis.id, (tx) =>
+          tx.update(diagnosticProjets).set(maj).where(eq(diagnosticProjets.id, p.id)),
+        );
+      return p.id;
+    };
+
+    it('part à l étape 3 sur un projet avec résultat, sans revue ou en brouillon', async () => {
+      for (const revue of [null, { statut: 'brouillon' }]) {
+        const id = await projetAvec('Prépa A', { dims, revue });
+        await demanderPreparationRevue(t.app.db, simatis, id);
+        const p = await relire(id);
+        expect(p.demande).toBe('revue_preparer');
+        expect(p.conversation.at(-1)).toMatchObject({
+          de: 'pilote',
+          etape: 3,
+          texte: `${DEBUT_MESSAGE_PREPARER_REVUE}.`,
+        });
+      }
+    });
+
+    it('refuse sans résultat, sur une revue validée, et pendant que Claude répond', async () => {
+      const sansResultat = await projetAvec('Prépa B', {});
+      await expect(demanderPreparationRevue(t.app.db, simatis, sansResultat)).rejects.toThrow(
+        /résultat/,
+      );
+      const validee = await projetAvec('Prépa C', { dims, revue: { statut: 'validée' } });
+      await expect(demanderPreparationRevue(t.app.db, simatis, validee)).rejects.toThrow(
+        ChatIndisponible,
+      );
+      const occupe = await projetAvec('Prépa D', { dims });
+      await demanderPreparationRevue(t.app.db, simatis, occupe);
+      await expect(demanderPreparationRevue(t.app.db, simatis, occupe)).rejects.toThrow(
+        ChatIndisponible,
+      );
+    });
   });
 });

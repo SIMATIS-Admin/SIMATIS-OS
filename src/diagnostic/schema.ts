@@ -51,6 +51,8 @@ export const DEMANDES = [
   'regles_support',
   // Capitalisation des règles d'analyse à la validation de la revue (étape 3).
   'regles_analyse',
+  // Préparation de la revue (étape 3) : Claude propose les textes, jamais les choix du pilote.
+  'revue_preparer',
 ] as const;
 // Capitalisation de la restitution (étape 5) : 'en_cours' tant que Claude propose, 'propose' une fois
 // sa proposition dans le chat, 'enregistre' quand le pilote l'a validée et que Claude l'a écrite.

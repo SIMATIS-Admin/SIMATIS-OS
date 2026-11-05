@@ -5,6 +5,7 @@ import { repondreClaude } from './chat.js';
 import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
 import { enregistrerRapport } from './rapport.js';
 import { enregistrerReglesRapport } from './regles.js';
+import { enregistrerRevueProposee, propositionsRevueSchema } from './revue-preparee.js';
 import { ACTIONS_REGLE, FICHES_REGLES } from './schema.js';
 import { contenuRapportSchema } from './rapport-word.js';
 import {
@@ -146,6 +147,23 @@ registerTool({
           }
         : {}),
     });
+    return { ok: true };
+  },
+});
+
+// Préparation de la revue : Claude propose les textes des préconisations, du plan d'action et de la
+// conclusion ; l'OS les fusionne sans toucher aux choix ni aux textes du pilote.
+registerTool({
+  name: 'enregistrer_revue_proposee',
+  description:
+    "Enregistre tes propositions de textes pour la revue d'un projet de diagnostic (préconisations, plan d'action sur trois horizons, conclusion). Tu ne fixes jamais les choix ni les textes du pilote : l'OS les conserve. Une seule fois, à la fin de ton travail.",
+  input: z.object({
+    projetId: z.uuid(),
+    propositions: propositionsRevueSchema,
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, propositions }) => {
+    await enregistrerRevueProposee(tx, projetId, propositions);
     return { ok: true };
   },
 });
