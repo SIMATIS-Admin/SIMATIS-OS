@@ -13,7 +13,8 @@ import { attentesClaude } from './chat.js';
 import type { DriveDeps } from './drive.js';
 import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
 import { rapportsFinauxPour } from './finaux.js';
-import { demanderRapport } from './rapport.js';
+import { demanderAnnulationRegle, demanderRapport, marquerVersionFinale } from './rapport.js';
+import { ajouterChangementsRegles, listerJournalRegles } from './regles.js';
 import { genererRapportWord } from './rapport-word.js';
 import { diagnosticProjets } from './schema.js';
 import { createProjet, updateProjet } from './service.js';
@@ -135,5 +136,56 @@ describe('Rapports finaux relus', () => {
     const coupe = (await attentesClaude(t.app.db, deps())).find((a) => a.id === p.id)!;
     expect(coupe.relireFinaux).toBe(false);
     expect(coupe.rapportsFinaux).toEqual([]);
+  });
+
+  it('l attente des règles joint la finale, le brouillon et les finaux précédents', async () => {
+    const p = await projetAvec('Finaux règles', [
+      { lien: doc(10), le: '2026-11-03T08:00:00.000Z', version: 5 },
+    ]);
+    await withInstance(t.app.db, simatis.id, (tx) =>
+      tx
+        .update(diagnosticProjets)
+        .set({
+          rapportVersions: [
+            { version: 3, le: '2026-11-01T08:00:00.000Z', contenu: contenuRapportFictif },
+          ],
+        })
+        .where(eq(diagnosticProjets.id, p)),
+    );
+    await marquerVersionFinale(t.app.db, simatis, p, doc(10), true);
+    const a = (await attentesClaude(t.app.db, deps())).find((x) => x.id === p)!;
+    expect(a.demande).toBe('regles_rapport');
+    expect(a.rapportFinalTexte).toContain('Installer la feuille de route.');
+    expect(a.rapportBrouillon).toMatchObject({ entreprise: 'Atelier Fictif Nord' });
+    expect(a.rapportsFinaux.length).toBeGreaterThan(0);
+    expect(a.regleAAnnuler).toBeNull();
+  });
+
+  it('l attente d une annulation porte la règle à rétablir', async () => {
+    const p = await projetAvec('Finaux annulation', [
+      { lien: doc(11), le: '2026-11-03T09:00:00.000Z', version: 6, finale: true },
+    ]);
+    await withInstance(t.app.db, simatis.id, (tx) =>
+      ajouterChangementsRegles(tx, p, 'version finale 6', [
+        {
+          fiche: 'communes',
+          action: 'modifiée',
+          libelle: 'Règle fictive',
+          avant: 'Avant',
+          apres: 'Après',
+        },
+      ]),
+    );
+    const [entree] = await listerJournalRegles(t.app.db, simatis, 1);
+    await demanderAnnulationRegle(t.app.db, simatis, p, entree!.id);
+    const a = (await attentesClaude(t.app.db, deps())).find((x) => x.id === p)!;
+    expect(a.regleAAnnuler).toEqual({
+      id: entree!.id,
+      libelle: 'Règle fictive',
+      avant: 'Avant',
+      apres: 'Après',
+      fiche: 'communes',
+    });
+    expect(a.rapportFinalTexte).toBeNull();
   });
 });

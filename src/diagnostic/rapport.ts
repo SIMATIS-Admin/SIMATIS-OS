@@ -12,6 +12,7 @@ import {
   nomFichier,
   type ContenuRapport,
 } from './rapport-word.js';
+import { DEBUT_MESSAGE_ANNULATION, DEBUT_MESSAGE_REGLES, lireEntreeJournal } from './regles.js';
 import { SupportInvalide } from './support.js';
 
 // Pré-requis du rapport : le résultat de l'étape 2. La revue de l'étape 3 enrichit le rapport
@@ -151,7 +152,7 @@ export async function renvoyerRapportSurDrive(
 
 // Le pilote désigne la version finale d'un rapport : celle qu'il a retravaillée et validée. Une seule
 // par projet. Seul un Google Doc peut l'être : l'OS doit pouvoir le relire plus tard.
-export function marquerVersionFinale(
+export async function marquerVersionFinale(
   db: Executor,
   instance: Instance,
   id: string,
@@ -159,6 +160,24 @@ export function marquerVersionFinale(
   finale: boolean,
 ): Promise<ProjetVue> {
   verifierEspace(instance);
+  const vueMarquee = await marquer(db, instance, id, lien, finale);
+  if (!finale) return vueMarquee;
+  // La finale est posée quoi qu'il arrive : si Claude répond déjà, la capitalisation se relance à la main.
+  try {
+    return await demanderCapitalisationRapport(db, instance, id);
+  } catch (error) {
+    if (error instanceof ChatIndisponible) return vueMarquee;
+    throw error;
+  }
+}
+
+function marquer(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  lien: string,
+  finale: boolean,
+): Promise<ProjetVue> {
   return withInstance(db, instance.id, async (tx) => {
     const [projet] = await tx
       .select()
@@ -184,6 +203,63 @@ export function marquerVersionFinale(
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
       .returning();
     return vue(row!);
+  });
+}
+
+export { DEBUT_MESSAGE_ANNULATION, DEBUT_MESSAGE_REGLES };
+
+// Claude compare la version finale au dernier brouillon et aux finaux précédents, met à jour les
+// fiches de règles du second cerveau et déclare ses changements au journal.
+export async function demanderCapitalisationRapport(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<ProjetVue> {
+  const version = await withInstance(db, instance.id, async (tx) => {
+    const [projet] = await tx
+      .select({ liens: diagnosticProjets.rapportLiens })
+      .from(diagnosticProjets)
+      .where(eq(diagnosticProjets.id, id));
+    return projet?.liens.find((l) => l.finale)?.version;
+  });
+  return envoyerMessage(
+    db,
+    instance,
+    id,
+    version ? `${DEBUT_MESSAGE_REGLES} version ${version}.` : `${DEBUT_MESSAGE_REGLES}.`,
+    {
+      type: 'regles_rapport',
+      etape: 4,
+      verifier: (projet) => {
+        if (!projet.rapportLiens.some((l) => l.finale))
+          throw new ChatIndisponible("Désignez d'abord la version finale du rapport.");
+        if (projet.rapportLienStatut === 'en_cours')
+          throw new ChatIndisponible('Un rapport est en cours de rédaction : attendez sa fin.');
+      },
+    },
+  );
+}
+
+// Annuler une règle apprise : Claude rétablit son ancien texte dans la fiche, si elle n'a pas changé
+// depuis, et déclare le résultat au journal.
+export async function demanderAnnulationRegle(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  journalId: string,
+): Promise<ProjetVue> {
+  const entree = await lireEntreeJournal(db, instance, journalId);
+  if (
+    !entree ||
+    entree.statut !== 'actif' ||
+    entree.action === 'annulée' ||
+    entree.action === 'signalée'
+  )
+    throw new ChatIndisponible("Cette règle n'est plus annulable.");
+  return envoyerMessage(db, instance, id, `${DEBUT_MESSAGE_ANNULATION} ${journalId}.`, {
+    type: 'regles_annuler',
+    etape: 4,
+    verifier: () => undefined,
   });
 }
 

@@ -11,6 +11,11 @@ import {
 import { ProjetIntrouvable } from './service.js';
 import { SupportInvalide } from './support.js';
 
+// Début du message du pilote qui lance la capitalisation des règles à partir de la version finale.
+export const DEBUT_MESSAGE_REGLES = 'Capitaliser le rapport final';
+// Début du message qui demande d'annuler une règle ; l'identifiant de l'entrée du journal le suit.
+export const DEBUT_MESSAGE_ANNULATION = 'Annuler la règle';
+
 // Un changement que Claude a fait dans une fiche de règles, déclaré à l'OS pour le journal.
 export type ChangementRegle = {
   fiche: FicheRegles;
@@ -77,6 +82,15 @@ export function listerJournalRegles(
       motifRefus: l.motifRefus,
     }));
   });
+}
+
+export async function lireEntreeJournal(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<EntreeJournalRegle | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  return (await listerJournalRegles(db, instance, 500)).find((e) => e.id === id) ?? null;
 }
 
 // Fin d'une demande d'annulation. Avec un motif, l'annulation n'a pas pu se faire (la fiche a changé
