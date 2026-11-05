@@ -16,6 +16,11 @@ import {
 import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
 import { exporterRapportDrive } from '../diagnostic/drive.js';
+import {
+  demanderCapitalisationAnalyse,
+  revueVientDEtreValidee,
+  statutRevueDe,
+} from '../diagnostic/analyse.js';
 import { listerJournalRegles } from '../diagnostic/regles.js';
 import {
   demanderAnnulationRegle,
@@ -500,7 +505,17 @@ export function registerApi(
           .code(400)
           .send({ error: parsed.error.issues[0]?.message ?? 'Projet invalide' });
       try {
-        return await updateProjet(db, i, request.params.id, parsed.data);
+        const avant = await statutRevueDe(db, i, request.params.id);
+        const projet = await updateProjet(db, i, request.params.id, parsed.data);
+        if (!revueVientDEtreValidee(avant, projet.revue?.statut)) return projet;
+        // La revue reste validée quoi qu'il arrive : si Claude répond déjà, la capitalisation se
+        // relance à la main.
+        try {
+          return await demanderCapitalisationAnalyse(db, i, request.params.id);
+        } catch (error) {
+          if (error instanceof ChatIndisponible) return projet;
+          throw error;
+        }
       } catch (error) {
         return diagnosticErreur(error, reply);
       }
@@ -627,6 +642,21 @@ export function registerApi(
       if (!corps.success) return reply.code(400).send({ error: 'Lien et choix attendus' });
       try {
         return await marquerVersionFinale(db, i, id, corps.data.lien, corps.data.finale);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Capitalisation de l'analyse à la demande (étape 3), si elle n'est pas partie à la validation.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/revue/capitaliser',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderCapitalisationAnalyse(db, i, id);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
