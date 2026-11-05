@@ -200,6 +200,32 @@ describe('Journal des règles de rédaction', () => {
       expect(apres).toMatchObject({ statut: 'actif', motifRefus: 'La fiche a changé.' });
     });
 
+    it('une demande de règles du support écrit avec l origine « support final »', async () => {
+      const id = await projetEn('Atelier Outil H', 'regles_support');
+      await enregistrer(id, {
+        changements: [{ ...regle('Ouvrir par le cadre de la séance'), fiche: 'support' }],
+      });
+      const [e] = await listerJournalRegles(t.app.db, simatis, 1);
+      expect(e).toMatchObject({ fiche: 'support', libelle: 'Ouvrir par le cadre de la séance' });
+      expect(e!.origine).toBe('support final');
+    });
+
+    it('une fiche du support peut aussi être déclarée pendant la demande du rapport', async () => {
+      const id = await projetEn('Atelier Outil I', 'regles_rapport');
+      await enregistrer(id, {
+        changements: [{ ...regle('Règle du support vue en rapport'), fiche: 'support' }],
+      });
+      const [e] = await listerJournalRegles(t.app.db, simatis, 1);
+      expect(e).toMatchObject({ fiche: 'support', origine: 'version finale 4' });
+    });
+
+    it('refuse sans aucune des demandes de règles', async () => {
+      const id = await projetEn('Atelier Outil J', 'support_final');
+      await expect(
+        enregistrer(id, { changements: [{ ...regle('Règle hors demande'), fiche: 'support' }] }),
+      ).rejects.toThrow(SupportInvalide);
+    });
+
     it('une annulation exige la demande d annulation, pas celle de capitalisation', async () => {
       const id = await projetEn('Atelier Outil G', 'regles_rapport');
       await enregistrer(id, { changements: [regle('Règle protégée')] });
