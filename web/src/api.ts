@@ -2350,6 +2350,7 @@ export type FactureAEmettre = {
   mandat: string;
   emissionPrevue: string;
   delaiJours: number | null;
+  delaiMandatJours: number | null;
   encaissementAttendu: string | null;
   totalHtCents: number;
   lignes: LigneFacture[];

@@ -20,6 +20,7 @@ const facture = (o: Partial<FactureAEmettre> = {}): FactureAEmettre => ({
   mandat: 'mandat-a',
   emissionPrevue: '2026-11-30',
   delaiJours: 45,
+  delaiMandatJours: 45,
   encaissementAttendu: '2027-01-14',
   totalHtCents: 63_000,
   lignes: [
@@ -96,6 +97,35 @@ describe('Factures', () => {
     fireEvent.change(champ, { target: { value: '' } });
     fireEvent.blur(champ);
     expect(onDelai).toHaveBeenLastCalledWith('mandat-a', null);
+  });
+
+  it('n’envoie rien si le délai n’a pas changé, et montre le délai général en repli', () => {
+    const onDelai = vi.fn();
+    rendre(
+      {
+        factures: [facture({ delaiMandatJours: null, delaiJours: 30 })],
+        sansMandat: [],
+      },
+      onDelai,
+    );
+    const champ = screen.getByLabelText<HTMLInputElement>('Délai de paiement (jours)');
+    expect(champ.value).toBe('');
+    expect(champ.placeholder).toMatch(/30/);
+    fireEvent.focus(champ);
+    fireEvent.blur(champ);
+    expect(onDelai).not.toHaveBeenCalled();
+  });
+
+  it('refuse une saisie qui n’est pas un nombre de jours, sans rien envoyer', () => {
+    const onDelai = vi.fn();
+    rendre({ factures: [facture()], sansMandat: [] }, onDelai);
+    const champ = screen.getByLabelText('Délai de paiement (jours)');
+    for (const mauvaise of ['abc', '-5', '30j', '400']) {
+      fireEvent.change(champ, { target: { value: mauvaise } });
+      fireEvent.blur(champ);
+      expect(screen.getByRole('alert').textContent).toMatch(/0 et 365/);
+    }
+    expect(onDelai).not.toHaveBeenCalled();
   });
 
   it('sans aucune facture, dit qu’il n’y a rien à facturer', () => {

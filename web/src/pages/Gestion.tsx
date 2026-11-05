@@ -572,7 +572,13 @@ export function Gestion({
               onSaved={() => void charger()}
             />
           ) : (
-            <GestionIk slug={slug} mois={mois} periode={cheminDuMois} mandats={mandats} />
+            <GestionIk
+              slug={slug}
+              mois={mois}
+              periode={cheminDuMois}
+              mandats={mandats}
+              onModifie={() => void charger()}
+            />
           )}
         </>
       )}

@@ -67,11 +67,14 @@ export function GestionIk({
   mois,
   periode,
   mandats,
+  onModifie,
 }: {
   slug: string;
   mois: string;
   periode: React.ReactNode;
   mandats: { slug: string; nom: string }[];
+  // Appelé après un changement qui touche les factures à émettre (mandat ou case Refacturer).
+  onModifie?: () => void;
 }) {
   const [config, setConfig] = useState<ConfigIk | null>(null);
   const [vehiculeId, setVehiculeId] = useState('');
@@ -321,6 +324,7 @@ export function GestionIk({
                             void attraper(async () => {
                               await modifierTrajetIk(slug, l.id, { refacturer: e.target.checked });
                               await charger();
+                              onModifie?.();
                             })
                           }
                         />
@@ -482,6 +486,7 @@ export function GestionIk({
                     });
                     setTraj({ ...traj, trajet: '', km: '', commentaire: '', refacturer: false });
                     await charger();
+                    onModifie?.();
                   });
                 }}
               >

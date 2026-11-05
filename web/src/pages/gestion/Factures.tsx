@@ -44,25 +44,36 @@ function Delai({
   facture: FactureAEmettre;
   onDelai: (mandat: string, jours: number | null) => void;
 }) {
-  const [saisie, setSaisie] = useState(
-    facture.delaiJours == null ? '' : String(facture.delaiJours),
-  );
+  // Le champ montre le délai propre au mandat ; le délai général n'est qu'un repli affiché en indice.
+  const initial = facture.delaiMandatJours == null ? '' : String(facture.delaiMandatJours);
+  const [saisie, setSaisie] = useState(initial);
+  const [erreur, setErreur] = useState<string | null>(null);
   const valider = () => {
-    const n = Number(saisie);
-    const jours = saisie.trim() === '' || !Number.isInteger(n) || n < 0 ? null : n;
-    onDelai(facture.mandat, jours);
+    const texte = saisie.trim();
+    const n = Number(texte);
+    const valide = texte === '' || (/^\d+$/.test(texte) && n >= 0 && n <= 365);
+    if (!valide) return setErreur('Indiquez un nombre entier de jours entre 0 et 365.');
+    setErreur(null);
+    if (texte === initial) return;
+    onDelai(facture.mandat, texte === '' ? null : n);
   };
   return (
-    <label className="field" style={{ maxWidth: 220 }}>
+    <label className="field" style={{ maxWidth: 260 }}>
       <span>Délai de paiement (jours)</span>
       <input
         className="input num"
         inputMode="numeric"
         value={saisie}
-        placeholder="Délai général"
+        placeholder={
+          facture.delaiJours == null
+            ? 'Aucun délai défini'
+            : `Délai général : ${facture.delaiJours}`
+        }
+        aria-invalid={erreur != null}
         onChange={(e) => setSaisie(e.target.value)}
         onBlur={valider}
       />
+      {erreur && <small role="alert">{erreur}</small>}
     </label>
   );
 }

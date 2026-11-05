@@ -73,6 +73,7 @@ const ccaVide = {
 
 describe('GestionIk', () => {
   let envois: { url: string; method: string; corps: unknown }[] = [];
+  const onModifie = vi.fn();
   const monter = (avecBareme: boolean) => {
     vi.stubGlobal(
       'fetch',
@@ -95,11 +96,13 @@ describe('GestionIk', () => {
         mois="2026-11"
         periode={null}
         mandats={[{ slug: 'mandat-a', nom: 'Mandat A' }]}
+        onModifie={onModifie}
       />,
     );
   };
   beforeEach(() => {
     envois = [];
+    onModifie.mockClear();
   });
   afterEach(() => {
     cleanup();
@@ -184,6 +187,8 @@ describe('GestionIk', () => {
         url: '/api/i/simatis/gestion/ik/trajets/t2',
         corps: { refacturer: true },
       });
+      // L'onglet Factures doit se recharger : il dépend de cette case.
+      await waitFor(() => expect(onModifie).toHaveBeenCalled());
     });
   });
 });

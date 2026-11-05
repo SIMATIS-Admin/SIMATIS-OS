@@ -95,7 +95,7 @@ indépendante, CI verte, validation de Marc avant fusion.
 
 ## 9. Cas limites
 
-- Mandat sans réglages : délai général de Gestion ; sans délai général, 0 jour avec avertissement.
+- Mandat sans réglages : délai général de Gestion ; sans aucun délai, l'encaissement n'est pas daté et un avertissement le dit.
 - Barème IK absent : ligne signalée, hors total.
 - Recette sans mandat : jamais comptée dans une facture, toujours signalée.
 - Annulation d'une facture émise : hors périmètre ; une correction passe par un avoir saisi à la

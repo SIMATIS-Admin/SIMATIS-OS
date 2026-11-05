@@ -116,9 +116,16 @@ describe('assemblerFactures', () => {
     expect(un(new Map([['mandat-a', 45]]), 30)).toMatchObject({
       emissionPrevue: '2026-11-30',
       delaiJours: 45,
+      delaiMandatJours: 45,
       encaissementAttendu: '2027-01-14',
     });
-    expect(un(new Map(), 30)).toMatchObject({ delaiJours: 30, encaissementAttendu: '2026-12-30' });
+    // Le délai propre du mandat reste distinct du délai effectif : le champ de l'écran ne doit pas
+    // transformer le délai général en réglage du mandat.
+    expect(un(new Map(), 30)).toMatchObject({
+      delaiJours: 30,
+      delaiMandatJours: null,
+      encaissementAttendu: '2026-12-30',
+    });
     const inconnu = un(new Map([['mandat-a', null]]), null);
     expect(inconnu.encaissementAttendu).toBeNull();
     expect(inconnu.avertissements.join(' ')).toMatch(/délai de paiement/i);

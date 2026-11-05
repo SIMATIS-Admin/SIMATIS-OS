@@ -28,7 +28,9 @@ export type LigneFacture = {
 export type FactureAEmettre = {
   mandat: string;
   emissionPrevue: string;
+  // Délai effectif (celui du mandat, sinon le général) et délai propre au mandat, distincts.
   delaiJours: number | null;
+  delaiMandatJours: number | null;
   encaissementAttendu: string | null;
   totalHtCents: number;
   lignes: LigneFacture[];
@@ -119,6 +121,7 @@ export function assemblerFactures(e: {
         mandat,
         emissionPrevue: emission,
         delaiJours,
+        delaiMandatJours: e.delaisMandat.get(mandat) ?? null,
         encaissementAttendu: delaiJours == null ? null : ajouterJours(emission, delaiJours),
         totalHtCents: lignes.reduce((s, l) => s + (l.montantHtCents ?? 0), 0),
         lignes: lignes.sort(parDate),
