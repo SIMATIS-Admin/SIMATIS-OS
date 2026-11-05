@@ -38,7 +38,7 @@ Hors périmètre : préparation du deck, calcul du score, restitution, capitalis
 | Où vivent les règles | Dans le second cerveau (fiche dédiée), pas dans le dépôt ni en base. La skill y renvoie. |
 | Qui met à jour les règles | Claude, sans validation préalable, avec un journal visible et une annulation possible. |
 | Seuil d'une règle ferme | Constatée sur au moins 2 rapports finaux. Avant : « observation ». |
-| Lecture des finaux | Par le runner, depuis le compte Google de l'OS (export existant `exporterRapportDrive`). |
+| Lecture des finaux | Par le runner, depuis le compte Google de l'OS (export existant `exporterRapportDrive`). C'est un **mode de démarrage** : une fois les règles assez mûres, le pilote le désactive et les règles seules guident la rédaction. |
 
 ## Livraison 1 : désigner la version finale
 
@@ -71,7 +71,13 @@ prompt (`slice`).
 
 **Prompt de production** (`src/runner/runner.ts`, fonction du rapport) : ajoute deux blocs :
 - les règles de rédaction fermes, lues dans la fiche du second cerveau, présentées comme impératives ;
-- les deux rapports finaux, présentés comme modèle de structure, de vocabulaire et de longueur.
+- les deux rapports finaux, présentés comme modèle de structure, de vocabulaire et de longueur,
+  tant que le réglage « Relire les finaux » est actif.
+
+**Réglage « Relire les finaux »** : actif par défaut. Il vaut pour l'instance, dans les réglages du
+module Diagnostic. Le pilote le désactive quand les règles suffisent : le bloc des finaux disparaît
+du prompt, les règles restent. La capitalisation (livraison 3) continue de comparer chaque nouvelle
+finale aux précédentes, que le réglage soit actif ou non. Le réglage est réversible.
 
 La skill privée précise que ces deux blocs priment sur les habitudes de rédaction en cas de conflit,
 y compris sur la trame en sept blocs si une règle ferme la modifie.
@@ -119,7 +125,8 @@ changements et écrit le journal. Le runner fait l'écriture dans la fiche du se
 - Service : une seule finale par projet ; refus d'un lien artifact, d'un lien étranger, pendant une
   production ; décocher.
 - Interface : case visible seulement pour un Google Doc ; la finale ressort ; remplacement de la finale.
-- Prompt : les règles fermes et les deux finaux figurent dans le prompt ; absents proprement s'il n'y
+- Prompt : les règles fermes et les deux finaux figurent dans le prompt ; réglage désactivé : seuls
+  les règles y figurent ; absents proprement s'il n'y
   en a pas ; troncature appliquée.
 - Capitalisation : observation devenue ferme au second constat ; contradiction signalée ; annulation.
 - Journal : une entrée par changement ; annulation refusée si la règle a changé depuis.
