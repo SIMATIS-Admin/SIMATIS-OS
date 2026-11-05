@@ -1,4 +1,4 @@
-# Diagnostic : versions finales et règles de rédaction continues (support, analyse, rapport, restitution, diagnostic complet)
+# Diagnostic : versions finales et règles de rédaction continues (support, analyse, rapport, restitution)
 
 Date : 2026-11-05. Statut : conception validée dans la conversation, spec à relire.
 
@@ -26,8 +26,7 @@ Quand un rapport est finalisé, la manière de rédiger les suivants s'enrichit 
 - Chaque changement de règle est visible dans l'OS et annulable.
 - Aucun contenu de rapport, nom de client ou règle propriétaire dans le dépôt.
 
-Le même mécanisme vaut pour le **support d'ouverture**, l'**analyse des résultats** (revue de l'étape 3), la **restitution** (deck
-de l'étape 5) et le **diagnostic complet** une fois terminé (voir « Extension »).
+Le même mécanisme vaut pour le **support d'ouverture**, l'**analyse des résultats** (revue de l'étape 3), la **restitution** (deck de l'étape 5), avec une fiche de **règles communes** (voir « Extension »).
 
 Hors périmètre : calcul du score, restitution, capitalisation des préconisations
 (livraison existante), modification du texte du rapport depuis l'OS.
@@ -113,10 +112,15 @@ générique (« pas de proposition d'accompagnement dans le rapport »), jamais 
 Écran dans la page Diagnostic : liste datée avec un bouton « Annuler » par entrée, qui renvoie la
 règle à son état antérieur dans la fiche.
 
+**Règles communes** : une seconde fiche du second cerveau rassemble les règles qui valent pour plusieurs
+types de livrable (exemple fictif : « pas de proposition d'accompagnement »). Quand une règle ferme
+apparaît dans au moins deux types, la capitalisation la remonte dans cette fiche et la retire des
+fiches propres. Toutes les productions la lisent avec la fiche de leur type.
+
 **Outil MCP** (réservé au jeton de la demande) : `enregistrer_regles_rapport`, qui reçoit les
 changements et écrit le journal. Le runner fait l'écriture dans la fiche du second cerveau.
 
-## Extension : restitution et diagnostic complet
+## Extension : support, analyse, restitution et règles communes
 
 Le mécanisme (version finale cochée, fiche de règles dans le second cerveau, règles fermes à 2
 constats, mode de démarrage « relire les finaux », journal annulable) est écrit une fois, pour un
@@ -128,7 +132,6 @@ constats, mode de démarrage « relire les finaux », journal annulable) est éc
 | `analyse` | revue de l'étape 3 validée par le pilote (commentaires, préconisations, plan d'action) | règles d'analyse : formulation des constats, niveau de détail des préconisations, construction du plan d'action | à la validation de la revue |
 | `rapport` | Google Doc coché (livraisons 1 à 3) | règles de rédaction du rapport | à la case cochée |
 | `restitution` | version du deck de l'étape 5 cochée (liste `restitutionLiens`) | règles de construction du deck de restitution (plan, durée, ton, place des options) | à la case cochée |
-| `diagnostic` | le projet entier, une fois terminé | règles de conduite du diagnostic de bout en bout (enchaînement des étapes, ce qui a été corrigé entre le brouillon de Claude et le livrable remis, délais) | quand le pilote clôt le diagnostic (étape 5 terminée) |
 
 **Livraison 4, support d'ouverture** : l'OS a déjà une notion de support final archivé
 (`supportFinalLe`) : elle sert de version finale, sans nouvelle case. Le texte du support (`supportTexte`)
@@ -148,11 +151,8 @@ finaux s'ajoutent à l'étape 5, sur le même modèle que le rapport. Le texte d
 par Claude comme aujourd'hui (le texte du deck n'est lu qu'à la demande), puis résumé en règles. Le
 réglage « Relire les finaux » est propre à chaque type.
 
-**Livraison 7, diagnostic complet** : à la clôture, une demande de capitalisation globale relit le
-projet (revue, rapport final, deck final, compte rendu de la restitution déjà capitalisé) et met à
-jour la fiche de règles du diagnostic. Elle complète la capitalisation de la restitution existante
-(`capitalisation.ts`), qui continue d'alimenter le second cerveau avec ce que dit le client : la
-nouvelle capitalisation porte, elle, sur la manière de conduire et de rédiger.
+Aucune capitalisation « diagnostic complet » : chaque livrable a la sienne, une globale n'apporterait
+presque rien de plus. Ce qui vaut pour plusieurs livrables passe par les règles communes (livraison 3).
 
 Le journal et l'annulation sont communs, avec une colonne « type de livrable ».
 
@@ -183,7 +183,6 @@ Le journal et l'annulation sont communs, avec une colonne « type de livrable »
 4. Support d'ouverture : règles et supports finaux déjà archivés.
 5. Analyse des résultats (étape 3) : réutilisation des analyses finalisées.
 6. La même chose pour la restitution (deck de l'étape 5).
-7. Capitalisation du diagnostic complet à la clôture.
 
 La livraison 2 apporte déjà le gain principal : un rapport en cours se refait avec les règles et les
 modèles. La 3 évite d'avoir à tenir les règles à la main.
@@ -199,5 +198,4 @@ modèles. La 3 évite d'avoir à tenir les règles à la main.
   le pilote, et le recouvrement avec la bibliothèque générique tenue par la skill de capitalisation.
 - Restitution : le deck est un artifact claude.ai ; confirmer avec le pilote comment il en fixe la
   version finale (artifact retouché ou fichier PowerPoint exporté), et comment l'OS en lit le texte.
-- Clôture du diagnostic : repérer l'événement qui marque « diagnostic terminé » (étape 5 validée).
 - Emplacement exact de la fiche des règles dans le second cerveau, à fixer avec le pilote.
