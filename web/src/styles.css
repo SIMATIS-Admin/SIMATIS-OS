@@ -1628,6 +1628,15 @@ textarea.input {
   border-radius: var(--r-m);
   z-index: 42;
   box-shadow: 0 20px 60px rgba(9, 25, 50, 0.3);
+  /* Une fenêtre plus haute que l'écran défile au lieu de déborder : le bas reste atteignable. */
+  max-height: 76vh;
+  overflow-y: auto;
+}
+.modal > .panel-h {
+  position: sticky;
+  top: 0;
+  background: var(--white);
+  z-index: 1;
 }
 .modal .panel-b {
   padding: 20px 22px;
