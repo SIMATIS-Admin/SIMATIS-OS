@@ -1,9 +1,12 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { SLUG } from '../instances/service.js';
 import { facturesParMandat } from './factures.js';
+import { lireFacturesEmises, vueFacture as vue, type FactureEmise } from './factures-lecture.js';
+
+export { lireFacturesEmises, type FactureEmise };
 import { lireRevenu, modifierOccurrenceRevenu, modifierRevenu } from './revenus.js';
 import { gestionFactures, gestionIkTrajets, type LigneFigee } from './schema.js';
 
@@ -23,39 +26,6 @@ export const emettreSchema = z.object({
   exclure: z.array(z.string()).max(500).default([]),
 });
 export const encaisserSchema = z.object({ dateEncaissement: jour });
-
-export type FactureEmise = {
-  id: string;
-  mandat: string;
-  numero: string;
-  dateEmission: string;
-  delaiJours: number | null;
-  totalHtCents: number;
-  etat: 'emise' | 'encaissee';
-  dateEncaissement: string | null;
-  lignes: LigneFigee[];
-};
-
-const vue = (l: typeof gestionFactures.$inferSelect): FactureEmise => ({
-  id: l.id,
-  mandat: l.mandat,
-  numero: l.numero,
-  dateEmission: l.dateEmission,
-  delaiJours: l.delaiJours,
-  totalHtCents: l.totalHtCents,
-  etat: l.etat,
-  dateEncaissement: l.dateEncaissement,
-  lignes: l.lignes,
-});
-
-export async function lireFacturesEmises(tx: Executor): Promise<FactureEmise[]> {
-  const lignes = await tx
-    .select()
-    .from(gestionFactures)
-    .where(eq(gestionFactures.instanceId, currentInstance))
-    .orderBy(desc(gestionFactures.dateEmission), desc(gestionFactures.createdAt));
-  return lignes.map(vue);
-}
 
 // Fait suivre aux recettes d'une facture son état (émise, puis encaissée). Les lignes IK n'ont pas
 // d'état propre : leur trajet porte `factureId`.

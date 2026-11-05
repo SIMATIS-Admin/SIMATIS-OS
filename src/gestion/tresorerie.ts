@@ -5,7 +5,11 @@ import { entreprises, opportunites } from '../crm/schema.js';
 import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { jourDe } from '../pilotage/realisees.js';
-import { ajouterJours, ajouterMois } from './dates.js';
+import { ajouterJours, ajouterMois, dateEmissionPrevue } from './dates.js';
+import type { FactureEmise } from './factures-lecture.js';
+import { lireFacturesEmises } from './factures-lecture.js';
+import { trajetsRefacturables, type IkRefacturable } from './ik.js';
+import { lireDelaisMandats } from './mandats.js';
 import { affairesPipe, mouvementsPipe, type AffairePipe } from './pipe.js';
 import { occurrencesRevenus, type OccurrenceRevenu } from './revenus.js';
 import { gestionReglages, MODES_SEUIL, type ModeSeuil } from './schema.js';
@@ -163,6 +167,9 @@ export function mouvementsRecettes(
     aujourdhui: string;
     delaiJours: number | null;
     retardJours: number;
+    // Délai de paiement propre à chaque mandat, et factures émises (clé d'échéance → émission figée).
+    delaisMandat?: Map<string, number | null>;
+    factures?: Map<string, { dateEmission: string; delaiJours: number | null }>;
   },
 ): { mouvements: Mouvement[]; ignorees: number } {
   const mouvements: Mouvement[] = [];
@@ -184,12 +191,26 @@ export function mouvementsRecettes(
       ignorees += 1;
       continue;
     }
-    const delai = (p.delaiJours ?? 0) + p.retardJours;
-    const cash = ajouterJours(o.date, delai);
+    // Une facture émise suit sa date d'émission et son délai figés ; une recette prévue d'un mandat sera
+    // facturée en fin de mois et réglée selon le délai du mandat ; le reste suit sa propre date.
+    const facture = o.etat === 'emise' ? p.factures?.get(o.cle) : undefined;
+    const parMandat = o.etat === 'prevue' && o.mandat != null;
+    const delaiEffectif = facture
+      ? (facture.delaiJours ?? p.delaiJours)
+      : parMandat
+        ? (p.delaisMandat?.get(o.mandat!) ?? p.delaiJours)
+        : p.delaiJours;
+    const delai = (delaiEffectif ?? 0) + p.retardJours;
+    const dateDeBase = facture
+      ? facture.dateEmission
+      : parMandat
+        ? dateEmissionPrevue(plusTard(o.date, p.aujourdhui))
+        : o.date;
+    const cash = ajouterJours(dateDeBase, delai);
     const effectif = plusTard(cash, p.aujourdhui);
     const notes = [
       sansTva ? 'Montant HT : TVA non renseignée' : null,
-      p.delaiJours == null
+      delaiEffectif == null
         ? 'Délai de paiement non défini : encaissement supposé à la date de facture'
         : null,
       p.retardJours ? `Retard simulé de ${p.retardJours} jours` : null,
@@ -203,6 +224,58 @@ export function mouvementsRecettes(
   }
   return { mouvements, ignorees };
 }
+// Trajets IK refacturés et lignes IK des factures émises. Un trajet à venir est réglé selon le délai de
+// son mandat ; une facture émise selon son délai figé ; une facture encaissée compte à son encaissement,
+// seulement après la date du solde. Mêmes montants dans les trois scénarios : l'indemnité est certaine.
+export function mouvementsFacturesIk(e: {
+  ik: IkRefacturable[];
+  factures: FactureEmise[];
+  delaisMandat: Map<string, number | null>;
+  soldeDate: string | null;
+  aujourdhui: string;
+  delaiJours: number | null;
+  retardJours: number;
+}): Mouvement[] {
+  const sortie = (date: string, libelle: string, montantCents: number, ref: string): Mouvement => ({
+    date,
+    sens: 'entree',
+    libelle,
+    montantCents,
+    nature: 'recette',
+    ref,
+    estime: true,
+    note: 'IK refacturés, montant HT',
+  });
+  const mouvements: Mouvement[] = [];
+  for (const t of e.ik) {
+    if (t.indemniteCents == null) continue;
+    const delai = (e.delaisMandat.get(t.mandat) ?? e.delaiJours ?? 0) + e.retardJours;
+    const facturation = dateEmissionPrevue(plusTard(t.date, e.aujourdhui));
+    mouvements.push(
+      sortie(ajouterJours(facturation, delai), t.libelle, t.indemniteCents, `ik:${t.trajetId}`),
+    );
+  }
+  for (const f of e.factures) {
+    for (const l of f.lignes.filter((x) => x.sorte === 'ik')) {
+      if (f.etat === 'encaissee') {
+        if (e.soldeDate && f.dateEncaissement && f.dateEncaissement > e.soldeDate)
+          mouvements.push(sortie(f.dateEncaissement, l.libelle, l.montantHtCents, l.cle));
+        continue;
+      }
+      const delai = (f.delaiJours ?? e.delaiJours ?? 0) + e.retardJours;
+      mouvements.push(
+        sortie(
+          plusTard(ajouterJours(f.dateEmission, delai), e.aujourdhui),
+          l.libelle,
+          l.montantHtCents,
+          l.cle,
+        ),
+      );
+    }
+  }
+  return mouvements;
+}
+
 const entree = (
   o: OccurrenceRevenu,
   date: string,
@@ -369,6 +442,24 @@ export async function projeter(
   const depenses = await occurrencesDepenses(tx, depart, fin, aujourdhui);
   const recettes = await occurrencesRevenus(tx, depart, fin);
   const sorties = mouvementsDepenses(depenses, reglages.soldeDate, aujourdhui);
+  const delaisMandat = await lireDelaisMandats(tx);
+  const facturesEmises = await lireFacturesEmises(tx);
+  const ikAFacturer = await trajetsRefacturables(tx, fin);
+  const parEcheance = new Map(
+    facturesEmises
+      .filter((f) => f.etat === 'emise')
+      .flatMap((f) =>
+        f.lignes
+          .filter((l) => l.cle.startsWith('revenu:'))
+          .map(
+            (l) =>
+              [
+                l.cle.slice('revenu:'.length),
+                { dateEmission: f.dateEmission, delaiJours: f.delaiJours },
+              ] as const,
+          ),
+      ),
+  );
   const src = await pipelineSource(tx);
   const probaEtape = new Map(src.etapes.map((e) => [e.id, e.probabilite ?? null]));
   const ouvertes = await tx
@@ -433,6 +524,17 @@ export async function projeter(
       aujourdhui,
       delaiJours: reglages.delaiPaiementJours,
       retardJours: p.retardJours,
+      delaisMandat,
+      factures: parEcheance,
+    });
+    const ik = mouvementsFacturesIk({
+      ik: ikAFacturer,
+      factures: facturesEmises,
+      delaisMandat,
+      soldeDate: reglages.soldeDate,
+      aujourdhui,
+      delaiJours: reglages.delaiPaiementJours,
+      retardJours: p.retardJours,
     });
     const pipe = mouvementsPipe(affaires, {
       scenario,
@@ -442,7 +544,7 @@ export async function projeter(
       aujourdhui,
       fin,
     });
-    const periodes = agreger([...sorties.mouvements, ...entrees.mouvements, ...pipe], {
+    const periodes = agreger([...sorties.mouvements, ...entrees.mouvements, ...ik, ...pipe], {
       solde: reglages.soldeCents,
       soldeDate: reglages.soldeDate,
       debut: aujourdhui,
