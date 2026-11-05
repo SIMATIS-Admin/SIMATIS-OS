@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
+import { eq } from 'drizzle-orm';
+import { diagnosticProjets } from './schema.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import {
@@ -10,6 +12,12 @@ import {
   finirAttente,
   repondreClaude,
 } from './chat.js';
+import {
+  DEBUT_MESSAGE_REGLES_SUPPORT,
+  capitaliserSiSupportFinal,
+  demanderCapitalisationSupport,
+  finDeDemande,
+} from './support.js';
 import { createProjet, DiagnosticIndisponible, listProjets, updateProjet } from './service.js';
 import {
   autoriserOutil,
@@ -170,5 +178,94 @@ describe("Diagnostic : support d'ouverture", () => {
     });
     expect(await decide('Bash', { command: 'ls' })).toMatchObject({ behavior: 'deny' });
     await finirAttente(t.app.db, simatis, p.id);
+  });
+
+  describe('capitalisation du support final', () => {
+    const projetFinal = async (nom: string, final = true) => {
+      const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        tx
+          .update(diagnosticProjets)
+          .set({
+            supportLien: 'https://claude.ai/artifact/AbCdEfGh12',
+            supportStatut: final ? 'final' : 'pret',
+            supportTexte: final ? [{ titre: 'T', texte: 'X', notes: 'N' }] : null,
+          })
+          .where(eq(diagnosticProjets.id, p.id)),
+      );
+      return p.id;
+    };
+
+    it('lance la demande de règles sur un support final, à l étape 1', async () => {
+      const id = await projetFinal('Capi support A');
+      await demanderCapitalisationSupport(t.app.db, simatis, id);
+      const p = await relire(id);
+      expect(p.demande).toBe('regles_support');
+      expect(p.conversation.at(-1)).toMatchObject({
+        de: 'pilote',
+        etape: 1,
+        texte: `${DEBUT_MESSAGE_REGLES_SUPPORT}.`,
+      });
+    });
+
+    it('refuse sans support final, et pendant que Claude répond', async () => {
+      const brouillon = await projetFinal('Capi support B', false);
+      await expect(demanderCapitalisationSupport(t.app.db, simatis, brouillon)).rejects.toThrow(
+        ChatIndisponible,
+      );
+      const occupe = await projetFinal('Capi support C');
+      await demanderCapitalisationSupport(t.app.db, simatis, occupe);
+      await expect(demanderCapitalisationSupport(t.app.db, simatis, occupe)).rejects.toThrow(
+        ChatIndisponible,
+      );
+    });
+
+    it('capitaliserSiSupportFinal : seulement après une demande support_final', async () => {
+      const apres = await projetFinal('Capi support D');
+      await capitaliserSiSupportFinal(t.app.db, simatis, apres, 'support_final');
+      expect((await relire(apres)).demande).toBe('regles_support');
+      for (const autre of ['preparer_support', 'rapport', null] as const) {
+        const id = await projetFinal(`Capi support E ${autre}`);
+        await capitaliserSiSupportFinal(t.app.db, simatis, id, autre);
+        expect((await relire(id)).demande).toBeNull();
+      }
+    });
+
+    it('capitaliserSiSupportFinal : rien si le support n est pas final, muet si Claude répond déjà', async () => {
+      const brouillon = await projetFinal('Capi support F', false);
+      await capitaliserSiSupportFinal(t.app.db, simatis, brouillon, 'support_final');
+      expect((await relire(brouillon)).demande).toBeNull();
+      const occupe = await projetFinal('Capi support G');
+      await demanderCapitalisationSupport(t.app.db, simatis, occupe);
+      await expect(
+        capitaliserSiSupportFinal(t.app.db, simatis, occupe, 'support_final'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('finDeDemande : après un « support final » sans erreur, enchaîne la capitalisation', async () => {
+      const id = await projetFinal('Capi support H');
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        tx
+          .update(diagnosticProjets)
+          .set({ demande: 'support_final', statutChat: 'en_cours' })
+          .where(eq(diagnosticProjets.id, id)),
+      );
+      await finDeDemande(t.app.db, simatis, id);
+      expect((await relire(id)).demande).toBe('regles_support');
+    });
+
+    it('finDeDemande : avec une erreur, ne lance rien', async () => {
+      const id = await projetFinal('Capi support I');
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        tx
+          .update(diagnosticProjets)
+          .set({ demande: 'support_final', statutChat: 'en_cours' })
+          .where(eq(diagnosticProjets.id, id)),
+      );
+      await finDeDemande(t.app.db, simatis, id, 'Claude s’est arrêté.');
+      const p = await relire(id);
+      expect(p.demande).toBeNull();
+      expect(p.statutChat).toBe('repos');
+    });
   });
 });

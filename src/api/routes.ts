@@ -37,7 +37,12 @@ import {
 } from '../diagnostic/restitution.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
 import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
-import { demanderSupport, logoDe, rouvrirSupport } from '../diagnostic/support.js';
+import {
+  demanderCapitalisationSupport,
+  demanderSupport,
+  logoDe,
+  rouvrirSupport,
+} from '../diagnostic/support.js';
 import {
   createContact,
   createEntreprise,
@@ -878,6 +883,7 @@ export function registerApi(
         if (action === 'preparer') return await demanderSupport(db, i, id, 'preparer_support');
         if (action === 'final') return await demanderSupport(db, i, id, 'support_final');
         if (action === 'rouvrir') return await rouvrirSupport(db, i, id);
+        if (action === 'capitaliser') return await demanderCapitalisationSupport(db, i, id);
         return reply.code(404).send({ error: 'Action inconnue' });
       } catch (error) {
         if (error instanceof ChatIndisponible)

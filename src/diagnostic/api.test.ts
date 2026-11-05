@@ -252,6 +252,28 @@ describe('Entretien : API', () => {
     expect(mauvais.statusCode).toBe(400);
   });
 
+  it('capitaliser le support : refusé sans support final, lancé avec, 400 sur identifiant invalide', async () => {
+    const projet = await creerProjet('Support capitalisation API');
+    const url = `/api/i/simatis/diagnostic/projets/${projet.id}/support/capitaliser`;
+    expect((await app.inject({ method: 'POST', url })).statusCode).toBe(409);
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({
+        supportStatut: 'final',
+        supportLien: 'https://claude.ai/artifact/AbCdEfGh12',
+        supportTexte: [{ titre: 'T', texte: 'X', notes: 'N' }],
+      })
+      .where(eq(diagnosticProjets.id, projet.id));
+    const ok = await app.inject({ method: 'POST', url });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json<{ demande: string }>().demande).toBe('regles_support');
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/support/capitaliser',
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
   it('refuse un identifiant de projet mal formé', async () => {
     const r = await app.inject({
       method: 'POST',
