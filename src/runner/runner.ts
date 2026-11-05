@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chargerGrille, type Grille } from '../diagnostic/grille.js';
 import { DEBUT_MESSAGE_RAPPORT } from '../diagnostic/rapport.js';
+import { resumeRevue } from '../diagnostic/revues-validees.js';
 import { consignesProposition, type Proposition } from '../diagnostic/proposition.js';
 import { DEBUT_MESSAGE_PROPOSITION } from '../diagnostic/capitalisation.js';
 import { DEBUT_MESSAGE_RESTITUTION } from '../diagnostic/restitution.js';
@@ -817,7 +818,11 @@ export const promptRapport = (a: AttenteDiag, cerveau: string | null, maintenant
     `- Ce qu'a dit le dirigeant : ${a.ditParDirigeant || 'rien de noté'}`,
     `- Hypothèses : ${a.hypotheses || 'aucune'}`,
     `- Résultat : ${a.dims ? `outils ${a.dims.outils}, stratégie ${a.dims.strategie}, polyvalence ${a.dims.polyvalence}, profil ${a.profil}` : 'non saisi'}`,
-    `- Revue des préconisations : ${a.revue ? JSON.stringify(a.revue).slice(0, 20_000) : 'aucune : fonde-toi sur le résultat, le contexte et la bibliothèque de préconisations'}`,
+    // Résumé lisible (proposé / choix / texte du pilote) plutôt que le JSON brut du formulaire, où les
+    // commentaires de Marc se perdaient dans des clés techniques et une coupe à 20 000 caractères.
+    a.revue
+      ? `- Revue des préconisations, validée par le pilote (ses choix et ses textes priment sur ce que l'OS proposait ; chaque commentaire doit se retrouver dans le rapport) :\n${resumeRevue(a.revue as Record<string, unknown>)}`
+      : '- Revue des préconisations : aucune : fonde-toi sur le résultat, le contexte et la bibliothèque de préconisations',
     a.rapportContenu
       ? `Rapport précédent (version ${a.rapportVersion}, à réviser : garde ce qui n'est pas contesté) : ${JSON.stringify(a.rapportContenu).slice(0, 30_000)}`
       : a.rapportNom
