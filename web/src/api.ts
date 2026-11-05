@@ -2357,6 +2357,39 @@ export type FactureAEmettre = {
   avertissements: string[];
 };
 export type FacturesAEmettre = { factures: FactureAEmettre[]; sansMandat: LigneFacture[] };
+export type LigneFigee = {
+  cle: string;
+  sorte: SorteLigneFacture;
+  libelle: string;
+  date: string;
+  montantHtCents: number;
+  tvaCents: number | null;
+};
+export type FactureEmise = {
+  id: string;
+  mandat: string;
+  numero: string;
+  dateEmission: string;
+  delaiJours: number | null;
+  totalHtCents: number;
+  etat: 'emise' | 'encaissee';
+  dateEncaissement: string | null;
+  lignes: LigneFigee[];
+};
+export type EmissionFacture = {
+  mandat: string;
+  numero: string;
+  dateEmission: string;
+  exclure: string[];
+};
+export const fetchFacturesEmises = (slug: string) =>
+  getJson<FactureEmise[]>(inst(slug, 'gestion/factures/emises'));
+export const emettreFacture = (slug: string, e: EmissionFacture) =>
+  sendJson<FactureEmise>('POST', inst(slug, 'gestion/factures/emettre'), e);
+export const encaisserFacture = (slug: string, id: string, dateEncaissement: string) =>
+  sendJson<FactureEmise>('POST', inst(slug, `gestion/factures/${id}/encaisser`), {
+    dateEncaissement,
+  });
 export const fetchFactures = (slug: string) =>
   getJson<FacturesAEmettre>(inst(slug, 'gestion/factures'));
 export const poserDelaiMandat = (slug: string, mandat: string, delaiPaiementJours: number | null) =>

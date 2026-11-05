@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { FactureAEmettre, FacturesAEmettre, LigneFacture } from '../../api.js';
+import type { FactureAEmettre, FactureEmise, FacturesAEmettre, LigneFacture } from '../../api.js';
 import { Factures } from './Factures.js';
 
 // Données fictives.
@@ -32,8 +32,33 @@ const facture = (o: Partial<FactureAEmettre> = {}): FactureAEmettre => ({
   ...o,
 });
 const mandats = [{ slug: 'mandat-a', nom: 'Mandat A' }];
-const rendre = (donnees: FacturesAEmettre, onDelai = vi.fn()) =>
-  render(<Factures donnees={donnees} mandats={mandats} onDelai={onDelai} />);
+const emise = (o: Partial<FactureEmise> = {}): FactureEmise => ({
+  id: 'f1',
+  mandat: 'mandat-a',
+  numero: 'F-2026-01',
+  dateEmission: '2026-11-12',
+  delaiJours: 45,
+  totalHtCents: 63_000,
+  etat: 'emise',
+  dateEncaissement: null,
+  lignes: [],
+  ...o,
+});
+const rendre = (
+  donnees: FacturesAEmettre,
+  onDelai = vi.fn(),
+  extra: { emises?: FactureEmise[]; onEmettre?: () => void; onEncaisser?: () => void } = {},
+) =>
+  render(
+    <Factures
+      donnees={donnees}
+      mandats={mandats}
+      onDelai={onDelai}
+      emises={extra.emises ?? []}
+      onEmettre={extra.onEmettre ?? vi.fn()}
+      onEncaisser={extra.onEncaisser ?? vi.fn()}
+    />,
+  );
 
 afterEach(cleanup);
 
@@ -131,5 +156,71 @@ describe('Factures', () => {
   it('sans aucune facture, dit qu’il n’y a rien à facturer', () => {
     rendre({ factures: [], sansMandat: [] });
     expect(screen.getByText('Rien à facturer')).toBeTruthy();
+  });
+
+  describe('émission et encaissement', () => {
+    it('émettre ouvre un formulaire ; le bouton attend un numéro', () => {
+      rendre({ factures: [facture()], sansMandat: [] });
+      fireEvent.click(screen.getByRole('button', { name: 'Émettre la facture' }));
+      const valider = screen.getByRole<HTMLButtonElement>('button', { name: 'Émettre' });
+      expect(valider.disabled).toBe(true);
+      fireEvent.change(screen.getByLabelText('Numéro de la facture'), {
+        target: { value: 'F-2026-02' },
+      });
+      expect(valider.disabled).toBe(false);
+    });
+
+    it('une ligne sans montant n’a pas de case', () => {
+      rendre({
+        factures: [facture({ lignes: [ligne({ cle: 'k', sorte: 'ik', montantHtCents: null })] })],
+        sansMandat: [],
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Émettre la facture' }));
+      expect(screen.queryByRole('checkbox')).toBeNull();
+    });
+
+    it('valider envoie mandat, numéro, date et les lignes décochées', () => {
+      const onEmettre = vi.fn();
+      rendre({ factures: [facture()], sansMandat: [] }, vi.fn(), { onEmettre });
+      fireEvent.click(screen.getByRole('button', { name: 'Émettre la facture' }));
+      fireEvent.change(screen.getByLabelText('Numéro de la facture'), {
+        target: { value: 'F-2026-02' },
+      });
+      fireEvent.change(screen.getByLabelText('Date d’émission'), {
+        target: { value: '2026-11-30' },
+      });
+      fireEvent.click(screen.getByLabelText('Inclure Train fictif'));
+      fireEvent.click(screen.getByRole('button', { name: 'Émettre' }));
+      expect(onEmettre).toHaveBeenCalledWith({
+        mandat: 'mandat-a',
+        numero: 'F-2026-02',
+        dateEmission: '2026-11-30',
+        exclure: ['f'],
+      });
+    });
+
+    it('liste les factures émises et marque l’encaissement à la date saisie', () => {
+      const onEncaisser = vi.fn();
+      rendre({ factures: [], sansMandat: [] }, vi.fn(), {
+        onEncaisser,
+        emises: [
+          emise(),
+          emise({
+            id: 'f2',
+            numero: 'F-2026-00',
+            etat: 'encaissee',
+            dateEncaissement: '2026-10-20',
+          }),
+        ],
+      });
+      expect(screen.getByText('F-2026-01')).toBeTruthy();
+      expect(screen.getByText('F-2026-00')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('Date d’encaissement de F-2026-01'), {
+        target: { value: '2026-12-20' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Marquer encaissée' }));
+      expect(onEncaisser).toHaveBeenCalledWith('f1', '2026-12-20');
+      expect(screen.getAllByRole('button', { name: 'Marquer encaissée' })).toHaveLength(1);
+    });
   });
 });
