@@ -102,7 +102,7 @@ registerTool({
 registerTool({
   name: 'enregistrer_regles_rapport',
   description:
-    "Déclare au journal de l'OS les changements que tu viens de faire dans les fiches de règles de rédaction du second cerveau (une consigne de style générique par changement, sans nom d'entreprise), ou le résultat d'une annulation de règle demandée par le pilote.",
+    "Déclare au journal de l'OS les changements que tu viens de faire dans les fiches de règles de rédaction du second cerveau (rapport, support d'ouverture ou règles communes) (une consigne de style générique par changement, sans nom d'entreprise), ou le résultat d'une annulation de règle demandée par le pilote.",
   input: z.object({
     projetId: z.uuid(),
     changements: z

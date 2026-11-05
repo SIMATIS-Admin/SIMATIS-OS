@@ -15,6 +15,7 @@ import {
   importerRapportDiag,
   annulerRegleDiag,
   capitaliserRapportDiag,
+  capitaliserSupportDiag,
   journalReglesDiag,
   majReglagesDiagnostic,
   marquerRapportFinal,
@@ -545,6 +546,12 @@ const lireBase64 = (fichier: File) =>
   });
 
 // Support d'ouverture : formulaire lu par Claude, puis le deck du projet sur claude.ai.
+const NOMS_FICHES_REGLES = {
+  rapport: 'règles du rapport',
+  communes: 'règles communes',
+  support: 'règles du support',
+} as const;
+
 function Support({
   slug,
   projet,
@@ -567,6 +574,29 @@ function Support({
 
   const statut = projet.supportStatut;
   const occupe = projet.statutChat !== 'repos' || statut === 'preparation';
+  // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
+  const [relireSupports, setRelireSupports] = useState(true);
+  useEffect(() => {
+    void Promise.resolve(reglagesDiagnostic(slug))
+      .then((r) => r && setRelireSupports(r.relireSupports))
+      .catch(() => undefined);
+  }, [slug]);
+  const changerRelire = async (valeur: boolean) => {
+    try {
+      setRelireSupports(
+        (await majReglagesDiagnostic(slug, { relireSupports: valeur })).relireSupports,
+      );
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const capitaliser = async () => {
+    try {
+      onChange(await capitaliserSupportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const demander = async (action: 'preparer' | 'final' | 'rouvrir') => {
     try {
       onChange(await demandeSupportDiag(slug, projet.id, action));
@@ -678,7 +708,20 @@ function Support({
               Modifier le support
             </button>
           )}
+          {statut === 'final' && (
+            <button className="btn" disabled={occupe} onClick={() => void capitaliser()}>
+              Capitaliser ce support
+            </button>
+          )}
         </div>
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={relireSupports}
+            onChange={(e) => void changerRelire(e.target.checked)}
+          />{' '}
+          Relire les deux derniers supports finaux avant de préparer
+        </label>
         {statut === 'pret' && (
           <div className="small muted">
             Corrigez le deck directement sur claude.ai, ou demandez à Claude dans l’assistant.
@@ -928,7 +971,7 @@ function Rapport({
   }, [slug]);
   const changerRelire = async (valeur: boolean) => {
     try {
-      setRelireFinaux((await majReglagesDiagnostic(slug, valeur)).relireFinaux);
+      setRelireFinaux((await majReglagesDiagnostic(slug, { relireFinaux: valeur })).relireFinaux);
     } catch (err) {
       onErreur(messageErreur(err));
     }
@@ -1105,8 +1148,8 @@ function Rapport({
               {journal.map((e) => (
                 <li key={e.id}>
                   <span className="muted">
-                    {new Date(e.le).toLocaleDateString('fr-FR')} ·{' '}
-                    {e.fiche === 'communes' ? 'règles communes' : 'règles du rapport'} · {e.action}
+                    {new Date(e.le).toLocaleDateString('fr-FR')} · {NOMS_FICHES_REGLES[e.fiche]} ·{' '}
+                    {e.action}
                     {e.statut === 'annule' ? ' (annulée)' : ''} :{' '}
                   </span>
                   {e.libelle}

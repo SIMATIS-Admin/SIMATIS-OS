@@ -184,16 +184,27 @@ describe('Entretien : API', () => {
   it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
     const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     const url = '/api/i/simatis/diagnostic/reglages';
-    expect((await app.inject({ method: 'GET', url })).json()).toEqual({ relireFinaux: true });
+    expect((await app.inject({ method: 'GET', url })).json()).toEqual({
+      relireFinaux: true,
+      relireSupports: true,
+    });
     const coupe = await app.inject({ method: 'PUT', url, payload: { relireFinaux: false } });
     expect(coupe.statusCode).toBe(200);
-    expect(coupe.json()).toEqual({ relireFinaux: false });
-    expect((await app.inject({ method: 'GET', url })).json()).toEqual({ relireFinaux: false });
+    expect(coupe.json()).toEqual({ relireFinaux: false, relireSupports: true });
+    expect((await app.inject({ method: 'GET', url })).json()).toEqual({
+      relireFinaux: false,
+      relireSupports: true,
+    });
     const apres = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     expect(apres.config.modules).toEqual(avant.config.modules);
     expect(apres.config.ecrituresReelles).toEqual(avant.config.ecrituresReelles);
     const remis = await app.inject({ method: 'PUT', url, payload: { relireFinaux: true } });
-    expect(remis.json()).toEqual({ relireFinaux: true });
+    expect(remis.json()).toEqual({ relireFinaux: true, relireSupports: true });
+    const supports = await app.inject({ method: 'PUT', url, payload: { relireSupports: false } });
+    expect(supports.json()).toEqual({ relireFinaux: true, relireSupports: false });
+    const vide = await app.inject({ method: 'PUT', url, payload: {} });
+    expect(vide.statusCode).toBe(400);
+    await app.inject({ method: 'PUT', url, payload: { relireSupports: true } });
     const invalide = await app.inject({ method: 'PUT', url, payload: { relireFinaux: 'oui' } });
     expect(invalide.statusCode).toBe(400);
   });
@@ -237,6 +248,28 @@ describe('Entretien : API', () => {
     const mauvais = await app.inject({
       method: 'POST',
       url: `${base}/regles-journal/pas-un-uuid/annuler`,
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
+  it('capitaliser le support : refusé sans support final, lancé avec, 400 sur identifiant invalide', async () => {
+    const projet = await creerProjet('Support capitalisation API');
+    const url = `/api/i/simatis/diagnostic/projets/${projet.id}/support/capitaliser`;
+    expect((await app.inject({ method: 'POST', url })).statusCode).toBe(409);
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({
+        supportStatut: 'final',
+        supportLien: 'https://claude.ai/artifact/AbCdEfGh12',
+        supportTexte: [{ titre: 'T', texte: 'X', notes: 'N' }],
+      })
+      .where(eq(diagnosticProjets.id, projet.id));
+    const ok = await app.inject({ method: 'POST', url });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json<{ demande: string }>().demande).toBe('regles_support');
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/support/capitaliser',
     });
     expect(mauvais.statusCode).toBe(400);
   });

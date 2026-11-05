@@ -37,7 +37,12 @@ import {
 } from '../diagnostic/restitution.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
 import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
-import { demanderSupport, logoDe, rouvrirSupport } from '../diagnostic/support.js';
+import {
+  demanderCapitalisationSupport,
+  demanderSupport,
+  logoDe,
+  rouvrirSupport,
+} from '../diagnostic/support.js';
 import {
   createContact,
   createEntreprise,
@@ -530,28 +535,34 @@ export function registerApi(
       }
     }),
   );
-  // Réglage du module Diagnostic : relire les deux derniers rapports finaux avant de rédiger.
+  // Réglages du module Diagnostic : relire les deux derniers rapports finaux (ou supports finaux)
+  // avant de rédiger. Actifs par défaut.
+  const reglagesDiag = (i: {
+    config: { diagnostic?: { relireFinaux?: boolean; relireSupports?: boolean } };
+  }) => ({
+    relireFinaux: i.config.diagnostic?.relireFinaux !== false,
+    relireSupports: i.config.diagnostic?.relireSupports !== false,
+  });
   app.get<SlugParams>(
     '/api/i/:slug/diagnostic/reglages',
-    onInstance((i) =>
-      Promise.resolve({ relireFinaux: i.config.diagnostic?.relireFinaux !== false }),
-    ),
+    onInstance((i) => Promise.resolve(reglagesDiag(i))),
   );
   app.put<SlugParams & { Body: unknown }>(
     '/api/i/:slug/diagnostic/reglages',
     onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
-      const parsed = z.object({ relireFinaux: z.boolean() }).safeParse(request.body);
+      const parsed = z
+        .object({ relireFinaux: z.boolean().optional(), relireSupports: z.boolean().optional() })
+        .refine((r) => r.relireFinaux !== undefined || r.relireSupports !== undefined)
+        .safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Réglage invalide' });
+      const diagnostic = { ...i.config.diagnostic, ...parsed.data };
       await withInstance(db, i.id, (tx) =>
         tx
           .update(instances)
-          .set({
-            config: { ...i.config, diagnostic: { ...i.config.diagnostic, ...parsed.data } },
-            updatedAt: new Date(),
-          })
+          .set({ config: { ...i.config, diagnostic }, updatedAt: new Date() })
           .where(eq(instances.id, i.id)),
       );
-      return parsed.data;
+      return reglagesDiag({ config: { ...i.config, diagnostic } });
     }),
   );
   // Rapport : le pilote demande sa rédaction par Claude (étape 4, revue validée).
@@ -872,6 +883,7 @@ export function registerApi(
         if (action === 'preparer') return await demanderSupport(db, i, id, 'preparer_support');
         if (action === 'final') return await demanderSupport(db, i, id, 'support_final');
         if (action === 'rouvrir') return await rouvrirSupport(db, i, id);
+        if (action === 'capitaliser') return await demanderCapitalisationSupport(db, i, id);
         return reply.code(404).send({ error: 'Action inconnue' });
       } catch (error) {
         if (error instanceof ChatIndisponible)

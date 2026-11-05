@@ -2,8 +2,8 @@ import { and, eq } from 'drizzle-orm';
 import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
-import { ChatIndisponible, envoyerMessage } from './chat.js';
-import { diagnosticProjets, type Diapositive, type Projet } from './schema.js';
+import { ChatIndisponible, envoyerMessage, finirAttente } from './chat.js';
+import { diagnosticProjets, type Demande, type Diapositive, type Projet } from './schema.js';
 import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
 
 // Support d'ouverture : le pilote demande, le runner fait préparer ou archiver le deck par Claude
@@ -32,6 +32,61 @@ export function demanderSupport(
         throw new ChatIndisponible("Aucun deck n'est encore enregistré pour ce projet.");
     },
   });
+}
+
+// Début du message qui lance la capitalisation des règles à partir du support final.
+export const DEBUT_MESSAGE_REGLES_SUPPORT = 'Capitaliser le support final';
+
+// Claude compare le support final aux supports finaux précédents, met à jour la fiche de règles du
+// support dans le second cerveau et déclare ses changements au journal.
+export function demanderCapitalisationSupport(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<ProjetVue> {
+  return envoyerMessage(db, instance, id, `${DEBUT_MESSAGE_REGLES_SUPPORT}.`, {
+    type: 'regles_support',
+    etape: 1,
+    verifier: (projet) => {
+      if (projet.supportStatut !== 'final' || !projet.supportTexte?.length)
+        throw new ChatIndisponible("Archivez d'abord le support final de ce projet.");
+    },
+  });
+}
+
+// Après une demande « support final », la capitalisation suit d'elle-même. Si Claude répond déjà ou
+// si le support n'est pas final, rien ne part : le pilote peut la relancer à la main.
+export async function capitaliserSiSupportFinal(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  demandeTerminee: Demande | null,
+): Promise<void> {
+  if (demandeTerminee !== 'support_final') return;
+  try {
+    await demanderCapitalisationSupport(db, instance, id);
+  } catch (error) {
+    if (!(error instanceof ChatIndisponible)) throw error;
+  }
+}
+
+// Fin du travail du runner sur un projet : clôt la demande, puis enchaîne la capitalisation d'un
+// support qui vient d'être archivé (sauf si le travail s'est arrêté en erreur).
+export async function finDeDemande(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  erreur?: string,
+): Promise<void> {
+  const demande = await withInstance(db, instance.id, async (tx) => {
+    const [projet] = await tx
+      .select({ demande: diagnosticProjets.demande })
+      .from(diagnosticProjets)
+      .where(eq(diagnosticProjets.id, id));
+    return projet?.demande ?? null;
+  });
+  await finirAttente(db, instance, id, erreur);
+  if (!erreur) await capitaliserSiSupportFinal(db, instance, id, demande);
 }
 
 // Rouvrir un support final pour le corriger : un nouveau « Support final » remplacera le texte.

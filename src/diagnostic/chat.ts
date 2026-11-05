@@ -5,6 +5,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { rapportsFinauxPour } from './finaux.js';
+import { supportsFinauxPour, texteDuSupport } from './supports-finaux.js';
 import { exporterDocParLien, type DriveDeps } from './drive.js';
 import { texteDuDocx } from './docx-texte.js';
 import { DEBUT_MESSAGE_ANNULATION, lireEntreeJournal } from './regles.js';
@@ -208,6 +209,17 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         drive && ((relireFinaux && p.demande === 'rapport') || p.demande === 'regles_rapport')
           ? await rapportsFinauxPour(db, instance, p.id, drive)
           : [];
+      // Supports d'ouverture : relus à la préparation si le réglage est actif, toujours comparés à la
+      // capitalisation.
+      const relireSupports = instance.config.diagnostic?.relireSupports !== false;
+      const supportsFinaux =
+        (relireSupports && p.demande === 'preparer_support') || p.demande === 'regles_support'
+          ? await supportsFinauxPour(db, instance, p.id)
+          : [];
+      const supportFinalTexte =
+        p.demande === 'regles_support' && p.supportTexte && p.supportTexte.length > 0
+          ? texteDuSupport(p.supportTexte)
+          : null;
       const finale = p.rapportLiens.find((l) => l.finale);
       let rapportFinalTexte: string | null = null;
       if (drive && finale && p.demande === 'regles_rapport') {
@@ -237,6 +249,9 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         ? await lireEntreeJournal(db, instance, idAnnulation)
         : null;
       sorties.push({
+        relireSupports,
+        supportsFinaux,
+        supportFinalTexte,
         relireFinaux,
         rapportsFinaux,
         rapportFinalTexte,

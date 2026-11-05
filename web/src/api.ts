@@ -1420,11 +1420,18 @@ export const marquerRapportFinal = (slug: string, id: string, lien: string, fina
     { lien, finale },
   );
 // Réglage du module Diagnostic : relire les deux derniers rapports finaux avant de rédiger.
-export type ReglagesDiag = { relireFinaux: boolean };
+export type ReglagesDiag = { relireFinaux: boolean; relireSupports: boolean };
 export const reglagesDiagnostic = (slug: string) =>
   getJson<ReglagesDiag>(inst(slug, 'diagnostic/reglages'));
-export const majReglagesDiagnostic = (slug: string, relireFinaux: boolean) =>
-  sendJson<ReglagesDiag>('PUT', inst(slug, 'diagnostic/reglages'), { relireFinaux });
+export const majReglagesDiagnostic = (slug: string, reglage: Partial<ReglagesDiag>) =>
+  sendJson<ReglagesDiag>('PUT', inst(slug, 'diagnostic/reglages'), reglage);
+// Capitalisation des règles à partir du support final archivé (étape 1).
+export const capitaliserSupportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/support/capitaliser`),
+    {},
+  );
 // Règles de rédaction apprises (journal), capitalisation à la demande et annulation d'une règle.
 export type EntreeReglesDiag = {
   id: string;

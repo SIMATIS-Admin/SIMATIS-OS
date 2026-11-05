@@ -8,13 +8,9 @@ import { createToken, resolveToken, revokeToken } from '../mcp/tokens.js';
 import { executions } from '../routines/schema.js';
 import { echangesAjout } from '../inbox/schema.js';
 import { demarrerEchange, EchangeInconnu, EchangeRefuse, finirEchange } from '../inbox/echanges.js';
-import {
-  attentesClaude,
-  ChatIndisponible,
-  demarrerAttente,
-  finirAttente,
-} from '../diagnostic/chat.js';
+import { attentesClaude, ChatIndisponible, demarrerAttente } from '../diagnostic/chat.js';
 import type { DriveDeps } from '../diagnostic/drive.js';
+import { finDeDemande } from '../diagnostic/support.js';
 import { and, eq } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
 import { CampagneInvalide } from '../prospection/campagnes.js';
@@ -203,7 +199,7 @@ export function registerRunnerApi(
     const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
     if (!parsed.success || !instance) return reply.code(404).send({ error: 'Instance inconnue' });
     if (parsed.data.tokenId) await revokeToken(db, parsed.data.tokenId);
-    await finirAttente(db, instance, request.params.id, parsed.data.erreur);
+    await finDeDemande(db, instance, request.params.id, parsed.data.erreur);
     return { ok: true };
   });
 
