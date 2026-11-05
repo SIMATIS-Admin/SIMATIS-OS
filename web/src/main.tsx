@@ -4,6 +4,7 @@ import { App } from './App.js';
 import './styles.css';
 import './cockpit.css';
 import './diagnostics.css';
+import './interface.css';
 
 const root = document.getElementById('root');
 if (root) {

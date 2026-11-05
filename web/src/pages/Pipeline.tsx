@@ -113,7 +113,15 @@ function Card({
       className={`card ${inactive ? 'inactive' : ''}`}
       draggable={draggable}
       tabIndex={0}
+      role="button"
+      aria-label={`Ouvrir ${o.titre}`}
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
       onDragStart={(e) => e.dataTransfer.setData(OPP_MIME, o.id)}
     >
       <div className="soc">
@@ -368,6 +376,9 @@ export function Pipeline({ slug }: { slug: string }) {
   const [mode, setMode] = useState<'board' | 'liste' | 'matrice'>('board');
   const [cloture, setCloture] = useState<{ id: string; r: 'gagne' | 'perdu' } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState('');
+  const [activite, setActivite] = useState('toutes');
+  const [afficherCloses, setAfficherCloses] = useState(false);
   const [over, setOver] = useState<string | null>(null);
   const [nouvelle, setNouvelle] = useState<string | null>(null);
 
@@ -392,10 +403,30 @@ export function Pipeline({ slug }: { slug: string }) {
       (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
     );
   const find = (id: string) => data.opportunites.find((o) => o.id === id);
-  const ouvertes = data.opportunites.filter((o) => !o.clos);
+  const normaliser = (v: string) =>
+    v
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+  const visibles = data.opportunites.filter((o) => {
+    const correspond = normaliser([o.titre, o.entreprise, o.contact].join(' ')).includes(
+      normaliser(recherche.trim()),
+    );
+    const activityMatch =
+      activite === 'toutes' ||
+      (!o.clos &&
+        (activite === 'retard'
+          ? o.prochaine?.enRetard
+          : activite === 'sans'
+            ? !o.prochaine
+            : (o.joursInactif ?? 0) > data.inactiviteJours));
+    return correspond && activityMatch;
+  });
+  const ouvertes = visibles.filter((o) => !o.clos);
 
   const drop = (cible: string) => (e: DragEvent) => {
     e.preventDefault();
+    if (!data.ecrit) return;
     setOver(null);
     const id = e.dataTransfer.getData(OPP_MIME);
     const o = find(id);
@@ -500,8 +531,59 @@ export function Pipeline({ slug }: { slug: string }) {
   // Pipedrive: a card opens the deal page.
   const ouvrir = (id: string) => (location.hash = `#/${slug}/fiche/affaire/${id}`);
   return (
-    <>
-      <div className="page-actions">
+    <section className="pipeline-page" aria-label="Gestion du pipeline">
+      <div className="pipeline-toolbar">
+        <div className="seg" aria-label="Vue du pipeline">
+          {(['board', 'liste', 'matrice'] as const).map((vue) => (
+            <button
+              key={vue}
+              className={mode === vue ? 'on' : ''}
+              aria-pressed={mode === vue}
+              onClick={() => setMode(vue)}
+            >
+              <Icon name={vue === 'board' ? 'kanban' : vue === 'liste' ? 'list' : 'radar'} />
+              {vue === 'board' ? 'Étapes' : vue === 'liste' ? 'Liste' : 'Matrice'}
+            </button>
+          ))}
+        </div>
+        {data.ecrit && data.etapes[0] && (
+          <button className="btn primary" onClick={() => setNouvelle(data.etapes[0]!.id)}>
+            + Affaire
+          </button>
+        )}
+        <label className="pipeline-search">
+          <Icon name="search" />
+          <input
+            className="input"
+            type="search"
+            aria-label="Rechercher dans le pipeline"
+            placeholder="Rechercher une affaire…"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+          />
+        </label>
+        <select
+          className="input pipeline-filter"
+          aria-label="Filtrer les activités"
+          value={activite}
+          onChange={(e) => setActivite(e.target.value)}
+        >
+          <option value="toutes">Toutes les activités</option>
+          <option value="retard">Activités en retard</option>
+          <option value="sans">Sans activité prévue</option>
+          <option value="inactives">Affaires inactives</option>
+        </select>
+        {mode === 'board' && (
+          <button
+            className="btn"
+            aria-pressed={afficherCloses}
+            onClick={() => setAfficherCloses(!afficherCloses)}
+          >
+            {afficherCloses ? 'Masquer les clôturées' : 'Voir les clôturées'}
+          </button>
+        )}
+      </div>
+      <div className="page-actions pipeline-settings">
         {data.source === 'hubspot' && (
           <>
             <span className="badge blue">Miroir HubSpot, {depuis(data.derniereSynchro)}</span>
@@ -539,17 +621,6 @@ export function Pipeline({ slug }: { slug: string }) {
           />
           <Tip text="Une opportunité ouverte sans activité faite depuis ce nombre de jours est bordée de rouge. Icône verte : prochaine activité planifiée ; rouge : activité en retard ; alerte : aucune activité prévue." />
         </label>
-        <div className="seg">
-          <button className={mode === 'board' ? 'on' : ''} onClick={() => setMode('board')}>
-            Étapes
-          </button>
-          <button className={mode === 'liste' ? 'on' : ''} onClick={() => setMode('liste')}>
-            Liste
-          </button>
-          <button className={mode === 'matrice' ? 'on' : ''} onClick={() => setMode('matrice')}>
-            Matrice
-          </button>
-        </div>
       </div>
       {data.source === 'hubspot' && !data.ecrit && (
         <div className="alert amber" style={{ marginBottom: 12 }}>
@@ -591,24 +662,51 @@ export function Pipeline({ slug }: { slug: string }) {
               ),
               arrow(k),
             ])}
-            {col(
-              'gagne',
-              'Gagnées',
-              data.opportunites.filter((o) => o.clos === 'gagne'),
-              'won closed',
-            )}
-            {col(
-              'perdu',
-              'Perdues',
-              data.opportunites.filter((o) => o.clos === 'perdu'),
-              'lost closed',
-            )}
+            {afficherCloses &&
+              col(
+                'gagne',
+                'Gagnées',
+                visibles.filter((o) => o.clos === 'gagne'),
+                'won closed',
+              )}
+            {afficherCloses &&
+              col(
+                'perdu',
+                'Perdues',
+                visibles.filter((o) => o.clos === 'perdu'),
+                'lost closed',
+              )}
           </div>
+          {ouvertes.length === 0 && (
+            <p className="pipeline-empty" role="status">
+              Aucune affaire ouverte ne correspond à cette vue.
+            </p>
+          )}
+          {data.ecrit && (
+            <div className="pipeline-closing" aria-label="Clôturer une affaire par glisser-déposer">
+              <span>Glisser une affaire pour la clôturer</span>
+              {(['gagne', 'perdu'] as const).map((resultat) => (
+                <div
+                  key={resultat}
+                  className={`pipeline-drop ${resultat} ${over === resultat ? 'drop' : ''}`}
+                  onDragOver={(e) => {
+                    if (!e.dataTransfer.types.includes(OPP_MIME)) return;
+                    e.preventDefault();
+                    setOver(resultat);
+                  }}
+                  onDragLeave={() => setOver(null)}
+                  onDrop={drop(resultat)}
+                >
+                  {resultat === 'gagne' ? 'Gagnée' : 'Perdue'}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       ) : mode === 'liste' ? (
         <Tableau
           cle="affaires"
-          lignes={data.opportunites}
+          lignes={visibles}
           titre={(o) => o.titre}
           onOuvrir={(o) => ouvrir(o.id)}
           onModifier={() => Promise.resolve()}
@@ -693,6 +791,6 @@ export function Pipeline({ slug }: { slug: string }) {
           }}
         />
       )}
-    </>
+    </section>
   );
 }
