@@ -32,6 +32,7 @@ export function Mouvements({
   onDupliquer,
   onRetirer,
   onMarquerFacturee,
+  onVoirFactures,
   onAjouter,
 }: {
   mouvements: Mouvement[];
@@ -45,6 +46,7 @@ export function Mouvements({
   onDupliquer: (m: Mouvement) => void;
   onRetirer: (m: Mouvement) => void;
   onMarquerFacturee: (r: OccurrenceRevenu) => void;
+  onVoirFactures: () => void;
   onAjouter: (filtre: FiltreMouvement) => void;
 }) {
   const [type, setType] = useState<FiltreMouvement>(filtreInitial);
@@ -78,6 +80,9 @@ export function Mouvements({
           <div className="panel-h">
             <h2>Factures à émettre (30 prochains jours)</h2>
             <span className="badge amber">{aFacturer.length}</span>
+            <button className="btn sm" onClick={onVoirFactures}>
+              Voir par mandat
+            </button>
           </div>
           <table className="tbl">
             <tbody>

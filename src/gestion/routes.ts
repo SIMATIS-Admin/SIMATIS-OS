@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { FichierIllisible, lireFichier, type Feuille } from '../base-vivante/lecture.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
-import { getInstanceBySlug } from '../instances/service.js';
+import { getInstanceBySlug, SLUG } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import { analyserImport, validerImport } from './import.js';
 import { ImportInvalide } from './import-pennylane.js';
@@ -14,6 +14,8 @@ import {
   mouvementSchema,
   suiviCca,
 } from './cca.js';
+import { facturesParMandat } from './factures.js';
+import { delaiMandatSchema, ecrireDelaiMandat, lireDelaisMandats } from './mandats.js';
 import {
   aboSchema,
   archiverLieu,
@@ -497,6 +499,39 @@ export function registerGestionRoutes(app: FastifyInstance, deps: { db: Database
       return r;
     });
   });
+
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/gestion/factures', async (req, rep) =>
+    dansGestion(req.params.slug, rep, (tx) => facturesParMandat(tx)),
+  );
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/gestion/mandats/reglages', async (req, rep) =>
+    dansGestion(req.params.slug, rep, async (tx) =>
+      [...(await lireDelaisMandats(tx))].map(([mandat, delaiPaiementJours]) => ({
+        mandat,
+        delaiPaiementJours,
+      })),
+    ),
+  );
+  app.put<{ Params: { slug: string; mandat: string } }>(
+    '/api/i/:slug/gestion/mandats/:mandat/reglages',
+    async (request, reply) => {
+      const corps = delaiMandatSchema.safeParse(request.body);
+      if (!corps.success || !SLUG.test(request.params.mandat)) return invalide(reply);
+      return dansGestion(request.params.slug, reply, async (tx, instanceId) => {
+        await ecrireDelaiMandat(
+          tx,
+          instanceId,
+          request.params.mandat,
+          corps.data.delaiPaiementJours,
+        );
+        await logEvent(tx, {
+          acteur: 'pilote',
+          action: 'Délai de paiement d’un mandat modifié dans Gestion',
+          niveau: 'L2',
+        });
+        return { ok: true };
+      });
+    },
+  );
 
   app.get<{ Params: { slug: string }; Querystring: { mois?: string } }>(
     '/api/i/:slug/gestion/tva',
