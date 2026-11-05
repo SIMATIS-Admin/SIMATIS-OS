@@ -274,6 +274,69 @@ describe('Entretien : API', () => {
     expect(mauvais.statusCode).toBe(400);
   });
 
+  it('valider la revue lance la capitalisation, une seule fois par validation', async () => {
+    const projet = await creerProjet('Revue capitalisation API');
+    const url = `/api/i/simatis/diagnostic/projets/${projet.id}`;
+    const patch = (payload: Record<string, unknown>) =>
+      app.inject({ method: 'PATCH', url, payload });
+    const demande = async () =>
+      (await app.inject({ method: 'GET', url: '/api/i/simatis/diagnostic/projets' }))
+        .json<{ id: string; demande: string | null }[]>()
+        .find((p) => p.id === projet.id)!.demande;
+    const repos = () =>
+      t.owner.db
+        .update(diagnosticProjets)
+        .set({ demande: null, statutChat: 'repos' })
+        .where(eq(diagnosticProjets.id, projet.id));
+    expect((await patch({ revue: { statut: 'brouillon' } })).statusCode).toBe(200);
+    expect(await demande()).toBeNull();
+    const valide = await patch({ revue: { statut: 'validée' } });
+    expect(valide.statusCode).toBe(200);
+    expect(await demande()).toBe('regles_analyse');
+    await repos();
+    // Une mise à jour qui garde la revue validée, ou qui change autre chose, ne lance rien.
+    await patch({ revue: { statut: 'validée', indicateurs: 'x' } });
+    await patch({ contexte: 'Autre contexte fictif' });
+    expect(await demande()).toBeNull();
+    // Revue modifiée (retour en brouillon) puis revalidée : une nouvelle capitalisation.
+    await patch({ revue: { statut: 'brouillon' } });
+    await patch({ revue: { statut: 'validée' } });
+    expect(await demande()).toBe('regles_analyse');
+  });
+
+  it('valider la revue pendant que Claude répond garde la revue validée sans erreur', async () => {
+    const projet = await creerProjet('Revue occupée API');
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({ statutChat: 'attente_claude' })
+      .where(eq(diagnosticProjets.id, projet.id));
+    const r = await app.inject({
+      method: 'PATCH',
+      url: `/api/i/simatis/diagnostic/projets/${projet.id}`,
+      payload: { revue: { statut: 'validée' } },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json<{ revue: { statut: string } }>().revue.statut).toBe('validée');
+  });
+
+  it('capitaliser l analyse : refusé sans revue validée, lancé avec, 400 sur identifiant invalide', async () => {
+    const projet = await creerProjet('Revue capitaliser API');
+    const url = `/api/i/simatis/diagnostic/projets/${projet.id}/revue/capitaliser`;
+    expect((await app.inject({ method: 'POST', url })).statusCode).toBe(409);
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({ revue: { statut: 'validée' } })
+      .where(eq(diagnosticProjets.id, projet.id));
+    const ok = await app.inject({ method: 'POST', url });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json<{ demande: string }>().demande).toBe('regles_analyse');
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/revue/capitaliser',
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
   it('refuse un identifiant de projet mal formé', async () => {
     const r = await app.inject({
       method: 'POST',

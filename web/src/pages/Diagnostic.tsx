@@ -14,6 +14,7 @@ import {
   envoyerRapportDriveDiag,
   importerRapportDiag,
   annulerRegleDiag,
+  capitaliserAnalyseDiag,
   capitaliserRapportDiag,
   capitaliserSupportDiag,
   journalReglesDiag,
@@ -420,7 +421,15 @@ export function ProjetVue({
               onErreur={onErreur}
             />
           )}
-          {projet.etape === 3 && <Revue projet={projet} onSauver={sauver} />}
+          {projet.etape === 3 && (
+            <Revue
+              slug={slug}
+              projet={projet}
+              onSauver={sauver}
+              onChange={onChange}
+              onErreur={onErreur}
+            />
+          )}
           {projet.etape === 4 && (
             <Rapport slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
           )}
@@ -550,6 +559,7 @@ const NOMS_FICHES_REGLES = {
   rapport: 'règles du rapport',
   communes: 'règles communes',
   support: 'règles du support',
+  analyse: 'règles d’analyse',
 } as const;
 
 function Support({
@@ -839,7 +849,26 @@ function Resultat({
   );
 }
 
-function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
+function Revue({
+  slug,
+  projet,
+  onSauver,
+  onChange,
+  onErreur,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onSauver: Sauver;
+  onChange: (p: ProjetDiag) => void;
+  onErreur: (m: string) => void;
+}) {
+  const capitaliser = async () => {
+    try {
+      onChange(await capitaliserAnalyseDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   if (!projet.dims) {
     return (
       <div className="panel empty">
@@ -883,6 +912,15 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
             >
               Valider la revue
             </button>
+            {projet.revue.statut === 'validée' && (
+              <button
+                className="btn"
+                disabled={projet.statutChat !== 'repos'}
+                onClick={() => void capitaliser()}
+              >
+                Capitaliser cette analyse
+              </button>
+            )}
           </div>
           <EditeurRevue revue={projet.revue} onChange={(revue) => void onSauver({ revue })} />
         </>

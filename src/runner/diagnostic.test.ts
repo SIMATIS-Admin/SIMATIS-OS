@@ -6,6 +6,7 @@ import {
   depuisDerniereProduction,
   outilsCapitalisation,
   outilsEntretien,
+  FICHE_REGLES_ANALYSE,
   FICHE_REGLES_COMMUNES,
   FICHE_REGLES_RAPPORT,
   FICHE_REGLES_SUPPORT,
@@ -19,6 +20,7 @@ import {
   promptEntretien,
   promptAnnulerRegle,
   promptRapport,
+  promptReglesAnalyse,
   promptReglesRapport,
   promptReglesSupport,
   promptExportRestitution,
@@ -70,6 +72,8 @@ const attente: AttenteDiag = {
   relireSupports: true,
   supportsFinaux: [],
   supportFinalTexte: null,
+  revueValideeTexte: null,
+  revuesValidees: [],
   restitutionLien: null,
   restitutionAvecProposition: true,
   proposition: null,
@@ -946,5 +950,75 @@ describe("Règles de rédaction du support d'ouverture par le runner", () => {
       },
     });
     expect(texte).toContain(FICHE_REGLES_SUPPORT);
+  });
+});
+
+describe("Règles d'analyse de la revue par le runner", () => {
+  const regles: AttenteDiag = {
+    ...attente,
+    etape: 3,
+    etapeMessage: 3,
+    demande: 'regles_analyse',
+    revueValideeTexte:
+      'Préconisation fictive — proposé : Texte proposé fictif — choix : remplacer — texte du pilote : Texte du pilote fictif',
+    revuesValidees: [
+      { nom: 'Revue validée 1', texte: 'Préconisation précédente fictive — choix : garder' },
+    ],
+  };
+
+  it('donne la revue validée, les précédentes, les fiches et les règles du jeu', () => {
+    const texte = promptReglesAnalyse(regles);
+    expect(texte).toContain('Texte du pilote fictif');
+    expect(texte).toContain('Préconisation précédente fictive');
+    expect(texte).toContain(FICHE_REGLES_ANALYSE);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/au moins deux revues validées/);
+    expect(texte).toMatch(/ne la supprime jamais/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+    expect(texte).toMatch(/garde.*remplace.*retire/is);
+    expect(texte).toContain(`projetId ${regles.id}`);
+    expect(texte).toContain('enregistrer_regles_rapport');
+    expect(texte).toMatch(/fiche « analyse »/);
+  });
+
+  it('sans revue précédente, le dit sans afficher null', () => {
+    const texte = promptReglesAnalyse({ ...regles, revuesValidees: [] });
+    expect(texte).toMatch(/Aucune autre revue validée/);
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  it('sans texte proposé, compare seulement aux autres revues', () => {
+    const texte = promptReglesAnalyse({
+      ...regles,
+      revueValideeTexte: 'Préconisation fictive — choix : non précisé',
+    });
+    expect(texte).toMatch(/pas de texte proposé/i);
+    expect(texte).toMatch(/n'invente aucune proposition/);
+  });
+
+  it('une revue absente est signalée', () => {
+    const texte = promptReglesAnalyse({ ...regles, revueValideeTexte: null });
+    expect(texte).toMatch(/revue validée.*indisponible/i);
+  });
+
+  it('l annulation d une règle de la fiche d analyse cite cette fiche', () => {
+    const texte = promptAnnulerRegle({
+      ...regles,
+      demande: 'regles_annuler',
+      regleAAnnuler: {
+        id: '00000000-0000-4000-8000-0000000000cc',
+        libelle: 'Libellé fictif',
+        avant: null,
+        apres: 'Texte fictif',
+        fiche: 'analyse',
+      },
+    });
+    expect(texte).toContain(FICHE_REGLES_ANALYSE);
+  });
+
+  it('le rapport lit aussi la fiche des règles d analyse', () => {
+    expect(promptRapport({ ...regles, demande: 'rapport' }, '/cerveau-fictif')).toContain(
+      FICHE_REGLES_ANALYSE,
+    );
   });
 });

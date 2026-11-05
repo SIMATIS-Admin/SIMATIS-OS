@@ -5,6 +5,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { rapportsFinauxPour } from './finaux.js';
+import { resumeRevue, revuesValideesPour } from './revues-validees.js';
 import { supportsFinauxPour, texteDuSupport } from './supports-finaux.js';
 import { exporterDocParLien, type DriveDeps } from './drive.js';
 import { texteDuDocx } from './docx-texte.js';
@@ -220,6 +221,11 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         p.demande === 'regles_support' && p.supportTexte && p.supportTexte.length > 0
           ? texteDuSupport(p.supportTexte)
           : null;
+      // Analyse : la revue validée du projet et les deux précédentes, pour la capitalisation.
+      const revueValideeTexte =
+        p.demande === 'regles_analyse' && p.revue ? resumeRevue(p.revue) : null;
+      const revuesValidees =
+        p.demande === 'regles_analyse' ? await revuesValideesPour(db, instance, p.id) : [];
       const finale = p.rapportLiens.find((l) => l.finale);
       let rapportFinalTexte: string | null = null;
       if (drive && finale && p.demande === 'regles_rapport') {
@@ -249,6 +255,8 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         ? await lireEntreeJournal(db, instance, idAnnulation)
         : null;
       sorties.push({
+        revueValideeTexte,
+        revuesValidees,
         relireSupports,
         supportsFinaux,
         supportFinalTexte,

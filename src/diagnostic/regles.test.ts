@@ -219,6 +219,19 @@ describe('Journal des règles de rédaction', () => {
       expect(e).toMatchObject({ fiche: 'support', origine: 'version finale 4' });
     });
 
+    it('une demande de règles d analyse écrit avec l origine « analyse validée »', async () => {
+      const id = await projetEn('Atelier Outil K', 'regles_analyse');
+      await enregistrer(id, {
+        changements: [{ ...regle('Garder le plan d action sans le reformuler'), fiche: 'analyse' }],
+      });
+      const [e] = await listerJournalRegles(t.app.db, simatis, 1);
+      expect(e).toMatchObject({
+        fiche: 'analyse',
+        libelle: 'Garder le plan d action sans le reformuler',
+      });
+      expect(e!.origine).toBe('analyse validée');
+    });
+
     it('refuse sans aucune des demandes de règles', async () => {
       const id = await projetEn('Atelier Outil J', 'support_final');
       await expect(

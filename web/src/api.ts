@@ -1425,6 +1425,13 @@ export const reglagesDiagnostic = (slug: string) =>
   getJson<ReglagesDiag>(inst(slug, 'diagnostic/reglages'));
 export const majReglagesDiagnostic = (slug: string, reglage: Partial<ReglagesDiag>) =>
   sendJson<ReglagesDiag>('PUT', inst(slug, 'diagnostic/reglages'), reglage);
+// Capitalisation des règles à partir de la revue validée (étape 3).
+export const capitaliserAnalyseDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/revue/capitaliser`),
+    {},
+  );
 // Capitalisation des règles à partir du support final archivé (étape 1).
 export const capitaliserSupportDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(
@@ -1437,7 +1444,7 @@ export type EntreeReglesDiag = {
   id: string;
   le: string;
   projetId: string;
-  fiche: 'rapport' | 'communes';
+  fiche: 'rapport' | 'communes' | 'support' | 'analyse';
   action: 'ajoutée' | 'durcie' | 'modifiée' | 'signalée' | 'annulée';
   libelle: string;
   avant: string | null;

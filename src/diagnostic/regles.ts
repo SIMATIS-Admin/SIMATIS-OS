@@ -161,7 +161,11 @@ export async function enregistrerReglesRapport(
   }
   const changements = charge.changements ?? [];
   if (changements.length === 0) return;
-  if (projet.demande !== 'regles_rapport' && projet.demande !== 'regles_support')
+  if (
+    projet.demande !== 'regles_rapport' &&
+    projet.demande !== 'regles_support' &&
+    projet.demande !== 'regles_analyse'
+  )
     throw new SupportInvalide("Le pilote n'a pas demandé de capitalisation des règles.");
   if (changements.length > CHANGEMENTS_MAX)
     throw new SupportInvalide(`Trop de changements d'un coup (${CHANGEMENTS_MAX} au plus).`);
@@ -178,9 +182,11 @@ export async function enregistrerReglesRapport(
     projetId,
     projet.demande === 'regles_support'
       ? 'support final'
-      : finale?.version
-        ? `version finale ${finale.version}`
-        : 'version finale',
+      : projet.demande === 'regles_analyse'
+        ? 'analyse validée'
+        : finale?.version
+          ? `version finale ${finale.version}`
+          : 'version finale',
     changements,
   );
 }
