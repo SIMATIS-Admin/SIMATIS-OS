@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Contact, FicheDetail, SemaineTaches } from '../../api.js';
+import { Entreprises } from '../Entreprises.js';
 import { Contacts } from '../Contacts.js';
 import { Fiche } from '../Fiche.js';
 import { ApercuCommercial } from './Apercu.js';
@@ -87,6 +88,55 @@ describe('Parcours commerciaux', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('ouvre les entreprises en liste et isole celles sans contact', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('/entreprises?q=')
+          ? reponse([
+              {
+                id: 'e1',
+                nom: 'Société exemple',
+                nbContacts: 1,
+                oppsOuvertes: 0,
+                montantOuvert: 0,
+                montantMensuelOuvert: 0,
+              },
+              {
+                id: 'e3',
+                nom: 'Entreprise HubSpot 12345',
+                nbContacts: 1,
+                oppsOuvertes: 0,
+                montantOuvert: 0,
+                montantMensuelOuvert: 0,
+              },
+              {
+                id: 'e2',
+                nom: 'Société sans interlocuteur',
+                nbContacts: 0,
+                oppsOuvertes: 0,
+                montantOuvert: 0,
+                montantMensuelOuvert: 0,
+              },
+            ])
+          : reponse([]),
+      ),
+    );
+    render(<Entreprises slug="test" />);
+    await screen.findByText('Société exemple');
+    expect(screen.getByRole('button', { name: 'Liste' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Sans contact' }));
+    expect(screen.queryByText('Société exemple')).toBeNull();
+    expect(screen.getByText('Société sans interlocuteur')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Nom à renseigner' }));
+    expect(screen.getByText('Entreprise HubSpot 12345')).toBeTruthy();
+    expect(screen.queryByText('Société sans interlocuteur')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Cartes' }));
+    expect(screen.getByRole('button', { name: 'Cartes' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
   });
 
   it('filtre les contacts, conserve la recherche et ouvre un aperçu au clavier', async () => {

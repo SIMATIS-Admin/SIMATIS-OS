@@ -43,13 +43,14 @@ export function AdressesEmail({
   };
   if (!modifiable && emails.length < 2) return null;
   return (
-    <div className="fi-champ" aria-label="Adresses email">
+    <div className="fi-champ fi-emails" aria-label="Adresses email">
       <span className="muted small">Adresses email</span>
       <ul className="fi-liste">
         {emails.map((a) => (
           <li key={a.email} className="fi-ligne">
-            <span>
-              {a.email} {a.principal && <span className="badge">Principale</span>}
+            <span className="fi-email-adresse">
+              <span>{a.email}</span>{' '}
+              {a.principal && <span className="badge green">Principale</span>}
             </span>
             {modifiable && (
               <span>
@@ -77,17 +78,17 @@ export function AdressesEmail({
         ))}
       </ul>
       {modifiable && (
-        <form onSubmit={ajouter} className="decision">
+        <form onSubmit={ajouter} className="fi-email-ajout">
           <input
             className="input"
             type="email"
-            aria-label="Ajouter une adresse"
-            placeholder="Ajouter une adresse"
+            aria-label="Nouvelle adresse email"
+            placeholder="nom@entreprise.fr"
             value={nouvelle}
             onChange={(e) => setNouvelle(e.target.value)}
           />
           <button className="btn sm" type="submit">
-            Ajouter
+            Ajouter une adresse email
           </button>
         </form>
       )}

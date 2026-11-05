@@ -18,7 +18,7 @@ import {
   type FicheDetail,
   type KindFiche,
 } from '../api.js';
-import { engagement, eur, montantEur } from '../crm.js';
+import { eur, montantEur } from '../crm.js';
 import type { InstanceSummary } from '../nav.js';
 import { Icon } from '../icons.js';
 import { ActionsFiche } from './liens/ActionsFiche.js';
@@ -124,7 +124,7 @@ function ChampEditable({
     if (e.key === 'Escape') setEdition(false);
   };
   return (
-    <div className="fi-champ">
+    <div className={`fi-champ ${champ.type === 'email' ? 'fi-champ-large' : ''}`}>
       <span className="muted small">{champ.label}</span>
       {edition ? (
         <input
@@ -139,9 +139,11 @@ function ChampEditable({
         />
       ) : (
         <span className="fi-valeur">
-          {(champ.affiche ? champ.affiche(valeur) : enTexte(valeur)) || (
-            <span className="muted">—</span>
-          )}
+          <span>
+            {(champ.affiche ? champ.affiche(valeur) : enTexte(valeur)) || (
+              <span className="muted">—</span>
+            )}
+          </span>
           {modifiable && (
             <button
               className="btn ghost sm"
@@ -540,8 +542,7 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                   }
                 />
                 {f.probabiliteManuelle != null && (
-                  <div className="fi-champ">
-                    <span />
+                  <div className="fi-champ fi-champ-action">
                     <button
                       type="button"
                       className="btn ghost sm"
@@ -599,8 +600,8 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                       value={mode}
                       onChange={(e) => modifier({ modeFacturation: e.target.value })}
                     >
-                      <option value="spot">Spot (montant unique)</option>
-                      <option value="recurrent">Récurrent (abonnement mensuel)</option>
+                      <option value="spot">Ponctuelle</option>
+                      <option value="recurrent">Récurrente mensuelle</option>
                     </select>
                   </span>
                 </div>
@@ -631,16 +632,21 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                     </span>
                   </div>
                   {f.montant ? (
-                    <p className="small muted">
-                      {engagement({
-                        montant: Number(f.montant),
-                        modeFacturation: mode,
-                        dureeEngagementMois: Number(f.dureeEngagementMois ?? 12),
-                        taciteReconduction: f.taciteReconduction !== false,
-                      })}
-                      {' : '}
-                      {eur(Number(f.montant) * Number(f.dureeEngagementMois ?? 12))} engagés
-                    </p>
+                    <div className="fi-engagement">
+                      <span className="small">Montant total de l’engagement</span>
+                      <strong>
+                        {eur(Number(f.montant) * Number(f.dureeEngagementMois ?? 12))}
+                      </strong>
+                      <span className="small muted">
+                        {eur(Number(f.montant))} par mois × {Number(f.dureeEngagementMois ?? 12)}{' '}
+                        mois
+                      </span>
+                      <span className="small">
+                        {f.taciteReconduction !== false
+                          ? 'Renouvellement automatique en fin d’engagement'
+                          : 'Sans renouvellement automatique'}
+                      </span>
+                    </div>
                   ) : null}
                 </>
               )}
@@ -877,33 +883,39 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                 const [ico, lbl] = EVENEMENTS[e.type];
                 return (
                   <li key={e.id} className={`fi-evt ${e.type}`}>
-                    <span className="fi-ico" title={lbl}>
-                      <Icon name={ico} />
-                    </span>
+                    {e.type === 'compte_rendu' ? (
+                      <button
+                        type="button"
+                        className="fi-ico fi-deplier"
+                        title={
+                          reduits.has(e.id) ? 'Afficher le compte rendu' : 'Réduire le compte rendu'
+                        }
+                        aria-label={
+                          reduits.has(e.id) ? 'Afficher le compte rendu' : 'Réduire le compte rendu'
+                        }
+                        aria-expanded={!reduits.has(e.id)}
+                        onClick={() =>
+                          setReduits((avant) => {
+                            const apres = new Set(avant);
+                            if (apres.has(e.id)) apres.delete(e.id);
+                            else apres.add(e.id);
+                            return apres;
+                          })
+                        }
+                      >
+                        <Icon name={ico} />
+                      </button>
+                    ) : (
+                      <span className="fi-ico" title={lbl}>
+                        <Icon name={ico} />
+                      </span>
+                    )}
                     <div className="fi-evt-corps">
                       <div className="small muted">
                         {lbl} · {dateHeure(e.at)}
                         {e.origine === 'hubspot' ? ' · HubSpot' : ''}
                         {e.compte ? ` · ${e.compte}` : ''}
                       </div>
-                      {e.type === 'compte_rendu' && (
-                        <button
-                          className="btn ghost sm"
-                          aria-expanded={!reduits.has(e.id)}
-                          onClick={() =>
-                            setReduits((avant) => {
-                              const apres = new Set(avant);
-                              if (apres.has(e.id)) apres.delete(e.id);
-                              else apres.add(e.id);
-                              return apres;
-                            })
-                          }
-                        >
-                          {reduits.has(e.id)
-                            ? 'Afficher le compte rendu'
-                            : 'Réduire le compte rendu'}
-                        </button>
-                      )}
                       {e.titre && <b>{e.type === 'etape' ? `Étape : ${e.titre}` : e.titre}</b>}
                       {noteEditee?.id === e.id ? (
                         <>
