@@ -13,6 +13,9 @@ import {
   importerEntretienDiag,
   envoyerRapportDriveDiag,
   importerRapportDiag,
+  annulerRegleDiag,
+  capitaliserRapportDiag,
+  journalReglesDiag,
   majReglagesDiagnostic,
   marquerRapportFinal,
   reglagesDiagnostic,
@@ -26,6 +29,7 @@ import {
   type ChatEtape,
   type Dimensions,
   type Proposition,
+  type EntreeReglesDiag,
   type ProjetDiag,
   type ProjetDiagPatch,
 } from '../api.js';
@@ -929,6 +933,27 @@ function Rapport({
       onErreur(messageErreur(err));
     }
   };
+  // Règles de rédaction apprises : rechargées quand Claude a fini de répondre (statut du chat).
+  const [journal, setJournal] = useState<EntreeReglesDiag[]>([]);
+  useEffect(() => {
+    void Promise.resolve(journalReglesDiag(slug))
+      .then((r) => Array.isArray(r) && setJournal(r))
+      .catch(() => undefined);
+  }, [slug, projet.statutChat]);
+  const capitaliser = async () => {
+    try {
+      onChange(await capitaliserRapportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const annulerRegle = async (entree: string) => {
+    try {
+      onChange(await annulerRegleDiag(slug, projet.id, entree));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const marquerFinale = async (lien: string, finale: boolean) => {
     try {
       onChange(await marquerRapportFinal(slug, projet.id, lien, finale));
@@ -1061,6 +1086,47 @@ function Rapport({
               ))}
             </ul>
           </div>
+        )}
+        {versionsDrive.some((r) => r.finale) && (
+          <div className="diag-actions">
+            <button
+              className="btn"
+              disabled={enCours || projet.statutChat !== 'repos'}
+              onClick={() => void capitaliser()}
+            >
+              Capitaliser cette version
+            </button>
+          </div>
+        )}
+        {journal.length > 0 && (
+          <details>
+            <summary className="small">Règles apprises ({journal.length})</summary>
+            <ul className="small">
+              {journal.map((e) => (
+                <li key={e.id}>
+                  <span className="muted">
+                    {new Date(e.le).toLocaleDateString('fr-FR')} ·{' '}
+                    {e.fiche === 'communes' ? 'règles communes' : 'règles du rapport'} · {e.action}
+                    {e.statut === 'annule' ? ' (annulée)' : ''} :{' '}
+                  </span>
+                  {e.libelle}
+                  {e.motifRefus && (
+                    <span className="muted"> — non annulée : {e.motifRefus}</span>
+                  )}{' '}
+                  {e.statut === 'actif' && ['ajoutée', 'durcie', 'modifiée'].includes(e.action) && (
+                    <button
+                      className="btn"
+                      disabled={projet.statutChat !== 'repos'}
+                      aria-label={`Annuler la règle : ${e.libelle}`}
+                      onClick={() => void annulerRegle(e.id)}
+                    >
+                      Annuler
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
         {precedents.length > 0 && (
           <details>

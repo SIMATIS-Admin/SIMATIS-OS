@@ -1425,6 +1425,37 @@ export const reglagesDiagnostic = (slug: string) =>
   getJson<ReglagesDiag>(inst(slug, 'diagnostic/reglages'));
 export const majReglagesDiagnostic = (slug: string, relireFinaux: boolean) =>
   sendJson<ReglagesDiag>('PUT', inst(slug, 'diagnostic/reglages'), { relireFinaux });
+// Règles de rédaction apprises (journal), capitalisation à la demande et annulation d'une règle.
+export type EntreeReglesDiag = {
+  id: string;
+  le: string;
+  projetId: string;
+  fiche: 'rapport' | 'communes';
+  action: 'ajoutée' | 'durcie' | 'modifiée' | 'signalée' | 'annulée';
+  libelle: string;
+  avant: string | null;
+  apres: string | null;
+  origine: string;
+  statut: 'actif' | 'annule';
+  motifRefus: string | null;
+};
+export const journalReglesDiag = (slug: string) =>
+  getJson<EntreeReglesDiag[]>(inst(slug, 'diagnostic/regles-journal'));
+export const capitaliserRapportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/capitaliser`),
+    {},
+  );
+export const annulerRegleDiag = (slug: string, id: string, entree: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(
+      slug,
+      `diagnostic/projets/${encodeURIComponent(id)}/regles-journal/${encodeURIComponent(entree)}/annuler`,
+    ),
+    {},
+  );
 // Correction d'une réponse lue : le profil se recalcule côté OS.
 export const corrigerReponseDiag = (
   slug: string,

@@ -31,6 +31,9 @@ const api = vi.hoisted(() => ({
   envoyerRapportDriveDiag: vi.fn(),
   marquerRapportFinal: vi.fn(),
   reglagesDiagnostic: vi.fn(),
+  journalReglesDiag: vi.fn(),
+  capitaliserRapportDiag: vi.fn(),
+  annulerRegleDiag: vi.fn(),
   majReglagesDiagnostic: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
@@ -1345,5 +1348,96 @@ describe('Rapport : réglage Relire les finaux', () => {
     await ouvrir();
     const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
     await waitFor(() => expect(c.checked).toBe(false));
+  });
+});
+
+describe('Rapport : règles apprises', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const doc = 'https://docs.google.com/document/d/doc-4/edit';
+  const entree = (extra: Record<string, unknown> = {}) => ({
+    id: 'e1',
+    le: '2026-11-05T10:00:00.000Z',
+    projetId: 'p1',
+    fiche: 'rapport',
+    action: 'ajoutée',
+    libelle: 'Aucune proposition dans le rapport',
+    avant: null,
+    apres: 'Règle fictive',
+    origine: 'version finale 4',
+    statut: 'actif',
+    motifRefus: null,
+    ...extra,
+  });
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        profil: 'Joggeur',
+        aRapport: true,
+        rapportNom: 'Rapport - v4.docx',
+        rapportLienStatut: 'pret',
+        rapportLien: doc,
+        rapportLiens: [{ lien: doc, le: '2026-10-29T08:00:00.000Z', version: 4, finale: true }],
+        ...extra,
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+
+  it('liste les règles apprises avec leur libellé', async () => {
+    api.journalReglesDiag.mockResolvedValue([entree()]);
+    await ouvrir();
+    expect(await screen.findByText('Aucune proposition dans le rapport')).toBeTruthy();
+    expect(screen.getByText(/Règles apprises \(1\)/)).toBeTruthy();
+  });
+
+  it('annuler appelle l API, seulement sur une règle active et annulable', async () => {
+    api.journalReglesDiag.mockResolvedValue([
+      entree(),
+      entree({ id: 'e2', libelle: 'Déjà annulée', statut: 'annule' }),
+      entree({ id: 'e3', libelle: 'Contradiction fictive', action: 'signalée' }),
+    ]);
+    api.annulerRegleDiag.mockResolvedValue(projet({ etape: 4, etapeMax: 4, dims }));
+    await ouvrir();
+    await screen.findByText('Aucune proposition dans le rapport');
+    const boutons = screen.getAllByRole('button', { name: /^Annuler la règle/ });
+    expect(boutons).toHaveLength(1);
+    fireEvent.click(boutons[0]!);
+    await waitFor(() => expect(api.annulerRegleDiag).toHaveBeenCalledWith('simatis', 'p1', 'e1'));
+  });
+
+  it('affiche le motif quand une annulation n a pas pu se faire', async () => {
+    api.journalReglesDiag.mockResolvedValue([entree({ motifRefus: 'La fiche a changé depuis.' })]);
+    await ouvrir();
+    expect(await screen.findByText(/La fiche a changé depuis\./)).toBeTruthy();
+  });
+
+  it('affiche le message de l API quand l annulation est refusée', async () => {
+    api.journalReglesDiag.mockResolvedValue([entree()]);
+    api.annulerRegleDiag.mockRejectedValue(new Error('Cette règle n’est plus annulable.'));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('button', { name: /^Annuler la règle/ }));
+    expect(await screen.findByText(/n’est plus annulable/)).toBeTruthy();
+  });
+
+  it('« Capitaliser cette version » : absent sans finale, actif avec, désactivé pendant une production', async () => {
+    api.journalReglesDiag.mockResolvedValue([]);
+    await ouvrir({ rapportLiens: [{ lien: doc, le: '2026-10-29T08:00:00.000Z', version: 4 }] });
+    await screen.findByText(/Rapport remis au dirigeant/);
+    expect(screen.queryByRole('button', { name: 'Capitaliser cette version' })).toBeNull();
+    cleanup();
+    api.capitaliserRapportDiag.mockResolvedValue(projet({ etape: 4, etapeMax: 4, dims }));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('button', { name: 'Capitaliser cette version' }));
+    await waitFor(() => expect(api.capitaliserRapportDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    await ouvrir({ rapportLienStatut: 'en_cours' });
+    expect(
+      (await screen.findByRole<HTMLButtonElement>('button', { name: 'Capitaliser cette version' }))
+        .disabled,
+    ).toBe(true);
   });
 });
