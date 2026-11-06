@@ -24,6 +24,7 @@ import {
   grouper,
   lignesSuivies,
   paginer,
+  rattacher,
   resumerVma,
   type LigneEntreprise,
 } from './diagnostics/grouper.js';
@@ -139,8 +140,8 @@ export function Diagnostics({
         fetchTestsVma(slug),
       ]);
       setEntreprises(e);
-      setProjets(p);
-      setTests(t);
+      setProjets(rattacher(e, p, (x) => x.nom));
+      setTests(rattacher(e, t, (x) => x.entrepriseNom));
     } catch (err) {
       setErreur(messageErreur(err));
     }
@@ -288,7 +289,15 @@ export function Diagnostics({
             key={projet.id}
             slug={slug}
             projet={projet}
-            onChange={(maj) => setProjets((l) => l.map((p) => (p.id === maj.id ? maj : p)))}
+            onChange={(maj) =>
+              setProjets((l) =>
+                l.map((p) =>
+                  p.id === maj.id
+                    ? { ...maj, entrepriseId: maj.entrepriseId ?? p.entrepriseId }
+                    : p,
+                ),
+              )
+            }
             onRetour={() => setProjetOuvert(null)}
             onErreur={setErreur}
           />
