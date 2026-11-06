@@ -44,6 +44,7 @@ import {
   marquerDeckFinal,
   pptxRestitutionDe,
 } from '../diagnostic/restitution.js';
+import { demanderDossier } from '../diagnostic/dossier-export.js';
 import { demanderExportRevue } from '../diagnostic/revue-export.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
 import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
@@ -802,6 +803,21 @@ export function registerApi(
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
       try {
         return await demanderExportRevue(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Dossier de travail du rapport (étape 4) en artifact, à rouvrir dans Claude Chat.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/dossier',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderDossier(db, i, id);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });

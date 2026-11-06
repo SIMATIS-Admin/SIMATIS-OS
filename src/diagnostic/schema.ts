@@ -59,6 +59,8 @@ export const DEMANDES = [
   'rapport_cadrer',
   // Export de la revue validée (étape 3) en artifact claude.ai, à rouvrir dans Claude Chat.
   'revue_exporter',
+  // Dossier de travail du rapport (étape 4) en artifact, à rouvrir dans Claude Chat.
+  'dossier_exporter',
 ] as const;
 // Capitalisation de la restitution (étape 5) : 'en_cours' tant que Claude propose, 'propose' une fois
 // sa proposition dans le chat, 'enregistre' quand le pilote l'a validée et que Claude l'a écrite.
@@ -111,6 +113,11 @@ export const diagnosticProjets = pgTable(
       .notNull()
       .default('aucun'),
     revueExportLien: text('revue_export_lien'),
+    // Dossier de travail du rapport en artifact : même principe que l'export de la revue.
+    dossierExportStatut: text('dossier_export_statut', { enum: STATUTS_RAPPORT })
+      .notNull()
+      .default('aucun'),
+    dossierExportLien: text('dossier_export_lien'),
     // Dossier Drive du diagnostic (Google Docs du rapport) : créé à la première version envoyée.
     driveDossierId: text('drive_dossier_id'),
     // Versions du rapport rédigées par Claude (la dernière est le Word affiché). Un Word importé

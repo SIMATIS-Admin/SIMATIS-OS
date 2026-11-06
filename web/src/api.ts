@@ -1290,6 +1290,7 @@ export type ProjetDiag = {
     | 'restitution'
     | 'restitution_export'
     | 'revue_exporter'
+    | 'dossier_exporter'
     | 'capitalisation_proposer'
     | 'capitalisation_enregistrer'
     | 'entretien'
@@ -1315,6 +1316,9 @@ export type ProjetDiag = {
   // Export de la revue validée en artifact claude.ai, à rouvrir dans Claude Chat.
   revueExportStatut: 'aucun' | 'en_cours' | 'pret';
   revueExportLien: string | null;
+  // Dossier de travail du rapport en artifact claude.ai, à rouvrir dans Claude Chat.
+  dossierExportStatut: 'aucun' | 'en_cours' | 'pret';
+  dossierExportLien: string | null;
   restitutionStatut: 'aucun' | 'en_cours' | 'pret';
   restitutionLien: string | null;
   restitutionLiens: { lien: string; le: string; finale?: boolean }[];
@@ -1445,6 +1449,13 @@ export const exporterRevueDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/revue/exporter`),
+    {},
+  );
+// Dossier de travail du rapport en artifact (étape 4) : Claude le crée, le lien s'ouvre dans Claude Chat.
+export const preparerDossierRapportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/dossier`),
     {},
   );
 // Capitalisation des règles à partir de la revue validée (étape 3).

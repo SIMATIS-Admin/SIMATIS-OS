@@ -33,6 +33,8 @@ import {
   promptReglesSupport,
   promptExportRestitution,
   promptExportRevue,
+  promptDossierRapport,
+  outilsDossierRapport,
   outilsExportRevue,
   promptRestitution,
   promptSupport,
@@ -90,6 +92,7 @@ const attente: AttenteDiag = {
   revueEnCoursTexte: null,
   restitutionLien: null,
   revueExportLien: null,
+  dossierExportLien: null,
   restitutionAvecProposition: true,
   proposition: null,
   pdf: null,
@@ -553,6 +556,47 @@ describe('Production par le runner : modifications et deck', () => {
   it('les outils de l export de la revue : artifact et enregistrement, ni skill ni second cerveau', () => {
     const outils = outilsExportRevue(['/travail']);
     expect(outils).toContain('mcp__simatis__enregistrer_revue_export');
+    expect(outils).toContain('Artifact');
+    expect(outils).not.toContain('Skill');
+    expect(outils).not.toContain('cerveau');
+  });
+
+  it('le dossier de travail réunit les données, renvoie à la skill et aux fiches, ne copie rien du cerveau', () => {
+    const texte = promptDossierRapport({
+      ...restitution,
+      demande: 'dossier_exporter',
+      contexte: 'Contexte fictif',
+      dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
+      revue: {
+        statut: 'validée',
+        preconisations: { r1: { titre: 'Titre fictif', choix: 'retenue' } },
+      },
+    });
+    expect(texte).toContain('Contexte fictif');
+    expect(texte).toContain('Titre fictif');
+    expect(texte).toContain(SKILL_RAPPORT);
+    expect(texte).toContain('Word A4 en portrait');
+    expect(texte).toContain('quickstart');
+    expect(texte).toContain('enregistrer_dossier_rapport');
+    expect(texte).toContain(`projetId ${restitution.id}`);
+    expect(texte).toContain("N'y mets rien qui vienne du second cerveau");
+  });
+
+  it('le dossier de travail révise l artifact existant au lieu d en créer un autre', () => {
+    const texte = promptDossierRapport({
+      ...restitution,
+      demande: 'dossier_exporter',
+      dossierExportLien: 'https://claude.ai/artifact/DossierFictif0001',
+    });
+    expect(texte).toContain(
+      "révise l'artifact existant (https://claude.ai/artifact/DossierFictif0001)",
+    );
+    expect(texte).not.toContain('quickstart');
+  });
+
+  it('les outils du dossier : artifact et enregistrement, ni skill ni second cerveau', () => {
+    const outils = outilsDossierRapport(['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_dossier_rapport');
     expect(outils).toContain('Artifact');
     expect(outils).not.toContain('Skill');
     expect(outils).not.toContain('cerveau');

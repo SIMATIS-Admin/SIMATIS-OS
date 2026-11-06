@@ -39,6 +39,7 @@ const api = vi.hoisted(() => ({
   capitaliserAnalyseDiag: vi.fn(),
   preparerRevueDiag: vi.fn(),
   exporterRevueDiag: vi.fn(),
+  preparerDossierRapportDiag: vi.fn(),
   capitaliserRapportDiag: vi.fn(),
   annulerRegleDiag: vi.fn(),
   majReglagesDiagnostic: vi.fn(),
@@ -83,6 +84,8 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   rapportVersions: [],
   revueExportStatut: 'aucun',
   revueExportLien: null,
+  dossierExportStatut: 'aucun',
+  dossierExportLien: null,
   restitutionStatut: 'aucun',
   restitutionLien: null,
   restitutionLiens: [],
@@ -1898,5 +1901,52 @@ describe('Diagnostic : export de la revue pour Claude Chat', () => {
     const lien = await screen.findByRole('link', { name: 'Ouvrir la revue pour Claude Chat' });
     expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/RevueFictive0001');
     expect(screen.getByRole('button', { name: 'Mettre à jour l’export' })).toBeTruthy();
+  });
+});
+
+describe('Diagnostic : dossier de travail du rapport pour Claude Chat', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const preparer = { name: 'Préparer le dossier pour Claude Chat' };
+
+  it('désactivé sans résultat saisi', async () => {
+    await ouvrir({ dims: null, profil: null });
+    expect((await screen.findByRole<HTMLButtonElement>('button', preparer)).disabled).toBe(true);
+  });
+
+  it('appelle l API et affiche son refus', async () => {
+    api.preparerDossierRapportDiag.mockResolvedValue(projet({ etape: 4, etapeMax: 4, dims }));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('button', preparer));
+    await waitFor(() =>
+      expect(api.preparerDossierRapportDiag).toHaveBeenCalledWith('simatis', 'p1'),
+    );
+    cleanup();
+    api.preparerDossierRapportDiag.mockRejectedValue(new Error('Claude répond déjà.'));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('button', preparer));
+    expect(await screen.findByText(/Claude répond déjà/)).toBeTruthy();
+  });
+
+  it('pendant la préparation : message d attente et bouton désactivé', async () => {
+    await ouvrir({ dossierExportStatut: 'en_cours' });
+    expect(await screen.findByText(/Claude prépare le dossier de travail/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', preparer).disabled).toBe(true);
+  });
+
+  it('avec un lien : ouvre le dossier et propose la mise à jour', async () => {
+    await ouvrir({
+      dossierExportStatut: 'pret',
+      dossierExportLien: 'https://claude.ai/artifact/DossierFictif0001',
+    });
+    const lien = await screen.findByRole('link', { name: 'Ouvrir le dossier pour Claude Chat' });
+    expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/DossierFictif0001');
+    expect(screen.getByRole('button', { name: 'Mettre à jour le dossier' })).toBeTruthy();
   });
 });

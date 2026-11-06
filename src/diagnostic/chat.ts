@@ -149,6 +149,10 @@ export async function finirAttente(
       projet.demande === 'revue_exporter' && projet.revueExportStatut === 'en_cours'
         ? { revueExportStatut: projet.revueExportLien ? ('pret' as const) : ('aucun' as const) }
         : {};
+    const dossier =
+      projet.demande === 'dossier_exporter' && projet.dossierExportStatut === 'en_cours'
+        ? { dossierExportStatut: projet.dossierExportLien ? ('pret' as const) : ('aucun' as const) }
+        : {};
     // Proposition de capitalisation : validée dans le chat si Claude a répondu, sinon à refaire.
     const capitalisation =
       projet.demande === 'capitalisation_proposer' && projet.capitalisationStatut === 'en_cours'
@@ -165,6 +169,7 @@ export async function finirAttente(
           ...rapport,
           ...restitution,
           ...exportRevue,
+          ...dossier,
           ...capitalisation,
           demande: null,
         })
@@ -186,6 +191,7 @@ export async function finirAttente(
         ...rapport,
         ...restitution,
         ...exportRevue,
+        ...dossier,
         ...capitalisation,
         conversation: [...projet.conversation, absence],
         statutChat: 'repos',
@@ -342,6 +348,7 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         rapportNom: p.rapportNom,
         restitutionLien: p.restitutionLien,
         revueExportLien: p.revueExportLien,
+        dossierExportLien: p.dossierExportLien,
         restitutionAvecProposition: p.restitutionAvecProposition,
         proposition: p.proposition,
         // Le PDF de l'entretien ne voyage que pour sa lecture.
