@@ -384,7 +384,12 @@ export function Partenaires({ slug }: { slug: string }) {
   }, [slug]);
   useEffect(load, [load]);
 
-  if (!data) return error ? <div className="empty">{error}</div> : null;
+  if (!data)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {error ?? 'Chargement des partenaires…'}
+      </div>
+    );
   if (!data.actif) {
     return (
       <div className="empty">

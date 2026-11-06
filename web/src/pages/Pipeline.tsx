@@ -100,53 +100,76 @@ function Card({
   label,
   seuil,
   onOpen,
+  destinations,
+  onMove,
 }: {
   o: PipelineOpp;
   draggable: boolean;
   label: (id: string) => string;
   seuil: number;
   onOpen: () => void;
+  destinations: { id: string; label: string }[];
+  onMove?: (destination: string) => void;
 }) {
   const inactive = !o.clos && (o.joursInactif ?? 0) > seuil;
   return (
     <div
       className={`card ${inactive ? 'inactive' : ''}`}
       draggable={draggable}
-      tabIndex={0}
-      role="button"
-      aria-label={`Ouvrir ${o.titre}`}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
       onDragStart={(e) => e.dataTransfer.setData(OPP_MIME, o.id)}
     >
-      <div className="soc">
-        {o.entreprise ?? '—'}
-        {!o.clos && <EtatActivite o={o} />}
-      </div>
-      <div className="ttl">{o.titre}</div>
-      {o.contact && <div className="pers small muted">{o.contact}</div>}
-      {o.clos === 'perdu' ? (
-        <div className="motif">
-          Perdue{label(o.etape) !== o.etape ? ` en ${label(o.etape).toLowerCase()}` : ''}
-          {o.motif ? ` : ${o.motif.toLowerCase()}` : ''}
+      <button
+        className="card-open"
+        type="button"
+        aria-label={`Ouvrir ${o.titre}`}
+        onClick={onOpen}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpen();
+          }
+        }}
+      >
+        <div className="soc">
+          {o.entreprise ?? '—'}
+          {!o.clos && <EtatActivite o={o} />}
         </div>
-      ) : o.clos ? null : (
-        o.prochaineEtape && (
-          <div className={`next ${enRetard(o) ? 'late' : ''}`}>{o.prochaineEtape}</div>
-        )
+        <div className="ttl">{o.titre}</div>
+        {o.contact && <div className="pers small muted">{o.contact}</div>}
+        {o.clos === 'perdu' ? (
+          <div className="motif">
+            Perdue{label(o.etape) !== o.etape ? ` en ${label(o.etape).toLowerCase()}` : ''}
+            {o.motif ? ` : ${o.motif.toLowerCase()}` : ''}
+          </div>
+        ) : o.clos ? null : (
+          o.prochaineEtape && (
+            <div className={`next ${enRetard(o) ? 'late' : ''}`}>{o.prochaineEtape}</div>
+          )
+        )}
+        {inactive && <div className="inactif">{o.joursInactif} j sans activité</div>}
+        <div className="ft">
+          <Score q={o.qualification} />
+          <span className="small">
+            {o.montant ? montantEur(o) : <span className="muted">à estimer</span>}
+          </span>
+        </div>
+      </button>
+      {onMove && !o.clos && (
+        <label className="card-move">
+          <span>Déplacer</span>
+          <select
+            aria-label={`Déplacer ${o.titre}`}
+            value={o.etape}
+            onChange={(event) => onMove(event.target.value)}
+          >
+            {destinations.map((destination) => (
+              <option key={destination.id} value={destination.id}>
+                {destination.label}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
-      {inactive && <div className="inactif">{o.joursInactif} j sans activité</div>}
-      <div className="ft">
-        <Score q={o.qualification} />
-        <span className="small">
-          {o.montant ? montantEur(o) : <span className="muted">à estimer</span>}
-        </span>
-      </div>
     </div>
   );
 }
@@ -387,7 +410,12 @@ export function Pipeline({ slug }: { slug: string }) {
   }, [slug]);
   useEffect(load, [load]);
 
-  if (!data) return message ? <div className="empty">{message}</div> : null;
+  if (!data)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {message ?? 'Chargement du pipeline…'}
+      </div>
+    );
 
   const label = (id: string) => data.etapes.find((e) => e.id === id)?.label ?? id;
   const change = (id: string, c: Changement) =>
@@ -424,11 +452,8 @@ export function Pipeline({ slug }: { slug: string }) {
   });
   const ouvertes = visibles.filter((o) => !o.clos);
 
-  const drop = (cible: string) => (e: DragEvent) => {
-    e.preventDefault();
+  const move = (id: string, cible: string) => {
     if (!data.ecrit) return;
-    setOver(null);
-    const id = e.dataTransfer.getData(OPP_MIME);
     const o = find(id);
     if (!o) return;
     // Winning or losing always goes through the closing window, to keep the reason.
@@ -439,6 +464,16 @@ export function Pipeline({ slug }: { slug: string }) {
     if (o.etape === cible && !o.clos) return;
     void change(id, { etape: cible });
   };
+  const drop = (cible: string) => (e: DragEvent) => {
+    e.preventDefault();
+    setOver(null);
+    move(e.dataTransfer.getData(OPP_MIME), cible);
+  };
+  const destinations = [
+    ...data.etapes.map((etape) => ({ id: etape.id, label: etape.label })),
+    { id: 'gagne', label: 'Clôturer gagnée' },
+    { id: 'perdu', label: 'Clôturer perdue' },
+  ];
   const col = (
     id: string,
     nom: string,
@@ -492,6 +527,8 @@ export function Pipeline({ slug }: { slug: string }) {
           label={label}
           seuil={data.inactiviteJours}
           onOpen={() => ouvrir(o.id)}
+          destinations={destinations}
+          onMove={data.ecrit ? (destination) => move(o.id, destination) : undefined}
         />
       ))}
       {os.length === 0 && (
@@ -683,8 +720,8 @@ export function Pipeline({ slug }: { slug: string }) {
             </p>
           )}
           {data.ecrit && (
-            <div className="pipeline-closing" aria-label="Clôturer une affaire par glisser-déposer">
-              <span>Glisser une affaire pour la clôturer</span>
+            <div className="pipeline-closing" aria-label="Zones de clôture rapide">
+              <span>Glisser une affaire ici, ou utiliser son menu Déplacer</span>
               {(['gagne', 'perdu'] as const).map((resultat) => (
                 <div
                   key={resultat}

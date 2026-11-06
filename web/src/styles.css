@@ -29,6 +29,8 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--ink-3) var(--line-2);
+  scrollbar-width: thin;
 }
 html,
 body {
@@ -40,6 +42,11 @@ body {
   color: var(--ink);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+  caret-color: var(--teal);
+}
+::selection {
+  background: var(--mint);
+  color: var(--navy-2);
 }
 h1,
 h2,
@@ -246,6 +253,20 @@ a {
   color: #dce8f7;
   text-decoration: none;
   font-size: 15px;
+  min-height: 44px;
+}
+.nav-entry {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.nav-entry > a {
+  flex: 1;
+  min-width: 0;
+  padding-right: 48px;
+}
+.nav-entry:has(.fav-order) > a {
+  padding-right: 136px;
 }
 .nav a:hover {
   background: var(--navy-3);
@@ -272,9 +293,18 @@ a {
   margin-left: 0;
 }
 .nav .fav {
-  display: inline-flex;
-  padding: 2px;
-  border-radius: 4px;
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
   color: #8fa7c6;
   opacity: 0;
   cursor: pointer;
@@ -283,12 +313,45 @@ a {
   width: 14px;
   height: 14px;
 }
-.nav a:hover .fav,
-.nav a:focus-visible .fav {
+.nav-entry:hover .fav,
+.nav-entry:focus-within .fav {
   opacity: 1;
 }
 .nav .fav:hover {
   color: var(--white);
+  background: var(--navy-3);
+}
+.nav .fav-order {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b8cce1;
+  opacity: 0;
+  cursor: pointer;
+}
+.nav .fav-order.up {
+  right: 88px;
+}
+.nav .fav-order.down {
+  right: 44px;
+}
+.nav-entry:hover .fav-order,
+.nav-entry:focus-within .fav-order {
+  opacity: 1;
+}
+.nav .fav-order:hover {
+  background: var(--navy-3);
+  color: var(--white);
+}
+.nav .fav-order.up svg {
+  transform: rotate(180deg);
 }
 /* The star stays hidden until the row is hovered: in favourites it removes, elsewhere it adds. */
 .nav .fav.on {
@@ -341,16 +404,16 @@ a {
 .nav-group.later a {
   color: #afc2db;
 }
-.nav .favs a[draggable] {
+.nav .favs .nav-entry[draggable] {
   cursor: grab;
 }
-.nav .favs a.dragging {
+.nav .favs .nav-entry.dragging {
   opacity: 0.4;
 }
-.nav .favs a.drop-before {
+.nav .favs .nav-entry.drop-before {
   box-shadow: inset 0 2px 0 var(--amber);
 }
-.nav .favs a.drop-after {
+.nav .favs .nav-entry.drop-after {
   box-shadow: inset 0 -2px 0 var(--amber);
 }
 .checks-row {
@@ -608,6 +671,7 @@ a {
   font-weight: 600;
   font-size: 15px;
   white-space: nowrap;
+  min-height: 44px;
 }
 .btn:hover {
   border-color: var(--ink-3);
@@ -640,14 +704,15 @@ a {
   color: var(--red);
 }
 .btn.sm {
-  padding: 5px 10px;
+  min-height: 44px;
+  padding: 7px 10px;
   font-size: 14px;
 }
 /* Icon-only square button (Inbox: update, add). */
 .btn.carre {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   justify-content: center;
 }
@@ -821,6 +886,14 @@ textarea.input {
   border: 1px solid var(--line);
   border-radius: var(--r-s);
   background: var(--white);
+}
+input.input:not([type='checkbox']):not([type='radio']),
+select.input {
+  min-height: 44px;
+}
+.input::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
 }
 textarea.input {
   min-height: 90px;
@@ -2154,7 +2227,11 @@ textarea.input {
 .reduire-btn {
   margin-left: auto;
   display: inline-flex;
-  padding: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: var(--r-s);
   background: none;
@@ -2187,6 +2264,7 @@ textarea.input {
   .side.reduite .later-btn,
   .side.reduite .nav a .lbl,
   .side.reduite .nav .fav,
+  .side.reduite .nav .fav-order,
   .side.reduite .soon-tag,
   .side.reduite .side-foot {
     display: none;
@@ -2230,6 +2308,9 @@ textarea.input {
     justify-content: center;
     padding: 9px 0;
   }
+  .side.reduite .nav-entry > a {
+    padding-right: 0;
+  }
   .side.reduite .nav svg {
     width: 19px;
     height: 19px;
@@ -2246,12 +2327,25 @@ textarea.input {
   .reduire-btn {
     display: none;
   }
+  .nav .fav,
+  .nav .fav-order {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
+  .side,
+  .later-btn .chev,
+  .drawer,
+  .btn {
+    transition: none;
+  }
+  .btn.carre.tourne svg,
+  .rt-steps.run li.cur::before {
+    animation: none;
+  }
+  .rt-steps.run li.cur::before {
+    border-style: dashed;
   }
 }
 
@@ -2788,7 +2882,7 @@ textarea.input {
 }
 .card.inactive {
   border-color: var(--red);
-  box-shadow: inset 3px 0 0 var(--red);
+  box-shadow: inset 1px 0 0 var(--red);
 }
 .card .inactif {
   font-size: 11px;
@@ -3266,6 +3360,7 @@ tr.sel {
   font-size: 18px;
   line-height: 1;
   padding: 6px 12px;
+  min-width: 44px;
 }
 /* Add conversation with Claude, in the Inbox. */
 .chat-ajout {
@@ -4306,6 +4401,7 @@ label.btn.off {
   align-items: center;
   gap: 10px;
   padding: 8px 0;
+  min-height: 44px;
   background: none;
   border: 0;
   color: inherit;
@@ -4328,6 +4424,7 @@ label.btn.off {
   background: none;
   border: 0;
   padding: 8px 0;
+  min-height: 44px;
   color: var(--teal-mid);
   font: inherit;
   cursor: pointer;

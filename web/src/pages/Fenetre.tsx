@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import { useDialogFocus } from './useDialogFocus.js';
 
 // A native <dialog> would do the same, but jsdom does not implement showModal: this keeps the
 // windows testable. Escape and a click outside close it; focus moves in and goes back on close.
@@ -17,22 +18,7 @@ export function Fenetre({
   children: ReactNode;
   pied?: ReactNode;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const fermer = useRef(onFermer);
-  fermer.current = onFermer;
-
-  useEffect(() => {
-    const avant = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
-    const touche = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') fermer.current();
-    };
-    document.addEventListener('keydown', touche);
-    return () => {
-      document.removeEventListener('keydown', touche);
-      avant?.focus?.();
-    };
-  }, []);
+  const ref = useDialogFocus<HTMLDivElement>(onFermer);
 
   return (
     <div

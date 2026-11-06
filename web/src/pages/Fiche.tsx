@@ -378,7 +378,12 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
       load();
     }, erreur);
 
-  if (!data) return message ? <div className="empty">{message}</div> : null;
+  if (!data)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {message ?? 'Chargement de la fiche…'}
+      </div>
+    );
   const f = data.fiche;
   const cartes = cartesDe(kind, data.liens, f.origine === 'hubspot');
   const hubspot = f.origine === 'hubspot';

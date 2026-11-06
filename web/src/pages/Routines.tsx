@@ -184,7 +184,12 @@ export function Routines({ slug }: { slug: string }) {
   }, [slug]);
   useEffect(load, [load]);
   if (error) return <div className="empty">{error}</div>;
-  if (!list) return null;
+  if (!list)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        Chargement des routines…
+      </div>
+    );
   return (
     <div className="grid g2">
       {list.map((r) => (
