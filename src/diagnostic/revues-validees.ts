@@ -35,7 +35,8 @@ const ligne = (titre: string, e: Record<string, unknown>, propose: string): stri
 
 // Résumé lisible d'une revue : de quoi comparer les propositions aux choix du pilote. Les champs
 // absents sont omis, jamais écrits « null ».
-export function resumeRevue(revue: Record<string, unknown>): string {
+// `max` : la coupe ne sert qu'aux revues données en modèle ; une revue relue par Claude l'est en entier.
+export function resumeRevue(revue: Record<string, unknown>, max = TEXTE_REVUE_MAX): string {
   const lignes: string[] = [];
   const precos = Object.entries(objet(revue.preconisations));
   if (precos.length === 0) lignes.push('(aucune préconisation)');
@@ -62,7 +63,7 @@ export function resumeRevue(revue: Record<string, unknown>): string {
     );
   for (const [champ, titre] of CHAMPS_LIBRES)
     if (texte(revue[champ])) lignes.push(`${titre} : ${texte(revue[champ])}`);
-  return lignes.join('\n').slice(0, TEXTE_REVUE_MAX);
+  return lignes.join('\n').slice(0, max);
 }
 
 // Les deux dernières revues validées de l'instance, hors projet courant, de la plus récente à la plus
