@@ -171,7 +171,12 @@ export function Devis({ slug }: { slug: string }) {
   }, [slug, load]);
 
   if (error) return <div className="empty">{error}</div>;
-  if (!list) return null;
+  if (!list)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        Chargement des devis…
+      </div>
+    );
   const courant = list.find((d) => d.id === selection);
   const nouveau = () =>
     preparerDevis(slug, choix).then(

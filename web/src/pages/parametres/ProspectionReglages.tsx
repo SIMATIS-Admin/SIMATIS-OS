@@ -67,7 +67,12 @@ export function ProspectionReglages({ slug }: { slug: string }) {
     }, 'Signature ajoutée.');
   };
 
-  if (!signatures) return message ? <div className="empty">{message.texte}</div> : null;
+  if (!signatures)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {message?.texte ?? 'Chargement des réglages de prospection…'}
+      </div>
+    );
 
   return (
     <div className="grid g2">

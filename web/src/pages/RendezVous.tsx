@@ -357,7 +357,12 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
     })().catch((e: unknown) => setError(String(e)));
 
   if (error) return <div className="empty">{error}</div>;
-  if (!data) return null;
+  if (!data)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        Chargement des rendez-vous…
+      </div>
+    );
   // Google's state goes next to the list: meetings created in the OS show whatever it says.
   const bandeau =
     data.etat === 'non_configure'

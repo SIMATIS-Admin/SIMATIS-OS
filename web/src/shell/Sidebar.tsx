@@ -78,7 +78,7 @@ export function Sidebar({
     memoriser(CLE_REDUITE, reduite ? '0' : '1');
   };
 
-  const link = (it: NavItem, inFavoris = false) => {
+  const link = (it: NavItem, inFavoris = false, index = -1) => {
     const fav = favoris.includes(it.id);
     const dragProps = inFavoris
       ? {
@@ -88,7 +88,7 @@ export function Sidebar({
           onDragOver: (e: DragEvent) => {
             if (e.dataTransfer.types.includes(FAV_MIME)) e.preventDefault();
           },
-          onDrop: (e: DragEvent<HTMLAnchorElement>) => {
+          onDrop: (e: DragEvent<HTMLDivElement>) => {
             const id = e.dataTransfer.getData(FAV_MIME);
             if (!id) return;
             e.preventDefault();
@@ -98,39 +98,49 @@ export function Sidebar({
         }
       : {};
     return (
-      <a
-        key={`${inFavoris ? 'fav-' : ''}${it.id}`}
-        href={`#/${current.slug}/${it.id}`}
-        className={[view === it.id ? 'on' : '', isBuilt(it.id) ? '' : 'soon'].join(' ')}
-        title={reduite ? it.label : undefined}
-        aria-current={view === it.id ? 'page' : undefined}
-        {...dragProps}
-      >
-        <Icon name={it.icon} />
-        <span className="lbl">{it.label}</span>
-        {it.beta && <span className="beta">Bêta</span>}
-        {(compteurs[it.id] ?? 0) > 0 && <span className="pastille">{compteurs[it.id]}</span>}
-        {!isBuilt(it.id) && <span className="soon-tag">Bientôt</span>}
-        <span
+      <div key={`${inFavoris ? 'fav-' : ''}${it.id}`} className="nav-entry" {...dragProps}>
+        <a
+          href={`#/${current.slug}/${it.id}`}
+          className={[view === it.id ? 'on' : '', isBuilt(it.id) ? '' : 'soon'].join(' ')}
+          title={reduite ? it.label : undefined}
+          aria-current={view === it.id ? 'page' : undefined}
+        >
+          <Icon name={it.icon} />
+          <span className="lbl">{it.label}</span>
+          {it.beta && <span className="beta">Bêta</span>}
+          {(compteurs[it.id] ?? 0) > 0 && <span className="pastille">{compteurs[it.id]}</span>}
+          {!isBuilt(it.id) && <span className="soon-tag">Bientôt</span>}
+        </a>
+        <button
+          type="button"
           className={`fav ${fav ? 'on' : ''}`}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              e.stopPropagation();
-              onToggleFavori(it.id);
-            }
-          }}
+          aria-label={fav ? `Retirer ${it.label} des favoris` : `Ajouter ${it.label} aux favoris`}
           title={fav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-          onClick={(e) => {
-            e.preventDefault();
-            onToggleFavori(it.id);
-          }}
+          onClick={() => onToggleFavori(it.id)}
         >
           <Icon name="star" />
-        </span>
-      </a>
+        </button>
+        {inFavoris && index > 0 && (
+          <button
+            type="button"
+            className="fav-order up"
+            aria-label={`Monter ${it.label}`}
+            onClick={() => onMoveFavori(it.id, favItems[index - 1]!.id, false)}
+          >
+            <Icon name="down" />
+          </button>
+        )}
+        {inFavoris && index < favItems.length - 1 && (
+          <button
+            type="button"
+            className="fav-order down"
+            aria-label={`Descendre ${it.label}`}
+            onClick={() => onMoveFavori(it.id, favItems[index + 1]!.id, true)}
+          >
+            <Icon name="down" />
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -233,7 +243,7 @@ export function Sidebar({
               <Icon name="star" />
               Mes raccourcis
             </span>
-            {favItems.map((it) => link(it, true))}
+            {favItems.map((it, index) => link(it, true, index))}
           </div>
         )}
         <button

@@ -160,9 +160,6 @@ export function Brief({ slug }: { slug: string }) {
         </p>
       )}
       <section className="brief-priorite" aria-label="Priorité proposée">
-        <span className="brief-eyebrow">
-          <Icon name="sun" /> LE BON POINT DE DÉPART
-        </span>
         <h2>{priorite.titre}</h2>
         <p>{priorite.texte}</p>
         <a className="btn primary" href={priorite.lien}>

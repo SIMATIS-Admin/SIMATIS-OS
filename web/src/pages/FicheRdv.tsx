@@ -298,7 +298,12 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
   }, [slug, id]);
   useEffect(load, [load]);
 
-  if (!rdv) return message ? <div className="empty">{message}</div> : null;
+  if (!rdv)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {message ?? 'Chargement du rendez-vous…'}
+      </div>
+    );
   const trier = (statut: StatutRdv) =>
     void trierRdv(slug, id, statut).then(load, (e: unknown) => setMessage(erreurDe(e)));
   return (

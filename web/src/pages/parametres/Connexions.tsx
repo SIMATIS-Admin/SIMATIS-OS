@@ -795,7 +795,12 @@ export function Connexions({ slug }: { slug: string }) {
   useEffect(load, [load]);
 
   if (error) return <div className="empty">{error}</div>;
-  if (!data) return null;
+  if (!data)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        Chargement des connexions…
+      </div>
+    );
   return (
     <div className="stack">
       {location.hash.includes('google=ok') && (

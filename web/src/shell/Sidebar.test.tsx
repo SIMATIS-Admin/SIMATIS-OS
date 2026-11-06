@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InstanceSummary } from '../nav.js';
 import { Sidebar } from './Sidebar.js';
 
@@ -164,5 +164,23 @@ describe('Sidebar', () => {
   it('shows the SIMATIS logo, not a plain letter', () => {
     renderSidebar(simatis, []);
     expect(document.querySelector('.brand-mark')?.tagName).toBe('IMG');
+  });
+
+  it('keeps favourite controls outside links and exposes reorder buttons', () => {
+    const move = vi.fn();
+    const { container } = render(
+      <Sidebar
+        instances={[simatis, mandat]}
+        current={simatis}
+        view="entreprises"
+        open={false}
+        favoris={['prospection', 'bases']}
+        onToggleFavori={() => undefined}
+        onMoveFavori={move}
+      />,
+    );
+    expect(container.querySelector('a button, a [role="button"]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Descendre Prospection' }));
+    expect(move).toHaveBeenCalledWith('prospection', 'bases', true);
   });
 });

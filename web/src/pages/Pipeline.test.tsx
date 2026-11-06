@@ -105,6 +105,18 @@ describe('Pipeline screen', () => {
     expect(screen.queryByText(/les cartes ne se déplacent pas/)).toBeNull();
   });
 
+  it('moves a card without drag and drop for touch and keyboard users', async () => {
+    render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    fireEvent.change(screen.getByLabelText('Déplacer Affaire o1'), {
+      target: { value: 'proposition' },
+    });
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+      body: { etape: 'proposition' },
+    });
+  });
+
   it('asks for the reason before closing a deal as lost', async () => {
     const { container } = render(<Pipeline slug="simatis" />);
     await screen.findByText('Entreprise o1');

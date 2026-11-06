@@ -4,3 +4,4 @@ dist/
 drizzle/
 package-lock.json
 src/diagnostic/modele-word.ts
+.claude/skills/

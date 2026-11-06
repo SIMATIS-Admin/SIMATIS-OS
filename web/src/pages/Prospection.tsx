@@ -117,7 +117,12 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
     );
   }, [slug]);
 
-  if (!vue) return message ? <div className="empty">{message}</div> : null;
+  if (!vue)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {message ?? 'Chargement de la prospection…'}
+      </div>
+    );
   const { stats } = vue;
   const accueil = () => {
     setEtape({ nom: 'accueil' });

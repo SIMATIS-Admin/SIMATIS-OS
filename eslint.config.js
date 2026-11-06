@@ -3,7 +3,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'maquettes/', 'drizzle/', 'node_modules/'] },
+  { ignores: ['dist/', 'maquettes/', 'drizzle/', 'node_modules/', '.claude/skills/'] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {

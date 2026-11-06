@@ -45,7 +45,12 @@ export function Tableau({ slug }: { slug: string }) {
   }, [slug]);
 
   if (error) return <div className="empty">{error}</div>;
-  if (!data || !funnel) return null;
+  if (!data || !funnel)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        Chargement du tableau de bord…
+      </div>
+    );
 
   const change = (cle: Cle, valeur: number) => {
     setFunnel({ ...funnel, [cle]: valeur });
