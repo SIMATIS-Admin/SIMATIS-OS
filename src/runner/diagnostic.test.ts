@@ -127,10 +127,17 @@ describe('Prompt du chat de diagnostic', () => {
     expect(texte).toContain('étape 2 sur 5');
   });
 
-  it("ne reprend que l'échange de l'étape en cours", () => {
+  it('reprend les échanges de toutes les étapes, en les datant par étape', () => {
     const texte = promptDiagnostic(attente);
-    expect(texte).toContain('Question fictive');
-    expect(texte).not.toContain('Ancienne question');
+    expect(texte).toContain('[étape 2] Pilote : Question fictive');
+    expect(texte).toContain('[étape 1] Pilote : Ancienne question');
+  });
+
+  it('ajoute la lecture du second cerveau seulement quand il est accessible', () => {
+    expect(promptDiagnostic(attente)).not.toContain('/cerveau-fictif');
+    const texte = promptDiagnostic(attente, new Date(), '/cerveau-fictif');
+    expect(texte).toContain('/cerveau-fictif');
+    expect(texte).toContain('Tu ne modifies rien dans le second cerveau');
   });
 });
 
@@ -223,6 +230,31 @@ describe('Support d ouverture par le runner', () => {
     });
     return args;
   };
+
+  it('donne au chat la lecture du second cerveau quand il est accessible', async () => {
+    const cerveau = await mkdtemp(path.join(tmpdir(), 'cerveau-fictif-'));
+    try {
+      let args: string[] = [];
+      await tourDiagnostic({
+        base: 'http://os.test',
+        token: 'r',
+        claude: 'claude',
+        cerveau,
+        fetch: fauxOs(attente, []),
+        poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [] }),
+        lancer: (_c, a2) => {
+          args = a2;
+          return Promise.resolve(0);
+        },
+      });
+      expect(args[args.indexOf('--add-dir') + 1]).toBe(cerveau);
+      const outils = args[args.indexOf('--allowedTools') + 1]!;
+      expect(outils).toContain('Grep');
+      expect(outils).not.toMatch(/Edit|Write/);
+    } finally {
+      await rm(cerveau, { recursive: true, force: true });
+    }
+  });
 
   it('passe le modèle et l effort choisis dans le chat à Claude', async () => {
     const args = await lanceAvec({ ...attente, modele: 'opus', effort: 'max' });

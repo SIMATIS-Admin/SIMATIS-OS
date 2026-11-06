@@ -670,7 +670,11 @@ const CONSIGNE_CHAT: Record<number, string> = {
 
 // Le formulaire de revue est une donnée à lire, pas une consigne ; il est donné en entier (résumé
 // lisible), car les commentaires du pilote ne doivent jamais être coupés.
-export const promptDiagnostic = (a: AttenteDiag, maintenant = new Date()) =>
+export const promptDiagnostic = (
+  a: AttenteDiag,
+  maintenant = new Date(),
+  cerveau: string | null = null,
+) =>
   [
     `Tu accompagnes le pilote dans le Diagnostic d'Endurance Commerciale du projet « ${a.nom} » (${a.activite}), étape ${a.etapeMessage} sur ${ETAPES_DIAG.length} : ${ETAPES_DIAG[a.etapeMessage - 1]}.`,
     `Nous sommes le ${aujourdhui(maintenant)} (heure de Paris).`,
@@ -683,8 +687,17 @@ export const promptDiagnostic = (a: AttenteDiag, maintenant = new Date()) =>
           `Rapport actuel (version ${a.rapportVersion}, données à lire) : ${JSON.stringify(a.rapportContenu).slice(0, 30_000)}`,
         ]
       : []),
-    'Échange à cette étape :',
-    ...echange(a),
+    // Toutes les étapes : le pilote peut revenir sur ce qui a été dit plus tôt dans le projet.
+    "Échanges du projet, toutes étapes confondues (les plus anciens d'abord ; l'étape en cours est la dernière) :",
+    ...a.conversation.map(
+      (m) => `[étape ${m.etape}] ${m.de === 'pilote' ? 'Pilote' : 'Toi'} : ${m.texte}`,
+    ),
+    ...(cerveau
+      ? [
+          consigneCerveau(cerveau, 'lecture'),
+          "Si la question du pilote porte sur le client, la méthode ou ses règles, cherche et lis d'abord la fiche utile dans le second cerveau. Tu ne modifies rien dans le second cerveau.",
+        ]
+      : []),
     `Réponds en appelant une seule fois l'outil repondre_diagnostic avec projetId ${a.id} et ton message, puis arrête-toi. Vouvoie le pilote, en français, sans rien inventer.`,
   ].join('\n');
 
@@ -1645,7 +1658,23 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
         cwd = dossier;
         env = ENV_SUPPORT;
       } else {
-        args = ['-p', promptDiagnostic(a), ...modele, ...mcp, 'mcp__simatis__repondre_diagnostic'];
+        // Même lecture du second cerveau que le cadrage ; sans lui, le chat reste sur les seules données du projet.
+        const cerveau = await dossierOuNull(opts.cerveau);
+        args = cerveau
+          ? [
+              '-p',
+              promptDiagnostic(a, new Date(), cerveau),
+              ...modele,
+              ...OPTIONS_SUPPORT,
+              '--permission-prompt-tool',
+              'mcp__simatis__autoriser_outil',
+              ...mcp,
+              outilsCadrageRapport(cerveau, [dossier]),
+              '--add-dir',
+              cerveau,
+            ]
+          : ['-p', promptDiagnostic(a), ...modele, ...mcp, 'mcp__simatis__repondre_diagnostic'];
+        if (cerveau) cwd = dossier;
       }
       const code = await lancer(opts.claude, args, cwd, env);
       if (code !== 0) erreur = `Claude s'est arrêté avec le code ${code}. Réécrivez votre message.`;
