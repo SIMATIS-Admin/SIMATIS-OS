@@ -21,6 +21,7 @@ import {
   capitaliserSupportDiag,
   preparerRevueDiag,
   exporterRevueDiag,
+  preparerDossierRapportDiag,
   journalReglesDiag,
   majReglagesDiagnostic,
   marquerDeckFinalDiag,
@@ -1115,6 +1116,14 @@ function Rapport({
       onErreur(messageErreur(err));
     }
   };
+  const preparerDossier = async () => {
+    try {
+      onChange(await preparerDossierRapportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const dossierEnCours = projet.dossierExportStatut === 'en_cours';
   // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
   const [relireFinaux, setRelireFinaux] = useState(true);
   useEffect(() => {
@@ -1204,6 +1213,11 @@ function Rapport({
           Word de votre côté, importez-le : il remplace le Word affiché, et la production suivante
           part de son numéro.
         </p>
+        {dossierEnCours && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Claude prépare le dossier de travail… La page se mettra à jour dès qu’il sera prêt.
+          </p>
+        )}
         {enCours && (
           <p className="small muted" style={{ margin: 0 }}>
             Claude rédige le rapport… La page se mettra à jour dès qu’il sera prêt.
@@ -1225,6 +1239,20 @@ function Rapport({
               Envoyer sur Drive
             </button>
           )}
+          {!dossierEnCours && projet.dossierExportLien && (
+            <a className="btn" href={projet.dossierExportLien} target="_blank" rel="noreferrer">
+              Ouvrir le dossier pour Claude Chat
+            </a>
+          )}
+          <button
+            className="btn"
+            disabled={enCours || dossierEnCours || raison !== null || projet.statutChat !== 'repos'}
+            onClick={() => void preparerDossier()}
+          >
+            {projet.dossierExportLien
+              ? 'Mettre à jour le dossier'
+              : 'Préparer le dossier pour Claude Chat'}
+          </button>
           <button
             className="btn"
             disabled={enCours || raison !== null || projet.statutChat !== 'repos'}
