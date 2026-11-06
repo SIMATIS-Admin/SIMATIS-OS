@@ -96,6 +96,23 @@ const attente: AttenteDiag = {
 };
 
 describe('Prompt du chat de diagnostic', () => {
+  it('le chat reçoit la revue en entier, lisible, avec les commentaires du pilote', () => {
+    const preconisations = Object.fromEntries(
+      Array.from({ length: 8 }, (_, i) => [
+        `p${i + 1}`,
+        {
+          titre: `Titre ${i + 1}`,
+          texte: 'x'.repeat(4_000),
+          choix: 'modifier',
+          detail: `Commentaire fictif ${i + 1}`,
+        },
+      ]),
+    );
+    const texte = promptDiagnostic({ ...attente, etapeMessage: 4, revue: { preconisations } });
+    for (let i = 1; i <= 8; i++)
+      expect(texte).toContain(`texte du pilote : Commentaire fictif ${i}`);
+  });
+
   it('demande une seule réponse via l outil, pour ce projet et cette étape', () => {
     const texte = promptDiagnostic(attente, new Date('2026-10-19T08:00:00Z'));
     expect(texte).toContain(`projetId ${attente.id}`);
