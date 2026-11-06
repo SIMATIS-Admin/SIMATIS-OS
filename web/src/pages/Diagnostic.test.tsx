@@ -38,6 +38,7 @@ const api = vi.hoisted(() => ({
   marquerDeckFinalDiag: vi.fn(),
   capitaliserAnalyseDiag: vi.fn(),
   preparerRevueDiag: vi.fn(),
+  exporterRevueDiag: vi.fn(),
   capitaliserRapportDiag: vi.fn(),
   annulerRegleDiag: vi.fn(),
   majReglagesDiagnostic: vi.fn(),
@@ -80,6 +81,8 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   rapportLien: null,
   rapportLiens: [],
   rapportVersions: [],
+  revueExportStatut: 'aucun',
+  revueExportLien: null,
   restitutionStatut: 'aucun',
   restitutionLien: null,
   restitutionLiens: [],
@@ -1848,5 +1851,52 @@ describe('Revue : préparer avec Claude', () => {
     cleanup();
     await ouvrir({ revue: null, statutChat: 'attente_claude' });
     expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
+  });
+});
+
+describe('Diagnostic : export de la revue pour Claude Chat', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 3, etapeMax: 3, dims, profil: 'Joggeur', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const exporter = { name: 'Exporter la revue pour Claude Chat' };
+
+  it('absent tant que la revue n est pas validée', async () => {
+    await ouvrir({ revue: { statut: 'brouillon' } });
+    await screen.findByText('Valider la revue');
+    expect(screen.queryByRole('button', exporter)).toBeNull();
+  });
+
+  it('présent sur une revue validée, appelle l API et affiche son refus', async () => {
+    api.exporterRevueDiag.mockResolvedValue(projet({ etape: 3, etapeMax: 3, dims }));
+    await ouvrir({ revue: { statut: 'validée' } });
+    fireEvent.click(await screen.findByRole('button', exporter));
+    await waitFor(() => expect(api.exporterRevueDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    api.exporterRevueDiag.mockRejectedValue(new Error('Validez d’abord la revue.'));
+    await ouvrir({ revue: { statut: 'validée' } });
+    fireEvent.click(await screen.findByRole('button', exporter));
+    expect(await screen.findByText(/Validez d’abord la revue/)).toBeTruthy();
+  });
+
+  it('pendant l export : message d attente et bouton désactivé', async () => {
+    await ouvrir({ revue: { statut: 'validée' }, revueExportStatut: 'en_cours' });
+    expect(await screen.findByText(/Claude crée l’artefact de la revue/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', exporter).disabled).toBe(true);
+  });
+
+  it('avec un lien : ouvre l artefact et propose la mise à jour', async () => {
+    await ouvrir({
+      revue: { statut: 'validée' },
+      revueExportStatut: 'pret',
+      revueExportLien: 'https://claude.ai/artifact/RevueFictive0001',
+    });
+    const lien = await screen.findByRole('link', { name: 'Ouvrir la revue pour Claude Chat' });
+    expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/RevueFictive0001');
+    expect(screen.getByRole('button', { name: 'Mettre à jour l’export' })).toBeTruthy();
   });
 });

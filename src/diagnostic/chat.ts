@@ -144,6 +144,11 @@ export async function finirAttente(
       projet.demande === 'restitution' && projet.restitutionStatut === 'en_cours'
         ? { restitutionStatut: projet.restitutionLien ? ('pret' as const) : ('aucun' as const) }
         : {};
+    // Même principe pour l'export de la revue : il garde le lien déjà enregistré, sinon il redevient possible.
+    const exportRevue =
+      projet.demande === 'revue_exporter' && projet.revueExportStatut === 'en_cours'
+        ? { revueExportStatut: projet.revueExportLien ? ('pret' as const) : ('aucun' as const) }
+        : {};
     // Proposition de capitalisation : validée dans le chat si Claude a répondu, sinon à refaire.
     const capitalisation =
       projet.demande === 'capitalisation_proposer' && projet.capitalisationStatut === 'en_cours'
@@ -155,7 +160,14 @@ export async function finirAttente(
     if (projet.statutChat !== 'en_cours') {
       await tx
         .update(diagnosticProjets)
-        .set({ ...support, ...rapport, ...restitution, ...capitalisation, demande: null })
+        .set({
+          ...support,
+          ...rapport,
+          ...restitution,
+          ...exportRevue,
+          ...capitalisation,
+          demande: null,
+        })
         .where(eq(diagnosticProjets.id, id));
       return;
     }
@@ -173,6 +185,7 @@ export async function finirAttente(
         ...support,
         ...rapport,
         ...restitution,
+        ...exportRevue,
         ...capitalisation,
         conversation: [...projet.conversation, absence],
         statutChat: 'repos',
@@ -328,6 +341,7 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         rapportContenu: p.rapportVersions.at(-1)?.contenu ?? null,
         rapportNom: p.rapportNom,
         restitutionLien: p.restitutionLien,
+        revueExportLien: p.revueExportLien,
         restitutionAvecProposition: p.restitutionAvecProposition,
         proposition: p.proposition,
         // Le PDF de l'entretien ne voyage que pour sa lecture.

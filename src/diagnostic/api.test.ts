@@ -411,6 +411,24 @@ describe('Entretien : API', () => {
     expect(mauvais.statusCode).toBe(400);
   });
 
+  it('exporter la revue : refusé sans revue validée, lancé avec, 400 sur identifiant invalide', async () => {
+    const projet = await creerProjet('Revue export API');
+    const url = `/api/i/simatis/diagnostic/projets/${projet.id}/revue/exporter`;
+    expect((await app.inject({ method: 'POST', url })).statusCode).toBe(409);
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({ revue: { statut: 'validée' } })
+      .where(eq(diagnosticProjets.id, projet.id));
+    const ok = await app.inject({ method: 'POST', url });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json<{ demande: string }>().demande).toBe('revue_exporter');
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/revue/exporter',
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
   it('cadrer le rapport : refusé sans résultat, lancé avec, 400 sur identifiant invalide', async () => {
     const projet = await creerProjet('Cadrage rapport API');
     const url = `/api/i/simatis/diagnostic/projets/${projet.id}/rapport/cadrer`;

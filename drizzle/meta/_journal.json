@@ -561,6 +561,13 @@
       "when": 1793960265832,
       "tag": "0079_previous_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1793972454806,
+      "tag": "0080_glossy_risque",
+      "breakpoints": true
     }
   ]
 }

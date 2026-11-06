@@ -5,6 +5,7 @@ import { repondreClaude } from './chat.js';
 import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
 import { enregistrerRapport } from './rapport.js';
 import { enregistrerReglesRapport } from './regles.js';
+import { autoriserSiExportRevue, enregistrerExportRevue } from './revue-export.js';
 import { enregistrerRevueProposee, propositionsRevueSchema } from './revue-preparee.js';
 import { ACTIONS_REGLE, FICHES_REGLES } from './schema.js';
 import { contenuRapportSchema } from './rapport-word.js';
@@ -74,6 +75,7 @@ registerTool({
   scope: 'instance',
   handler: async ({ tx }, { tool_name, input }) =>
     (await autoriserSiRestitution(tx, tool_name, input)) ??
+    (await autoriserSiExportRevue(tx, tool_name, input)) ??
     (await autoriserSiEntretien(tx, tool_name, input)) ??
     autoriserOutil(tx, tool_name, input),
 });
@@ -197,6 +199,22 @@ registerTool({
   handler: async ({ tx }, { projetId, lien, diapositives }) => {
     if (diapositives) await enregistrerDiapositivesRestitution(tx, projetId, diapositives);
     else await enregistrerRestitution(tx, projetId, lien!);
+    return { ok: true };
+  },
+});
+
+// Outil de l'export de la revue : Claude rend le lien de l'artifact créé pour Claude Chat.
+registerTool({
+  name: 'enregistrer_revue_export',
+  description:
+    "Enregistre le lien claude.ai de l'artifact qui contient la revue validée d'un projet de diagnostic, dès sa création, pour que le pilote le rouvre dans Claude Chat.",
+  input: z.object({
+    projetId: z.uuid(),
+    lien: z.string().regex(LIEN_ARTIFACT, 'Lien d’artifact claude.ai attendu'),
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, lien }) => {
+    await enregistrerExportRevue(tx, projetId, lien);
     return { ok: true };
   },
 });
