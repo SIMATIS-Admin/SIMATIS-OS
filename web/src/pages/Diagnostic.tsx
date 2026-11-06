@@ -1208,10 +1208,10 @@ function Rapport({
           </div>
         )}
         <p className="small muted" style={{ margin: 0 }}>
-          Le rapport est enregistré ici, version par version. Discutez des modifications avec Claude
-          dans la fenêtre Claude, puis produisez la nouvelle version. Si vous avez retravaillé le
-          Word de votre côté, importez-le : il remplace le Word affiché, et la production suivante
-          part de son numéro.
+          Le parcours : préparez le dossier pour Claude Chat, rédigez et retouchez le rapport dans
+          Claude Chat, puis importez ici le Word final. Il remplace le Word affiché et sert de base
+          à la restitution. Faire rédiger le rapport par l’OS (« Produire le rapport ») et le cadrer
+          avec Claude restent possibles dans « Plus d’actions ».
         </p>
         {dossierEnCours && (
           <p className="small muted" style={{ margin: 0 }}>
@@ -1224,50 +1224,19 @@ function Rapport({
           </p>
         )}
         <div className="diag-actions">
-          {!enCours && projet.rapportLien && (
-            <a className="btn go" href={projet.rapportLien} target="_blank" rel="noreferrer">
-              {docGoogle ? 'Ouvrir dans Google Docs' : 'Ouvrir le rapport'}
-            </a>
-          )}
-          {!enCours && docGoogle && (
-            <a className="btn" href={urlExportRapportDiag(slug, projet.id)}>
-              Exporter en .docx
-            </a>
-          )}
-          {!enCours && projet.aRapport && !docGoogle && (
-            <button className="btn" onClick={() => void envoyerSurDrive()}>
-              Envoyer sur Drive
-            </button>
-          )}
           {!dossierEnCours && projet.dossierExportLien && (
-            <a className="btn" href={projet.dossierExportLien} target="_blank" rel="noreferrer">
+            <a className="btn go" href={projet.dossierExportLien} target="_blank" rel="noreferrer">
               Ouvrir le dossier pour Claude Chat
             </a>
           )}
           <button
-            className="btn"
+            className={`btn ${projet.dossierExportLien ? '' : 'go'}`}
             disabled={enCours || dossierEnCours || raison !== null || projet.statutChat !== 'repos'}
             onClick={() => void preparerDossier()}
           >
             {projet.dossierExportLien
               ? 'Mettre à jour le dossier'
               : 'Préparer le dossier pour Claude Chat'}
-          </button>
-          <button
-            className="btn"
-            disabled={enCours || raison !== null || projet.statutChat !== 'repos'}
-            onClick={() => void cadrer()}
-          >
-            Cadrer le rapport avec Claude
-          </button>
-          <button
-            className="btn go"
-            disabled={enCours || raison !== null}
-            onClick={() => void demander()}
-          >
-            {projet.aRapport || projet.rapportLien
-              ? `Produire la version ${prochaine}`
-              : 'Produire le rapport'}
           </button>
           <label className={`btn ${enCours ? 'off' : ''}`}>
             Importer ma version (.docx)
@@ -1283,6 +1252,37 @@ function Rapport({
               }}
             />
           </label>
+          {!enCours && projet.rapportLien && (
+            <a className="btn" href={projet.rapportLien} target="_blank" rel="noreferrer">
+              {docGoogle ? 'Ouvrir dans Google Docs' : 'Ouvrir le rapport'}
+            </a>
+          )}
+          {!enCours && docGoogle && (
+            <a className="btn" href={urlExportRapportDiag(slug, projet.id)}>
+              Exporter en .docx
+            </a>
+          )}
+          {!enCours && projet.aRapport && !docGoogle && (
+            <button className="btn" onClick={() => void envoyerSurDrive()}>
+              Envoyer sur Drive
+            </button>
+          )}
+          <details className="diag-plus">
+            <summary className="btn">Plus d’actions</summary>
+            <div className="diag-plus-liste">
+              <button
+                disabled={enCours || raison !== null || projet.statutChat !== 'repos'}
+                onClick={() => void cadrer()}
+              >
+                Cadrer le rapport avec Claude
+              </button>
+              <button disabled={enCours || raison !== null} onClick={() => void demander()}>
+                {projet.aRapport || projet.rapportLien
+                  ? `Produire la version ${prochaine}`
+                  : 'Produire le rapport'}
+              </button>
+            </div>
+          </details>
         </div>
         {!enCours && raison && (
           <p className="small muted" style={{ margin: 0 }}>

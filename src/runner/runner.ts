@@ -1436,7 +1436,9 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
         !entretien &&
         !capitalisation &&
         !regles &&
-        !revue
+        !revue &&
+        !exportRevue &&
+        !dossierRapport
       ) {
         erreur = `Skill « ${SKILL_SUPPORT} » absente de ce poste : le support n'a pas été préparé.`;
         continue;
