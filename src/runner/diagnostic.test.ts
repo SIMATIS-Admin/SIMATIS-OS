@@ -684,6 +684,33 @@ describe('Production par le runner : modifications et deck', () => {
     expect(args.join(' ')).not.toContain(SKILL_RESTITUTION);
   });
 
+  it.each(['revue_exporter', 'dossier_exporter'] as const)(
+    "l'export %s se lance sans aucune skill sur le poste",
+    async (demande) => {
+      let lance = false;
+      await tourDiagnostic({
+        base: 'http://os.test',
+        token: 'r',
+        claude: 'claude',
+        fetch: ((url: string) =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify(
+                url.endsWith('/attentes') ? [{ ...restitution, demande }] : { ok: true },
+              ),
+              { status: 200 },
+            ),
+          )) as typeof fetch,
+        poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [] }),
+        lancer: () => {
+          lance = true;
+          return Promise.resolve(0);
+        },
+      });
+      expect(lance).toBe(true);
+    },
+  );
+
   it('les outils du deck sont ceux de la restitution seulement', () => {
     const outils = outilsRestitution(null, ['/travail']);
     expect(outils).toContain('mcp__simatis__enregistrer_restitution');
