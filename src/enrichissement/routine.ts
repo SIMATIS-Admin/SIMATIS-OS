@@ -7,6 +7,7 @@ import { jourDe } from '../pilotage/realisees.js';
 import { preferences } from '../preferences/schema.js';
 import { CIBLE } from './cible.js';
 import type { ClientIA } from './client.js';
+import { cloreSessionRecherche, ouvrirSessionRecherche } from './sessions.js';
 import { chercherProspects } from './recherche.js';
 
 export const reglagesRecherche = z.object({
@@ -85,6 +86,11 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
 
     const instanceId = ligne.utilisateur.slice(prefixe.length);
     let bilan: string;
+    const session = await ouvrirSessionRecherche(db, instanceId, {
+      mode: 'automatique',
+      nombreVise: routine.nombre,
+    });
+    let fin: Parameters<typeof cloreSessionRecherche>[3];
     try {
       const contacts = await chercherProspects(client, routine.consignes, routine.nombre);
       let creees = 0;
@@ -110,10 +116,18 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
         }
       }
       await noterContactsRecherches(db, instanceId, contacts);
+      fin = {
+        etat: contacts.length >= routine.nombre ? 'terminee' : 'incomplete',
+        trouves: contacts.length,
+        ajoutees: creees,
+        rapprochees: fusionnees,
+      };
       bilan = `${creees} fiche(s) ajoutée(s), ${fusionnees} rapprochée(s), sur ${routine.nombre} contacts visés.`;
     } catch {
+      fin = { etat: 'erreur', trouves: 0, erreur: 'Codex indisponible ou réponse invalide.' };
       bilan = 'Recherche interrompue. Vérifiez la connexion de Codex sur le Mac.';
     }
+    await cloreSessionRecherche(db, instanceId, session, fin);
     await db
       .update(preferences)
       .set({

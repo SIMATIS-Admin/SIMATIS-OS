@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, text, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { baseVivante } from '../base-vivante/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
@@ -84,3 +84,29 @@ export const enrichissementSuggestions = pgTable(
 export type Tache = typeof enrichissementTaches.$inferSelect;
 export type Ligne = typeof enrichissementLignes.$inferSelect;
 export type Suggestion = typeof enrichissementSuggestions.$inferSelect;
+
+export const MODES_RECHERCHE = ['manuel', 'automatique'] as const;
+export const ETATS_RECHERCHE = ['en_cours', 'terminee', 'incomplete', 'erreur'] as const;
+
+// Historique des recherches de nouveaux prospects (lancées à la main ou par la routine quotidienne) :
+// l'état courant de la recherche manuelle est écrasé à chaque lancement, ce journal garde chaque passage.
+export const rechercheSessions = pgTable(
+  'recherche_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    mode: text('mode', { enum: MODES_RECHERCHE }).notNull(),
+    nombreVise: integer('nombre_vise').notNull(),
+    trouves: integer('trouves').notNull().default(0),
+    // Fiches créées / rapprochées à l'intégration : connues pour la routine, qui intègre elle-même.
+    ajoutees: integer('ajoutees'),
+    rapprochees: integer('rapprochees'),
+    etat: text('etat', { enum: ETATS_RECHERCHE }).notNull().default('en_cours'),
+    erreur: text('erreur'),
+    finiLe: timestamp('fini_le', { withTimezone: true }),
+  },
+  (t) => [
+    index('recherche_sessions_instance_idx').on(t.instanceId, t.createdAt),
+    instanceIsolation('recherche_sessions'),
+  ],
+);

@@ -1,4 +1,10 @@
-import { lancerRecherche, lireRecherche, effacerRecherche } from './recherche-tache.js';
+import {
+  attendreRecherche,
+  lancerRecherche,
+  lireRecherche,
+  effacerRecherche,
+} from './recherche-tache.js';
+import { cloreSessionRecherche, dernieresSessions, ouvrirSessionRecherche } from './sessions.js';
 import { enregistrerRoutineRecherche, lireRoutineRecherche, reglagesRecherche } from './routine.js';
 import { chercherProspects } from './recherche.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -79,6 +85,32 @@ export function registerEnrichissementRoutes(
 
   const racine = '/api/i/:slug/base/enrichissement';
 
+  // Journalise une recherche manuelle : ouverte au lancement, close quand le travail de fond se termine.
+  const journaliser = async (instanceId: string, tache: { id: string; nombre: number }) => {
+    await ouvrirSessionRecherche(db, instanceId, {
+      id: tache.id,
+      mode: 'manuel',
+      nombreVise: tache.nombre,
+    });
+    void attendreRecherche(tache.id)
+      .then(async () => {
+        const fin = await lireRecherche(db, instanceId);
+        if (fin?.id !== tache.id) return;
+        await cloreSessionRecherche(db, instanceId, tache.id, {
+          etat:
+            fin.etat === 'terminee' ? 'terminee' : fin.etat === 'erreur' ? 'erreur' : 'incomplete',
+          trouves: fin.contacts?.length ?? 0,
+          erreur: fin.erreur,
+        });
+      })
+      .catch(() => undefined);
+  };
+
+  app.get<Route>(
+    '/api/i/:slug/base/enrichissement-sessions',
+    surInstance((instanceId) => dernieresSessions(db, instanceId)),
+  );
+
   app.get<Route>(
     '/api/i/:slug/base/recherche/routine',
     surInstance((instanceId) => lireRoutineRecherche(db, instanceId)),
@@ -117,18 +149,16 @@ export function registerEnrichissementRoutes(
         .safeParse(request.body ?? {});
       const consignes = input.success ? (input.data.consignes ?? precedente.consignes) : undefined;
       if (!consignes) throw new LotRefuse('Précisez les critères pour compléter la recherche.');
-      return reply
-        .code(202)
-        .send(
-          await lancerRecherche(
-            db,
-            codex,
-            instanceId,
-            consignes,
-            precedente.nombre,
-            precedente.contacts ?? [],
-          ),
-        );
+      const tache = await lancerRecherche(
+        db,
+        codex,
+        instanceId,
+        consignes,
+        precedente.nombre,
+        precedente.contacts ?? [],
+      );
+      await journaliser(instanceId, tache);
+      return reply.code(202).send(tache);
     }),
   );
   app.post<Route>(
@@ -143,11 +173,15 @@ export function registerEnrichissementRoutes(
         .safeParse(request.body);
       if (!input.success)
         throw new LotRefuse('Indiquez des consignes et un nombre de contacts entre 1 et 100.');
-      return reply
-        .code(202)
-        .send(
-          await lancerRecherche(db, codex, instanceId, input.data.consignes, input.data.nombre),
-        );
+      const tache = await lancerRecherche(
+        db,
+        codex,
+        instanceId,
+        input.data.consignes,
+        input.data.nombre,
+      );
+      await journaliser(instanceId, tache);
+      return reply.code(202).send(tache);
     }),
   );
 
