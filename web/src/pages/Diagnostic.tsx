@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   creerProjetDiag,
   cadrerRapportDiag,
@@ -319,6 +319,7 @@ export function ProjetVue({
   onRetour: () => void;
   onErreur: (m: string) => void;
 }) {
+  const [chatE4, setChatE4] = useState<'ouvert' | 'reduit' | 'ferme'>('reduit');
   // Pendant que Claude répond, le projet est relu toutes les cinq secondes.
   useEffect(() => {
     if (
@@ -435,11 +436,13 @@ export function ProjetVue({
             />
           )}
           {projet.etape === 4 && (
-            <Rapport slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
-          )}
-          {/* Étape 4 : la conversation modifie l'historique du rapport, elle se lit sous lui. */}
-          {projet.etape === 4 && (
-            <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
+            <Rapport
+              slug={slug}
+              projet={projet}
+              onChange={onChange}
+              onErreur={onErreur}
+              onOuvrirChat={() => setChatE4('ouvert')}
+            />
           )}
           {projet.etape === 5 && (
             <RestitutionDeck
@@ -465,6 +468,46 @@ export function ProjetVue({
           <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
         )}
       </div>
+      {/* Étape 4 : le chat est une fenêtre devant la page, qu'on réduit, ferme et rouvre. */}
+      {projet.etape === 4 && (
+        <>
+          {chatE4 === 'ferme' && (
+            <button className="btn go diag-flottant-ouvrir" onClick={() => setChatE4('ouvert')}>
+              Ouvrir Claude
+            </button>
+          )}
+          <div className={`diag-flottant ${chatE4}`}>
+            <Assistant
+              slug={slug}
+              projet={projet}
+              onChange={onChange}
+              onErreur={onErreur}
+              controles={
+                <>
+                  <button
+                    className="btn"
+                    aria-label={
+                      chatE4 === 'reduit'
+                        ? 'Agrandir la fenêtre Claude'
+                        : 'Réduire la fenêtre Claude'
+                    }
+                    onClick={() => setChatE4(chatE4 === 'reduit' ? 'ouvert' : 'reduit')}
+                  >
+                    {chatE4 === 'reduit' ? '▢' : '−'}
+                  </button>
+                  <button
+                    className="btn"
+                    aria-label="Fermer la fenêtre Claude"
+                    onClick={() => setChatE4('ferme')}
+                  >
+                    ×
+                  </button>
+                </>
+              }
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -980,11 +1023,13 @@ function Rapport({
   projet,
   onChange,
   onErreur,
+  onOuvrirChat,
 }: {
   slug: string;
   projet: ProjetDiag;
   onChange: (p: ProjetDiag) => void;
   onErreur: (m: string) => void;
+  onOuvrirChat: () => void;
 }) {
   const enCours = projet.rapportLienStatut === 'en_cours';
   const raison = raisonRapport(projet);
@@ -1033,6 +1078,7 @@ function Rapport({
     }
   };
   const cadrer = async () => {
+    onOuvrirChat();
     try {
       onChange(await cadrerRapportDiag(slug, projet.id));
     } catch (err) {
@@ -1084,8 +1130,29 @@ function Rapport({
   const estDoc = (lien: string) => /docs\.google\.com\/document\//.test(lien);
   const versionsDrive = projet.rapportLiens.filter((r) => estDoc(r.lien));
   const docGoogle = estDoc(projet.rapportLien ?? '');
-  const precedents = projet.rapportLiens.slice(1);
-  const versionsPrecedentes = projet.rapportVersions.slice(0, -1).reverse();
+  // Une seule liste : le Google Doc et le Word d'une même version sur la même ligne.
+  const versions = [
+    ...projet.rapportLiens.map((r) => ({
+      cle: r.lien,
+      lien: r.lien,
+      le: r.le,
+      version: r.version,
+      doc: estDoc(r.lien),
+      finale: r.finale === true,
+      word: projet.rapportVersions.some((w) => w.version === r.version),
+    })),
+    ...projet.rapportVersions
+      .filter((w) => !projet.rapportLiens.some((r) => r.version === w.version))
+      .map((w) => ({
+        cle: `word-${w.version}`,
+        lien: null,
+        le: w.le,
+        version: w.version,
+        doc: false,
+        finale: false,
+        word: true,
+      })),
+  ].sort((x, y) => y.le.localeCompare(x.le) || (y.version ?? 0) - (x.version ?? 0));
   return (
     <div className="panel">
       <div className="panel-h">
@@ -1103,9 +1170,9 @@ function Rapport({
         )}
         <p className="small muted" style={{ margin: 0 }}>
           Le rapport est enregistré ici, version par version. Discutez des modifications avec Claude
-          dans la conversation ci-dessous, puis produisez la nouvelle version. Si vous avez
-          retravaillé le Word de votre côté, importez-le : il remplace le Word affiché, et la
-          production suivante part de son numéro.
+          dans la fenêtre Claude, puis produisez la nouvelle version. Si vous avez retravaillé le
+          Word de votre côté, importez-le : il remplace le Word affiché, et la production suivante
+          part de son numéro.
         </p>
         {enCours && (
           <p className="small muted" style={{ margin: 0 }}>
@@ -1164,20 +1231,6 @@ function Rapport({
             {raison}
           </p>
         )}
-        {versionsPrecedentes.length > 0 && (
-          <details>
-            <summary className="small">Versions précédentes ({versionsPrecedentes.length})</summary>
-            <ul className="small">
-              {versionsPrecedentes.map((v) => (
-                <li key={v.version}>
-                  <a href={urlRapportDiag(slug, projet.id, v.version)}>
-                    Version {v.version}, du {new Date(v.le).toLocaleDateString('fr-FR')}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
         <label className="small">
           <input
             type="checkbox"
@@ -1186,31 +1239,49 @@ function Rapport({
           />{' '}
           Relire les deux derniers rapports finaux avant de rédiger
         </label>
-        {versionsDrive.length > 0 && (
+        {versions.length > 0 && (
           <div className="stack">
+            <h3 style={{ margin: 0 }}>Versions du rapport</h3>
             <span className="small muted">
               Cochez la version finale : c’est elle qui servira de modèle pour rédiger les prochains
               rapports.
             </span>
             <ul className="small">
-              {versionsDrive.map((r) => (
-                <li key={r.lien}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={r.finale === true}
-                      disabled={enCours}
-                      aria-label={`Version finale : ${r.version ? `version ${r.version}` : 'rapport'} du ${new Date(r.le).toLocaleDateString('fr-FR')}`}
-                      onChange={(e) => void marquerFinale(r.lien, e.target.checked)}
-                    />{' '}
-                    <a href={r.lien} target="_blank" rel="noreferrer">
-                      {r.version ? `Version ${r.version}` : 'Rapport'} du{' '}
-                      {new Date(r.le).toLocaleDateString('fr-FR')}
-                    </a>
-                    {r.finale && <span className="badge green"> Version finale</span>}
-                  </label>
-                </li>
-              ))}
+              {versions.map((v) => {
+                const date = new Date(v.le).toLocaleDateString('fr-FR');
+                const titre = v.version ? `Version ${v.version}` : 'Rapport';
+                return (
+                  <li key={v.cle}>
+                    <label>
+                      {v.doc && v.lien && (
+                        <input
+                          type="checkbox"
+                          checked={v.finale}
+                          disabled={enCours}
+                          aria-label={`Version finale : ${v.version ? `version ${v.version}` : 'rapport'} du ${date}`}
+                          onChange={(e) => void marquerFinale(v.lien, e.target.checked)}
+                        />
+                      )}{' '}
+                      {v.lien ? (
+                        <a href={v.lien} target="_blank" rel="noreferrer">
+                          {titre} du {date}
+                        </a>
+                      ) : (
+                        <span>
+                          {titre} du {date}
+                        </span>
+                      )}
+                    </label>
+                    {v.finale && <span className="badge green"> Version finale</span>}
+                    {v.word && v.version && (
+                      <>
+                        {' · '}
+                        <a href={urlRapportDiag(slug, projet.id, v.version)}>Word</a>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
@@ -1250,20 +1321,6 @@ function Rapport({
                       Annuler
                     </button>
                   )}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-        {precedents.length > 0 && (
-          <details>
-            <summary className="small">Rapports précédents ({precedents.length})</summary>
-            <ul className="small">
-              {precedents.map((r) => (
-                <li key={r.lien}>
-                  <a href={r.lien} target="_blank" rel="noreferrer">
-                    Rapport du {new Date(r.le).toLocaleDateString('fr-FR')}
-                  </a>
                 </li>
               ))}
             </ul>
@@ -1992,11 +2049,13 @@ function Assistant({
   projet,
   onChange,
   onErreur,
+  controles,
 }: {
   slug: string;
   projet: ProjetDiag;
   onChange: (p: ProjetDiag) => void;
   onErreur: (m: string) => void;
+  controles?: ReactNode;
 }) {
   const etape = projet.etape;
   const chat: ChatEtape = { ...CHAT_DEFAUT[etape]!, ...projet.chats[String(etape)] };
@@ -2072,6 +2131,7 @@ function Assistant({
         >
           Vider la conversation
         </button>
+        {controles}
       </div>
       <div className="panel-b stack">
         <div className="diag-cfg">
