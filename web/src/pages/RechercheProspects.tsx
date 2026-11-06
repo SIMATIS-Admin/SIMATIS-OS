@@ -110,7 +110,11 @@ export function RechercheProspects({
         fusionnees += bilan.fusionnees;
       }
       await noterContactsRechercheBase(slug, lignes);
-      if (tache) await effacerRechercheProspects(slug, tache.id);
+      if (tache)
+        await effacerRechercheProspects(slug, tache.id, {
+          ajoutees: creees,
+          rapprochees: fusionnees,
+        });
       signalRecherche();
       termine(`${creees} fiche(s) ajoutée(s), ${fusionnees} fiche(s) rapprochée(s).`);
     });

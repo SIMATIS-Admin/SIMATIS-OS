@@ -363,7 +363,7 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
                   <th>Statut</th>
                   <th className="r">Brouillons</th>
                   <th className="r">E-mails envoyés</th>
-                  <th>Action</th>
+                  <th style={{ paddingLeft: 24 }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -399,12 +399,19 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
                       {Math.max(0, (c.resultat?.brouillons ?? c.brouillons) - (c.envoyes ?? 0))}
                     </td>
                     <td className="r num">{c.envoyes ?? 0}</td>
-                    <td>
+                    <td style={{ paddingLeft: 24 }}>
                       {c.statut !== 'terminee' && (
-                        <>
-                          <button className="btn sm primary" onClick={() => reprendre(c.id)}>
-                            Reprendre la campagne
-                          </button>{' '}
+                        <span style={{ display: 'inline-flex', gap: 8 }}>
+                          <button
+                            className="btn sm primary"
+                            aria-label="Reprendre la campagne"
+                            title="Reprendre la campagne"
+                            onClick={() => reprendre(c.id)}
+                          >
+                            <span style={{ display: 'inline-flex', width: 16, height: 16 }}>
+                              <Icon name="play" />
+                            </span>
+                          </button>
                           <button
                             className="btn sm"
                             style={{ color: '#b42318' }}
@@ -416,7 +423,7 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
                               <Icon name="trash" />
                             </span>
                           </button>
-                        </>
+                        </span>
                       )}
                     </td>
                   </tr>

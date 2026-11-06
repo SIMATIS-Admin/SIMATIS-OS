@@ -1,4 +1,3 @@
-import { SuiviRecherche } from './pages/SuiviRecherche.js';
 import { useCallback, useEffect, useState } from 'react';
 import {
   fetchCompteurInbox,
@@ -336,7 +335,6 @@ export function App() {
           </div>
           {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
         </div>
-        <SuiviRecherche key={current.slug} slug={current.slug} />
         <div className="content">{page()}</div>
         {view !== 'portefeuille' && <Console key={current.slug} slug={current.slug} />}
       </main>
