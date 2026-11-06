@@ -513,6 +513,22 @@ describe('Rapport à l étape 4', () => {
     expect(screen.getByText(/Saisissez d'abord le résultat/)).toBeTruthy();
   });
 
+  it('met le dossier pour Claude Chat et le dépôt du Word en avant, la rédaction de l OS repliée', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const dossier = await screen.findByRole('button', {
+      name: 'Préparer le dossier pour Claude Chat',
+    });
+    expect(dossier.closest('details')).toBeNull();
+    expect(screen.getByLabelText('Importer ma version du rapport').closest('details')).toBeNull();
+    for (const nom of ['Produire le rapport', 'Cadrer le rapport avec Claude']) {
+      expect(screen.getByRole('button', { name: nom }).closest('details.diag-plus')).not.toBeNull();
+    }
+  });
+
   it('active le bouton dès le résultat saisi, sans revue validée, puis demande le rapport', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
       projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', revue: null }),
@@ -581,7 +597,9 @@ describe('Rapport à l étape 4', () => {
     const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    expect(await screen.findByText(/Discutez des modifications avec Claude/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Le parcours : préparez le dossier pour Claude Chat/),
+    ).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Produire la version 2' }));
     expect(confirmation).toHaveBeenCalled();
     expect(api.demandeRapportDiag).not.toHaveBeenCalled();
