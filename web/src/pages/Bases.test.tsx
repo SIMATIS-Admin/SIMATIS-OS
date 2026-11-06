@@ -12,6 +12,9 @@ let mandats: unknown[] = [];
 let rapprochement: unknown = null;
 let reponses: unknown[] = [];
 
+// La liste complète est repliée par défaut : les tests qui la lisent l'ouvrent d'avance.
+beforeEach(() => window.localStorage.setItem('base-liste-ouverte', '1'));
+
 const apercu: ImportBase = {
   id: '11111111-1111-4111-8111-111111111111',
   nomFichier: 'Texte collé',
@@ -70,6 +73,31 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.endsWith('/suggestions') && url.includes('/base/enrichissement/')) return json([]);
   if (method === 'GET' && url.includes('/base/enrichissement/'))
     return json({ tache: { id: 't', etat: 'terminee', jetons: 0, erreur: null }, lignes: [] });
+  if (url.endsWith('/base/enrichissement-sessions'))
+    return json([
+      {
+        id: 's1',
+        date: '2026-11-03T08:00:00Z',
+        nature: 'recherche',
+        libelle: 'Recherche de nouveaux prospects',
+        mode: 'automatique',
+        etat: 'terminee',
+        traites: 12,
+        ajoutees: 9,
+        detail: null,
+      },
+      {
+        id: 's2',
+        date: '2026-11-02T08:00:00Z',
+        nature: 'enrichissement',
+        libelle: 'Complément de fiches',
+        mode: 'manuel',
+        etat: 'erreur',
+        traites: 3,
+        ajoutees: null,
+        detail: 'Quota atteint',
+      },
+    ]);
   if (url.endsWith('/base/mandats')) return json(mandats);
   if (url.endsWith('/base/rapprochement-mail'))
     return method === 'POST' ? json(rapprochement, 202) : json(rapprochement);
@@ -284,7 +312,11 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
   it('montre le dernier contact et les alertes de chaque fiche', async () => {
     render(<Bases slug="simatis" />);
     expect(await screen.findByText('Atelier Fictif')).toBeTruthy();
-    expect(within(screen.getByRole('table')).getByText('Contacté')).toBeTruthy();
+    expect(
+      within(
+        within(screen.getByRole('region', { name: 'Fiches de la base' })).getByRole('table'),
+      ).getByText('Contacté'),
+    ).toBeTruthy();
     expect(screen.getByText(/Contacté le 15\/09\/2026/)).toBeTruthy();
     expect(screen.getByText(/2 contacts · Mandat A/)).toBeTruthy();
   });
@@ -401,6 +433,26 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByText("Actualiser l'historique"));
     expect(await screen.findByText(/1 adresses vérifiées dans les CRM/)).toBeTruthy();
+  });
+
+  it('affiche les dernières sessions, automatiques et manuelles', async () => {
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    expect(await within(panneau).findByText('Automatique')).toBeTruthy();
+    expect(within(panneau).getByText('Manuel')).toBeTruthy();
+    expect(within(panneau).getByText('Quota atteint')).toBeTruthy();
+  });
+
+  it('replie la liste des contacts par défaut et la rouvre avec le bouton', async () => {
+    window.localStorage.removeItem('base-liste-ouverte');
+    render(<Bases slug="simatis" />);
+    const bouton = await screen.findByRole('button', { name: 'Afficher la liste des contacts' });
+    expect(screen.queryByText('Atelier Fictif')).toBeNull();
+    fireEvent.click(bouton);
+    expect(await screen.findByText('Atelier Fictif')).toBeTruthy();
+    expect(window.localStorage.getItem('base-liste-ouverte')).toBe('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Réduire la liste des contacts' }));
+    expect(screen.queryByText('Atelier Fictif')).toBeNull();
   });
 });
 

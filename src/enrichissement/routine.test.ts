@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { setupTestApp } from '../../test/database.js';
 import { listerFiches } from '../base-vivante/service.js';
 import { createInstance } from '../instances/service.js';
+import { dernieresSessions } from './sessions.js';
 import { enregistrerRoutineRecherche, lireRoutineRecherche, tournerRecherche } from './routine.js';
 
 it('ajoute les contacts au plus une fois par jour après l’heure de Paris', async () => {
@@ -52,6 +53,15 @@ it('ajoute les contacts au plus une fois par jour après l’heure de Paris', as
     expect(await lireRoutineRecherche(t.app.db, instance.id)).toMatchObject({
       dernierJour: '2026-11-03',
     });
+    expect(await dernieresSessions(t.app.db, instance.id)).toMatchObject([
+      {
+        nature: 'recherche',
+        mode: 'automatique',
+        etat: 'incomplete',
+        traites: 1,
+        ajoutees: 1,
+      },
+    ]);
   } finally {
     await t.drop();
   }

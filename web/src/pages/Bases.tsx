@@ -1,5 +1,6 @@
 import { RoutineProspects } from './RoutineProspects.js';
 import { RechercheProspects } from './RechercheProspects.js';
+import { SessionsEnrichissement } from './SessionsEnrichissement.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   annulerImportBase,
@@ -578,6 +579,14 @@ export function Bases({ slug }: { slug: string }) {
     aClasser: 0,
   });
   const recherche = useRef<HTMLInputElement>(null);
+  // La liste complète est longue : repliée par défaut, le choix de Marc est retenu.
+  const [listeOuverte, setListeOuverte] = useState(
+    () => window.localStorage.getItem('base-liste-ouverte') === '1',
+  );
+  const basculerListe = () => {
+    window.localStorage.setItem('base-liste-ouverte', listeOuverte ? '0' : '1');
+    setListeOuverte(!listeOuverte);
+  };
   // Closed previews: the list may still hold them until it is read again.
   const termines = useRef(new Set<string>());
 
@@ -612,7 +621,8 @@ export function Bases({ slug }: { slug: string }) {
     const touche = (e: KeyboardEvent) => {
       if (e.key !== '/' || (e.target as HTMLElement).matches?.('input, select, textarea')) return;
       e.preventDefault();
-      recherche.current?.focus();
+      setListeOuverte(true);
+      setTimeout(() => recherche.current?.focus());
     };
     document.addEventListener('keydown', touche);
     return () => document.removeEventListener('keydown', touche);
@@ -799,30 +809,40 @@ export function Bases({ slug }: { slug: string }) {
         </div>
       )}
 
-      <BaseTable
-        slug={slug}
-        etat={etat}
-        filtres={filtres}
-        onFiltres={setFiltres}
-        page={page}
-        onPage={setPage}
-        onChange={() => void charger()}
-        onImporter={() => setFenetre({ quoi: 'import', etape: 1 })}
-        recherche={
-          <input
-            ref={recherche}
-            className="input bv-recherche"
-            type="search"
-            aria-label="Rechercher dans la base"
-            placeholder="Rechercher une entreprise, un nom, un e-mail…"
-            value={filtres.q ?? ''}
-            onChange={(e) => {
-              setFiltres({ ...filtres, q: e.target.value });
-              setPage(0);
-            }}
-          />
-        }
-      />
+      <SessionsEnrichissement slug={slug} version={fenetre === null ? 0 : 1} />
+
+      <div className="bv-liste-bascule">
+        <button className="btn" type="button" aria-expanded={listeOuverte} onClick={basculerListe}>
+          {listeOuverte ? 'Réduire la liste des contacts' : 'Afficher la liste des contacts'}
+        </button>
+      </div>
+
+      {listeOuverte && (
+        <BaseTable
+          slug={slug}
+          etat={etat}
+          filtres={filtres}
+          onFiltres={setFiltres}
+          page={page}
+          onPage={setPage}
+          onChange={() => void charger()}
+          onImporter={() => setFenetre({ quoi: 'import', etape: 1 })}
+          recherche={
+            <input
+              ref={recherche}
+              className="input bv-recherche"
+              type="search"
+              aria-label="Rechercher dans la base"
+              placeholder="Rechercher une entreprise, un nom, un e-mail…"
+              value={filtres.q ?? ''}
+              onChange={(e) => {
+                setFiltres({ ...filtres, q: e.target.value });
+                setPage(0);
+              }}
+            />
+          }
+        />
+      )}
 
       {fenetre?.quoi === 'routine-recherche' && (
         <RoutineProspects slug={slug} fermer={() => setFenetre(null)} />

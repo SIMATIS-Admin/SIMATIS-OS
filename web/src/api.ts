@@ -2755,6 +2755,21 @@ export const comptabiliserMouvementCca = (slug: string, id: string, source: stri
 export const archiverMouvementCca = (slug: string, id: string) =>
   sendJson<SuiviCcaGestion>('DELETE', inst(slug, `gestion/cca/mouvements/${id}`), {});
 
+// Dernières sessions de recherche de prospects et d'enrichissement (voir src/enrichissement/sessions.ts).
+export type SessionEnrichissement = {
+  id: string;
+  date: string;
+  nature: 'recherche' | 'enrichissement';
+  libelle: string;
+  mode: 'manuel' | 'automatique';
+  etat: 'en_cours' | 'terminee' | 'incomplete' | 'erreur';
+  traites: number;
+  ajoutees: number | null;
+  detail: string | null;
+};
+export const fetchSessionsEnrichissement = (slug: string) =>
+  getJson<SessionEnrichissement[]>(inst(slug, 'base/enrichissement-sessions'));
+
 // Enrichissement de listes par IA (voir src/enrichissement).
 export type EtatEnrichissement = {
   disponible: boolean;
