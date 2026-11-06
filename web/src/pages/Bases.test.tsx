@@ -73,6 +73,18 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.endsWith('/suggestions') && url.includes('/base/enrichissement/')) return json([]);
   if (method === 'GET' && url.includes('/base/enrichissement/'))
     return json({ tache: { id: 't', etat: 'terminee', jetons: 0, erreur: null }, lignes: [] });
+  if (url.includes('/base/enrichissement-sessions/') && url.endsWith('/contacts'))
+    return json([
+      {
+        entreprise: 'Atelier Fictif',
+        prenom: 'Léa',
+        nom: 'Martin',
+        fonction: 'Dirigeante',
+        statut: null,
+      },
+    ]);
+  if (url.includes('/base/enrichissement-sessions/') && (method === 'PATCH' || method === 'DELETE'))
+    return json({ ok: true });
   if (url.endsWith('/base/enrichissement-sessions'))
     return json([
       {
@@ -85,6 +97,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
         traites: 12,
         ajoutees: 9,
         detail: null,
+        commentaire: null,
       },
       {
         id: 's2',
@@ -94,8 +107,9 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
         mode: 'manuel',
         etat: 'erreur',
         traites: 3,
-        ajoutees: null,
+        ajoutees: 0,
         detail: 'Quota atteint',
+        commentaire: null,
       },
     ]);
   if (url.endsWith('/base/mandats')) return json(mandats);
@@ -441,6 +455,57 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     expect(await within(panneau).findByText('Automatique')).toBeTruthy();
     expect(within(panneau).getByText('Manuel')).toBeTruthy();
     expect(within(panneau).getByText('Quota atteint')).toBeTruthy();
+  });
+
+  it('replie la liste des sessions et retient le choix', async () => {
+    window.localStorage.removeItem('sessions-enrichissement-ouvertes');
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    expect(await within(panneau).findByText('Quota atteint')).toBeTruthy();
+    fireEvent.click(within(panneau).getByRole('button', { name: 'Replier la liste' }));
+    expect(within(panneau).queryByText('Quota atteint')).toBeNull();
+    expect(window.localStorage.getItem('sessions-enrichissement-ouvertes')).toBe('0');
+  });
+
+  it('montre les contacts d’une session et enregistre un commentaire', async () => {
+    window.localStorage.removeItem('sessions-enrichissement-ouvertes');
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    const boutons = await within(panneau).findAllByTitle('Voir les contacts de cette session');
+    fireEvent.click(boutons[0]!);
+    expect(await within(panneau).findByText('Atelier Fictif')).toBeTruthy();
+    fireEvent.change(within(panneau).getByLabelText('Commentaire'), {
+      target: { value: 'Lancée par erreur' },
+    });
+    fireEvent.click(within(panneau).getByRole('button', { name: 'Enregistrer le commentaire' }));
+    await waitFor(() => {
+      const patch = calls.find(
+        (c) => c.method === 'PATCH' && c.url.includes('enrichissement-sessions'),
+      );
+      expect(patch?.url).toContain('/enrichissement-sessions/recherche/s1');
+      expect(patch?.body).toEqual({ commentaire: 'Lancée par erreur' });
+    });
+  });
+
+  it('supprime une session après confirmation', async () => {
+    window.localStorage.removeItem('sessions-enrichissement-ouvertes');
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    fireEvent.click(
+      (await within(panneau).findAllByRole('button', { name: 'Supprimer la session' }))[1]!,
+    );
+    await waitFor(() => expect(within(panneau).queryByText('Quota atteint')).toBeNull());
+    expect(
+      calls.some(
+        (c) =>
+          c.method === 'DELETE' && c.url.endsWith('/enrichissement-sessions/enrichissement/s2'),
+      ),
+    ).toBe(true);
+    vi.unstubAllGlobals();
   });
 
   it('replie la liste des contacts par défaut et la rouvre avec le bouton', async () => {

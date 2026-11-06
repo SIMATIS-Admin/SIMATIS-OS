@@ -2777,7 +2777,30 @@ export type SessionEnrichissement = {
   traites: number;
   ajoutees: number | null;
   detail: string | null;
+  commentaire: string | null;
 };
+export type ContactSessionEnrichissement = {
+  entreprise: string;
+  prenom: string;
+  nom: string;
+  fonction: string;
+  statut: string | null;
+};
+const urlSession = (slug: string, s: Pick<SessionEnrichissement, 'nature' | 'id'>) =>
+  inst(slug, `base/enrichissement-sessions/${s.nature}/${s.id}`);
+export const fetchContactsSession = (
+  slug: string,
+  s: Pick<SessionEnrichissement, 'nature' | 'id'>,
+) => getJson<ContactSessionEnrichissement[]>(`${urlSession(slug, s)}/contacts`);
+export const commenterSessionEnrichissement = (
+  slug: string,
+  s: Pick<SessionEnrichissement, 'nature' | 'id'>,
+  commentaire: string,
+) => sendJson<{ ok: boolean }>('PATCH', urlSession(slug, s), { commentaire });
+export const supprimerSessionEnrichissement = (
+  slug: string,
+  s: Pick<SessionEnrichissement, 'nature' | 'id'>,
+) => sendJson<{ ok: boolean }>('DELETE', urlSession(slug, s), {});
 export const fetchSessionsEnrichissement = (slug: string) =>
   getJson<SessionEnrichissement[]>(inst(slug, 'base/enrichissement-sessions'));
 
@@ -2861,8 +2884,11 @@ export const lireRechercheProspects = (slug: string) =>
   getJson<RechercheEnCours | null>(inst(slug, 'base/recherche/tache'));
 export const lancerRechercheProspects = (slug: string, consignes: string, nombre: number) =>
   sendJson<RechercheEnCours>('POST', inst(slug, 'base/recherche/tache'), { consignes, nombre });
-export const effacerRechercheProspects = (slug: string, id: string) =>
-  sendJson<{ ok: boolean }>('DELETE', inst(slug, 'base/recherche/tache'), { id });
+export const effacerRechercheProspects = (
+  slug: string,
+  id: string,
+  bilan?: { ajoutees: number; rapprochees: number },
+) => sendJson<{ ok: boolean }>('DELETE', inst(slug, 'base/recherche/tache'), { id, ...bilan });
 
 export const continuerRechercheProspects = (slug: string, consignes?: string) =>
   sendJson<RechercheEnCours>('POST', inst(slug, 'base/recherche/tache/continuer'), { consignes });

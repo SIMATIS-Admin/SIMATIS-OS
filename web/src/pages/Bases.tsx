@@ -1,6 +1,7 @@
 import { RoutineProspects } from './RoutineProspects.js';
 import { RechercheProspects } from './RechercheProspects.js';
 import { SessionsEnrichissement } from './SessionsEnrichissement.js';
+import { SuiviRecherche } from './SuiviRecherche.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   annulerImportBase,
@@ -705,6 +706,7 @@ export function Bases({ slug }: { slug: string }) {
 
   return (
     <div className="bv">
+      <SuiviRecherche slug={slug} />
       <div className="bv-tete bv-entete">
         <p className="muted">
           Vos contacts, leurs sources et leur historique, prêts pour la prospection.

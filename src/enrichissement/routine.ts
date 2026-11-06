@@ -121,6 +121,12 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
         trouves: contacts.length,
         ajoutees: creees,
         rapprochees: fusionnees,
+        contacts: contacts.map((c) => ({
+          entreprise: c.entreprise,
+          prenom: c.prenom,
+          nom: c.nom,
+          fonction: c.fonction,
+        })),
       };
       bilan = `${creees} fiche(s) ajoutée(s), ${fusionnees} rapprochée(s), sur ${routine.nombre} contacts visés.`;
     } catch {

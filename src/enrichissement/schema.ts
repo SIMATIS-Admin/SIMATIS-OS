@@ -23,6 +23,7 @@ export const enrichissementTaches = pgTable(
     etat: text('etat', { enum: ETATS_TACHE }).notNull(),
     jetons: integer('jetons').notNull().default(0),
     erreur: text('erreur'),
+    commentaire: text('commentaire'),
   },
   (t) => [
     index('enrichissement_taches_instance_idx').on(t.instanceId, t.createdAt),
@@ -85,6 +86,13 @@ export type Tache = typeof enrichissementTaches.$inferSelect;
 export type Ligne = typeof enrichissementLignes.$inferSelect;
 export type Suggestion = typeof enrichissementSuggestions.$inferSelect;
 
+export type ContactSession = {
+  entreprise: string;
+  prenom: string;
+  nom: string;
+  fonction: string;
+};
+
 export const MODES_RECHERCHE = ['manuel', 'automatique'] as const;
 export const ETATS_RECHERCHE = ['en_cours', 'terminee', 'incomplete', 'erreur'] as const;
 
@@ -104,6 +112,9 @@ export const rechercheSessions = pgTable(
     etat: text('etat', { enum: ETATS_RECHERCHE }).notNull().default('en_cours'),
     erreur: text('erreur'),
     finiLe: timestamp('fini_le', { withTimezone: true }),
+    commentaire: text('commentaire'),
+    // Les contacts trouvés pendant la session, pour pouvoir les relire depuis l'historique.
+    contacts: jsonb('contacts').$type<ContactSession[]>(),
   },
   (t) => [
     index('recherche_sessions_instance_idx').on(t.instanceId, t.createdAt),

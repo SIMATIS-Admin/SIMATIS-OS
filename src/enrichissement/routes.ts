@@ -4,7 +4,15 @@ import {
   lireRecherche,
   effacerRecherche,
 } from './recherche-tache.js';
-import { cloreSessionRecherche, dernieresSessions, ouvrirSessionRecherche } from './sessions.js';
+import {
+  cloreSessionRecherche,
+  commenterSession,
+  contactsDeSession,
+  dernieresSessions,
+  noterIntegrationSession,
+  ouvrirSessionRecherche,
+  supprimerSession,
+} from './sessions.js';
 import { enregistrerRoutineRecherche, lireRoutineRecherche, reglagesRecherche } from './routine.js';
 import { chercherProspects } from './recherche.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -60,7 +68,7 @@ export function registerEnrichissementRoutes(
         ? reglagesDe(enrichissement)
         : null;
 
-  type Route = { Params: { slug: string; tacheId?: string }; Body: unknown };
+  type Route = { Params: { slug: string; tacheId?: string; nature?: string }; Body: unknown };
   const surInstance =
     (
       f: (
@@ -100,6 +108,12 @@ export function registerEnrichissementRoutes(
           etat:
             fin.etat === 'terminee' ? 'terminee' : fin.etat === 'erreur' ? 'erreur' : 'incomplete',
           trouves: fin.contacts?.length ?? 0,
+          contacts: (fin.contacts ?? []).map((c) => ({
+            entreprise: c.entreprise,
+            prenom: c.prenom,
+            nom: c.nom,
+            fonction: c.fonction,
+          })),
           erreur: fin.erreur,
         });
       })
@@ -109,6 +123,50 @@ export function registerEnrichissementRoutes(
   app.get<Route>(
     '/api/i/:slug/base/enrichissement-sessions',
     surInstance((instanceId) => dernieresSessions(db, instanceId)),
+  );
+
+  const natureSession = (request: FastifyRequest<Route>) => {
+    const nature = request.params.nature;
+    if (nature !== 'recherche' && nature !== 'enrichissement')
+      throw new LotRefuse('Session inconnue.');
+    return nature;
+  };
+  const sessionRoute = '/api/i/:slug/base/enrichissement-sessions/:nature/:tacheId';
+  app.get<Route>(
+    `${sessionRoute}/contacts`,
+    surInstance((instanceId, request) =>
+      contactsDeSession(db, instanceId, natureSession(request), request.params.tacheId as string),
+    ),
+  );
+  app.patch<Route>(
+    sessionRoute,
+    surInstance(async (instanceId, request) => {
+      const corps = z.object({ commentaire: z.string().max(2000) }).safeParse(request.body);
+      if (!corps.success) throw new LotRefuse('Commentaire invalide.');
+      await commenterSession(
+        db,
+        instanceId,
+        natureSession(request),
+        request.params.tacheId as string,
+        corps.data.commentaire,
+      );
+      return { ok: true };
+    }),
+  );
+  app.delete<Route>(
+    sessionRoute,
+    surInstance(async (instanceId, request, reply) => {
+      const resultat = await supprimerSession(
+        db,
+        instanceId,
+        natureSession(request),
+        request.params.tacheId as string,
+      );
+      if (resultat === 'absente') return reply.code(404).send({ error: 'Session introuvable.' });
+      if (resultat === 'en_cours')
+        return reply.code(409).send({ error: 'Cette session est encore en cours.' });
+      return { ok: true };
+    }),
   );
 
   app.get<Route>(
@@ -131,8 +189,20 @@ export function registerEnrichissementRoutes(
   app.delete<Route>(
     '/api/i/:slug/base/recherche/tache',
     surInstance(async (instanceId, request) => {
-      const input = z.object({ id: z.string().uuid() }).safeParse(request.body);
+      const input = z
+        .object({
+          id: z.string().uuid(),
+          // Bilan de l'intégration, quand la recherche est effacée après avoir été intégrée.
+          ajoutees: z.number().int().min(0).optional(),
+          rapprochees: z.number().int().min(0).optional(),
+        })
+        .safeParse(request.body);
       if (!input.success) throw new LotRefuse('Recherche invalide.');
+      if (input.data.ajoutees !== undefined)
+        await noterIntegrationSession(db, instanceId, input.data.id, {
+          ajoutees: input.data.ajoutees,
+          rapprochees: input.data.rapprochees ?? 0,
+        });
       await effacerRecherche(db, instanceId, input.data.id);
       return { ok: true };
     }),
