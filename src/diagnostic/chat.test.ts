@@ -13,7 +13,9 @@ import {
   repondreClaude,
   viderConversation,
 } from './chat.js';
-import { demanderRapport, enregistrerRapport } from './rapport.js';
+import { demanderRapport, enregistrerRapport, importerRapport } from './rapport.js';
+import { genererRapportWord } from './rapport-word.js';
+import { demanderRestitution } from './restitution.js';
 import { contenuRapportFictif } from './fixtures/rapport-fictif.js';
 import { createProjet, DiagnosticIndisponible, listProjets, updateProjet } from './service.js';
 
@@ -205,5 +207,61 @@ describe('Vider la conversation de l assistant', () => {
     );
     const relu = (await listProjets(t.app.db, simatis)).find((x) => x.id === p.id)!;
     expect(relu.conversation).toHaveLength(1);
+  });
+});
+
+describe('Texte du Word affiché pour la restitution', () => {
+  let t: TestApp;
+  let simatis: Instance;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    simatis = await createInstance(t.owner.db, {
+      slug: 'simatis-chat-word',
+      nom: 'SIMATIS',
+      type: 'propre',
+    });
+  });
+
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  const attente = async (id: string) => (await attentesClaude(t.app.db)).find((a) => a.id === id)!;
+
+  const avecWordDepose = async (nom: string) => {
+    const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+    await updateProjet(t.app.db, simatis, p.id, {
+      dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
+    });
+    await importerRapport(t.app.db, simatis, p.id, {
+      nom: `${nom} - v3.docx`,
+      base64: Buffer.from(genererRapportWord(contenuRapportFictif)).toString('base64'),
+    });
+    return p.id;
+  };
+
+  it('la restitution reçoit le texte du Word déposé, sans version rédigée par l OS', async () => {
+    const id = await avecWordDepose('Word Fictif A');
+    await demanderRestitution(t.app.db, simatis, id);
+    const a = await attente(id);
+    expect(a.rapportWordTexte).toContain('Installer la feuille de route.');
+    expect(a.rapportContenu).toBeNull();
+  });
+
+  it('le texte du Word ne voyage pas pour une demande qui n en a pas besoin', async () => {
+    const id = await avecWordDepose('Word Fictif B');
+    await envoyerMessage(t.app.db, simatis, id, 'Une question');
+    expect((await attente(id)).rapportWordTexte).toBeNull();
+  });
+
+  it('un Word illisible donne un texte nul, sans faire échouer la demande', async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Word Fictif C', activite: 'services' });
+    await importerRapport(t.app.db, simatis, p.id, {
+      nom: 'Word Fictif C.docx',
+      base64: Buffer.from('PK\u0003\u0004pas un vrai zip').toString('base64'),
+    });
+    await demanderRestitution(t.app.db, simatis, p.id);
+    expect((await attente(p.id)).rapportWordTexte).toBeNull();
   });
 });

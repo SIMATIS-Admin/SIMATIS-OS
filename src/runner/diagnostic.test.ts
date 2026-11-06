@@ -93,6 +93,7 @@ const attente: AttenteDiag = {
   restitutionLien: null,
   revueExportLien: null,
   dossierExportLien: null,
+  rapportWordTexte: null,
   restitutionAvecProposition: true,
   proposition: null,
   pdf: null,
@@ -580,6 +581,30 @@ describe('Production par le runner : modifications et deck', () => {
     expect(texte).toContain('enregistrer_dossier_rapport');
     expect(texte).toContain(`projetId ${restitution.id}`);
     expect(texte).toContain("N'y mets rien qui vienne du second cerveau");
+  });
+
+  it('la révision du rapport part du Word déposé quand il n y a pas de version rédigée par l OS', () => {
+    const texte = promptRapport(
+      { ...base, rapportNom: 'importe.docx', rapportWordTexte: 'Texte fictif du Word déposé' },
+      null,
+    );
+    expect(texte).toContain('Texte fictif du Word déposé');
+    expect(texte).not.toContain("dont tu n'as pas le contenu");
+  });
+
+  it('la restitution et le dossier partent du Word affiché quand il y en a un', () => {
+    const base = { ...restitution, rapportNom: 'Rapport Fictif - v3.docx', rapportContenu: null };
+    const avec = { ...base, rapportWordTexte: 'Texte fictif du Word final' };
+    for (const texte of [
+      promptRestitution({ ...avec, demande: 'restitution' }),
+      promptDossierRapport({ ...avec, demande: 'dossier_exporter' }),
+    ]) {
+      expect(texte).toContain('Texte fictif du Word final');
+      expect(texte).not.toContain("dont tu n'as pas le contenu");
+    }
+    expect(promptRestitution({ ...base, demande: 'restitution' })).toContain(
+      "dont tu n'as pas le contenu",
+    );
   });
 
   it('le dossier de travail révise l artifact existant au lieu d en créer un autre', () => {

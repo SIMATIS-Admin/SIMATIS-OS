@@ -224,6 +224,14 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
                 .where(eq(rendezVous.id, p.capitalisationRdvId!)),
             )
           : [];
+      // Le Word affiché (celui que le pilote a déposé après l'avoir retravaillé dans Claude Chat, ou celui
+      // de l'OS) donne son texte à la restitution, au dossier de travail et à la révision du rapport.
+      const rapportWordTexte =
+        p.rapport &&
+        (['restitution', 'dossier_exporter'].includes(p.demande ?? '') ||
+          (p.demande === 'rapport' && p.rapportVersions.length === 0))
+          ? (texteDuDocx(Buffer.from(p.rapport, 'base64'))?.slice(0, 30_000) ?? null)
+          : null;
       const relireFinaux = instance.config.diagnostic?.relireFinaux !== false;
       // La capitalisation compare toujours aux finaux précédents, réglage actif ou non.
       const rapportsFinaux =
@@ -346,6 +354,7 @@ export async function attentesClaude(db: Executor, drive?: DriveDeps) {
         rapportVersion: p.rapportVersions.at(-1)?.version ?? null,
         rapportContenu: p.rapportVersions.at(-1)?.contenu ?? null,
         rapportNom: p.rapportNom,
+        rapportWordTexte,
         restitutionLien: p.restitutionLien,
         revueExportLien: p.revueExportLien,
         dossierExportLien: p.dossierExportLien,
