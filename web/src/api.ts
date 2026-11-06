@@ -1518,6 +1518,13 @@ export const demandeRapportDiag = (slug: string, id: string) =>
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/produire`),
     {},
   );
+// Cadrage du rapport (étape 4) : Claude pose ses questions et propose le plan avant la production.
+export const cadrerRapportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/cadrer`),
+    {},
+  );
 // Demande le deck de restitution du rapport (étape 5).
 export const demandeRestitutionDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(

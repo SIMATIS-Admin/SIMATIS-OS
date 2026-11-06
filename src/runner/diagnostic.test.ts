@@ -15,6 +15,7 @@ import {
   outilsRapport,
   outilsRegles,
   outilsReglesRestitution,
+  outilsCadrageRapport,
   outilsRevue,
   outilsExportRestitution,
   outilsRestitution,
@@ -23,6 +24,7 @@ import {
   promptDiagnostic,
   promptEntretien,
   promptAnnulerRegle,
+  promptCadrageRapport,
   promptRapport,
   promptReglesAnalyse,
   promptRevue,
@@ -1211,5 +1213,56 @@ describe('Préparation de la revue par le runner', () => {
     expect(outils).toContain('Read(//cerveau-fictif/**)');
     expect(outils).not.toMatch(/Edit\(\/\/cerveau-fictif/);
     expect(outils).not.toContain('enregistrer_rapport,');
+  });
+});
+
+describe('Cadrage du rapport par le runner', () => {
+  const cadrer: AttenteDiag = {
+    ...attente,
+    etape: 4,
+    etapeMessage: 4,
+    demande: 'rapport_cadrer',
+    contexte: 'Contexte fictif du projet.',
+    revue: {
+      statut: 'validée',
+      preconisations: {
+        p1: {
+          titre: 'Cadencer la prospection',
+          texte: 'Texte fictif',
+          choix: 'remplacer',
+          detail: 'Ma version fictive',
+        },
+      },
+    },
+    conversation: [
+      { etape: 4, de: 'pilote', texte: 'Cadrer le rapport.', at: '2026-11-06T08:00:00Z' },
+    ],
+  };
+
+  it('fait de Claude un partenaire : questions, plan proposé, rien de rédigé', () => {
+    const texte = promptCadrageRapport(cadrer, '/cerveau-fictif');
+    expect(texte).toContain(SKILL_RAPPORT);
+    expect(texte).toContain('Contexte fictif du projet.');
+    expect(texte).toContain('texte du pilote : Ma version fictive');
+    expect(texte).not.toContain('"preconisations"');
+    expect(texte).toMatch(/pose.*questions/i);
+    expect(texte).toMatch(/propose.*plan/i);
+    expect(texte).toMatch(/ne rédiges pas le rapport/i);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toContain('Pilote : Cadrer le rapport.');
+    expect(texte).toContain(`projetId ${cadrer.id}`);
+    expect(texte).not.toContain('enregistrer_rapport');
+  });
+
+  it('sans second cerveau, le dit au lieu de deviner', () => {
+    expect(promptCadrageRapport(cadrer, null)).toContain('Second cerveau non accessible');
+  });
+
+  it('ne permet que de lire : jamais d enregistrer_rapport, d écriture ni de Bash', () => {
+    const outils = outilsCadrageRapport('/cerveau', ['/travail']);
+    expect(outils).toContain('mcp__simatis__repondre_diagnostic');
+    expect(outils).toContain('Read(//cerveau/**)');
+    expect(outils).not.toContain('enregistrer_rapport');
+    expect(outils).not.toMatch(/Edit|Write|Bash/);
   });
 });

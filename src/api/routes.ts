@@ -26,6 +26,7 @@ import { listerJournalRegles } from '../diagnostic/regles.js';
 import {
   demanderAnnulationRegle,
   demanderCapitalisationRapport,
+  demanderCadrageRapport,
   demanderRapport,
   importerRapport,
   marquerVersionFinale,
@@ -656,6 +657,21 @@ export function registerApi(
       if (!corps.success) return reply.code(400).send({ error: 'Lien et choix attendus' });
       try {
         return await marquerVersionFinale(db, i, id, corps.data.lien, corps.data.finale);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Cadrage du rapport (étape 4) : questions et plan proposés par Claude avant la production.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/cadrer',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderCadrageRapport(db, i, id);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });

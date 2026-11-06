@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   majProjetDiag: vi.fn(),
   envoyerMessageDiag: vi.fn(),
   demandeSupportDiag: vi.fn(),
+  cadrerRapportDiag: vi.fn(),
   demandeRapportDiag: vi.fn(),
   demandeRestitutionDiag: vi.fn(),
   exporterRestitutionDiag: vi.fn(),
@@ -520,6 +521,43 @@ describe('Rapport à l étape 4', () => {
     fireEvent.click(bouton);
     await waitFor(() => expect(api.demandeRapportDiag).toHaveBeenCalledWith('simatis', 'p1'));
     expect(await screen.findByText(/Claude rédige le rapport/)).toBeTruthy();
+  });
+
+  it('propose de cadrer le rapport avec Claude : désactivé sans résultat ou pendant qu il répond', async () => {
+    const bouton = { name: 'Cadrer le rapport avec Claude' };
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 4, etapeMax: 4 })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
+    cleanup();
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', statutChat: 'attente_claude' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
+  });
+
+  it('lance le cadrage, et affiche le message de l API en cas de refus', async () => {
+    const bouton = { name: 'Cadrer le rapport avec Claude' };
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur' }),
+    ]);
+    api.cadrerRapportDiag.mockResolvedValue(
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', statutChat: 'attente_claude' }),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', bouton));
+    await waitFor(() => expect(api.cadrerRapportDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    api.cadrerRapportDiag.mockRejectedValue(
+      new Error('Un rapport est déjà en cours de rédaction.'),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', bouton));
+    expect(await screen.findByText(/déjà en cours de rédaction/)).toBeTruthy();
   });
 
   it('prévient avant de produire une nouvelle version, et s arrête si on refuse', async () => {
