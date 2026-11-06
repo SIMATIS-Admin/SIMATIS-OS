@@ -3441,6 +3441,50 @@ tr.sel {
 .diag-chat-e4 {
   position: static;
 }
+/* Étape 4 : fenêtre flottante devant la page ; réduite, il ne reste que son en-tête. */
+.diag-flottant {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 32px));
+  height: min(520px, calc(100vh - 32px));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  border-radius: var(--r-m);
+}
+.diag-flottant.ferme {
+  display: none;
+}
+.diag-flottant.reduit {
+  height: auto;
+}
+.diag-flottant.reduit .panel-b {
+  display: none;
+}
+.diag-flottant .diag-chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+}
+.diag-flottant .diag-chat .panel-b {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.diag-flottant .diag-log {
+  flex: 1;
+  max-height: none;
+}
+.diag-flottant-ouvrir {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+}
 /* En-tête du chat : l'icône, le titre, puis le bouton, qui passe dessous quand la place manque. */
 .diag-chat-h {
   flex-wrap: wrap;

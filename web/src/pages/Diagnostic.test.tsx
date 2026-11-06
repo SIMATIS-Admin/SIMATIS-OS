@@ -627,16 +627,56 @@ describe('Rapport à l étape 4', () => {
     confirmation.mockRestore();
   });
 
-  it('place la conversation sous le rapport, pas à côté', async () => {
+  it('place la conversation dans une fenêtre flottante, réductible, fermable et rouvrable', async () => {
     api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 4, etapeMax: 4, dims })]);
     const { container } = render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     await screen.findByText('Rapport remis au dirigeant');
-    const mise = container.querySelector('.diag-layout')!;
-    expect(mise.classList.contains('empile')).toBe(true);
-    const principal = container.querySelector('.diag-main')!;
-    expect(principal.querySelector('.diag-chat')).not.toBeNull();
-    expect(mise.querySelectorAll('.diag-chat')).toHaveLength(1);
+    expect(container.querySelector('.diag-main .diag-chat')).toBeNull();
+    const fenetre = container.querySelector('.diag-flottant')!;
+    expect(fenetre.querySelectorAll('.diag-chat')).toHaveLength(1);
+    expect(fenetre.classList.contains('reduit')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir la fenêtre Claude' }));
+    expect(fenetre.classList.contains('ouvert')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer la fenêtre Claude' }));
+    expect(fenetre.classList.contains('ferme')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir Claude' }));
+    expect(fenetre.classList.contains('ouvert')).toBe(true);
+  });
+
+  it('une seule liste de versions : Google Doc et Word sur la même ligne', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        aRapport: true,
+        rapportNom: 'Rapport - v2.docx',
+        rapportLiens: [
+          {
+            lien: 'https://docs.google.com/document/d/b/edit',
+            le: '2026-11-06T08:00:00.000Z',
+            version: 2,
+          },
+          {
+            lien: 'https://docs.google.com/document/d/a/edit',
+            le: '2026-11-05T08:00:00.000Z',
+            version: 1,
+          },
+        ],
+        rapportVersions: [
+          { version: 1, le: '2026-11-05T08:00:00.000Z' },
+          { version: 2, le: '2026-11-06T08:00:00.000Z' },
+        ],
+      }),
+    ]);
+    const { container } = render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    await screen.findByText('Versions du rapport');
+    expect(screen.queryByText(/Versions précédentes/)).toBeNull();
+    expect(screen.queryByText(/Rapports précédents/)).toBeNull();
+    expect(container.querySelectorAll('.diag-main li')).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: 'Word' })).toHaveLength(2);
   });
 });
 
@@ -971,7 +1011,8 @@ describe('Versions du rapport et chat de l étape 4', () => {
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     expect(await screen.findByRole('button', { name: 'Produire la version 3' })).toBeTruthy();
-    const ancienne = await screen.findByRole('link', { name: /Version 1, du/ });
+    const ligne = (await screen.findByText(/Version 1 du/)).closest('li')!;
+    const ancienne = within(ligne as HTMLElement).getByRole('link', { name: 'Word' });
     expect(ancienne.getAttribute('href')).toBe(
       '/api/i/simatis/diagnostic/projets/p1/rapport?version=1',
     );
