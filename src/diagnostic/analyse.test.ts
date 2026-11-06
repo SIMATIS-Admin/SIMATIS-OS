@@ -12,6 +12,7 @@ import {
   revueVientDEtreValidee,
 } from './analyse.js';
 import { ChatIndisponible } from './chat.js';
+import { DEBUT_MESSAGE_CADRER_RAPPORT, demanderCadrageRapport } from './rapport.js';
 import { diagnosticProjets } from './schema.js';
 import { createProjet, listProjets } from './service.js';
 
@@ -119,6 +120,44 @@ describe('Capitalisation de l analyse', () => {
       const occupe = await projetAvec('Prépa D', { dims });
       await demanderPreparationRevue(t.app.db, simatis, occupe);
       await expect(demanderPreparationRevue(t.app.db, simatis, occupe)).rejects.toThrow(
+        ChatIndisponible,
+      );
+    });
+  });
+  describe('cadrage du rapport', () => {
+    const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+    const projetAvec = async (nom: string, maj: Partial<typeof diagnosticProjets.$inferInsert>) => {
+      const p = await createProjet(t.app.db, simatis, { nom, activite: 'services' });
+      if (Object.keys(maj).length > 0)
+        await withInstance(t.app.db, simatis.id, (tx) =>
+          tx.update(diagnosticProjets).set(maj).where(eq(diagnosticProjets.id, p.id)),
+        );
+      return p.id;
+    };
+
+    it('part à l étape 4 sur un projet avec résultat', async () => {
+      const id = await projetAvec('Cadrage A', { dims });
+      await demanderCadrageRapport(t.app.db, simatis, id);
+      const p = await relire(id);
+      expect(p.demande).toBe('rapport_cadrer');
+      expect(p.rapportLienStatut).toBe('aucun');
+      expect(p.conversation.at(-1)).toMatchObject({
+        de: 'pilote',
+        etape: 4,
+        texte: `${DEBUT_MESSAGE_CADRER_RAPPORT}.`,
+      });
+    });
+
+    it('refuse sans résultat, pendant un rapport en cours et pendant que Claude répond', async () => {
+      const sans = await projetAvec('Cadrage B', {});
+      await expect(demanderCadrageRapport(t.app.db, simatis, sans)).rejects.toThrow(/résultat/);
+      const enCours = await projetAvec('Cadrage C', { dims, rapportLienStatut: 'en_cours' });
+      await expect(demanderCadrageRapport(t.app.db, simatis, enCours)).rejects.toThrow(
+        ChatIndisponible,
+      );
+      const occupe = await projetAvec('Cadrage D', { dims });
+      await demanderCadrageRapport(t.app.db, simatis, occupe);
+      await expect(demanderCadrageRapport(t.app.db, simatis, occupe)).rejects.toThrow(
         ChatIndisponible,
       );
     });

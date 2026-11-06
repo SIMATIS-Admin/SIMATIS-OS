@@ -411,6 +411,24 @@ describe('Entretien : API', () => {
     expect(mauvais.statusCode).toBe(400);
   });
 
+  it('cadrer le rapport : refusé sans résultat, lancé avec, 400 sur identifiant invalide', async () => {
+    const projet = await creerProjet('Cadrage rapport API');
+    const url = `/api/i/simatis/diagnostic/projets/${projet.id}/rapport/cadrer`;
+    expect((await app.inject({ method: 'POST', url })).statusCode).toBe(409);
+    await t.owner.db
+      .update(diagnosticProjets)
+      .set({ dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 } })
+      .where(eq(diagnosticProjets.id, projet.id));
+    const ok = await app.inject({ method: 'POST', url });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json<{ demande: string }>().demande).toBe('rapport_cadrer');
+    const mauvais = await app.inject({
+      method: 'POST',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/rapport/cadrer',
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
+
   it('refuse un identifiant de projet mal formé', async () => {
     const r = await app.inject({
       method: 'POST',

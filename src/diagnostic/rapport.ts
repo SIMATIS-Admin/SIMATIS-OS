@@ -63,6 +63,27 @@ export function demanderRapport(db: Executor, instance: Instance, id: string): P
   );
 }
 
+// Début du message qui lance le cadrage : Claude pose ses questions et propose le plan du rapport
+// avant la rédaction. Il ne produit rien ; le pilote répond dans la conversation de l'étape 4.
+export const DEBUT_MESSAGE_CADRER_RAPPORT = 'Cadrer le rapport';
+
+export function demanderCadrageRapport(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<ProjetVue> {
+  return envoyerMessage(db, instance, id, `${DEBUT_MESSAGE_CADRER_RAPPORT}.`, {
+    type: 'rapport_cadrer',
+    etape: 4,
+    verifier: (projet) => {
+      const pret = rapportPret(projet);
+      if (!pret.ok) throw new ChatIndisponible(pret.raison);
+      if (projet.rapportLienStatut === 'en_cours')
+        throw new ChatIndisponible('Un rapport est déjà en cours de rédaction.');
+    },
+  });
+}
+
 // Claude rend le contenu du rapport : l'OS le met en page en Word et le garde dans le projet, d'où
 // le pilote le télécharge pour le relire ou le modifier. Chaque production crée une nouvelle version ;
 // les précédentes restent téléchargeables. Avec Drive branché, la version est aussi envoyée en

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   creerProjetDiag,
+  cadrerRapportDiag,
   demandeRapportDiag,
   demandeRestitutionDiag,
   enregistrerCapitalisationDiag,
@@ -1031,6 +1032,13 @@ function Rapport({
       onErreur(messageErreur(err));
     }
   };
+  const cadrer = async () => {
+    try {
+      onChange(await cadrerRapportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
   const [relireFinaux, setRelireFinaux] = useState(true);
   useEffect(() => {
@@ -1120,6 +1128,13 @@ function Rapport({
               Envoyer sur Drive
             </button>
           )}
+          <button
+            className="btn"
+            disabled={enCours || raison !== null || projet.statutChat !== 'repos'}
+            onClick={() => void cadrer()}
+          >
+            Cadrer le rapport avec Claude
+          </button>
           <button
             className="btn go"
             disabled={enCours || raison !== null}

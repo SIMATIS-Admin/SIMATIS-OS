@@ -55,6 +55,8 @@ export const DEMANDES = [
   'regles_restitution',
   // Préparation de la revue (étape 3) : Claude propose les textes, jamais les choix du pilote.
   'revue_preparer',
+  // Cadrage du rapport (étape 4) : Claude pose ses questions et propose le plan, sans rien rédiger.
+  'rapport_cadrer',
 ] as const;
 // Capitalisation de la restitution (étape 5) : 'en_cours' tant que Claude propose, 'propose' une fois
 // sa proposition dans le chat, 'enregistre' quand le pilote l'a validée et que Claude l'a écrite.
