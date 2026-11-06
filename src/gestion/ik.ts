@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -548,4 +548,49 @@ export async function exporterCsv(
     "Document de préparation édité par SIMATIS OS : ce n'est pas une pièce fiscale validée. Péages exclus.",
   );
   return `${BOM}${[en.map(cellule).join(';'), ...lignes, total, note].join('\r\n')}\r\n`;
+}
+
+export type IkRefacturable = {
+  trajetId: string;
+  mandat: string;
+  date: string;
+  libelle: string;
+  // null = pas de barème validé : jamais inventé.
+  indemniteCents: number | null;
+};
+
+// Trajets cochés « refacturer », avec mandat, pas encore repris par une facture, jusqu'à `jusqua`.
+export async function trajetsRefacturables(
+  tx: Executor,
+  jusqua: string,
+): Promise<IkRefacturable[]> {
+  const trajets = await tx
+    .select()
+    .from(gestionIkTrajets)
+    .where(
+      and(
+        visible(gestionIkTrajets),
+        eq(gestionIkTrajets.refacturer, true),
+        isNotNull(gestionIkTrajets.mandat),
+        isNull(gestionIkTrajets.factureId),
+        lte(gestionIkTrajets.date, jusqua),
+      ),
+    );
+  // Une indemnité dépend du cumul annuel du véhicule : on demande l'état de chaque (mois, véhicule).
+  const groupes = new Map<string, { mois: string; vehiculeId: string }>();
+  for (const t of trajets) {
+    const mois = t.date.slice(0, 7);
+    groupes.set(`${t.vehiculeId}|${mois}`, { mois, vehiculeId: t.vehiculeId });
+  }
+  const indemnites = new Map<string, number | null>();
+  for (const g of groupes.values())
+    for (const l of (await etatIkMois(tx, g.mois, g.vehiculeId)).lignes)
+      indemnites.set(l.id, l.indemniteCents);
+  return trajets.map((t) => ({
+    trajetId: t.id,
+    mandat: t.mandat!,
+    date: t.date,
+    libelle: `${t.trajet} (${t.kmAllerRetour} km)`,
+    indemniteCents: indemnites.get(t.id) ?? null,
+  }));
 }

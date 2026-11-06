@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import type { FactureAEmettre, FacturesAEmettre, LigneFacture } from '../../api.js';
-import { eurCents, jourCourt } from '../../gestion.js';
+import type {
+  EmissionFacture,
+  FactureAEmettre,
+  FactureEmise,
+  FacturesAEmettre,
+  LigneFacture,
+} from '../../api.js';
+import { aujourdhui, eurCents, jourCourt } from '../../gestion.js';
 
 const SORTES: [LigneFacture['sorte'], string][] = [
   ['recurrent', 'Récurrent'],
@@ -78,17 +84,142 @@ function Delai({
   );
 }
 
+function FormulaireEmission({
+  facture,
+  onEmettre,
+  onFermer,
+}: {
+  facture: FactureAEmettre;
+  // `false` = refusée : le formulaire reste ouvert avec ce qui a été saisi.
+  onEmettre: (e: EmissionFacture) => Promise<boolean> | void;
+  onFermer: () => void;
+}) {
+  const [numero, setNumero] = useState('');
+  const [dateEmission, setDateEmission] = useState(aujourdhui());
+  const [exclues, setExclues] = useState<string[]>([]);
+  const bascule = (cle: string) =>
+    setExclues((l) => (l.includes(cle) ? l.filter((x) => x !== cle) : [...l, cle]));
+  return (
+    <form
+      style={{ margin: '12px 18px' }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!numero.trim()) return;
+        void (async () => {
+          const ok = await onEmettre({
+            mandat: facture.mandat,
+            numero: numero.trim(),
+            dateEmission,
+            exclure: exclues,
+          });
+          if (ok !== false) onFermer();
+        })();
+      }}
+    >
+      <div className="g-champs2">
+        <label className="field">
+          <span>Numéro de la facture</span>
+          <input className="input" value={numero} onChange={(e) => setNumero(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Date d’émission</span>
+          <input
+            className="input"
+            type="date"
+            value={dateEmission}
+            onChange={(e) => setDateEmission(e.target.value)}
+          />
+        </label>
+      </div>
+      {facture.lignes
+        .filter((l) => l.montantHtCents != null)
+        .map((l) => (
+          <label key={l.cle} className="check" style={{ display: 'block' }}>
+            <input
+              type="checkbox"
+              aria-label={`Inclure ${l.libelle}`}
+              checked={!exclues.includes(l.cle)}
+              onChange={() => bascule(l.cle)}
+            />
+            &nbsp;{l.libelle} · {eurCents(l.montantHtCents!)}
+          </label>
+        ))}
+      <p className="small muted">
+        Une ligne décochée reste à émettre. L’OS n’établit pas le document de facture : il
+        enregistre celle que vous avez émise ailleurs.
+      </p>
+      <button className="btn primary" type="submit" disabled={!numero.trim()}>
+        Émettre
+      </button>{' '}
+      <button className="btn" type="button" onClick={onFermer}>
+        Annuler
+      </button>
+    </form>
+  );
+}
+
+function Emise({
+  facture,
+  mandat,
+  onEncaisser,
+}: {
+  facture: FactureEmise;
+  mandat: string;
+  onEncaisser: (id: string, date: string) => void;
+}) {
+  const [date, setDate] = useState(aujourdhui());
+  return (
+    <tr>
+      <td className="num">{jourCourt(facture.dateEmission)}</td>
+      <td className="g-lib" style={{ textAlign: 'left' }}>
+        <b>{facture.numero}</b>
+        <small>{mandat}</small>
+      </td>
+      <td className="r num">
+        <b>{eurCents(facture.totalHtCents)}</b>
+      </td>
+      <td>
+        {facture.etat === 'encaissee' ? (
+          <span className="badge green">
+            Encaissée{facture.dateEncaissement ? ` le ${jourCourt(facture.dateEncaissement)}` : ''}
+          </span>
+        ) : (
+          <>
+            <input
+              className="input"
+              type="date"
+              aria-label={`Date d’encaissement de ${facture.numero}`}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />{' '}
+            <button className="btn sm" onClick={() => onEncaisser(facture.id, date)}>
+              Marquer encaissée
+            </button>
+          </>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 export function Factures({
   donnees,
   mandats,
   onDelai,
+  emises,
+  onEmettre,
+  onEncaisser,
 }: {
   donnees: FacturesAEmettre;
   mandats: { slug: string; nom: string }[];
   onDelai: (mandat: string, jours: number | null) => void;
+  emises: FactureEmise[];
+  onEmettre: (e: EmissionFacture) => Promise<boolean> | void;
+  onEncaisser: (id: string, date: string) => void;
 }) {
   const nom = (slug: string) => mandats.find((m) => m.slug === slug)?.nom ?? slug;
-  if (!donnees.factures.length && !donnees.sansMandat.length)
+  const [ouverte, setOuverte] = useState<string | null>(null);
+  if (!donnees.factures.length && !donnees.sansMandat.length && !emises.length)
     return (
       <div className="panel" style={{ padding: 18 }}>
         <p className="muted">Rien à facturer</p>
@@ -131,6 +262,19 @@ export function Factures({
           <div style={{ margin: '12px 18px' }}>
             <Delai facture={f} onDelai={onDelai} />
           </div>
+          {ouverte === f.mandat ? (
+            <FormulaireEmission
+              facture={f}
+              onEmettre={onEmettre}
+              onFermer={() => setOuverte(null)}
+            />
+          ) : (
+            <div style={{ margin: '0 18px 12px' }}>
+              <button className="btn primary" onClick={() => setOuverte(f.mandat)}>
+                Émettre la facture
+              </button>
+            </div>
+          )}
         </section>
       ))}
       {donnees.sansMandat.length > 0 && (
@@ -142,6 +286,20 @@ export function Factures({
             Ces recettes ne sont dans aucune facture : rattachez-les à un mandat.
           </p>
           <Lignes lignes={donnees.sansMandat} />
+        </section>
+      )}
+      {emises.length > 0 && (
+        <section className="panel" aria-label="Factures émises" style={{ marginBottom: 18 }}>
+          <div className="panel-h">
+            <h2>Factures émises</h2>
+          </div>
+          <table className="tbl">
+            <tbody>
+              {emises.map((f) => (
+                <Emise key={f.id} facture={f} mandat={nom(f.mandat)} onEncaisser={onEncaisser} />
+              ))}
+            </tbody>
+          </table>
         </section>
       )}
     </>

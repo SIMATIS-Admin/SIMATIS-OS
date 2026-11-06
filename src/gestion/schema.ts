@@ -201,6 +201,38 @@ export const gestionMandatReglages = pgTable(
   ],
 );
 
+// Facture de mandat émise : photographie figée de ses lignes. Rien d'autre que son encaissement ne la
+// modifie ensuite ; les recettes et trajets qu'elle couvre portent sa référence.
+export const ETATS_FACTURE = ['emise', 'encaissee'] as const;
+export type LigneFigee = {
+  cle: string;
+  sorte: 'recurrent' | 'commission' | 'frais' | 'ik';
+  libelle: string;
+  date: string;
+  montantHtCents: number;
+  tvaCents: number | null;
+};
+export const gestionFactures = pgTable(
+  'gestion_factures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    mandat: text('mandat').notNull(),
+    numero: text('numero').notNull(),
+    dateEmission: date('date_emission', { mode: 'string' }).notNull(),
+    totalHtCents: integer('total_ht_cents').notNull(),
+    // Délai de paiement effectif au moment de l'émission : l'encaissement attendu ne bouge plus.
+    delaiJours: integer('delai_jours'),
+    etat: text('etat', { enum: ETATS_FACTURE }).notNull().default('emise'),
+    dateEncaissement: date('date_encaissement', { mode: 'string' }),
+    lignes: jsonb('lignes').$type<LigneFigee[]>().notNull(),
+  },
+  (t) => [
+    uniqueIndex('gestion_factures_numero_idx').on(t.instanceId, t.numero),
+    instanceIsolation('gestion_factures'),
+  ],
+);
+
 // TVA mensuelle : la déclaration est mensuelle (confirmé), l'exigibilité reste à confirmer. Le montant
 // déclaré est saisi à la main, jamais transmis.
 export const gestionTvaMois = pgTable(
@@ -321,6 +353,8 @@ export const gestionIkTrajets = pgTable(
     mandat: text('mandat'),
     // Refacturé au mandat en plus d'alimenter le compte d'associé ; exige un mandat.
     refacturer: boolean('refacturer').notNull().default(false),
+    // Facture qui a repris ce trajet ; null = pas encore facturé.
+    factureId: uuid('facture_id').references(() => gestionFactures.id),
     justificatif: text('justificatif'),
     statut: text('statut', { enum: STATUTS_IK }).notNull().default('brouillon'),
     archiveeAt: timestamp('archivee_at', { withTimezone: true }),

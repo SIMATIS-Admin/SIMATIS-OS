@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
@@ -10,6 +11,7 @@ import {
 } from './factures.js';
 import { creerBareme, creerTrajet, creerVehicule, trajetSchema, validerBareme } from './ik.js';
 import { creerRevenu, revenuSchema, type OccurrenceRevenu } from './revenus.js';
+import { gestionFactures, gestionIkTrajets } from './schema.js';
 
 // Données fictives : aucun client, montant ni taux réels.
 const recette = (o: Partial<OccurrenceRevenu> = {}): OccurrenceRevenu => ({
@@ -237,5 +239,96 @@ describe('facturesParMandat', () => {
     // 40 km × 0,50 € = 20 €, plus 100 € de frais.
     expect(f.totalHtCents).toBe(2_000 + 10_000);
     expect(r.sansMandat.map((l) => l.libelle)).toEqual(['Orpheline']);
+  });
+});
+
+describe('facturesParMandat — limite d’émission et trajets déjà facturés', () => {
+  let t: TestApp;
+  let inst = '';
+  let trajetId = '';
+  beforeAll(async () => {
+    t = await setupTestApp();
+    inst = (
+      await createInstance(t.owner.db, {
+        slug: 'fac2-propre',
+        nom: 'Mon activité',
+        type: 'propre',
+        config: { modules: ['gestion'] },
+      })
+    ).id;
+    await withInstance(t.app.db, inst, async (tx) => {
+      const v = await creerVehicule(tx, inst, { libelle: 'Voiture', categorie: 'auto' });
+      const b = await creerBareme(tx, inst, {
+        annee: 2026,
+        categorie: 'auto',
+        source: 'Barème fictif de test',
+        tranches: [{ deKm: 0, jusquaKm: null, tauxDixMilliemes: 5000, forfaitCents: 0 }],
+      });
+      await validerBareme(tx, b.id, '2026-11-03');
+      const trajet = await creerTrajet(
+        tx,
+        inst,
+        trajetSchema.parse({
+          vehiculeId: v.id,
+          date: '2026-11-05',
+          trajet: 'Déjà facturé',
+          commentaire: 'Réunion fictive',
+          kmAllerRetour: 40,
+          mandat: 'fac2-a',
+          refacturer: true,
+        }),
+      );
+      trajetId = trajet.id;
+      await creerRevenu(
+        tx,
+        inst,
+        revenuSchema.parse({
+          libelle: 'Recette du 20',
+          montantHtCents: 10_000,
+          mandat: 'fac2-a',
+          date: '2026-11-20',
+        }),
+      );
+    });
+  });
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  it('jusqua limite les lignes à la date d’émission choisie', async () => {
+    const lignes = (jusqua: string) =>
+      withInstance(t.app.db, inst, async (tx) =>
+        (await facturesParMandat(tx, '2026-11-12', jusqua)).factures.flatMap((f) =>
+          f.lignes.map((l) => l.libelle),
+        ),
+      );
+    expect(await lignes('2026-11-15')).toEqual([expect.stringContaining('Déjà facturé')]);
+    expect(await lignes('2026-11-30')).toHaveLength(2);
+  });
+
+  it('un trajet déjà facturé n’est plus à émettre', async () => {
+    await withInstance(t.app.db, inst, async (tx) => {
+      const [f] = await tx
+        .insert(gestionFactures)
+        .values({
+          instanceId: inst,
+          mandat: 'fac2-a',
+          numero: 'F-TEST-1',
+          dateEmission: '2026-11-06',
+          totalHtCents: 2_000,
+          lignes: [],
+        })
+        .returning();
+      await tx
+        .update(gestionIkTrajets)
+        .set({ factureId: f!.id })
+        .where(eq(gestionIkTrajets.id, trajetId));
+    });
+    const lignes = await withInstance(t.app.db, inst, async (tx) =>
+      (await facturesParMandat(tx, '2026-11-12', '2026-11-30')).factures.flatMap((f) =>
+        f.lignes.map((l) => l.sorte),
+      ),
+    );
+    expect(lignes).toEqual(['commission']);
   });
 });

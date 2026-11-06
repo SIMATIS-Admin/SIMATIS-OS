@@ -4,6 +4,11 @@ import {
   archiverRevenuGestion,
   fetchFacturesAEmettre,
   fetchFactures,
+  fetchFacturesEmises,
+  emettreFacture,
+  encaisserFacture,
+  type EmissionFacture,
+  type FactureEmise,
   poserDelaiMandat,
   type FacturesAEmettre,
   fetchTresorerie,
@@ -84,6 +89,7 @@ export function Gestion({
   const [tva, setTva] = useState<SuiviTvaGestion | null>(null);
   const [aFacturer, setAFacturer] = useState<OccurrenceRevenu[]>([]);
   const [factures, setFactures] = useState<FacturesAEmettre | null>(null);
+  const [emises, setEmises] = useState<FactureEmise[]>([]);
   const [tiroirRevenu, setTiroirRevenu] = useState<CibleRevenu | null>(null);
   const [sousOnglet, setSousOnglet] = useState<'tva' | 'ik'>('tva');
   const [filtreMouvement, setFiltreMouvement] = useState<FiltreMouvement>('tout');
@@ -96,13 +102,14 @@ export function Gestion({
       setErreur(null);
       const horizon = new Date(`${aujourdhui()}T00:00:00Z`);
       horizon.setUTCDate(horizon.getUTCDate() + 30);
-      const [d, r, f, t, v, fm] = await Promise.all([
+      const [d, r, f, t, v, fm, em] = await Promise.all([
         fetchDepenses(slug, mois),
         fetchRevenus(slug, mois),
         fetchFacturesAEmettre(slug, horizon.toISOString().slice(0, 10)),
         fetchTresorerie(slug, paramsTreso),
         fetchTva(slug, mois),
         fetchFactures(slug),
+        fetchFacturesEmises(slug),
       ]);
       if (numero !== sequence.current) return;
       setTresorerie(t);
@@ -111,6 +118,7 @@ export function Gestion({
       setRecettes(r);
       setAFacturer(f);
       setFactures(fm);
+      setEmises(em);
     } catch (e) {
       setErreur(message(e));
     }
@@ -381,6 +389,24 @@ export function Gestion({
       setErreur(message(e));
     }
   };
+  const emettre = async (e: EmissionFacture) => {
+    try {
+      await emettreFacture(slug, e);
+      await charger();
+      return true;
+    } catch (err) {
+      setErreur(message(err));
+      return false;
+    }
+  };
+  const encaisser = async (id: string, date: string) => {
+    try {
+      await encaisserFacture(slug, id, date);
+      await charger();
+    } catch (err) {
+      setErreur(message(err));
+    }
+  };
   const changerDelai = async (mandat: string, jours: number | null) => {
     try {
       await poserDelaiMandat(slug, mandat, jours);
@@ -556,6 +582,9 @@ export function Gestion({
           donnees={factures}
           mandats={mandats}
           onDelai={(m, j) => void changerDelai(m, j)}
+          emises={emises}
+          onEmettre={(e) => emettre(e)}
+          onEncaisser={(id, d) => void encaisser(id, d)}
         />
       )}
       {onglet === 'importer' && <GestionImport slug={slug} onImporte={() => void charger()} />}

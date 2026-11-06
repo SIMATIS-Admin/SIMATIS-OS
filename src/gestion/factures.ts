@@ -1,12 +1,9 @@
-import { and, eq, isNotNull, isNull, lte } from 'drizzle-orm';
 import type { Executor } from '../db.js';
-import { currentInstance } from '../db/columns.js';
 import { jourDe } from '../pilotage/realisees.js';
-import { ajouterJours } from './dates.js';
-import { etatIkMois } from './ik.js';
+import { ajouterJours, dateEmissionPrevue } from './dates.js';
+import { trajetsRefacturables, type IkRefacturable } from './ik.js';
 import { lireDelaisMandats } from './mandats.js';
 import { occurrencesRevenus, type OccurrenceRevenu } from './revenus.js';
-import { gestionIkTrajets } from './schema.js';
 import { lireReglages } from './tresorerie.js';
 
 // Les factures à émettre d'un mandat, calculées à la demande. Rien n'est stocké ici : l'émission, qui
@@ -37,22 +34,9 @@ export type FactureAEmettre = {
   avertissements: string[];
 };
 
+export { dateEmissionPrevue, type IkRefacturable };
+
 export type FacturesAEmettre = { factures: FactureAEmettre[]; sansMandat: LigneFacture[] };
-
-export type IkRefacturable = {
-  trajetId: string;
-  mandat: string;
-  date: string;
-  libelle: string;
-  indemniteCents: number | null;
-};
-
-// Cadence unique pour l'instant : une facture par mandat, en fin de mois.
-export function dateEmissionPrevue(aujourdhui: string): string {
-  const [a, m] = aujourdhui.split('-').map(Number) as [number, number];
-  const dernier = new Date(Date.UTC(a, m, 0)).getUTCDate();
-  return `${aujourdhui.slice(0, 7)}-${String(dernier).padStart(2, '0')}`;
-}
 
 const SORTE_PAR_TYPE: Record<OccurrenceRevenu['type'], SorteLigne> = {
   abonnement: 'recurrent',
@@ -96,8 +80,10 @@ export function assemblerFactures(e: {
   delaisMandat: Map<string, number | null>;
   delaiGeneral: number | null;
   aujourdhui: string;
+  // Limite des lignes ; par défaut la prochaine émission de cadence.
+  jusqua?: string;
 }): FacturesAEmettre {
-  const emission = dateEmissionPrevue(e.aujourdhui);
+  const emission = e.jusqua ?? dateEmissionPrevue(e.aujourdhui);
   const retenues = e.recettes.filter(
     (o) => o.etat === 'prevue' && o.certitude !== 'hypothese' && o.date <= emission,
   );
@@ -134,47 +120,18 @@ export function assemblerFactures(e: {
 export async function facturesParMandat(
   tx: Executor,
   aujourdhui: string = jourDe(new Date()),
+  // Limite des lignes ; par défaut la prochaine émission de cadence (fin de mois).
+  jusqua?: string,
 ): Promise<FacturesAEmettre> {
-  const emission = dateEmissionPrevue(aujourdhui);
+  const limite = jusqua ?? dateEmissionPrevue(aujourdhui);
   const [a, m, j] = aujourdhui.split('-').map(Number) as [number, number, number];
   const debut = `${a - 2}-${String(m).padStart(2, '0')}-${String(j).padStart(2, '0')}`;
-  const recettes = await occurrencesRevenus(tx, debut, emission);
-
-  const trajets = await tx
-    .select()
-    .from(gestionIkTrajets)
-    .where(
-      and(
-        eq(gestionIkTrajets.instanceId, currentInstance),
-        isNull(gestionIkTrajets.archiveeAt),
-        eq(gestionIkTrajets.refacturer, true),
-        isNotNull(gestionIkTrajets.mandat),
-        lte(gestionIkTrajets.date, emission),
-      ),
-    );
-  // Une indemnité dépend du cumul annuel du véhicule : on demande l'état de chaque (mois, véhicule).
-  const groupes = new Map<string, { mois: string; vehiculeId: string }>();
-  for (const t of trajets) {
-    const mois = t.date.slice(0, 7);
-    groupes.set(`${t.vehiculeId}|${mois}`, { mois, vehiculeId: t.vehiculeId });
-  }
-  const indemnites = new Map<string, number | null>();
-  for (const g of groupes.values())
-    for (const l of (await etatIkMois(tx, g.mois, g.vehiculeId)).lignes)
-      indemnites.set(l.id, l.indemniteCents);
-  const ik: IkRefacturable[] = trajets.map((t) => ({
-    trajetId: t.id,
-    mandat: t.mandat!,
-    date: t.date,
-    libelle: `${t.trajet} (${t.kmAllerRetour} km)`,
-    indemniteCents: indemnites.get(t.id) ?? null,
-  }));
-
   return assemblerFactures({
-    recettes,
-    ik,
+    recettes: await occurrencesRevenus(tx, debut, limite),
+    ik: await trajetsRefacturables(tx, limite),
     delaisMandat: await lireDelaisMandats(tx),
     delaiGeneral: (await lireReglages(tx)).delaiPaiementJours,
     aujourdhui,
+    jusqua,
   });
 }

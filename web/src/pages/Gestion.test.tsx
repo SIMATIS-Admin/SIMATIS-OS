@@ -115,28 +115,30 @@ describe('Gestion', () => {
       vi.fn((url: string, init?: RequestInit) => {
         const method = init?.method ?? 'GET';
         if (method !== 'GET') envois.push({ url, method, corps: JSON.parse(init?.body as string) });
-        const corps = url.endsWith('gestion/factures')
-          ? { factures: [], sansMandat: [] }
-          : url.includes('gestion/depenses?')
-            ? { synthese, occurrences: [occurrence] }
-            : url.includes('gestion/revenus?')
-              ? {
-                  synthese: {
-                    mois: '2026-11',
-                    aEncaisserCertainCents: 600_000,
-                    aEncaisserIncertainCents: 0,
-                    encaisseCents: 0,
-                    parMandat: [],
-                  },
-                  revenus: [],
-                }
-              : url.includes('factures-a-emettre')
-                ? []
-                : url.includes('gestion/tresorerie')
-                  ? projection
-                  : url.includes('gestion/tva')
-                    ? suiviTva
-                    : { id: occurrence.depenseId, refacturations: [] };
+        const corps = url.endsWith('gestion/factures/emises')
+          ? []
+          : url.endsWith('gestion/factures')
+            ? { factures: [], sansMandat: [] }
+            : url.includes('gestion/depenses?')
+              ? { synthese, occurrences: [occurrence] }
+              : url.includes('gestion/revenus?')
+                ? {
+                    synthese: {
+                      mois: '2026-11',
+                      aEncaisserCertainCents: 600_000,
+                      aEncaisserIncertainCents: 0,
+                      encaisseCents: 0,
+                      parMandat: [],
+                    },
+                    revenus: [],
+                  }
+                : url.includes('factures-a-emettre')
+                  ? []
+                  : url.includes('gestion/tresorerie')
+                    ? projection
+                    : url.includes('gestion/tva')
+                      ? suiviTva
+                      : { id: occurrence.depenseId, refacturations: [] };
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(corps) });
       }),
     );
