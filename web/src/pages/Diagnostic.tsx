@@ -20,6 +20,7 @@ import {
   capitaliserDeckDiag,
   capitaliserSupportDiag,
   preparerRevueDiag,
+  exporterRevueDiag,
   journalReglesDiag,
   majReglagesDiagnostic,
   marquerDeckFinalDiag,
@@ -917,6 +918,14 @@ function Revue({
       onErreur(messageErreur(err));
     }
   };
+  const exporter = async () => {
+    try {
+      onChange(await exporterRevueDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const exportEnCours = projet.revueExportStatut === 'en_cours';
   const capitaliser = async () => {
     try {
       onChange(await capitaliserAnalyseDiag(slug, projet.id));
@@ -995,7 +1004,28 @@ function Revue({
                 Capitaliser cette analyse
               </button>
             )}
+            {projet.revue.statut === 'validée' && !exportEnCours && projet.revueExportLien && (
+              <a className="btn" href={projet.revueExportLien} target="_blank" rel="noreferrer">
+                Ouvrir la revue pour Claude Chat
+              </a>
+            )}
+            {projet.revue.statut === 'validée' && (
+              <button
+                className="btn"
+                disabled={projet.statutChat !== 'repos' || exportEnCours}
+                onClick={() => void exporter()}
+              >
+                {projet.revueExportLien
+                  ? 'Mettre à jour l’export'
+                  : 'Exporter la revue pour Claude Chat'}
+              </button>
+            )}
           </div>
+          {exportEnCours && (
+            <p className="small muted" style={{ margin: 0 }}>
+              Claude crée l’artefact de la revue… La page se mettra à jour dès qu’il sera prêt.
+            </p>
+          )}
           <EditeurRevue revue={projet.revue} onChange={(revue) => void onSauver({ revue })} />
         </>
       ) : (

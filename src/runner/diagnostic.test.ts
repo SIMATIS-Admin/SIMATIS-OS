@@ -32,6 +32,8 @@ import {
   promptReglesRestitution,
   promptReglesSupport,
   promptExportRestitution,
+  promptExportRevue,
+  outilsExportRevue,
   promptRestitution,
   promptSupport,
   skillsDe,
@@ -87,6 +89,7 @@ const attente: AttenteDiag = {
   revuesValidees: [],
   revueEnCoursTexte: null,
   restitutionLien: null,
+  revueExportLien: null,
   restitutionAvecProposition: true,
   proposition: null,
   pdf: null,
@@ -515,6 +518,44 @@ describe('Production par le runner : modifications et deck', () => {
     });
     expect(lance).toBe(false);
     expect((appels.at(-1)?.body as { erreur?: string }).erreur).toContain(SKILL_RESTITUTION);
+  });
+
+  it('l export de la revue crée un artifact fidèle à la revue et en enregistre le lien', () => {
+    const texte = promptExportRevue({
+      ...restitution,
+      demande: 'revue_exporter',
+      revue: {
+        statut: 'validée',
+        preconisations: { r1: { titre: 'Titre fictif', choix: 'retenue' } },
+      },
+    });
+    expect(texte).toContain('Titre fictif');
+    expect(texte).toContain('retenue');
+    expect(texte).toContain('quickstart');
+    expect(texte).toContain('enregistrer_revue_export');
+    expect(texte).toContain(`projetId ${restitution.id}`);
+    expect(texte).toContain("n'ajoute rien");
+  });
+
+  it('l export de la revue révise l artifact existant au lieu d en créer un autre', () => {
+    const texte = promptExportRevue({
+      ...restitution,
+      demande: 'revue_exporter',
+      revue: { statut: 'validée' },
+      revueExportLien: 'https://claude.ai/artifact/RevueFictive0001',
+    });
+    expect(texte).toContain(
+      "révise l'artifact existant (https://claude.ai/artifact/RevueFictive0001)",
+    );
+    expect(texte).not.toContain('quickstart');
+  });
+
+  it('les outils de l export de la revue : artifact et enregistrement, ni skill ni second cerveau', () => {
+    const outils = outilsExportRevue(['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_revue_export');
+    expect(outils).toContain('Artifact');
+    expect(outils).not.toContain('Skill');
+    expect(outils).not.toContain('cerveau');
   });
 
   it('l export PowerPoint relit le deck publié et rend ses diapositives, sans rien publier', () => {

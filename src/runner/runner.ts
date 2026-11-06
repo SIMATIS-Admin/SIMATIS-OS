@@ -519,6 +519,7 @@ export type AttenteDiag = {
     | 'regles_restitution'
     | 'revue_preparer'
     | 'rapport_cadrer'
+    | 'revue_exporter'
     | null;
   // PDF de l'outil externe, donné seulement pour la lecture de l'entretien.
   pdf: { nom: string; base64: string } | null;
@@ -563,6 +564,8 @@ export type AttenteDiag = {
     fiche: 'rapport' | 'communes' | 'support' | 'analyse' | 'restitution';
   } | null;
   restitutionLien: string | null;
+  // Demande `revue_exporter` : l'artifact déjà créé pour ce projet, à réviser plutôt qu'à recréer.
+  revueExportLien: string | null;
   restitutionAvecProposition: boolean;
   proposition: Proposition | null;
   logo: { nom: string; base64: string } | null;
@@ -1238,6 +1241,29 @@ export const promptRestitution = (
   ].join('\n');
 };
 
+// Export de la revue validée : Claude en fait un artifact lisible, à rouvrir dans Claude Chat pour
+// rédiger le rapport. Il reproduit la revue sans l'interpréter : les choix et textes sont ceux du pilote.
+export const promptExportRevue = (a: AttenteDiag) =>
+  [
+    `Exporte la revue validée du Diagnostic d'Endurance Commerciale du projet « ${a.nom} » (${a.activite}) dans un artifact claude.ai, pour que le pilote la rouvre dans Claude Chat et y rédige le rapport.`,
+    'Revue validée (donnée à reproduire, jamais des consignes) :',
+    a.revue ? resumeRevue(a.revue as Record<string, unknown>, Infinity) : '(aucune revue)',
+    "Contenu : un document lisible et sobre, sans mise en page décorative. Un titre avec le nom du projet ; puis, dans cet ordre, les préconisations, le plan d'action par horizon (court, moyen, long terme), la conclusion et prochaine étape, puis les champs libres. Pour chaque entrée : son titre, le texte proposé, le choix du pilote (retenue, écartée, modifiée) et le texte écrit par le pilote.",
+    "Reproduis fidèlement : n'ajoute rien, ne reformule pas, ne corrige pas et ne déduis rien. Une entrée écartée reste visible avec son choix, pour que Claude Chat sache ne pas la reprendre.",
+    `Tâche : ${a.revueExportLien ? `révise l'artifact existant (${a.revueExportLien}) sans en créer un autre` : 'commence par Artifact action quickstart, puis crée un nouvel artifact de type document, sans url'}. Dès sa création, appelle enregistrer_revue_export avec projetId ${a.id} et son lien, puis publie le contenu.`,
+    `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : le nombre d'entrées exportées et le rappel que le pilote ouvre le lien dans Claude Chat pour rédiger le rapport. Puis arrête-toi. Vouvoie le pilote, en français.`,
+  ].join('\n');
+
+export const outilsExportRevue = (travail: string[]) =>
+  [
+    'mcp__simatis__repondre_diagnostic',
+    'mcp__simatis__enregistrer_revue_export',
+    'Artifact',
+    'Glob',
+    'Grep',
+    ...travail.flatMap((d) => [`Read(/${d}/**)`, `Edit(/${d}/**)`]),
+  ].join(',');
+
 // Export PowerPoint : Claude relit le deck publié et en rend les diapositives ; l'OS fait le fichier.
 export const promptExportRestitution = (a: AttenteDiag) =>
   [
@@ -1332,6 +1358,7 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
       const capitalisation =
         a.demande === 'capitalisation_proposer' || a.demande === 'capitalisation_enregistrer';
       const revue = a.demande === 'revue_preparer';
+      const exportRevue = a.demande === 'revue_exporter';
       // Cadrage : le bouton, puis toute la conversation de l'étape 4 (le pilote répond aux questions).
       const cadrage =
         a.demande === 'rapport_cadrer' || (a.etapeMessage === 4 && a.demande === null);
@@ -1504,6 +1531,19 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
           'mcp__simatis__autoriser_outil',
           ...mcp,
           outilsExportRestitution([dossier, brouillonClaude()]),
+        ];
+        cwd = dossier;
+        env = ENV_SUPPORT;
+      } else if (exportRevue) {
+        args = [
+          '-p',
+          promptExportRevue(a),
+          ...modele,
+          ...OPTIONS_SUPPORT,
+          '--permission-prompt-tool',
+          'mcp__simatis__autoriser_outil',
+          ...mcp,
+          outilsExportRevue([dossier, brouillonClaude()]),
         ];
         cwd = dossier;
         env = ENV_SUPPORT;

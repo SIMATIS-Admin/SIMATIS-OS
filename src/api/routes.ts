@@ -44,6 +44,7 @@ import {
   marquerDeckFinal,
   pptxRestitutionDe,
 } from '../diagnostic/restitution.js';
+import { demanderExportRevue } from '../diagnostic/revue-export.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
 import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
 import {
@@ -786,6 +787,21 @@ export function registerApi(
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
       try {
         return await demanderRestitution(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Export de la revue validée (étape 3) en artifact, à rouvrir dans Claude Chat pour le rapport.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/revue/exporter',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderExportRevue(db, i, id);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
