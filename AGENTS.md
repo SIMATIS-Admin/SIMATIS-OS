@@ -65,6 +65,7 @@ Un secret poussé une fois reste récupérable dans l'historique : en cas de dou
 ## Second cerveau
 
 Le second cerveau est privé et contient toute l'information confidentielle et métier. Ce dépôt peut le **référencer par concept** (« voir le second cerveau, fiche mandat »), jamais en copier le contenu.
+**Référence : le dépôt GitHub privé `SIMATIS-Admin/second-cerveau`** (plus le Drive), cloné sur le poste de Marc dans `~/Second Cerveau` (`SECOND_CERVEAU_DIR`). Toute écriture dans le second cerveau, par l'agent ou par l'OS (routines, éditeur de notes), se termine par : `git pull --rebase`, `git add` des fichiers modifiés (jamais `-A`), commit, `git push` sur `main`. En fin de travail, ne jamais laisser de modification non poussée dans ce clone. Le dépôt est privé : y mettre du contenu métier est permis, mais il ne doit jamais être copié dans le présent dépôt public.
 La configuration locale (chemins, URL, jetons) passe par des variables d'environnement ou des fichiers ignorés par git.
 
 ## Branches (pas de worktree)
@@ -84,7 +85,7 @@ Marc n'est pas développeur : l'agent gère tout git seul, sans demander de conf
 - **Une nouvelle branche par feature** (`feature/nom-court`).
 - **Feature terminée** : l'agent ouvre une PR, fait lui-même la revue de code (corrige ce qu'il trouve), vérifie que la CI est verte, puis merge dans `main`. Marc n'a pas à relire.
 - **Marc est débutant** : à chaque fin de feature, expliquer simplement, étape par étape, comment tester l'app. L'agent s'occupe de tout le reste.
-- **Second cerveau à jour** : en fin de feature, mettre à jour dans le second cerveau `brain/outils/simatis-os-structure.md` (ce qui a changé dans la structure de l'OS) et `brain/outils/simatis-os-feuille-de-route.md` (étape faite, nouvelles étapes). Écrire dans le dossier du Drive et noter la modification dans `log.md` ; ne rien en copier dans ce dépôt.
+- **Second cerveau à jour** : en fin de feature, mettre à jour dans le second cerveau `brain/outils/simatis-os-structure.md` (ce qui a changé dans la structure de l'OS) et `brain/outils/simatis-os-feuille-de-route.md` (étape faite, nouvelles étapes). Écrire dans le clone local du second cerveau (`SECOND_CERVEAU_DIR`), noter la modification dans `log.md`, puis la committer et la pousser sur le dépôt privé (voir « Second cerveau ») ; ne rien en copier dans ce dépôt.
 
 ### Garde-fou confidentialité (avant chaque commit, non négociable)
 
