@@ -3,7 +3,6 @@ import {
   fetchEntreprises,
   fetchProjetsDiag,
   fetchTestsVma,
-  ouvrirEspaceTesteurVma,
   relancerTestVma,
   revoquerTestVma,
   supprimerProjetDiag,
@@ -13,6 +12,8 @@ import {
   type TestVma,
 } from '../api.js';
 import { ContactsVma } from './diagnostics/ContactsVma.js';
+import logoDiagnostic from '../assets/diagnostic-endurance.svg';
+import logoVma from '../assets/test-vma.svg';
 import { Icon } from '../icons.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
@@ -118,19 +119,6 @@ export function Diagnostics({
   const [enCours, setEnCours] = useState(false);
   const [relance, setRelance] = useState<{ test: TestVma; tu: boolean } | null>(null);
   const [sansReponseSeul, setSansReponseSeul] = useState(false);
-
-  // L'onglet s'ouvre tout de suite, pendant le clic : après une attente, le navigateur le bloquerait.
-  const ouvrirTesteur = async () => {
-    const onglet = window.open('', '_blank');
-    try {
-      const { lien } = await ouvrirEspaceTesteurVma(slug);
-      if (onglet) onglet.location.href = lien;
-      else window.location.href = lien;
-    } catch (e) {
-      onglet?.close();
-      setErreur(e instanceof Error ? e.message : 'Espace testeur indisponible');
-    }
-  };
 
   const charger = async () => {
     try {
@@ -431,12 +419,14 @@ export function Diagnostics({
             <button className="btn" type="button" onClick={() => setContactsOuverts(true)}>
               Contacts
             </button>
-            <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
-              Test VMA: module d'essai
-            </button>
-            {/* Hors du menu latéral : la présentation s'ouvre depuis cette barre. */}
-            <a className="btn" href={`#/${slug}/presentation-diagnostic`}>
-              Diagnostic d’endurance commerciale : présentation
+            {/* Hors du menu latéral : chaque présentation s'ouvre depuis cette barre. */}
+            <a className="btn dg-outil" href={`#/${slug}/presentation-vma`}>
+              <img src={logoVma} alt="" />
+              Test VMA
+            </a>
+            <a className="btn dg-outil" href={`#/${slug}/presentation-diagnostic`}>
+              <img src={logoDiagnostic} alt="" />
+              Diagnostic d’endurance commerciale
             </a>
             <div className="dg-menu">
               <button

@@ -555,6 +555,15 @@
 .dg .dg-titre .panel-h {
   grid-template-columns: minmax(0, 1fr);
 }
+.dg .dg-outil {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dg .dg-outil img {
+  height: 20px;
+  width: auto;
+}
 .dg-outils {
   display: flex;
   flex-wrap: wrap;

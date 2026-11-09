@@ -21,6 +21,7 @@ import type { KindFiche } from './api.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
 import { Pipeline } from './pages/Pipeline.js';
+import { ModePresentationContext, estVuePresentation } from './shell/modePresentation.js';
 import { Sidebar } from './shell/Sidebar.js';
 
 const Agenda = lazy(() => import('./pages/Agenda.js').then((m) => ({ default: m.Agenda })));
@@ -49,6 +50,9 @@ const Portefeuille = lazy(() =>
 );
 const PresentationDiagnostic = lazy(() =>
   import('./pages/PresentationDiagnostic.js').then((m) => ({ default: m.PresentationDiagnostic })),
+);
+const PresentationVma = lazy(() =>
+  import('./pages/PresentationVma.js').then((m) => ({ default: m.PresentationVma })),
 );
 const Prospection = lazy(() =>
   import('./pages/Prospection.js').then((m) => ({ default: m.Prospection })),
@@ -94,6 +98,8 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [route, setRoute] = useState(readHash);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Mode présentation : la barre du haut et la console se masquent, la barre latérale reste.
+  const [presentation, setPresentation] = useState(false);
 
   const loadInstances = useCallback(() => {
     fetchInstances().then(setInstances, (e: unknown) => setError(String(e)));
@@ -109,6 +115,15 @@ export function App() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, [loadInstances]);
+
+  // Le mode présentation ne survit pas à un changement d'écran, et Échap en sort.
+  useEffect(() => setPresentation(false), [route.view, route.slug]);
+  useEffect(() => {
+    if (!presentation) return;
+    const sortir = (e: KeyboardEvent) => e.key === 'Escape' && setPresentation(false);
+    document.addEventListener('keydown', sortir);
+    return () => document.removeEventListener('keydown', sortir);
+  }, [presentation]);
 
   const slugCourant = instances
     ? (instances.find((i) => i.slug === route.slug) ?? instances[0])?.slug
@@ -164,12 +179,14 @@ export function App() {
       : view === 'fiche'
         ? (TITRES_FICHE[route.kind ?? ''] ?? 'Fiche')
         : view === 'presentation-diagnostic'
-          ? 'Diagnostic d’endurance commerciale : présentation'
-          : view === 'feuille-de-route-os'
-            ? 'Feuille de route de l’OS'
-            : view === 'gestion'
-              ? 'Gestion'
-              : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+          ? 'Diagnostic d’endurance commerciale'
+          : view === 'presentation-vma'
+            ? 'Test VMA'
+            : view === 'feuille-de-route-os'
+              ? 'Feuille de route de l’OS'
+              : view === 'gestion'
+                ? 'Gestion'
+                : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
@@ -228,7 +245,9 @@ export function App() {
           />
         );
       case 'presentation-diagnostic':
-        return <PresentationDiagnostic />;
+        return <PresentationDiagnostic slug={current.slug} />;
+      case 'presentation-vma':
+        return <PresentationVma slug={current.slug} />;
       case 'bases':
         return <Bases key={current.slug} slug={current.slug} />;
       case 'prospection':
@@ -305,7 +324,9 @@ export function App() {
                 affaire: 'pipeline',
                 rdv: 'rendez-vous',
               }[route.kind ?? ''] ?? view)
-            : view
+            : estVuePresentation(view)
+              ? 'diagnostics'
+              : view
         }
         open={menuOpen}
         favoris={favoris}
@@ -315,59 +336,66 @@ export function App() {
           updateFavoris(reorderFavoris(favoris, id, cible, apres))
         }
       />
-      <main className="main">
-        <div className="top">
-          <div>
-            <button
-              className="btn ghost menu-btn"
-              aria-label="Menu"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              <Icon name="menu" />
-            </button>
-            {view === 'inbox' && <span className="entete-slot" ref={setEnteteGauche} />}
-            <h1>
-              {(view === 'diagnostics' || view === 'atelier') && titreOutil ? titreOutil : title}
-            </h1>
-            {view === 'inbox' && (
+      <ModePresentationContext.Provider
+        value={{
+          actif: presentation && estVuePresentation(view),
+          basculer: () => setPresentation((p) => !p),
+        }}
+      >
+        <main className={presentation && estVuePresentation(view) ? 'main presentation' : 'main'}>
+          <div className="top">
+            <div>
               <button
-                className="btn carre"
-                aria-label="Ajouter une entrée à l'Inbox"
-                title="Ajouter une entrée"
-                onClick={() => setAjoutInbox(true)}
+                className="btn ghost menu-btn"
+                aria-label="Menu"
+                onClick={() => setMenuOpen(!menuOpen)}
               >
-                <Icon name="inbox" />
-                <span className="carre-plus" aria-hidden="true">
-                  +
-                </span>
+                <Icon name="menu" />
               </button>
-            )}
-            {view === 'inbox' && (
-              <button
-                className={`btn sm ${pasAPasInbox ? '' : 'primary'}`}
-                aria-pressed={pasAPasInbox}
-                onClick={() => setPasAPasInbox(!pasAPasInbox)}
-              >
-                {pasAPasInbox ? 'Quitter le pas à pas' : 'Pas à pas'}
-              </button>
-            )}
-            {view === 'inbox' && <span className="entete-slot" ref={setEnteteDroite} />}
+              {view === 'inbox' && <span className="entete-slot" ref={setEnteteGauche} />}
+              <h1>
+                {(view === 'diagnostics' || view === 'atelier') && titreOutil ? titreOutil : title}
+              </h1>
+              {view === 'inbox' && (
+                <button
+                  className="btn carre"
+                  aria-label="Ajouter une entrée à l'Inbox"
+                  title="Ajouter une entrée"
+                  onClick={() => setAjoutInbox(true)}
+                >
+                  <Icon name="inbox" />
+                  <span className="carre-plus" aria-hidden="true">
+                    +
+                  </span>
+                </button>
+              )}
+              {view === 'inbox' && (
+                <button
+                  className={`btn sm ${pasAPasInbox ? '' : 'primary'}`}
+                  aria-pressed={pasAPasInbox}
+                  onClick={() => setPasAPasInbox(!pasAPasInbox)}
+                >
+                  {pasAPasInbox ? 'Quitter le pas à pas' : 'Pas à pas'}
+                </button>
+              )}
+              {view === 'inbox' && <span className="entete-slot" ref={setEnteteDroite} />}
+            </div>
+            {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
           </div>
-          {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
-        </div>
-        <div className="content">
-          <Suspense
-            fallback={
-              <div className="empty" role="status" aria-live="polite">
-                Chargement de l’espace…
-              </div>
-            }
-          >
-            {page()}
-          </Suspense>
-        </div>
-        {view !== 'portefeuille' && <Console key={current.slug} slug={current.slug} />}
-      </main>
+          <div className="content">
+            <Suspense
+              fallback={
+                <div className="empty" role="status" aria-live="polite">
+                  Chargement de l’espace…
+                </div>
+              }
+            >
+              {page()}
+            </Suspense>
+          </div>
+          {view !== 'portefeuille' && <Console key={current.slug} slug={current.slug} />}
+        </main>
+      </ModePresentationContext.Provider>
     </div>
   );
 }
