@@ -248,6 +248,9 @@ export type LigneEntreprise = {
   // The most serious recent BODACC notice, if any; `signauxLe` null = never checked.
   signal: { gravite: 'alerte' | 'attention' | 'info'; nature: string; date: string } | null;
   signauxLe: string | null;
+  siteWeb: string | null;
+  // The first number found on the company's site.
+  standard: string | null;
 };
 
 const PAR_PAGE_ENTREPRISES = 50;
@@ -308,6 +311,8 @@ export async function listerEntreprisesBase(
           LigneEntreprise['signal']
         >`(select to_jsonb(x) from (select g.gravite, g.nature, g.date from base_signaux g where g.entreprise_id = ${sql.raw('"base_entreprises"."id"')} order by case g.gravite when 'alerte' then 0 when 'attention' then 1 else 2 end, g.date desc limit 1) x)`,
         signauxLe: sql<string | null>`${baseEntreprises.signauxLe}`,
+        siteWeb: baseEntreprises.siteWeb,
+        standard: sql<string | null>`${baseEntreprises.siteTelephones}[1]`,
       })
       .from(baseEntreprises)
       .where(filtre)

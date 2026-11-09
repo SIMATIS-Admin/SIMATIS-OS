@@ -510,3 +510,27 @@ export async function modifierEtiquettes(
       .where(and(eq(baseVivante.id, f.id), eq(baseVivante.instanceId, instanceId)));
   }
 }
+
+// The general e-mail address of a company, read on its site, goes to the records of that company
+// that have none yet. An address already there (typed by hand, or found elsewhere) is kept.
+export async function completerEmailEntreprise(
+  tx: Tx,
+  instanceId: string,
+  entrepriseId: string,
+  email: string,
+): Promise<number> {
+  const adresse = normaliserEmail(email);
+  if (!adresse) return 0;
+  const maj = await tx
+    .update(baseVivante)
+    .set({ emailEntreprise: adresse, updatedAt: new Date() })
+    .where(
+      and(
+        eq(baseVivante.instanceId, instanceId),
+        eq(baseVivante.entrepriseId, entrepriseId),
+        isNull(baseVivante.emailEntreprise),
+      ),
+    )
+    .returning({ id: baseVivante.id });
+  return maj.length;
+}

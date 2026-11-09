@@ -1854,6 +1854,8 @@ export type LigneEntrepriseBase = {
   listes: string[];
   signal: { gravite: GraviteSignal; nature: string; date: string } | null;
   signauxLe: string | null;
+  siteWeb: string | null;
+  standard: string | null;
 };
 export type GraviteSignal = 'alerte' | 'attention' | 'info';
 export type SignalWeb = {
@@ -1991,6 +1993,12 @@ export type EntrepriseBaseWeb = EntrepriseAnnuaireWeb & {
   creeLe: string | null;
   oppositionDiffusion: boolean;
   etablissementsOuverts: number | null;
+  siteWeb: string | null;
+  siteTelephones: string[];
+  siteEmails: string[];
+  linkedin: string | null;
+  siteConfirme: boolean;
+  siteLuLe: string | null;
   finances: { annee: number; ca: number | null; resultat: number | null }[];
   dirigeants: { nom: string; fonction: string | null; societe: boolean }[];
 };
@@ -2006,6 +2014,12 @@ export const rattacherEntrepriseBase = (slug: string, ficheId: string, siren: st
   );
 export const detacherEntrepriseBase = (slug: string, ficheId: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `base/fiches/${ficheId}/entreprise`), {});
+export const lireSiteEntrepriseBase = (slug: string, id: string, url?: string) =>
+  sendJson<EntrepriseBaseWeb>(
+    'POST',
+    inst(slug, `base/entreprises/${id}/site`),
+    url ? { url } : {},
+  );
 export const fetchEntrepriseBase = (slug: string, id: string) =>
   getJson<EntrepriseBaseWeb>(inst(slug, `base/entreprises/${id}`));
 export const majConformiteBase = (
