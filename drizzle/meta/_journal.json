@@ -610,6 +610,13 @@
       "when": 1794226773841,
       "tag": "0086_greedy_cobalt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1794231085545,
+      "tag": "0087_supreme_eddie_brock",
+      "breakpoints": true
     }
   ]
 }

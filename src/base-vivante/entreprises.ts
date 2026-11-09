@@ -245,6 +245,9 @@ export type LigneEntreprise = {
   ca: number | null;
   nbContacts: number;
   listes: string[];
+  // The most serious recent BODACC notice, if any; `signauxLe` null = never checked.
+  signal: { gravite: 'alerte' | 'attention' | 'info'; nature: string; date: string } | null;
+  signauxLe: string | null;
 };
 
 const PAR_PAGE_ENTREPRISES = 50;
@@ -252,7 +255,7 @@ const PAR_PAGE_ENTREPRISES = 50;
 // Search by name, SIREN or city, and optionally within one list of companies.
 export function filtreEntreprises(
   instanceId: string,
-  { q, liste }: { q?: string; liste?: string },
+  { q, liste, signal }: { q?: string; liste?: string; signal?: string },
 ) {
   const motif = q?.trim() ? `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
   return and(
@@ -267,6 +270,13 @@ export function filtreEntreprises(
     liste
       ? sql`exists (select 1 from base_liste_entreprises m where m.entreprise_id = ${baseEntreprises.id} and m.liste_id = ${liste})`
       : undefined,
+    signal === 'alerte'
+      ? sql`exists (select 1 from base_signaux g where g.entreprise_id = ${baseEntreprises.id} and g.gravite = 'alerte')`
+      : signal === 'attention'
+        ? sql`exists (select 1 from base_signaux g where g.entreprise_id = ${baseEntreprises.id} and g.gravite in ('alerte', 'attention'))`
+        : signal === 'jamais'
+          ? sql`${baseEntreprises.signauxLe} is null`
+          : undefined,
   );
 }
 
@@ -275,9 +285,9 @@ export function filtreEntreprises(
 export async function listerEntreprisesBase(
   db: Executor,
   instanceId: string,
-  { q, liste, page = 0 }: { q?: string; liste?: string; page?: number },
+  { q, liste, signal, page = 0 }: { q?: string; liste?: string; signal?: string; page?: number },
 ): Promise<{ entreprises: LigneEntreprise[]; total: number }> {
-  const filtre = filtreEntreprises(instanceId, { q, liste });
+  const filtre = filtreEntreprises(instanceId, { q, liste, signal });
   return withInstance(db, instanceId, async (tx) => {
     const lignes = await tx
       .select({
@@ -294,6 +304,10 @@ export async function listerEntreprisesBase(
         listes: sql<
           string[]
         >`coalesce((select array_agg(m.liste_id::text) from base_liste_entreprises m where m.entreprise_id = ${sql.raw('"base_entreprises"."id"')}), '{}')`,
+        signal: sql<
+          LigneEntreprise['signal']
+        >`(select to_jsonb(x) from (select g.gravite, g.nature, g.date from base_signaux g where g.entreprise_id = ${sql.raw('"base_entreprises"."id"')} order by case g.gravite when 'alerte' then 0 when 'attention' then 1 else 2 end, g.date desc limit 1) x)`,
+        signauxLe: sql<string | null>`${baseEntreprises.signauxLe}`,
       })
       .from(baseEntreprises)
       .where(filtre)

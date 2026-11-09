@@ -24,6 +24,8 @@ const ligne = (id: string, nom: string, extra = {}) => ({
   ca: 425000,
   nbContacts: 2,
   listes: [],
+  signal: null,
+  signauxLe: '2026-11-01T08:00:00Z',
   ...extra,
 });
 const listes: ResumeListeBase[] = [
@@ -185,6 +187,39 @@ describe('Entreprises de la base', () => {
     expect(
       await screen.findByRole('button', { name: 'Retirer ATELIER FICTIF de la tournée' }),
     ).toBeTruthy();
+  });
+
+  it('montre le signal du BODACC de chaque entreprise et filtre dessus', async () => {
+    const appels = simuler([
+      ligne('e1', 'ATELIER FICTIF', {
+        signal: { gravite: 'alerte', nature: 'Redressement judiciaire', date: '2026-10-05' },
+      }),
+      ligne('e2', 'BUREAU FICTIF', { signauxLe: null }),
+      ligne('e3', 'CHANTIER FICTIF'),
+    ]);
+    render(<EntreprisesBase slug="base" listes={[]} onChange={vi.fn()} onVoirContacts={vi.fn()} />);
+    expect(await screen.findByText('Redressement judiciaire')).toBeTruthy();
+    expect(screen.getByText('à vérifier')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Filtrer les entreprises par signal'), {
+      target: { value: 'alerte' },
+    });
+    await waitFor(() => expect(appels.at(-1)?.url).toContain('signal=alerte'));
+  });
+
+  it('vérifie les signaux de la sélection, par groupes de 25', async () => {
+    const entreprises = Array.from({ length: 30 }, (_, i) => ligne(`e${i}`, `ENTREPRISE ${i}`));
+    const appels = simuler(entreprises);
+    render(<EntreprisesBase slug="base" listes={[]} onChange={vi.fn()} onVoirContacts={vi.fn()} />);
+    fireEvent.click(await screen.findByLabelText('Tout sélectionner'));
+    fireEvent.click(screen.getByRole('button', { name: 'Vérifier les signaux' }));
+    await waitFor(() =>
+      expect(appels.filter((a) => a.url.endsWith('/entreprises/signaux/actualiser'))).toHaveLength(
+        2,
+      ),
+    );
+    const envois = appels.filter((a) => a.url.endsWith('/entreprises/signaux/actualiser'));
+    expect((envois[0]?.body as { ids: string[] }).ids).toHaveLength(25);
+    expect((envois[1]?.body as { ids: string[] }).ids).toHaveLength(5);
   });
 
   it('explique comment remplir la vue quand elle est vide', async () => {
