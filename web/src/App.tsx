@@ -51,6 +51,9 @@ const Portefeuille = lazy(() =>
 const PresentationDiagnostic = lazy(() =>
   import('./pages/PresentationDiagnostic.js').then((m) => ({ default: m.PresentationDiagnostic })),
 );
+const DiaporamaProjet = lazy(() =>
+  import('./pages/DiaporamaProjet.js').then((m) => ({ default: m.DiaporamaProjet })),
+);
 const PresentationSimatis = lazy(() =>
   import('./pages/PresentationSimatis.js').then((m) => ({ default: m.PresentationSimatis })),
 );
@@ -183,15 +186,19 @@ export function App() {
         ? (TITRES_FICHE[route.kind ?? ''] ?? 'Fiche')
         : view === 'presentation-diagnostic'
           ? 'Diagnostic d’endurance commerciale'
-          : view === 'presentation-vma'
-            ? 'Test VMA'
-            : view === 'presentation-simatis'
-              ? 'SIMATIS'
-              : view === 'feuille-de-route-os'
-                ? 'Feuille de route de l’OS'
-                : view === 'gestion'
-                  ? 'Gestion'
-                  : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+          : view === 'diaporama'
+            ? route.kind === 'support'
+              ? 'Support d’ouverture'
+              : 'Restitution'
+            : view === 'presentation-vma'
+              ? 'Test VMA'
+              : view === 'presentation-simatis'
+                ? 'SIMATIS'
+                : view === 'feuille-de-route-os'
+                  ? 'Feuille de route de l’OS'
+                  : view === 'gestion'
+                    ? 'Gestion'
+                    : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
@@ -251,6 +258,17 @@ export function App() {
         );
       case 'presentation-diagnostic':
         return <PresentationDiagnostic slug={current.slug} />;
+      case 'diaporama':
+        return route.id && (route.kind === 'support' || route.kind === 'restitution') ? (
+          <DiaporamaProjet
+            key={`${current.slug}-${route.kind}-${route.id}`}
+            slug={current.slug}
+            genre={route.kind}
+            id={route.id}
+          />
+        ) : (
+          <p className="empty">Diaporama introuvable.</p>
+        );
       case 'presentation-simatis':
         return <PresentationSimatis slug={current.slug} />;
       case 'presentation-vma':

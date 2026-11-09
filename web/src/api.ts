@@ -1625,6 +1625,11 @@ export const exporterRestitutionDiag = (slug: string, id: string) =>
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/exporter`),
     {},
   );
+// Diapositives du dernier export de la restitution, pour les présenter dans l'OS.
+export const fetchDiapositivesRestitution = (slug: string, id: string) =>
+  getJson<{ nom: string; diapositives: Diapositive[] }>(
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/diapositives`),
+  );
 export const urlPptxRestitutionDiag = (slug: string, id: string) =>
   inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/pptx`);
 export const urlRapportDiag = (slug: string, id: string, version?: number) =>

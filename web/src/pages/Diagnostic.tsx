@@ -753,6 +753,11 @@ function Support({
               Ouvrir le deck ↗
             </a>
           )}
+          {!!projet.supportTexte?.length && (
+            <a className="btn" href={`#/${slug}/diaporama/support/${projet.id}`}>
+              Présenter dans l’OS
+            </a>
+          )}
           {(statut === 'aucun' || statut === 'pret') && (
             <button className="btn go" disabled={occupe} onClick={() => void demander('preparer')}>
               {statut === 'aucun' ? 'Préparer le support' : 'Mettre à jour le deck'}
@@ -1698,6 +1703,11 @@ function RestitutionDeck({
               Télécharger le PowerPoint
             </a>
           )}
+          {!exportEnCours && projet.aPptx && (
+            <a className="btn" href={`#/${slug}/diaporama/restitution/${projet.id}`}>
+              Présenter dans l’OS
+            </a>
+          )}
           {projet.restitutionLien && (
             <details className="diag-plus">
               <summary className="btn">Plus d’actions</summary>
@@ -1714,8 +1724,8 @@ function RestitutionDeck({
         </div>
         <p className="small muted" style={{ margin: 0 }}>
           Le deck est un brouillon : retouchez-le sur claude.ai, puis exportez-le en PowerPoint
-          quand il vous convient (le PowerPoint reprend le texte et les notes à cet instant, avec la
-          charte SIMATIS ; après une retouche, exportez à nouveau).
+          quand il vous convient (le PowerPoint et la présentation dans l’OS reprennent le texte et
+          les notes à cet instant ; après une retouche, exportez à nouveau).
           {projet.aPptx && projet.restitutionExportLe
             ? ` PowerPoint exporté le ${new Date(projet.restitutionExportLe).toLocaleDateString('fr-FR')}.`
             : ''}{' '}

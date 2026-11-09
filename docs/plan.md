@@ -127,14 +127,14 @@ Décisions :
 - Trois présentations génériques en diaporama (une idée par slide, petits ronds de progression, flèches du clavier) : SIMATIS (contenu repris du site public et du second cerveau), Test VMA, Diagnostic. Textes génériques, jamais de nom de client, de tarif ni de méthode propriétaire (formule de la VMA, gains maximaux, potentiel brut).
 - Mode présentation commun : masque la barre du haut et la console, garde la barre latérale. Touche P pour entrer, Échap pour sortir.
 - Logo du Test VMA : le logo du diagnostic avec une pastille « VMA » au centre de la piste, sans slogan. Nouveau fichier SVG, l'original reste intact.
-- Diaporama d'OS d'un diagnostic (introduction et restitution) : les artefacts restent la référence et l'archive (export PDF). Une fois l'artefact validé, ses slides sont rangées en base de données, en lecture seule et temporaires, puis affichées dans l'OS. Jamais dans git (contenu client). Mise en place par la skill de restitution, côté second cerveau.
+- Diaporama d'OS d'un diagnostic (introduction et restitution) : les artefacts restent la référence et l'archive (export PDF). L'OS garde déjà le texte des slides (support d'ouverture finalisé, restitution exportée) : le diaporama les présente en lecture seule, sans nouvelle table. Un nouvel export le met à jour. Mise en page de l'OS (titre et puces), pas la copie du visuel de l'artefact ; des slides structurées (cartes, étapes) restent une évolution possible.
 - Exemples de démonstration : entreprise fictive, chiffres modifiés, préconisations génériques.
 
 Livraisons, chacune dans sa branche, avec ses tests :
 
 1. **Livrée.** Boutons, mode présentation, page Test VMA, logo VMA, présentation du Diagnostic en slides. Test : le mode présentation masque barre du haut et console, Échap le quitte, la navigation entre slides.
 2. **Livrée.** Page SIMATIS en 10 slides (photo, logos SIMATIS et KAIROS repris du site), bouton « SIMATIS ».
-3. Diaporama d'OS des diagnostics : table de slides, écran de lecture, branchement dans la skill. Demande une migration et une vérification de la colonne après reconstruction.
+3. **Livrée.** Diaporama d'OS des diagnostics : bouton « Présenter dans l'OS » (support et restitution), route de lecture des diapositives exportées, notes d'orateur masquées en mode présentation. Aucune migration.
 
 Qualité visuelle : vitrine de l'offre. Passe de design dédiée avant chaque page, vérification dans le navigateur à la taille d'un écran de projection et d'un portable, capture montrée à Marc avant fusion.
 

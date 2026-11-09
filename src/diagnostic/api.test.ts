@@ -215,6 +215,19 @@ describe('Entretien : API', () => {
     expect(mauvais.statusCode).toBe(400);
   });
 
+  it('diapositives à présenter : 400 sur un identifiant invalide, 404 sans projet ni export', async () => {
+    const invalide = await app.inject({
+      method: 'GET',
+      url: '/api/i/simatis/diagnostic/projets/pas-un-uuid/restitution/diapositives',
+    });
+    expect(invalide.statusCode).toBe(400);
+    const inconnu = await app.inject({
+      method: 'GET',
+      url: '/api/i/simatis/diagnostic/projets/00000000-0000-4000-8000-000000000000/restitution/diapositives',
+    });
+    expect(inconnu.statusCode).toBe(404);
+  });
+
   it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
     const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     const url = '/api/i/simatis/diagnostic/reglages';

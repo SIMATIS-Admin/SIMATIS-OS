@@ -159,6 +159,25 @@ export async function pptxRestitutionDe(
   return { nom: nomFichierDeck(row.nom), contenu: Buffer.from(octets) };
 }
 
+// Les dernières diapositives exportées, pour les présenter dans l'OS : le deck publié reste l'archive,
+// rien n'est gardé en plus. Elles suivent chaque nouvel export.
+export async function diapositivesRestitutionDe(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<{ nom: string; diapositives: Diapositive[] }> {
+  verifierEspace(instance);
+  const [row] = await withInstance(db, instance.id, (tx) =>
+    tx
+      .select({ nom: diagnosticProjets.nom, diapos: diagnosticProjets.restitutionDiapos })
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id))),
+  );
+  if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+  if (!row.diapos) throw new ProjetIntrouvable("Aucune diapositive n'a encore été exportée");
+  return { nom: row.nom, diapositives: row.diapos };
+}
+
 // Claude rend le lien du deck : il devient le lien affiché, l'ancien passe à l'historique.
 export async function enregistrerRestitution(tx: Tx, id: string, lien: string): Promise<void> {
   const [projet] = await tx.select().from(diagnosticProjets).where(eq(diagnosticProjets.id, id));
