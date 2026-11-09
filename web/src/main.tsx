@@ -6,6 +6,7 @@ import './cockpit.css';
 import './diagnostics.css';
 import './interface.css';
 import './commercial.css';
+import './pages/endurance.css';
 
 const root = document.getElementById('root');
 if (root) {
