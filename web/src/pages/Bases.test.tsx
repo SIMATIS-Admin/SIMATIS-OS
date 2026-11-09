@@ -439,6 +439,16 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     expect(await screen.findByLabelText('Rechercher dans la base')).toBeTruthy();
   });
 
+  it('ouvre le réglage de l’alerte quotidienne du BODACC depuis le menu de la base', async () => {
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    fireEvent.click(screen.getByRole('button', { name: 'Alerte quotidienne du BODACC' }));
+    expect(screen.getByRole('dialog', { name: 'Alerte quotidienne du BODACC' })).toBeTruthy();
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith('/base/signaux/routine'))).toBe(true),
+    );
+  });
+
   it('ouvre la recherche d’entreprises depuis le parcours de recherche', async () => {
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Chercher des entreprises' }));

@@ -1,4 +1,6 @@
 import { tournerBrouillons } from './prospection/quotidienne.js';
+import { tournerAlertes } from './base-vivante/alerte-signaux.js';
+import { creerClientBodacc } from './signaux/bodacc.js';
 import { tournerRecherche } from './enrichissement/routine.js';
 import { fileCodex } from './enrichissement/codex.js';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
@@ -88,6 +90,27 @@ export function buildApp({
   });
   app.addHook('onClose', () => {
     clearInterval(timerRecherche);
+    return Promise.resolve();
+  });
+  // Veille quotidienne du BODACC : les nouvelles annonces sur les entreprises de la base
+  // arrivent dans l'Inbox.
+  const bodacc = creerClientBodacc();
+  let timerSignaux: ReturnType<typeof setInterval> | undefined;
+  let veilleEnCours = false;
+  app.addHook('onListen', () => {
+    timerSignaux = setInterval(() => {
+      if (veilleEnCours) return;
+      veilleEnCours = true;
+      void tournerAlertes(db, bodacc)
+        .catch((err: unknown) => app.log.error(err, 'Veille du BODACC'))
+        .finally(() => {
+          veilleEnCours = false;
+        });
+    }, 60_000);
+    return Promise.resolve();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(timerSignaux);
     return Promise.resolve();
   });
   let timerBrouillons: ReturnType<typeof setInterval> | undefined;
