@@ -741,10 +741,10 @@ const COLONNES_CSV = [
 ];
 
 // A spreadsheet runs a cell that starts with = + - @ as a formula: prefix it.
-const cellule = (v: string | number | null | undefined): string => {
+export const cellule = (v: string | number | null | undefined, separateur = ';'): string => {
   let t = v === null || v === undefined ? '' : String(v);
   if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
-  return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  return /["\n\r]/.test(t) || t.includes(separateur) ? `"${t.replace(/"/g, '""')}"` : t;
 };
 
 // Same filters as the screen; semicolon-separated with a BOM, as French Excel expects.
@@ -753,7 +753,7 @@ export async function exporterCsv(
   instanceId: string,
   filtres: FiltresBase = {},
 ): Promise<string> {
-  const lignes = [COLONNES_CSV.map(cellule).join(';')];
+  const lignes = [COLONNES_CSV.map((v) => cellule(v)).join(';')];
   for (let decalage = 0; ; decalage += 200) {
     const { fiches } = await listerFiches(db, instanceId, { ...filtres, limite: 200, decalage });
     if (fiches.length === 0) break;
@@ -781,7 +781,7 @@ export async function exporterCsv(
           f.mandatContacteur,
           f.alertes.map((a) => a.libelle).join(' | '),
         ]
-          .map(cellule)
+          .map((v) => cellule(v))
           .join(';'),
       );
   }

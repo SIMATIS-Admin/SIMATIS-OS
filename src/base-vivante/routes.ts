@@ -44,6 +44,7 @@ import {
   validerReponse,
 } from './reponses.js';
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
+import { exporterWaalaxy } from './waalaxy.js';
 import { FicheIntrouvable, FicheNonHomogene } from './integration.js';
 import { EXCLUSIONS, STATUTS_PROSPECTION } from './schema.js';
 
@@ -146,6 +147,7 @@ export function registerBaseVivanteRoutes(
       zone?: string;
       q?: string;
       page?: string;
+      partie?: string;
       statut?: string;
       alerte?: string;
       provenance?: string;
@@ -296,6 +298,24 @@ export function registerBaseVivanteRoutes(
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', 'attachment; filename="base-vivante.csv"')
+      .send(csv);
+  });
+
+  // Fichier prêt pour l'import CSV de Waalaxy : seuls les profils LinkedIn, hors opposition.
+  app.get<Route>('/api/i/:slug/base/export-waalaxy', async (request, reply) => {
+    const instance = await getInstanceBySlug(db, request.params.slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    return (await exporterWaalaxy(db, instance.id, filtresDe(request.query), 1)).apercu;
+  });
+
+  app.get<Route>('/api/i/:slug/base/export-waalaxy.csv', async (request, reply) => {
+    const instance = await getInstanceBySlug(db, request.params.slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    const partie = Math.max(1, Math.floor(Number(request.query.partie)) || 1);
+    const { csv } = await exporterWaalaxy(db, instance.id, filtresDe(request.query), partie);
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="waalaxy-${partie}.csv"`)
       .send(csv);
   });
 
