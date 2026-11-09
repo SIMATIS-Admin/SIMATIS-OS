@@ -748,7 +748,9 @@ export const promptSupport = (
         : TACHES_SUPPORT.chat(a),
     // Coût : trois recherches web suffisent pour le marché ; au-delà, la consommation grimpe sans
     // améliorer le support.
-    'Recherche de marché : trois recherches web au maximum, et une lecture par source. Ne retiens que des faits sourcés et datés.',
+    cerveau
+      ? 'Recherche de marché : trois recherches web au maximum, sans ouvrir les pages (appuie-toi sur les résultats de recherche). Ne retiens que des faits sourcés et datés.'
+      : 'Recherche de marché : trois recherches web au maximum, et une lecture par source. Ne retiens que des faits sourcés et datés.',
     "Échange à l'étape 1 :",
     ...echange(a),
     `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : ce qui a changé en quelques phrases, les sources de marché et les questions qui restent, puis arrête-toi. Vouvoie le pilote, en français, sans rien inventer. Si une information manque, demande-la au lieu de la deviner.`,
@@ -760,6 +762,9 @@ const dossierOuNull = async (dossier: string | undefined) =>
 // Outils du support : le deck (Artifact), la recherche de marché, la skill, les fichiers de travail
 // (dossier courant et brouillon de Claude, où l'outil Artifact range les diapositives lues) et le
 // second cerveau. Claude Code n'applique aux fichiers que les règles Edit : elles couvrent l'écriture.
+// Jamais WebFetch avec le second cerveau : une page lue pendant la recherche peut porter une
+// injection qui fait lire une fiche puis appeler une adresse contenant son texte. WebSearch reste :
+// la requête part au moteur de recherche, pas à une adresse choisie par la page.
 export const outilsSupport = (cerveau: string | null, travail: string[]) =>
   [
     'mcp__simatis__repondre_diagnostic',
@@ -767,7 +772,7 @@ export const outilsSupport = (cerveau: string | null, travail: string[]) =>
     'Skill',
     'Artifact',
     'WebSearch',
-    'WebFetch',
+    ...(cerveau ? [] : ['WebFetch']),
     'Glob',
     'Grep',
     ...[...travail, ...(cerveau ? [cerveau] : [])].flatMap((d) => [

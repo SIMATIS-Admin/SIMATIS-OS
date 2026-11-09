@@ -198,6 +198,15 @@ describe('Support d ouverture par le runner', () => {
     expect(avec).not.toContain('Write(');
   });
 
+  it('ne cumule jamais WebFetch et le second cerveau, qui permettrait de l envoyer dehors', () => {
+    expect(outilsSupport(null, ['/travail']).split(',')).toContain('WebFetch');
+    const avec = outilsSupport('/cerveau-fictif', ['/travail']).split(',');
+    expect(avec).not.toContain('WebFetch');
+    expect(avec).toContain('WebSearch');
+    expect(promptSupport(preparer, null, '/cerveau-fictif')).toContain('sans ouvrir les pages');
+    expect(promptSupport(preparer, null, null)).toContain('une lecture par source');
+  });
+
   const fauxOs = (a: AttenteDiag, appels: { url: string; body: unknown }[]) =>
     ((url: string, init?: RequestInit) => {
       const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
