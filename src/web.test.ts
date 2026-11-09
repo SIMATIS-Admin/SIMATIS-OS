@@ -6,6 +6,11 @@ describe('cacheControlFor', () => {
     expect(cacheControlFor('/app/dist/web/index.html')).toBe('no-cache');
   });
 
+  it('revalidates the icons and the manifest, whose names never change', () => {
+    expect(cacheControlFor('/app/dist/web/icon-512.png')).toBe('no-cache');
+    expect(cacheControlFor('/app/dist/web/manifest.webmanifest')).toBe('no-cache');
+  });
+
   it('caches hashed assets for good', () => {
     expect(cacheControlFor('/app/dist/web/assets/index-BMMtTej1.js')).toMatch(/immutable/);
   });
