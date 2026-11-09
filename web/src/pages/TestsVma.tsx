@@ -126,7 +126,7 @@ export function TestsVma({ slug }: { slug: string }) {
         <div className="panel-b stack">
           <p className="small muted">
             Auto-diagnostic envoyé par invitation : le dirigeant ouvre le lien, passe le test en
-            environ 15 minutes, et son résultat arrive ici. Cette procédure est séparée des
+            environ 10 minutes, et son résultat arrive ici. Cette procédure est séparée des
             diagnostics d’endurance.
           </p>
           {erreur && <div className="alert amber">{erreur}</div>}
