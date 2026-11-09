@@ -24,11 +24,14 @@ afterAll(async () => {
 
 it('rend la main sans attendre, isole les instances, refuse un doublon et conserve les résultats', async () => {
   let finir!: (r: ReponseIA) => void;
+  let appel = 0;
   const client = {
-    demander: () =>
-      new Promise<ReponseIA>((r) => {
+    demander: () => {
+      if (appel++ > 0) return Promise.reject(new Error('Fin du faux client'));
+      return new Promise<ReponseIA>((r) => {
         finir = r;
-      }),
+      });
+    },
   };
   const job = await lancerRecherche(t.app.db, client, 'fictif-a', 'Critères fictifs', 10);
   expect(job.etat).toBe('en_cours');
@@ -50,13 +53,16 @@ it('rend la main sans attendre, isole les instances, refuse un doublon et conser
 
 it('signale une interruption après redémarrage et protège la nouvelle recherche des anciennes réponses', async () => {
   let finir!: (r: ReponseIA) => void;
+  let appel = 0;
   const ancien = await lancerRecherche(
     t.app.db,
     {
-      demander: () =>
-        new Promise<ReponseIA>((r) => {
+      demander: () => {
+        if (appel++ > 0) return Promise.reject(new Error('Fin du faux client'));
+        return new Promise<ReponseIA>((r) => {
           finir = r;
-        }),
+        });
+      },
     },
     'fictif-c',
     'Test',
@@ -67,7 +73,7 @@ it('signale une interruption après redémarrage et protège la nouvelle recherc
   expect((await lireRecherche(t.app.db, 'fictif-c'))?.etat).toBe('erreur');
   const nouveau = await lancerRecherche(
     t.app.db,
-    { demander: () => Promise.resolve({ json: { contacts: [] }, jetons: 0 }) },
+    { demander: () => Promise.reject(new Error('Fin du faux client')) },
     'fictif-c',
     'Test',
     1,
@@ -88,15 +94,18 @@ it('répond 202 avant la fin du travail et retrouve son état par HTTP', async (
     type: 'mandat',
   });
   let finir!: (r: ReponseIA) => void;
+  let appel = 0;
   const app = Fastify();
   registerEnrichissementRoutes(app, {
     db: t.app.db,
     enrichissement: null,
     codex: {
-      demander: () =>
-        new Promise<ReponseIA>((r) => {
+      demander: () => {
+        if (appel++ > 0) return Promise.reject(new Error('Fin du faux client'));
+        return new Promise<ReponseIA>((r) => {
           finir = r;
-        }),
+        });
+      },
     },
   });
   const url = '/api/i/recherche-fictive/base/recherche/tache';
@@ -110,9 +119,7 @@ it('répond 202 avant la fin du travail et retrouve son état par HTTP', async (
   await attendreAppel(() => finir);
   finir({ json: { contacts: [] }, jetons: 0 });
   await attendreRecherche(lancement.json<{ id: string }>().id);
-  expect((await app.inject({ method: 'GET', url })).json<{ etat: string }>().etat).toBe(
-    'a_completer',
-  );
+  expect((await app.inject({ method: 'GET', url })).json<{ etat: string }>().etat).toBe('erreur');
   await app.close();
 });
 
@@ -142,7 +149,7 @@ it('complète par passages jusqu’à dix contacts vérifiés et évite les doub
   expect(resultat?.passage).toBe(4);
 });
 
-it('conserve les contacts et propose de poursuivre quand un passage ne rapporte que des doublons', async () => {
+it('conserve les contacts et continue après un passage qui ne rapporte que des doublons', async () => {
   const contact = {
     entreprise: 'Atelier fictif',
     prenom: 'Alice',
@@ -153,23 +160,20 @@ it('conserve les contacts et propose de poursuivre quand un passage ne rapporte 
     source: 'https://atelier.example/equipe',
     qualification: 'Données fictives',
   };
-  const client = { demander: () => Promise.resolve({ json: { contacts: [contact] }, jetons: 0 }) };
+  let appels = 0;
+  const client = {
+    demander: () =>
+      appels++ < 2
+        ? Promise.resolve({ json: { contacts: [contact] }, jetons: 0 })
+        : Promise.reject(new Error('Fin du faux client')),
+  };
   const job = await lancerRecherche(t.app.db, client, 'fictif-doublon', 'Test fictif', 10);
   await attendreRecherche(job.id);
   const resultat = await lireRecherche(t.app.db, 'fictif-doublon');
-  expect(resultat?.etat).toBe('a_completer');
+  expect(resultat?.etat).toBe('erreur');
   expect(resultat?.contacts).toHaveLength(1);
   expect(resultat?.consignes).toBe('Test fictif');
-  const suite = await lancerRecherche(
-    t.app.db,
-    client,
-    'fictif-doublon',
-    resultat!.consignes!,
-    10,
-    resultat!.contacts,
-  );
-  await attendreRecherche(suite.id);
-  expect((await lireRecherche(t.app.db, 'fictif-doublon'))?.contacts).toHaveLength(1);
+  expect(appels).toBe(3);
 });
 
 it('classe les anciennes recherches terminées sous dix contacts comme à compléter', async () => {

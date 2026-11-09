@@ -139,7 +139,7 @@ export function RechercheProspects({
                 !charge ||
                 !consignes.trim() ||
                 !Number.isInteger(nombre) ||
-                nombre < 10 ||
+                nombre < 1 ||
                 nombre > 100
               }
               onClick={() => void rechercher()}
@@ -176,7 +176,7 @@ export function RechercheProspects({
             <input
               className="input"
               type="number"
-              min={10}
+              min={1}
               max={100}
               disabled={occupe || enRecherche}
               value={nombre}

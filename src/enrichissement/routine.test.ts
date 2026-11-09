@@ -19,25 +19,25 @@ it('ajoute les contacts au plus une fois par jour après l’heure de Paris', as
       nombre: 12,
       heure: '09:00',
     });
-    const demander = vi.fn(() =>
-      Promise.resolve({
+    let passage = 0;
+    const demander = vi.fn(() => {
+      passage++;
+      return Promise.resolve({
         json: {
-          contacts: [
-            {
-              entreprise: 'Atelier Fictif',
-              prenom: 'Alice',
-              nom: 'Martin',
-              fonction: 'Dirigeante',
-              email: null,
-              linkedin: 'https://www.linkedin.com/in/alice-fictive',
-              source: 'https://exemple.test/equipe',
-              qualification: 'Industrie',
-            },
-          ],
+          contacts: Array.from({ length: 10 }, (_, i) => ({
+            entreprise: `Atelier Fictif ${passage}-${i}`,
+            prenom: 'Alice',
+            nom: `Martin ${passage}-${i}`,
+            fonction: 'Dirigeante',
+            email: null,
+            linkedin: `https://www.linkedin.com/in/alice-fictive-${passage}-${i}`,
+            source: 'https://exemple.test/equipe',
+            qualification: 'Industrie',
+          })),
         },
         jetons: 0,
-      }),
-    );
+      });
+    });
     await tournerRecherche(t.app.db, { demander }, new Date('2026-11-03T07:59:00Z'));
     expect(demander).not.toHaveBeenCalled();
     const heure = new Date('2026-11-03T08:00:00Z');
@@ -45,10 +45,10 @@ it('ajoute les contacts au plus une fois par jour après l’heure de Paris', as
       tournerRecherche(t.app.db, { demander }, heure),
       tournerRecherche(t.app.db, { demander }, heure),
     ]);
-    expect(demander).toHaveBeenCalledTimes(1);
-    expect((await listerFiches(t.app.db, instance.id, { canal: 'linkedin' })).total).toBe(1);
+    expect(demander).toHaveBeenCalledTimes(2);
+    expect((await listerFiches(t.app.db, instance.id, { canal: 'linkedin' })).total).toBe(12);
     expect((await lireRoutineRecherche(t.app.db, instance.id)).bilan).toContain(
-      '1 fiche(s) ajoutée(s)',
+      '12 fiche(s) ajoutée(s)',
     );
     expect(await lireRoutineRecherche(t.app.db, instance.id)).toMatchObject({
       dernierJour: '2026-11-03',
@@ -57,9 +57,9 @@ it('ajoute les contacts au plus une fois par jour après l’heure de Paris', as
       {
         nature: 'recherche',
         mode: 'automatique',
-        etat: 'incomplete',
-        traites: 1,
-        ajoutees: 1,
+        etat: 'terminee',
+        traites: 12,
+        ajoutees: 12,
       },
     ]);
   } finally {
