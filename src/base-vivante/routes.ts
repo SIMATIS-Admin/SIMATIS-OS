@@ -49,6 +49,8 @@ import { exporterWaalaxy } from './waalaxy.js';
 import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
 import { creerGeocodeur, type Geocodeur } from '../routage/geocodage.js';
 import { creerClientBodacc, ErreurBodacc, type ClientBodacc } from '../signaux/bodacc.js';
+import { creerLecteurWeb, ErreurSite, type LecteurWeb } from '../site-entreprise/reseau.js';
+import { lireSiteEntreprise, SiteIntrouvable } from './site.js';
 import { creerRouteur, type Routeur } from '../routage/osrm.js';
 import {
   bilanDe,
@@ -161,6 +163,7 @@ export type BaseVivanteRoutesDeps = {
   routeur?: Routeur;
   geocodeur?: Geocodeur;
   bodacc?: ClientBodacc;
+  lecteurWeb?: LecteurWeb;
 };
 
 export function registerBaseVivanteRoutes(
@@ -174,6 +177,7 @@ export function registerBaseVivanteRoutes(
     routeur = creerRouteur(),
     geocodeur = creerGeocodeur(),
     bodacc = creerClientBodacc(),
+    lecteurWeb = creerLecteurWeb(),
   }: BaseVivanteRoutesDeps,
 ) {
   const erreur = (error: unknown, reply: FastifyReply) => {
@@ -194,6 +198,8 @@ export function registerBaseVivanteRoutes(
       error instanceof SirenInvalide ||
       error instanceof RechercheRefusee ||
       error instanceof TourneeRefusee ||
+      error instanceof SiteIntrouvable ||
+      error instanceof ErreurSite ||
       error instanceof ListeRefusee ||
       error instanceof EtiquetteRefusee
     )
@@ -537,6 +543,17 @@ export function registerBaseVivanteRoutes(
     surInstance(async (instanceId) => {
       const rapport = await lancerAlerte(db, bodacc, instanceId, { limite: 100 });
       return { ...rapport, bilan: bilanDe(rapport) };
+    }),
+  );
+  // The company's own site: its switchboard, its general e-mail addresses, its LinkedIn page.
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/:id/site',
+    surInstance((instanceId, request) => {
+      const { url } = z
+        .object({ url: z.string().max(300).optional() })
+        .strict()
+        .parse(request.body ?? {});
+      return lireSiteEntreprise(db, lecteurWeb, instanceId, request.params.id as string, url);
     }),
   );
   // What the BODACC says about the companies of the base.

@@ -22,6 +22,12 @@ const entreprise = {
   creeLe: '1996-03-01',
   oppositionDiffusion: true,
   etablissementsOuverts: 2,
+  siteWeb: null,
+  siteTelephones: [],
+  siteEmails: [],
+  linkedin: null,
+  siteConfirme: false,
+  siteLuLe: null,
   finances: [{ annee: 2022, ca: 425165, resultat: -9666 }],
   dirigeants: [{ nom: 'Jeanne DUPONT', fonction: 'Président', societe: false }],
 };

@@ -123,6 +123,19 @@ export const baseEntreprises = pgTable(
     finances: jsonb('finances').$type<ExerciceFinancier[]>().notNull().default([]),
     dirigeants: jsonb('dirigeants').$type<Dirigeant[]>().notNull().default([]),
     siteWeb: text('site_web'),
+    // What the company's own site says (src/site-entreprise): its switchboard, its general
+    // e-mail addresses, its LinkedIn page. `siteConfirme`: the site quotes the company's SIREN.
+    siteTelephones: text('site_telephones')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    siteEmails: text('site_emails')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    linkedin: text('linkedin'),
+    siteConfirme: boolean('site_confirme').notNull().default(false),
+    siteLuLe: timestamp('site_lu_le', { withTimezone: true }),
     // When the BODACC was last read for this company; null = never.
     signauxLe: timestamp('signaux_le', { withTimezone: true }),
     annuaireLe: timestamp('annuaire_le', { withTimezone: true }).notNull().defaultNow(),

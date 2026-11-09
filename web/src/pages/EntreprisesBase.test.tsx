@@ -26,6 +26,8 @@ const ligne = (id: string, nom: string, extra = {}) => ({
   listes: [],
   signal: null,
   signauxLe: '2026-11-01T08:00:00Z',
+  siteWeb: null,
+  standard: null,
   ...extra,
 });
 const listes: ResumeListeBase[] = [
@@ -220,6 +222,20 @@ describe('Entreprises de la base', () => {
     const envois = appels.filter((a) => a.url.endsWith('/entreprises/signaux/actualiser'));
     expect((envois[0]?.body as { ids: string[] }).ids).toHaveLength(25);
     expect((envois[1]?.body as { ids: string[] }).ids).toHaveLength(5);
+  });
+
+  it('montre le site et le standard des entreprises dont le site a été lu', async () => {
+    simuler([
+      ligne('e1', 'ATELIER FICTIF', {
+        siteWeb: 'https://www.atelier-fictif.test/',
+        standard: '+33437250573',
+      }),
+      ligne('e2', 'BUREAU FICTIF'),
+    ]);
+    render(<EntreprisesBase slug="base" listes={[]} onChange={vi.fn()} onVoirContacts={vi.fn()} />);
+    const lien = await screen.findByRole('link', { name: 'atelier-fictif.test' });
+    expect(lien.getAttribute('href')).toBe('https://www.atelier-fictif.test/');
+    expect(screen.getByText('04 37 25 05 73')).toBeTruthy();
   });
 
   it('explique comment remplir la vue quand elle est vide', async () => {
