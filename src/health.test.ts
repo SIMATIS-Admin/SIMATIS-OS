@@ -48,6 +48,16 @@ describe('GET /health', () => {
     });
   });
 
+  it('is guarded against a foreign host, like every route of the app', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { host: 'evil.example:4300' },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
   it('shows the last backup written by the backup container', async () => {
     const file = path.join(dir, 'last.json');
     await writeFile(
