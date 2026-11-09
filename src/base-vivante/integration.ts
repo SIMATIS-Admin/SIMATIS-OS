@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { evaluer, type Zone } from './completude.js';
 import {
@@ -428,4 +428,45 @@ export async function ajouterNoteOrigine(
         sql`not exists (select 1 from jsonb_array_elements(${baseVivante.notesOrigine}) n where n->>'texte' = ${note.texte} and n->>'origine' = ${note.origine} and coalesce(n->>'source', '') = ${note.source ?? ''})`,
       ),
     );
+}
+
+// The pilot confirmed which company of the directory a record belongs to. The same company often
+// carries several contacts of the base: those under the same name (and a compatible domain, the
+// rule used to spot a company already reachable) follow, unless they were linked on their own.
+export async function rattacherEntreprise(
+  tx: Tx,
+  instanceId: string,
+  id: string,
+  entrepriseId: string,
+): Promise<number> {
+  const f = await charger(tx, instanceId, id);
+  const memeNom = sql`lower(trim(${baseVivante.entreprise})) = lower(trim(${f.entreprise}))`;
+  const rattaches = await tx
+    .update(baseVivante)
+    .set({ entrepriseId, updatedAt: new Date() })
+    .where(
+      and(
+        eq(baseVivante.instanceId, instanceId),
+        or(
+          eq(baseVivante.id, id),
+          and(
+            isNull(baseVivante.entrepriseId),
+            memeNom,
+            f.domaine
+              ? or(isNull(baseVivante.domaine), eq(baseVivante.domaine, f.domaine))
+              : undefined,
+          ),
+        ),
+      ),
+    )
+    .returning({ id: baseVivante.id });
+  return rattaches.length;
+}
+
+export async function detacherEntreprise(tx: Tx, instanceId: string, id: string): Promise<void> {
+  await charger(tx, instanceId, id);
+  await tx
+    .update(baseVivante)
+    .set({ entrepriseId: null, updatedAt: new Date() })
+    .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
 }
