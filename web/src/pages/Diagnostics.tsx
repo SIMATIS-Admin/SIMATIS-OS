@@ -625,13 +625,27 @@ export function Diagnostics({
                     {resume.dernier && (
                       <div className="dg-resultat">
                         <div className="dg-grand">
-                          {resume.dernier.allure != null
-                            ? fmtEur(resume.dernier.allure)
-                            : resume.dernier.vma != null
-                              ? fmtEur(resume.dernier.vma)
-                              : 'Non mesurable'}
-                          <small> de CA commandé par mois</small>
+                          {resume.dernier.caMensuel != null
+                            ? fmtEur(resume.dernier.caMensuel)
+                            : resume.dernier.allure != null
+                              ? fmtEur(resume.dernier.allure)
+                              : resume.dernier.vma != null
+                                ? fmtEur(resume.dernier.vma)
+                                : 'Non mesurable'}
+                          <small>
+                            {resume.dernier.caMensuel != null
+                              ? ' de chiffre d’affaires par mois'
+                              : ' de CA commandé par mois'}
+                          </small>
                         </div>
+                        {resume.dernier.caMensuel != null && (
+                          <p className="small">
+                            VMA ponctuelle :{' '}
+                            {resume.dernier.vma != null
+                              ? fmtEur(resume.dernier.vma)
+                              : 'non mesurable'}
+                          </p>
+                        )}
                         <p className="small muted">
                           Dernier résultat · {libelleTest(resume.dernier)} · reçu le{' '}
                           {date(resume.dernier.date)}
@@ -661,6 +675,13 @@ export function Diagnostics({
                                 {fmtEur(resume.ecart.euros)} par mois (
                                 {resume.ecart.pourcentage >= 0 ? '+' : ''}
                                 {resume.ecart.pourcentage} %) depuis le premier test.
+                              </p>
+                            )}
+                            {resume.methodesMelangees && (
+                              <p className="small muted">
+                                Méthodes différentes : la VMA de la méthode 3.0 ne compte plus les
+                                nouveaux contrats récurrents. Seuls les résultats d’une même méthode
+                                se comparent.
                               </p>
                             )}
                           </div>

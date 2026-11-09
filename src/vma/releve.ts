@@ -79,6 +79,15 @@ export function resumeResultat(r: ResultatSite): string {
     allureActuelle?: number;
     partRecurrent?: number | null;
     top?: { label: string; bloc: string }[];
+    // Méthode 3.0 : CA mensuel en trois catégories, deux conclusions, points à vérifier.
+    caMensuel?: number;
+    regulier?: number;
+    engage?: number;
+    ponctuel?: number;
+    conclusionCa?: { statut: string; manque: string[] };
+    composition?: { statut: string; cible?: number };
+    alertes?: { code: string }[];
+    topPortefeuille?: { label: string; bloc: string }[];
   };
   const vma =
     typeof e.vma === 'number'
@@ -86,16 +95,33 @@ export function resumeResultat(r: ResultatSite): string {
       : 'non mesurable';
   const niveau = (e.niveau as { label?: string } | undefined)?.label ?? '';
   const freins = (c.top ?? []).map((f) => `${f.label} (bloc ${f.bloc})`).join(', ');
+  const freinsPortefeuille = (c.topPortefeuille ?? [])
+    .map((f) => `${f.label} (bloc ${f.bloc})`)
+    .join(', ');
+  const v3 = typeof c.caMensuel === 'number';
+  const conclusion = (statut?: string) => statut ?? 'non renseignée';
   return [
     `Entreprise : ${r.ecran.entreprise}`,
     `Type : ${r.type === 'essai' ? 'essai (non rangé, hors historique)' : 'premier test'}`,
     `Date du test : ${new Date(r.recueLe).toLocaleDateString('fr-FR')}`,
-    `VMA : ${vma}`,
+    `VMA${v3 ? ' ponctuelle' : ''} : ${vma}`,
+    v3 &&
+      `CA mensuel : ${euros(c.caMensuel ?? 0)} (régulier variable ${euros(c.regulier ?? 0)}, sous engagement ${euros(c.engage ?? 0)}, ponctuel ${euros(c.ponctuel ?? 0)})`,
+    v3 && `Objectif de CA couvert : ${conclusion(c.conclusionCa?.statut)}`,
+    v3 &&
+      c.conclusionCa?.manque.length &&
+      `Ce qui manque pour conclure : ${c.conclusionCa.manque.join(', ')}`,
+    v3 &&
+      c.composition?.statut !== 'non-demande' &&
+      `Objectif sous engagement : ${conclusion(c.composition?.statut)}`,
+    v3 && c.alertes?.length && `À vérifier : ${c.alertes.map((a) => a.code).join(', ')}`,
     c.recurrent && c.recurrent > 0 && `Socle récurrent : ${euros(c.recurrent)} par mois`,
     typeof c.allureActuelle === 'number' && `Allure actuelle : ${euros(c.allureActuelle)} par mois`,
     niveau && `Ambition : ${niveau}`,
     typeof c.potentiel === 'number' && `Potentiel brut : +${euros(c.potentiel)} par mois`,
     freins && `Freins les plus lourds : ${freins}`,
+    freinsPortefeuille &&
+      `Freins sur les clients réguliers et les contrats : ${freinsPortefeuille}`,
     `Version de la configuration : ${r.version}`,
   ]
     .filter(Boolean)

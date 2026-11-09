@@ -130,7 +130,9 @@ export type FreinVma = {
   titre: string;
   phrase: string;
   // v2.1 : estimation moyenne, réponse du dirigeant, pratique la plus avancée, par où commencer.
-  enjeu?: number;
+  // Méthode 3.0 : null quand l'enjeu n'est pas chiffré ; `nature` dit s'il s'agit d'un gain, d'une perte évitée ou d'un revenu sécurisé.
+  enjeu?: number | null;
+  nature?: string;
   reponse?: string;
   cible?: string;
   debut?: string[];
@@ -162,6 +164,33 @@ export type TestVma = {
   // Écran du dirigeant (ce qu'il a vu) : seulement après l'envoi.
   resultat: {
     entreprise: string;
+    // Méthode 3.0 : trois catégories de revenus, flux séparés, deux conclusions (voir le cadrage du site).
+    methode?: string;
+    periode?: number;
+    caMensuel?: { total: number; regulier: number; engage: number; ponctuel: number };
+    tauxObserve?: number | null;
+    objectif?: {
+      caMensuel: number;
+      echeance: number;
+      partEngageeVisee: number | null;
+      montantEngageMensuel: number | null;
+    };
+    projection?: {
+      ca: number;
+      caAvecReconduction: number | null;
+      engage: number;
+      engageAvecReconduction: number | null;
+      echu: number;
+    };
+    conclusionCa?: {
+      statut: string;
+      manque: string[];
+      ecart: number;
+      ecartAvecReconduction: number | null;
+      ecartPct: number | null;
+    };
+    composition?: { statut: string; partVisee?: number; cible?: number; partActuelle?: number };
+    alertes?: { code: string }[];
     vma: number | null;
     mesurable: boolean;
     statut: string;
@@ -209,6 +238,14 @@ export type TestVma = {
     potentiel?: number;
     // v2.0 : potentiel de la seule VMA, et dynamique du portefeuille (taux annuels).
     potentielVma?: number;
+    // Méthode 3.0 : CA mensuel par catégorie, ce qui manque pour conclure, rapport des montants.
+    caMensuel?: number;
+    regulier?: number;
+    engage?: number;
+    ponctuel?: number;
+    manque?: string[];
+    tauxObserve?: number | null;
+    ecartReference?: number | null;
     trajectoire?: number;
     socleEcheance?: number;
     partRec?: number;
@@ -219,13 +256,15 @@ export type TestVma = {
       n: number;
       label: string;
       note: number;
-      gainMax: number;
-      gainRestant: number;
+      // Absents (méthode 3.0) pour les freins sur les clients réguliers et les contrats : aucun coefficient.
+      gainMax?: number | null;
+      gainRestant?: number | null;
       bloc: string;
       moteur?: string;
       effet?: string;
-      // Gain d'allure à l'échéance si ce frein seul était levé (v2.0).
-      impact?: number;
+      nature?: string;
+      // Gain d'allure à l'échéance si ce frein seul était levé (v2.0) ; null en méthode 3.0 quand il n'est pas chiffré.
+      impact?: number | null;
     }[];
   } | null;
 };
