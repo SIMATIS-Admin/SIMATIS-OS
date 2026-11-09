@@ -7,8 +7,8 @@ import { jourDe } from '../pilotage/realisees.js';
 import { preferences } from '../preferences/schema.js';
 import { CIBLE } from './cible.js';
 import type { ClientIA } from './client.js';
+import { chercherNouveauxProspects, type ProspectRecherche } from './recherche-nouveaux.js';
 import { cloreSessionRecherche, ouvrirSessionRecherche } from './sessions.js';
-import { chercherProspects } from './recherche.js';
 
 export const reglagesRecherche = z.object({
   active: z.boolean(),
@@ -91,14 +91,22 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
       nombreVise: routine.nombre,
     });
     let fin: Parameters<typeof cloreSessionRecherche>[3];
+    const contacts: ProspectRecherche[] = [];
+    let creees = 0;
+    let fusionnees = 0;
     try {
-      const contacts = await chercherProspects(client, routine.consignes, routine.nombre);
-      let creees = 0;
-      let fusionnees = 0;
-      if (contacts.length) {
+      while (creees < routine.nombre) {
+        const recherche = await chercherNouveauxProspects(
+          db,
+          client,
+          instanceId,
+          routine.consignes,
+          routine.nombre - creees,
+        );
+        const candidats = recherche.contacts;
         const texte = [
           'Entreprise;Prénom;Nom;Fonction;Email;LinkedIn',
-          ...contacts.map((c) =>
+          ...candidats.map((c) =>
             [c.entreprise, c.prenom, c.nom, c.fonction, c.email, c.linkedin].map(csv).join(';'),
           ),
         ].join('\n');
@@ -114,11 +122,12 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
           creees += resultat.creees;
           fusionnees += resultat.fusionnees;
         }
+        await noterContactsRecherches(db, instanceId, candidats);
+        contacts.push(...candidats);
       }
-      await noterContactsRecherches(db, instanceId, contacts);
       fin = {
-        etat: contacts.length >= routine.nombre ? 'terminee' : 'incomplete',
-        trouves: contacts.length,
+        etat: 'terminee',
+        trouves: creees,
         ajoutees: creees,
         rapprochees: fusionnees,
         contacts: contacts.map((c) => ({
@@ -130,7 +139,19 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
       };
       bilan = `${creees} fiche(s) ajoutée(s), ${fusionnees} rapprochée(s), sur ${routine.nombre} contacts visés.`;
     } catch {
-      fin = { etat: 'erreur', trouves: 0, erreur: 'Codex indisponible ou réponse invalide.' };
+      fin = {
+        etat: 'erreur',
+        trouves: creees,
+        ajoutees: creees,
+        rapprochees: fusionnees,
+        contacts: contacts.map((c) => ({
+          entreprise: c.entreprise,
+          prenom: c.prenom,
+          nom: c.nom,
+          fonction: c.fonction,
+        })),
+        erreur: 'Codex indisponible ou réponse invalide.',
+      };
       bilan = 'Recherche interrompue. Vérifiez la connexion de Codex sur le Mac.';
     }
     await cloreSessionRecherche(db, instanceId, session, fin);
