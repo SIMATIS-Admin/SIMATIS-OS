@@ -1,5 +1,16 @@
+import DOMPurify from 'dompurify';
+
 // Le mail est du HTML (paragraphes et listes à puces) ; Marc le retouche en texte simple :
 // paragraphes séparés par une ligne vide, puces par « - ».
+
+// Claude rédige ce HTML après avoir lu des mails et des sites extérieurs : il peut porter une
+// injection. Le nettoyage du serveur (par expressions régulières) ne suffit pas, l'affichage ne
+// garde donc que la mise en forme et les liens, rien qui s'exécute ou charge quelque chose.
+export const corpsSur = (html: string) =>
+  DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 'div', 'span', 'a'],
+    ALLOWED_ATTR: ['href'],
+  });
 
 const entites: Record<string, string> = {
   '&amp;': '&',
