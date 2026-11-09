@@ -10,8 +10,9 @@ import {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const siren = (s: string) => s.replace(/^(\d{3})(\d{3})(\d{3})$/, '$1 $2 $3');
+// A published turnover of 0 means the figure is not disclosed.
 const euros = (n: number | null) =>
-  n === null
+  !n
     ? '—'
     : new Intl.NumberFormat('fr-FR', {
         style: 'currency',

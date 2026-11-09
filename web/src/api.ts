@@ -1751,6 +1751,43 @@ export const actualiserHistoriqueBase = (slug: string) =>
   );
 export const supprimerFichesBase = (slug: string, ids: string[]) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, 'base/fiches'), { ids });
+export type SecteurWeb = { code: string; libelle: string };
+export type CriteresWeb = {
+  q?: string;
+  secteurs: SecteurWeb[];
+  departements: string[];
+  effectifs: string[];
+  categories: string[];
+  caMin?: number;
+  caMax?: number;
+};
+export type ResultatEntrepriseWeb = EntrepriseAnnuaireWeb & {
+  finances: { annee: number; ca: number | null; resultat: number | null }[];
+};
+export type PageEntreprisesWeb = {
+  resultats: ResultatEntrepriseWeb[];
+  total: number;
+  pages: number;
+  page: number;
+  dejaDansLaBase: string[];
+};
+export const interpreterEntreprisesBase = (slug: string, demande: string) =>
+  sendJson<{ criteres: CriteresWeb; nonTraites: string[]; resume: string }>(
+    'POST',
+    inst(slug, 'base/entreprises/interpreter'),
+    { demande },
+  );
+export const rechercherEntreprisesBase = (slug: string, criteres: CriteresWeb, page = 1) =>
+  sendJson<PageEntreprisesWeb>('POST', inst(slug, 'base/entreprises/recherche'), {
+    criteres,
+    page,
+  });
+export const ajouterEntreprisesBase = (slug: string, sirens: string[], liste?: string) =>
+  sendJson<{ ajoutees: number; existantes: number; introuvables: number }>(
+    'POST',
+    inst(slug, 'base/entreprises/ajouter'),
+    { sirens, liste },
+  );
 export const creerListeBase = (slug: string, nom: string, mandat?: string | null) =>
   sendJson<ResumeListeBase>('POST', inst(slug, 'base/listes'), { nom, mandat });
 export const majListeBase = (
