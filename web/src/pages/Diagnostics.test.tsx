@@ -105,6 +105,13 @@ describe('Diagnostics : écran fusionné', () => {
     expect(lien.getAttribute('href')).toBe('#/demo/presentation-diagnostic');
   });
 
+  it('ouvre la présentation de SIMATIS depuis la barre d’outils', async () => {
+    charger([entreprise(1)], [diagPour(1)]);
+    render(<Diagnostics slug="demo" />);
+    const lien = await screen.findByRole('link', { name: 'SIMATIS' });
+    expect(lien.getAttribute('href')).toBe('#/demo/presentation-simatis');
+  });
+
   it('ouvre la présentation du Test VMA depuis la barre d’outils', async () => {
     charger([entreprise(1)], [diagPour(1)]);
     render(<Diagnostics slug="demo" />);
