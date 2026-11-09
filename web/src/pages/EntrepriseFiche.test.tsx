@@ -61,7 +61,9 @@ describe('Fiche entreprise de la base', () => {
     expect(screen.getByText(/CHASSIEU/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Choisir/ }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
-    expect(appels.at(-1)).toMatchObject({ method: 'POST', body: { siren: '123456789' } });
+    expect(
+      appels.find((a) => a.method === 'POST' && a.url.endsWith('/fiches/f1/entreprise')),
+    ).toMatchObject({ body: { siren: '123456789' } });
     expect(await screen.findByText(/3 contacts rattachés/)).toBeTruthy();
   });
 

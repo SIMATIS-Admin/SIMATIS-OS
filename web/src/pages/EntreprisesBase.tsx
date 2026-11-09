@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  actualiserSignauxPlusieurs,
   ajouterEntreprisesALaListeBase,
   creerListeBase,
   fetchEntreprisesBase,
@@ -7,6 +8,7 @@ import {
   type LigneEntrepriseBase,
   type ResumeListeBase,
 } from '../api.js';
+import { COULEUR_GRAVITE, LIBELLE_GRAVITE } from './SignauxEntreprise.js';
 import { CarteEntreprises } from './CarteEntreprises.js';
 import { Fenetre } from './Fenetre.js';
 
@@ -37,6 +39,7 @@ export function EntreprisesBase({
 }) {
   const [q, setQ] = useState('');
   const [liste, setListe] = useState('');
+  const [signal, setSignal] = useState('');
   const [page, setPage] = useState(0);
   const [etat, setEtat] = useState<{ entreprises: LigneEntrepriseBase[]; total: number } | null>(
     null,
@@ -51,14 +54,19 @@ export function EntreprisesBase({
 
   const charger = useCallback(
     () =>
-      fetchEntreprisesBase(slug, { q, liste: liste || undefined, page }).then(
+      fetchEntreprisesBase(slug, {
+        q,
+        liste: liste || undefined,
+        signal: signal || undefined,
+        page,
+      }).then(
         (e) => {
           setEtat(e);
           setSelection(new Set());
         },
         (e: unknown) => setErreur(message(e)),
       ),
-    [slug, q, liste, page],
+    [slug, q, liste, signal, page],
   );
   useEffect(() => {
     void charger();
@@ -125,6 +133,20 @@ export function EntreprisesBase({
             </option>
           ))}
         </select>
+        <select
+          className="input"
+          aria-label="Filtrer les entreprises par signal"
+          value={signal}
+          onChange={(e) => {
+            setSignal(e.target.value);
+            setPage(0);
+          }}
+        >
+          <option value="">Tous les signaux</option>
+          <option value="alerte">Procédures et radiations</option>
+          <option value="attention">Procédures, radiations et cessions</option>
+          <option value="jamais">Jamais vérifiées</option>
+        </select>
         {liste && (
           <button className="btn sm" onClick={() => onVoirContacts(liste)}>
             Voir les contacts de cette liste
@@ -157,6 +179,32 @@ export function EntreprisesBase({
             ))}
             <option value="nouvelle">+ Nouvelle liste…</option>
           </select>
+          <button
+            className="btn sm"
+            disabled={occupe}
+            onClick={() =>
+              void agir(async () => {
+                // The server reads 25 companies at most per call.
+                const ids = [...selection];
+                let nouveaux = 0;
+                let echecs = 0;
+                for (let i = 0; i < ids.length; i += 25) {
+                  const r = await actualiserSignauxPlusieurs(slug, ids.slice(i, i + 25));
+                  nouveaux += r.nouveaux;
+                  echecs += r.echecs;
+                }
+                setInfo(
+                  `Signaux vérifiés : ${nouveaux} nouvelle${nouveaux > 1 ? 's' : ''} annonce${nouveaux > 1 ? 's' : ''}${
+                    echecs > 0
+                      ? `, ${echecs} entreprise${echecs > 1 ? 's' : ''} non lue${echecs > 1 ? 's' : ''} (BODACC indisponible)`
+                      : ''
+                  }.`,
+                );
+              })
+            }
+          >
+            Vérifier les signaux
+          </button>
           <button className="btn sm" disabled={occupe} onClick={() => setCarte([...selection])}>
             Tournée sur la carte
           </button>
@@ -223,6 +271,7 @@ export function EntreprisesBase({
                 <th>Effectif</th>
                 <th>CA publié</th>
                 <th>Contacts</th>
+                <th>Signal</th>
                 <th>Listes</th>
               </tr>
             </thead>
@@ -250,6 +299,20 @@ export function EntreprisesBase({
                   <td>{l.effectif ?? '—'}</td>
                   <td>{euros(l.ca)}</td>
                   <td>{l.nbContacts}</td>
+                  <td>
+                    {l.signal ? (
+                      <span
+                        className={`badge ${COULEUR_GRAVITE[l.signal.gravite]}`}
+                        title={LIBELLE_GRAVITE[l.signal.gravite]}
+                      >
+                        {l.signal.nature}
+                      </span>
+                    ) : l.signauxLe ? (
+                      '—'
+                    ) : (
+                      <span className="small muted">à vérifier</span>
+                    )}
+                  </td>
                   <td>{l.listes.map(nomListe).filter(Boolean).join(', ') || '—'}</td>
                 </tr>
               ))}

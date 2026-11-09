@@ -123,12 +123,38 @@ export const baseEntreprises = pgTable(
     finances: jsonb('finances').$type<ExerciceFinancier[]>().notNull().default([]),
     dirigeants: jsonb('dirigeants').$type<Dirigeant[]>().notNull().default([]),
     siteWeb: text('site_web'),
+    // When the BODACC was last read for this company; null = never.
+    signauxLe: timestamp('signaux_le', { withTimezone: true }),
     annuaireLe: timestamp('annuaire_le', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex('base_entreprises_siren_idx').on(t.instanceId, t.siren),
     index('base_entreprises_instance_idx').on(t.instanceId),
     instanceIsolation('base_entreprises'),
+  ],
+);
+
+// What the BODACC says about a company of the base: a procedure, a sale of the business, a
+// removal from the register… One row per notice and company.
+export const baseSignaux = pgTable(
+  'base_signaux',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    entrepriseId: uuid('entreprise_id')
+      .notNull()
+      .references(() => baseEntreprises.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    famille: text('famille').notNull(),
+    nature: text('nature').notNull(),
+    gravite: text('gravite', { enum: ['alerte', 'attention', 'info'] }).notNull(),
+    detail: text('detail'),
+    url: text('url'),
+  },
+  (t) => [
+    uniqueIndex('base_signaux_annonce_idx').on(t.instanceId, t.entrepriseId, t.sourceId),
+    index('base_signaux_entreprise_idx').on(t.entrepriseId, t.date),
+    instanceIsolation('base_signaux'),
   ],
 );
 

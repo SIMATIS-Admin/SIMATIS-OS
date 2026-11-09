@@ -1812,14 +1812,42 @@ export type LigneEntrepriseBase = {
   ca: number | null;
   nbContacts: number;
   listes: string[];
+  signal: { gravite: GraviteSignal; nature: string; date: string } | null;
+  signauxLe: string | null;
 };
+export type GraviteSignal = 'alerte' | 'attention' | 'info';
+export type SignalWeb = {
+  id: string;
+  date: string;
+  famille: string;
+  nature: string;
+  gravite: GraviteSignal;
+  detail: string | null;
+  url: string | null;
+};
+export type SignauxWeb = { signaux: SignalWeb[]; verifieLe: string | null };
+export const fetchSignauxEntreprise = (slug: string, id: string) =>
+  getJson<SignauxWeb>(inst(slug, `base/entreprises/${id}/signaux`));
+export const actualiserSignauxEntreprise = (slug: string, id: string) =>
+  sendJson<SignauxWeb & { nouveaux: number }>(
+    'POST',
+    inst(slug, `base/entreprises/${id}/signaux/actualiser`),
+    {},
+  );
+export const actualiserSignauxPlusieurs = (slug: string, ids: string[]) =>
+  sendJson<{ verifiees: number; nouveaux: number; echecs: number }>(
+    'POST',
+    inst(slug, 'base/entreprises/signaux/actualiser'),
+    { ids },
+  );
 export const fetchEntreprisesBase = (
   slug: string,
-  { q, liste, page }: { q?: string; liste?: string; page?: number },
+  { q, liste, signal, page }: { q?: string; liste?: string; signal?: string; page?: number },
 ) => {
   const params = new URLSearchParams();
   if (q?.trim()) params.set('q', q.trim());
   if (liste) params.set('liste', liste);
+  if (signal) params.set('signal', signal);
   if (page) params.set('page', String(page));
   const suite = params.toString();
   return getJson<{ entreprises: LigneEntrepriseBase[]; total: number }>(

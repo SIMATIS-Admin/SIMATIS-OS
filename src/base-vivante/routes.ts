@@ -48,8 +48,15 @@ import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
 import { exporterWaalaxy } from './waalaxy.js';
 import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
 import { creerGeocodeur, type Geocodeur } from '../routage/geocodage.js';
+import { creerClientBodacc, ErreurBodacc, type ClientBodacc } from '../signaux/bodacc.js';
 import { creerRouteur, type Routeur } from '../routage/osrm.js';
 import { calculerTournee, pointsCarte, TourneeRefusee } from './carte.js';
+import {
+  actualiserPlusieurs,
+  actualiserSignaux,
+  lireSignaux,
+  MAX_ACTUALISATION,
+} from './signaux.js';
 import {
   ajouterEntreprises,
   candidatsPourFiche,
@@ -146,6 +153,7 @@ export type BaseVivanteRoutesDeps = {
   annuaire?: ClientAnnuaire;
   routeur?: Routeur;
   geocodeur?: Geocodeur;
+  bodacc?: ClientBodacc;
 };
 
 export function registerBaseVivanteRoutes(
@@ -158,6 +166,7 @@ export function registerBaseVivanteRoutes(
     annuaire = creerClientAnnuaire(),
     routeur = creerRouteur(),
     geocodeur = creerGeocodeur(),
+    bodacc = creerClientBodacc(),
   }: BaseVivanteRoutesDeps,
 ) {
   const erreur = (error: unknown, reply: FastifyReply) => {
@@ -183,7 +192,8 @@ export function registerBaseVivanteRoutes(
     )
       return reply.code(400).send({ error: error.message });
     if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
-    if (error instanceof ErreurAnnuaire) return reply.code(502).send({ error: error.message });
+    if (error instanceof ErreurAnnuaire || error instanceof ErreurBodacc)
+      return reply.code(502).send({ error: error.message });
     throw error;
   };
 
@@ -201,6 +211,7 @@ export function registerBaseVivanteRoutes(
       provenance?: string;
       liste?: string;
       tag?: string;
+      signal?: string;
     };
     Body: unknown;
   };
@@ -503,10 +514,32 @@ export function registerBaseVivanteRoutes(
       calculerTournee(db, routeur, geocodeur, instanceId, tourneeSchema.parse(request.body)),
     ),
   );
+  // What the BODACC says about the companies of the base.
+  const actualisationSchema = z
+    .object({ ids: z.array(z.string().regex(UUID)).min(1).max(MAX_ACTUALISATION) })
+    .strict();
+  app.get<Route>(
+    '/api/i/:slug/base/entreprises/:id/signaux',
+    surInstance((instanceId, request) => lireSignaux(db, instanceId, request.params.id as string)),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/:id/signaux/actualiser',
+    surInstance(async (instanceId, request) => {
+      const nouveaux = await actualiserSignaux(db, bodacc, instanceId, request.params.id as string);
+      return { nouveaux, ...(await lireSignaux(db, instanceId, request.params.id as string)) };
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/signaux/actualiser',
+    surInstance((instanceId, request) =>
+      actualiserPlusieurs(db, bodacc, instanceId, actualisationSchema.parse(request.body).ids),
+    ),
+  );
   app.get<Route>(
     '/api/i/:slug/base/entreprises',
     surInstance((instanceId, request) =>
       listerEntreprisesBase(db, instanceId, {
+        signal: request.query.signal,
         q: request.query.q,
         liste:
           request.query.liste && UUID.test(request.query.liste) ? request.query.liste : undefined,

@@ -7,6 +7,7 @@ import {
   type EntrepriseAnnuaireWeb,
   type EntrepriseBaseWeb,
 } from '../api.js';
+import { SignauxEntreprise } from './SignauxEntreprise.js';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const siren = (s: string) => s.replace(/^(\d{3})(\d{3})(\d{3})$/, '$1 $2 $3');
@@ -165,6 +166,7 @@ export function EntrepriseFiche({
               </>
             )}
           </dl>
+          <SignauxEntreprise slug={slug} entrepriseId={entreprise.id} />
           <button className="btn ghost" disabled={occupe} onClick={() => void detacher()}>
             Détacher de cette entreprise
           </button>
