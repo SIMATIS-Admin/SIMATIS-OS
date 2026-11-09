@@ -1722,6 +1722,20 @@ export const urlExportBase = (slug: string, filtres: FiltresBaseWeb = {}) => {
   const suite = paramsBase(filtres).toString();
   return inst(slug, `base/export.csv${suite ? `?${suite}` : ''}`);
 };
+export type ApercuWaalaxy = {
+  retenues: number;
+  parties: number;
+  ecartees: { opposition: number; exclusion: number; sansProfil: number };
+};
+export const fetchApercuWaalaxy = (slug: string, filtres: FiltresBaseWeb = {}) => {
+  const suite = paramsBase(filtres).toString();
+  return getJson<ApercuWaalaxy>(inst(slug, `base/export-waalaxy${suite ? `?${suite}` : ''}`));
+};
+export const urlExportWaalaxy = (slug: string, filtres: FiltresBaseWeb, partie: number) => {
+  const params = paramsBase(filtres);
+  params.set('partie', String(partie));
+  return inst(slug, `base/export-waalaxy.csv?${params.toString()}`);
+};
 export const actualiserHistoriqueBase = (slug: string) =>
   sendJson<{ verifiees: number; trouvees: number }>(
     'POST',

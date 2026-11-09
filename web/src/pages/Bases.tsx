@@ -26,6 +26,7 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { BaseTable } from './BaseTable.js';
+import { ExportWaalaxy } from './ExportWaalaxy.js';
 import { Fenetre } from './Fenetre.js';
 import { RapprochementMail } from './RapprochementMail.js';
 import { ReponsesBase } from './ReponsesBase.js';
@@ -564,6 +565,7 @@ type Fenetres =
   | { quoi: 'import'; etape: 1 | 2 | 3 }
   | { quoi: 'mail' }
   | { quoi: 'triage' }
+  | { quoi: 'waalaxy' }
   | { quoi: 'recherche' }
   | { quoi: 'routine-recherche' };
 
@@ -730,6 +732,13 @@ export function Bases({ slug }: { slug: string }) {
               <a className="btn ghost" href={urlExportBase(slug, filtres)} download>
                 Exporter en CSV
               </a>
+              <button
+                className="btn ghost"
+                disabled={total === 0}
+                onClick={() => setFenetre({ quoi: 'waalaxy' })}
+              >
+                Exporter pour Waalaxy
+              </button>
             </div>
           </details>
         </div>
@@ -882,6 +891,11 @@ export function Bases({ slug }: { slug: string }) {
           onFermer={fermer}
         >
           <RapprochementMail slug={slug} onTermine={() => void charger()} />
+        </Fenetre>
+      )}
+      {fenetre?.quoi === 'waalaxy' && (
+        <Fenetre titre="Exporter pour Waalaxy" onFermer={fermer}>
+          <ExportWaalaxy slug={slug} filtres={filtres} />
         </Fenetre>
       )}
       {fenetre?.quoi === 'triage' && (
