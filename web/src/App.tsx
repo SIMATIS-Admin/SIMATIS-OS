@@ -51,6 +51,9 @@ const Portefeuille = lazy(() =>
 const PresentationDiagnostic = lazy(() =>
   import('./pages/PresentationDiagnostic.js').then((m) => ({ default: m.PresentationDiagnostic })),
 );
+const PresentationSimatis = lazy(() =>
+  import('./pages/PresentationSimatis.js').then((m) => ({ default: m.PresentationSimatis })),
+);
 const PresentationVma = lazy(() =>
   import('./pages/PresentationVma.js').then((m) => ({ default: m.PresentationVma })),
 );
@@ -182,11 +185,13 @@ export function App() {
           ? 'Diagnostic d’endurance commerciale'
           : view === 'presentation-vma'
             ? 'Test VMA'
-            : view === 'feuille-de-route-os'
-              ? 'Feuille de route de l’OS'
-              : view === 'gestion'
-                ? 'Gestion'
-                : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+            : view === 'presentation-simatis'
+              ? 'SIMATIS'
+              : view === 'feuille-de-route-os'
+                ? 'Feuille de route de l’OS'
+                : view === 'gestion'
+                  ? 'Gestion'
+                  : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
@@ -246,6 +251,8 @@ export function App() {
         );
       case 'presentation-diagnostic':
         return <PresentationDiagnostic slug={current.slug} />;
+      case 'presentation-simatis':
+        return <PresentationSimatis slug={current.slug} />;
       case 'presentation-vma':
         return <PresentationVma slug={current.slug} />;
       case 'bases':

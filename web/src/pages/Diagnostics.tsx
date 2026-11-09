@@ -13,6 +13,7 @@ import {
 } from '../api.js';
 import { ContactsVma } from './diagnostics/ContactsVma.js';
 import logoDiagnostic from '../assets/diagnostic-endurance.svg';
+import logoSimatis from '../assets/simatis-mark.png';
 import logoVma from '../assets/test-vma.svg';
 import { Icon } from '../icons.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
@@ -427,6 +428,10 @@ export function Diagnostics({
             <a className="btn dg-outil" href={`#/${slug}/presentation-diagnostic`}>
               <img src={logoDiagnostic} alt="" />
               Diagnostic d’endurance commerciale
+            </a>
+            <a className="btn dg-outil" href={`#/${slug}/presentation-simatis`}>
+              <img src={logoSimatis} alt="" />
+              SIMATIS
             </a>
             <div className="dg-menu">
               <button

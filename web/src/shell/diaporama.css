@@ -496,3 +496,131 @@
     justify-content: flex-start;
   }
 }
+
+/* Présentation de SIMATIS : logos, portrait, repères et liens vers les autres présentations */
+.dia-plaque.large {
+  width: calc(260px * var(--s));
+  padding: 14px 18px;
+  border-radius: 18px;
+}
+.dia-plaque.ronde {
+  width: calc(110px * var(--s));
+  padding: 10px;
+  border-radius: 50%;
+}
+.dia-reseau {
+  font: 600 0.72em var(--f-body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #bfe6de;
+}
+.dia-puce-liste.non li::before {
+  background: #c0442e;
+}
+.dia-carte.marine {
+  background: var(--navy);
+  border-color: var(--navy);
+}
+.dia-carte.marine h3 {
+  color: #fff;
+}
+.dia-carte.marine p {
+  color: #d3e3f2;
+}
+.dia-bio {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: calc(48px * var(--s));
+  align-items: center;
+}
+.dia-bio img {
+  width: calc(190px * var(--s));
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-radius: 22px;
+  box-shadow: 0 14px 34px -18px #0c376b88;
+}
+.dia-bio h2 {
+  margin-bottom: 0.4em;
+}
+.dia-chiffres {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 1em;
+}
+.dia-chiffres div {
+  background: var(--bg);
+  border-radius: 14px;
+  padding: 0.9em 1.1em;
+}
+.dia-chiffres b {
+  display: block;
+  font-size: 1.3em;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+}
+.dia-chiffres span {
+  font-size: 0.82em;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+.dia-liens {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 1.2em;
+}
+.dia-lien {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1.1em 1.3em;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+.dia-lien:hover {
+  border-color: var(--teal);
+  transform: translateY(-2px);
+}
+.dia-lien:focus-visible {
+  outline: 3px solid #41a59499;
+  outline-offset: 2px;
+}
+.dia-lien-logo {
+  width: calc(84px * var(--s));
+  background: #e4f4f0;
+  border-radius: 16px;
+  padding: 10px;
+  display: grid;
+  place-items: center;
+}
+.dia-lien-logo img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.dia-lien b {
+  display: block;
+  font-size: 1.05em;
+  color: var(--navy);
+  margin-bottom: 0.2em;
+}
+.dia-lien > span:nth-child(2) > span {
+  font-size: 0.88em;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .dia-bio,
+  .dia-liens {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

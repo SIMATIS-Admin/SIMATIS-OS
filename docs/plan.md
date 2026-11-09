@@ -133,7 +133,7 @@ Décisions :
 Livraisons, chacune dans sa branche, avec ses tests :
 
 1. **Livrée.** Boutons, mode présentation, page Test VMA, logo VMA, présentation du Diagnostic en slides. Test : le mode présentation masque barre du haut et console, Échap le quitte, la navigation entre slides.
-2. Page SIMATIS (photo, logos SIMATIS et KAIROS repris du site).
+2. **Livrée.** Page SIMATIS en 10 slides (photo, logos SIMATIS et KAIROS repris du site), bouton « SIMATIS ».
 3. Diaporama d'OS des diagnostics : table de slides, écran de lecture, branchement dans la skill. Demande une migration et une vérification de la colonne après reconstruction.
 
 Qualité visuelle : vitrine de l'offre. Passe de design dédiée avant chaque page, vérification dans le navigateur à la taille d'un écran de projection et d'un portable, capture montrée à Marc avant fusion.
