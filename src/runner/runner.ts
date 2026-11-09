@@ -14,6 +14,7 @@ import { executer, type Operation, type Partage } from '../cerveau/file.js';
 import { cartePartage } from '../cerveau/partage.js';
 import { configPartage, connecterPartage } from '../cerveau/partage-mcp.js';
 import { consigneCerveau } from './cerveau.js';
+import { LOGO_DIAGNOSTIC_SVG } from '../diagnostic/logo-diagnostic.js';
 
 // Local runner (npm run runner, started by launchd on the workstation): picks the routine runs the
 // OS requested and runs each one with Claude Code, connected to the OS's MCP server through a
@@ -1286,6 +1287,8 @@ export const outilsExportRevue = (travail: string[]) =>
     ...travail.flatMap((d) => [`Read(/${d}/**)`, `Edit(/${d}/**)`]),
   ].join(',');
 
+const CONSIGNE_LOGO_DIAGNOSTIC = `reproduis tel quel ce code SVG dans un bloc de code, avec ces règles que le Word doit suivre : en page de garde, le logo en couleur en haut à droite, en face du logo SIMATIS, avec dessous « ENDURANCE COMMERCIALE » (bleu marine, petites capitales) et le slogan « Le cap. Le rythme. La durée. » (teal, italique) ; en pied de page de chaque page intérieure, la version simplifiée (même SVG avec 41a594 remplacé par 0c376b), environ 0,6 cm de haut, avant le texte du pied de page. Ne jamais redessiner ni recolorer autrement ; pour le Word, convertis le SVG en PNG (fond transparent) et rogne-le au dessin. SVG : ${LOGO_DIAGNOSTIC_SVG}`;
+
 // Dossier de travail du rapport : Claude réunit dans un artifact tout ce qu'il faut pour rédiger le
 // rapport dans Claude Chat. Il reproduit les données sans les interpréter et ne copie rien du second
 // cerveau : la consigne de départ y renvoie par le nom de la skill et des fiches.
@@ -1306,8 +1309,8 @@ export const promptDossierRapport = (a: AttenteDiag) =>
       : a.rapportContenu
         ? `- Dernière version du rapport (version ${a.rapportVersion}) : ${JSON.stringify(a.rapportContenu).slice(0, 30_000)}`
         : '- Rapport : aucune version rédigée dans l’OS',
-    `Contenu du document, dans cet ordre : (1) un titre avec le nom du projet ; (2) « Consigne de départ », un texte que le pilote colle tel quel dans Claude Chat : utiliser la skill « ${SKILL_RAPPORT} », lire les fiches « ${FICHE_REGLES_COMMUNES} », « ${FICHE_REGLES_ANALYSE} » et « ${FICHE_REGLES_RAPPORT} » du second cerveau (leurs règles fermes priment), fonder le rapport sur ce dossier sans rien inventer, et livrer un Word A4 en portrait ; (3) le résultat et le profil ; (4) le contexte, ce qu'a dit le dirigeant et les hypothèses ; (5) la revue, entrée par entrée, avec le choix du pilote (une entrée écartée reste visible pour ne pas être reprise) ; (6) la dernière version du rapport, s'il y en a une, en texte lisible.`,
-    "Reproduis fidèlement : n'ajoute rien, ne reformule pas, ne corrige pas et ne déduis rien. N'y mets rien qui vienne du second cerveau : seuls les noms de la skill et des fiches y figurent.",
+    `Contenu du document, dans cet ordre : (1) un titre avec le nom du projet ; (2) « Consigne de départ », un texte que le pilote colle tel quel dans Claude Chat : utiliser la skill « ${SKILL_RAPPORT} », lire les fiches « ${FICHE_REGLES_COMMUNES} », « ${FICHE_REGLES_ANALYSE} » et « ${FICHE_REGLES_RAPPORT} » du second cerveau (leurs règles fermes priment), fonder le rapport sur ce dossier sans rien inventer, placer le logo du diagnostic comme indiqué au point (7), et livrer un Word A4 en portrait ; (3) le résultat et le profil ; (4) le contexte, ce qu'a dit le dirigeant et les hypothèses ; (5) la revue, entrée par entrée, avec le choix du pilote (une entrée écartée reste visible pour ne pas être reprise) ; (6) la dernière version du rapport, s'il y en a une, en texte lisible ; (7) « Logo du diagnostic » : ${CONSIGNE_LOGO_DIAGNOSTIC}`,
+    "Reproduis fidèlement : n'ajoute rien, ne reformule pas, ne corrige pas et ne déduis rien. N'y mets rien qui vienne du second cerveau : seuls les noms de la skill et des fiches y figurent, avec le logo du diagnostic du point (7), qui vient de l'OS.",
     `Tâche : ${a.dossierExportLien ? `révise l'artifact existant (${a.dossierExportLien}) sans en créer un autre` : 'commence par Artifact action quickstart, puis crée un nouvel artifact de type document, sans url'}. Dès sa création, appelle enregistrer_dossier_rapport avec projetId ${a.id} et son lien, puis publie le contenu.`,
     `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : ce que contient le dossier en quelques phrases, ce qui manque (revue absente, rapport non rédigé), et le rappel que le pilote ouvre le lien dans Claude Chat. Puis arrête-toi. Vouvoie le pilote, en français.`,
   ].join('\n');

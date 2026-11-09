@@ -613,6 +613,10 @@ describe('Production par le runner : modifications et deck', () => {
     expect(texte).toContain('enregistrer_dossier_rapport');
     expect(texte).toContain(`projetId ${restitution.id}`);
     expect(texte).toContain("N'y mets rien qui vienne du second cerveau");
+    // Claude Chat ne lit pas les images du second cerveau : le logo voyage dans le dossier, en SVG.
+    expect(texte).toContain('<svg');
+    expect(texte).toContain('Le cap. Le rythme. La durée.');
+    expect(texte).toContain('en haut à droite');
   });
 
   it('la révision du rapport part du Word déposé quand il n y a pas de version rédigée par l OS', () => {
