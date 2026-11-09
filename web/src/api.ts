@@ -1826,6 +1826,47 @@ export const fetchEntreprisesBase = (
     inst(slug, `base/entreprises${suite ? `?${suite}` : ''}`),
   );
 };
+export type PointCarteWeb = {
+  id: string;
+  siren: string;
+  nom: string;
+  ville: string | null;
+  latitude: number;
+  longitude: number;
+  nbContacts: number;
+};
+export const fetchCarteEntreprises = (
+  slug: string,
+  { q, liste }: { q?: string; liste?: string },
+) => {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set('q', q.trim());
+  if (liste) params.set('liste', liste);
+  const suite = params.toString();
+  return getJson<{ points: PointCarteWeb[]; sansCoordonnees: number; total: number }>(
+    inst(slug, `base/entreprises/carte${suite ? `?${suite}` : ''}`),
+  );
+};
+export type EtapeTourneeWeb = {
+  id: string | null;
+  nom: string;
+  ville: string | null;
+  adresse: string | null;
+  latitude: number;
+  longitude: number;
+  distanceM: number;
+  dureeS: number;
+};
+export type TourneeWeb = {
+  etapes: EtapeTourneeWeb[];
+  distanceM: number;
+  dureeS: number;
+  trace: [number, number][];
+  source: 'routes' | 'estimation';
+  ignorees: string[];
+};
+export const calculerTourneeBase = (slug: string, ids: string[], depart?: string) =>
+  sendJson<TourneeWeb>('POST', inst(slug, 'base/tournee'), { ids, depart: depart || undefined });
 export const ajouterEntreprisesALaListeBase = (slug: string, id: string, ids: string[]) =>
   sendJson<{ ajoutees: number }>('POST', inst(slug, `base/listes/${id}/entreprises`), { ids });
 export const retirerEntreprisesDeLaListeBase = (slug: string, id: string, ids: string[]) =>

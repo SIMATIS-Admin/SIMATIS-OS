@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ResumeListeBase } from '../api.js';
 import { EntreprisesBase } from './EntreprisesBase.js';
 
+vi.mock('./CarteLeaflet.js', () => ({ default: () => <div data-testid="carte" /> }));
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -41,7 +43,25 @@ function simuler(entreprises: unknown[], total = entreprises.length) {
         method,
         body: init?.body ? (JSON.parse(init.body) as unknown) : undefined,
       });
-      const corps = method === 'GET' ? { entreprises, total } : { ajoutees: 1, id: 'l3', ok: true };
+      const corps = url.includes('/entreprises/carte')
+        ? {
+            points: [
+              {
+                id: 'e1',
+                siren: '123456789',
+                nom: 'ATELIER FICTIF',
+                ville: 'CHASSIEU',
+                latitude: 45.7,
+                longitude: 4.9,
+                nbContacts: 2,
+              },
+            ],
+            sansCoordonnees: 0,
+            total: 1,
+          }
+        : method === 'GET'
+          ? { entreprises, total }
+          : { ajoutees: 1, id: 'l3', ok: true };
       return Promise.resolve(new Response(JSON.stringify(corps)));
     }),
   );
@@ -144,6 +164,27 @@ describe('Entreprises de la base', () => {
       url: '/api/i/base/base/listes/l1/entreprises',
       body: { ids: ['e1'] },
     });
+  });
+
+  it('ouvre la carte, avec ou sans sélection', async () => {
+    const appels = simuler([ligne('e1', 'ATELIER FICTIF')]);
+    render(
+      <EntreprisesBase slug="base" listes={listes} onChange={vi.fn()} onVoirContacts={vi.fn()} />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir la carte' }));
+    expect(await screen.findByRole('dialog', { name: 'Carte des entreprises' })).toBeTruthy();
+    await waitFor(() =>
+      expect(appels.some((a) => a.url.includes('/entreprises/carte'))).toBe(true),
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByLabelText('Sélectionner ATELIER FICTIF'));
+    fireEvent.click(screen.getByRole('button', { name: 'Tournée sur la carte' }));
+    expect(await screen.findByRole('dialog', { name: 'Carte des entreprises' })).toBeTruthy();
+    // La sélection de la liste est déjà choisie dans la tournée.
+    expect(
+      await screen.findByRole('button', { name: 'Retirer ATELIER FICTIF de la tournée' }),
+    ).toBeTruthy();
   });
 
   it('explique comment remplir la vue quand elle est vide', async () => {

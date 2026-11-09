@@ -7,6 +7,8 @@ import {
   type LigneEntrepriseBase,
   type ResumeListeBase,
 } from '../api.js';
+import { CarteEntreprises } from './CarteEntreprises.js';
+import { Fenetre } from './Fenetre.js';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const entier = (n: number) => n.toLocaleString('fr-FR');
@@ -43,6 +45,8 @@ export function EntreprisesBase({
   const [occupe, setOccupe] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // The map, with the companies already chosen when it is opened from a selection.
+  const [carte, setCarte] = useState<string[] | null>(null);
   const listesEntreprises = listes.filter((l) => l.type === 'entreprises');
 
   const charger = useCallback(
@@ -126,6 +130,9 @@ export function EntreprisesBase({
             Voir les contacts de cette liste
           </button>
         )}
+        <button className="btn sm" onClick={() => setCarte([])}>
+          Voir la carte
+        </button>
         <span className="small muted">
           {entier(total)} entreprise{total > 1 ? 's' : ''}
         </span>
@@ -150,6 +157,9 @@ export function EntreprisesBase({
             ))}
             <option value="nouvelle">+ Nouvelle liste…</option>
           </select>
+          <button className="btn sm" disabled={occupe} onClick={() => setCarte([...selection])}>
+            Tournée sur la carte
+          </button>
           {liste && (
             <button
               className="btn sm"
@@ -259,6 +269,15 @@ export function EntreprisesBase({
             Page suivante
           </button>
         </p>
+      )}
+      {carte && (
+        <Fenetre titre="Carte des entreprises" onFermer={() => setCarte(null)}>
+          <CarteEntreprises
+            slug={slug}
+            filtres={{ q: q || undefined, liste: liste || undefined }}
+            initiales={carte}
+          />
+        </Fenetre>
       )}
     </section>
   );
