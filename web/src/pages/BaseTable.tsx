@@ -16,6 +16,7 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { LancerEnrichissement, SuggestionsEnrichissement } from './EnrichissementIA.js';
+import { EntrepriseFiche } from './EntrepriseFiche.js';
 import { Fenetre } from './Fenetre.js';
 
 export const PAR_PAGE = 50;
@@ -190,6 +191,7 @@ function FicheTiroir({
   onSupprimer,
   occupe,
   onEnrichi,
+  onActualiser,
   onFermer,
 }: {
   slug: string;
@@ -198,6 +200,8 @@ function FicheTiroir({
   onSupprimer: () => void;
   occupe: boolean;
   onEnrichi: () => void;
+  // Reload the list but keep the drawer open (a company link does not move the record).
+  onActualiser: () => void;
   onFermer: () => void;
 }) {
   return (
@@ -236,6 +240,13 @@ function FicheTiroir({
         </dd>
       </dl>
       {f.zone === 'a_enrichir' && <EnrichirFiche key={f.id} slug={slug} f={f} onFait={onEnrichi} />}
+      <EntrepriseFiche
+        key={f.id}
+        slug={slug}
+        ficheId={f.id}
+        entrepriseId={f.entrepriseId ?? null}
+        onChange={onActualiser}
+      />
       <h3 className="bv-sous-titre">Historique</h3>
       <p>
         {LIBELLE_STATUT[f.statutProspection]}
@@ -701,6 +712,7 @@ export function BaseTable({
             setOuverte(null);
             onChange();
           }}
+          onActualiser={onChange}
           onFermer={() => setOuverte(null)}
           occupe={occupe}
           onSupprimer={() =>

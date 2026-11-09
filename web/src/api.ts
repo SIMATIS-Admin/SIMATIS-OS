@@ -1684,6 +1684,7 @@ export type FicheBase = {
   exclusion: ExclusionBase | null;
   emailInvalide: boolean;
   crmMandat: string | null;
+  entrepriseId?: string | null;
   alertes: { code: string; libelle: string; bloquante: boolean }[];
 };
 export type StatutProspectionBase = 'jamais_contacte' | 'contacte' | 'a_repondu';
@@ -1744,6 +1745,39 @@ export const actualiserHistoriqueBase = (slug: string) =>
   );
 export const supprimerFichesBase = (slug: string, ids: string[]) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, 'base/fiches'), { ids });
+export type EntrepriseAnnuaireWeb = {
+  siren: string;
+  nom: string;
+  naf: string | null;
+  categorie: string | null;
+  effectif: string | null;
+  adresse: string | null;
+  ville: string | null;
+  active: boolean;
+};
+export type EntrepriseBaseWeb = EntrepriseAnnuaireWeb & {
+  id: string;
+  formeJuridique: string | null;
+  creeLe: string | null;
+  oppositionDiffusion: boolean;
+  etablissementsOuverts: number | null;
+  finances: { annee: number; ca: number | null; resultat: number | null }[];
+  dirigeants: { nom: string; fonction: string | null; societe: boolean }[];
+};
+export const fetchCandidatsEntreprise = (slug: string, ficheId: string) =>
+  getJson<{ candidats: EntrepriseAnnuaireWeb[] }>(
+    inst(slug, `base/fiches/${ficheId}/entreprise/candidats`),
+  );
+export const rattacherEntrepriseBase = (slug: string, ficheId: string, siren: string) =>
+  sendJson<{ entreprise: EntrepriseBaseWeb; rattachees: number }>(
+    'POST',
+    inst(slug, `base/fiches/${ficheId}/entreprise`),
+    { siren },
+  );
+export const detacherEntrepriseBase = (slug: string, ficheId: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/fiches/${ficheId}/entreprise`), {});
+export const fetchEntrepriseBase = (slug: string, id: string) =>
+  getJson<EntrepriseBaseWeb>(inst(slug, `base/entreprises/${id}`));
 export const majConformiteBase = (
   slug: string,
   id: string,

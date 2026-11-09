@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -13,6 +14,7 @@ import {
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Correspondance, MemoireColonnes } from './colonnes.js';
 import { ZONES } from './completude.js';
+import type { Dirigeant, ExerciceFinancier } from '../annuaire/client.js';
 import type { Fiche } from './nettoyage.js';
 
 export const STATUTS_IMPORT = ['apercu', 'integre'] as const;
@@ -91,6 +93,44 @@ export const baseLignesBrutes = pgTable(
 
 export type NoteOrigine = { date: string; origine: string; texte: string; source: string | null };
 
+// A company of the living base, identified by its SIREN and filled from the State's company
+// directory (src/annuaire). Contacts of the base point to it; it is not a CRM company: those live
+// per mandate and mirror HubSpot, the SIREN is what will link the two.
+export const baseEntreprises = pgTable(
+  'base_entreprises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    siren: text('siren').notNull(),
+    nom: text('nom').notNull(),
+    formeJuridique: text('forme_juridique'),
+    naf: text('naf'),
+    categorie: text('categorie'),
+    effectif: text('effectif'),
+    creeLe: date('cree_le'),
+    active: boolean('active').notNull().default(true),
+    etablissementsOuverts: integer('etablissements_ouverts'),
+    // The directory flags companies that refuse commercial use of their data.
+    oppositionDiffusion: boolean('opposition_diffusion').notNull().default(false),
+    siret: text('siret'),
+    adresse: text('adresse'),
+    codePostal: text('code_postal'),
+    ville: text('ville'),
+    departement: text('departement'),
+    latitude: doublePrecision('latitude'),
+    longitude: doublePrecision('longitude'),
+    finances: jsonb('finances').$type<ExerciceFinancier[]>().notNull().default([]),
+    dirigeants: jsonb('dirigeants').$type<Dirigeant[]>().notNull().default([]),
+    siteWeb: text('site_web'),
+    annuaireLe: timestamp('annuaire_le', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('base_entreprises_siren_idx').on(t.instanceId, t.siren),
+    index('base_entreprises_instance_idx').on(t.instanceId),
+    instanceIsolation('base_entreprises'),
+  ],
+);
+
 // The living base. Only integration.ts writes here (see integration.test.ts).
 export const baseVivante = pgTable(
   'base_vivante',
@@ -132,6 +172,10 @@ export const baseVivante = pgTable(
     // Set when the record entered the CRM of a mandate (first contact): keeps the link for history.
     crmMandat: text('crm_mandat'),
     crmContactId: uuid('crm_contact_id'),
+    // The company of the directory this record belongs to, once the pilot has confirmed it.
+    entrepriseId: uuid('entreprise_id').references(() => baseEntreprises.id, {
+      onDelete: 'set null',
+    }),
   },
   (t) => [
     index('base_vivante_instance_idx').on(t.instanceId, t.zone),
@@ -186,3 +230,4 @@ export type BaseImport = typeof baseImports.$inferSelect;
 export type LigneBrute = typeof baseLignesBrutes.$inferSelect;
 export type FicheBase = typeof baseVivante.$inferSelect;
 export type ReponseBase = typeof baseReponses.$inferSelect;
+export type EntrepriseBase = typeof baseEntreprises.$inferSelect;

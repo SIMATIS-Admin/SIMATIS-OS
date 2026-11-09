@@ -2,6 +2,7 @@ import { lireOrigine, noterContactsRecherches } from './origine.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { withInstance } from '../db/context.js';
 import type { FetchLike } from '../connecteurs/google/oauth.js';
 import type { Database } from '../db.js';
 import { instances } from '../instances/schema.js';
@@ -45,7 +46,15 @@ import {
 } from './reponses.js';
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
 import { exporterWaalaxy } from './waalaxy.js';
-import { FicheIntrouvable, FicheNonHomogene } from './integration.js';
+import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
+import {
+  candidatsPourFiche,
+  EntrepriseIntrouvable,
+  lireEntreprise,
+  rattacherParSiren,
+  SirenInvalide,
+} from './entreprises.js';
+import { detacherEntreprise, FicheIntrouvable, FicheNonHomogene } from './integration.js';
 import { EXCLUSIONS, STATUTS_PROSPECTION } from './schema.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -110,6 +119,7 @@ export type BaseVivanteRoutesDeps = {
   secretsDir?: string;
   realWrites?: boolean;
   googleFetch?: FetchLike;
+  annuaire?: ClientAnnuaire;
 };
 
 export function registerBaseVivanteRoutes(
@@ -119,12 +129,14 @@ export function registerBaseVivanteRoutes(
     secretsDir = './secrets/instances',
     realWrites = false,
     googleFetch,
+    annuaire = creerClientAnnuaire(),
   }: BaseVivanteRoutesDeps,
 ) {
   const erreur = (error: unknown, reply: FastifyReply) => {
     if (
       error instanceof ImportIntrouvable ||
       error instanceof FicheIntrouvable ||
+      error instanceof EntrepriseIntrouvable ||
       error instanceof ReponseIntrouvable
     )
       return reply.code(404).send({ error: error.message });
@@ -133,9 +145,11 @@ export function registerBaseVivanteRoutes(
       error instanceof FichierIllisible ||
       error instanceof FicheNonHomogene ||
       error instanceof RapprochementImpossible ||
-      error instanceof ClasseRefusee
+      error instanceof ClasseRefusee ||
+      error instanceof SirenInvalide
     )
       return reply.code(400).send({ error: error.message });
+    if (error instanceof ErreurAnnuaire) return reply.code(502).send({ error: error.message });
     throw error;
   };
 
@@ -300,6 +314,41 @@ export function registerBaseVivanteRoutes(
       .header('content-disposition', 'attachment; filename="base-vivante.csv"')
       .send(csv);
   });
+
+  // Companies of the State directory: proposed for a record, confirmed by the pilot.
+  app.get<Route>(
+    '/api/i/:slug/base/fiches/:id/entreprise/candidats',
+    surInstance(async (instanceId, request) => ({
+      candidats: await candidatsPourFiche(db, annuaire, instanceId, request.params.id as string),
+    })),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/fiches/:id/entreprise',
+    surInstance((instanceId, request) =>
+      rattacherParSiren(
+        db,
+        annuaire,
+        instanceId,
+        request.params.id as string,
+        z.object({ siren: z.string() }).parse(request.body).siren,
+      ),
+    ),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/fiches/:id/entreprise',
+    surInstance(async (instanceId, request) => {
+      await withInstance(db, instanceId, (tx) =>
+        detacherEntreprise(tx, instanceId, request.params.id as string),
+      );
+      return { ok: true };
+    }),
+  );
+  app.get<Route>(
+    '/api/i/:slug/base/entreprises/:id',
+    surInstance((instanceId, request) =>
+      lireEntreprise(db, instanceId, request.params.id as string),
+    ),
+  );
 
   // Fichier prêt pour l'import CSV de Waalaxy : seuls les profils LinkedIn, hors opposition.
   app.get<Route>('/api/i/:slug/base/export-waalaxy', async (request, reply) => {

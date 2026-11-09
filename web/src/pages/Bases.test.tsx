@@ -63,6 +63,32 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
+  if (url.endsWith('/entreprise/candidats'))
+    return json({
+      candidats: [
+        {
+          siren: '123456789',
+          nom: 'ATELIER FICTIF',
+          naf: null,
+          categorie: null,
+          effectif: null,
+          adresse: null,
+          ville: 'CHASSIEU',
+          active: true,
+        },
+      ],
+    });
+  if (method === 'POST' && url.endsWith('/entreprise'))
+    return json({
+      entreprise: {
+        id: 'e1',
+        siren: '123456789',
+        nom: 'ATELIER FICTIF',
+        finances: [],
+        dirigeants: [],
+      },
+      rattachees: 1,
+    });
   if (method === 'POST' && url.endsWith('/base/imports')) return json([apercu]);
   if (method === 'POST' && url.endsWith('/enrichir')) return json({ zone: 'prospectable' });
   if (method === 'POST' && url.endsWith('/integrer'))
@@ -395,6 +421,20 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
       expect(post?.url).toContain('/base/fiches/22222222');
       expect(post?.body).toMatchObject({ prenom: 'Léa', nom: 'Martin', email: 'lea@atelier.test' });
     });
+  });
+
+  it('rattache la fiche à l’annuaire sans fermer la fiche', async () => {
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Léa MARTIN'));
+    fireEvent.click(screen.getByRole('button', { name: /Rattacher à l’annuaire/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Choisir' }));
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/entreprise'));
+      expect(post?.url).toContain('/base/fiches/22222222');
+      expect(post?.body).toEqual({ siren: '123456789' });
+    });
+    expect(await screen.findByText('1 contact rattaché.')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Léa MARTIN' })).toBeTruthy();
   });
 
   it('marque une opposition depuis la fiche', async () => {
