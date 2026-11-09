@@ -1841,6 +1841,26 @@ export const actualiserSignauxPlusieurs = (slug: string, ids: string[]) =>
     inst(slug, 'base/entreprises/signaux/actualiser'),
     { ids },
   );
+export type AlerteSignauxWeb = {
+  active: boolean;
+  heure: string;
+  dernierJour?: string;
+  bilan?: string;
+};
+export const lireAlerteSignaux = (slug: string) =>
+  getJson<AlerteSignauxWeb>(inst(slug, 'base/signaux/routine'));
+export const enregistrerAlerteSignaux = (
+  slug: string,
+  reglages: { active: boolean; heure: string },
+) => sendJson<AlerteSignauxWeb>('PUT', inst(slug, 'base/signaux/routine'), reglages);
+export const lancerAlerteSignaux = (slug: string) =>
+  sendJson<{
+    verifiees: number;
+    nouveaux: number;
+    deposes: number;
+    echecs: number;
+    bilan: string;
+  }>('POST', inst(slug, 'base/signaux/routine/lancer'), {});
 export const fetchEntreprisesBase = (
   slug: string,
   { q, liste, signal, page }: { q?: string; liste?: string; signal?: string; page?: number },

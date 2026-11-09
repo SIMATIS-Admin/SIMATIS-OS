@@ -50,6 +50,13 @@ import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../ann
 import { creerGeocodeur, type Geocodeur } from '../routage/geocodage.js';
 import { creerClientBodacc, ErreurBodacc, type ClientBodacc } from '../signaux/bodacc.js';
 import { creerRouteur, type Routeur } from '../routage/osrm.js';
+import {
+  bilanDe,
+  enregistrerRoutineAlerte,
+  lancerAlerte,
+  lireRoutineAlerte,
+  reglagesAlerte,
+} from './alerte-signaux.js';
 import { calculerTournee, pointsCarte, TourneeRefusee } from './carte.js';
 import {
   actualiserPlusieurs,
@@ -513,6 +520,24 @@ export function registerBaseVivanteRoutes(
     surInstance((instanceId, request) =>
       calculerTournee(db, routeur, geocodeur, instanceId, tourneeSchema.parse(request.body)),
     ),
+  );
+  // The daily watch of the BODACC: on or off, at what hour, and a manual pass.
+  app.get<Route>(
+    '/api/i/:slug/base/signaux/routine',
+    surInstance((instanceId) => lireRoutineAlerte(db, instanceId)),
+  );
+  app.put<Route>(
+    '/api/i/:slug/base/signaux/routine',
+    surInstance((instanceId, request) =>
+      enregistrerRoutineAlerte(db, instanceId, reglagesAlerte.parse(request.body)),
+    ),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/signaux/routine/lancer',
+    surInstance(async (instanceId) => {
+      const rapport = await lancerAlerte(db, bodacc, instanceId, { limite: 100 });
+      return { ...rapport, bilan: bilanDe(rapport) };
+    }),
   );
   // What the BODACC says about the companies of the base.
   const actualisationSchema = z
