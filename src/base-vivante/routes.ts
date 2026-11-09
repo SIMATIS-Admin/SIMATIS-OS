@@ -51,6 +51,7 @@ import {
   ajouterEntreprises,
   candidatsPourFiche,
   EntrepriseIntrouvable,
+  listerEntreprisesBase,
   lireEntreprise,
   rattacherParSiren,
   RechercheRefusee,
@@ -66,11 +67,13 @@ import {
 } from './integration.js';
 import {
   ajouterALaListe,
+  ajouterEntreprisesALaListe,
   creerListe,
   ListeIntrouvable,
   ListeRefusee,
   modifierListe,
   retirerDeLaListe,
+  retirerEntreprisesDeLaListe,
   supprimerListe,
 } from './listes.js';
 import { EXCLUSIONS, STATUTS_PROSPECTION } from './schema.js';
@@ -379,7 +382,11 @@ export function registerBaseVivanteRoutes(
 
   // Lists the pilot builds by hand, labels on contacts, and the mandate a list is assigned to.
   const listeSchema = z
-    .object({ nom: z.string().optional(), mandat: z.string().nullable().optional() })
+    .object({
+      nom: z.string().optional(),
+      mandat: z.string().nullable().optional(),
+      type: z.string().optional(),
+    })
     .strict();
   const idsSchema = z.object({ ids: z.array(z.string().regex(UUID)).max(500) }).strict();
   const etiquettesSchema = z
@@ -393,7 +400,11 @@ export function registerBaseVivanteRoutes(
     '/api/i/:slug/base/listes',
     surInstance((instanceId, request) => {
       const corps = listeSchema.parse(request.body);
-      return creerListe(db, instanceId, { nom: corps.nom ?? '', mandat: corps.mandat });
+      return creerListe(db, instanceId, {
+        nom: corps.nom ?? '',
+        mandat: corps.mandat,
+        type: corps.type,
+      });
     }),
   );
   app.patch<Route>(
@@ -437,6 +448,40 @@ export function registerBaseVivanteRoutes(
       );
       return { ok: true };
     }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/listes/:id/entreprises',
+    surInstance(async (instanceId, request) => ({
+      ajoutees: await ajouterEntreprisesALaListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        idsSchema.parse(request.body).ids,
+      ),
+    })),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/listes/:id/entreprises',
+    surInstance(async (instanceId, request) => {
+      await retirerEntreprisesDeLaListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        idsSchema.parse(request.body).ids,
+      );
+      return { ok: true };
+    }),
+  );
+  app.get<Route>(
+    '/api/i/:slug/base/entreprises',
+    surInstance((instanceId, request) =>
+      listerEntreprisesBase(db, instanceId, {
+        q: request.query.q,
+        liste:
+          request.query.liste && UUID.test(request.query.liste) ? request.query.liste : undefined,
+        page: Math.max(0, Number(request.query.page) || 0),
+      }),
+    ),
   );
   app.post<Route>(
     '/api/i/:slug/base/tags',

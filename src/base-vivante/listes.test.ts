@@ -86,7 +86,9 @@ describe('base vivante : listes, étiquettes et mandat assigné', () => {
     expect((await appel(a, 'POST', '/listes', { nom: '   ' })).status).toBe(400);
     expect((await appel(a, 'PATCH', `/listes/${id}`, { nom: 'Ain' })).status).toBe(200);
     const liste = await appel(a, 'GET', '');
-    expect(liste.corps.listes).toEqual([{ id, nom: 'Ain', mandat: null, nombre: 0 }]);
+    expect(liste.corps.listes).toEqual([
+      { id, nom: 'Ain', type: 'contacts', mandat: null, nombre: 0 },
+    ]);
     expect((await appel(a, 'DELETE', `/listes/${id}`)).status).toBe(200);
     expect((await appel(a, 'GET', '')).corps.listes).toEqual([]);
   });

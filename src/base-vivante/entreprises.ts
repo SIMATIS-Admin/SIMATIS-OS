@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import {
   ErreurAnnuaire,
   type ClientAnnuaire,
@@ -9,7 +9,7 @@ import { criteresValides, versParametres } from '../annuaire/criteres.js';
 import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { FicheIntrouvable, integrerFiches, rattacherEntreprise } from './integration.js';
-import { ajouterALaListe } from './listes.js';
+import { ajouterALaListe, ajouterEntreprisesALaListe, typeDeLaListe } from './listes.js';
 import { normaliserFiche } from './nettoyage.js';
 import { baseEntreprises, baseVivante, type EntrepriseBase } from './schema.js';
 
@@ -183,6 +183,9 @@ export async function ajouterEntreprises(
     throw new SirenInvalide('SIREN invalide : 9 chiffres attendus.');
   const rapport: RapportAjout = { ajoutees: 0, existantes: 0, introuvables: 0 };
   const ficheIds: string[] = [];
+  const entrepriseIds: string[] = [];
+  // A bad list is refused before anything is written.
+  const typeListe = listeId ? await typeDeLaListe(db, instanceId, listeId) : null;
   for (const siren of uniques) {
     const e = await annuaire.parSiren(siren);
     if (!e) {
@@ -220,8 +223,76 @@ export async function ajouterEntreprises(
       if (!ficheId) throw new Error('Fiche non créée');
       await rattacherEntreprise(tx, instanceId, ficheId, entreprise.id);
       ficheIds.push(ficheId);
+      entrepriseIds.push(entreprise.id);
     });
   }
-  if (listeId) await ajouterALaListe(db, instanceId, listeId, ficheIds);
+  if (listeId && typeListe === 'entreprises')
+    await ajouterEntreprisesALaListe(db, instanceId, listeId, entrepriseIds);
+  else if (listeId) await ajouterALaListe(db, instanceId, listeId, ficheIds);
   return rapport;
+}
+
+export type LigneEntreprise = {
+  id: string;
+  siren: string;
+  nom: string;
+  ville: string | null;
+  departement: string | null;
+  naf: string | null;
+  effectif: string | null;
+  categorie: string | null;
+  // Latest published turnover; null when none or not disclosed (0).
+  ca: number | null;
+  nbContacts: number;
+  listes: string[];
+};
+
+const PAR_PAGE_ENTREPRISES = 50;
+
+// The companies of the base, with how many real contacts each has (a company-only record is not
+// a contact) and the lists of companies it belongs to.
+export async function listerEntreprisesBase(
+  db: Executor,
+  instanceId: string,
+  { q, liste, page = 0 }: { q?: string; liste?: string; page?: number },
+): Promise<{ entreprises: LigneEntreprise[]; total: number }> {
+  const motif = q?.trim() ? `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+  const filtre = and(
+    eq(baseEntreprises.instanceId, instanceId),
+    motif
+      ? or(
+          ilike(baseEntreprises.nom, motif),
+          ilike(baseEntreprises.siren, motif),
+          ilike(baseEntreprises.ville, motif),
+        )
+      : undefined,
+    liste
+      ? sql`exists (select 1 from base_liste_entreprises m where m.entreprise_id = ${baseEntreprises.id} and m.liste_id = ${liste})`
+      : undefined,
+  );
+  return withInstance(db, instanceId, async (tx) => {
+    const lignes = await tx
+      .select({
+        id: baseEntreprises.id,
+        siren: baseEntreprises.siren,
+        nom: baseEntreprises.nom,
+        ville: baseEntreprises.ville,
+        departement: baseEntreprises.departement,
+        naf: baseEntreprises.naf,
+        effectif: baseEntreprises.effectif,
+        categorie: baseEntreprises.categorie,
+        ca: sql<number | null>`nullif((${baseEntreprises.finances}->0->>'ca')::numeric, 0)::float8`,
+        nbContacts: sql<number>`(select count(*)::int from base_vivante v where v.entreprise_id = ${sql.raw('"base_entreprises"."id"')} and trim(v.nom) <> '')`,
+        listes: sql<
+          string[]
+        >`coalesce((select array_agg(m.liste_id::text) from base_liste_entreprises m where m.entreprise_id = ${sql.raw('"base_entreprises"."id"')}), '{}')`,
+      })
+      .from(baseEntreprises)
+      .where(filtre)
+      .orderBy(asc(sql`lower(${baseEntreprises.nom})`), asc(baseEntreprises.id))
+      .limit(PAR_PAGE_ENTREPRISES)
+      .offset(Math.max(0, page) * PAR_PAGE_ENTREPRISES);
+    const [{ n } = { n: 0 }] = await tx.select({ n: count() }).from(baseEntreprises).where(filtre);
+    return { entreprises: lignes, total: n };
+  });
 }

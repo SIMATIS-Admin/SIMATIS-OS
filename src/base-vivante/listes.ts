@@ -2,12 +2,25 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { listInstances } from '../instances/service.js';
-import { baseListeFiches, baseListes, baseVivante } from './schema.js';
+import {
+  baseEntreprises,
+  baseListeEntreprises,
+  baseListeFiches,
+  baseListes,
+  baseVivante,
+} from './schema.js';
 
 export class ListeIntrouvable extends Error {}
 export class ListeRefusee extends Error {}
 
-export type ResumeListe = { id: string; nom: string; mandat: string | null; nombre: number };
+export type TypeListe = 'contacts' | 'entreprises';
+export type ResumeListe = {
+  id: string;
+  nom: string;
+  type: TypeListe;
+  mandat: string | null;
+  nombre: number;
+};
 
 const nomValide = (nom: string): string => {
   const n = nom.trim().replace(/\s+/g, ' ');
@@ -32,9 +45,12 @@ export async function resumeListes(tx: Tx, instanceId: string): Promise<ResumeLi
     .select({
       id: baseListes.id,
       nom: baseListes.nom,
+      type: baseListes.type,
       mandat: baseListes.mandat,
       // Qualified by hand: inside the subquery a bare "id" would be the member's own.
-      nombre: sql<number>`(select count(*)::int from base_liste_fiches m where m.liste_id = ${sql.raw('"base_listes"."id"')})`,
+      nombre: sql<number>`case when ${baseListes.type} = 'entreprises'
+        then (select count(*)::int from base_liste_entreprises m where m.liste_id = ${sql.raw('"base_listes"."id"')})
+        else (select count(*)::int from base_liste_fiches m where m.liste_id = ${sql.raw('"base_listes"."id"')}) end`,
     })
     .from(baseListes)
     .where(eq(baseListes.instanceId, instanceId))
@@ -52,9 +68,11 @@ export async function etiquettesUtilisees(tx: Tx, instanceId: string): Promise<s
 export async function creerListe(
   db: Executor,
   instanceId: string,
-  { nom, mandat }: { nom: string; mandat?: string | null },
+  { nom, mandat, type = 'contacts' }: { nom: string; mandat?: string | null; type?: string },
 ): Promise<ResumeListe> {
   const n = nomValide(nom);
+  if (type !== 'contacts' && type !== 'entreprises')
+    throw new ListeRefusee('Une liste contient des contacts ou des entreprises.');
   const m = await mandatConnu(db, mandat);
   return withInstance(db, instanceId, async (tx) => {
     const [existe] = await tx
@@ -64,9 +82,12 @@ export async function creerListe(
         and(eq(baseListes.instanceId, instanceId), sql`lower(${baseListes.nom}) = lower(${n})`),
       );
     if (existe) throw new ListeRefusee('Une liste porte déjà ce nom.');
-    const [l] = await tx.insert(baseListes).values({ instanceId, nom: n, mandat: m }).returning();
+    const [l] = await tx
+      .insert(baseListes)
+      .values({ instanceId, nom: n, mandat: m, type })
+      .returning();
     if (!l) throw new Error('Liste non créée');
-    return { id: l.id, nom: l.nom, mandat: l.mandat, nombre: 0 };
+    return { id: l.id, nom: l.nom, type: l.type, mandat: l.mandat, nombre: 0 };
   });
 }
 
@@ -113,12 +134,18 @@ export async function supprimerListe(db: Executor, instanceId: string, id: strin
   });
 }
 
-async function listeDe(tx: Tx, instanceId: string, id: string) {
+async function listeDe(tx: Tx, instanceId: string, id: string, type: TypeListe) {
   const [l] = await tx
-    .select({ id: baseListes.id })
+    .select({ id: baseListes.id, type: baseListes.type })
     .from(baseListes)
     .where(and(eq(baseListes.id, id), eq(baseListes.instanceId, instanceId)));
   if (!l) throw new ListeIntrouvable('Liste introuvable');
+  if (l.type !== type)
+    throw new ListeRefusee(
+      type === 'contacts'
+        ? 'Cette liste reçoit des entreprises, pas des contacts.'
+        : 'Cette liste reçoit des contacts, pas des entreprises.',
+    );
 }
 
 // Contacts of another instance are ignored, a contact already in the list is not added twice.
@@ -129,7 +156,7 @@ export async function ajouterALaListe(
   ficheIds: string[],
 ): Promise<number> {
   return withInstance(db, instanceId, async (tx) => {
-    await listeDe(tx, instanceId, id);
+    await listeDe(tx, instanceId, id, 'contacts');
     const miens = await tx
       .select({ id: baseVivante.id })
       .from(baseVivante)
@@ -156,7 +183,7 @@ export async function retirerDeLaListe(
   ficheIds: string[],
 ): Promise<void> {
   await withInstance(db, instanceId, async (tx) => {
-    await listeDe(tx, instanceId, id);
+    await listeDe(tx, instanceId, id, 'contacts');
     await tx
       .delete(baseListeFiches)
       .where(
@@ -167,4 +194,67 @@ export async function retirerDeLaListe(
         ),
       );
   });
+}
+
+// Companies of another instance are ignored, a company already in the list is not added twice.
+export async function ajouterEntreprisesALaListe(
+  db: Executor,
+  instanceId: string,
+  id: string,
+  entrepriseIds: string[],
+): Promise<number> {
+  return withInstance(db, instanceId, async (tx) => {
+    await listeDe(tx, instanceId, id, 'entreprises');
+    const miennes = await tx
+      .select({ id: baseEntreprises.id })
+      .from(baseEntreprises)
+      .where(
+        and(
+          eq(baseEntreprises.instanceId, instanceId),
+          inArray(baseEntreprises.id, [...new Set(entrepriseIds)]),
+        ),
+      );
+    if (miennes.length === 0) return 0;
+    const ajoutees = await tx
+      .insert(baseListeEntreprises)
+      .values(miennes.map((e) => ({ instanceId, listeId: id, entrepriseId: e.id })))
+      .onConflictDoNothing()
+      .returning({ id: baseListeEntreprises.id });
+    return ajoutees.length;
+  });
+}
+
+export async function retirerEntreprisesDeLaListe(
+  db: Executor,
+  instanceId: string,
+  id: string,
+  entrepriseIds: string[],
+): Promise<void> {
+  await withInstance(db, instanceId, async (tx) => {
+    await listeDe(tx, instanceId, id, 'entreprises');
+    await tx
+      .delete(baseListeEntreprises)
+      .where(
+        and(
+          eq(baseListeEntreprises.instanceId, instanceId),
+          eq(baseListeEntreprises.listeId, id),
+          inArray(baseListeEntreprises.entrepriseId, entrepriseIds),
+        ),
+      );
+  });
+}
+
+export async function typeDeLaListe(
+  db: Executor,
+  instanceId: string,
+  id: string,
+): Promise<TypeListe> {
+  const [l] = await withInstance(db, instanceId, (tx) =>
+    tx
+      .select({ type: baseListes.type })
+      .from(baseListes)
+      .where(and(eq(baseListes.id, id), eq(baseListes.instanceId, instanceId))),
+  );
+  if (!l) throw new ListeIntrouvable('Liste introuvable');
+  return l.type;
 }

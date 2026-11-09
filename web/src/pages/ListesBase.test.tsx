@@ -32,7 +32,9 @@ function simuler() {
   return appels;
 }
 
-const listes = [{ id: 'l1', nom: 'Industrie Ain', mandat: null, nombre: 12 }];
+const listes = [
+  { id: 'l1', nom: 'Industrie Ain', type: 'contacts' as const, mandat: null, nombre: 12 },
+];
 
 describe('Listes de la base', () => {
   it('crée une liste', async () => {
@@ -46,7 +48,7 @@ describe('Listes de la base', () => {
     expect(appels.at(-1)).toMatchObject({
       url: '/api/i/base/base/listes',
       method: 'POST',
-      body: { nom: 'À appeler' },
+      body: { nom: 'À appeler', type: 'contacts' },
     });
   });
 
@@ -55,7 +57,7 @@ describe('Listes de la base', () => {
     const onChange = vi.fn();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<ListesBase slug="base" listes={listes} onChange={onChange} />);
-    expect(screen.getByText('12')).toBeTruthy();
+    expect(screen.getByText(/12 contacts/)).toBeTruthy();
     const mandat = await screen.findByLabelText('Mandat de la liste Industrie Ain');
     await screen.findByRole('option', { name: 'OID Fictif' });
     fireEvent.change(mandat, { target: { value: 'OID Fictif' } });

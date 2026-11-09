@@ -336,11 +336,13 @@ export function RechercheEntreprises({
                 onChange={(e) => setListe(e.target.value)}
               >
                 <option value="">Sans liste</option>
-                {listes.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.nom}
-                  </option>
-                ))}
+                {listes
+                  .filter((l) => l.type === 'entreprises')
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.nom}
+                    </option>
+                  ))}
               </select>{' '}
               <button className="btn primary" disabled={occupe} onClick={() => void ajouter()}>
                 Ajouter {choisies.size} entreprise{choisies.size > 1 ? 's' : ''} à la base

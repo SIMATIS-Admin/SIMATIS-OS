@@ -26,6 +26,7 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { BaseTable } from './BaseTable.js';
+import { EntreprisesBase } from './EntreprisesBase.js';
 import { ExportWaalaxy } from './ExportWaalaxy.js';
 import { ListesBase } from './ListesBase.js';
 import { RechercheEntreprises } from './RechercheEntreprises.js';
@@ -581,6 +582,7 @@ export function Bases({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [fenetre, setFenetre] = useState<Fenetres>(null);
+  const [vue, setVue] = useState<'contacts' | 'entreprises'>('contacts');
   const [reponses, setReponses] = useState<{ aValider: ReponseBase[]; aClasser: number }>({
     aValider: [],
     aClasser: 0,
@@ -839,6 +841,35 @@ export function Bases({ slug }: { slug: string }) {
       </div>
 
       {listeOuverte && (
+        <div className="bv-onglets" role="tablist" aria-label="Contenu de la base">
+          {(['contacts', 'entreprises'] as const).map((v) => (
+            <button
+              key={v}
+              role="tab"
+              aria-selected={vue === v}
+              className="bv-onglet"
+              onClick={() => setVue(v)}
+            >
+              {v === 'contacts' ? 'Contacts' : 'Entreprises'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {listeOuverte && vue === 'entreprises' && (
+        <EntreprisesBase
+          slug={slug}
+          listes={etat?.listes ?? []}
+          onChange={() => void charger()}
+          onVoirContacts={(liste) => {
+            setFiltres({ tri: 'entreprise', liste });
+            setPage(0);
+            setVue('contacts');
+          }}
+        />
+      )}
+
+      {listeOuverte && vue === 'contacts' && (
         <BaseTable
           slug={slug}
           etat={etat}

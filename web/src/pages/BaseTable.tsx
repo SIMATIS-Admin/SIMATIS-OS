@@ -528,7 +528,8 @@ export function BaseTable({
               <option value="">Toutes les listes</option>
               {etat.listes.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.nom} ({l.nombre})
+                  {l.nom} ({l.nombre}
+                  {l.type === 'entreprises' ? ' entreprises' : ''})
                 </option>
               ))}
             </select>
@@ -585,11 +586,13 @@ export function BaseTable({
             onChange={(e) => e.target.value && void ajouterAListe(e.target.value)}
           >
             <option value="">Ajouter à une liste…</option>
-            {etat.listes.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.nom}
-              </option>
-            ))}
+            {etat.listes
+              .filter((l) => l.type === 'contacts')
+              .map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nom}
+                </option>
+              ))}
             <option value="nouvelle">+ Nouvelle liste…</option>
           </select>
           {filtres.liste && (

@@ -224,6 +224,10 @@ export const baseListes = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     ...metierColumns(),
     nom: text('nom').notNull(),
+    // A list holds contacts or companies of the directory, never both.
+    type: text('type', { enum: ['contacts', 'entreprises'] })
+      .notNull()
+      .default('contacts'),
     mandat: text('mandat'),
   },
   (t) => [
@@ -248,6 +252,25 @@ export const baseListeFiches = pgTable(
     uniqueIndex('base_liste_fiches_paire_idx').on(t.listeId, t.ficheId),
     index('base_liste_fiches_fiche_idx').on(t.ficheId),
     instanceIsolation('base_liste_fiches'),
+  ],
+);
+
+export const baseListeEntreprises = pgTable(
+  'base_liste_entreprises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    listeId: uuid('liste_id')
+      .notNull()
+      .references(() => baseListes.id, { onDelete: 'cascade' }),
+    entrepriseId: uuid('entreprise_id')
+      .notNull()
+      .references(() => baseEntreprises.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('base_liste_entreprises_paire_idx').on(t.listeId, t.entrepriseId),
+    index('base_liste_entreprises_entreprise_idx').on(t.entrepriseId),
+    instanceIsolation('base_liste_entreprises'),
   ],
 );
 

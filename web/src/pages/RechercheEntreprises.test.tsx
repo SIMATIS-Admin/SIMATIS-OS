@@ -35,7 +35,9 @@ function simuler(reponses: Record<string, { status?: number; corps: unknown }>) 
   return appels;
 }
 
-const listes = [{ id: 'l1', nom: 'Industrie Rhône', mandat: null, nombre: 0 }];
+const listes = [
+  { id: 'l1', nom: 'Industrie Rhône', type: 'entreprises' as const, mandat: null, nombre: 0 },
+];
 
 describe('Chercher des entreprises', () => {
   it('comprend la demande, cherche, et ajoute les entreprises choisies à une liste', async () => {
