@@ -23,9 +23,14 @@ export const entreprises = pgTable(
     ville: text('ville'),
     taille: integer('taille'),
     domaine: text('domaine'),
+    // The legal identity of the company, confirmed from the State directory in the living base.
+    // Local to the OS (never sent to a CRM, never overwritten by a sync): it links this company
+    // to the one of the base.
+    siren: text('siren'),
   },
   (t) => [
     index('entreprises_instance_idx').on(t.instanceId),
+    index('entreprises_siren_idx').on(t.instanceId, t.siren),
     // A copied record is identified by its source: syncs update it instead of duplicating it.
     uniqueIndex('entreprises_source_idx').on(t.instanceId, t.source, t.sourceId),
     instanceIsolation('entreprises'),

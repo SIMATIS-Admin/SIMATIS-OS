@@ -8,7 +8,7 @@ import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { peutEntrerDansLeCrm } from './completude.js';
 import { lierCrm } from './integration.js';
-import { baseVivante, type FicheBase } from './schema.js';
+import { baseEntreprises, baseVivante, type FicheBase } from './schema.js';
 
 export type EntreeCrm =
   | { resultat: 'cree' | 'existant'; mandat: string }
@@ -68,11 +68,35 @@ export async function entrerDansCrm(
 
   let contactId = existant?.id ?? null;
   let entrepriseId: string | null = null;
+  // The SIREN confirmed in the base is the surest way to find the company in the mandate's CRM.
+  const siren = fiche.entrepriseId
+    ? await withInstance(db, baseId, async (tx) => {
+        const [e] = await tx
+          .select({ siren: baseEntreprises.siren })
+          .from(baseEntreprises)
+          .where(
+            and(
+              eq(baseEntreprises.id, fiche.entrepriseId ?? ''),
+              eq(baseEntreprises.instanceId, baseId),
+            ),
+          );
+        return e?.siren ?? null;
+      })
+    : null;
+  // Set when the company was found by its name: it gets its SIREN once the contact is created.
+  const aCompleter = { id: null as string | null };
   if (!contactId) {
     try {
       entrepriseId = await withInstance(db, mandat.id, async (tx) => {
+        if (siren) {
+          const [parSiren] = await tx
+            .select({ id: entreprises.id })
+            .from(entreprises)
+            .where(and(eq(entreprises.instanceId, mandat.id), eq(entreprises.siren, siren)));
+          if (parSiren) return parSiren.id;
+        }
         const [e] = await tx
-          .select({ id: entreprises.id })
+          .select({ id: entreprises.id, siren: entreprises.siren })
           .from(entreprises)
           .where(
             and(
@@ -85,13 +109,17 @@ export async function entrerDansCrm(
                   ),
             ),
           );
-        return e?.id ?? null;
+        if (!e) return null;
+        // Same name, other SIREN: another company, not this one.
+        if (siren && e.siren && e.siren !== siren) return null;
+        if (siren && !e.siren) aCompleter.id = e.id;
+        return e.id;
       });
       if (!entrepriseId) {
         const e = await createEntreprise(
           db,
           mandat,
-          { nom: fiche.entreprise, domaine: fiche.domaine },
+          { nom: fiche.entreprise, domaine: fiche.domaine, siren },
           deps,
         );
         if ('simulation' in e) return { resultat: 'simulation', mandat: mandat.nom };
@@ -111,6 +139,15 @@ export async function entrerDansCrm(
       );
       if ('simulation' in c) return { resultat: 'simulation', mandat: mandat.nom };
       contactId = c.id;
+      if (siren && aCompleter.id) {
+        const cible = aCompleter.id;
+        await withInstance(db, mandat.id, (tx) =>
+          tx
+            .update(entreprises)
+            .set({ siren, updatedAt: new Date() })
+            .where(and(eq(entreprises.id, cible), eq(entreprises.instanceId, mandat.id))),
+        );
+      }
     } catch (error) {
       // A CRM that refuses (read-only, no connector…) leaves the record where it was.
       if (error instanceof CrmIndisponible) return refus(error.message);

@@ -589,6 +589,13 @@
       "when": 1794215674967,
       "tag": "0083_regular_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1794221060140,
+      "tag": "0084_chubby_luke_cage",
+      "breakpoints": true
     }
   ]
 }
