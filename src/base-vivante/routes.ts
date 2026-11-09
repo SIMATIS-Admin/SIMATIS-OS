@@ -48,10 +48,13 @@ import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
 import { exporterWaalaxy } from './waalaxy.js';
 import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
 import {
+  ajouterEntreprises,
   candidatsPourFiche,
   EntrepriseIntrouvable,
   lireEntreprise,
   rattacherParSiren,
+  RechercheRefusee,
+  rechercherEntreprises,
   SirenInvalide,
 } from './entreprises.js';
 import {
@@ -163,10 +166,12 @@ export function registerBaseVivanteRoutes(
       error instanceof RapprochementImpossible ||
       error instanceof ClasseRefusee ||
       error instanceof SirenInvalide ||
+      error instanceof RechercheRefusee ||
       error instanceof ListeRefusee ||
       error instanceof EtiquetteRefusee
     )
       return reply.code(400).send({ error: error.message });
+    if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
     if (error instanceof ErreurAnnuaire) return reply.code(502).send({ error: error.message });
     throw error;
   };
@@ -441,6 +446,31 @@ export function registerBaseVivanteRoutes(
         modifierEtiquettes(tx, instanceId, ids, { ajouter, retirer }),
       );
       return { ok: true };
+    }),
+  );
+
+  // Search the State directory by criteria, then bring the chosen companies into the base.
+  const rechercheSchema = z
+    .object({
+      criteres: z.record(z.string(), z.unknown()),
+      page: z.number().int().min(1).max(400).optional(),
+    })
+    .strict();
+  const ajoutSchema = z
+    .object({ sirens: z.array(z.string()).max(100), liste: z.string().regex(UUID).optional() })
+    .strict();
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/recherche',
+    surInstance((instanceId, request) => {
+      const { criteres, page } = rechercheSchema.parse(request.body);
+      return rechercherEntreprises(db, annuaire, instanceId, criteres, page ?? 1);
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/ajouter',
+    surInstance((instanceId, request) => {
+      const { sirens, liste } = ajoutSchema.parse(request.body);
+      return ajouterEntreprises(db, annuaire, instanceId, sirens, liste);
     }),
   );
 

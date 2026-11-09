@@ -28,6 +28,7 @@ import { Icon } from '../icons.js';
 import { BaseTable } from './BaseTable.js';
 import { ExportWaalaxy } from './ExportWaalaxy.js';
 import { ListesBase } from './ListesBase.js';
+import { RechercheEntreprises } from './RechercheEntreprises.js';
 import { Fenetre } from './Fenetre.js';
 import { RapprochementMail } from './RapprochementMail.js';
 import { ReponsesBase } from './ReponsesBase.js';
@@ -568,6 +569,7 @@ type Fenetres =
   | { quoi: 'triage' }
   | { quoi: 'waalaxy' }
   | { quoi: 'listes' }
+  | { quoi: 'entreprises' }
   | { quoi: 'recherche' }
   | { quoi: 'routine-recherche' };
 
@@ -785,6 +787,9 @@ export function Bases({ slug }: { slug: string }) {
               <button className="btn primary" onClick={() => setFenetre({ quoi: 'recherche' })}>
                 Rechercher de nouveaux prospects
               </button>
+              <button className="btn" onClick={() => setFenetre({ quoi: 'entreprises' })}>
+                Chercher des entreprises
+              </button>
               <button
                 className="link small"
                 onClick={() => setFenetre({ quoi: 'routine-recherche' })}
@@ -896,6 +901,22 @@ export function Bases({ slug }: { slug: string }) {
           onFermer={fermer}
         >
           <RapprochementMail slug={slug} onTermine={() => void charger()} />
+        </Fenetre>
+      )}
+      {fenetre?.quoi === 'entreprises' && (
+        <Fenetre
+          titre="Chercher des entreprises"
+          sousTitre="Décrivez la cible : l'annuaire des entreprises de l'État fournit la liste, vous choisissez celles à ajouter. Les contacts se trouvent ensuite avec « Rechercher avec Codex »."
+          onFermer={fermer}
+        >
+          <RechercheEntreprises
+            slug={slug}
+            listes={etat?.listes ?? []}
+            onAjoute={(m) => {
+              setInfo(m);
+              void charger();
+            }}
+          />
         </Fenetre>
       )}
       {fenetre?.quoi === 'listes' && (

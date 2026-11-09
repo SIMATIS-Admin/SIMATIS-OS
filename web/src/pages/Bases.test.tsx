@@ -429,6 +429,13 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     });
   });
 
+  it('ouvre la recherche d’entreprises depuis le parcours de recherche', async () => {
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Chercher des entreprises' }));
+    expect(screen.getByRole('dialog', { name: 'Chercher des entreprises' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Chercher dans l’annuaire' })).toBeTruthy();
+  });
+
   it('rattache la fiche à l’annuaire sans fermer la fiche', async () => {
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByText('Léa MARTIN'));

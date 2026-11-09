@@ -1,16 +1,21 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   ErreurAnnuaire,
   type ClientAnnuaire,
   type EntrepriseAnnuaire,
+  type PageAnnuaire,
 } from '../annuaire/client.js';
+import { criteresValides, versParametres } from '../annuaire/criteres.js';
 import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
-import { FicheIntrouvable, rattacherEntreprise } from './integration.js';
+import { FicheIntrouvable, integrerFiches, rattacherEntreprise } from './integration.js';
+import { ajouterALaListe } from './listes.js';
+import { normaliserFiche } from './nettoyage.js';
 import { baseEntreprises, baseVivante, type EntrepriseBase } from './schema.js';
 
 export class EntrepriseIntrouvable extends Error {}
 export class SirenInvalide extends ErreurAnnuaire {}
+export class RechercheRefusee extends Error {}
 
 // One company per SIREN and per instance: a second link refreshes what the directory says.
 // The website, found elsewhere, is never overwritten by a refresh.
@@ -118,4 +123,105 @@ export async function rattacherParSiren(
       rattachees: await rattacherEntreprise(tx, instanceId, ficheId, entreprise.id),
     };
   });
+}
+
+export const PROVENANCE_RECHERCHE = 'Recherche d’entreprises';
+export const MAX_AJOUT = 25;
+
+// One page of the directory for the given criteria, each result marked when the base already
+// holds the company.
+export async function rechercherEntreprises(
+  db: Executor,
+  annuaire: ClientAnnuaire,
+  instanceId: string,
+  brut: Record<string, unknown>,
+  page: number,
+): Promise<PageAnnuaire & { dejaDansLaBase: string[] }> {
+  const criteres = criteresValides(brut);
+  try {
+    versParametres(criteres);
+  } catch (e) {
+    throw new RechercheRefusee(e instanceof Error ? e.message : 'Critères invalides.');
+  }
+  const resultat = await annuaire.rechercher(criteres, page);
+  const sirens = resultat.resultats.map((r) => r.siren);
+  const connues =
+    sirens.length === 0
+      ? []
+      : await withInstance(db, instanceId, (tx) =>
+          tx
+            .select({ siren: baseEntreprises.siren })
+            .from(baseEntreprises)
+            .where(
+              and(
+                eq(baseEntreprises.instanceId, instanceId),
+                inArray(baseEntreprises.siren, sirens),
+              ),
+            ),
+        );
+  return { ...resultat, dejaDansLaBase: connues.map((c) => c.siren) };
+}
+
+export type RapportAjout = { ajoutees: number; existantes: number; introuvables: number };
+
+// The companies picked in a search enter the base as « à enrichir » records (company only),
+// linked to the directory. A company the base already knows by name keeps its contacts: they are
+// linked, nothing new is created. The directory is asked again for each SIREN: the screen's data
+// is never trusted.
+export async function ajouterEntreprises(
+  db: Executor,
+  annuaire: ClientAnnuaire,
+  instanceId: string,
+  sirens: string[],
+  listeId?: string,
+): Promise<RapportAjout> {
+  const uniques = [...new Set(sirens.map((s) => s.replace(/\s/g, '')))];
+  if (uniques.length === 0) throw new RechercheRefusee('Choisissez au moins une entreprise.');
+  if (uniques.length > MAX_AJOUT)
+    throw new RechercheRefusee(`Ajoutez ${MAX_AJOUT} entreprises au plus à la fois.`);
+  if (uniques.some((s) => !/^\d{9}$/.test(s)))
+    throw new SirenInvalide('SIREN invalide : 9 chiffres attendus.');
+  const rapport: RapportAjout = { ajoutees: 0, existantes: 0, introuvables: 0 };
+  const ficheIds: string[] = [];
+  for (const siren of uniques) {
+    const e = await annuaire.parSiren(siren);
+    if (!e) {
+      rapport.introuvables++;
+      continue;
+    }
+    await withInstance(db, instanceId, async (tx) => {
+      const entreprise = await enregistrerEntreprise(tx, instanceId, e);
+      const [connue] = await tx
+        .select({ id: baseVivante.id })
+        .from(baseVivante)
+        .where(
+          and(
+            eq(baseVivante.instanceId, instanceId),
+            sql`lower(trim(${baseVivante.entreprise})) = lower(trim(${e.nom}))`,
+          ),
+        )
+        .limit(1);
+      const existante = connue ?? null;
+      let ficheId = existante?.id;
+      if (!ficheId) {
+        const [cree] = await integrerFiches(tx, instanceId, [
+          {
+            fiche: normaliserFiche({ entreprise: e.nom }).fiche,
+            provenance: PROVENANCE_RECHERCHE,
+            mandat: null,
+            importId: null,
+            collecteLe: null,
+          },
+        ]);
+        ficheId = cree?.id;
+        if (cree?.fusionnee) rapport.existantes++;
+        else rapport.ajoutees++;
+      } else rapport.existantes++;
+      if (!ficheId) throw new Error('Fiche non créée');
+      await rattacherEntreprise(tx, instanceId, ficheId, entreprise.id);
+      ficheIds.push(ficheId);
+    });
+  }
+  if (listeId) await ajouterALaListe(db, instanceId, listeId, ficheIds);
+  return rapport;
 }

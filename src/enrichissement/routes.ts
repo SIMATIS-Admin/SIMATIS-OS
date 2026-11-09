@@ -14,6 +14,7 @@ import {
   supprimerSession,
 } from './sessions.js';
 import { enregistrerRoutineRecherche, lireRoutineRecherche, reglagesRecherche } from './routine.js';
+import { DemandeRefusee, interpreter } from '../annuaire/interpreter.js';
 import { chercherProspects } from './recherche.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -47,6 +48,8 @@ export type EnrichissementRoutesDeps = {
   // Remplaçable par un faux dans les tests ; sinon construit depuis la clé configurée.
   client?: ClientIA;
   codex?: ClientIA;
+  // Combien de temps attendre l'IA pour traduire une demande de recherche d'entreprises.
+  delaiInterpretationMs?: number;
 };
 
 export const reglagesDe = (cfg: NonNullable<Config['enrichissement']>): ReglagesLot => ({
@@ -57,7 +60,7 @@ export const reglagesDe = (cfg: NonNullable<Config['enrichissement']>): Reglages
 
 export function registerEnrichissementRoutes(
   app: FastifyInstance,
-  { db, enrichissement, client, codex }: EnrichissementRoutesDeps,
+  { db, enrichissement, client, codex, delaiInterpretationMs = 120_000 }: EnrichissementRoutesDeps,
 ) {
   const ia = client ?? codex ?? (enrichissement ? creerClientOpenAI(enrichissement) : null);
 
@@ -273,6 +276,43 @@ export function registerEnrichissementRoutes(
         throw new LotRefuse(
           error instanceof ErreurIA ? error.message : 'Réponse de recherche Codex invalide.',
         );
+      }
+    }),
+  );
+
+  // « PME de la métallurgie dans le Rhône » → critères pour l'annuaire des entreprises. L'IA ne
+  // fait que traduire : la recherche, elle, se fait dans l'annuaire.
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/interpreter',
+    surInstance(async (_instanceId, request, reply) => {
+      if (!ia)
+        return reply
+          .code(409)
+          .send({ error: 'Aucune IA n’est disponible : renseignez les critères à la main.' });
+      const input = z
+        .object({ demande: z.string().trim().min(1).max(2000) })
+        .safeParse(request.body);
+      if (!input.success) throw new LotRefuse('Décrivez les entreprises que vous cherchez.');
+      // Codex tourne sur le Mac de Marc : s'il est éteint, la demande resterait en attente
+      // plusieurs minutes. Mieux vaut rendre la main pour saisir les critères à la main.
+      let minuteur: NodeJS.Timeout | undefined;
+      const patience = new Promise<never>((_, rejeter) => {
+        minuteur = setTimeout(
+          () =>
+            rejeter(
+              new LotRefuse('L’IA ne répond pas : renseignez les critères à la main ou réessayez.'),
+            ),
+          delaiInterpretationMs,
+        );
+      });
+      try {
+        return await Promise.race([interpreter(ia, input.data.demande), patience]);
+      } catch (error) {
+        if (error instanceof DemandeRefusee || error instanceof ErreurIA)
+          throw new LotRefuse(error.message);
+        throw error;
+      } finally {
+        clearTimeout(minuteur);
       }
     }),
   );

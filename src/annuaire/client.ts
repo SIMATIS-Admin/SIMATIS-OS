@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { FetchLike } from '../connecteurs/google/oauth.js';
+import { versParametres, type Criteres } from './criteres.js';
 
 // Annuaire des entreprises de l'État (données SIRENE, RNE, comptes publiés) : API publique et
 // gratuite, sans clé. Elle refuse au-delà d'environ 7 appels par seconde.
@@ -91,7 +92,20 @@ const resultatApi = z.object({
     .nullish(),
   dirigeants: z.array(dirigeant).nullish(),
 });
-const reponseApi = z.object({ results: z.array(resultatApi) });
+const reponseApi = z.object({
+  results: z.array(resultatApi),
+  total_results: z.number().optional(),
+  total_pages: z.number().optional(),
+  page: z.number().optional(),
+});
+export const PAR_PAGE = 25;
+export type PageAnnuaire = {
+  resultats: EntrepriseAnnuaire[];
+  // The directory never reports more than 10 000 results for one search.
+  total: number;
+  pages: number;
+  page: number;
+};
 
 function nomDirigeant(d: z.infer<typeof dirigeant>): string | null {
   if (d.type_dirigeant === 'personne morale') return d.denomination?.trim() || null;
@@ -165,6 +179,7 @@ export type ClientAnnuaire = {
     options?: { departement?: string; limite?: number },
   ): Promise<EntrepriseAnnuaire[]>;
   parSiren(siren: string): Promise<EntrepriseAnnuaire | null>;
+  rechercher(criteres: Criteres, page?: number): Promise<PageAnnuaire>;
 };
 
 export function creerClientAnnuaire(
@@ -201,20 +216,38 @@ export function creerClientAnnuaire(
     });
   };
 
-  const chercher: ClientAnnuaire['chercher'] = (recherche, opts = {}) => {
-    const params = new URLSearchParams({ q: recherche, per_page: String(opts.limite ?? 5) });
-    if (opts.departement) params.set('departement', opts.departement);
+  const lire = (params: URLSearchParams) => {
     const suite = file.then(() => appeler(`${URL_RECHERCHE}?${params.toString()}`));
     file = suite.catch(() => undefined);
     return suite.then((json) => {
       const lu = reponseApi.safeParse(json);
       if (!lu.success) throw new ErreurAnnuaire('Réponse de l’annuaire illisible.');
-      return lu.data.results.map(convertir);
+      return lu.data;
     });
+  };
+
+  const chercher: ClientAnnuaire['chercher'] = async (recherche, opts = {}) => {
+    const params = new URLSearchParams({ q: recherche, per_page: String(opts.limite ?? 5) });
+    if (opts.departement) params.set('departement', opts.departement);
+    return (await lire(params)).results.map(convertir);
+  };
+
+  const rechercher: ClientAnnuaire['rechercher'] = async (criteres, page = 1) => {
+    const params = versParametres(criteres);
+    params.set('per_page', String(PAR_PAGE));
+    params.set('page', String(Math.max(1, Math.floor(page))));
+    const r = await lire(params);
+    return {
+      resultats: r.results.map(convertir),
+      total: r.total_results ?? r.results.length,
+      pages: r.total_pages ?? 1,
+      page: r.page ?? page,
+    };
   };
 
   return {
     chercher,
+    rechercher,
     async parSiren(siren) {
       const chiffres = siren.replace(/\s/g, '');
       if (!/^\d{9}$/.test(chiffres))

@@ -38,6 +38,7 @@ describe('base vivante : entreprises de l’annuaire', () => {
   const annuaire = {
     chercher: vi.fn<ClientAnnuaire['chercher']>(),
     parSiren: vi.fn<ClientAnnuaire['parSiren']>(),
+    rechercher: vi.fn<ClientAnnuaire['rechercher']>(),
   };
 
   beforeAll(async () => {
