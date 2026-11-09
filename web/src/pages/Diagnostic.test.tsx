@@ -464,6 +464,19 @@ describe('Assistant de l étape', () => {
     );
   });
 
+  it('un support dont le texte est gardé se présente dans l’OS', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        supportStatut: 'final',
+        supportTexte: [{ titre: 'Introduction', texte: 'Le modèle', notes: '' }],
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const lien = await screen.findByRole('link', { name: 'Présenter dans l’OS' });
+    expect(lien.getAttribute('href')).toBe('#/simatis/diaporama/support/p1');
+  });
+
   it('un support final n affiche plus le texte des diapositives et peut être rouvert', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
       projet({
@@ -1202,6 +1215,22 @@ describe('Deck de restitution à l étape 5', () => {
         '/api/i/simatis/diagnostic/projets/p1/restitution/pptx',
       );
       expect(screen.getByText(/exporté le 28\/10\/2026/)).toBeTruthy();
+    });
+
+    it('propose de présenter dans l’OS le deck exporté', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([
+        deckPret({ aPptx: true, restitutionExportLe: '2026-10-28T10:30:00.000Z' }),
+      ]);
+      await ouvrir();
+      const lien = await screen.findByRole('link', { name: 'Présenter dans l’OS' });
+      expect(lien.getAttribute('href')).toBe('#/simatis/diaporama/restitution/p1');
+    });
+
+    it('sans export, rien à présenter dans l’OS', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([deckPret()]);
+      await ouvrir();
+      await screen.findByRole('button', { name: 'Exporter en PowerPoint' });
+      expect(screen.queryByRole('link', { name: 'Présenter dans l’OS' })).toBeNull();
     });
 
     it('sans export, aucun lien de téléchargement', async () => {

@@ -85,6 +85,28 @@
   color: #286e60;
   margin-bottom: 0.9em;
 }
+.dia-notes {
+  margin-top: 1.6em;
+  padding: 0.8em 1em;
+  background: var(--bg);
+  border-radius: 12px;
+  font-size: 0.82em;
+  line-height: 1.5;
+  color: var(--ink-2);
+  white-space: pre-line;
+  max-width: 58ch;
+}
+.dia-notes b {
+  display: block;
+  font: 700 0.85em var(--f-body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #286e60;
+  margin-bottom: 0.3em;
+}
+.main.presentation .dia-notes {
+  display: none;
+}
 .dia-note {
   font: 500 0.75em var(--f-num);
   color: var(--ink-3);
@@ -513,6 +535,12 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #bfe6de;
+}
+.dia-puce-liste.dense {
+  max-width: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6em 2.4em;
+  font-size: 0.94em;
 }
 .dia-puce-liste.non li::before {
   background: #c0442e;

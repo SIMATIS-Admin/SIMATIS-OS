@@ -42,6 +42,7 @@ import {
   demanderReglesRestitution,
   demanderRestitution,
   marquerDeckFinal,
+  diapositivesRestitutionDe,
   pptxRestitutionDe,
 } from '../diagnostic/restitution.js';
 import { demanderDossier } from '../diagnostic/dossier-export.js';
@@ -880,6 +881,18 @@ export function registerApi(
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Les diapositives du dernier export, pour la présentation dans l'OS.
+  app.get<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/diapositives',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await diapositivesRestitutionDe(db, i, request.params.id);
+      } catch (error) {
         return diagnosticErreur(error, reply);
       }
     }),
