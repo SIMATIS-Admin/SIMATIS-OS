@@ -47,6 +47,9 @@ import {
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
 import { exporterWaalaxy } from './waalaxy.js';
 import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
+import { creerGeocodeur, type Geocodeur } from '../routage/geocodage.js';
+import { creerRouteur, type Routeur } from '../routage/osrm.js';
+import { calculerTournee, pointsCarte, TourneeRefusee } from './carte.js';
 import {
   ajouterEntreprises,
   candidatsPourFiche,
@@ -141,6 +144,8 @@ export type BaseVivanteRoutesDeps = {
   realWrites?: boolean;
   googleFetch?: FetchLike;
   annuaire?: ClientAnnuaire;
+  routeur?: Routeur;
+  geocodeur?: Geocodeur;
 };
 
 export function registerBaseVivanteRoutes(
@@ -151,6 +156,8 @@ export function registerBaseVivanteRoutes(
     realWrites = false,
     googleFetch,
     annuaire = creerClientAnnuaire(),
+    routeur = creerRouteur(),
+    geocodeur = creerGeocodeur(),
   }: BaseVivanteRoutesDeps,
 ) {
   const erreur = (error: unknown, reply: FastifyReply) => {
@@ -170,6 +177,7 @@ export function registerBaseVivanteRoutes(
       error instanceof ClasseRefusee ||
       error instanceof SirenInvalide ||
       error instanceof RechercheRefusee ||
+      error instanceof TourneeRefusee ||
       error instanceof ListeRefusee ||
       error instanceof EtiquetteRefusee
     )
@@ -471,6 +479,29 @@ export function registerBaseVivanteRoutes(
       );
       return { ok: true };
     }),
+  );
+  // The map of the companies of the base, and the order to visit some of them in.
+  const tourneeSchema = z
+    .object({
+      ids: z.array(z.string().regex(UUID)).min(1).max(100),
+      depart: z.string().max(200).optional(),
+    })
+    .strict();
+  app.get<Route>(
+    '/api/i/:slug/base/entreprises/carte',
+    surInstance((instanceId, request) =>
+      pointsCarte(db, instanceId, {
+        q: request.query.q,
+        liste:
+          request.query.liste && UUID.test(request.query.liste) ? request.query.liste : undefined,
+      }),
+    ),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/tournee',
+    surInstance((instanceId, request) =>
+      calculerTournee(db, routeur, geocodeur, instanceId, tourneeSchema.parse(request.body)),
+    ),
   );
   app.get<Route>(
     '/api/i/:slug/base/entreprises',

@@ -249,15 +249,13 @@ export type LigneEntreprise = {
 
 const PAR_PAGE_ENTREPRISES = 50;
 
-// The companies of the base, with how many real contacts each has (a company-only record is not
-// a contact) and the lists of companies it belongs to.
-export async function listerEntreprisesBase(
-  db: Executor,
+// Search by name, SIREN or city, and optionally within one list of companies.
+export function filtreEntreprises(
   instanceId: string,
-  { q, liste, page = 0 }: { q?: string; liste?: string; page?: number },
-): Promise<{ entreprises: LigneEntreprise[]; total: number }> {
+  { q, liste }: { q?: string; liste?: string },
+) {
   const motif = q?.trim() ? `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
-  const filtre = and(
+  return and(
     eq(baseEntreprises.instanceId, instanceId),
     motif
       ? or(
@@ -270,6 +268,16 @@ export async function listerEntreprisesBase(
       ? sql`exists (select 1 from base_liste_entreprises m where m.entreprise_id = ${baseEntreprises.id} and m.liste_id = ${liste})`
       : undefined,
   );
+}
+
+// The companies of the base, with how many real contacts each has (a company-only record is not
+// a contact) and the lists of companies it belongs to.
+export async function listerEntreprisesBase(
+  db: Executor,
+  instanceId: string,
+  { q, liste, page = 0 }: { q?: string; liste?: string; page?: number },
+): Promise<{ entreprises: LigneEntreprise[]; total: number }> {
+  const filtre = filtreEntreprises(instanceId, { q, liste });
   return withInstance(db, instanceId, async (tx) => {
     const lignes = await tx
       .select({

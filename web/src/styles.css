@@ -6667,3 +6667,19 @@ div.pb-ligne {
 .g-how li {
   margin: 4px 0;
 }
+
+/* Carte des entreprises et tournée (Leaflet). */
+.bv-carte {
+  height: 380px;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line, #d7dee8);
+  margin: 8px 0;
+}
+.bv-tournee ol {
+  padding-left: 22px;
+  margin: 6px 0;
+}
+.bv-tournee-resultat {
+  margin-top: 10px;
+}
