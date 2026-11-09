@@ -650,8 +650,10 @@ function conditions(instanceId: string, f: FiltresBase) {
     f.zone === 'a_enrichir' ? aEnrichir : f.zone ? eq(baseVivante.zone, f.zone) : undefined,
     f.statut ? eq(baseVivante.statutProspection, f.statut) : undefined,
     f.provenance ? eq(baseVivante.provenance, f.provenance) : undefined,
+    // A list of contacts holds them directly; a list of companies holds their contacts.
     f.liste
-      ? sql`exists (select 1 from base_liste_fiches m where m.fiche_id = ${baseVivante.id} and m.liste_id = ${f.liste})`
+      ? sql`(exists (select 1 from base_liste_fiches m where m.fiche_id = ${baseVivante.id} and m.liste_id = ${f.liste})
+        or exists (select 1 from base_liste_entreprises m where m.entreprise_id = ${baseVivante.entrepriseId} and m.liste_id = ${f.liste}))`
       : undefined,
     f.tag ? sql`${f.tag.trim().toLowerCase()} = any(${baseVivante.tags})` : undefined,
     f.alerte === 'opposition' ? eq(baseVivante.opposition, true) : undefined,

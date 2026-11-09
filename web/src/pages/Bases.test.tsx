@@ -429,6 +429,16 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     });
   });
 
+  it('bascule entre les contacts et les entreprises de la base', async () => {
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    fireEvent.click(screen.getByRole('tab', { name: 'Entreprises' }));
+    expect(await screen.findByLabelText('Rechercher une entreprise de la base')).toBeTruthy();
+    expect(calls.some((c) => c.url.includes('/base/entreprises'))).toBe(true);
+    fireEvent.click(screen.getByRole('tab', { name: 'Contacts' }));
+    expect(await screen.findByLabelText('Rechercher dans la base')).toBeTruthy();
+  });
+
   it('ouvre la recherche d’entreprises depuis le parcours de recherche', async () => {
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Chercher des entreprises' }));
@@ -477,7 +487,7 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
   it('filtre par liste et par étiquette', async () => {
     etat = {
       ...etat,
-      listes: [{ id: 'l1', nom: 'À appeler', mandat: null, nombre: 3 }],
+      listes: [{ id: 'l1', nom: 'À appeler', type: 'contacts', mandat: null, nombre: 3 }],
       tags: ['salon'],
     };
     render(<Bases slug="simatis" />);
@@ -492,7 +502,10 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
   });
 
   it('ajoute la sélection à une liste et l’étiquette', async () => {
-    etat = { ...etat, listes: [{ id: 'l1', nom: 'À appeler', mandat: null, nombre: 3 }] };
+    etat = {
+      ...etat,
+      listes: [{ id: 'l1', nom: 'À appeler', type: 'contacts', mandat: null, nombre: 3 }],
+    };
     vi.spyOn(window, 'prompt').mockReturnValue('Salon 2026');
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));

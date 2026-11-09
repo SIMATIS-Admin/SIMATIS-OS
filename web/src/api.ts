@@ -1703,7 +1703,13 @@ export type FiltresBaseWeb = {
   tag?: string;
   q?: string;
 };
-export type ResumeListeBase = { id: string; nom: string; mandat: string | null; nombre: number };
+export type ResumeListeBase = {
+  id: string;
+  nom: string;
+  type: 'contacts' | 'entreprises';
+  mandat: string | null;
+  nombre: number;
+};
 export type EtatBase = {
   fiches: FicheBase[];
   total: number;
@@ -1788,8 +1794,42 @@ export const ajouterEntreprisesBase = (slug: string, sirens: string[], liste?: s
     inst(slug, 'base/entreprises/ajouter'),
     { sirens, liste },
   );
-export const creerListeBase = (slug: string, nom: string, mandat?: string | null) =>
-  sendJson<ResumeListeBase>('POST', inst(slug, 'base/listes'), { nom, mandat });
+export const creerListeBase = (
+  slug: string,
+  nom: string,
+  mandat?: string | null,
+  type: 'contacts' | 'entreprises' = 'contacts',
+) => sendJson<ResumeListeBase>('POST', inst(slug, 'base/listes'), { nom, mandat, type });
+export type LigneEntrepriseBase = {
+  id: string;
+  siren: string;
+  nom: string;
+  ville: string | null;
+  departement: string | null;
+  naf: string | null;
+  effectif: string | null;
+  categorie: string | null;
+  ca: number | null;
+  nbContacts: number;
+  listes: string[];
+};
+export const fetchEntreprisesBase = (
+  slug: string,
+  { q, liste, page }: { q?: string; liste?: string; page?: number },
+) => {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set('q', q.trim());
+  if (liste) params.set('liste', liste);
+  if (page) params.set('page', String(page));
+  const suite = params.toString();
+  return getJson<{ entreprises: LigneEntrepriseBase[]; total: number }>(
+    inst(slug, `base/entreprises${suite ? `?${suite}` : ''}`),
+  );
+};
+export const ajouterEntreprisesALaListeBase = (slug: string, id: string, ids: string[]) =>
+  sendJson<{ ajoutees: number }>('POST', inst(slug, `base/listes/${id}/entreprises`), { ids });
+export const retirerEntreprisesDeLaListeBase = (slug: string, id: string, ids: string[]) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/listes/${id}/entreprises`), { ids });
 export const majListeBase = (
   slug: string,
   id: string,

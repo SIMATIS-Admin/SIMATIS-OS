@@ -22,6 +22,7 @@ export function ListesBase({
 }) {
   const [mandats, setMandats] = useState<MandatBase[]>([]);
   const [nouveau, setNouveau] = useState('');
+  const [typeNouvelle, setTypeNouvelle] = useState<'contacts' | 'entreprises'>('contacts');
   const [occupe, setOccupe] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -65,7 +66,7 @@ export function ListesBase({
           <thead>
             <tr>
               <th>Liste</th>
-              <th>Contacts</th>
+              <th>Contient</th>
               <th>Mandat qui la prospecte</th>
               <th />
             </tr>
@@ -86,7 +87,10 @@ export function ListesBase({
                     }}
                   />
                 </td>
-                <td>{l.nombre}</td>
+                <td>
+                  {l.nombre} {l.type === 'entreprises' ? 'entreprise' : 'contact'}
+                  {l.nombre > 1 ? 's' : ''}
+                </td>
                 <td>
                   <select
                     className="input"
@@ -134,7 +138,7 @@ export function ListesBase({
           const nom = nouveau.trim();
           if (nom)
             void agir(async () => {
-              await creerListeBase(slug, nom);
+              await creerListeBase(slug, nom, null, typeNouvelle);
               setNouveau('');
             });
         }}
@@ -143,6 +147,15 @@ export function ListesBase({
           Nouvelle liste
           <input className="input" value={nouveau} onChange={(e) => setNouveau(e.target.value)} />
         </label>{' '}
+        <select
+          className="input"
+          aria-label="Contenu de la nouvelle liste"
+          value={typeNouvelle}
+          onChange={(e) => setTypeNouvelle(e.target.value as 'contacts' | 'entreprises')}
+        >
+          <option value="contacts">Des contacts</option>
+          <option value="entreprises">Des entreprises</option>
+        </select>{' '}
         <button className="btn sm primary" disabled={occupe || !nouveau.trim()}>
           Créer la liste
         </button>
