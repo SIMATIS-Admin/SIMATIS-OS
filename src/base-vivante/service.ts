@@ -41,6 +41,7 @@ import {
   type StatutLigne,
 } from './schema.js';
 import { clesDoublon } from './nettoyage.js';
+import { etiquettesUtilisees, resumeListes } from './listes.js';
 import { calculerLigne, calculerLignes, type LigneCalculee } from './traitement.js';
 
 export class ImportIntrouvable extends Error {}
@@ -603,6 +604,8 @@ export type FiltresBase = {
   statut?: StatutProspection;
   alerte?: FiltreAlerte;
   provenance?: string;
+  liste?: string;
+  tag?: string;
   q?: string;
 };
 
@@ -647,6 +650,10 @@ function conditions(instanceId: string, f: FiltresBase) {
     f.zone === 'a_enrichir' ? aEnrichir : f.zone ? eq(baseVivante.zone, f.zone) : undefined,
     f.statut ? eq(baseVivante.statutProspection, f.statut) : undefined,
     f.provenance ? eq(baseVivante.provenance, f.provenance) : undefined,
+    f.liste
+      ? sql`exists (select 1 from base_liste_fiches m where m.fiche_id = ${baseVivante.id} and m.liste_id = ${f.liste})`
+      : undefined,
+    f.tag ? sql`${f.tag.trim().toLowerCase()} = any(${baseVivante.tags})` : undefined,
     f.alerte === 'opposition' ? eq(baseVivante.opposition, true) : undefined,
     f.alerte === 'email_invalide' ? eq(baseVivante.emailInvalide, true) : undefined,
     f.alerte === 'exclusion' ? isNotNull(baseVivante.exclusion) : undefined,
@@ -715,6 +722,8 @@ export async function listerFiches(
         total: parZone.reduce((somme, p) => somme + p.n, 0),
       },
       provenances: provenances.map((p) => p.provenance),
+      listes: await resumeListes(tx, instanceId),
+      tags: await etiquettesUtilisees(tx, instanceId),
     };
   });
 }

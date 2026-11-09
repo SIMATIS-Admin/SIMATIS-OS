@@ -63,6 +63,8 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
+  if (url.includes('/base/listes/') && url.endsWith('/fiches')) return json({ ajoutees: 1 });
+  if (method === 'POST' && url.endsWith('/base/tags')) return json({ ok: true });
   if (url.endsWith('/entreprise/candidats'))
     return json({
       candidats: [
@@ -158,6 +160,8 @@ const videEtat = (): EtatBase => ({
   total: 0,
   compteurs: { aEnrichir: 0, prospectable: 0 },
   provenances: [],
+  listes: [],
+  tags: [],
   imports: [],
 });
 const ouvrirImport = () => fireEvent.click(screen.getByText('+ Importer une liste'));
@@ -309,6 +313,8 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
       total: 1,
       compteurs: { aEnrichir: 4, prospectable: 1 },
       provenances: ['Sharp'],
+      listes: [],
+      tags: [],
       imports: [],
     };
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
@@ -461,6 +467,49 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     });
   });
 
+  it('filtre par liste et par étiquette', async () => {
+    etat = {
+      ...etat,
+      listes: [{ id: 'l1', nom: 'À appeler', mandat: null, nombre: 3 }],
+      tags: ['salon'],
+    };
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    fireEvent.change(screen.getByLabelText('Filtrer par liste'), { target: { value: 'l1' } });
+    await waitFor(() => expect(lectures().some((u) => u.includes('liste=l1'))).toBe(true));
+    fireEvent.change(screen.getByLabelText('Filtrer par étiquette'), {
+      target: { value: 'salon' },
+    });
+    await waitFor(() => expect(lectures().some((u) => u.includes('tag=salon'))).toBe(true));
+    expect(screen.getByRole('button', { name: 'Exporter pour Waalaxy' })).toBeTruthy();
+  });
+
+  it('ajoute la sélection à une liste et l’étiquette', async () => {
+    etat = { ...etat, listes: [{ id: 'l1', nom: 'À appeler', mandat: null, nombre: 3 }] };
+    vi.spyOn(window, 'prompt').mockReturnValue('Salon 2026');
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
+    fireEvent.change(screen.getByLabelText('Ajouter la sélection à une liste'), {
+      target: { value: 'l1' },
+    });
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.endsWith('/base/listes/l1/fiches'));
+      expect(post?.method).toBe('POST');
+      expect(post?.body).toEqual({ ids: ['22222222-2222-4222-8222-222222222222'] });
+    });
+    expect(await screen.findByText('1 contact ajouté à la liste.')).toBeTruthy();
+    // La liste est relue après l'ajout : la sélection repart de zéro.
+    fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
+    fireEvent.click(screen.getByRole('button', { name: 'Étiqueter…' }));
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.endsWith('/base/tags'));
+      expect(post?.body).toEqual({
+        ids: ['22222222-2222-4222-8222-222222222222'],
+        ajouter: ['Salon 2026'],
+      });
+    });
+  });
+
   it('propose d’enrichir avec l’IA quand Codex est disponible', async () => {
     const { unmount } = render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
@@ -583,6 +632,8 @@ describe('base vivante : boîte mail et réponses', () => {
       total: 0,
       compteurs: { aEnrichir: 0, prospectable: 0 },
       provenances: [],
+      listes: [],
+      tags: [],
       imports: [],
     };
     vi.stubGlobal('fetch', vi.fn(fakeFetch));

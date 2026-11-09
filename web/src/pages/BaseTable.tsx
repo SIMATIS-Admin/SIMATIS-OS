@@ -2,9 +2,13 @@ import { OrigineContact } from './OrigineContact.js';
 import { emailGenerique, normaliserLinkedin } from '../../../src/base-vivante/nettoyage.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  ajouterALaListeBase,
+  creerListeBase,
   enrichirFicheBase,
+  etiqueterBase,
   etatEnrichissement,
   majConformiteBase,
+  retirerDeLaListeBase,
   supprimerFichesBase,
   type AlerteBase,
   type EtatBase,
@@ -17,6 +21,7 @@ import {
 import { Icon } from '../icons.js';
 import { LancerEnrichissement, SuggestionsEnrichissement } from './EnrichissementIA.js';
 import { EntrepriseFiche } from './EntrepriseFiche.js';
+import { EtiquettesFiche } from './EtiquettesFiche.js';
 import { Fenetre } from './Fenetre.js';
 
 export const PAR_PAGE = 50;
@@ -192,6 +197,7 @@ function FicheTiroir({
   occupe,
   onEnrichi,
   onActualiser,
+  etiquettes,
   onFermer,
 }: {
   slug: string;
@@ -202,6 +208,7 @@ function FicheTiroir({
   onEnrichi: () => void;
   // Reload the list but keep the drawer open (a company link does not move the record).
   onActualiser: () => void;
+  etiquettes: string[];
   onFermer: () => void;
 }) {
   return (
@@ -240,6 +247,14 @@ function FicheTiroir({
         </dd>
       </dl>
       {f.zone === 'a_enrichir' && <EnrichirFiche key={f.id} slug={slug} f={f} onFait={onEnrichi} />}
+      <EtiquettesFiche
+        key={`etiquettes-${f.id}`}
+        slug={slug}
+        ficheId={f.id}
+        tags={f.tags ?? []}
+        suggestions={etiquettes}
+        onChange={onActualiser}
+      />
       <EntrepriseFiche
         key={f.id}
         slug={slug}
@@ -284,6 +299,7 @@ export function BaseTable({
 }) {
   const [note, setNote] = useState<FicheBase | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const fichesPrecedentes = useRef(etat.fiches);
@@ -352,6 +368,34 @@ export function BaseTable({
       onChange();
     });
 
+  const ajouterAListe = (valeur: string) =>
+    agir(async () => {
+      let id = valeur;
+      if (valeur === 'nouvelle') {
+        const nom = window.prompt('Nom de la nouvelle liste');
+        if (!nom?.trim()) return;
+        id = (await creerListeBase(slug, nom)).id;
+      }
+      const { ajoutees } = await ajouterALaListeBase(slug, id, [...selection]);
+      setInfo(
+        `${ajoutees} contact${ajoutees > 1 ? 's' : ''} ajouté${ajoutees > 1 ? 's' : ''} à la liste.`,
+      );
+      onChange();
+    });
+  const etiqueter = () => {
+    const saisie = window.prompt('Étiquette à ajouter aux contacts sélectionnés');
+    if (!saisie?.trim()) return;
+    void agir(async () => {
+      await etiqueterBase(slug, [...selection], { ajouter: [saisie] });
+      onChange();
+    });
+  };
+  const retirerDeLaListe = (liste: string) =>
+    agir(async () => {
+      await retirerDeLaListeBase(slug, liste, [...selection]);
+      onChange();
+    });
+
   const basculer = (id: string) =>
     setSelection((s) => {
       const n = new Set(s);
@@ -412,7 +456,11 @@ export function BaseTable({
           <summary className="btn sm">
             <Icon name="sliders" />
             Filtres et tri
-            {filtres.alerte || filtres.provenance || (baseComplete && filtres.statut)
+            {filtres.alerte ||
+            filtres.provenance ||
+            filtres.liste ||
+            filtres.tag ||
+            (baseComplete && filtres.statut)
               ? ' · actifs'
               : ''}
           </summary>
@@ -471,6 +519,32 @@ export function BaseTable({
                 </option>
               ))}
             </select>
+            <select
+              className="input"
+              aria-label="Filtrer par liste"
+              value={filtres.liste ?? ''}
+              onChange={(e) => filtrer({ liste: e.target.value || undefined })}
+            >
+              <option value="">Toutes les listes</option>
+              {etat.listes.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nom} ({l.nombre})
+                </option>
+              ))}
+            </select>
+            <select
+              className="input"
+              aria-label="Filtrer par étiquette"
+              value={filtres.tag ?? ''}
+              onChange={(e) => filtrer({ tag: e.target.value || undefined })}
+            >
+              <option value="">Toutes les étiquettes</option>
+              {etat.tags.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </div>
         </details>
       </div>
@@ -505,6 +579,33 @@ export function BaseTable({
           </button>
           <select
             className="input"
+            aria-label="Ajouter la sélection à une liste"
+            value=""
+            disabled={occupe}
+            onChange={(e) => e.target.value && void ajouterAListe(e.target.value)}
+          >
+            <option value="">Ajouter à une liste…</option>
+            {etat.listes.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.nom}
+              </option>
+            ))}
+            <option value="nouvelle">+ Nouvelle liste…</option>
+          </select>
+          {filtres.liste && (
+            <button
+              className="btn sm"
+              disabled={occupe}
+              onClick={() => void retirerDeLaListe(filtres.liste ?? '')}
+            >
+              Retirer de cette liste
+            </button>
+          )}
+          <button className="btn sm" disabled={occupe} onClick={etiqueter}>
+            Étiqueter…
+          </button>
+          <select
+            className="input"
             aria-label="Exclure la sélection comme"
             value=""
             disabled={occupe}
@@ -525,6 +626,11 @@ export function BaseTable({
         </div>
       )}
 
+      {info && (
+        <p className="small muted" role="status">
+          {info}
+        </p>
+      )}
       {error && (
         <div className="alert amber">
           <Icon name="info" />
@@ -713,6 +819,7 @@ export function BaseTable({
             onChange();
           }}
           onActualiser={onChange}
+          etiquettes={etat.tags}
           onFermer={() => setOuverte(null)}
           occupe={occupe}
           onSupprimer={() =>

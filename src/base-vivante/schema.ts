@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   date,
@@ -176,6 +177,11 @@ export const baseVivante = pgTable(
     entrepriseId: uuid('entreprise_id').references(() => baseEntreprises.id, {
       onDelete: 'set null',
     }),
+    // Free labels chosen by the pilot (lower case, no duplicate).
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
   },
   (t) => [
     index('base_vivante_instance_idx').on(t.instanceId, t.zone),
@@ -210,6 +216,41 @@ export const baseReponses = pgTable(
   ],
 );
 
+// A named group of contacts the pilot builds by hand. A contact can sit in several lists; the
+// mandate is the one that will prospect the list (its name, as `mandat_contacteur` records it).
+export const baseListes = pgTable(
+  'base_listes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    nom: text('nom').notNull(),
+    mandat: text('mandat'),
+  },
+  (t) => [
+    uniqueIndex('base_listes_nom_idx').on(t.instanceId, sql`lower(${t.nom})`),
+    instanceIsolation('base_listes'),
+  ],
+);
+
+export const baseListeFiches = pgTable(
+  'base_liste_fiches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    listeId: uuid('liste_id')
+      .notNull()
+      .references(() => baseListes.id, { onDelete: 'cascade' }),
+    ficheId: uuid('fiche_id')
+      .notNull()
+      .references(() => baseVivante.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('base_liste_fiches_paire_idx').on(t.listeId, t.ficheId),
+    index('base_liste_fiches_fiche_idx').on(t.ficheId),
+    instanceIsolation('base_liste_fiches'),
+  ],
+);
+
 // What the OS remembers per source: a format already seen goes through without a question.
 export const baseCorrespondances = pgTable(
   'base_correspondances',
@@ -231,3 +272,4 @@ export type LigneBrute = typeof baseLignesBrutes.$inferSelect;
 export type FicheBase = typeof baseVivante.$inferSelect;
 export type ReponseBase = typeof baseReponses.$inferSelect;
 export type EntrepriseBase = typeof baseEntreprises.$inferSelect;
+export type ListeBase = typeof baseListes.$inferSelect;

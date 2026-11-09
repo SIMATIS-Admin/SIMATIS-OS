@@ -470,3 +470,43 @@ export async function detacherEntreprise(tx: Tx, instanceId: string, id: string)
     .set({ entrepriseId: null, updatedAt: new Date() })
     .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
 }
+
+export class EtiquetteRefusee extends Error {}
+
+const MAX_ETIQUETTE = 40;
+const MAX_ETIQUETTES = 20;
+
+// Labels are typed by hand: trimmed, lower case, one space between words.
+export function normaliserEtiquette(valeur: string): string {
+  const e = valeur.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!e) throw new EtiquetteRefusee('Étiquette vide');
+  if (e.length > MAX_ETIQUETTE)
+    throw new EtiquetteRefusee(`Étiquette trop longue (${MAX_ETIQUETTE} caractères au plus)`);
+  return e;
+}
+
+export async function modifierEtiquettes(
+  tx: Tx,
+  instanceId: string,
+  ids: string[],
+  { ajouter = [], retirer = [] }: { ajouter?: string[]; retirer?: string[] },
+): Promise<void> {
+  const aAjouter = ajouter.map(normaliserEtiquette);
+  const aRetirer = new Set(retirer.map(normaliserEtiquette));
+  const uniques = [...new Set(ids)];
+  const fiches = await tx
+    .select({ id: baseVivante.id, tags: baseVivante.tags })
+    .from(baseVivante)
+    .where(and(eq(baseVivante.instanceId, instanceId), inArray(baseVivante.id, uniques)));
+  if (fiches.length !== uniques.length) throw new FicheIntrouvable();
+  for (const f of fiches) {
+    const tags = [...new Set([...f.tags, ...aAjouter])].filter((t) => !aRetirer.has(t));
+    if (tags.length > MAX_ETIQUETTES)
+      throw new EtiquetteRefusee(`Un contact porte ${MAX_ETIQUETTES} étiquettes au plus`);
+    if (tags.length === f.tags.length && tags.every((t, i) => t === f.tags[i])) continue;
+    await tx
+      .update(baseVivante)
+      .set({ tags: tags.sort(), updatedAt: new Date() })
+      .where(and(eq(baseVivante.id, f.id), eq(baseVivante.instanceId, instanceId)));
+  }
+}

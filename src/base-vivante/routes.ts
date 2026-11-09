@@ -54,7 +54,22 @@ import {
   rattacherParSiren,
   SirenInvalide,
 } from './entreprises.js';
-import { detacherEntreprise, FicheIntrouvable, FicheNonHomogene } from './integration.js';
+import {
+  detacherEntreprise,
+  EtiquetteRefusee,
+  FicheIntrouvable,
+  FicheNonHomogene,
+  modifierEtiquettes,
+} from './integration.js';
+import {
+  ajouterALaListe,
+  creerListe,
+  ListeIntrouvable,
+  ListeRefusee,
+  modifierListe,
+  retirerDeLaListe,
+  supprimerListe,
+} from './listes.js';
 import { EXCLUSIONS, STATUTS_PROSPECTION } from './schema.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -137,6 +152,7 @@ export function registerBaseVivanteRoutes(
       error instanceof ImportIntrouvable ||
       error instanceof FicheIntrouvable ||
       error instanceof EntrepriseIntrouvable ||
+      error instanceof ListeIntrouvable ||
       error instanceof ReponseIntrouvable
     )
       return reply.code(404).send({ error: error.message });
@@ -146,7 +162,9 @@ export function registerBaseVivanteRoutes(
       error instanceof FicheNonHomogene ||
       error instanceof RapprochementImpossible ||
       error instanceof ClasseRefusee ||
-      error instanceof SirenInvalide
+      error instanceof SirenInvalide ||
+      error instanceof ListeRefusee ||
+      error instanceof EtiquetteRefusee
     )
       return reply.code(400).send({ error: error.message });
     if (error instanceof ErreurAnnuaire) return reply.code(502).send({ error: error.message });
@@ -165,6 +183,8 @@ export function registerBaseVivanteRoutes(
       statut?: string;
       alerte?: string;
       provenance?: string;
+      liste?: string;
+      tag?: string;
     };
     Body: unknown;
   };
@@ -289,6 +309,8 @@ export function registerBaseVivanteRoutes(
     statut: STATUTS_PROSPECTION.find((s) => s === q.statut),
     alerte: FILTRES_ALERTE.find((a) => a === q.alerte),
     provenance: q.provenance?.trim() || undefined,
+    liste: q.liste && UUID.test(q.liste) ? q.liste : undefined,
+    tag: q.tag?.trim() || undefined,
     q: q.q,
   });
 
@@ -348,6 +370,78 @@ export function registerBaseVivanteRoutes(
     surInstance((instanceId, request) =>
       lireEntreprise(db, instanceId, request.params.id as string),
     ),
+  );
+
+  // Lists the pilot builds by hand, labels on contacts, and the mandate a list is assigned to.
+  const listeSchema = z
+    .object({ nom: z.string().optional(), mandat: z.string().nullable().optional() })
+    .strict();
+  const idsSchema = z.object({ ids: z.array(z.string().regex(UUID)).max(500) }).strict();
+  const etiquettesSchema = z
+    .object({
+      ids: z.array(z.string().regex(UUID)).min(1).max(500),
+      ajouter: z.array(z.string()).max(20).optional(),
+      retirer: z.array(z.string()).max(20).optional(),
+    })
+    .strict();
+  app.post<Route>(
+    '/api/i/:slug/base/listes',
+    surInstance((instanceId, request) => {
+      const corps = listeSchema.parse(request.body);
+      return creerListe(db, instanceId, { nom: corps.nom ?? '', mandat: corps.mandat });
+    }),
+  );
+  app.patch<Route>(
+    '/api/i/:slug/base/listes/:id',
+    surInstance(async (instanceId, request) => {
+      await modifierListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        listeSchema.parse(request.body),
+      );
+      return { ok: true };
+    }),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/listes/:id',
+    surInstance(async (instanceId, request) => {
+      await supprimerListe(db, instanceId, request.params.id as string);
+      return { ok: true };
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/listes/:id/fiches',
+    surInstance(async (instanceId, request) => ({
+      ajoutees: await ajouterALaListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        idsSchema.parse(request.body).ids,
+      ),
+    })),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/listes/:id/fiches',
+    surInstance(async (instanceId, request) => {
+      await retirerDeLaListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        idsSchema.parse(request.body).ids,
+      );
+      return { ok: true };
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/tags',
+    surInstance(async (instanceId, request) => {
+      const { ids, ajouter, retirer } = etiquettesSchema.parse(request.body);
+      await withInstance(db, instanceId, (tx) =>
+        modifierEtiquettes(tx, instanceId, ids, { ajouter, retirer }),
+      );
+      return { ok: true };
+    }),
   );
 
   // Fichier prêt pour l'import CSV de Waalaxy : seuls les profils LinkedIn, hors opposition.
