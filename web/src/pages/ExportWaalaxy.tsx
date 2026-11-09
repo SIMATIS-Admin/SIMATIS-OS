@@ -39,6 +39,7 @@ export function ExportWaalaxy({ slug, filtres }: { slug: string; filtres: Filtre
     ecartees.opposition > 0 && `${entier(ecartees.opposition)} en opposition`,
     ecartees.exclusion > 0 &&
       `${entier(ecartees.exclusion)} exclu${ecartees.exclusion > 1 ? 's' : ''}`,
+    ecartees.alerte > 0 && `${entier(ecartees.alerte)} en procédure ou radiation (BODACC)`,
   ].filter(Boolean);
 
   return (
@@ -61,6 +62,12 @@ export function ExportWaalaxy({ slug, filtres }: { slug: string; filtres: Filtre
             ))}
           </ul>
         </>
+      )}
+      {apercu.nonVerifiees > 0 && (
+        <p className="small muted">
+          {entier(apercu.nonVerifiees)} contacts d’entreprises jamais vérifiées au BODACC :
+          vérifiez-les dans l’onglet Entreprises avant d’exporter.
+        </p>
       )}
       {ecartes.length > 0 && <p className="small muted">Laissés de côté : {ecartes.join(', ')}.</p>}
       <p className="small muted">

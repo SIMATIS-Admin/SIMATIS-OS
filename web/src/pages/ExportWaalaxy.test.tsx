@@ -18,7 +18,8 @@ describe('Export Waalaxy', () => {
     const fetchSimule = reponse({
       retenues: 12_500,
       parties: 2,
-      ecartees: { opposition: 3, exclusion: 1, sansProfil: 40 },
+      ecartees: { opposition: 3, exclusion: 1, sansProfil: 40, alerte: 2 },
+      nonVerifiees: 6,
     });
     vi.stubGlobal('fetch', fetchSimule);
     render(<ExportWaalaxy slug="base" filtres={{ statut: 'jamais_contacte' }} />);
@@ -26,6 +27,8 @@ describe('Export Waalaxy', () => {
     expect(screen.getByText(/40 sans profil LinkedIn/)).toBeTruthy();
     expect(screen.getByText(/3 en opposition/)).toBeTruthy();
     expect(screen.getByText(/1 exclu/)).toBeTruthy();
+    expect(screen.getByText(/2 en procédure ou radiation \(BODACC\)/)).toBeTruthy();
+    expect(screen.getByText(/6 contacts d’entreprises jamais vérifiées au BODACC/)).toBeTruthy();
     const liens = screen.getAllByRole('link', { name: /Télécharger/ });
     expect(liens.map((l) => l.getAttribute('href'))).toEqual([
       '/api/i/base/base/export-waalaxy.csv?statut=jamais_contacte&partie=1',
@@ -40,7 +43,8 @@ describe('Export Waalaxy', () => {
       reponse({
         retenues: 0,
         parties: 1,
-        ecartees: { opposition: 0, exclusion: 0, sansProfil: 5 },
+        ecartees: { opposition: 0, exclusion: 0, sansProfil: 5, alerte: 0 },
+        nonVerifiees: 0,
       }),
     );
     render(<ExportWaalaxy slug="base" filtres={{}} />);
