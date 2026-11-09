@@ -27,6 +27,7 @@ import {
 import { Icon } from '../icons.js';
 import { BaseTable } from './BaseTable.js';
 import { ExportWaalaxy } from './ExportWaalaxy.js';
+import { ListesBase } from './ListesBase.js';
 import { Fenetre } from './Fenetre.js';
 import { RapprochementMail } from './RapprochementMail.js';
 import { ReponsesBase } from './ReponsesBase.js';
@@ -566,6 +567,7 @@ type Fenetres =
   | { quoi: 'mail' }
   | { quoi: 'triage' }
   | { quoi: 'waalaxy' }
+  | { quoi: 'listes' }
   | { quoi: 'recherche' }
   | { quoi: 'routine-recherche' };
 
@@ -732,6 +734,9 @@ export function Bases({ slug }: { slug: string }) {
               <a className="btn ghost" href={urlExportBase(slug, filtres)} download>
                 Exporter en CSV
               </a>
+              <button className="btn ghost" onClick={() => setFenetre({ quoi: 'listes' })}>
+                Gérer les listes
+              </button>
               <button
                 className="btn ghost"
                 disabled={total === 0}
@@ -891,6 +896,11 @@ export function Bases({ slug }: { slug: string }) {
           onFermer={fermer}
         >
           <RapprochementMail slug={slug} onTermine={() => void charger()} />
+        </Fenetre>
+      )}
+      {fenetre?.quoi === 'listes' && (
+        <Fenetre titre="Mes listes" onFermer={fermer}>
+          <ListesBase slug={slug} listes={etat?.listes ?? []} onChange={() => void charger()} />
         </Fenetre>
       )}
       {fenetre?.quoi === 'waalaxy' && (

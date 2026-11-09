@@ -1685,6 +1685,7 @@ export type FicheBase = {
   emailInvalide: boolean;
   crmMandat: string | null;
   entrepriseId?: string | null;
+  tags?: string[];
   alertes: { code: string; libelle: string; bloquante: boolean }[];
 };
 export type StatutProspectionBase = 'jamais_contacte' | 'contacte' | 'a_repondu';
@@ -1698,13 +1699,18 @@ export type FiltresBaseWeb = {
   statut?: StatutProspectionBase;
   alerte?: AlerteBase;
   provenance?: string;
+  liste?: string;
+  tag?: string;
   q?: string;
 };
+export type ResumeListeBase = { id: string; nom: string; mandat: string | null; nombre: number };
 export type EtatBase = {
   fiches: FicheBase[];
   total: number;
   compteurs: { aEnrichir: number; prospectable: number; total?: number };
   provenances: string[];
+  listes: ResumeListeBase[];
+  tags: string[];
   imports: ResumeImportBase[];
 };
 const paramsBase = (filtres: FiltresBaseWeb) => {
@@ -1745,6 +1751,24 @@ export const actualiserHistoriqueBase = (slug: string) =>
   );
 export const supprimerFichesBase = (slug: string, ids: string[]) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, 'base/fiches'), { ids });
+export const creerListeBase = (slug: string, nom: string, mandat?: string | null) =>
+  sendJson<ResumeListeBase>('POST', inst(slug, 'base/listes'), { nom, mandat });
+export const majListeBase = (
+  slug: string,
+  id: string,
+  patch: { nom?: string; mandat?: string | null },
+) => sendJson<{ ok: true }>('PATCH', inst(slug, `base/listes/${id}`), patch);
+export const supprimerListeBase = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/listes/${id}`), {});
+export const ajouterALaListeBase = (slug: string, id: string, ids: string[]) =>
+  sendJson<{ ajoutees: number }>('POST', inst(slug, `base/listes/${id}/fiches`), { ids });
+export const retirerDeLaListeBase = (slug: string, id: string, ids: string[]) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/listes/${id}/fiches`), { ids });
+export const etiqueterBase = (
+  slug: string,
+  ids: string[],
+  etiquettes: { ajouter?: string[]; retirer?: string[] },
+) => sendJson<{ ok: true }>('POST', inst(slug, 'base/tags'), { ids, ...etiquettes });
 export type EntrepriseAnnuaireWeb = {
   siren: string;
   nom: string;
