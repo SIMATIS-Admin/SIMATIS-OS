@@ -4,6 +4,13 @@ import { rendezVous } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
+import { rapportsFinauxPour } from './finaux.js';
+import { resumeRevue, revuesValideesPour } from './revues-validees.js';
+import { restitutionsFinalesPour } from './restitutions-finales.js';
+import { supportsFinauxPour, texteDuSupport } from './supports-finaux.js';
+import { exporterDocParLien, type DriveDeps } from './drive.js';
+import { texteDuDocx } from './docx-texte.js';
+import { DEBUT_MESSAGE_ANNULATION, lireEntreeJournal } from './regles.js';
 import { diagnosticProjets, type Demande, type MessageDiag, type Projet } from './schema.js';
 import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
 
@@ -137,6 +144,15 @@ export async function finirAttente(
       projet.demande === 'restitution' && projet.restitutionStatut === 'en_cours'
         ? { restitutionStatut: projet.restitutionLien ? ('pret' as const) : ('aucun' as const) }
         : {};
+    // Même principe pour l'export de la revue : il garde le lien déjà enregistré, sinon il redevient possible.
+    const exportRevue =
+      projet.demande === 'revue_exporter' && projet.revueExportStatut === 'en_cours'
+        ? { revueExportStatut: projet.revueExportLien ? ('pret' as const) : ('aucun' as const) }
+        : {};
+    const dossier =
+      projet.demande === 'dossier_exporter' && projet.dossierExportStatut === 'en_cours'
+        ? { dossierExportStatut: projet.dossierExportLien ? ('pret' as const) : ('aucun' as const) }
+        : {};
     // Proposition de capitalisation : validée dans le chat si Claude a répondu, sinon à refaire.
     const capitalisation =
       projet.demande === 'capitalisation_proposer' && projet.capitalisationStatut === 'en_cours'
@@ -148,7 +164,15 @@ export async function finirAttente(
     if (projet.statutChat !== 'en_cours') {
       await tx
         .update(diagnosticProjets)
-        .set({ ...support, ...rapport, ...restitution, ...capitalisation, demande: null })
+        .set({
+          ...support,
+          ...rapport,
+          ...restitution,
+          ...exportRevue,
+          ...dossier,
+          ...capitalisation,
+          demande: null,
+        })
         .where(eq(diagnosticProjets.id, id));
       return;
     }
@@ -166,6 +190,8 @@ export async function finirAttente(
         ...support,
         ...rapport,
         ...restitution,
+        ...exportRevue,
+        ...dossier,
         ...capitalisation,
         conversation: [...projet.conversation, absence],
         statutChat: 'repos',
@@ -176,7 +202,10 @@ export async function finirAttente(
 }
 
 // Messages en attente sur toutes les instances SIMATIS (le runner ne traite que l'espace SIMATIS).
-export async function attentesClaude(db: Executor) {
+//
+// `drive` permet de joindre à une demande de rapport les deux derniers rapports finaux (exportés de
+// Drive) ; sans lui, ou si le réglage de l'instance les désactive, la liste reste vide.
+export async function attentesClaude(db: Executor, drive?: DriveDeps) {
   const sorties = [];
   for (const instance of (await listInstances(db)).filter((i) => i.type === 'propre')) {
     const rows = await withInstance(db, instance.id, (tx) =>
@@ -195,7 +224,103 @@ export async function attentesClaude(db: Executor) {
                 .where(eq(rendezVous.id, p.capitalisationRdvId!)),
             )
           : [];
+      // Le Word affiché (celui que le pilote a déposé après l'avoir retravaillé dans Claude Chat, ou celui
+      // de l'OS) donne son texte à la restitution, au dossier de travail et à la révision du rapport.
+      const rapportWordTexte =
+        p.rapport &&
+        (['restitution', 'dossier_exporter'].includes(p.demande ?? '') ||
+          (p.demande === 'rapport' && p.rapportVersions.length === 0))
+          ? (texteDuDocx(Buffer.from(p.rapport, 'base64'))?.slice(0, 30_000) ?? null)
+          : null;
+      const relireFinaux = instance.config.diagnostic?.relireFinaux !== false;
+      // La capitalisation compare toujours aux finaux précédents, réglage actif ou non.
+      const rapportsFinaux =
+        drive && ((relireFinaux && p.demande === 'rapport') || p.demande === 'regles_rapport')
+          ? await rapportsFinauxPour(db, instance, p.id, drive)
+          : [];
+      // Supports d'ouverture : relus à la préparation si le réglage est actif, toujours comparés à la
+      // capitalisation.
+      const relireSupports = instance.config.diagnostic?.relireSupports !== false;
+      const supportsFinaux =
+        (relireSupports && p.demande === 'preparer_support') || p.demande === 'regles_support'
+          ? await supportsFinauxPour(db, instance, p.id)
+          : [];
+      const supportFinalTexte =
+        p.demande === 'regles_support' && p.supportTexte && p.supportTexte.length > 0
+          ? texteDuSupport(p.supportTexte)
+          : null;
+      // Decks de restitution : relus à la production si le réglage est actif, toujours comparés à la
+      // capitalisation ; le lien du deck final du projet n'est utile qu'à celle-ci.
+      const relireRestitutions = instance.config.diagnostic?.relireRestitutions !== false;
+      const restitutionsFinales =
+        (relireRestitutions && p.demande === 'restitution') || p.demande === 'regles_restitution'
+          ? await restitutionsFinalesPour(db, instance, p.id)
+          : [];
+      const restitutionFinaleLien =
+        p.demande === 'regles_restitution'
+          ? (p.restitutionLiens.find((l) => l.finale)?.lien ?? null)
+          : null;
+      // Analyse : la revue validée du projet et les deux précédentes, pour la capitalisation.
+      const revueValideeTexte =
+        p.demande === 'regles_analyse' && p.revue ? resumeRevue(p.revue) : null;
+      const revuesValidees =
+        p.demande === 'regles_analyse' || p.demande === 'revue_preparer'
+          ? await revuesValideesPour(db, instance, p.id)
+          : [];
+      // Préparation : la revue déjà commencée, pour que Claude n'écrase pas le travail du pilote.
+      const revueEnCoursTexte =
+        p.demande === 'revue_preparer' && p.revue ? resumeRevue(p.revue) : null;
+      const finale = p.rapportLiens.find((l) => l.finale);
+      let rapportFinalTexte: string | null = null;
+      if (drive && finale && p.demande === 'regles_rapport') {
+        try {
+          rapportFinalTexte =
+            texteDuDocx(await exporterDocParLien(instance, finale.lien, drive))?.slice(0, 30_000) ??
+            null;
+        } catch {
+          rapportFinalTexte = null;
+        }
+      }
+      // Dernière version rédigée par Claude avant la finale, sinon la dernière : de quoi mesurer
+      // l'écart avec ce que le pilote a validé.
+      const brouillon =
+        (finale?.version
+          ? [...p.rapportVersions].reverse().find((v) => v.version < finale.version!)
+          : undefined) ?? p.rapportVersions.at(-1);
+      const idAnnulation =
+        p.demande === 'regles_annuler'
+          ? [...p.conversation]
+              .reverse()
+              .find((m) => m.de === 'pilote' && m.texte.startsWith(`${DEBUT_MESSAGE_ANNULATION} `))
+              ?.texte.slice(DEBUT_MESSAGE_ANNULATION.length + 1)
+              .replace(/\.$/, '')
+          : undefined;
+      const entreeAnnulee = idAnnulation
+        ? await lireEntreeJournal(db, instance, idAnnulation)
+        : null;
       sorties.push({
+        revueEnCoursTexte,
+        revueValideeTexte,
+        revuesValidees,
+        relireRestitutions,
+        restitutionsFinales,
+        restitutionFinaleLien,
+        relireSupports,
+        supportsFinaux,
+        supportFinalTexte,
+        relireFinaux,
+        rapportsFinaux,
+        rapportFinalTexte,
+        rapportBrouillon: p.demande === 'regles_rapport' ? (brouillon?.contenu ?? null) : null,
+        regleAAnnuler: entreeAnnulee
+          ? {
+              id: entreeAnnulee.id,
+              libelle: entreeAnnulee.libelle,
+              avant: entreeAnnulee.avant,
+              apres: entreeAnnulee.apres,
+              fiche: entreeAnnulee.fiche,
+            }
+          : null,
         compteRendu: rdv?.compteRendu ?? null,
         capitalisationProposition:
           p.demande === 'capitalisation_enregistrer'
@@ -229,7 +354,10 @@ export async function attentesClaude(db: Executor) {
         rapportVersion: p.rapportVersions.at(-1)?.version ?? null,
         rapportContenu: p.rapportVersions.at(-1)?.contenu ?? null,
         rapportNom: p.rapportNom,
+        rapportWordTexte,
         restitutionLien: p.restitutionLien,
+        revueExportLien: p.revueExportLien,
+        dossierExportLien: p.dossierExportLien,
         restitutionAvecProposition: p.restitutionAvecProposition,
         proposition: p.proposition,
         // Le PDF de l'entretien ne voyage que pour sa lecture.

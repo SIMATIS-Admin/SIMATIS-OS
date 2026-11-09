@@ -1,3 +1,4 @@
+import { MOTIF_EMAIL_GENERIQUE } from '../base-vivante/nettoyage.js';
 import { and, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { baseVivante } from '../base-vivante/schema.js';
 import type { Executor } from '../db.js';
@@ -39,6 +40,7 @@ const eligibles = (maintenant: Date) =>
     eq(baseVivante.zone, 'prospectable'),
     sql`${baseVivante.email} is not null and ${baseVivante.email} <> ''`,
     eq(baseVivante.emailInvalide, false),
+    sql`trim(${baseVivante.email}) !~* ${MOTIF_EMAIL_GENERIQUE}`,
     eq(baseVivante.opposition, false),
     isNull(baseVivante.exclusion),
     ne(baseVivante.statutProspection, 'a_repondu'),
@@ -117,18 +119,49 @@ export async function echantillonFroid(
     }));
 }
 
+export async function destinataireFroidToujoursEligible(
+  tx: Executor,
+  brouillon: { baseId: string; contactEmail: string; touche: number },
+): Promise<boolean> {
+  const [fiche] = await joindre(tx).where(
+    and(eq(baseVivante.id, brouillon.baseId), eligibles(new Date())),
+  );
+  return (
+    !!fiche &&
+    fiche.email === brouillon.contactEmail &&
+    (fiche.touches ?? 0) + 1 === brouillon.touche
+  );
+}
+
 export async function creerCampagneFroid(
   tx: Executor,
   input: { baseIds: string[]; reglage: ReglageCampagne },
   maintenant = new Date(),
 ): Promise<{ campagneId: string; refusees: { baseId: string; raison: string }[] }> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext('prospection-froid:' || ${currentInstance}::text))`,
+  );
   const ids = [...new Set(input.baseIds)];
   if (ids.length === 0) throw new CampagneInvalide('Choisissez au moins un contact.');
   if (ids.length > MAX_TACHES_CAMPAGNE) {
     throw new CampagneInvalide(`Une campagne compte ${MAX_TACHES_CAMPAGNE} contacts au maximum.`);
   }
   await verifierReglage(tx, input.reglage);
-  const valides = await joindre(tx).where(and(inArray(baseVivante.id, ids), eligibles(maintenant)));
+  const eligiblesDuLot = await joindre(tx).where(
+    and(inArray(baseVivante.id, ids), eligibles(maintenant)),
+  );
+  const enAttente = await tx
+    .select({ baseId: prospectionBrouillons.baseId })
+    .from(prospectionBrouillons)
+    .innerJoin(prospectionCampagnes, eq(prospectionCampagnes.id, prospectionBrouillons.campagneId))
+    .where(
+      and(
+        eq(prospectionBrouillons.instanceId, currentInstance),
+        ne(prospectionCampagnes.statut, 'terminee'),
+      ),
+    );
+  const reserves = new Set(enAttente.map((b) => b.baseId));
+  const valides = eligiblesDuLot.filter((f) => !reserves.has(f.id));
   const ok = new Set(valides.map((v) => v.id));
   const refusees = ids
     .filter((id) => !ok.has(id))

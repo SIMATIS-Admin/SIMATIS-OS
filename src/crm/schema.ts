@@ -23,9 +23,14 @@ export const entreprises = pgTable(
     ville: text('ville'),
     taille: integer('taille'),
     domaine: text('domaine'),
+    // The legal identity of the company, confirmed from the State directory in the living base.
+    // Local to the OS (never sent to a CRM, never overwritten by a sync): it links this company
+    // to the one of the base.
+    siren: text('siren'),
   },
   (t) => [
     index('entreprises_instance_idx').on(t.instanceId),
+    index('entreprises_siren_idx').on(t.instanceId, t.siren),
     // A copied record is identified by its source: syncs update it instead of duplicating it.
     uniqueIndex('entreprises_source_idx').on(t.instanceId, t.source, t.sourceId),
     instanceIsolation('entreprises'),
@@ -78,6 +83,9 @@ export const opportunites = pgTable(
     // Hand-set win probability for this deal only (0-100); null = the stage's standard one. OS-only
     // like the billing terms: never sent to HubSpot.
     probabiliteManuelle: integer('probabilite_manuelle'),
+    // Estimated signing date, hand-set; OS-only like the probability. Falls back on `echeance` (the
+    // HubSpot close date) when empty. Drives the pipe's cash projection in Gestion.
+    signatureEstimee: date('signature_estimee'),
     montant: integer('montant'),
     echeance: date('echeance'),
     clos: text('clos', { enum: ['gagne', 'perdu'] }),

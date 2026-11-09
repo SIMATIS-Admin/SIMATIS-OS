@@ -1,3 +1,4 @@
+import { interrompreRecherches } from './enrichissement/recherche-tache.js';
 import { buildApp } from './app.js';
 import { loadConfig, type Config } from './config.js';
 import { createDb } from './db.js';
@@ -41,6 +42,7 @@ const app = buildApp({
   secretsDir: config.secretsDir,
   vma: config.site && config.vmaOsToken ? { url: config.site.url, token: config.vmaOsToken } : null,
   enrichissement: config.enrichissement,
+  partageKdriveUrl: config.partageKdriveUrl,
   relais: config.relaisUrl
     ? {
         url: config.relaisUrl,
@@ -75,6 +77,7 @@ let stopRelancesVma = () => {};
 let stopRelevePartenaires = () => {};
 try {
   await prepareDatabase();
+  await interrompreRecherches(db);
   await app.listen({ host: config.host, port: config.port });
   // Un enrichissement laissé en cours par l'arrêt précédent repart des fiches non traitées.
   if (config.enrichissement)

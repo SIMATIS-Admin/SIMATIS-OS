@@ -10,6 +10,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { ateliersStrategie } from '../atelier/schema.js';
 import { atelierActif } from '../atelier/service.js';
+import { vmaTests } from '../vma/schema.js';
 import { diagnosticProjets } from '../diagnostic/schema.js';
 import { emailsDuContact, normaliserEmail } from './emails.js';
 import { assurerLiensPrincipaux, lireLiens, type LienFiche } from './liens.js';
@@ -34,6 +35,19 @@ export type Evenement = {
   origine: 'hubspot' | 'os';
   // Mailbox a mail was read in, when the instance has two.
   compte?: string;
+  mail?: {
+    fil: string;
+    objet: string;
+    de: string | null;
+    a: string | null;
+    cc?: string | null;
+    sens: 'envoye' | 'recu';
+    reponse: boolean;
+    lien?: string;
+    html?: string;
+    corps?: string;
+    charge?: boolean;
+  };
 };
 type Lien = { id: string; nom: string };
 export type Fiche = {
@@ -58,6 +72,7 @@ export type Fiche = {
   rendezVous: RdvLie[];
   // Diagnostics d'endurance commerciale rattachés à l'organisation ou au contact (espace SIMATIS).
   diagnostics?: DiagnosticLie[];
+  testsVma?: { id: string; nom: string; date: Date | null }[];
   // Ateliers stratégiques de l'entreprise (ceux de l'entreprise d'un contact), si le module est activé.
   ateliers?: AtelierLie[];
   historique: Evenement[];
@@ -313,7 +328,19 @@ export async function getFiche(
       .from(diagnosticProjets)
       .where(and(eq(diagnosticProjets.instanceId, currentInstance), eq(lien, id)))
       .orderBy(desc(diagnosticProjets.updatedAt));
-    if (kind === 'affaire' || !atelierActif(instance)) return { ...fiche, diagnostics: projets };
+    const lienVma =
+      kind === 'contact'
+        ? vmaTests.contactId
+        : kind === 'affaire'
+          ? vmaTests.opportuniteId
+          : vmaTests.entrepriseId;
+    const testsVma = await tx
+      .select({ id: vmaTests.id, nom: vmaTests.entrepriseNom, date: vmaTests.recueLe })
+      .from(vmaTests)
+      .where(and(eq(vmaTests.instanceId, currentInstance), eq(lienVma, id)))
+      .orderBy(desc(vmaTests.createdAt));
+    if (kind === 'affaire' || !atelierActif(instance))
+      return { ...fiche, diagnostics: projets, testsVma };
     const entrepriseId = kind === 'entreprise' ? id : fiche.liens.entreprise?.id;
     const ateliers = entrepriseId
       ? (
@@ -334,7 +361,7 @@ export async function getFiche(
             .orderBy(desc(ateliersStrategie.updatedAt))
         ).map((a) => ({ ...a, date: a.date.toISOString() }))
       : [];
-    return { ...fiche, diagnostics: projets, ateliers };
+    return { ...fiche, diagnostics: projets, testsVma, ateliers };
   });
 }
 
@@ -345,6 +372,7 @@ export type PatchFiche = {
   dureeEngagementMois?: number;
   taciteReconduction?: boolean;
   probabiliteManuelle?: number | null;
+  signatureEstimee?: string | null;
   echeance?: string | null;
   nom?: string;
   fonction?: string | null;
@@ -366,6 +394,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
     'dureeEngagementMois',
     'taciteReconduction',
     'probabiliteManuelle',
+    'signatureEstimee',
     'echeance',
     'contactId',
     'entrepriseId',
@@ -378,6 +407,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
 // and stay editable when the CRM is read-only.
 const CHAMPS_LOCAUX: (keyof PatchFiche)[] = [
   'probabiliteManuelle',
+  'signatureEstimee',
   'modeFacturation',
   'dureeEngagementMois',
   'taciteReconduction',

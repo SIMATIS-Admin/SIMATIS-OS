@@ -18,6 +18,12 @@ export type InstanceConfig = {
   siteWeb?: { proprieteId: string; proprieteNom: string };
   // Mandate only: start of the mandate (AAAA-MM-JJ). The living base reads the mailbox from there.
   debutMandat?: string;
+  // Diagnostic module: reread the last final reports / opening decks before writing a new one (default true).
+  diagnostic?: {
+    relireFinaux?: boolean;
+    relireSupports?: boolean;
+    relireRestitutions?: boolean;
+  };
   // Mandate created from (or linked to) a deal of the own activity.
   origine?: { opportuniteId: string; entrepriseId: string | null };
 };

@@ -43,6 +43,16 @@ function fakeFetch(input: string, init?: { method?: string; body?: string }) {
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
   if (method === 'POST') return json({ id: 'c-new', nom: 'Nouvelle' }, 201);
+  if (url.includes('/fiches/entreprise/e1'))
+    return json({
+      kind: 'entreprise',
+      fiche: { ...ENTREPRISES[0], origine: 'os' },
+      liens: { contacts: [], affaires: [] },
+      aVenir: [],
+      rendezVous: [],
+      historique: [],
+      ecrit: true,
+    });
   if (url.includes('/entreprises/e1')) return json(FICHE);
   if (url.includes('/entreprises')) return json(ENTREPRISES);
   if (url.includes('/contacts')) return json([]);
@@ -52,6 +62,7 @@ function fakeFetch(input: string, init?: { method?: string; body?: string }) {
 describe('CRM screens', () => {
   beforeEach(() => {
     calls = [];
+    sessionStorage.clear();
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -64,6 +75,7 @@ describe('CRM screens', () => {
     expect(await screen.findByText('Plasturgie Mornand')).toBeTruthy();
     // Pipedrive list: open deals and their value in their own columns.
     expect(screen.getByText(/18\s000 €/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
     expect(screen.getByRole('button', { name: 'Trier par Affaires ouvertes' })).toBeTruthy();
 
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'plast' } });
@@ -72,10 +84,12 @@ describe('CRM screens', () => {
     );
   });
 
-  it('opens the company page, Pipedrive-like', async () => {
+  it('previews a company and keeps its full record accessible', async () => {
     render(<Entreprises slug="simatis" />);
     fireEvent.click(await screen.findByText('Plasturgie Mornand'));
-    expect(location.hash).toBe('#/simatis/fiche/entreprise/e1');
+    const complet = await screen.findByRole('link', { name: 'Ouvrir la fiche complète' });
+    expect(complet.getAttribute('href')).toBe('#/simatis/fiche/entreprise/e1');
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('creates a contact attached to a company', async () => {
@@ -114,6 +128,7 @@ describe('CRM screens', () => {
       }),
     );
     render(<Entreprises slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Liste' }));
     fireEvent.click(await screen.findByLabelText('Sélectionner Plasturgie Mornand'));
     const listes = () =>
       calls.filter((c) => c.method === 'GET' && c.url.endsWith('/entreprises?q=')).length;

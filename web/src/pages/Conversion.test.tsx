@@ -106,7 +106,7 @@ describe('conversion screens', () => {
     Element.prototype.scrollIntoView = scroll;
     render(<RendezVous slug="helioval" ouvrir="evt-1" />);
     expect(await screen.findByText('Budget')).toBeTruthy();
-    expect(document.getElementById('rdv-evt-1')?.className).toBe('cible');
+    expect(document.getElementById('rdv-evt-1')?.classList.contains('cible')).toBe(true);
     await waitFor(() => expect(scroll).toHaveBeenCalled());
   });
 

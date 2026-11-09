@@ -76,8 +76,51 @@ const charger = (entreprises: Entreprise[], projets: ProjetDiag[] = [], tests: T
 describe('Diagnostics : création', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
   afterEach(() => cleanup());
+
+  it('archive et restaure le diagnostic sans déplacer les tests du bloc', async () => {
+    charger(
+      [entreprise('e1', 'Entreprise Fictive A')],
+      [projet({ entrepriseId: 'e1' })],
+      [test({ entrepriseId: 'e1' })],
+    );
+    render(<Diagnostics slug="demo" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archiver le diagnostic' }));
+    expect(screen.queryByRole('button', { name: 'Ouvrir le diagnostic' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Archiver ce test' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Archives (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restaurer le diagnostic' }));
+    expect(screen.getByText('Aucun bloc archivé.')).toBeTruthy();
+  });
+
+  it('crée un diagnostic actif depuis un bloc archivé et conserve les anciens éléments', async () => {
+    const entreprises = [entreprise('e1', 'Entreprise Fictive A')];
+    const ancien = projet({ id: 'ancien', entrepriseId: 'e1', updatedAt: '2026-01-01' });
+    const nouveau = projet({
+      id: 'nouveau',
+      entrepriseId: 'e1',
+      updatedAt: '2026-11-03',
+      etapeMax: 2,
+    });
+    const tests = [test({ entrepriseId: 'e1' })];
+    charger(entreprises, [ancien], tests);
+    api.creerProjetDiag.mockImplementation(() => {
+      charger(entreprises, [ancien, nouveau], tests);
+      return Promise.resolve(nouveau);
+    });
+    render(<Diagnostics slug="demo" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Détail/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archiver ce bloc' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archives (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Nouveau diagnostic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le diagnostic' }));
+    expect(await screen.findByText('Étape 2 sur 5')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Archives (2)' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Archiver ce test' })).toBeNull();
+  });
 
   it('« Lancer le diagnostic » crée un diagnostic rattaché à l’entreprise', async () => {
     // Une entreprise suivie grâce à un test VMA, mais sans diagnostic encore.
@@ -122,7 +165,7 @@ describe('Diagnostics : création', () => {
     api.createEntreprise.mockResolvedValue({ id: 'e9' });
     api.creerTestVma.mockResolvedValue(test({ id: 'v1', entrepriseId: 'e9' }));
     render(<Diagnostics slug="demo" />);
-    await screen.findByText('Aucune entreprise.');
+    await screen.findByText('Aucun bloc actif.');
     fireEvent.click(screen.getByRole('button', { name: '+ Nouveau' }));
     fireEvent.click(screen.getByRole('button', { name: /Nouveau test VMA/ }));
     fireEvent.change(screen.getByLabelText('Nom de l’entreprise (nouvelle)'), {

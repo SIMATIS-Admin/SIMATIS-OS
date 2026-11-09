@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchCarteCerveau, operationCerveau, type EspaceCerveau } from '../api.js';
 import { IdeeCerveau, MessagePartage, NoteCerveau } from './NoteCerveau.js';
+import { PartageBoite } from './PartageBoite.js';
 import { categorieInfo, disposer, voisins, type CarteCerveau } from '../cerveau.js';
 
 const TAILLE = 1000;
@@ -14,35 +15,42 @@ const dateParis = (iso: string) =>
     minute: '2-digit',
   });
 
-// Deux cerveaux : SIMATIS (le dossier du Drive) et Partagé (l'espace partagé avec Christophe), chacun
-// avec sa carte et son édition.
-export function Cerveau({ slug }: { slug: string }) {
-  const [espace, setEspace] = useState<EspaceCerveau>('simatis');
+// Deux cerveaux : SIMATIS (le dossier du Drive) et Alpes IA (l'espace partagé avec Christophe),
+// chacun avec sa carte et son édition. L'instance d'un partenaire (seulPartage) ne voit que le sien.
+export function Cerveau({ slug, seulPartage = false }: { slug: string; seulPartage?: boolean }) {
+  const [choix, setEspace] = useState<EspaceCerveau>('simatis');
+  const espace = seulPartage ? 'partage' : choix;
   return (
     <>
-      <div className="seg" style={{ marginBottom: 14 }}>
-        {(
-          [
-            ['simatis', 'SIMATIS'],
-            ['partage', 'Partagé'],
-          ] as const
-        ).map(([id, libelle]) => (
-          <button
-            key={id}
-            className={espace === id ? 'on' : ''}
-            aria-pressed={espace === id}
-            onClick={() => setEspace(id)}
-          >
-            {libelle}
-          </button>
-        ))}
-      </div>
-      <CerveauEspace key={`${slug}-${espace}`} slug={slug} espace={espace} />
+      {!seulPartage && (
+        <div className="seg" style={{ marginBottom: 14 }}>
+          {(
+            [
+              ['simatis', 'SIMATIS'],
+              ['partage', 'Alpes IA'],
+            ] as const
+          ).map(([id, libelle]) => (
+            <button
+              key={id}
+              className={espace === id ? 'on' : ''}
+              aria-pressed={espace === id}
+              onClick={() => setEspace(id)}
+            >
+              {libelle}
+            </button>
+          ))}
+        </div>
+      )}
+      {espace === 'partage' ? (
+        <PartageBoite key={slug} slug={slug} />
+      ) : (
+        <CerveauEspace key={`${slug}-${espace}`} slug={slug} espace={espace} />
+      )}
     </>
   );
 }
 
-function CerveauEspace({ slug, espace }: { slug: string; espace: EspaceCerveau }) {
+export function CerveauEspace({ slug, espace }: { slug: string; espace: EspaceCerveau }) {
   const partage = espace === 'partage';
   const [carte, setCarte] = useState<CarteCerveau | null | undefined>(undefined);
   const [erreur, setErreur] = useState<string | null>(null);

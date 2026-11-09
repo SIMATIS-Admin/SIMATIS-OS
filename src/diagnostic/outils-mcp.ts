@@ -4,6 +4,11 @@ import { enregistrerCapitalisation } from './capitalisation.js';
 import { repondreClaude } from './chat.js';
 import { autoriserSiEntretien, enregistrerReponses, reponsesSchema } from './entretien.js';
 import { enregistrerRapport } from './rapport.js';
+import { enregistrerReglesRapport } from './regles.js';
+import { autoriserSiDossier, enregistrerDossier } from './dossier-export.js';
+import { autoriserSiExportRevue, enregistrerExportRevue } from './revue-export.js';
+import { enregistrerRevueProposee, propositionsRevueSchema } from './revue-preparee.js';
+import { ACTIONS_REGLE, FICHES_REGLES } from './schema.js';
 import { contenuRapportSchema } from './rapport-word.js';
 import {
   autoriserSiRestitution,
@@ -71,6 +76,8 @@ registerTool({
   scope: 'instance',
   handler: async ({ tx }, { tool_name, input }) =>
     (await autoriserSiRestitution(tx, tool_name, input)) ??
+    (await autoriserSiExportRevue(tx, tool_name, input)) ??
+    (await autoriserSiDossier(tx, tool_name, input)) ??
     (await autoriserSiEntretien(tx, tool_name, input)) ??
     autoriserOutil(tx, tool_name, input),
 });
@@ -92,6 +99,76 @@ registerTool({
     });
     // Claude en tient compte dans sa réponse : le lien Google Doc, ou pourquoi il n'y en a pas.
     return { ok: true, drive };
+  },
+});
+
+// Règles de rédaction : Claude déclare ce qu'il a changé dans les fiches du second cerveau (ou le
+// résultat d'une annulation) ; l'OS le garde au journal.
+registerTool({
+  name: 'enregistrer_regles_rapport',
+  description:
+    "Déclare au journal de l'OS les changements que tu viens de faire dans les fiches de règles de rédaction du second cerveau (rapport, support d'ouverture, analyse de la revue ou règles communes) (une consigne de style générique par changement, sans nom d'entreprise), ou le résultat d'une annulation de règle demandée par le pilote.",
+  input: z.object({
+    projetId: z.uuid(),
+    changements: z
+      .array(
+        z.object({
+          fiche: z.enum(FICHES_REGLES),
+          action: z.enum(
+            ACTIONS_REGLE.filter((a) => a !== 'annulée') as [
+              'ajoutée',
+              'durcie',
+              'modifiée',
+              'signalée',
+            ],
+          ),
+          libelle: z.string().trim().min(1).max(200),
+          avant: z.string().max(2000).nullable(),
+          apres: z.string().max(2000).nullable(),
+        }),
+      )
+      .max(20)
+      .optional(),
+    annulation: z
+      .object({
+        journalId: z.uuid(),
+        effectuee: z.boolean(),
+        motif: z.string().trim().max(500).optional(),
+      })
+      .optional(),
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, changements, annulation }) => {
+    await enregistrerReglesRapport(tx, projetId, {
+      ...(changements ? { changements } : {}),
+      ...(annulation
+        ? {
+            annulation: {
+              journalId: annulation.journalId,
+              effectuee: annulation.effectuee,
+              ...(annulation.motif ? { motif: annulation.motif } : {}),
+            },
+          }
+        : {}),
+    });
+    return { ok: true };
+  },
+});
+
+// Préparation de la revue : Claude propose les textes des préconisations, du plan d'action et de la
+// conclusion ; l'OS les fusionne sans toucher aux choix ni aux textes du pilote.
+registerTool({
+  name: 'enregistrer_revue_proposee',
+  description:
+    "Enregistre tes propositions de textes pour la revue d'un projet de diagnostic (préconisations, plan d'action sur trois horizons, conclusion). Tu ne fixes jamais les choix ni les textes du pilote : l'OS les conserve. Une seule fois, à la fin de ton travail.",
+  input: z.object({
+    projetId: z.uuid(),
+    propositions: propositionsRevueSchema,
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, propositions }) => {
+    await enregistrerRevueProposee(tx, projetId, propositions);
+    return { ok: true };
   },
 });
 
@@ -124,6 +201,38 @@ registerTool({
   handler: async ({ tx }, { projetId, lien, diapositives }) => {
     if (diapositives) await enregistrerDiapositivesRestitution(tx, projetId, diapositives);
     else await enregistrerRestitution(tx, projetId, lien!);
+    return { ok: true };
+  },
+});
+
+// Outil de l'export de la revue : Claude rend le lien de l'artifact créé pour Claude Chat.
+registerTool({
+  name: 'enregistrer_revue_export',
+  description:
+    "Enregistre le lien claude.ai de l'artifact qui contient la revue validée d'un projet de diagnostic, dès sa création, pour que le pilote le rouvre dans Claude Chat.",
+  input: z.object({
+    projetId: z.uuid(),
+    lien: z.string().regex(LIEN_ARTIFACT, 'Lien d’artifact claude.ai attendu'),
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, lien }) => {
+    await enregistrerExportRevue(tx, projetId, lien);
+    return { ok: true };
+  },
+});
+
+// Outil du dossier de travail : Claude rend le lien de l'artifact créé pour rédiger le rapport.
+registerTool({
+  name: 'enregistrer_dossier_rapport',
+  description:
+    "Enregistre le lien claude.ai de l'artifact qui réunit le dossier de travail du rapport d'un projet de diagnostic (résultat, contexte, revue, consigne de départ), dès sa création, pour que le pilote le rouvre dans Claude Chat.",
+  input: z.object({
+    projetId: z.uuid(),
+    lien: z.string().regex(LIEN_ARTIFACT, 'Lien d’artifact claude.ai attendu'),
+  }),
+  scope: 'instance',
+  handler: async ({ tx }, { projetId, lien }) => {
+    await enregistrerDossier(tx, projetId, lien);
     return { ok: true };
   },
 });

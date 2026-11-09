@@ -234,4 +234,178 @@ describe('Routes Gestion — trésorerie, réglages et TVA', () => {
       400,
     );
   });
+
+  describe('rémunération', () => {
+    const sortiesSalaire = (p: Projection) =>
+      p.scenarios[1]!.periodes.flatMap((x) => x.mouvements).filter((m) =>
+        m.ref.startsWith('remuneration:'),
+      );
+    const salaire = {
+      actif: true,
+      base: 'brut',
+      montantCents: 400_000,
+      tauxSalarial: 20,
+      tauxPatronal: 40,
+      periodicite: 'mensuelle',
+    };
+
+    it('sans réglage, aucune rémunération n’est projetée', async () => {
+      await reglages({});
+      const p = await projection('horizon=6');
+      expect(p.remuneration).toBeNull();
+      expect(sortiesSalaire(p)).toHaveLength(0);
+    });
+
+    it('projette le net et les cotisations, et se retire avec remuneration=0', async () => {
+      await reglages({ remuneration: salaire });
+      const p = await projection('horizon=6');
+      expect(p.remuneration).toMatchObject({
+        brutCents: 400_000,
+        netCents: 320_000,
+        urssafCents: 240_000,
+        coutCents: 560_000,
+        inclus: true,
+      });
+      const m = sortiesSalaire(p);
+      expect(
+        m
+          .filter((x) => x.ref.startsWith('remuneration:net'))
+          .every((x) => x.montantCents === 320_000),
+      ).toBe(true);
+      expect(
+        m.some((x) => x.ref.startsWith('remuneration:urssaf') && x.montantCents === 240_000),
+      ).toBe(true);
+      // Les trois scénarios portent la même rémunération.
+      expect(
+        p.scenarios[0]!.periodes.flatMap((x) => x.mouvements).some((x) =>
+          x.ref.startsWith('remuneration:'),
+        ),
+      ).toBe(true);
+      const sans = await projection('horizon=6&remuneration=0');
+      expect(sortiesSalaire(sans)).toHaveLength(0);
+      expect(sans.remuneration).toMatchObject({ inclus: false });
+      await reglages({});
+    });
+
+    it('refuse une rémunération incohérente', async () => {
+      expect((await reglages({ remuneration: { ...salaire, tauxSalarial: 120 } })).statusCode).toBe(
+        400,
+      );
+      expect((await reglages({ remuneration: { ...salaire, montantCents: 0 } })).statusCode).toBe(
+        400,
+      );
+      expect((await reglages({ remuneration: { ...salaire, base: 'autre' } })).statusCode).toBe(
+        400,
+      );
+    });
+  });
+
+  describe('pipe', () => {
+    let idOk = '';
+    let idSansDate = '';
+    const pipeDe = (p: Projection, scenario: number) =>
+      p.scenarios[scenario]!.periodes.flatMap((x) => x.mouvements).filter((m) =>
+        m.ref.startsWith('pipe:'),
+      );
+    const somme = (m: { montantCents: number }[]) => m.reduce((t2, x) => t2 + x.montantCents, 0);
+
+    beforeAll(async () => {
+      const inst = (
+        await t.owner.pool.query<{ id: string }>(
+          "select id from instances where slug = 'tre-propre'",
+        )
+      ).rows[0]!.id;
+      const aujourdhui = (await projection()).aujourdhui;
+      const insere = async (titre: string, signature: string | null) =>
+        (
+          await t.owner.pool.query<{ id: string }>(
+            `insert into opportunites (instance_id, titre, etape, montant, probabilite_manuelle, signature_estimee)
+             values ($1, $2, 'proposition', 10000, 60, $3) returning id`,
+            [inst, titre, signature],
+          )
+        ).rows[0]!.id;
+      idOk = await insere('Affaire pipe fictive', ajouterMois(aujourdhui, 2));
+      idSansDate = await insere('Affaire sans date fictive', null);
+    });
+
+    it('le central inclut le pipe pondéré, l’ambitieux à 100 %, le sécurisé rien', async () => {
+      const p = await projection('horizon=12');
+      expect(pipeDe(p, 0)).toHaveLength(0);
+      expect(somme(pipeDe(p, 1))).toBe(600_000);
+      expect(somme(pipeDe(p, 2))).toBe(1_000_000);
+    });
+
+    it('liste les affaires avec leur statut et avertit de celles qui sont écartées', async () => {
+      const p = (await projection('horizon=12')) as Projection & {
+        pipe: { affaires: { id: string; statut: string }[]; decalageMois: number };
+      };
+      expect(p.pipe.affaires.find((a) => a.id === idOk)?.statut).toBe('comptee');
+      expect(p.pipe.affaires.find((a) => a.id === idSansDate)?.statut).toBe('sans_date');
+      expect(p.avertissements.join(' ')).toContain('pipe');
+    });
+
+    it('décale l’encaissement avec decalage, et le retire avec exclus', async () => {
+      const premiere = async (q: string) => pipeDe(await projection(q), 1)[0]?.date;
+      const d0 = (await premiere('horizon=12'))!;
+      const d3 = (await premiere('horizon=12&decalage=3'))!;
+      const jours = (new Date(d3).getTime() - new Date(d0).getTime()) / 86_400_000;
+      expect(jours).toBeGreaterThan(80);
+      expect(jours).toBeLessThan(100);
+      expect(await premiere(`horizon=12&exclus=${idOk}`)).toBeUndefined();
+    });
+
+    it('pipe=0 retire le pipe de tous les scénarios', async () => {
+      expect(pipeDe(await projection('horizon=12&pipe=0'), 1)).toHaveLength(0);
+      expect(pipeDe(await projection('horizon=12&pipe=0'), 2)).toHaveLength(0);
+    });
+
+    it('chaque scénario suit son propre réglage de pipe, enregistré avec les réglages', async () => {
+      const r = await reglages({
+        scenarios: {
+          securise: { certitudes: ['certaine'], pipe: 'total' },
+          central: { certitudes: ['certaine', 'probable'], pipe: 'total' },
+          ambitieux: { certitudes: ['certaine'], pipe: 'pondere' },
+        },
+      });
+      expect(r.statusCode).toBe(200);
+      const p = await projection('horizon=12');
+      expect(somme(pipeDe(p, 0))).toBe(1_000_000);
+      expect(somme(pipeDe(p, 1))).toBe(1_000_000);
+      expect(somme(pipeDe(p, 2))).toBe(600_000);
+      expect(p.reglages.scenarios.ambitieux.pipe).toBe('pondere');
+      await reglages({});
+      expect(somme(pipeDe(await projection('horizon=12'), 1))).toBe(600_000);
+    });
+
+    it('hyp règle montant et probabilité d’une affaire, sans rien écrire en base', async () => {
+      const p = (await projection(`horizon=12&hyp=${idOk}:20000:25`)) as Projection & {
+        pipe: { affaires: { id: string; surcharge: boolean }[] };
+      };
+      expect(somme(pipeDe(p, 1))).toBe(500_000);
+      expect(p.pipe.affaires.find((a) => a.id === idOk)?.surcharge).toBe(true);
+      expect(somme(pipeDe(await projection('horizon=12'), 1))).toBe(600_000);
+      const [l] = (
+        await t.owner.pool.query<{ montant: number }>(
+          'select montant from opportunites where id = $1',
+          [idOk],
+        )
+      ).rows;
+      expect(l!.montant).toBe(10_000);
+    });
+
+    it('refuse une hypothèse mal formée ou une probabilité au-delà de 100', async () => {
+      const code = async (q: string) =>
+        (await app.inject({ method: 'GET', url: `${base}/tresorerie?${q}` })).statusCode;
+      expect(await code('horizon=3&hyp=pas-un-uuid:1:1')).toBe(400);
+      expect(await code(`horizon=3&hyp=${idOk}:100:150`)).toBe(400);
+      expect(await code(`horizon=3&hyp=${idOk}::40`)).toBe(200);
+    });
+
+    it('refuse un décalage hors limites ou une liste d’exclus mal formée', async () => {
+      const code = async (q: string) =>
+        (await app.inject({ method: 'GET', url: `${base}/tresorerie?${q}` })).statusCode;
+      expect(await code('horizon=3&decalage=9')).toBe(400);
+      expect(await code('horizon=3&exclus=pas-un-uuid')).toBe(400);
+    });
+  });
 });

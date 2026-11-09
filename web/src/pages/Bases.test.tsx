@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EtatBase, ImportBase } from '../api.js';
 import { Bases } from './Bases.js';
@@ -11,6 +11,9 @@ let enrichissement: Record<string, unknown> | null = null;
 let mandats: unknown[] = [];
 let rapprochement: unknown = null;
 let reponses: unknown[] = [];
+
+// La liste complète est repliée par défaut : les tests qui la lisent l'ouvrent d'avance.
+beforeEach(() => window.localStorage.setItem('base-liste-ouverte', '1'));
 
 const apercu: ImportBase = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -60,6 +63,34 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
+  if (url.includes('/base/listes/') && url.endsWith('/fiches')) return json({ ajoutees: 1 });
+  if (method === 'POST' && url.endsWith('/base/tags')) return json({ ok: true });
+  if (url.endsWith('/entreprise/candidats'))
+    return json({
+      candidats: [
+        {
+          siren: '123456789',
+          nom: 'ATELIER FICTIF',
+          naf: null,
+          categorie: null,
+          effectif: null,
+          adresse: null,
+          ville: 'CHASSIEU',
+          active: true,
+        },
+      ],
+    });
+  if (method === 'POST' && url.endsWith('/entreprise'))
+    return json({
+      entreprise: {
+        id: 'e1',
+        siren: '123456789',
+        nom: 'ATELIER FICTIF',
+        finances: [],
+        dirigeants: [],
+      },
+      rattachees: 1,
+    });
   if (method === 'POST' && url.endsWith('/base/imports')) return json([apercu]);
   if (method === 'POST' && url.endsWith('/enrichir')) return json({ zone: 'prospectable' });
   if (method === 'POST' && url.endsWith('/integrer'))
@@ -70,6 +101,45 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.endsWith('/suggestions') && url.includes('/base/enrichissement/')) return json([]);
   if (method === 'GET' && url.includes('/base/enrichissement/'))
     return json({ tache: { id: 't', etat: 'terminee', jetons: 0, erreur: null }, lignes: [] });
+  if (url.includes('/base/enrichissement-sessions/') && url.endsWith('/contacts'))
+    return json([
+      {
+        entreprise: 'Atelier Fictif',
+        prenom: 'Léa',
+        nom: 'Martin',
+        fonction: 'Dirigeante',
+        statut: null,
+      },
+    ]);
+  if (url.includes('/base/enrichissement-sessions/') && (method === 'PATCH' || method === 'DELETE'))
+    return json({ ok: true });
+  if (url.endsWith('/base/enrichissement-sessions'))
+    return json([
+      {
+        id: 's1',
+        date: '2026-11-03T08:00:00Z',
+        nature: 'recherche',
+        libelle: 'Recherche de nouveaux prospects',
+        mode: 'automatique',
+        etat: 'terminee',
+        traites: 12,
+        ajoutees: 9,
+        detail: null,
+        commentaire: null,
+      },
+      {
+        id: 's2',
+        date: '2026-11-02T08:00:00Z',
+        nature: 'enrichissement',
+        libelle: 'Complément de fiches',
+        mode: 'manuel',
+        etat: 'erreur',
+        traites: 3,
+        ajoutees: 0,
+        detail: 'Quota atteint',
+        commentaire: null,
+      },
+    ]);
   if (url.endsWith('/base/mandats')) return json(mandats);
   if (url.endsWith('/base/rapprochement-mail'))
     return method === 'POST' ? json(rapprochement, 202) : json(rapprochement);
@@ -90,6 +160,8 @@ const videEtat = (): EtatBase => ({
   total: 0,
   compteurs: { aEnrichir: 0, prospectable: 0 },
   provenances: [],
+  listes: [],
+  tags: [],
   imports: [],
 });
 const ouvrirImport = () => fireEvent.click(screen.getByText('+ Importer une liste'));
@@ -241,6 +313,8 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
       total: 1,
       compteurs: { aEnrichir: 4, prospectable: 1 },
       provenances: ['Sharp'],
+      listes: [],
+      tags: [],
       imports: [],
     };
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
@@ -252,10 +326,43 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
 
   const lectures = () => calls.filter((c) => c.method === 'GET').map((c) => c.url);
 
+  it('sépare les parcours d’ajout des outils de la liste et ouvre la base complète', async () => {
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    expect(screen.getByRole('tab', { name: /Base complète/ }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(
+      within(screen.getByRole('region', { name: 'Trouver des prospects' })).getByRole('button', {
+        name: 'Rechercher de nouveaux prospects',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByRole('region', { name: 'Importer des contacts' })).getByRole('button', {
+        name: '+ Importer une liste',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByRole('region', { name: 'Fiches de la base' })).getByLabelText(
+        'Rechercher dans la base',
+      ),
+    ).toBeTruthy();
+    const menu = screen.getByText('Gérer la base').closest('details');
+    expect(menu?.open).toBe(false);
+    fireEvent.click(screen.getByText('Gérer la base'));
+    expect(menu?.open).toBe(true);
+    expect(within(menu!).getByText('Mettre à jour depuis les mails')).toBeTruthy();
+    expect(within(menu!).getByText('Exporter en CSV')).toBeTruthy();
+  });
+
   it('montre le dernier contact et les alertes de chaque fiche', async () => {
     render(<Bases slug="simatis" />);
     expect(await screen.findByText('Atelier Fictif')).toBeTruthy();
-    expect(screen.getByText('Contacté')).toBeTruthy();
+    expect(
+      within(
+        within(screen.getByRole('region', { name: 'Fiches de la base' })).getByRole('table'),
+      ).getByText('Contacté'),
+    ).toBeTruthy();
     expect(screen.getByText(/Contacté le 15\/09\/2026/)).toBeTruthy();
     expect(screen.getByText(/2 contacts · Mandat A/)).toBeTruthy();
   });
@@ -322,6 +429,47 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     });
   });
 
+  it('bascule entre les contacts et les entreprises de la base', async () => {
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    fireEvent.click(screen.getByRole('tab', { name: 'Entreprises' }));
+    expect(await screen.findByLabelText('Rechercher une entreprise de la base')).toBeTruthy();
+    expect(calls.some((c) => c.url.includes('/base/entreprises'))).toBe(true);
+    fireEvent.click(screen.getByRole('tab', { name: 'Contacts' }));
+    expect(await screen.findByLabelText('Rechercher dans la base')).toBeTruthy();
+  });
+
+  it('ouvre le réglage de l’alerte quotidienne du BODACC depuis le menu de la base', async () => {
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    fireEvent.click(screen.getByRole('button', { name: 'Alerte quotidienne du BODACC' }));
+    expect(screen.getByRole('dialog', { name: 'Alerte quotidienne du BODACC' })).toBeTruthy();
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith('/base/signaux/routine'))).toBe(true),
+    );
+  });
+
+  it('ouvre la recherche d’entreprises depuis le parcours de recherche', async () => {
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Chercher des entreprises' }));
+    expect(screen.getByRole('dialog', { name: 'Chercher des entreprises' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Chercher dans l’annuaire' })).toBeTruthy();
+  });
+
+  it('rattache la fiche à l’annuaire sans fermer la fiche', async () => {
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByText('Léa MARTIN'));
+    fireEvent.click(screen.getByRole('button', { name: /Rattacher à l’annuaire/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Choisir' }));
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/entreprise'));
+      expect(post?.url).toContain('/base/fiches/22222222');
+      expect(post?.body).toEqual({ siren: '123456789' });
+    });
+    expect(await screen.findByText('1 contact rattaché.')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Léa MARTIN' })).toBeTruthy();
+  });
+
   it('marque une opposition depuis la fiche', async () => {
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByText('Léa MARTIN'));
@@ -346,17 +494,63 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     });
   });
 
-  it('propose d’enrichir avec l’IA seulement quand le serveur a une clé OpenAI', async () => {
+  it('filtre par liste et par étiquette', async () => {
+    etat = {
+      ...etat,
+      listes: [{ id: 'l1', nom: 'À appeler', type: 'contacts', mandat: null, nombre: 3 }],
+      tags: ['salon'],
+    };
+    render(<Bases slug="simatis" />);
+    await screen.findByText('Atelier Fictif');
+    fireEvent.change(screen.getByLabelText('Filtrer par liste'), { target: { value: 'l1' } });
+    await waitFor(() => expect(lectures().some((u) => u.includes('liste=l1'))).toBe(true));
+    fireEvent.change(screen.getByLabelText('Filtrer par étiquette'), {
+      target: { value: 'salon' },
+    });
+    await waitFor(() => expect(lectures().some((u) => u.includes('tag=salon'))).toBe(true));
+    expect(screen.getByRole('button', { name: 'Exporter pour Waalaxy' })).toBeTruthy();
+  });
+
+  it('ajoute la sélection à une liste et l’étiquette', async () => {
+    etat = {
+      ...etat,
+      listes: [{ id: 'l1', nom: 'À appeler', type: 'contacts', mandat: null, nombre: 3 }],
+    };
+    vi.spyOn(window, 'prompt').mockReturnValue('Salon 2026');
+    render(<Bases slug="simatis" />);
+    fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
+    fireEvent.change(screen.getByLabelText('Ajouter la sélection à une liste'), {
+      target: { value: 'l1' },
+    });
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.endsWith('/base/listes/l1/fiches'));
+      expect(post?.method).toBe('POST');
+      expect(post?.body).toEqual({ ids: ['22222222-2222-4222-8222-222222222222'] });
+    });
+    expect(await screen.findByText('1 contact ajouté à la liste.')).toBeTruthy();
+    // La liste est relue après l'ajout : la sélection repart de zéro.
+    fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
+    fireEvent.click(screen.getByRole('button', { name: 'Étiqueter…' }));
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.endsWith('/base/tags'));
+      expect(post?.body).toEqual({
+        ids: ['22222222-2222-4222-8222-222222222222'],
+        ajouter: ['Salon 2026'],
+      });
+    });
+  });
+
+  it('propose d’enrichir avec l’IA quand Codex est disponible', async () => {
     const { unmount } = render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
-    expect(screen.queryByText("Enrichir avec l'IA")).toBeNull();
+    expect(screen.queryByText('Rechercher avec Codex')).toBeNull();
     unmount();
     cleanup();
     enrichissement = { disponible: true, lotMax: 5, tacheEnCours: null };
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByLabelText('Sélectionner Léa MARTIN'));
-    fireEvent.click(await screen.findByText("Enrichir avec l'IA"));
-    expect(await screen.findByLabelText('Fonctions recherchées')).toBeTruthy();
+    fireEvent.click(await screen.findByText('Rechercher avec Codex'));
+    expect(await screen.findByText('Lancer sur 1 fiche')).toBeTruthy();
   });
 
   it('permet de suivre un enrichissement resté en cours', async () => {
@@ -372,6 +566,77 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     render(<Bases slug="simatis" />);
     fireEvent.click(await screen.findByText("Actualiser l'historique"));
     expect(await screen.findByText(/1 adresses vérifiées dans les CRM/)).toBeTruthy();
+  });
+
+  it('affiche les dernières sessions, automatiques et manuelles', async () => {
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    expect(await within(panneau).findByText('Automatique')).toBeTruthy();
+    expect(within(panneau).getByText('Manuel')).toBeTruthy();
+    expect(within(panneau).getByText('Quota atteint')).toBeTruthy();
+  });
+
+  it('replie la liste des sessions et retient le choix', async () => {
+    window.localStorage.removeItem('sessions-enrichissement-ouvertes');
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    expect(await within(panneau).findByText('Quota atteint')).toBeTruthy();
+    fireEvent.click(within(panneau).getByRole('button', { name: 'Replier la liste' }));
+    expect(within(panneau).queryByText('Quota atteint')).toBeNull();
+    expect(window.localStorage.getItem('sessions-enrichissement-ouvertes')).toBe('0');
+  });
+
+  it('montre les contacts d’une session et enregistre un commentaire', async () => {
+    window.localStorage.removeItem('sessions-enrichissement-ouvertes');
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    const boutons = await within(panneau).findAllByTitle('Voir les contacts de cette session');
+    fireEvent.click(boutons[0]!);
+    expect(await within(panneau).findByText('Atelier Fictif')).toBeTruthy();
+    fireEvent.change(within(panneau).getByLabelText('Commentaire'), {
+      target: { value: 'Lancée par erreur' },
+    });
+    fireEvent.click(within(panneau).getByRole('button', { name: 'Enregistrer le commentaire' }));
+    await waitFor(() => {
+      const patch = calls.find(
+        (c) => c.method === 'PATCH' && c.url.includes('enrichissement-sessions'),
+      );
+      expect(patch?.url).toContain('/enrichissement-sessions/recherche/s1');
+      expect(patch?.body).toEqual({ commentaire: 'Lancée par erreur' });
+    });
+  });
+
+  it('supprime une session après confirmation', async () => {
+    window.localStorage.removeItem('sessions-enrichissement-ouvertes');
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    fireEvent.click(
+      (await within(panneau).findAllByRole('button', { name: 'Supprimer la session' }))[1]!,
+    );
+    await waitFor(() => expect(within(panneau).queryByText('Quota atteint')).toBeNull());
+    expect(
+      calls.some(
+        (c) =>
+          c.method === 'DELETE' && c.url.endsWith('/enrichissement-sessions/enrichissement/s2'),
+      ),
+    ).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it('replie la liste des contacts par défaut et la rouvre avec le bouton', async () => {
+    window.localStorage.removeItem('base-liste-ouverte');
+    render(<Bases slug="simatis" />);
+    const bouton = await screen.findByRole('button', { name: 'Afficher la liste des contacts' });
+    expect(screen.queryByText('Atelier Fictif')).toBeNull();
+    fireEvent.click(bouton);
+    expect(await screen.findByText('Atelier Fictif')).toBeTruthy();
+    expect(window.localStorage.getItem('base-liste-ouverte')).toBe('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Réduire la liste des contacts' }));
+    expect(screen.queryByText('Atelier Fictif')).toBeNull();
   });
 });
 
@@ -397,6 +662,8 @@ describe('base vivante : boîte mail et réponses', () => {
       total: 0,
       compteurs: { aEnrichir: 0, prospectable: 0 },
       provenances: [],
+      listes: [],
+      tags: [],
       imports: [],
     };
     vi.stubGlobal('fetch', vi.fn(fakeFetch));

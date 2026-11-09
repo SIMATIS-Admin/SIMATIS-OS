@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   creerProjetDiag,
+  cadrerRapportDiag,
   demandeRapportDiag,
   demandeRestitutionDiag,
   enregistrerCapitalisationDiag,
@@ -13,6 +14,19 @@ import {
   importerEntretienDiag,
   envoyerRapportDriveDiag,
   importerRapportDiag,
+  annulerRegleDiag,
+  capitaliserAnalyseDiag,
+  capitaliserRapportDiag,
+  capitaliserDeckDiag,
+  capitaliserSupportDiag,
+  preparerRevueDiag,
+  exporterRevueDiag,
+  preparerDossierRapportDiag,
+  journalReglesDiag,
+  majReglagesDiagnostic,
+  marquerDeckFinalDiag,
+  marquerRapportFinal,
+  reglagesDiagnostic,
   demandeSupportDiag,
   envoyerMessageDiag,
   fetchProjetsDiag,
@@ -23,6 +37,7 @@ import {
   type ChatEtape,
   type Dimensions,
   type Proposition,
+  type EntreeReglesDiag,
   type ProjetDiag,
   type ProjetDiagPatch,
 } from '../api.js';
@@ -306,6 +321,7 @@ export function ProjetVue({
   onRetour: () => void;
   onErreur: (m: string) => void;
 }) {
+  const [chatE4, setChatE4] = useState<'ouvert' | 'reduit' | 'ferme'>('reduit');
   // Pendant que Claude répond, le projet est relu toutes les cinq secondes.
   useEffect(() => {
     if (
@@ -412,13 +428,23 @@ export function ProjetVue({
               onErreur={onErreur}
             />
           )}
-          {projet.etape === 3 && <Revue projet={projet} onSauver={sauver} />}
-          {projet.etape === 4 && (
-            <Rapport slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
+          {projet.etape === 3 && (
+            <Revue
+              slug={slug}
+              projet={projet}
+              onSauver={sauver}
+              onChange={onChange}
+              onErreur={onErreur}
+            />
           )}
-          {/* Étape 4 : la conversation modifie l'historique du rapport, elle se lit sous lui. */}
           {projet.etape === 4 && (
-            <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
+            <Rapport
+              slug={slug}
+              projet={projet}
+              onChange={onChange}
+              onErreur={onErreur}
+              onOuvrirChat={() => setChatE4('ouvert')}
+            />
           )}
           {projet.etape === 5 && (
             <RestitutionDeck
@@ -444,6 +470,46 @@ export function ProjetVue({
           <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
         )}
       </div>
+      {/* Étape 4 : le chat est une fenêtre devant la page, qu'on réduit, ferme et rouvre. */}
+      {projet.etape === 4 && (
+        <>
+          {chatE4 === 'ferme' && (
+            <button className="btn go diag-flottant-ouvrir" onClick={() => setChatE4('ouvert')}>
+              Ouvrir Claude
+            </button>
+          )}
+          <div className={`diag-flottant ${chatE4}`}>
+            <Assistant
+              slug={slug}
+              projet={projet}
+              onChange={onChange}
+              onErreur={onErreur}
+              controles={
+                <>
+                  <button
+                    className="btn"
+                    aria-label={
+                      chatE4 === 'reduit'
+                        ? 'Agrandir la fenêtre Claude'
+                        : 'Réduire la fenêtre Claude'
+                    }
+                    onClick={() => setChatE4(chatE4 === 'reduit' ? 'ouvert' : 'reduit')}
+                  >
+                    {chatE4 === 'reduit' ? '▢' : '−'}
+                  </button>
+                  <button
+                    className="btn"
+                    aria-label="Fermer la fenêtre Claude"
+                    onClick={() => setChatE4('ferme')}
+                  >
+                    ×
+                  </button>
+                </>
+              }
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -538,6 +604,14 @@ const lireBase64 = (fichier: File) =>
   });
 
 // Support d'ouverture : formulaire lu par Claude, puis le deck du projet sur claude.ai.
+const NOMS_FICHES_REGLES = {
+  rapport: 'règles du rapport',
+  communes: 'règles communes',
+  support: 'règles du support',
+  analyse: 'règles d’analyse',
+  restitution: 'règles du deck de restitution',
+} as const;
+
 function Support({
   slug,
   projet,
@@ -560,6 +634,29 @@ function Support({
 
   const statut = projet.supportStatut;
   const occupe = projet.statutChat !== 'repos' || statut === 'preparation';
+  // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
+  const [relireSupports, setRelireSupports] = useState(true);
+  useEffect(() => {
+    void Promise.resolve(reglagesDiagnostic(slug))
+      .then((r) => r && setRelireSupports(r.relireSupports))
+      .catch(() => undefined);
+  }, [slug]);
+  const changerRelire = async (valeur: boolean) => {
+    try {
+      setRelireSupports(
+        (await majReglagesDiagnostic(slug, { relireSupports: valeur })).relireSupports,
+      );
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const capitaliser = async () => {
+    try {
+      onChange(await capitaliserSupportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const demander = async (action: 'preparer' | 'final' | 'rouvrir') => {
     try {
       onChange(await demandeSupportDiag(slug, projet.id, action));
@@ -671,7 +768,20 @@ function Support({
               Modifier le support
             </button>
           )}
+          {statut === 'final' && (
+            <button className="btn" disabled={occupe} onClick={() => void capitaliser()}>
+              Capitaliser ce support
+            </button>
+          )}
         </div>
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={relireSupports}
+            onChange={(e) => void changerRelire(e.target.checked)}
+          />{' '}
+          Relire les deux derniers supports finaux avant de préparer
+        </label>
         {statut === 'pret' && (
           <div className="small muted">
             Corrigez le deck directement sur claude.ai, ou demandez à Claude dans l’assistant.
@@ -789,7 +899,41 @@ function Resultat({
   );
 }
 
-function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
+function Revue({
+  slug,
+  projet,
+  onSauver,
+  onChange,
+  onErreur,
+}: {
+  slug: string;
+  projet: ProjetDiag;
+  onSauver: Sauver;
+  onChange: (p: ProjetDiag) => void;
+  onErreur: (m: string) => void;
+}) {
+  const preparer = async () => {
+    try {
+      onChange(await preparerRevueDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const exporter = async () => {
+    try {
+      onChange(await exporterRevueDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const exportEnCours = projet.revueExportStatut === 'en_cours';
+  const capitaliser = async () => {
+    try {
+      onChange(await capitaliserAnalyseDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   if (!projet.dims) {
     return (
       <div className="panel empty">
@@ -823,6 +967,25 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
           })}
         </div>
       </div>
+      {projet.revue?.statut !== 'validée' && (
+        <div className="panel">
+          <div className="panel-b stack">
+            <div className="row">
+              <button
+                className="btn go"
+                disabled={projet.statutChat !== 'repos'}
+                onClick={() => void preparer()}
+              >
+                Préparer la revue avec Claude
+              </button>
+            </div>
+            <p className="small muted" style={{ margin: 0 }}>
+              Claude propose des textes d’après la bibliothèque, vos revues validées et les règles
+              apprises ; vos choix et vos textes ne sont jamais modifiés.
+            </p>
+          </div>
+        </div>
+      )}
       {projet.revue ? (
         <>
           <div className="row">
@@ -833,12 +996,43 @@ function Revue({ projet, onSauver }: { projet: ProjetDiag; onSauver: Sauver }) {
             >
               Valider la revue
             </button>
+            {projet.revue.statut === 'validée' && (
+              <button
+                className="btn"
+                disabled={projet.statutChat !== 'repos'}
+                onClick={() => void capitaliser()}
+              >
+                Capitaliser cette analyse
+              </button>
+            )}
+            {projet.revue.statut === 'validée' && !exportEnCours && projet.revueExportLien && (
+              <a className="btn" href={projet.revueExportLien} target="_blank" rel="noreferrer">
+                Ouvrir la revue pour Claude Chat
+              </a>
+            )}
+            {projet.revue.statut === 'validée' && (
+              <button
+                className="btn"
+                disabled={projet.statutChat !== 'repos' || exportEnCours}
+                onClick={() => void exporter()}
+              >
+                {projet.revueExportLien
+                  ? 'Mettre à jour l’export'
+                  : 'Exporter la revue pour Claude Chat'}
+              </button>
+            )}
           </div>
+          {exportEnCours && (
+            <p className="small muted" style={{ margin: 0 }}>
+              Claude crée l’artefact de la revue… La page se mettra à jour dès qu’il sera prêt.
+            </p>
+          )}
           <EditeurRevue revue={projet.revue} onChange={(revue) => void onSauver({ revue })} />
         </>
       ) : (
         <div className="panel empty">
-          Pas encore de formulaire de revue. Il se saisit ici, comme dans l’artefact.
+          Pas encore de formulaire de revue. Faites-le préparer par Claude ci-dessus, ou
+          saisissez-le ici comme dans l’artefact.
         </div>
       )}
     </div>
@@ -860,11 +1054,13 @@ function Rapport({
   projet,
   onChange,
   onErreur,
+  onOuvrirChat,
 }: {
   slug: string;
   projet: ProjetDiag;
   onChange: (p: ProjetDiag) => void;
   onErreur: (m: string) => void;
+  onOuvrirChat: () => void;
 }) {
   const enCours = projet.rapportLienStatut === 'en_cours';
   const raison = raisonRapport(projet);
@@ -912,9 +1108,90 @@ function Rapport({
       onErreur(messageErreur(err));
     }
   };
-  const docGoogle = /docs\.google\.com\/document\//.test(projet.rapportLien ?? '');
-  const precedents = projet.rapportLiens.slice(1);
-  const versionsPrecedentes = projet.rapportVersions.slice(0, -1).reverse();
+  const cadrer = async () => {
+    onOuvrirChat();
+    try {
+      onChange(await cadrerRapportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const preparerDossier = async () => {
+    try {
+      onChange(await preparerDossierRapportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const dossierEnCours = projet.dossierExportStatut === 'en_cours';
+  // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
+  const [relireFinaux, setRelireFinaux] = useState(true);
+  useEffect(() => {
+    void Promise.resolve(reglagesDiagnostic(slug))
+      .then((r) => r && setRelireFinaux(r.relireFinaux))
+      .catch(() => undefined);
+  }, [slug]);
+  const changerRelire = async (valeur: boolean) => {
+    try {
+      setRelireFinaux((await majReglagesDiagnostic(slug, { relireFinaux: valeur })).relireFinaux);
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  // Règles de rédaction apprises : rechargées quand Claude a fini de répondre (statut du chat).
+  const [journal, setJournal] = useState<EntreeReglesDiag[]>([]);
+  useEffect(() => {
+    void Promise.resolve(journalReglesDiag(slug))
+      .then((r) => Array.isArray(r) && setJournal(r))
+      .catch(() => undefined);
+  }, [slug, projet.statutChat]);
+  const capitaliser = async () => {
+    try {
+      onChange(await capitaliserRapportDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const annulerRegle = async (entree: string) => {
+    try {
+      onChange(await annulerRegleDiag(slug, projet.id, entree));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const marquerFinale = async (lien: string, finale: boolean) => {
+    try {
+      onChange(await marquerRapportFinal(slug, projet.id, lien, finale));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const estDoc = (lien: string) => /docs\.google\.com\/document\//.test(lien);
+  const versionsDrive = projet.rapportLiens.filter((r) => estDoc(r.lien));
+  const docGoogle = estDoc(projet.rapportLien ?? '');
+  // Une seule liste : le Google Doc et le Word d'une même version sur la même ligne.
+  const versions = [
+    ...projet.rapportLiens.map((r) => ({
+      cle: r.lien,
+      lien: r.lien,
+      le: r.le,
+      version: r.version,
+      doc: estDoc(r.lien),
+      finale: r.finale === true,
+      word: projet.rapportVersions.some((w) => w.version === r.version),
+    })),
+    ...projet.rapportVersions
+      .filter((w) => !projet.rapportLiens.some((r) => r.version === w.version))
+      .map((w) => ({
+        cle: `word-${w.version}`,
+        lien: null,
+        le: w.le,
+        version: w.version,
+        doc: false,
+        finale: false,
+        word: true,
+      })),
+  ].sort((x, y) => y.le.localeCompare(x.le) || (y.version ?? 0) - (x.version ?? 0));
   return (
     <div className="panel">
       <div className="panel-h">
@@ -931,40 +1208,35 @@ function Rapport({
           </div>
         )}
         <p className="small muted" style={{ margin: 0 }}>
-          Le rapport est enregistré ici, version par version. Discutez des modifications avec Claude
-          dans la conversation ci-dessous, puis produisez la nouvelle version. Si vous avez
-          retravaillé le Word de votre côté, importez-le : il remplace le Word affiché, et la
-          production suivante part de son numéro.
+          Le parcours : préparez le dossier pour Claude Chat, rédigez et retouchez le rapport dans
+          Claude Chat, puis importez ici le Word final. Il remplace le Word affiché et sert de base
+          à la restitution. Faire rédiger le rapport par l’OS (« Produire le rapport ») et le cadrer
+          avec Claude restent possibles dans « Plus d’actions ».
         </p>
+        {dossierEnCours && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Claude prépare le dossier de travail… La page se mettra à jour dès qu’il sera prêt.
+          </p>
+        )}
         {enCours && (
           <p className="small muted" style={{ margin: 0 }}>
             Claude rédige le rapport… La page se mettra à jour dès qu’il sera prêt.
           </p>
         )}
         <div className="diag-actions">
-          {!enCours && projet.rapportLien && (
-            <a className="btn go" href={projet.rapportLien} target="_blank" rel="noreferrer">
-              {docGoogle ? 'Ouvrir dans Google Docs' : 'Ouvrir le rapport'}
+          {!dossierEnCours && projet.dossierExportLien && (
+            <a className="btn go" href={projet.dossierExportLien} target="_blank" rel="noreferrer">
+              Ouvrir le dossier pour Claude Chat
             </a>
-          )}
-          {!enCours && docGoogle && (
-            <a className="btn" href={urlExportRapportDiag(slug, projet.id)}>
-              Exporter en .docx
-            </a>
-          )}
-          {!enCours && projet.aRapport && !docGoogle && (
-            <button className="btn" onClick={() => void envoyerSurDrive()}>
-              Envoyer sur Drive
-            </button>
           )}
           <button
-            className="btn go"
-            disabled={enCours || raison !== null}
-            onClick={() => void demander()}
+            className={`btn ${projet.dossierExportLien ? '' : 'go'}`}
+            disabled={enCours || dossierEnCours || raison !== null || projet.statutChat !== 'repos'}
+            onClick={() => void preparerDossier()}
           >
-            {projet.aRapport || projet.rapportLien
-              ? `Produire la version ${prochaine}`
-              : 'Produire le rapport'}
+            {projet.dossierExportLien
+              ? 'Mettre à jour le dossier'
+              : 'Préparer le dossier pour Claude Chat'}
           </button>
           <label className={`btn ${enCours ? 'off' : ''}`}>
             Importer ma version (.docx)
@@ -980,35 +1252,133 @@ function Rapport({
               }}
             />
           </label>
+          {!enCours && projet.rapportLien && (
+            <a className="btn" href={projet.rapportLien} target="_blank" rel="noreferrer">
+              {docGoogle ? 'Ouvrir dans Google Docs' : 'Ouvrir le rapport'}
+            </a>
+          )}
+          {!enCours && docGoogle && (
+            <a className="btn" href={urlExportRapportDiag(slug, projet.id)}>
+              Exporter en .docx
+            </a>
+          )}
+          {!enCours && projet.aRapport && !docGoogle && (
+            <button className="btn" onClick={() => void envoyerSurDrive()}>
+              Envoyer sur Drive
+            </button>
+          )}
+          <details className="diag-plus">
+            <summary className="btn">Plus d’actions</summary>
+            <div className="diag-plus-liste">
+              <button
+                disabled={enCours || raison !== null || projet.statutChat !== 'repos'}
+                onClick={() => void cadrer()}
+              >
+                Cadrer le rapport avec Claude
+              </button>
+              <button disabled={enCours || raison !== null} onClick={() => void demander()}>
+                {projet.aRapport || projet.rapportLien
+                  ? `Produire la version ${prochaine}`
+                  : 'Produire le rapport'}
+              </button>
+            </div>
+          </details>
         </div>
         {!enCours && raison && (
           <p className="small muted" style={{ margin: 0 }}>
             {raison}
           </p>
         )}
-        {versionsPrecedentes.length > 0 && (
-          <details>
-            <summary className="small">Versions précédentes ({versionsPrecedentes.length})</summary>
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={relireFinaux}
+            onChange={(e) => void changerRelire(e.target.checked)}
+          />{' '}
+          Relire les deux derniers rapports finaux avant de rédiger
+        </label>
+        {versions.length > 0 && (
+          <div className="stack">
+            <h3 style={{ margin: 0 }}>Versions du rapport</h3>
+            <span className="small muted">
+              Cochez la version finale : c’est elle qui servira de modèle pour rédiger les prochains
+              rapports.
+            </span>
             <ul className="small">
-              {versionsPrecedentes.map((v) => (
-                <li key={v.version}>
-                  <a href={urlRapportDiag(slug, projet.id, v.version)}>
-                    Version {v.version}, du {new Date(v.le).toLocaleDateString('fr-FR')}
-                  </a>
-                </li>
-              ))}
+              {versions.map((v) => {
+                const date = new Date(v.le).toLocaleDateString('fr-FR');
+                const titre = v.version ? `Version ${v.version}` : 'Rapport';
+                return (
+                  <li key={v.cle}>
+                    <label>
+                      {v.doc && v.lien && (
+                        <input
+                          type="checkbox"
+                          checked={v.finale}
+                          disabled={enCours}
+                          aria-label={`Version finale : ${v.version ? `version ${v.version}` : 'rapport'} du ${date}`}
+                          onChange={(e) => void marquerFinale(v.lien, e.target.checked)}
+                        />
+                      )}{' '}
+                      {v.lien ? (
+                        <a href={v.lien} target="_blank" rel="noreferrer">
+                          {titre} du {date}
+                        </a>
+                      ) : (
+                        <span>
+                          {titre} du {date}
+                        </span>
+                      )}
+                    </label>
+                    {v.finale && <span className="badge green"> Version finale</span>}
+                    {v.word && v.version && (
+                      <>
+                        {' · '}
+                        <a href={urlRapportDiag(slug, projet.id, v.version)}>Word</a>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
-          </details>
+          </div>
         )}
-        {precedents.length > 0 && (
+        {versionsDrive.some((r) => r.finale) && (
+          <div className="diag-actions">
+            <button
+              className="btn"
+              disabled={enCours || projet.statutChat !== 'repos'}
+              onClick={() => void capitaliser()}
+            >
+              Capitaliser cette version
+            </button>
+          </div>
+        )}
+        {journal.length > 0 && (
           <details>
-            <summary className="small">Rapports précédents ({precedents.length})</summary>
+            <summary className="small">Règles apprises ({journal.length})</summary>
             <ul className="small">
-              {precedents.map((r) => (
-                <li key={r.lien}>
-                  <a href={r.lien} target="_blank" rel="noreferrer">
-                    Rapport du {new Date(r.le).toLocaleDateString('fr-FR')}
-                  </a>
+              {journal.map((e) => (
+                <li key={e.id}>
+                  <span className="muted">
+                    {new Date(e.le).toLocaleDateString('fr-FR')} · {NOMS_FICHES_REGLES[e.fiche]} ·{' '}
+                    {e.action}
+                    {e.statut === 'annule' ? ' (annulée)' : ''} :{' '}
+                  </span>
+                  {e.libelle}
+                  {e.motifRefus && (
+                    <span className="muted"> — non annulée : {e.motifRefus}</span>
+                  )}{' '}
+                  {e.statut === 'actif' && ['ajoutée', 'durcie', 'modifiée'].includes(e.action) && (
+                    <button
+                      className="btn"
+                      disabled={projet.statutChat !== 'repos'}
+                      aria-label={`Annuler la règle : ${e.libelle}`}
+                      onClick={() => void annulerRegle(e.id)}
+                    >
+                      Annuler
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -1232,6 +1602,49 @@ function RestitutionDeck({
     }
   };
   const precedents = projet.restitutionLiens.slice(1);
+  const aDeckFinal = projet.restitutionLiens.some((l) => l.finale);
+  const occupe = projet.statutChat !== 'repos' || enCours;
+  // Réglage d'instance : actif par défaut, tant que le pilote ne l'a pas coupé.
+  const [relireRestitutions, setRelireRestitutions] = useState(true);
+  useEffect(() => {
+    void Promise.resolve(reglagesDiagnostic(slug))
+      .then((r) => r && setRelireRestitutions(r.relireRestitutions))
+      .catch(() => undefined);
+  }, [slug]);
+  const changerRelire = async (valeur: boolean) => {
+    try {
+      setRelireRestitutions(
+        (await majReglagesDiagnostic(slug, { relireRestitutions: valeur })).relireRestitutions,
+      );
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const marquerFinal = async (lien: string, finale: boolean) => {
+    try {
+      onChange(await marquerDeckFinalDiag(slug, projet.id, lien, finale));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const capitaliser = async () => {
+    try {
+      onChange(await capitaliserDeckDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const caseFinale = (r: { lien: string; le: string; finale?: boolean }, nom: string) => (
+    <label className="small">
+      <input
+        type="checkbox"
+        aria-label={`Version finale : ${nom}`}
+        checked={r.finale === true}
+        onChange={(e) => void marquerFinal(r.lien, e.target.checked)}
+      />{' '}
+      Version finale
+    </label>
+  );
   return (
     <div className="panel">
       <div className="panel-h">
@@ -1314,6 +1727,24 @@ function RestitutionDeck({
             {raison}
           </p>
         )}
+        {projet.restitutionLiens[0] && (
+          <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+            {caseFinale(projet.restitutionLiens[0], 'deck affiché')}
+            {aDeckFinal && (
+              <button className="btn" disabled={occupe} onClick={() => void capitaliser()}>
+                Capitaliser ce deck
+              </button>
+            )}
+          </div>
+        )}
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={relireRestitutions}
+            onChange={(e) => void changerRelire(e.target.checked)}
+          />{' '}
+          Relire les deux derniers decks finaux avant de produire
+        </label>
         {precedents.length > 0 && (
           <details>
             <summary className="small">Decks précédents ({precedents.length})</summary>
@@ -1322,7 +1753,8 @@ function RestitutionDeck({
                 <li key={r.lien}>
                   <a href={r.lien} target="_blank" rel="noreferrer">
                     Deck du {new Date(r.le).toLocaleDateString('fr-FR')}
-                  </a>
+                  </a>{' '}
+                  {caseFinale(r, `deck du ${new Date(r.le).toLocaleDateString('fr-FR')}`)}
                 </li>
               ))}
             </ul>
@@ -1675,11 +2107,13 @@ function Assistant({
   projet,
   onChange,
   onErreur,
+  controles,
 }: {
   slug: string;
   projet: ProjetDiag;
   onChange: (p: ProjetDiag) => void;
   onErreur: (m: string) => void;
+  controles?: ReactNode;
 }) {
   const etape = projet.etape;
   const chat: ChatEtape = { ...CHAT_DEFAUT[etape]!, ...projet.chats[String(etape)] };
@@ -1755,6 +2189,7 @@ function Assistant({
         >
           Vider la conversation
         </button>
+        {controles}
       </div>
       <div className="panel-b stack">
         <div className="diag-cfg">

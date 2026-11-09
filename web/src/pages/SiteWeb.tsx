@@ -483,7 +483,12 @@ export function SiteWeb({ slug }: { slug: string }) {
       window.location.href = url;
     }, err);
 
-  if (!etat) return error ? <div className="empty">{error}</div> : null;
+  if (!etat)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {error ?? 'Chargement du site web…'}
+      </div>
+    );
 
   if (!etat.googleClientDisponible) {
     return (

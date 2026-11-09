@@ -64,21 +64,133 @@ function Periode({
 
 export function Brief({ slug }: { slug: string }) {
   const [data, setData] = useState<BriefData | null>(null);
+  const [maintenant, setMaintenant] = useState(() => Date.now());
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchBrief(slug).then(setData, (e: unknown) => setMessage(String(e)));
+    let actif = true;
+    const charger = () =>
+      fetchBrief(slug).then(
+        (d) => {
+          if (actif) {
+            setData(d);
+            setMessage(null);
+            setMaintenant(Date.now());
+          }
+        },
+        (e: unknown) => {
+          if (actif) setMessage(String(e));
+        },
+      );
+    void charger();
+    const intervalle = window.setInterval(() => {
+      setMaintenant(Date.now());
+      void charger();
+    }, 60_000);
+    return () => {
+      actif = false;
+      window.clearInterval(intervalle);
+    };
   }, [slug]);
 
-  if (!data) return message ? <div className="empty">{message}</div> : null;
+  if (!data)
+    return (
+      <div className="empty" role="status">
+        {message ?? 'Ton brief se prépare…'}
+      </div>
+    );
 
   const { retard, jour } = data.aFaire;
   const taches = `#/${slug}/taches`;
   const veille = data.realisees.veille;
+  const prochain =
+    data.rdvEtat === 'ok'
+      ? data.rdv
+          .filter((r) => !r.journee && new Date(r.fin).getTime() > maintenant)
+          .sort((a, b) => Date.parse(a.debut) - Date.parse(b.debut))[0]
+      : undefined;
+  const faites = data.realisees.aujourdhui.total;
+  const total = faites + jour.total + retard;
+  const priorite =
+    retard > 0
+      ? {
+          titre: 'Reprendre le fil.',
+          texte: `${retard} ${pluriel(retard, 'tâche')} en retard. Choisis la prochaine action à faire avancer.`,
+          action: 'Voir mes actions',
+          lien: taches,
+        }
+      : prochain
+        ? {
+            titre: 'Un rendez-vous bien préparé.',
+            texte: `${heure(prochain.debut)} · ${prochain.titre}`,
+            action: 'Ouvrir mon agenda',
+            lien: `#/${slug}/agenda`,
+          }
+        : jour.total > 0
+          ? {
+              titre: 'Une action, puis la suivante.',
+              texte: `${jour.total} ${pluriel(jour.total, 'tâche')} à faire aujourd’hui. Commence par celle qui compte le plus.`,
+              action: 'Choisir ma prochaine action',
+              lien: taches,
+            }
+          : {
+              titre: 'De la place pour avancer.',
+              texte: 'Aucune tâche prévue aujourd’hui. Consulte ton Inbox pour choisir la suite.',
+              action: 'Ouvrir mon Inbox',
+              lien: `#/${slug}/inbox`,
+            };
 
   return (
-    <>
-      <div className="grid g3">
+    <div className="brief-focus">
+      <header className="brief-bonjour">
+        <p className="brief-date">
+          {new Date(maintenant).toLocaleDateString('fr-FR', {
+            timeZone: 'Europe/Paris',
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+          })}
+        </p>
+        <h2>On commence par l’essentiel.</h2>
+        <p>Une journée claire. Une priorité à la fois.</p>
+      </header>
+      {message && (
+        <p role="status" className="brief-erreur">
+          Actualisation impossible. Les dernières données restent affichées.
+        </p>
+      )}
+      <section className="brief-priorite" aria-label="Priorité proposée">
+        <h2>{priorite.titre}</h2>
+        <p>{priorite.texte}</p>
+        <a className="btn primary" href={priorite.lien}>
+          {priorite.action}
+          <Icon name="play" />
+        </a>
+      </section>
+      <section className="brief-avancee" aria-label="Avancée du jour">
+        <div>
+          <h2>Chaque action compte.</h2>
+          <p>
+            {faites > 0
+              ? `${faites} ${pluriel(faites, 'tâche')} ${pluriel(faites, 'terminée')} aujourd’hui.`
+              : 'Ton prochain pas commence ici.'}
+          </p>
+        </div>
+        {total > 0 && (
+          <div className="brief-progression">
+            <span>
+              {faites} / {total} tâches
+            </span>
+            <progress
+              aria-label="Tâches terminées sur les tâches terminées, du jour et en retard"
+              value={faites}
+              max={total}
+            />
+            <small>Terminées aujourd’hui + à faire aujourd’hui et en retard</small>
+          </div>
+        )}
+      </section>
+      <div className="grid g3 brief-reperes">
         <a className={`panel kpi kpi-link ${retard > 0 ? 'alerte' : ''}`} href={taches}>
           <span className="l">Tâches en retard</span>
           <span className="v">{retard}</span>
@@ -115,7 +227,7 @@ export function Brief({ slug }: { slug: string }) {
           </span>
         </a>
       </div>
-      <div className="grid g-main" style={{ marginTop: 18 }}>
+      <div className="brief-details">
         <div className="panel">
           <div className="panel-h">
             <h2>Rendez-vous et réunions du jour</h2>
@@ -151,7 +263,10 @@ export function Brief({ slug }: { slug: string }) {
             )}
           </div>
         </div>
-        <div className="panel">
+        <details className="panel brief-historique">
+          <summary>
+            Mon activité récente <Icon name="down" />
+          </summary>
           <div className="panel-h">
             <h2>
               Activité{' '}
@@ -183,11 +298,11 @@ export function Brief({ slug }: { slug: string }) {
               rdv={data.rdvTenus?.mois ?? null}
             />
           </div>
-        </div>
+        </details>
       </div>
       <div style={{ marginTop: 18 }}>
         <PanneauProspection slug={slug} />
       </div>
-    </>
+    </div>
   );
 }

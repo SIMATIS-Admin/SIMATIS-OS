@@ -7,6 +7,7 @@ import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import {
   creerInvitation,
+  creerLienProspectionVma,
   envoyerInvitation,
   InvitationImpossible,
   ouvrirEspaceTesteur,
@@ -16,6 +17,12 @@ import {
   TestIntrouvable,
   type InvitationDeps,
 } from './invitations.js';
+import {
+  contactsVma,
+  rattacherContactVma,
+  retirerAccordVma,
+  RattachementImpossible,
+} from './contacts.js';
 import { RelanceImpossible, relancerInvitation } from './relances.js';
 import { TYPES_TEST_VMA, vmaTests, type TestVma } from './schema.js';
 
@@ -45,9 +52,17 @@ const relanceSchema = z.object({ tutoiement: z.boolean().optional() });
 const vueTest = (t: TestVma) => ({
   id: t.id,
   entrepriseId: t.entrepriseId,
+  opportuniteId: t.opportuniteId,
   entrepriseNom: t.entrepriseNom,
   contactNom: t.contactNom,
   contactEmail: t.contactEmail,
+  contactId: t.contactId,
+  contactPrenom: t.contactPrenom,
+  contactNomFamille: t.contactNomFamille,
+  contactPoste: t.contactPoste,
+  contactTelephone: t.contactTelephone,
+  origine: t.origine,
+  consentement: t.consentement,
   tutoiement: t.tutoiement,
   envoyeeLe: t.envoyeeLe,
   relances: t.relances,
@@ -87,6 +102,73 @@ export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): vo
       return reply.code(400).send({ error: error.message });
     return reply.code(503).send({ error: 'Le site ne répond pas : réessayez dans un instant.' });
   };
+
+  app.post<{ Params: { slug: string } }>(
+    '/api/i/:slug/vma/liens-prospection',
+    async (request, reply) => {
+      if (!(await getInstanceBySlug(db, request.params.slug)))
+        return reply.code(404).send({ error: 'Instance inconnue' });
+      const avecSite = invitations();
+      if (!avecSite) return reply.code(503).send({ error: 'Test VMA non configuré' });
+      try {
+        return await creerLienProspectionVma(avecSite);
+      } catch (e) {
+        return erreur(e, reply);
+      }
+    },
+  );
+
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/vma/contacts', async (request, reply) => {
+    const instance = await getInstanceBySlug(db, request.params.slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    return (await contactsVma(db, instance.id)).map((t) => ({
+      ...vueTest(t),
+      contactLie: t.contactLie,
+      entrepriseLiee: t.entrepriseLiee,
+    }));
+  });
+
+  app.patch<{ Params: { slug: string; id: string }; Body: unknown }>(
+    '/api/i/:slug/vma/tests/:id/crm',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      const parsed = z
+        .object({
+          contactId: z.uuid().nullable().optional(),
+          opportuniteId: z.uuid().nullable().optional(),
+          entrepriseId: z.uuid().nullable().optional(),
+        })
+        .strict()
+        .safeParse(request.body);
+      if (!UUID.test(request.params.id) || !parsed.success)
+        return reply.code(400).send({ error: 'Rattachement invalide' });
+      try {
+        await rattacherContactVma(db, instance.id, request.params.id, parsed.data);
+        return { ok: true };
+      } catch (e) {
+        if (e instanceof RattachementImpossible) return reply.code(404).send({ error: e.message });
+        throw e;
+      }
+    },
+  );
+
+  app.post<{ Params: { slug: string; id: string } }>(
+    '/api/i/:slug/vma/tests/:id/retirer-accord',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      if (!UUID.test(request.params.id))
+        return reply.code(400).send({ error: 'Invitation invalide' });
+      try {
+        await retirerAccordVma(db, instance.id, request.params.id);
+        return { ok: true };
+      } catch (e) {
+        if (e instanceof RattachementImpossible) return reply.code(404).send({ error: e.message });
+        throw e;
+      }
+    },
+  );
 
   app.get<{ Params: { slug: string } }>('/api/i/:slug/vma/tests', async (request, reply) => {
     const instance = await getInstanceBySlug(db, request.params.slug);

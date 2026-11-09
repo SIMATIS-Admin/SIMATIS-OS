@@ -18,6 +18,9 @@ import { jourParis, memeHeure, titreJour, titreSemaine } from './taches/creneaux
 import { Grille } from './taches/Grille.js';
 import { MIME_TACHE } from './taches/agenda.js';
 import { Panneau } from './taches/Panneau.js';
+import { EnteteCommercial } from './commercial/commun.js';
+import { JourneeCommerciale } from './commercial/Journee.js';
+import { ApercuCommercial } from './commercial/Apercu.js';
 import { Programme } from './taches/Programme.js';
 
 type Mode = 'jour' | 'semaine' | 'liste' | 'tableau';
@@ -292,8 +295,9 @@ function Liste({
   );
 }
 
-export function Taches({ slug }: { slug: string }) {
-  const [mode, setMode] = useState<Mode>('semaine');
+export function Taches({ slug, commercial = false }: { slug: string; commercial?: boolean }) {
+  const [mode, setMode] = useState<Mode>(commercial ? 'jour' : 'semaine');
+  const [apercuRdv, setApercuRdv] = useState<string | null>(null);
   const [lundi, setLundi] = useState(() => lundiDe(new Date()));
   const [jour, setJour] = useState(() => jourParis(new Date().toISOString()));
   // The Day view moves one day at a time, the others one week; the week follows the day.
@@ -457,7 +461,10 @@ export function Taches({ slug }: { slug: string }) {
   );
 
   return (
-    <>
+    <section className={commercial ? `commercial-page com-agenda com-agenda-${mode}` : undefined}>
+      {commercial && (
+        <EnteteCommercial description="Vos rendez-vous d’un côté, vos actions de l’autre." />
+      )}
       <div className="ag-barre">
         {nav || <span />}
         <div className="ag-barre-d">
@@ -533,18 +540,30 @@ export function Taches({ slug }: { slug: string }) {
           />
         ) : (
           <div className="ag">
-            <Grille
-              jours={
-                mode === 'jour' ? [jour] : Array.from({ length: 7 }, (_, k) => plusJours(lundi, k))
-              }
-              data={data}
-              slug={slug}
-              aujourdhui={aujourdhui}
-              maintenant={new Date()}
-              onOpen={setEdition}
-              onPatch={(t, patch) => void modifier(t, patch)}
-              onJour={mode === 'semaine' ? voirJour : undefined}
-            />
+            {commercial && mode === 'jour' ? (
+              <JourneeCommerciale
+                jour={jour}
+                data={data}
+                onRdv={setApercuRdv}
+                onTache={setEdition}
+              />
+            ) : (
+              <Grille
+                jours={
+                  mode === 'jour'
+                    ? [jour]
+                    : Array.from({ length: 7 }, (_, k) => plusJours(lundi, k))
+                }
+                data={data}
+                slug={slug}
+                aujourdhui={aujourdhui}
+                maintenant={new Date()}
+                onOpen={setEdition}
+                onPatch={(t, patch) => void modifier(t, patch)}
+                onJour={mode === 'semaine' ? voirJour : undefined}
+                onRdv={commercial ? setApercuRdv : undefined}
+              />
+            )}
             <Panneau
               jours={
                 mode === 'jour' ? [jour] : Array.from({ length: 7 }, (_, k) => plusJours(lundi, k))
@@ -558,6 +577,14 @@ export function Taches({ slug }: { slug: string }) {
             />
           </div>
         ))}
+      {apercuRdv && (
+        <ApercuCommercial
+          key={apercuRdv}
+          slug={slug}
+          reference={{ kind: 'rdv', id: apercuRdv }}
+          onFermer={() => setApercuRdv(null)}
+        />
+      )}
       {edition && data && (
         <EditionTache
           tache={edition === 'nouvelle' ? null : edition}
@@ -591,6 +618,6 @@ export function Taches({ slug }: { slug: string }) {
           }}
         />
       )}
-    </>
+    </section>
   );
 }

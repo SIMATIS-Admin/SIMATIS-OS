@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Instance } from '../../instances/schema.js';
-import { brouillons, compteAgenda, compteGmail, evenements, filsRecents } from './google.js';
+import {
+  brouillons,
+  compteAgenda,
+  compteGmail,
+  evenements,
+  filsRecents,
+  lireMessage,
+} from './google.js';
 
 const ctx = {
   instance: { nom: 'Mandat fictif' } as Instance,
@@ -119,5 +126,55 @@ describe('Google : lectures de la routine Inbox', () => {
     );
     expect(e?.lien).toBe('https://calendar.google.com/event?eid=e1');
     expect(await compteAgenda(ctx, g)).toBe('pilote@exemple.fr');
+  });
+});
+
+describe('Lecture HTML d’un message Gmail', () => {
+  it('lit les parties MIME imbriquées sans prendre le HTML d’une pièce jointe', async () => {
+    const encode = (s: string) => Buffer.from(s).toString('base64url');
+    const fetch = (url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url.includes('oauth2')
+              ? { access_token: 'test' }
+              : {
+                  id: 'm1',
+                  threadId: 't1',
+                  payload: {
+                    mimeType: 'multipart/mixed',
+                    headers: [
+                      h('In-Reply-To', '<original@exemple.test>'),
+                      h('Cc', 'copie@exemple.test'),
+                    ],
+                    parts: [
+                      {
+                        mimeType: 'text/html',
+                        filename: 'piece.html',
+                        body: { data: encode('Pièce jointe') },
+                      },
+                      {
+                        mimeType: 'multipart/alternative',
+                        parts: [
+                          { mimeType: 'text/plain', body: { data: encode('Bonjour') } },
+                          {
+                            mimeType: 'text/html',
+                            body: { data: encode('<p>Bonjour <b>à tous</b></p>') },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+          ),
+        ),
+      );
+    expect(await lireMessage(ctx, 'm1', true, { fetch })).toMatchObject({
+      threadId: 't1',
+      corps: 'Bonjour',
+      html: '<p>Bonjour <b>à tous</b></p>',
+      cc: 'copie@exemple.test',
+      inReplyTo: '<original@exemple.test>',
+    });
   });
 });

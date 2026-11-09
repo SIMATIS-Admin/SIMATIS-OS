@@ -139,7 +139,8 @@ describe('Envoi de l’invitation par la messagerie', () => {
         type: 'essai',
         invitationId: randomBytes(16).toString('hex'),
         lien: test.lien,
-        expireLe: test.expireLe,
+        // Relative : une date fixe finit par passer et l'invitation serait alors « expirée ».
+        expireLe: new Date(Date.now() + 86_400_000),
       })
       .returning();
     const envoi = await envoyerInvitation(

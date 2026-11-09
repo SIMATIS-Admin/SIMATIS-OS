@@ -24,6 +24,28 @@ describe('Rapport Word', () => {
     expect(strFromU8(f['[Content_Types].xml']!)).not.toContain('comments');
   });
 
+  it('place le logo du diagnostic en couverture, en haut à droite (couleur) et en pied de page (simplifié)', () => {
+    const f = ouvrir();
+    for (const nom of [
+      'word/media/logo-diagnostic-couleur.png',
+      'word/media/logo-diagnostic-simplifie.png',
+    ])
+      expect([...f[nom]!.slice(1, 4)], nom).toEqual([0x50, 0x4e, 0x47]);
+    const doc = strFromU8(f['word/document.xml']!);
+    expect(doc).toContain('r:embed="rId12"');
+    expect(doc.indexOf('r:embed="rId12"')).toBeLessThan(
+      doc.indexOf('DIAGNOSTIC D’ENDURANCE COMMERCIALE'),
+    );
+    expect(strFromU8(f['word/_rels/document.xml.rels']!)).toContain(
+      'media/logo-diagnostic-couleur.png',
+    );
+    expect(strFromU8(f['word/footer1.xml']!)).toContain('r:embed="rId1"');
+    expect(strFromU8(f['word/footer1.xml']!)).toContain('SIMATIS Conseil');
+    expect(strFromU8(f['word/_rels/footer1.xml.rels']!)).toContain(
+      'media/logo-diagnostic-simplifie.png',
+    );
+  });
+
   it('reprend le contenu dans l ordre des sections, avec l entreprise en couverture et en en-tête', () => {
     const f = ouvrir();
     const doc = strFromU8(f['word/document.xml']!);
@@ -67,5 +89,19 @@ describe('Rapport Word', () => {
 
   it('refuse un contenu incomplet', () => {
     expect(contenuRapportSchema.safeParse({ entreprise: 'X' }).success).toBe(false);
+  });
+
+  it('omet les passages de proposition quand le contenu n en a pas', () => {
+    const essentiel = { ...contenuRapportFictif.essentiel };
+    delete essentiel.proposition;
+    const conclusion = { ...contenuRapportFictif.conclusion };
+    delete conclusion.propositionTitre;
+    delete conclusion.proposition;
+    const sans = { ...contenuRapportFictif, essentiel, conclusion };
+    expect(contenuRapportSchema.safeParse(sans).success).toBe(true);
+    const xml = strFromU8(ouvrir(contenuRapportSchema.parse(sans))['word/document.xml']!);
+    expect(xml).not.toContain('Ma proposition');
+    expect(xml).not.toContain('De Sprinteur à Marathonien');
+    expect(xml).toContain('Conclusion et prochaine étape');
   });
 });

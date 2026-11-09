@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Brief } from './Brief.js';
 
@@ -60,8 +60,19 @@ describe('pilot screens', () => {
     expect(container.querySelectorAll('.vq-filter')).toHaveLength(0);
   });
 
+  it('brief: prioritizes overdue tasks and uses real completed counts', async () => {
+    render(<Brief slug="simatis" />);
+    const priority = await screen.findByRole('region', { name: 'Priorité proposée' });
+    expect(within(priority).getByText('Reprendre le fil.')).toBeTruthy();
+    expect(within(priority).getByRole('link').getAttribute('href')).toBe('#/simatis/taches');
+    expect(screen.getByRole('progressbar').getAttribute('max')).toBe('10');
+    expect(screen.getByRole('progressbar').getAttribute('value')).toBe('0');
+    expect(calls.every((c) => c.method === 'GET')).toBe(true);
+  });
+
   it('brief: activity with tasks done and meetings held per period', async () => {
     render(<Brief slug="simatis" />);
+    fireEvent.click(await screen.findByText('Mon activité récente'));
     await screen.findByText('30 derniers jours');
     const mois = screen.getByText('30 derniers jours').closest('.activ-row');
     expect(mois?.textContent).toMatch(/30.*tâches.*17 RDV tenus/);
@@ -84,5 +95,62 @@ describe('pilot screens', () => {
     render(<Brief slug="simatis" />);
     expect(await screen.findByText('Agenda non connecté')).toBeTruthy();
     expect(screen.queryByText(/RDV tenu/)).toBeNull();
+  });
+  it('brief: offers the next timed meeting, ignoring holidays and finished events', async () => {
+    const now = Date.now();
+    const meeting = (titre: string, offset: number, journee = false) => ({
+      titre,
+      debut: new Date(now + offset).toISOString(),
+      fin: new Date(now + offset + 1000).toISOString(),
+      journee,
+      lieu: null,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ...brief,
+              aFaire: { retard: 0, jour: compte(0) },
+              rdv: [
+                meeting('Congé', 5000, true),
+                meeting('Terminé', -5000),
+                meeting('Plus tard', 90000),
+                meeting('Prochain échange', 60000),
+              ],
+            }),
+          ),
+        ),
+      ),
+    );
+    render(<Brief slug="simatis" />);
+    const priority = await screen.findByRole('region', { name: 'Priorité proposée' });
+    expect(within(priority).getByText(/Prochain échange/)).toBeTruthy();
+    expect(within(priority).queryByText(/Congé|Terminé|Plus tard/)).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
+  it('brief: offers the inbox on a day without tasks or connected calendar', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ...brief,
+              aFaire: { retard: 0, jour: compte(0) },
+              rdv: [],
+              rdvEtat: 'non_configure',
+            }),
+          ),
+        ),
+      ),
+    );
+    render(<Brief slug="simatis" />);
+    expect(
+      (await screen.findByRole('link', { name: 'Ouvrir mon Inbox' })).getAttribute('href'),
+    ).toBe('#/simatis/inbox');
+    expect(screen.getByText('Agenda non connecté')).toBeTruthy();
   });
 });

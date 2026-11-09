@@ -155,6 +155,7 @@ type ParamsMail = {
   lien: string;
   expireLe: Date;
   tutoiement?: boolean;
+  origine?: 'invitation' | 'inscription';
 };
 
 // Les deux registres d'un même mail : seule la formulation change, jamais le gabarit.
@@ -197,7 +198,10 @@ export function mailInvitation(p: ParamsMail): { subject: string; html: string }
   return {
     subject: `Votre test VMA : ${p.entrepriseNom}`,
     html: habillerMail(
-      corpsMail(p, `${r.lienVoici} pour passer le test VMA de ${echapper(p.entrepriseNom)} :`),
+      corpsMail(
+        p,
+        `${p.origine === 'inscription' ? 'Conformément à votre demande, voici votre lien' : r.lienVoici} pour passer le test VMA de ${echapper(p.entrepriseNom)} :`,
+      ),
       { tutoiement: p.tutoiement },
     ),
   };
@@ -255,6 +259,7 @@ export async function envoyerInvitation(
   test: Pick<TestVma, 'entrepriseNom' | 'contactNom' | 'contactEmail' | 'lien' | 'expireLe'> & {
     id?: string;
     tutoiement?: boolean;
+    origine?: 'invitation' | 'inscription';
   },
 ): Promise<EnvoiInvitation> {
   if (!test.contactEmail) return { statut: 'echec', raison: 'aucune adresse e-mail' };
@@ -264,8 +269,20 @@ export async function envoyerInvitation(
     lien: test.lien,
     expireLe: test.expireLe,
     tutoiement: test.tutoiement,
+    origine: test.origine,
   });
   return withInstance(db, instance.id, async (tx) => {
+    if (test.id) {
+      const [actuel] = await tx
+        .select()
+        .from(vmaTests)
+        .where(and(eq(vmaTests.instanceId, instance.id), eq(vmaTests.id, test.id)))
+        .for('update');
+      if (!actuel) return { statut: 'echec', raison: 'Invitation introuvable' };
+      if (actuel.envoyeeLe) return { statut: 'envoye' };
+      if (actuel.statut !== 'envoyee' || actuel.expireLe <= new Date())
+        return { statut: 'echec', raison: 'Invitation expirée ou fermée' };
+    }
     const envoi = await envoyerMail(tx, instance, ecriture, { to: test.contactEmail, message });
     if (test.id && envoi.statut !== 'simule') {
       await tx
@@ -293,7 +310,7 @@ export async function revoquerInvitation(
       .from(vmaTests)
       .where(and(eq(vmaTests.instanceId, p.instanceId), eq(vmaTests.id, p.testId)));
     if (!test) throw new InvitationImpossible('Invitation introuvable dans cette instance');
-    if (test.statut !== 'envoyee')
+    if (test.statut !== 'envoyee' || test.recueLe || test.ecran)
       throw new InvitationImpossible('Seule une invitation ouverte peut être révoquée');
 
     const http = deps.fetch ?? fetch;
@@ -327,7 +344,7 @@ export async function supprimerTest(
       .where(and(eq(vmaTests.instanceId, p.instanceId), eq(vmaTests.id, p.testId))),
   );
   if (!test) throw new TestIntrouvable();
-  if (test.statut === 'envoyee') {
+  if (test.statut === 'envoyee' && !test.recueLe && !test.ecran) {
     if (!deps) throw new InvitationImpossible('Test de VMA non configuré (VMA_OS_TOKEN)');
     await revoquerInvitation(db, deps, p);
   }
@@ -352,4 +369,19 @@ export async function ouvrirEspaceTesteur(
   if (!res.ok) throw new InvitationImpossible(`Site : accès testeur refusé (${res.status})`);
   const { id, expireLe } = (await res.json()) as { id: string; expireLe: string };
   return { lien: `${base(deps.url)}/test-vma/testeur?t=${id}`, expireLe };
+}
+
+// Un lien de formulaire par destinataire de prospection ; aucun contact ni test créé avant inscription.
+export async function creerLienProspectionVma(
+  deps: InvitationDeps,
+): Promise<{ lien: string; expireLe: string }> {
+  const res = await (deps.fetch ?? fetch)(`${base(deps.url)}/api/test-vma/liens-prospection`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${deps.token}` },
+  });
+  if (!res.ok) throw new InvitationImpossible(`Site : création du lien refusée (${res.status})`);
+  const { id, expireLe } = (await res.json()) as { id: string; expireLe: string };
+  if (!/^[0-9a-f]{32}$/.test(id) || !Number.isFinite(Date.parse(expireLe)))
+    throw new InvitationImpossible('Lien de prospection invalide');
+  return { lien: `${base(deps.url)}/inscription-vma?a=${id}`, expireLe };
 }

@@ -105,7 +105,7 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
         <li key={f.n}>
           <span className="rang">{i + 1}</span>
           <span className="corps">
-            <span className="ft">{f.titre}</span>
+            <h3 className="ft">{f.titre}</h3>
             {(f.enjeu ?? 0) > 0 && (
               <span className="enjeu">
                 {t.libelleEnjeu ?? 'Enjeu estimé'} : environ +{fmtEur(f.enjeu)} par mois*
@@ -158,7 +158,8 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
   return (
     <div className="stack rc" ref={fiche}>
       {entete}
-      <div className="panel rc-carte">
+
+      <div className="panel rc-carte rc-synthese">
         <div className="rc-eyebrow">
           {portefeuille
             ? (t.libelleAllureTotale ?? 'Votre allure commerciale')
@@ -222,7 +223,7 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
         </div>
       </div>
 
-      <div className="panel rc-carte">
+      <div className="panel rc-carte rc-objectifs">
         <div className="rc-eyebrow">Votre objectif</div>
         <div className="rc-niveau">
           <span className={`rc-level ${e.niveau.cle}`}>{e.niveau.label}</span>
@@ -233,25 +234,39 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
         </div>
         {(e.mesurable || socle) && (
           <>
-            <div
-              className="rc-piste"
-              role="img"
-              aria-label={`Aujourd’hui ${fmtEur(allure)} par mois, objectif ${fmtEur(e.allureVisee)} par mois`}
-            >
-              <span className="fill rec" style={{ left: '0%', width: pos(rec) }} />
-              <span className="fill vma" style={{ left: pos(rec), width: pos(e.vma ?? 0) }} />
-              <span className="goal" style={{ left: pos(e.allureVisee) }} />
-              {lancee && <span className="lancee" style={{ left: pos(e.trajectoire as number) }} />}
-            </div>
-            <div className="rc-legende">
-              <span>Aujourd’hui : {fmtEur(allure)} / mois</span>
-              {lancee && (
-                <span className="lancee">
-                  Sur votre lancée dans {ans(e.echeance)} : {fmtEur(e.trajectoire)} / mois
-                </span>
-              )}
-              <span>Objectif : {fmtEur(e.allureVisee)} / mois</span>
-            </div>
+            <figure className="rc-comparaison" aria-label="Comparaison des allures commerciales">
+              <figcaption>CA commandé par mois · une même échelle pour comparer</figcaption>
+              {[
+                { label: 'Aujourd’hui', valeur: allure, classe: 'actuelle' },
+                ...(lancee
+                  ? [
+                      {
+                        label: `Sur votre lancée dans ${ans(e.echeance)}`,
+                        valeur: e.trajectoire as number,
+                        classe: 'projection',
+                      },
+                    ]
+                  : []),
+                { label: 'Objectif', valeur: e.allureVisee, classe: 'objectif' },
+              ].map((ligne) => (
+                <div className={`rc-comparaison-ligne ${ligne.classe}`} key={ligne.classe}>
+                  <div className="rc-comparaison-label">
+                    <span>{ligne.label}</span>
+                    <strong>
+                      {fmtEur(ligne.valeur)}
+                      <small> / mois</small>
+                    </strong>
+                  </div>
+                  <div className="rc-comparaison-rail" aria-hidden="true">
+                    <span style={{ width: pos(ligne.valeur) }} />
+                  </div>
+                </div>
+              ))}
+              <div className="rc-comparaison-echelle" aria-hidden="true">
+                <span>0 €</span>
+                <span>{fmtEur(echelle)}</span>
+              </div>
+            </figure>
             {lancee && (
               <p>
                 Sans rien changer, votre socle récurrent passerait de {fmtEur(e.recurrent)} à{' '}
@@ -280,7 +295,7 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
         <p>{e.niveau.phrase}</p>
       </div>
 
-      <div className="panel rc-carte">
+      <div className="panel rc-carte rc-recommandations">
         <div className="rc-eyebrow">
           {socle ? 'Où se perd votre allure' : 'Où se perd votre VMA'}
         </div>

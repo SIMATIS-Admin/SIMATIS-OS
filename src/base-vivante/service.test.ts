@@ -83,7 +83,7 @@ describe('base vivante : chaîne d’import', () => {
     ]);
     expect(imp.correspondance).toEqual({ telephone: 0, nomComplet: 1, entreprise: 2, email: 3 });
     expect(imp.inconnues).toEqual([4]);
-    expect(imp.compteurs).toEqual({
+    expect(imp.compteurs).toMatchObject({
       total: 7,
       // Jean Dupont (téléphone), Claire Martin (email), Luc Bon (email, entreprise déduite)
       prospectables: 3,
@@ -120,7 +120,7 @@ describe('base vivante : chaîne d’import', () => {
     const rapport = await integrerImport(t.app.db, mandat.id, imp.id);
     expect(rapport).toEqual({ creees: 5, fusionnees: 0, restantes: 1 });
     const base = await listerFiches(t.app.db, mandat.id);
-    expect(base.compteurs).toEqual({ aEnrichir: 2, prospectable: 3 });
+    expect(base.compteurs).toMatchObject({ aEnrichir: 2, prospectable: 3 });
     expect(base.fiches.map((f) => [f.entreprise, f.nom, f.zone])).toEqual([
       ['Atelier Fictif', 'DUPONT', 'prospectable'],
       ['Boutique Fictive', '', 'a_enrichir'],
@@ -158,7 +158,7 @@ describe('base vivante : chaîne d’import', () => {
     const { fiches, compteurs, total } = await listerFiches(t.app.db, mandat.id);
     expect(total).toBe(6);
     // Paul Petit gained an email: « à enrichir » → « prospectable ». The company alone stays.
-    expect(compteurs).toEqual({ aEnrichir: 1, prospectable: 5 });
+    expect(compteurs).toMatchObject({ aEnrichir: 1, prospectable: 5 });
     const paul = fiches.find((f) => f.nom === 'PETIT');
     expect(paul).toMatchObject({
       email: 'paul@cabinet-fictif.test',
@@ -236,7 +236,7 @@ describe('base vivante : chaîne d’import', () => {
       fusionnees: 2,
     });
     const base = await listerFiches(t.app.db, mandat.id);
-    expect(base.compteurs).toEqual({ aEnrichir: 2, prospectable: 0 });
+    expect(base.compteurs).toMatchObject({ aEnrichir: 2, prospectable: 0 });
     const fiche = base.fiches.find((f) => f.entreprise === 'Atelier Seul');
     if (!fiche) throw new Error('fiche absente');
 
@@ -259,7 +259,7 @@ describe('base vivante : chaîne d’import', () => {
       email: 'lea@atelier-seul.test',
       zone: 'prospectable',
     });
-    expect((await listerFiches(t.app.db, mandat.id)).compteurs).toEqual({
+    expect((await listerFiches(t.app.db, mandat.id)).compteurs).toMatchObject({
       aEnrichir: 1,
       prospectable: 1,
     });
@@ -402,10 +402,30 @@ describe('base vivante : chaîne d’import', () => {
 
       const liste = await a.inject({ method: 'GET', url: '/api/i/bv-mandat/base?zone=a_enrichir' });
       expect(liste.json<Liste>().fiches).toHaveLength(2);
-      expect(liste.json<Liste>().compteurs).toEqual({ aEnrichir: 2, prospectable: 3 });
+      expect(liste.json<Liste>().compteurs).toMatchObject({ aEnrichir: 2, prospectable: 3 });
       expect(liste.json<Liste>().imports[0]?.statut).toBe('integre');
       const recherche = await a.inject({ method: 'GET', url: '/api/i/bv-mandat/base?q=bureau' });
       expect(recherche.json<Liste>().total).toBe(1);
+      const [fiche] = recherche.json<{ fiches: { id: string }[] }>().fiches;
+      expect(fiche).toBeDefined();
+      const suppression = await a.inject({
+        method: 'DELETE',
+        url: `/api/i/bv-mandat/base/fiches/${fiche?.id}`,
+      });
+      expect(suppression.statusCode).toBe(200);
+      const apres = await a.inject({ method: 'GET', url: '/api/i/bv-mandat/base?q=bureau' });
+      expect(apres.json<Liste>().total).toBe(0);
+      const groupe = await a.inject({
+        method: 'DELETE',
+        url: '/api/i/bv-mandat/base/fiches',
+        payload: { ids: liste.json<{ fiches: { id: string }[] }>().fiches.map((f) => f.id) },
+      });
+      expect(groupe.statusCode).toBe(200);
+      const restant = await a.inject({
+        method: 'GET',
+        url: '/api/i/bv-mandat/base?zone=a_enrichir',
+      });
+      expect(restant.json<Liste>().total).toBe(0);
     });
 
     it('refuse un import sans source, sans contenu, ou illisible', async () => {

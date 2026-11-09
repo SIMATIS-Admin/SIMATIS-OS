@@ -244,7 +244,7 @@ describe('Relecture et finalisation d’une campagne', () => {
       .from(prospectionOccurrences)
       .where(eq(prospectionOccurrences.lot, campagneId));
     expect(occ).toHaveLength(3);
-    expect(occ.every((o) => o.etat === 'brouillon' && o.mode === 'relance' && o.touche === 2)).toBe(
+    expect(occ.every((o) => o.etat === 'envoye' && o.mode === 'relance' && o.touche === 2)).toBe(
       true,
     );
     expect(occ.find((o) => o.contactNom === 'Denis')?.threadId).toBe('fil-Denis');
@@ -440,7 +440,7 @@ describe('Envoi direct', () => {
     expect((await dans((tx) => lireCampagne(tx, id))).statut).toBe('relecture');
   });
 
-  it('sans envoi demandé, le comportement reste celui des brouillons (draft.create, occurrence « brouillon »)', async () => {
+  it('crée un brouillon Gmail et comptabilise la relance validée', async () => {
     ecrits.length = 0;
     const id = await enRelecture('Carole');
     const r = await finaliserCampagne(t.app.db, instance, id, { secretsDir, realWrites: true });
@@ -450,7 +450,7 @@ describe('Envoi direct', () => {
       .select()
       .from(prospectionOccurrences)
       .where(eq(prospectionOccurrences.lot, id));
-    expect(o?.etat).toBe('brouillon');
+    expect(o?.etat).toBe('envoye');
   });
 });
 

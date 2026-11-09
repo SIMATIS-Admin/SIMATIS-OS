@@ -1,5 +1,5 @@
 import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { entreprises } from '../crm/schema.js';
+import { contacts, entreprises, opportunites } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
 // Test de VMA : auto-diagnostic envoyé par invitation depuis le site. Une ligne par invitation ;
@@ -18,7 +18,22 @@ export const vmaTests = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     ...metierColumns(),
     entrepriseId: uuid('entreprise_id').references(() => entreprises.id),
+    opportuniteId: uuid('opportunite_id').references(() => opportunites.id),
     entrepriseNom: text('entreprise_nom').notNull(),
+    contactId: uuid('contact_id').references(() => contacts.id),
+    contactPrenom: text('contact_prenom'),
+    contactNomFamille: text('contact_nom_famille'),
+    contactPoste: text('contact_poste'),
+    contactTelephone: text('contact_telephone'),
+    origine: text('origine', { enum: ['invitation', 'inscription'] })
+      .notNull()
+      .default('invitation'),
+    consentement: jsonb('consentement').$type<{
+      accepteLe: string;
+      version: string;
+      texte: string;
+      retireLe?: string;
+    }>(),
     // Dirigeant qui passe le test : reste dans l'OS, jamais envoyé au site (il sert au brouillon du résultat).
     contactNom: text('contact_nom'),
     contactEmail: text('contact_email'),

@@ -11,6 +11,28 @@ export type LigneEntreprise = {
 
 export type Entreprise = { id: string; nom: string; secteur: string | null };
 
+// Sans accents, sans casse : « élodie » trouve « Élodie Fictive ».
+const normaliser = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+// Un diagnostic ou un test créé sans entreprise choisie, mais au nom d'une entreprise connue, rejoint son bloc : sinon le test disparaît et le diagnostic reste « Sans entreprise ».
+export function rattacher<T extends { entrepriseId?: string | null }>(
+  entreprises: Entreprise[],
+  elements: T[],
+  nomDe: (e: T) => string,
+): T[] {
+  const parNom = new Map(entreprises.map((e) => [normaliser(e.nom), e.id]));
+  return elements.map((el) => {
+    if (el.entrepriseId) return el;
+    const id = parNom.get(normaliser(nomDe(el)));
+    return id ? { ...el, entrepriseId: id } : el;
+  });
+}
+
 // Le diagnostic en cours est le plus récent non restitué ; à défaut, le plus récent (une année déjà restituée reste dans l'historique).
 const diagEnCours = (liste: ProjetDiag[]): ProjetDiag | null => {
   const plusRecent = (a: ProjetDiag, b: ProjetDiag) => b.updatedAt.localeCompare(a.updatedAt);
@@ -41,14 +63,6 @@ export function grouper(
   return lignes;
 }
 
-// Sans accents, sans casse : « élodie » trouve « Élodie Fictive ».
-const normaliser = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-
 // Seules comptent les entreprises déjà suivies (diagnostic ou test VMA) ; le reste de l'annuaire n'apparaît pas.
 export function lignesSuivies(lignes: LigneEntreprise[]): LigneEntreprise[] {
   return lignes.filter((l) => l.diag !== null || l.tests.length > 0);
@@ -57,7 +71,11 @@ export function lignesSuivies(lignes: LigneEntreprise[]): LigneEntreprise[] {
 export function filtrer(lignes: LigneEntreprise[], recherche: string): LigneEntreprise[] {
   const q = normaliser(recherche);
   if (!q) return lignes;
-  return lignes.filter((l) => normaliser(l.nom).includes(q));
+  return lignes.filter(
+    (l) =>
+      normaliser(l.nom).includes(q) ||
+      l.tests.some((t) => normaliser(`${t.contactNom ?? ''} ${t.contactEmail ?? ''}`).includes(q)),
+  );
 }
 
 // La page demandée est bornée à [1, pages] : une recherche qui réduit la liste ne laisse pas une page vide.

@@ -78,9 +78,11 @@ describe('Pipeline screen', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows stage columns, closed columns and the conversion rate between stages', async () => {
+  it('focuses on open stages and shows closed deals on request', async () => {
     render(<Pipeline slug="simatis" />);
     expect(await screen.findByText('Entreprise o1')).toBeTruthy();
+    expect(screen.queryByText('Entreprise o3')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les clôturées' }));
     expect(screen.getByText('Gagnées')).toBeTruthy();
     expect(screen.getByLabelText('Qualification vers Proposition : 83 %')).toBeTruthy();
     expect(screen.getByText(/Perdue en proposition : budget reporté/)).toBeTruthy();
@@ -103,10 +105,22 @@ describe('Pipeline screen', () => {
     expect(screen.queryByText(/les cartes ne se déplacent pas/)).toBeNull();
   });
 
+  it('moves a card without drag and drop for touch and keyboard users', async () => {
+    render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    fireEvent.change(screen.getByLabelText('Déplacer Affaire o1'), {
+      target: { value: 'proposition' },
+    });
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+      body: { etape: 'proposition' },
+    });
+  });
+
   it('asks for the reason before closing a deal as lost', async () => {
     const { container } = render(<Pipeline slug="simatis" />);
     await screen.findByText('Entreprise o1');
-    const perdues = container.querySelector('.col.lost');
+    const perdues = container.querySelector('.pipeline-drop.perdu');
     if (!perdues) throw new Error('column missing');
     fireEvent.drop(perdues, { dataTransfer: dataTransfer('o1') });
     const modal = await screen.findByRole('dialog');
@@ -143,10 +157,61 @@ describe('Pipeline screen', () => {
     expect(carte('o2').classList.contains('inactive')).toBe(true);
     expect(within(carte('o2')).getByText('20 j sans activité')).toBeTruthy();
     expect(carte('o1').classList.contains('inactive')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les clôturées' }));
     const close = [...container.querySelectorAll('.card')].find((c) =>
       c.textContent?.includes('Entreprise o3'),
     );
     expect(close?.querySelector('.act')).toBeNull();
+  });
+
+  it('filters by activity and searches people without accents across views', async () => {
+    const { container } = render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    fireEvent.change(screen.getByLabelText('Filtrer les activités'), {
+      target: { value: 'retard' },
+    });
+    expect(screen.queryByText('Entreprise o1')).toBeNull();
+    expect(screen.getByText('Entreprise o4')).toBeTruthy();
+    expect(container.querySelector('.pipe-totaux')?.textContent).toMatch(/10\s000/);
+    fireEvent.change(screen.getByLabelText('Filtrer les activités'), { target: { value: 'sans' } });
+    expect(screen.getByText('Entreprise o2')).toBeTruthy();
+    expect(screen.queryByText('Entreprise o4')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Filtrer les activités'), {
+      target: { value: 'toutes' },
+    });
+    fireEvent.change(screen.getByLabelText('Rechercher dans le pipeline'), {
+      target: { value: 'valliere' },
+    });
+    expect(screen.getByText('Entreprise o1')).toBeTruthy();
+    expect(screen.queryByText('Entreprise o2')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
+    expect(screen.getByText('Affaire o1')).toBeTruthy();
+    expect(screen.queryByText('Affaire o2')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Matrice' }));
+    expect(screen.getByText('Entreprise o1')).toBeTruthy();
+    expect(screen.queryByText('Entreprise o2')).toBeNull();
+  });
+
+  it('opens a deal with the keyboard and reports an empty search', async () => {
+    render(<Pipeline slug="simatis" />);
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Ouvrir Affaire o1' }), {
+      key: 'Enter',
+    });
+    expect(location.hash).toBe('#/simatis/fiche/affaire/o1');
+    fireEvent.change(screen.getByLabelText('Rechercher dans le pipeline'), {
+      target: { value: 'inexistant' },
+    });
+    expect(screen.getByRole('status').textContent).toMatch(/Aucune affaire ouverte/);
+  });
+
+  it('rejects drops in read-only mode', async () => {
+    lectureSeule = true;
+    const { container } = render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    fireEvent.drop(container.querySelector('.col')!, { dataTransfer: dataTransfer('o4') });
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
+    expect(screen.queryByRole('button', { name: '+ Affaire' })).toBeNull();
+    expect(container.querySelector('.pipeline-closing')).toBeNull();
   });
 
   it('saves the inactivity threshold from the pipeline', async () => {

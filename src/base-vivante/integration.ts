@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { evaluer, type Zone } from './completude.js';
 import {
@@ -285,6 +285,7 @@ export type Apport = {
   email?: string;
   telephone?: string;
   fonction?: string;
+  linkedin?: string;
 };
 
 // A contact found for a record « à enrichir »: fills what is given, through the same
@@ -306,7 +307,7 @@ export async function enrichir(
     email: neuf(apport.email, f.email),
     telephone: neuf(apport.telephone, f.telephone),
     fonction: neuf(apport.fonction, f.fonction),
-    linkedin: f.linkedin,
+    linkedin: neuf(apport.linkedin, f.linkedin),
   });
   if (avertissements.length > 0) throw new FicheNonHomogene(avertissements.join(', '));
   const emailChange = fiche.email !== f.email;
@@ -322,6 +323,7 @@ export async function enrichir(
       email: fiche.email,
       telephone: fiche.telephone,
       fonction: fiche.fonction,
+      linkedin: fiche.linkedin,
       domaine: fiche.domaine ?? f.domaine,
       emailInvalide: emailChange ? false : f.emailInvalide,
       cles: [...new Set([...f.cles, ...clesDoublon(fiche)])],
@@ -372,6 +374,7 @@ export async function appliquerContact(
     email: apport.email,
     telephone: apport.telephone,
     fonction: apport.fonction,
+    linkedin: apport.linkedin,
   });
   if (avertissements.length > 0) throw new FicheNonHomogene(avertissements.join(', '));
   const [r] = await integrerFiches(tx, instanceId, [
@@ -385,4 +388,125 @@ export async function appliquerContact(
   ]);
   if (!r) throw new FicheNonHomogene('Contact non intégré');
   return { id: r.id, zone: r.zone, creee: !r.fusionnee };
+}
+
+export async function supprimerFiches(tx: Tx, instanceId: string, ids: string[]) {
+  const uniques = [...new Set(ids)];
+  const supprimees = await tx
+    .delete(baseVivante)
+    .where(and(eq(baseVivante.instanceId, instanceId), inArray(baseVivante.id, uniques)))
+    .returning({ id: baseVivante.id });
+  if (supprimees.length !== uniques.length) throw new FicheIntrouvable();
+}
+
+export async function enregistrerEmailEntreprise(
+  tx: Tx,
+  instanceId: string,
+  id: string,
+  email: string,
+) {
+  await charger(tx, instanceId, id);
+  await tx
+    .update(baseVivante)
+    .set({ emailEntreprise: normaliserEmail(email), updatedAt: new Date() })
+    .where(and(eq(baseVivante.instanceId, instanceId), eq(baseVivante.id, id)));
+}
+
+export async function ajouterNoteOrigine(
+  tx: Tx,
+  instanceId: string,
+  ficheId: string,
+  note: import('./schema.js').NoteOrigine,
+) {
+  await tx
+    .update(baseVivante)
+    .set({ notesOrigine: sql`${baseVivante.notesOrigine} || ${JSON.stringify([note])}::jsonb` })
+    .where(
+      and(
+        eq(baseVivante.instanceId, instanceId),
+        eq(baseVivante.id, ficheId),
+        sql`not exists (select 1 from jsonb_array_elements(${baseVivante.notesOrigine}) n where n->>'texte' = ${note.texte} and n->>'origine' = ${note.origine} and coalesce(n->>'source', '') = ${note.source ?? ''})`,
+      ),
+    );
+}
+
+// The pilot confirmed which company of the directory a record belongs to. The same company often
+// carries several contacts of the base: those under the same name (and a compatible domain, the
+// rule used to spot a company already reachable) follow, unless they were linked on their own.
+export async function rattacherEntreprise(
+  tx: Tx,
+  instanceId: string,
+  id: string,
+  entrepriseId: string,
+): Promise<number> {
+  const f = await charger(tx, instanceId, id);
+  const memeNom = sql`lower(trim(${baseVivante.entreprise})) = lower(trim(${f.entreprise}))`;
+  const rattaches = await tx
+    .update(baseVivante)
+    .set({ entrepriseId, updatedAt: new Date() })
+    .where(
+      and(
+        eq(baseVivante.instanceId, instanceId),
+        or(
+          eq(baseVivante.id, id),
+          and(
+            isNull(baseVivante.entrepriseId),
+            memeNom,
+            f.domaine
+              ? or(isNull(baseVivante.domaine), eq(baseVivante.domaine, f.domaine))
+              : undefined,
+          ),
+        ),
+      ),
+    )
+    .returning({ id: baseVivante.id });
+  return rattaches.length;
+}
+
+export async function detacherEntreprise(tx: Tx, instanceId: string, id: string): Promise<void> {
+  await charger(tx, instanceId, id);
+  await tx
+    .update(baseVivante)
+    .set({ entrepriseId: null, updatedAt: new Date() })
+    .where(and(eq(baseVivante.id, id), eq(baseVivante.instanceId, instanceId)));
+}
+
+export class EtiquetteRefusee extends Error {}
+
+const MAX_ETIQUETTE = 40;
+const MAX_ETIQUETTES = 20;
+
+// Labels are typed by hand: trimmed, lower case, one space between words.
+export function normaliserEtiquette(valeur: string): string {
+  const e = valeur.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!e) throw new EtiquetteRefusee('Étiquette vide');
+  if (e.length > MAX_ETIQUETTE)
+    throw new EtiquetteRefusee(`Étiquette trop longue (${MAX_ETIQUETTE} caractères au plus)`);
+  return e;
+}
+
+export async function modifierEtiquettes(
+  tx: Tx,
+  instanceId: string,
+  ids: string[],
+  { ajouter = [], retirer = [] }: { ajouter?: string[]; retirer?: string[] },
+): Promise<void> {
+  const aAjouter = ajouter.map(normaliserEtiquette);
+  const aRetirer = new Set(retirer.map(normaliserEtiquette));
+  const uniques = [...new Set(ids)];
+  const fiches = await tx
+    .select({ id: baseVivante.id, tags: baseVivante.tags })
+    .from(baseVivante)
+    .where(and(eq(baseVivante.instanceId, instanceId), inArray(baseVivante.id, uniques)));
+  if (fiches.length !== uniques.length) throw new FicheIntrouvable();
+  for (const f of fiches) {
+    const tags = [...new Set([...f.tags, ...aAjouter])].filter((t) => !aRetirer.has(t));
+    if (tags.length > MAX_ETIQUETTES)
+      throw new EtiquetteRefusee(`Un contact porte ${MAX_ETIQUETTES} étiquettes au plus`);
+    if (tags.length === f.tags.length && tags.every((t, i) => t === f.tags[i])) continue;
+    await tx
+      .update(baseVivante)
+      .set({ tags: tags.sort(), updatedAt: new Date() })
+      .where(and(eq(baseVivante.id, f.id), eq(baseVivante.instanceId, instanceId)));
+  }
 }

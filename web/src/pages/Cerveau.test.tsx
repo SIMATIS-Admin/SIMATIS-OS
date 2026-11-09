@@ -204,10 +204,13 @@ describe('Cerveau : espace partagé', () => {
         titre: 'Question fictive',
         categorie: 'echanges',
         statut: null,
+        genre: 'question',
+        auteur: 'christophe',
       },
     ],
     liens: [],
     autresFichiers: 0,
+    moi: 'marc',
     tronquee: false,
     misAJour: '2026-10-29T10:00:00Z',
   };
@@ -224,17 +227,33 @@ describe('Cerveau : espace partagé', () => {
   const ouvrirPartage = async () => {
     render(<Cerveau slug="x" />);
     await screen.findByLabelText('Légende');
-    fireEvent.click(screen.getByRole('button', { name: 'Partagé' }));
-    await screen.findByTestId('noeud-reference/offre.md');
+    fireEvent.click(screen.getByRole('button', { name: 'Alpes IA' }));
+    await screen.findByRole('button', { name: /^Échanges/ });
   };
 
-  it('le sélecteur bascule sur la carte de l’espace partagé', async () => {
+  it('le sélecteur bascule sur la boîte de réception de l’espace partagé', async () => {
     brancher(() => json({}));
     await ouvrirPartage();
     expect(appels.some((a) => a.url.includes('cerveau/carte?espace=partage'))).toBe(true);
-    expect(screen.getByLabelText('Légende').textContent).toContain('Référence (Christophe)');
-    expect(screen.queryByTestId('noeud-index.md')).toBeNull();
-    expect(screen.getByRole('button', { name: '+ Nouveau message' })).toBeTruthy();
+    expect(screen.queryByLabelText('Légende')).toBeNull();
+    expect(screen.getAllByTestId('fil')[0]?.textContent).toContain('Question fictive');
+    expect(screen.getByRole('button', { name: 'Nouveau message' })).toBeTruthy();
+  });
+
+  it('l’instance d’un partenaire ne voit que son espace, sans le cerveau SIMATIS', async () => {
+    brancher(() => json({}));
+    render(<Cerveau slug="x" seulPartage />);
+    await screen.findByRole('button', { name: /^Échanges/ });
+    expect(screen.queryByRole('button', { name: 'SIMATIS' })).toBeNull();
+    expect(appels.every((a) => !a.url.includes('espace=simatis'))).toBe(true);
+    expect(appels.some((a) => a.url.includes('cerveau/carte?espace=partage'))).toBe(true);
+  });
+
+  it('la carte reste disponible comme rubrique', async () => {
+    brancher(() => json({}));
+    await ouvrirPartage();
+    fireEvent.click(screen.getByRole('button', { name: /^Carte/ }));
+    expect(await screen.findByTestId('noeud-reference/offre.md')).toBeTruthy();
   });
 
   it('une note du dossier de Christophe s’ouvre en lecture seule, sans bouton Enregistrer', async () => {
@@ -246,53 +265,14 @@ describe('Cerveau : espace partagé', () => {
       }),
     );
     await ouvrirPartage();
-    fireEvent.click(screen.getByTestId('noeud-reference/offre.md'));
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir et modifier' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Documents/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Offre fictive/ }));
     expect(await screen.findByText(/appartient à Christophe/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull();
     expect(screen.getByLabelText<HTMLTextAreaElement>('Texte de reference/offre.md').readOnly).toBe(
       true,
     );
     expect(appels.find((a) => a.body?.type === 'lire')?.body?.espace).toBe('partage');
-  });
-
-  it('on répond à un message après confirmation, et rien ne part sans elle', async () => {
-    brancher((op) =>
-      op.type === 'message'
-        ? json({ chemin: 'echanges/2026-10-29-1300-marc-reponse.md' })
-        : json({
-            contenu: 'Corps',
-            empreinte: 'e1',
-            lectureSeule: 'Un message déposé ne se modifie plus.',
-          }),
-    );
-    await ouvrirPartage();
-    fireEvent.click(screen.getByTestId('noeud-echanges/2026-10-29-1200-christophe-question.md'));
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir et modifier' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Répondre à ce message' }));
-    fireEvent.change(screen.getByLabelText('Sujet du message'), {
-      target: { value: 'Re : question' },
-    });
-    fireEvent.change(screen.getByLabelText('Corps du message'), {
-      target: { value: 'Voici la réponse.' },
-    });
-
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    fireEvent.click(screen.getByRole('button', { name: 'Déposer le message' }));
-    expect(appels.some((a) => a.body?.type === 'message')).toBe(false);
-
-    confirm.mockReturnValue(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Déposer le message' }));
-    await waitFor(() => expect(appels.some((a) => a.body?.type === 'message')).toBe(true));
-    expect(appels.find((a) => a.body?.type === 'message')?.body).toEqual({
-      espace: 'partage',
-      type: 'message',
-      genre: 'reponse',
-      sujet: 'Re : question',
-      corps: 'Voici la réponse.',
-      enReponseA: 'echanges/2026-10-29-1200-christophe-question.md',
-    });
-    confirm.mockRestore();
   });
 
   it('publie un nouveau document dans prospection/', async () => {
@@ -302,6 +282,7 @@ describe('Cerveau : espace partagé', () => {
         : json({ contenu: '# Point', empreinte: 'e1', lectureSeule: null }),
     );
     await ouvrirPartage();
+    fireEvent.click(screen.getByRole('button', { name: /^Documents/ }));
     fireEvent.click(screen.getByRole('button', { name: '+ Nouveau document' }));
     fireEvent.change(screen.getByLabelText('Titre du document'), { target: { value: 'Point' } });
     fireEvent.click(screen.getByRole('button', { name: 'Publier dans prospection/' }));

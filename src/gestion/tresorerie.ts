@@ -1,20 +1,65 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Executor } from '../db.js';
+import { pipelineSource } from '../crm/pipeline.js';
+import { entreprises, opportunites } from '../crm/schema.js';
+import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { jourDe } from '../pilotage/realisees.js';
+import { ajouterJours, ajouterMois, dateEmissionPrevue } from './dates.js';
+import type { FactureEmise } from './factures-lecture.js';
+import { lireFacturesEmises } from './factures-lecture.js';
+import { trajetsRefacturables, type IkRefacturable } from './ik.js';
+import { lireDelaisMandats } from './mandats.js';
+import {
+  affairesPipe,
+  MODE_PIPE_PAR_SCENARIO,
+  MODES_PIPE,
+  mouvementsPipe,
+  type AffairePipe,
+  type Hypothese,
+} from './pipe.js';
+import {
+  decomposer,
+  mouvementsRemuneration,
+  remunerationSchema,
+  type DecompositionRemuneration,
+  type Remuneration,
+} from './remuneration.js';
 import { occurrencesRevenus, type OccurrenceRevenu } from './revenus.js';
 import { gestionReglages, MODES_SEUIL, type ModeSeuil } from './schema.js';
 import { occurrencesDepenses, type OccurrenceVue } from './service.js';
 
+type Certitude = 'certaine' | 'probable' | 'hypothese';
 export const SCENARIOS = ['securise', 'central', 'ambitieux'] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 // Quelles recettes entrent dans chaque scénario : le sécurisé ne retient que le certain.
-const CERTITUDES_RETENUES: Record<Scenario, string[]> = {
+const CERTITUDES_RETENUES: Record<Scenario, Certitude[]> = {
   securise: ['certaine'],
   central: ['certaine', 'probable'],
   ambitieux: ['certaine', 'probable', 'hypothese'],
 };
+
+export type ConfigScenario = { certitudes: Certitude[]; pipe: (typeof MODES_PIPE)[number] };
+export type ConfigScenarios = Record<Scenario, ConfigScenario>;
+export const SCENARIOS_PAR_DEFAUT: ConfigScenarios = {
+  securise: { certitudes: CERTITUDES_RETENUES.securise, pipe: MODE_PIPE_PAR_SCENARIO.securise },
+  central: { certitudes: CERTITUDES_RETENUES.central, pipe: MODE_PIPE_PAR_SCENARIO.central },
+  ambitieux: { certitudes: CERTITUDES_RETENUES.ambitieux, pipe: MODE_PIPE_PAR_SCENARIO.ambitieux },
+};
+const configScenario = z.object({
+  // Les recettes déjà encaissées ou facturées comptent toujours : ce réglage ne porte que sur les prévisions.
+  certitudes: z.array(z.enum(['certaine', 'probable', 'hypothese'])).max(3),
+  pipe: z.enum(MODES_PIPE),
+});
+export const scenariosSchema = z.object({
+  securise: configScenario,
+  central: configScenario,
+  ambitieux: configScenario,
+});
+const modeleSchema = z.object({
+  scenarios: scenariosSchema.optional(),
+  remuneration: remunerationSchema.nullable().optional(),
+});
 
 export type Reglages = {
   soldeCents: number | null;
@@ -23,6 +68,8 @@ export type Reglages = {
   seuilMode: ModeSeuil;
   seuilCents: number | null;
   delaiPaiementJours: number | null;
+  scenarios: ConfigScenarios;
+  remuneration: Remuneration | null;
 };
 export const REGLAGES_VIDES: Reglages = {
   soldeCents: null,
@@ -31,6 +78,8 @@ export const REGLAGES_VIDES: Reglages = {
   seuilMode: 'aucun',
   seuilCents: null,
   delaiPaiementJours: null,
+  scenarios: SCENARIOS_PAR_DEFAUT,
+  remuneration: null,
 };
 
 export class ReglagesInvalides extends Error {}
@@ -43,6 +92,8 @@ export const reglagesSchema = z.object({
   seuilMode: z.enum(MODES_SEUIL),
   seuilCents: z.number().int().min(0).nullable(),
   delaiPaiementJours: z.number().int().min(0).max(365).nullable(),
+  scenarios: scenariosSchema.default(SCENARIOS_PAR_DEFAUT),
+  remuneration: remunerationSchema.nullable().default(null),
 });
 
 function verifierReglages(r: Reglages) {
@@ -63,6 +114,8 @@ export async function lireReglages(tx: Executor): Promise<Reglages> {
     .from(gestionReglages)
     .where(eq(gestionReglages.instanceId, currentInstance));
   if (!l) return { ...REGLAGES_VIDES };
+  // Un modèle illisible ou absent retombe sur les réglages d'origine, jamais sur une erreur.
+  const modele = modeleSchema.safeParse(l.modele ?? {});
   return {
     soldeCents: l.soldeCents,
     soldeDate: l.soldeDate,
@@ -70,12 +123,19 @@ export async function lireReglages(tx: Executor): Promise<Reglages> {
     seuilMode: l.seuilMode,
     seuilCents: l.seuilCents,
     delaiPaiementJours: l.delaiPaiementJours,
+    scenarios: (modele.success && modele.data.scenarios) || SCENARIOS_PAR_DEFAUT,
+    remuneration: (modele.success && modele.data.remuneration) || null,
   };
 }
 
 export async function ecrireReglages(tx: Executor, instanceId: string, r: Reglages) {
   verifierReglages(r);
-  const valeurs = { ...r, seuilCents: r.seuilMode === 'montant' ? r.seuilCents : null };
+  const { scenarios, remuneration, ...simples } = r;
+  const valeurs = {
+    ...simples,
+    seuilCents: r.seuilMode === 'montant' ? r.seuilCents : null,
+    modele: { scenarios, remuneration },
+  };
   await tx
     .insert(gestionReglages)
     .values({ instanceId, ...valeurs })
@@ -101,11 +161,7 @@ export type Mouvement = {
   note: string | null;
 };
 
-const ajouterJours = (jourIso: string, n: number) => {
-  const d = new Date(`${jourIso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-};
+export { ajouterMois };
 const plusTard = (a: string, b: string) => (a > b ? a : b);
 
 // Sorties : TTC, à la date de paiement. Une dépense avancée par l'associé ou créditée à son compte
@@ -163,11 +219,15 @@ export function mouvementsRecettes(
     aujourdhui: string;
     delaiJours: number | null;
     retardJours: number;
+    // Délai de paiement propre à chaque mandat, et factures émises (clé d'échéance → émission figée).
+    delaisMandat?: Map<string, number | null>;
+    factures?: Map<string, { dateEmission: string; delaiJours: number | null }>;
+    certitudes?: string[];
   },
 ): { mouvements: Mouvement[]; ignorees: number } {
   const mouvements: Mouvement[] = [];
   let ignorees = 0;
-  const retenues = CERTITUDES_RETENUES[p.scenario];
+  const retenues = p.certitudes ?? CERTITUDES_RETENUES[p.scenario];
   for (const o of occ) {
     if (o.etat === 'ignoree') continue;
     const montant = o.montantHtCents + (o.tvaCents ?? 0);
@@ -180,16 +240,31 @@ export function mouvementsRecettes(
     if (!retenues.includes(o.certitude)) continue;
     // Une facture émise reste due même avant la date du solde ; une simple prévision ancienne, non.
     const apres = p.soldeDate ?? ajouterJours(p.aujourdhui, -1);
-    if (o.etat === 'prevue' && o.date <= apres) {
+    // Une recette de mandat reste à facturer tant qu'elle n'est pas émise, quelle que soit son ancienneté.
+    if (o.etat === 'prevue' && o.mandat == null && o.date <= apres) {
       ignorees += 1;
       continue;
     }
-    const delai = (p.delaiJours ?? 0) + p.retardJours;
-    const cash = ajouterJours(o.date, delai);
+    // Une facture émise suit sa date d'émission et son délai figés ; une recette prévue d'un mandat sera
+    // facturée en fin de mois et réglée selon le délai du mandat ; le reste suit sa propre date.
+    const facture = o.etat === 'emise' ? p.factures?.get(o.cle) : undefined;
+    const parMandat = o.etat === 'prevue' && o.mandat != null;
+    const delaiEffectif = facture
+      ? (facture.delaiJours ?? p.delaiJours)
+      : parMandat
+        ? (p.delaisMandat?.get(o.mandat!) ?? p.delaiJours)
+        : p.delaiJours;
+    const delai = (delaiEffectif ?? 0) + p.retardJours;
+    const dateDeBase = facture
+      ? facture.dateEmission
+      : parMandat
+        ? dateEmissionPrevue(plusTard(o.date, p.aujourdhui))
+        : o.date;
+    const cash = ajouterJours(dateDeBase, delai);
     const effectif = plusTard(cash, p.aujourdhui);
     const notes = [
       sansTva ? 'Montant HT : TVA non renseignée' : null,
-      p.delaiJours == null
+      delaiEffectif == null
         ? 'Délai de paiement non défini : encaissement supposé à la date de facture'
         : null,
       p.retardJours ? `Retard simulé de ${p.retardJours} jours` : null,
@@ -203,6 +278,58 @@ export function mouvementsRecettes(
   }
   return { mouvements, ignorees };
 }
+// Trajets IK refacturés et lignes IK des factures émises. Un trajet à venir est réglé selon le délai de
+// son mandat ; une facture émise selon son délai figé ; une facture encaissée compte à son encaissement,
+// seulement après la date du solde. Mêmes montants dans les trois scénarios : l'indemnité est certaine.
+export function mouvementsFacturesIk(e: {
+  ik: IkRefacturable[];
+  factures: FactureEmise[];
+  delaisMandat: Map<string, number | null>;
+  soldeDate: string | null;
+  aujourdhui: string;
+  delaiJours: number | null;
+  retardJours: number;
+}): Mouvement[] {
+  const sortie = (date: string, libelle: string, montantCents: number, ref: string): Mouvement => ({
+    date,
+    sens: 'entree',
+    libelle,
+    montantCents,
+    nature: 'recette',
+    ref,
+    estime: true,
+    note: 'IK refacturés, montant HT',
+  });
+  const mouvements: Mouvement[] = [];
+  for (const t of e.ik) {
+    if (t.indemniteCents == null) continue;
+    const delai = (e.delaisMandat.get(t.mandat) ?? e.delaiJours ?? 0) + e.retardJours;
+    const facturation = dateEmissionPrevue(plusTard(t.date, e.aujourdhui));
+    mouvements.push(
+      sortie(ajouterJours(facturation, delai), t.libelle, t.indemniteCents, `ik:${t.trajetId}`),
+    );
+  }
+  for (const f of e.factures) {
+    for (const l of f.lignes.filter((x) => x.sorte === 'ik')) {
+      if (f.etat === 'encaissee') {
+        if (e.soldeDate && f.dateEncaissement && f.dateEncaissement > e.soldeDate)
+          mouvements.push(sortie(f.dateEncaissement, l.libelle, l.montantHtCents, l.cle));
+        continue;
+      }
+      const delai = (f.delaiJours ?? e.delaiJours ?? 0) + e.retardJours;
+      mouvements.push(
+        sortie(
+          plusTard(ajouterJours(f.dateEmission, delai), e.aujourdhui),
+          l.libelle,
+          l.montantHtCents,
+          l.cle,
+        ),
+      );
+    }
+  }
+  return mouvements;
+}
+
 const entree = (
   o: OccurrenceRevenu,
   date: string,
@@ -346,24 +473,25 @@ export type Projection = {
   reglages: Reglages;
   seuil: Seuil;
   scenarios: ProjectionScenario[];
+  // Affaires ouvertes du Pipeline, comptées ou écartées (avec la raison), et le décalage simulé.
+  pipe: { affaires: AffairePipe[]; decalageMois: number };
+  // Rémunération réglée : sa décomposition et si la simulation la compte ; null tant qu'elle n'est pas réglée.
+  remuneration: (DecompositionRemuneration & { inclus: boolean }) | null;
   avertissements: string[];
 };
 
-export function ajouterMois(jourIso: string, n: number): string {
-  const [a, m, j] = jourIso.split('-').map(Number) as [number, number, number];
-  const i = a * 12 + (m - 1) + n;
-  const annee = Math.floor(i / 12);
-  const mois = (i % 12) + 1;
-  const dernier = new Date(Date.UTC(annee, mois, 0)).getUTCDate();
-  return `${String(annee).padStart(4, '0')}-${String(mois).padStart(2, '0')}-${String(Math.min(j, dernier)).padStart(2, '0')}`;
-}
-
 export async function projeter(
-  tx: Executor,
+  tx: Tx,
   p: {
     horizonMois: number;
     granularite: Granularite;
     retardJours: number;
+    decalageMois?: number;
+    exclus?: string[];
+    // Simulation du pipe : tout retirer, pondérer ou prendre au total, régler montant et probabilité.
+    inclurePipe?: boolean;
+    inclureRemuneration?: boolean;
+    hypotheses?: Map<string, Hypothese>;
     aujourdhui?: string;
   },
 ): Promise<Projection> {
@@ -374,6 +502,52 @@ export async function projeter(
   const depenses = await occurrencesDepenses(tx, depart, fin, aujourdhui);
   const recettes = await occurrencesRevenus(tx, depart, fin);
   const sorties = mouvementsDepenses(depenses, reglages.soldeDate, aujourdhui);
+  const delaisMandat = await lireDelaisMandats(tx);
+  const facturesEmises = await lireFacturesEmises(tx);
+  const ikAFacturer = await trajetsRefacturables(tx, fin);
+  const parEcheance = new Map(
+    facturesEmises
+      .filter((f) => f.etat === 'emise')
+      .flatMap((f) =>
+        f.lignes
+          .filter((l) => l.cle.startsWith('revenu:'))
+          .map(
+            (l) =>
+              [
+                l.cle.slice('revenu:'.length),
+                { dateEmission: f.dateEmission, delaiJours: f.delaiJours },
+              ] as const,
+          ),
+      ),
+  );
+  const src = await pipelineSource(tx);
+  const probaEtape = new Map(src.etapes.map((e) => [e.id, e.probabilite ?? null]));
+  const ouvertes = await tx
+    .select({
+      id: opportunites.id,
+      titre: opportunites.titre,
+      entreprise: entreprises.nom,
+      etape: opportunites.etape,
+      clos: opportunites.clos,
+      montant: opportunites.montant,
+      modeFacturation: opportunites.modeFacturation,
+      dureeEngagementMois: opportunites.dureeEngagementMois,
+      probabiliteManuelle: opportunites.probabiliteManuelle,
+      signatureEstimee: opportunites.signatureEstimee,
+      echeance: opportunites.echeance,
+    })
+    .from(opportunites)
+    .leftJoin(
+      entreprises,
+      and(
+        eq(entreprises.id, opportunites.entrepriseId),
+        eq(entreprises.instanceId, currentInstance),
+      ),
+    )
+    .where(and(eq(opportunites.instanceId, currentInstance), isNull(opportunites.clos)));
+  const affaires = affairesPipe(ouvertes, probaEtape, p.hypotheses);
+  const decalageMois = p.decalageMois ?? 0;
+  const exclus = new Set(p.exclus ?? []);
 
   const bfr =
     reglages.seuilMode === 'bfr'
@@ -395,8 +569,26 @@ export async function projeter(
     avertissements.push(
       `${sorties.ignorees} échéance(s) de dépense antérieure(s) au solde non confirmée(s) : ignorée(s).`,
     );
+  const ecartees = (p.inclurePipe === false ? [] : affaires).filter(
+    (a) => a.statut !== 'comptee',
+  ).length;
+  if (ecartees)
+    avertissements.push(
+      `${ecartees} affaire(s) du pipe sans montant, sans probabilité ou sans date de signature : non comptée(s).`,
+    );
   if (reglages.seuilMode === 'aucun')
     avertissements.push("Aucun seuil d'alerte réglé : aucune alerte n'est calculée.");
+
+  const remuneration = reglages.remuneration?.actif ? reglages.remuneration : null;
+  const inclureRemuneration = p.inclureRemuneration !== false;
+  const salaire =
+    remuneration && inclureRemuneration
+      ? mouvementsRemuneration(remuneration, { soldeDate: reglages.soldeDate, aujourdhui, fin })
+      : [];
+  if (remuneration && inclureRemuneration)
+    avertissements.push(
+      'Rémunération projetée : si elle figure déjà parmi vos dépenses, ne la comptez qu’une fois.',
+    );
 
   const scenarios: ProjectionScenario[] = SCENARIOS.map((scenario) => {
     const entrees = mouvementsRecettes(recettes, {
@@ -405,14 +597,39 @@ export async function projeter(
       aujourdhui,
       delaiJours: reglages.delaiPaiementJours,
       retardJours: p.retardJours,
+      delaisMandat,
+      factures: parEcheance,
+      certitudes: reglages.scenarios[scenario].certitudes,
     });
-    const periodes = agreger([...sorties.mouvements, ...entrees.mouvements], {
-      solde: reglages.soldeCents,
+    const ik = mouvementsFacturesIk({
+      ik: ikAFacturer,
+      factures: facturesEmises,
+      delaisMandat,
       soldeDate: reglages.soldeDate,
-      debut: aujourdhui,
-      fin,
-      g: p.granularite,
+      aujourdhui,
+      delaiJours: reglages.delaiPaiementJours,
+      retardJours: p.retardJours,
     });
+    const pipe = mouvementsPipe(affaires, {
+      scenario,
+      delaiJours: reglages.delaiPaiementJours,
+      decalageMois,
+      exclus,
+      aujourdhui,
+      fin,
+      inclure: p.inclurePipe,
+      mode: reglages.scenarios[scenario].pipe,
+    });
+    const periodes = agreger(
+      [...sorties.mouvements, ...salaire, ...entrees.mouvements, ...ik, ...pipe],
+      {
+        solde: reglages.soldeCents,
+        soldeDate: reglages.soldeDate,
+        debut: aujourdhui,
+        fin,
+        g: p.granularite,
+      },
+    );
     const sous =
       seuilCents == null
         ? undefined
@@ -429,6 +646,10 @@ export async function projeter(
     reglages,
     seuil: { mode: reglages.seuilMode, cents: seuilCents, bfr },
     scenarios,
+    pipe: { affaires, decalageMois },
+    remuneration: remuneration
+      ? { ...decomposer(remuneration), inclus: inclureRemuneration }
+      : null,
     avertissements,
   };
 }

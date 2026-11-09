@@ -1,3 +1,4 @@
+import { MOTIF_EMAIL_GENERIQUE } from './nettoyage.js';
 import { and, asc, count, desc, eq, gt, ilike, isNotNull, or, sql } from 'drizzle-orm';
 import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
@@ -21,6 +22,7 @@ import {
 } from './historique.js';
 import {
   enrichir,
+  supprimerFiches,
   integrerFiches,
   majConformite,
   type Apport,
@@ -39,6 +41,7 @@ import {
   type StatutLigne,
 } from './schema.js';
 import { clesDoublon } from './nettoyage.js';
+import { etiquettesUtilisees, resumeListes } from './listes.js';
 import { calculerLigne, calculerLignes, type LigneCalculee } from './traitement.js';
 
 export class ImportIntrouvable extends Error {}
@@ -592,24 +595,67 @@ export const FILTRES_ALERTE = [
 ] as const;
 export type FiltreAlerte = (typeof FILTRES_ALERTE)[number];
 
+export const TRIS_BASE = ['entreprise', 'tentatives', 'dernier_contact'] as const;
+
 export type FiltresBase = {
+  tri?: (typeof TRIS_BASE)[number];
+  canal?: 'email' | 'linkedin';
   zone?: Zone;
   statut?: StatutProspection;
   alerte?: FiltreAlerte;
   provenance?: string;
+  liste?: string;
+  tag?: string;
   q?: string;
 };
+
+// A public personal profile is enough for manual outreach, even without CRM-ready details.
+const profilLinkedin = sql`coalesce(${baseVivante.linkedin} ~* '^https://([a-z0-9-]+[.])?linkedin[.]com/in/[^ /]+', false)`;
+const joignableSurLinkedin = sql`trim(${baseVivante.nom}) <> '' and ${profilLinkedin}
+  and not ${baseVivante.opposition} and ${baseVivante.exclusion} is null`;
+// Keep the company record, but stop asking for a first contact once one is reachable.
+const aEnrichir = sql`${baseVivante.zone} = 'a_enrichir' and not (${joignableSurLinkedin})
+  and (trim(${baseVivante.nom}) <> '' or not exists (
+    select 1 from base_vivante contact
+    where contact.instance_id = ${baseVivante.instanceId}
+      and lower(trim(contact.entreprise)) = lower(trim(${baseVivante.entreprise}))
+      and (contact.domaine is null or ${baseVivante.domaine} is null or contact.domaine = ${baseVivante.domaine})
+      and trim(contact.nom) <> ''
+      and not contact.opposition and contact.exclusion is null
+      and (
+        (nullif(trim(contact.email), '') is not null and not contact.email_invalide
+          and trim(contact.email) !~* ${MOTIF_EMAIL_GENERIQUE})
+        or contact.linkedin ~* '^https://([a-z0-9-]+[.])?linkedin[.]com/in/[^ /]+'
+      )
+  ))`;
 
 function conditions(instanceId: string, f: FiltresBase) {
   const recherche = f.q?.trim();
   const motif = recherche ? `%${recherche.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
   const limiteRecontact = new Date();
   limiteRecontact.setMonth(limiteRecontact.getMonth() - MOIS_RECONTACT);
+  const emailExploitable = sql`nullif(trim(${baseVivante.email}), '') is not null and not ${baseVivante.emailInvalide} and trim(${baseVivante.email}) !~* ${MOTIF_EMAIL_GENERIQUE}`;
   return and(
     eq(baseVivante.instanceId, instanceId),
-    f.zone ? eq(baseVivante.zone, f.zone) : undefined,
+    f.canal
+      ? and(
+          eq(baseVivante.opposition, false),
+          sql`${baseVivante.exclusion} is null`,
+          sql`trim(${baseVivante.nom}) <> ''`,
+          f.canal === 'email'
+            ? emailExploitable
+            : sql`not (${emailExploitable}) and ${profilLinkedin}`,
+        )
+      : undefined,
+    f.zone === 'a_enrichir' ? aEnrichir : f.zone ? eq(baseVivante.zone, f.zone) : undefined,
     f.statut ? eq(baseVivante.statutProspection, f.statut) : undefined,
     f.provenance ? eq(baseVivante.provenance, f.provenance) : undefined,
+    // A list of contacts holds them directly; a list of companies holds their contacts.
+    f.liste
+      ? sql`(exists (select 1 from base_liste_fiches m where m.fiche_id = ${baseVivante.id} and m.liste_id = ${f.liste})
+        or exists (select 1 from base_liste_entreprises m where m.entreprise_id = ${baseVivante.entrepriseId} and m.liste_id = ${f.liste}))`
+      : undefined,
+    f.tag ? sql`${f.tag.trim().toLowerCase()} = any(${baseVivante.tags})` : undefined,
     f.alerte === 'opposition' ? eq(baseVivante.opposition, true) : undefined,
     f.alerte === 'email_invalide' ? eq(baseVivante.emailInvalide, true) : undefined,
     f.alerte === 'exclusion' ? isNotNull(baseVivante.exclusion) : undefined,
@@ -639,11 +685,23 @@ export async function listerFiches(
       .select()
       .from(baseVivante)
       .where(filtre)
-      .orderBy(asc(baseVivante.entreprise), asc(baseVivante.nom), asc(baseVivante.id))
+      .orderBy(
+        ...(options.tri === 'tentatives' ? [sql`${baseVivante.nbContacts} desc`] : []),
+        ...(options.tri === 'dernier_contact'
+          ? [sql`${baseVivante.dernierContactLe} desc nulls last`]
+          : []),
+        asc(baseVivante.entreprise),
+        asc(baseVivante.nom),
+        asc(baseVivante.id),
+      )
       .limit(Math.min(options.limite ?? 50, 200))
       .offset(options.decalage ?? 0);
     const parZone = await tx
-      .select({ zone: baseVivante.zone, n: count() })
+      .select({
+        zone: baseVivante.zone,
+        n: count(),
+        aEnrichir: sql<number>`count(*) filter (where ${aEnrichir})`.mapWith(Number),
+      })
       .from(baseVivante)
       .where(eq(baseVivante.instanceId, instanceId))
       .groupBy(baseVivante.zone);
@@ -660,8 +718,14 @@ export async function listerFiches(
     return {
       fiches: fiches.map((f): FicheAvecAlertes => ({ ...f, alertes: alertesDe(f) })),
       total,
-      compteurs: { aEnrichir: nombre('a_enrichir'), prospectable: nombre('prospectable') },
+      compteurs: {
+        aEnrichir: parZone.find((p) => p.zone === 'a_enrichir')?.aEnrichir ?? 0,
+        prospectable: nombre('prospectable'),
+        total: parZone.reduce((somme, p) => somme + p.n, 0),
+      },
       provenances: provenances.map((p) => p.provenance),
+      listes: await resumeListes(tx, instanceId),
+      tags: await etiquettesUtilisees(tx, instanceId),
     };
   });
 }
@@ -688,10 +752,10 @@ const COLONNES_CSV = [
 ];
 
 // A spreadsheet runs a cell that starts with = + - @ as a formula: prefix it.
-const cellule = (v: string | number | null | undefined): string => {
+export const cellule = (v: string | number | null | undefined, separateur = ';'): string => {
   let t = v === null || v === undefined ? '' : String(v);
   if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
-  return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  return /["\n\r]/.test(t) || t.includes(separateur) ? `"${t.replace(/"/g, '""')}"` : t;
 };
 
 // Same filters as the screen; semicolon-separated with a BOM, as French Excel expects.
@@ -700,7 +764,7 @@ export async function exporterCsv(
   instanceId: string,
   filtres: FiltresBase = {},
 ): Promise<string> {
-  const lignes = [COLONNES_CSV.map(cellule).join(';')];
+  const lignes = [COLONNES_CSV.map((v) => cellule(v)).join(';')];
   for (let decalage = 0; ; decalage += 200) {
     const { fiches } = await listerFiches(db, instanceId, { ...filtres, limite: 200, decalage });
     if (fiches.length === 0) break;
@@ -728,7 +792,7 @@ export async function exporterCsv(
           f.mandatContacteur,
           f.alertes.map((a) => a.libelle).join(' | '),
         ]
-          .map(cellule)
+          .map((v) => cellule(v))
           .join(';'),
       );
   }
@@ -756,3 +820,7 @@ export async function enrichirFiche(
 }
 
 export { STATUTS_PROSPECTION };
+
+export async function supprimerFichesBase(db: Executor, instanceId: string, ids: string[]) {
+  await withInstance(db, instanceId, (tx) => supprimerFiches(tx, instanceId, ids));
+}

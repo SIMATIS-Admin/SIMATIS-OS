@@ -10,6 +10,7 @@ import { loadInstanceSecrets } from '../secrets.js';
 import type { Evenement, Kind } from './fiches.js';
 import { lireLiens } from './liens.js';
 import { contactEmails } from './schema.js';
+import { adressesDe } from '../base-vivante/boite-mail.js';
 
 // Mails exchanged with a record, read live from the instance's mailbox: nothing is copied into
 // the database, so the history is as long as the mailbox and no mail content is stored.
@@ -66,6 +67,7 @@ async function boitesDeInstance(db: Database, instance: Instance, deps: Connexio
 export async function mailsEchanges(
   boites: Messagerie[],
   adresses: string[],
+  detailId?: string,
 ): Promise<{ mails: Evenement[]; erreurs: string[] }> {
   const vus = new Map<string, Evenement>();
   const erreurs: string[] = [];
@@ -78,14 +80,36 @@ export async function mailsEchanges(
           // The same mail sits in both boxes when both are on it: one line, the first box's.
           const cle = `${m.id}@${compte}`;
           if (!at || Number.isNaN(at.getTime()) || vus.has(cle)) continue;
-          const envoye = compte !== '' && (m.de ?? '').toLowerCase().includes(compte);
+          const envoye = compte !== '' && adressesDe(m.de).includes(compte);
+          const eventId = `mail-${compte}-${m.id}`;
+          const detail =
+            detailId === eventId
+              ? boite.message
+                ? await boite.message(m.id)
+                : (
+                    await boite.historique(adresse, { mois: MOIS, max: PAR_ADRESSE, complet: true })
+                  ).find((x) => x.id === m.id)
+              : undefined;
           vus.set(cle, {
-            id: `mail-${compte}-${m.id}`,
+            id: eventId,
             type: 'email',
             titre: `${envoye ? 'Envoyé' : 'Reçu'} · ${m.objet?.trim() || '(sans objet)'}`,
             texte: m.extrait || null,
             at: at.toISOString(),
             origine: 'os',
+            mail: {
+              fil: `${compte}:${m.threadId ?? m.id}`,
+              objet: m.objet?.trim() || '(sans objet)',
+              de: m.de,
+              a: m.a,
+              cc: m.cc,
+              sens: envoye ? 'envoye' : 'recu',
+              reponse: Boolean(m.inReplyTo),
+              lien:
+                boite.lienFil?.(m.threadId ?? m.id) ??
+                `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(compte)}#all/${encodeURIComponent(m.threadId ?? m.id)}`,
+              ...(detail ? { html: detail.html, corps: detail.corps, charge: true } : {}),
+            },
             ...(boites.length > 1 && compte ? { compte } : {}),
           });
         }
@@ -108,6 +132,7 @@ export async function mailsDeFiche(
     i: Instance,
     d: ConnexionDeps,
   ) => Promise<Messagerie[]> = boitesDeInstance,
+  detailId?: string,
 ): Promise<MailsFiche> {
   const adresses = await adressesDeFiche(db, instance, kind, id);
   if (!adresses.length)
@@ -119,7 +144,7 @@ export async function mailsDeFiche(
       adresses: adresses.length,
       message: 'Aucune messagerie connectée à cette instance (Paramètres > Connexions).',
     };
-  const { mails, erreurs } = await mailsEchanges(boites, adresses);
+  const { mails, erreurs } = await mailsEchanges(boites, adresses, detailId);
   return {
     mails,
     adresses: adresses.length,

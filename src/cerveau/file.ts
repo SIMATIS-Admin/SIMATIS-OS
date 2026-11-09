@@ -2,10 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { ajouterIdee, ecrireNote, ErreurCerveau, lireNote } from './fichiers.js';
 import {
   ajouterDocumentPartage,
+  chercherPartage,
+  lireMessages,
   deposerMessage,
   ecrirePartage,
   lirePartage,
   type AppelerPartage,
+  type ResultatRecherche,
 } from './partage.js';
 
 // Le second cerveau est un dossier du poste de Marc : le serveur (dans Docker) ne peut pas le lire.
@@ -27,7 +30,9 @@ export type Operation =
       corps: string;
       enReponseA?: string | undefined;
     }
-  | { espace: 'partage'; type: 'actualiser' };
+  | { espace: 'partage'; type: 'actualiser' }
+  | { espace: 'partage'; type: 'chercher'; requete: string }
+  | { espace: 'partage'; type: 'lire_messages'; chemins: string[] };
 
 export type Resultat =
   | {
@@ -36,6 +41,8 @@ export type Resultat =
       contenu?: string;
       empreinte?: string;
       lectureSeule?: string | null;
+      resultats?: ResultatRecherche[];
+      textes?: Record<string, string>;
     }
   | { ok: false; erreur: string; conflit?: boolean };
 
@@ -148,5 +155,9 @@ async function executerPartage(op: Operation, partage: Partage | null): Promise<
       return { ok: true, ...(await deposerMessage(appeler, op)) };
     case 'actualiser':
       return { ok: true };
+    case 'lire_messages':
+      return { ok: true, textes: await lireMessages(appeler, op.chemins, auteur) };
+    case 'chercher':
+      return { ok: true, resultats: await chercherPartage(appeler, op.requete) };
   }
 }

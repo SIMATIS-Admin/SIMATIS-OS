@@ -43,6 +43,24 @@ export const DEMANDES = [
   'entretien',
   'capitalisation_proposer',
   'capitalisation_enregistrer',
+  // Capitalisation des règles de rédaction à la version finale du rapport, et son annulation. Pas de
+  // préfixe « capitalisation_ » : il déclenche la capitalisation de la restitution.
+  'regles_rapport',
+  'regles_annuler',
+  // Capitalisation des règles du support d'ouverture à l'archivage du support final.
+  'regles_support',
+  // Capitalisation des règles d'analyse à la validation de la revue (étape 3).
+  'regles_analyse',
+  // Capitalisation des règles de construction du deck à la version finale de la restitution.
+  'regles_restitution',
+  // Préparation de la revue (étape 3) : Claude propose les textes, jamais les choix du pilote.
+  'revue_preparer',
+  // Cadrage du rapport (étape 4) : Claude pose ses questions et propose le plan, sans rien rédiger.
+  'rapport_cadrer',
+  // Export de la revue validée (étape 3) en artifact claude.ai, à rouvrir dans Claude Chat.
+  'revue_exporter',
+  // Dossier de travail du rapport (étape 4) en artifact, à rouvrir dans Claude Chat.
+  'dossier_exporter',
 ] as const;
 // Capitalisation de la restitution (étape 5) : 'en_cours' tant que Claude propose, 'propose' une fois
 // sa proposition dans le chat, 'enregistre' quand le pilote l'a validée et que Claude l'a écrite.
@@ -53,6 +71,12 @@ export const STATUTS_RAPPORT = ['aucun', 'en_cours', 'pret'] as const;
 export type Demande = (typeof DEMANDES)[number];
 // Une version du rapport : son contenu structuré, d'où le Word se régénère et que Claude révise.
 export type VersionRapport = { version: number; le: string; contenu: ContenuRapport };
+// Une version du rapport sur Drive. `finale` : la version que le pilote a validée comme référence de
+// rédaction pour les rapports suivants (une seule par projet).
+export type LienRapport = { lien: string; le: string; version?: number; finale?: boolean };
+// Une version du deck de restitution. `finale` : le deck que le pilote a validé comme référence pour
+// les suivants (un seul par projet).
+export type LienRestitution = { lien: string; le: string; finale?: boolean };
 export type Diapositive = { titre: string; texte: string; notes: string };
 
 // Un projet de diagnostic, pour une entreprise prospect de SIMATIS. Étapes : 1 préparation,
@@ -83,10 +107,17 @@ export const diagnosticProjets = pgTable(
       .notNull()
       .default('aucun'),
     rapportLien: text('rapport_lien'),
-    rapportLiens: jsonb('rapport_liens')
-      .$type<{ lien: string; le: string; version?: number }[]>()
+    rapportLiens: jsonb('rapport_liens').$type<LienRapport[]>().notNull().default([]),
+    // Export de la revue validée en artifact : statut et lien, remplacé à chaque nouvel export.
+    revueExportStatut: text('revue_export_statut', { enum: STATUTS_RAPPORT })
       .notNull()
-      .default([]),
+      .default('aucun'),
+    revueExportLien: text('revue_export_lien'),
+    // Dossier de travail du rapport en artifact : même principe que l'export de la revue.
+    dossierExportStatut: text('dossier_export_statut', { enum: STATUTS_RAPPORT })
+      .notNull()
+      .default('aucun'),
+    dossierExportLien: text('dossier_export_lien'),
     // Dossier Drive du diagnostic (Google Docs du rapport) : créé à la première version envoyée.
     driveDossierId: text('drive_dossier_id'),
     // Versions du rapport rédigées par Claude (la dernière est le Word affiché). Un Word importé
@@ -98,10 +129,7 @@ export const diagnosticProjets = pgTable(
       .notNull()
       .default('aucun'),
     restitutionLien: text('restitution_lien'),
-    restitutionLiens: jsonb('restitution_liens')
-      .$type<{ lien: string; le: string }[]>()
-      .notNull()
-      .default([]),
+    restitutionLiens: jsonb('restitution_liens').$type<LienRestitution[]>().notNull().default([]),
     restitutionAvecProposition: boolean('restitution_avec_proposition').notNull().default(true),
     // Dernier export du deck : Claude relit le deck publié et en rend les diapositives, l'OS en
     // fait le fichier PowerPoint. Le texte du deck n'est lu qu'à la demande du pilote.
@@ -164,3 +192,37 @@ export const diagnosticProjets = pgTable(
 );
 
 export type Projet = typeof diagnosticProjets.$inferSelect;
+
+export const ACTIONS_REGLE = ['ajoutée', 'durcie', 'modifiée', 'signalée', 'annulée'] as const;
+export type ActionRegle = (typeof ACTIONS_REGLE)[number];
+export const FICHES_REGLES = ['rapport', 'communes', 'support', 'analyse', 'restitution'] as const;
+export type FicheRegles = (typeof FICHES_REGLES)[number];
+
+// Journal des changements de règles de rédaction faits par Claude dans le second cerveau. Pas de clé
+// étrangère vers le projet : le journal survit à la suppression d'un projet. Un libellé est une
+// consigne de style générique, jamais un extrait de rapport.
+export const diagnosticReglesJournal = pgTable(
+  'diagnostic_regles_journal',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    projetId: uuid('projet_id').notNull(),
+    fiche: text('fiche', { enum: FICHES_REGLES }).notNull(),
+    action: text('action', { enum: ACTIONS_REGLE }).notNull(),
+    libelle: text('libelle').notNull(),
+    // Texte de la règle avant et après le changement : de quoi l'annuler.
+    avant: text('avant'),
+    apres: text('apres'),
+    // Ce qui a déclenché le changement (« version finale 4 »).
+    origine: text('origine').notNull(),
+    statut: text('statut', { enum: ['actif', 'annule'] })
+      .notNull()
+      .default('actif'),
+    // Pourquoi une annulation demandée n'a pas pu se faire.
+    motifRefus: text('motif_refus'),
+  },
+  (t) => [
+    index('diagnostic_regles_journal_instance_idx').on(t.instanceId, t.createdAt),
+    instanceIsolation('diagnostic_regles_journal'),
+  ],
+);

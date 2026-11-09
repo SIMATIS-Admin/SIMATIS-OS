@@ -52,11 +52,26 @@ export function creerClientOpenAI(
         await new Promise((r) => setTimeout(r, attenteMs));
         res = await appeler(d);
       }
-      if (res.status === 401 || res.status === 429)
-        throw new ErreurIA(
-          res.status === 401 ? 'Clé OpenAI refusée' : 'Quota OpenAI atteint',
-          true,
-        );
+      if (res.status === 401) throw new ErreurIA('Clé OpenAI refusée', true);
+      if (res.status === 429) {
+        const corps = (await res.json().catch(() => null)) as {
+          error?: { code?: string; type?: string };
+        } | null;
+        const { code, type } = corps?.error ?? {};
+        if (code === 'insufficient_quota' || type === 'insufficient_quota') {
+          throw new ErreurIA(
+            'Quota API OpenAI épuisé. Vérifiez la facturation du compte API.',
+            true,
+          );
+        }
+        if (code === 'rate_limit_exceeded' || type === 'rate_limit_exceeded') {
+          throw new ErreurIA(
+            'Limite de débit OpenAI atteinte. Réessayez dans quelques instants.',
+            true,
+          );
+        }
+        throw new ErreurIA('OpenAI a refusé la requête (HTTP 429). Cause non précisée.', true);
+      }
       if (!res.ok) throw new ErreurIA(`OpenAI indisponible (HTTP ${res.status})`, false);
       let corps: Sortie;
       try {

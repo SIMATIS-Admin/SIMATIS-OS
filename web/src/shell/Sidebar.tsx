@@ -27,6 +27,8 @@ type Props = {
 const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
+const QUOTIDIEN = ['brief', 'inbox'];
+const COMMERCIAL = ['agenda', 'pipeline', 'contacts', 'entreprises', 'rendez-vous'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
 const memoriser = (cle: string, valeur: string) => {
@@ -62,6 +64,7 @@ export function Sidebar({
   onMoveFavori,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [espaces, setEspaces] = useState(false);
   // Sections fold and unfold; « Plus tard » starts folded, the others open.
   const [ouverts, setOuverts] = useState(lireOuverts);
   const basculer = (titre: string, ouvert: boolean) => {
@@ -75,7 +78,7 @@ export function Sidebar({
     memoriser(CLE_REDUITE, reduite ? '0' : '1');
   };
 
-  const link = (it: NavItem, inFavoris = false) => {
+  const link = (it: NavItem, inFavoris = false, index = -1) => {
     const fav = favoris.includes(it.id);
     const dragProps = inFavoris
       ? {
@@ -85,7 +88,7 @@ export function Sidebar({
           onDragOver: (e: DragEvent) => {
             if (e.dataTransfer.types.includes(FAV_MIME)) e.preventDefault();
           },
-          onDrop: (e: DragEvent<HTMLAnchorElement>) => {
+          onDrop: (e: DragEvent<HTMLDivElement>) => {
             const id = e.dataTransfer.getData(FAV_MIME);
             if (!id) return;
             e.preventDefault();
@@ -95,36 +98,62 @@ export function Sidebar({
         }
       : {};
     return (
-      <a
-        key={`${inFavoris ? 'fav-' : ''}${it.id}`}
-        href={`#/${current.slug}/${it.id}`}
-        className={[view === it.id ? 'on' : '', isBuilt(it.id) ? '' : 'soon'].join(' ')}
-        title={reduite ? it.label : undefined}
-        {...dragProps}
-      >
-        <Icon name={it.icon} />
-        <span className="lbl">{it.label}</span>
-        {it.beta && <span className="beta">Bêta</span>}
-        {(compteurs[it.id] ?? 0) > 0 && <span className="pastille">{compteurs[it.id]}</span>}
-        {!isBuilt(it.id) && <span className="soon-tag">Bientôt</span>}
-        <span
+      <div key={`${inFavoris ? 'fav-' : ''}${it.id}`} className="nav-entry" {...dragProps}>
+        <a
+          href={`#/${current.slug}/${it.id}`}
+          className={[view === it.id ? 'on' : '', isBuilt(it.id) ? '' : 'soon'].join(' ')}
+          title={reduite ? it.label : undefined}
+          aria-current={view === it.id ? 'page' : undefined}
+        >
+          <Icon name={it.icon} />
+          <span className="lbl">{it.label}</span>
+          {it.beta && <span className="beta">Bêta</span>}
+          {(compteurs[it.id] ?? 0) > 0 && <span className="pastille">{compteurs[it.id]}</span>}
+          {!isBuilt(it.id) && <span className="soon-tag">Bientôt</span>}
+        </a>
+        <button
+          type="button"
           className={`fav ${fav ? 'on' : ''}`}
-          role="button"
+          aria-label={fav ? `Retirer ${it.label} des favoris` : `Ajouter ${it.label} aux favoris`}
           title={fav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-          onClick={(e) => {
-            e.preventDefault();
-            onToggleFavori(it.id);
-          }}
+          onClick={() => onToggleFavori(it.id)}
         >
           <Icon name="star" />
-        </span>
-      </a>
+        </button>
+        {inFavoris && index > 0 && (
+          <button
+            type="button"
+            className="fav-order up"
+            aria-label={`Monter ${it.label}`}
+            onClick={() => onMoveFavori(it.id, favItems[index - 1]!.id, false)}
+          >
+            <Icon name="down" />
+          </button>
+        )}
+        {inFavoris && index < favItems.length - 1 && (
+          <button
+            type="button"
+            className="fav-order down"
+            aria-label={`Descendre ${it.label}`}
+            onClick={() => onMoveFavori(it.id, favItems[index + 1]!.id, true)}
+          >
+            <Icon name="down" />
+          </button>
+        )}
+      </div>
     );
   };
 
+  const quotidien = allItems().filter(
+    (it) => QUOTIDIEN.includes(it.id) && allowed(it, current.modules),
+  );
   const favItems = favoris
+    .filter((id) => !QUOTIDIEN.includes(id) && !COMMERCIAL.includes(id))
     .map((id) => allItems().find((it) => it.id === id))
     .filter((it): it is NavItem => !!it && allowed(it, current.modules));
+  const commercial = COMMERCIAL.map((id) => allItems().find((it) => it.id === id)).filter(
+    (it): it is NavItem => !!it && allowed(it, current.modules),
+  );
   const isPortefeuille = view === 'portefeuille';
 
   return (
@@ -199,36 +228,66 @@ export function Sidebar({
           </button>
         </div>
       )}
-      <nav className="nav">
+      <nav className="nav" aria-label="Navigation principale">
+        <div className="nav-group quotidien">
+          <span>Mon quotidien</span>
+          {quotidien.map((it) => link(it))}
+        </div>
+        <div className="nav-group commercial">
+          <span>Relation commerciale</span>
+          {commercial.map((it) => link(it))}
+        </div>
         {favItems.length > 0 && (
           <div className="nav-group favs">
             <span>
               <Icon name="star" />
-              Favoris
+              Mes raccourcis
             </span>
-            {favItems.map((it) => link(it, true))}
+            {favItems.map((it, index) => link(it, true, index))}
           </div>
         )}
-        {NAV.map((g) => {
-          const items = g.items.filter((it) => allowed(it, current.modules));
-          if (items.length === 0) return null;
-          const ouvert = ouverts[g.title] ?? !g.later;
-          return (
-            <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
-              <button
-                className="later-btn"
-                aria-expanded={ouvert}
-                onClick={() => basculer(g.title, ouvert)}
-              >
-                {g.title}
-                <span className={`chev ${ouvert ? 'open' : ''}`}>
-                  <Icon name="down" />
-                </span>
-              </button>
-              {ouvert && items.map((it) => link(it))}
-            </div>
-          );
-        })}
+        <button
+          className="espaces-btn"
+          aria-expanded={espaces}
+          aria-controls="nav-espaces"
+          title="Mes espaces"
+          onClick={() => {
+            setEspaces(!espaces);
+            if (reduite) basculerReduite();
+          }}
+        >
+          <Icon name="panel" />
+          <span>Mes espaces</span>
+          <Icon name="down" />
+        </button>
+        <div id="nav-espaces" hidden={!espaces}>
+          {NAV.map((g) => {
+            const items = g.items.filter(
+              (it) =>
+                allowed(it, current.modules) &&
+                !QUOTIDIEN.includes(it.id) &&
+                !COMMERCIAL.includes(it.id) &&
+                !favItems.some((f) => f.id === it.id),
+            );
+            if (items.length === 0) return null;
+            const ouvert = ouverts[g.title] ?? !g.later;
+            return (
+              <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
+                <button
+                  className="later-btn"
+                  aria-expanded={ouvert}
+                  onClick={() => basculer(g.title, ouvert)}
+                >
+                  {g.title}
+                  <span className={`chev ${ouvert ? 'open' : ''}`}>
+                    <Icon name="down" />
+                  </span>
+                </button>
+                {ouvert && items.map((it) => link(it))}
+              </div>
+            );
+          })}
+        </div>
       </nav>
       {current.type === 'propre' &&
         (current.modules.includes('cerveau') || current.modules.includes('gestion')) && (

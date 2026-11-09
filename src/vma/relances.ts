@@ -1,3 +1,4 @@
+import { logEvent } from '../journal/service.js';
 import { and, eq, gt, isNotNull, lte, sql } from 'drizzle-orm';
 import type { ConnexionDeps } from '../connexions/service.js';
 import type { Database } from '../db.js';
@@ -33,7 +34,7 @@ export async function relancerInvitation(
       .where(and(eq(vmaTests.instanceId, instance.id), eq(vmaTests.id, p.testId)))
       .for('update');
     if (!test) throw new RelanceImpossible('Invitation introuvable dans cette instance');
-    if (test.statut !== 'envoyee')
+    if (test.statut !== 'envoyee' || test.recueLe || test.ecran)
       throw new RelanceImpossible('Seule une invitation ouverte peut être relancée');
     if (test.expireLe <= maintenant)
       throw new RelanceImpossible('Invitation expirée : créez-en une nouvelle');
@@ -67,6 +68,15 @@ export async function relancerInvitation(
         ...(envoi.statut === 'echec' ? { echecEnvoi: envoi.raison ?? 'échec' } : {}),
       })
       .where(and(eq(vmaTests.instanceId, instance.id), eq(vmaTests.id, test.id)));
+    if (p.origine === 'manuelle') {
+      const action =
+        envoi.statut === 'envoye'
+          ? `Relance envoyée à ${test.contactEmail}.`
+          : envoi.statut === 'simule'
+            ? 'Relance non envoyée (simulation).'
+            : `Relance non envoyée${envoi.raison ? ` : ${envoi.raison}` : ''}.`;
+      await logEvent(tx, { acteur: 'pilote', action });
+    }
     return envoi;
   });
 }

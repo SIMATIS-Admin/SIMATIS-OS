@@ -157,10 +157,79 @@ export const gestionReglages = pgTable(
     seuilMode: text('seuil_mode', { enum: MODES_SEUIL }).notNull().default('aucun'),
     seuilCents: integer('seuil_cents'),
     delaiPaiementJours: integer('delai_paiement_jours'),
+    // Hypothèses du modèle de projection : ce que retient chaque scénario et la rémunération du dirigeant.
+    // Validé à la lecture par zod (tresorerie.ts) : une valeur absente retombe sur les réglages d'origine.
+    modele: jsonb('modele'),
   },
   (t) => [
     uniqueIndex('gestion_reglages_instance_idx').on(t.instanceId),
     instanceIsolation('gestion_reglages'),
+  ],
+);
+
+// Registre des lignes importées d'un export bancaire : la clé d'une ligne ne se réimporte jamais.
+// Le fichier lui-même n'est pas conservé ; on garde la clé, la décision et ce qu'elle a produit.
+export const DECISIONS_IMPORT = ['importee', 'rapprochee', 'ignoree'] as const;
+export const gestionImportCles = pgTable(
+  'gestion_import_cles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    cle: text('cle').notNull(),
+    decision: text('decision', { enum: DECISIONS_IMPORT }).notNull(),
+    cibleType: text('cible_type', { enum: ['depense', 'recette'] }),
+    cibleId: uuid('cible_id'),
+  },
+  (t) => [
+    uniqueIndex('gestion_import_cles_idx').on(t.instanceId, t.cle),
+    instanceIsolation('gestion_import_cles'),
+  ],
+);
+
+// Réglages propres à un mandat : le délai de paiement de ses factures (repli sur le délai général).
+export const gestionMandatReglages = pgTable(
+  'gestion_mandat_reglages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    mandat: text('mandat').notNull(),
+    delaiPaiementJours: integer('delai_paiement_jours'),
+  },
+  (t) => [
+    uniqueIndex('gestion_mandat_reglages_idx').on(t.instanceId, t.mandat),
+    instanceIsolation('gestion_mandat_reglages'),
+  ],
+);
+
+// Facture de mandat émise : photographie figée de ses lignes. Rien d'autre que son encaissement ne la
+// modifie ensuite ; les recettes et trajets qu'elle couvre portent sa référence.
+export const ETATS_FACTURE = ['emise', 'encaissee'] as const;
+export type LigneFigee = {
+  cle: string;
+  sorte: 'recurrent' | 'commission' | 'frais' | 'ik';
+  libelle: string;
+  date: string;
+  montantHtCents: number;
+  tvaCents: number | null;
+};
+export const gestionFactures = pgTable(
+  'gestion_factures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    mandat: text('mandat').notNull(),
+    numero: text('numero').notNull(),
+    dateEmission: date('date_emission', { mode: 'string' }).notNull(),
+    totalHtCents: integer('total_ht_cents').notNull(),
+    // Délai de paiement effectif au moment de l'émission : l'encaissement attendu ne bouge plus.
+    delaiJours: integer('delai_jours'),
+    etat: text('etat', { enum: ETATS_FACTURE }).notNull().default('emise'),
+    dateEncaissement: date('date_encaissement', { mode: 'string' }),
+    lignes: jsonb('lignes').$type<LigneFigee[]>().notNull(),
+  },
+  (t) => [
+    uniqueIndex('gestion_factures_numero_idx').on(t.instanceId, t.numero),
+    instanceIsolation('gestion_factures'),
   ],
 );
 
@@ -178,5 +247,156 @@ export const gestionTvaMois = pgTable(
   (t) => [
     uniqueIndex('gestion_tva_mois_idx').on(t.instanceId, t.mois),
     instanceIsolation('gestion_tva_mois'),
+  ],
+);
+
+// IK et compte courant d'associé (Lot D). Aucune valeur réelle (commune, lieux, distances, taux) n'est
+// dans le code : tout se saisit dans l'OS. Le fichier du comptable n'est jamais modifié.
+export const ORIGINES_DISTANCE = ['calculee', 'convention_comptable', 'saisie'] as const;
+export const STATUTS_IK = [
+  'brouillon',
+  'a_controler',
+  'valide',
+  'comptabilise',
+  'rembourse',
+] as const;
+export type StatutIk = (typeof STATUTS_IK)[number];
+
+export const gestionIkVehicules = pgTable(
+  'gestion_ik_vehicules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    libelle: text('libelle').notNull(),
+    // Catégorie du barème (voiture, deux-roues…) et puissance fiscale : à renseigner par Marc.
+    categorie: text('categorie').notNull(),
+    puissanceFiscale: integer('puissance_fiscale'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  () => [instanceIsolation('gestion_ik_vehicules')],
+);
+
+// Barème versionné par année et catégorie. Il ne sert au calcul qu'une fois validé (`valideLe`).
+export const gestionIkBaremes = pgTable(
+  'gestion_ik_baremes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    annee: integer('annee').notNull(),
+    categorie: text('categorie').notNull(),
+    version: integer('version').notNull(),
+    tranches: jsonb('tranches')
+      .$type<
+        {
+          deKm: number;
+          jusquaKm: number | null;
+          tauxDixMilliemes: number;
+          forfaitCents: number;
+        }[]
+      >()
+      .notNull(),
+    // D'où vient le barème (texte officiel, fichier du comptable) : jamais un taux sans source.
+    source: text('source').notNull(),
+    valideLe: date('valide_le', { mode: 'string' }),
+  },
+  (t) => [
+    uniqueIndex('gestion_ik_baremes_version_idx').on(t.instanceId, t.annee, t.categorie, t.version),
+    instanceIsolation('gestion_ik_baremes'),
+  ],
+);
+
+// Lieux habituels (bureau d'un client…) : distance aller-retour conventionnelle.
+export const gestionIkLieux = pgTable(
+  'gestion_ik_lieux',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    nom: text('nom').notNull(),
+    distanceKm: integer('distance_km').notNull(),
+    origine: text('origine', { enum: ORIGINES_DISTANCE }).notNull().default('saisie'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  () => [instanceIsolation('gestion_ik_lieux')],
+);
+
+// « Abonnement de transport » du mois : demandé à Marc, jamais deviné (absence de ligne = inconnu).
+export const gestionIkMois = pgTable(
+  'gestion_ik_mois',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    mois: text('mois').notNull(),
+    abonnement: boolean('abonnement').notNull(),
+  },
+  (t) => [
+    uniqueIndex('gestion_ik_mois_idx').on(t.instanceId, t.mois),
+    instanceIsolation('gestion_ik_mois'),
+  ],
+);
+
+export const gestionIkTrajets = pgTable(
+  'gestion_ik_trajets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    vehiculeId: uuid('vehicule_id')
+      .notNull()
+      .references(() => gestionIkVehicules.id),
+    date: date('date', { mode: 'string' }).notNull(),
+    trajet: text('trajet').notNull(),
+    // Client, projet ou réunion : motif professionnel.
+    commentaire: text('commentaire').notNull(),
+    kmAllerRetour: integer('km_aller_retour').notNull(),
+    origineDistance: text('origine_distance', { enum: ORIGINES_DISTANCE })
+      .notNull()
+      .default('saisie'),
+    mandat: text('mandat'),
+    // Refacturé au mandat en plus d'alimenter le compte d'associé ; exige un mandat.
+    refacturer: boolean('refacturer').notNull().default(false),
+    // Facture qui a repris ce trajet ; null = pas encore facturé.
+    factureId: uuid('facture_id').references(() => gestionFactures.id),
+    justificatif: text('justificatif'),
+    statut: text('statut', { enum: STATUTS_IK }).notNull().default('brouillon'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('gestion_ik_trajets_idx').on(t.instanceId, t.date),
+    instanceIsolation('gestion_ik_trajets'),
+  ],
+);
+
+// Compte courant d'associé : seuls les mouvements `comptabilise` composent le solde confirmé ; les
+// `prevu` restent des estimations. `refSource` rend un mouvement dérivé (IK d'un mois) idempotent.
+export const TYPES_CCA = [
+  'ouverture',
+  'apport',
+  'depense_personnelle',
+  'ik',
+  'loyer',
+  'remboursement',
+  'correction',
+] as const;
+export const ETATS_CCA = ['prevu', 'comptabilise'] as const;
+export type TypeCca = (typeof TYPES_CCA)[number];
+
+export const gestionCcaMouvements = pgTable(
+  'gestion_cca_mouvements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    date: date('date', { mode: 'string' }).notNull(),
+    type: text('type', { enum: TYPES_CCA }).notNull(),
+    libelle: text('libelle').notNull(),
+    // Positif = crédit du compte d'associé (la société doit à l'associé) ; négatif = débit.
+    montantCents: integer('montant_cents').notNull(),
+    etat: text('etat', { enum: ETATS_CCA }).notNull().default('prevu'),
+    // Source du chiffre (relevé, écriture du comptable) : obligatoire pour comptabiliser.
+    source: text('source'),
+    refSource: text('ref_source'),
+    archiveeAt: timestamp('archivee_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('gestion_cca_ref_idx').on(t.instanceId, t.refSource),
+    instanceIsolation('gestion_cca_mouvements'),
   ],
 );

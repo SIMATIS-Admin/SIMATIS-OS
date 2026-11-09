@@ -1,6 +1,8 @@
+import { lireOrigine, noterContactsRecherches } from './origine.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { withInstance } from '../db/context.js';
 import type { FetchLike } from '../connecteurs/google/oauth.js';
 import type { Database } from '../db.js';
 import { instances } from '../instances/schema.js';
@@ -28,7 +30,9 @@ import {
   FILTRES_ALERTE,
   listerFiches,
   modifierConformite,
+  supprimerFichesBase,
   type FiltresBase,
+  TRIS_BASE,
   listerImports,
   reglerCorrespondance,
 } from './service.js';
@@ -41,7 +45,54 @@ import {
   validerReponse,
 } from './reponses.js';
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
-import { FicheIntrouvable, FicheNonHomogene } from './integration.js';
+import { exporterWaalaxy } from './waalaxy.js';
+import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
+import { creerGeocodeur, type Geocodeur } from '../routage/geocodage.js';
+import { creerClientBodacc, ErreurBodacc, type ClientBodacc } from '../signaux/bodacc.js';
+import { creerRouteur, type Routeur } from '../routage/osrm.js';
+import {
+  bilanDe,
+  enregistrerRoutineAlerte,
+  lancerAlerte,
+  lireRoutineAlerte,
+  reglagesAlerte,
+} from './alerte-signaux.js';
+import { calculerTournee, pointsCarte, TourneeRefusee } from './carte.js';
+import {
+  actualiserPlusieurs,
+  actualiserSignaux,
+  lireSignaux,
+  MAX_ACTUALISATION,
+} from './signaux.js';
+import {
+  ajouterEntreprises,
+  candidatsPourFiche,
+  EntrepriseIntrouvable,
+  listerEntreprisesBase,
+  lireEntreprise,
+  rattacherParSiren,
+  RechercheRefusee,
+  rechercherEntreprises,
+  SirenInvalide,
+} from './entreprises.js';
+import {
+  detacherEntreprise,
+  EtiquetteRefusee,
+  FicheIntrouvable,
+  FicheNonHomogene,
+  modifierEtiquettes,
+} from './integration.js';
+import {
+  ajouterALaListe,
+  ajouterEntreprisesALaListe,
+  creerListe,
+  ListeIntrouvable,
+  ListeRefusee,
+  modifierListe,
+  retirerDeLaListe,
+  retirerEntreprisesDeLaListe,
+  supprimerListe,
+} from './listes.js';
 import { EXCLUSIONS, STATUTS_PROSPECTION } from './schema.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -76,6 +127,12 @@ const apportSchema = z.object({
   email: z.string().max(200).optional(),
   telephone: z.string().max(60).optional(),
   fonction: z.string().max(200).optional(),
+  linkedin: z
+    .string()
+    .trim()
+    .max(300)
+    .regex(/^(?:https:\/\/(?:[a-z0-9-]+\.)?linkedin\.com\/in\/[^\s/]+.*)?$/i)
+    .optional(),
 });
 
 const validationSchema = z.object({ classe: z.enum(CLASSES).optional() });
@@ -100,6 +157,10 @@ export type BaseVivanteRoutesDeps = {
   secretsDir?: string;
   realWrites?: boolean;
   googleFetch?: FetchLike;
+  annuaire?: ClientAnnuaire;
+  routeur?: Routeur;
+  geocodeur?: Geocodeur;
+  bodacc?: ClientBodacc;
 };
 
 export function registerBaseVivanteRoutes(
@@ -109,12 +170,18 @@ export function registerBaseVivanteRoutes(
     secretsDir = './secrets/instances',
     realWrites = false,
     googleFetch,
+    annuaire = creerClientAnnuaire(),
+    routeur = creerRouteur(),
+    geocodeur = creerGeocodeur(),
+    bodacc = creerClientBodacc(),
   }: BaseVivanteRoutesDeps,
 ) {
   const erreur = (error: unknown, reply: FastifyReply) => {
     if (
       error instanceof ImportIntrouvable ||
       error instanceof FicheIntrouvable ||
+      error instanceof EntrepriseIntrouvable ||
+      error instanceof ListeIntrouvable ||
       error instanceof ReponseIntrouvable
     )
       return reply.code(404).send({ error: error.message });
@@ -123,21 +190,35 @@ export function registerBaseVivanteRoutes(
       error instanceof FichierIllisible ||
       error instanceof FicheNonHomogene ||
       error instanceof RapprochementImpossible ||
-      error instanceof ClasseRefusee
+      error instanceof ClasseRefusee ||
+      error instanceof SirenInvalide ||
+      error instanceof RechercheRefusee ||
+      error instanceof TourneeRefusee ||
+      error instanceof ListeRefusee ||
+      error instanceof EtiquetteRefusee
     )
       return reply.code(400).send({ error: error.message });
+    if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
+    if (error instanceof ErreurAnnuaire || error instanceof ErreurBodacc)
+      return reply.code(502).send({ error: error.message });
     throw error;
   };
 
   type Route = {
     Params: { slug: string; id?: string; numero?: string; mandat?: string };
     Querystring: {
+      canal?: string;
+      tri?: string;
       zone?: string;
       q?: string;
       page?: string;
+      partie?: string;
       statut?: string;
       alerte?: string;
       provenance?: string;
+      liste?: string;
+      tag?: string;
+      signal?: string;
     };
     Body: unknown;
   };
@@ -256,10 +337,14 @@ export function registerBaseVivanteRoutes(
   );
 
   const filtresDe = (q: Route['Querystring']): FiltresBase => ({
+    tri: TRIS_BASE.find((tri) => tri === q.tri),
+    canal: q.canal === 'email' || q.canal === 'linkedin' ? q.canal : undefined,
     zone: ZONES.find((z) => z === q.zone),
     statut: STATUTS_PROSPECTION.find((s) => s === q.statut),
     alerte: FILTRES_ALERTE.find((a) => a === q.alerte),
     provenance: q.provenance?.trim() || undefined,
+    liste: q.liste && UUID.test(q.liste) ? q.liste : undefined,
+    tag: q.tag?.trim() || undefined,
     q: q.q,
   });
 
@@ -286,6 +371,261 @@ export function registerBaseVivanteRoutes(
       .send(csv);
   });
 
+  // Companies of the State directory: proposed for a record, confirmed by the pilot.
+  app.get<Route>(
+    '/api/i/:slug/base/fiches/:id/entreprise/candidats',
+    surInstance(async (instanceId, request) => ({
+      candidats: await candidatsPourFiche(db, annuaire, instanceId, request.params.id as string),
+    })),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/fiches/:id/entreprise',
+    surInstance((instanceId, request) =>
+      rattacherParSiren(
+        db,
+        annuaire,
+        instanceId,
+        request.params.id as string,
+        z.object({ siren: z.string() }).parse(request.body).siren,
+      ),
+    ),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/fiches/:id/entreprise',
+    surInstance(async (instanceId, request) => {
+      await withInstance(db, instanceId, (tx) =>
+        detacherEntreprise(tx, instanceId, request.params.id as string),
+      );
+      return { ok: true };
+    }),
+  );
+  app.get<Route>(
+    '/api/i/:slug/base/entreprises/:id',
+    surInstance((instanceId, request) =>
+      lireEntreprise(db, instanceId, request.params.id as string),
+    ),
+  );
+
+  // Lists the pilot builds by hand, labels on contacts, and the mandate a list is assigned to.
+  const listeSchema = z
+    .object({
+      nom: z.string().optional(),
+      mandat: z.string().nullable().optional(),
+      type: z.string().optional(),
+    })
+    .strict();
+  const idsSchema = z.object({ ids: z.array(z.string().regex(UUID)).max(500) }).strict();
+  const etiquettesSchema = z
+    .object({
+      ids: z.array(z.string().regex(UUID)).min(1).max(500),
+      ajouter: z.array(z.string()).max(20).optional(),
+      retirer: z.array(z.string()).max(20).optional(),
+    })
+    .strict();
+  app.post<Route>(
+    '/api/i/:slug/base/listes',
+    surInstance((instanceId, request) => {
+      const corps = listeSchema.parse(request.body);
+      return creerListe(db, instanceId, {
+        nom: corps.nom ?? '',
+        mandat: corps.mandat,
+        type: corps.type,
+      });
+    }),
+  );
+  app.patch<Route>(
+    '/api/i/:slug/base/listes/:id',
+    surInstance(async (instanceId, request) => {
+      await modifierListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        listeSchema.parse(request.body),
+      );
+      return { ok: true };
+    }),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/listes/:id',
+    surInstance(async (instanceId, request) => {
+      await supprimerListe(db, instanceId, request.params.id as string);
+      return { ok: true };
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/listes/:id/fiches',
+    surInstance(async (instanceId, request) => ({
+      ajoutees: await ajouterALaListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        idsSchema.parse(request.body).ids,
+      ),
+    })),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/listes/:id/fiches',
+    surInstance(async (instanceId, request) => {
+      await retirerDeLaListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        idsSchema.parse(request.body).ids,
+      );
+      return { ok: true };
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/listes/:id/entreprises',
+    surInstance(async (instanceId, request) => ({
+      ajoutees: await ajouterEntreprisesALaListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        idsSchema.parse(request.body).ids,
+      ),
+    })),
+  );
+  app.delete<Route>(
+    '/api/i/:slug/base/listes/:id/entreprises',
+    surInstance(async (instanceId, request) => {
+      await retirerEntreprisesDeLaListe(
+        db,
+        instanceId,
+        request.params.id as string,
+        idsSchema.parse(request.body).ids,
+      );
+      return { ok: true };
+    }),
+  );
+  // The map of the companies of the base, and the order to visit some of them in.
+  const tourneeSchema = z
+    .object({
+      ids: z.array(z.string().regex(UUID)).min(1).max(100),
+      depart: z.string().max(200).optional(),
+    })
+    .strict();
+  app.get<Route>(
+    '/api/i/:slug/base/entreprises/carte',
+    surInstance((instanceId, request) =>
+      pointsCarte(db, instanceId, {
+        q: request.query.q,
+        liste:
+          request.query.liste && UUID.test(request.query.liste) ? request.query.liste : undefined,
+      }),
+    ),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/tournee',
+    surInstance((instanceId, request) =>
+      calculerTournee(db, routeur, geocodeur, instanceId, tourneeSchema.parse(request.body)),
+    ),
+  );
+  // The daily watch of the BODACC: on or off, at what hour, and a manual pass.
+  app.get<Route>(
+    '/api/i/:slug/base/signaux/routine',
+    surInstance((instanceId) => lireRoutineAlerte(db, instanceId)),
+  );
+  app.put<Route>(
+    '/api/i/:slug/base/signaux/routine',
+    surInstance((instanceId, request) =>
+      enregistrerRoutineAlerte(db, instanceId, reglagesAlerte.parse(request.body)),
+    ),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/signaux/routine/lancer',
+    surInstance(async (instanceId) => {
+      const rapport = await lancerAlerte(db, bodacc, instanceId, { limite: 100 });
+      return { ...rapport, bilan: bilanDe(rapport) };
+    }),
+  );
+  // What the BODACC says about the companies of the base.
+  const actualisationSchema = z
+    .object({ ids: z.array(z.string().regex(UUID)).min(1).max(MAX_ACTUALISATION) })
+    .strict();
+  app.get<Route>(
+    '/api/i/:slug/base/entreprises/:id/signaux',
+    surInstance((instanceId, request) => lireSignaux(db, instanceId, request.params.id as string)),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/:id/signaux/actualiser',
+    surInstance(async (instanceId, request) => {
+      const nouveaux = await actualiserSignaux(db, bodacc, instanceId, request.params.id as string);
+      return { nouveaux, ...(await lireSignaux(db, instanceId, request.params.id as string)) };
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/signaux/actualiser',
+    surInstance((instanceId, request) =>
+      actualiserPlusieurs(db, bodacc, instanceId, actualisationSchema.parse(request.body).ids),
+    ),
+  );
+  app.get<Route>(
+    '/api/i/:slug/base/entreprises',
+    surInstance((instanceId, request) =>
+      listerEntreprisesBase(db, instanceId, {
+        signal: request.query.signal,
+        q: request.query.q,
+        liste:
+          request.query.liste && UUID.test(request.query.liste) ? request.query.liste : undefined,
+        page: Math.max(0, Number(request.query.page) || 0),
+      }),
+    ),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/tags',
+    surInstance(async (instanceId, request) => {
+      const { ids, ajouter, retirer } = etiquettesSchema.parse(request.body);
+      await withInstance(db, instanceId, (tx) =>
+        modifierEtiquettes(tx, instanceId, ids, { ajouter, retirer }),
+      );
+      return { ok: true };
+    }),
+  );
+
+  // Search the State directory by criteria, then bring the chosen companies into the base.
+  const rechercheSchema = z
+    .object({
+      criteres: z.record(z.string(), z.unknown()),
+      page: z.number().int().min(1).max(400).optional(),
+    })
+    .strict();
+  const ajoutSchema = z
+    .object({ sirens: z.array(z.string()).max(100), liste: z.string().regex(UUID).optional() })
+    .strict();
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/recherche',
+    surInstance((instanceId, request) => {
+      const { criteres, page } = rechercheSchema.parse(request.body);
+      return rechercherEntreprises(db, annuaire, instanceId, criteres, page ?? 1);
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/entreprises/ajouter',
+    surInstance((instanceId, request) => {
+      const { sirens, liste } = ajoutSchema.parse(request.body);
+      return ajouterEntreprises(db, annuaire, instanceId, sirens, liste);
+    }),
+  );
+
+  // Fichier prêt pour l'import CSV de Waalaxy : seuls les profils LinkedIn, hors opposition.
+  app.get<Route>('/api/i/:slug/base/export-waalaxy', async (request, reply) => {
+    const instance = await getInstanceBySlug(db, request.params.slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    return (await exporterWaalaxy(db, instance.id, filtresDe(request.query), 1)).apercu;
+  });
+
+  app.get<Route>('/api/i/:slug/base/export-waalaxy.csv', async (request, reply) => {
+    const instance = await getInstanceBySlug(db, request.params.slug);
+    if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+    const partie = Math.max(1, Math.floor(Number(request.query.partie)) || 1);
+    const { csv } = await exporterWaalaxy(db, instance.id, filtresDe(request.query), partie);
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="waalaxy-${partie}.csv"`)
+      .send(csv);
+  });
+
   app.post<Route>(
     '/api/i/:slug/base/historique/actualiser',
     surInstance((instanceId) => actualiserHistorique(db, instanceId)),
@@ -297,6 +637,58 @@ export function registerBaseVivanteRoutes(
       const corps = apportSchema.safeParse(request.body);
       if (!corps.success) throw new ImportRefuse('Contact invalide');
       return enrichirFiche(db, instanceId, request.params.id as string, corps.data);
+    }),
+  );
+
+  app.delete<Route>(
+    '/api/i/:slug/base/fiches',
+    surInstance(async (instanceId, request) => {
+      const corps = z
+        .object({ ids: z.array(z.string().uuid()).min(1).max(200) })
+        .safeParse(request.body);
+      if (!corps.success) throw new ImportRefuse('Sélection invalide');
+      await supprimerFichesBase(db, instanceId, corps.data.ids);
+      return { ok: true };
+    }),
+  );
+
+  app.get<Route>(
+    '/api/i/:slug/base/fiches/:id/origine',
+    surInstance(async (instanceId, request, reply) => {
+      const origine = await lireOrigine(db, instanceId, request.params.id as string);
+      return origine ?? reply.code(404).send({ error: 'Fiche inconnue' });
+    }),
+  );
+  app.post<Route>(
+    '/api/i/:slug/base/notes-recherche',
+    surInstance(async (instanceId, request) => {
+      const input = z
+        .object({
+          contacts: z
+            .array(
+              z.object({
+                entreprise: z.string().min(1).max(500),
+                prenom: z.string().max(200),
+                nom: z.string().max(200),
+                email: z.string().nullable(),
+                linkedin: z.string().nullable(),
+                qualification: z.string().max(20000),
+                source: z.string().url().startsWith('https://'),
+              }),
+            )
+            .max(100),
+        })
+        .safeParse(request.body);
+      if (!input.success) throw new ImportRefuse('Notes de recherche invalides.');
+      return noterContactsRecherches(db, instanceId, input.data.contacts);
+    }),
+  );
+
+  app.delete<Route>(
+    '/api/i/:slug/base/fiches/:id',
+    surInstance(async (instanceId, request) => {
+      await supprimerFichesBase(db, instanceId, [request.params.id as string]);
+      return { ok: true };
     }),
   );
 

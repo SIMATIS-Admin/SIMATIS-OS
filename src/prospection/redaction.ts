@@ -94,7 +94,7 @@ export async function deposerBrouillons(
     throw new CampagneInvalide("Cette campagne n'attend pas de brouillons.");
   }
   const attendus = await tx
-    .select({ id: prospectionBrouillons.id })
+    .select({ id: prospectionBrouillons.id, lienVma: prospectionBrouillons.lienVma })
     .from(prospectionBrouillons)
     .where(
       and(
@@ -108,6 +108,10 @@ export async function deposerBrouillons(
   for (const it of items) {
     if (!ids.has(it.id) || vus.has(it.id)) {
       throw new CampagneInvalide(`Brouillon inconnu, déjà déposé ou non attendu : ${it.id}`);
+    }
+    const lien = attendus.find((b) => b.id === it.id)?.lienVma;
+    if (lien && !nettoyerCorps(it.corps).includes(lien.replaceAll('&', '&amp;'))) {
+      throw new CampagneInvalide('Le lien VMA individuel est absent du brouillon.');
     }
     vus.add(it.id);
     if (!it.objet.trim() || !it.corps.trim()) {
@@ -343,7 +347,7 @@ export async function abandonnerCampagnes(tx: Executor, maintenant = new Date())
 // rédaction restée en plan) : elles disparaissent avec leurs brouillons de relecture. Les mails
 // déjà partis restent comptés ; les brouillons de messagerie créés par une finalisation incomplète
 // n'ont pas été envoyés, leur occurrence est retirée pour ne pas être confondue avec un envoi futur.
-export async function abandonnerCampagnesEnCours(tx: Executor): Promise<number> {
+export async function abandonnerCampagnesEnCours(tx: Executor, id?: string): Promise<number> {
   const enCours = await tx
     .select({ id: prospectionCampagnes.id })
     .from(prospectionCampagnes)
@@ -351,8 +355,10 @@ export async function abandonnerCampagnesEnCours(tx: Executor): Promise<number> 
       and(
         eq(prospectionCampagnes.instanceId, currentInstance),
         ne(prospectionCampagnes.statut, 'terminee'),
+        id ? eq(prospectionCampagnes.id, id) : undefined,
       ),
-    );
+    )
+    .for('update');
   if (enCours.length === 0) return 0;
   const ids = enCours.map((c) => c.id);
   await tx

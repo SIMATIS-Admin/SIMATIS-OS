@@ -1,6 +1,8 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -13,6 +15,7 @@ import {
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 import type { Correspondance, MemoireColonnes } from './colonnes.js';
 import { ZONES } from './completude.js';
+import type { Dirigeant, ExerciceFinancier } from '../annuaire/client.js';
 import type { Fiche } from './nettoyage.js';
 
 export const STATUTS_IMPORT = ['apercu', 'integre'] as const;
@@ -89,6 +92,72 @@ export const baseLignesBrutes = pgTable(
   ],
 );
 
+export type NoteOrigine = { date: string; origine: string; texte: string; source: string | null };
+
+// A company of the living base, identified by its SIREN and filled from the State's company
+// directory (src/annuaire). Contacts of the base point to it; it is not a CRM company: those live
+// per mandate and mirror HubSpot, the SIREN is what will link the two.
+export const baseEntreprises = pgTable(
+  'base_entreprises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    siren: text('siren').notNull(),
+    nom: text('nom').notNull(),
+    formeJuridique: text('forme_juridique'),
+    naf: text('naf'),
+    categorie: text('categorie'),
+    effectif: text('effectif'),
+    creeLe: date('cree_le'),
+    active: boolean('active').notNull().default(true),
+    etablissementsOuverts: integer('etablissements_ouverts'),
+    // The directory flags companies that refuse commercial use of their data.
+    oppositionDiffusion: boolean('opposition_diffusion').notNull().default(false),
+    siret: text('siret'),
+    adresse: text('adresse'),
+    codePostal: text('code_postal'),
+    ville: text('ville'),
+    departement: text('departement'),
+    latitude: doublePrecision('latitude'),
+    longitude: doublePrecision('longitude'),
+    finances: jsonb('finances').$type<ExerciceFinancier[]>().notNull().default([]),
+    dirigeants: jsonb('dirigeants').$type<Dirigeant[]>().notNull().default([]),
+    siteWeb: text('site_web'),
+    // When the BODACC was last read for this company; null = never.
+    signauxLe: timestamp('signaux_le', { withTimezone: true }),
+    annuaireLe: timestamp('annuaire_le', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('base_entreprises_siren_idx').on(t.instanceId, t.siren),
+    index('base_entreprises_instance_idx').on(t.instanceId),
+    instanceIsolation('base_entreprises'),
+  ],
+);
+
+// What the BODACC says about a company of the base: a procedure, a sale of the business, a
+// removal from the register… One row per notice and company.
+export const baseSignaux = pgTable(
+  'base_signaux',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    entrepriseId: uuid('entreprise_id')
+      .notNull()
+      .references(() => baseEntreprises.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    famille: text('famille').notNull(),
+    nature: text('nature').notNull(),
+    gravite: text('gravite', { enum: ['alerte', 'attention', 'info'] }).notNull(),
+    detail: text('detail'),
+    url: text('url'),
+  },
+  (t) => [
+    uniqueIndex('base_signaux_annonce_idx').on(t.instanceId, t.entrepriseId, t.sourceId),
+    index('base_signaux_entreprise_idx').on(t.entrepriseId, t.date),
+    instanceIsolation('base_signaux'),
+  ],
+);
+
 // The living base. Only integration.ts writes here (see integration.test.ts).
 export const baseVivante = pgTable(
   'base_vivante',
@@ -102,11 +171,13 @@ export const baseVivante = pgTable(
     prenom: text('prenom'),
     nom: text('nom').notNull(),
     email: text('email'),
+    emailEntreprise: text('email_entreprise'),
     telephone: text('telephone'),
     fonction: text('fonction'),
     linkedin: text('linkedin'),
     domaine: text('domaine'),
     provenance: text('provenance').notNull(),
+    notesOrigine: jsonb('notes_origine').$type<NoteOrigine[]>().notNull().default([]),
     mandat: text('mandat'),
     importId: uuid('import_id').references(() => baseImports.id, { onDelete: 'set null' }),
     collecteLe: date('collecte_le'),
@@ -128,6 +199,15 @@ export const baseVivante = pgTable(
     // Set when the record entered the CRM of a mandate (first contact): keeps the link for history.
     crmMandat: text('crm_mandat'),
     crmContactId: uuid('crm_contact_id'),
+    // The company of the directory this record belongs to, once the pilot has confirmed it.
+    entrepriseId: uuid('entreprise_id').references(() => baseEntreprises.id, {
+      onDelete: 'set null',
+    }),
+    // Free labels chosen by the pilot (lower case, no duplicate).
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
   },
   (t) => [
     index('base_vivante_instance_idx').on(t.instanceId, t.zone),
@@ -162,6 +242,64 @@ export const baseReponses = pgTable(
   ],
 );
 
+// A named group of contacts the pilot builds by hand. A contact can sit in several lists; the
+// mandate is the one that will prospect the list (its name, as `mandat_contacteur` records it).
+export const baseListes = pgTable(
+  'base_listes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    nom: text('nom').notNull(),
+    // A list holds contacts or companies of the directory, never both.
+    type: text('type', { enum: ['contacts', 'entreprises'] })
+      .notNull()
+      .default('contacts'),
+    mandat: text('mandat'),
+  },
+  (t) => [
+    uniqueIndex('base_listes_nom_idx').on(t.instanceId, sql`lower(${t.nom})`),
+    instanceIsolation('base_listes'),
+  ],
+);
+
+export const baseListeFiches = pgTable(
+  'base_liste_fiches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    listeId: uuid('liste_id')
+      .notNull()
+      .references(() => baseListes.id, { onDelete: 'cascade' }),
+    ficheId: uuid('fiche_id')
+      .notNull()
+      .references(() => baseVivante.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('base_liste_fiches_paire_idx').on(t.listeId, t.ficheId),
+    index('base_liste_fiches_fiche_idx').on(t.ficheId),
+    instanceIsolation('base_liste_fiches'),
+  ],
+);
+
+export const baseListeEntreprises = pgTable(
+  'base_liste_entreprises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    listeId: uuid('liste_id')
+      .notNull()
+      .references(() => baseListes.id, { onDelete: 'cascade' }),
+    entrepriseId: uuid('entreprise_id')
+      .notNull()
+      .references(() => baseEntreprises.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('base_liste_entreprises_paire_idx').on(t.listeId, t.entrepriseId),
+    index('base_liste_entreprises_entreprise_idx').on(t.entrepriseId),
+    instanceIsolation('base_liste_entreprises'),
+  ],
+);
+
 // What the OS remembers per source: a format already seen goes through without a question.
 export const baseCorrespondances = pgTable(
   'base_correspondances',
@@ -182,3 +320,5 @@ export type BaseImport = typeof baseImports.$inferSelect;
 export type LigneBrute = typeof baseLignesBrutes.$inferSelect;
 export type FicheBase = typeof baseVivante.$inferSelect;
 export type ReponseBase = typeof baseReponses.$inferSelect;
+export type EntrepriseBase = typeof baseEntreprises.$inferSelect;
+export type ListeBase = typeof baseListes.$inferSelect;

@@ -12,18 +12,19 @@ import {
   type ProjetDiag,
   type TestVma,
 } from '../api.js';
+import { ContactsVma } from './diagnostics/ContactsVma.js';
 import { Icon } from '../icons.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
 import { Modale, NouveauDiagnostic, NouveauTestVma } from './diagnostics/Creation.js';
-import { messageRelance } from './diagnostics/envoi.js';
-import { etapesFrise, peutRelancer, sansReponse } from './diagnostics/suivi.js';
+import { etapesFrise, peutRelancer, sansReponse, testTermine } from './diagnostics/suivi.js';
 import { libelleStatut, fmtEur } from './TestsVma.js';
 import {
   filtrer,
   grouper,
   lignesSuivies,
   paginer,
+  rattacher,
   resumerVma,
   type LigneEntreprise,
 } from './diagnostics/grouper.js';
@@ -50,17 +51,57 @@ const listeEffacee = (projetIds: string[], testIds: string[]) =>
 // Une ligne sans entreprise (diagnostic orphelin) a un identifiant null : on la distingue par son nom de projet.
 const cleDe = (l: LigneEntreprise) => l.id ?? `projet-${l.diag?.id ?? l.nom}`;
 
+const cleDiagArchive = (id: string) => `diag-${id}`;
+const cleSuppressions = (slug: string) => `diagnostics.tests-supprimes.${slug}`;
+
+const cleTestArchive = (id: string) => `test-${id}`;
+const cleArchives = (slug: string) => `diagnostics.archives.${slug}`;
+
+function lireArchives(slug: string): string[] {
+  try {
+    const valeur: unknown = JSON.parse(localStorage.getItem(cleArchives(slug)) ?? '[]');
+    return Array.isArray(valeur) ? valeur.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 // `ouvrir` : identifiant d'un projet à ouvrir directement (lien depuis une fiche).
 export function Diagnostics({
   slug,
   ouvrir,
+  ouvrirTest,
   onTitre,
 }: {
   slug: string;
   ouvrir?: string;
+  ouvrirTest?: string;
   // Titre de l'en-tête de l'application : celui de l'outil ouvert, pour ne pas répéter celui de la section.
   onTitre?: (titre: string | null) => void;
 }) {
+  const [archives, setArchives] = useState(() => lireArchives(slug));
+  const [voirArchives, setVoirArchives] = useState(false);
+
+  useEffect(() => {
+    setArchives(lireArchives(slug));
+    setVoirArchives(false);
+  }, [slug]);
+
+  const enregistrerArchives = (suivantes: string[]) => {
+    try {
+      localStorage.setItem(cleArchives(slug), JSON.stringify(suivantes));
+      setArchives(suivantes);
+    } catch {
+      setErreur('Impossible d’enregistrer les archives dans ce navigateur.');
+    }
+  };
+
+  const basculerArchive = (cle: string) =>
+    enregistrerArchives(
+      archives.includes(cle) ? archives.filter((id) => id !== cle) : [...archives, cle],
+    );
+
+  const [contactsOuverts, setContactsOuverts] = useState(false);
   const [entreprises, setEntreprises] = useState<Entreprise[] | null>(null);
   const [projets, setProjets] = useState<ProjetDiag[]>([]);
   const [tests, setTests] = useState<TestVma[]>([]);
@@ -68,14 +109,14 @@ export function Diagnostics({
   const [page, setPage] = useState(1);
   const [ouvertes, setOuvertes] = useState<Set<string>>(new Set());
   const [projetOuvert, setProjetOuvert] = useState<string | null>(ouvrir ?? null);
-  const [testOuvert, setTestOuvert] = useState<string | null>(null);
+  const [testCible, setTestCible] = useState<string | null>(ouvrirTest ?? null);
+  const [testOuvert, setTestOuvert] = useState<string | null>(ouvrirTest ?? null);
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [modale, setModale] = useState<{ type: 'diag' | 'vma'; preselect?: string } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [suppression, setSuppression] = useState<Suppression | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [relance, setRelance] = useState<{ test: TestVma; tu: boolean } | null>(null);
-  const [infoRelance, setInfoRelance] = useState<string | null>(null);
   const [sansReponseSeul, setSansReponseSeul] = useState(false);
 
   // L'onglet s'ouvre tout de suite, pendant le clic : après une attente, le navigateur le bloquerait.
@@ -99,18 +140,20 @@ export function Diagnostics({
         fetchTestsVma(slug),
       ]);
       setEntreprises(e);
-      setProjets(p);
-      setTests(t);
+      setProjets(rattacher(e, p, (x) => x.nom));
+      setTests(rattacher(e, t, (x) => x.entrepriseNom));
     } catch (err) {
       setErreur(messageErreur(err));
     }
   };
 
-  const titreOuvert = projetOuvert
-    ? 'Diagnostic d’endurance commerciale'
-    : testOuvert
-      ? 'Test de VMA'
-      : null;
+  const titreOuvert = contactsOuverts
+    ? 'Contacts'
+    : projetOuvert
+      ? 'Diagnostic d’endurance commerciale'
+      : testOuvert
+        ? 'Test de VMA'
+        : null;
   useEffect(() => {
     onTitre?.(titreOuvert);
     return () => onTitre?.(null);
@@ -146,8 +189,8 @@ export function Diagnostics({
     if (!relance) return;
     setEnCours(true);
     try {
-      const res = await relancerTestVma(slug, relance.test.id, relance.tu);
-      setInfoRelance(messageRelance(res.envoi ?? { statut: 'echec' }, res.contactEmail));
+      await relancerTestVma(slug, relance.test.id, relance.tu);
+      window.dispatchEvent(new Event('console:actualiser'));
       setRelance(null);
       await charger();
     } catch (err) {
@@ -163,7 +206,26 @@ export function Diagnostics({
     if (!suppression) return;
     setEnCours(true);
     try {
-      for (const id of suppression.testIds) await supprimerTestVma(slug, id);
+      for (const id of suppression.testIds) {
+        const test = tests.find((t) => t.id === id);
+        await supprimerTestVma(slug, id);
+        if (test) {
+          try {
+            const cle = cleSuppressions(slug);
+            const valeur: unknown = JSON.parse(localStorage.getItem(cle) ?? '[]');
+            const precedents: unknown[] = Array.isArray(valeur) ? valeur : [];
+            localStorage.setItem(
+              cle,
+              JSON.stringify([
+                ...precedents,
+                { id, nom: test.contactNom, entreprise: test.entrepriseNom, date: test.creeLe },
+              ]),
+            );
+          } catch {
+            setErreur('Le test a été supprimé, mais sa trace locale n’a pas pu être enregistrée.');
+          }
+        }
+      }
       for (const id of suppression.projetIds) await supprimerProjetDiag(slug, id);
     } catch (err) {
       setErreur(messageErreur(err));
@@ -183,6 +245,40 @@ export function Diagnostics({
     </div>
   );
 
+  if (contactsOuverts)
+    return (
+      <ContactsVma
+        slug={slug}
+        testsSupprimesCle={cleSuppressions(slug)}
+        accesTest={(t) => {
+          if (!tests.some((test) => test.id === t.id)) return null;
+          const archive =
+            archives.includes(cleTestArchive(t.id)) ||
+            Boolean(t.entrepriseId && archives.includes(t.entrepriseId));
+          return {
+            archive,
+            ouvrir: () => {
+              setContactsOuverts(false);
+              setVoirArchives(archive);
+              setTestCible(t.id);
+              setPage(1);
+              setRecherche('');
+              setSansReponseSeul(false);
+              const cible =
+                t.entrepriseId && entreprises?.some((e) => e.id === t.entrepriseId)
+                  ? t.entrepriseId
+                  : `projet-${t.entrepriseNom}`;
+              setOuvertes((avant) => new Set([...avant, cible]));
+            },
+          };
+        }}
+        onRetour={() => {
+          setContactsOuverts(false);
+          void charger();
+        }}
+      />
+    );
+
   if (projetOuvert) {
     const projet = projets.find((p) => p.id === projetOuvert);
     if (projet) {
@@ -193,7 +289,15 @@ export function Diagnostics({
             key={projet.id}
             slug={slug}
             projet={projet}
-            onChange={(maj) => setProjets((l) => l.map((p) => (p.id === maj.id ? maj : p)))}
+            onChange={(maj) =>
+              setProjets((l) =>
+                l.map((p) =>
+                  p.id === maj.id
+                    ? { ...maj, entrepriseId: maj.entrepriseId ?? p.entrepriseId }
+                    : p,
+                ),
+              )
+            }
             onRetour={() => setProjetOuvert(null)}
             onErreur={setErreur}
           />
@@ -215,9 +319,74 @@ export function Diagnostics({
     );
   }
 
-  const lignes = lignesSuivies(grouper(entreprises, projets, tests));
+  const toutes = lignesSuivies(grouper(entreprises, projets, tests));
+  const archivees = new Set(archives);
+  const blocProjet = (p: ProjetDiag) =>
+    p.entrepriseId && entreprises.some((e) => e.id === p.entrepriseId)
+      ? p.entrepriseId
+      : `projet-${p.id}`;
+  const projetsVisibles = projets.filter((p) =>
+    archivees.has(blocProjet(p))
+      ? voirArchives
+      : archivees.has(cleDiagArchive(p.id)) === voirArchives,
+  );
+  const testsVisibles = tests.filter((t) =>
+    t.entrepriseId && archivees.has(t.entrepriseId)
+      ? voirArchives
+      : archivees.has(cleTestArchive(t.id)) === voirArchives,
+  );
+  const lignes = lignesSuivies(grouper(entreprises, projetsVisibles, testsVisibles));
+  const cibleSansBloc = testsVisibles.find(
+    (t) => t.id === testCible && !entreprises.some((e) => e.id === t.entrepriseId),
+  );
+  if (cibleSansBloc) {
+    lignes.push({ id: null, nom: cibleSansBloc.entrepriseNom, diag: null, tests: [cibleSansBloc] });
+  }
+  if (voirArchives) {
+    const affiches = new Set(lignes.map((l) => l.diag?.id));
+    for (const p of projetsVisibles) {
+      if (
+        affiches.has(p.id) ||
+        !archivees.has(cleDiagArchive(p.id)) ||
+        archivees.has(blocProjet(p))
+      )
+        continue;
+      lignes.push({ id: null, nom: p.nom, diag: p, tests: [] });
+    }
+  }
+  const nombreArchives = toutes.reduce(
+    (total, l) =>
+      total +
+      (archivees.has(cleDe(l))
+        ? 1
+        : l.tests.filter((t) => archivees.has(cleTestArchive(t.id))).length),
+    projets.filter((p) => !archivees.has(blocProjet(p)) && archivees.has(cleDiagArchive(p.id)))
+      .length,
+  );
+
+  const apresCreation = (entrepriseId?: string | null) => {
+    if (entrepriseId && archivees.has(entrepriseId)) {
+      enregistrerArchives([
+        ...new Set([
+          ...archives.filter((id) => id !== entrepriseId),
+          ...projets
+            .filter((p) => p.entrepriseId === entrepriseId)
+            .map((p) => cleDiagArchive(p.id)),
+          ...tests.filter((t) => t.entrepriseId === entrepriseId).map((t) => cleTestArchive(t.id)),
+        ]),
+      ]);
+    }
+    setVoirArchives(false);
+    setRecherche('');
+    setSansReponseSeul(false);
+    setPage(1);
+    void charger();
+  };
+
   const filtrees = filtrer(lignes, recherche).filter(
-    (l) => !sansReponseSeul || l.tests.some((t) => sansReponse(t)),
+    (l) =>
+      (!testCible || l.tests.some((t) => t.id === testCible)) &&
+      (!sansReponseSeul || l.tests.some((t) => sansReponse(t))),
   );
   const { items, page: pageCourante, pages } = paginer(filtrees, page, PAR_PAGE);
 
@@ -226,89 +395,124 @@ export function Diagnostics({
       {alerte}
       <div className="panel dg-titre">
         <div className="panel-h">
-          <p className="dg-intro">Chaque entreprise avec son diagnostic et ses tests VMA.</p>
-          <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
-            Test VMA: module d'essai
-          </button>
-          {/* Hors du menu latéral : la présentation s'ouvre depuis cette barre. */}
-          <a className="btn" href={`#/${slug}/presentation-diagnostic`}>
-            Diagnostic d’endurance commerciale : présentation
-          </a>
-          <div className="dg-menu">
-            <button
-              className="btn go"
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={menuOuvert}
-              onClick={() => setMenuOuvert((o) => !o)}
-            >
-              + Nouveau
-            </button>
-            {menuOuvert && (
-              <div className="dg-menu-liste">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOuvert(false);
-                    setModale({ type: 'diag' });
-                  }}
-                >
-                  Nouveau diagnostic
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOuvert(false);
-                    setModale({ type: 'vma' });
-                  }}
-                >
-                  Nouveau test VMA
-                </button>
-              </div>
-            )}
+          <div className="dg-introduction">
+            <span className="dg-kicker">ÉVALUER · COMPRENDRE · AGIR</span>
+            <h2>
+              {voirArchives ? 'Archives des diagnostics et tests VMA' : 'Diagnostics & tests VMA'}
+            </h2>
+            <p className="dg-intro">Chaque entreprise avec son diagnostic et ses tests VMA.</p>
           </div>
-          <input
-            type="search"
-            aria-label="Rechercher une entreprise"
-            placeholder="Recherche"
-            value={recherche}
-            onChange={(e) => {
-              setRecherche(e.target.value);
-              setPage(1);
-            }}
-          />
-          <label className="dg-filtre small">
+          <div className="dg-outils">
+            {testCible && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  setTestCible(null);
+                  setContactsOuverts(true);
+                }}
+              >
+                ← Contacts
+              </button>
+            )}
+            <button
+              className={voirArchives ? 'btn go' : 'btn'}
+              type="button"
+              onClick={() => {
+                setTestCible(null);
+                setVoirArchives(!voirArchives);
+                setPage(1);
+                setRecherche('');
+                setSansReponseSeul(false);
+              }}
+            >
+              {voirArchives ? 'Retour aux blocs actifs' : `Archives (${nombreArchives})`}
+            </button>
+            <button className="btn" type="button" onClick={() => setContactsOuverts(true)}>
+              Contacts
+            </button>
+            <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
+              Test VMA: module d'essai
+            </button>
+            {/* Hors du menu latéral : la présentation s'ouvre depuis cette barre. */}
+            <a className="btn" href={`#/${slug}/presentation-diagnostic`}>
+              Diagnostic d’endurance commerciale : présentation
+            </a>
+            <div className="dg-menu">
+              <button
+                className="btn go"
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={menuOuvert}
+                onClick={() => setMenuOuvert((o) => !o)}
+              >
+                + Nouveau
+              </button>
+              {menuOuvert && (
+                <div className="dg-menu-liste">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOuvert(false);
+                      setModale({ type: 'diag' });
+                    }}
+                  >
+                    Nouveau diagnostic
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOuvert(false);
+                      setModale({ type: 'vma' });
+                    }}
+                  >
+                    Nouveau test VMA
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="dg-recherche">
             <input
-              type="checkbox"
-              checked={sansReponseSeul}
+              type="search"
+              aria-label="Rechercher une entreprise"
+              placeholder="Entreprise, destinataire ou e-mail"
+              value={recherche}
               onChange={(e) => {
-                setSansReponseSeul(e.target.checked);
+                setRecherche(e.target.value);
                 setPage(1);
               }}
             />
-            <span>Sans réponse depuis plus de 7 jours</span>
-          </label>
+            <label className="dg-filtre small">
+              <input
+                type="checkbox"
+                checked={sansReponseSeul}
+                onChange={(e) => {
+                  setSansReponseSeul(e.target.checked);
+                  setPage(1);
+                }}
+              />
+              <span>Sans réponse depuis plus de 7 jours</span>
+            </label>
+          </div>
         </div>
       </div>
-      {infoRelance && (
-        <div className="alert" role="status">
-          <span>{infoRelance}</span>
-          <button className="btn" type="button" onClick={() => setInfoRelance(null)}>
-            Fermer
-          </button>
-        </div>
-      )}
-
       {items.length === 0 ? (
         <div className="panel empty">
-          {lignes.length === 0 ? 'Aucune entreprise.' : 'Aucune entreprise ne correspond.'}
+          {lignes.length === 0
+            ? voirArchives
+              ? 'Aucun bloc archivé.'
+              : 'Aucun bloc actif.'
+            : 'Aucune entreprise ne correspond.'}
         </div>
       ) : (
         items.map((l) => {
           const cle = cleDe(l);
+          const blocArchive = archivees.has(cle);
+          const archivePartielle = voirArchives && !blocArchive;
           const ouverte = ouvertes.has(cle);
           const resume = resumerVma(l.tests);
-          const nbRecus = l.tests.filter((t) => t.recueLe).length;
+          const nbRecus = l.tests.filter(testTermine).length;
           return (
             <div key={cle} className="panel dg-ligne">
               <button
@@ -321,13 +525,19 @@ export function Diagnostics({
                   <div className="dg-nom">{l.nom}</div>
                   <div className="small muted">{l.id ? 'Entreprise' : 'Sans entreprise'}</div>
                 </div>
-                <div>
-                  <div className="dg-label">Diagnostic</div>
-                  <div>{l.diag ? `Étape ${l.diag.etapeMax} sur 5` : 'Pas encore lancé'}</div>
-                </div>
+                {(!archivePartielle || l.diag) && (
+                  <div>
+                    <div className="dg-label">Diagnostic</div>
+                    <div className={`dg-compteur ${l.diag ? 'diagnostic' : 'attente'}`}>
+                      {l.diag ? `Étape ${l.diag.etapeMax} sur 5` : 'Pas encore lancé'}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <div className="dg-label">Tests VMA</div>
-                  <div>
+                  <div
+                    className={`dg-compteur ${nbRecus ? 'recu' : l.tests.length ? 'envoye' : 'attente'}`}
+                  >
                     {l.tests.length === 0
                       ? 'Aucun'
                       : `${l.tests.length} test${l.tests.length > 1 ? 's' : ''}${nbRecus ? ` · ${nbRecus} reçu${nbRecus > 1 ? 's' : ''}` : ''}`}
@@ -338,66 +548,77 @@ export function Diagnostics({
 
               {ouverte && (
                 <div className="dg-detail">
-                  <section className="dg-bloc">
-                    <h3>Diagnostic d’endurance commerciale</h3>
-                    {l.diag ? (
-                      <>
-                        <div className="dg-etapes">
-                          {ETAPES.map((_, i) => (
-                            <span
-                              key={i}
-                              className={
-                                i < l.diag!.etapeMax - 1
-                                  ? 'fait'
-                                  : i === l.diag!.etapeMax - 1
-                                    ? 'en-cours'
-                                    : ''
-                              }
-                            />
-                          ))}
-                        </div>
-                        <p className="small muted">
-                          Étape {l.diag.etape} · {ETAPES[l.diag.etape - 1]}
-                        </p>
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => setProjetOuvert(l.diag!.id)}
-                        >
-                          Ouvrir le diagnostic
-                        </button>{' '}
-                        <button
-                          className="btn carre danger"
-                          aria-label="Supprimer le diagnostic"
-                          title="Supprimer le diagnostic"
-                          type="button"
-                          onClick={() =>
-                            setSuppression({
-                              titre: 'Supprimer le diagnostic',
-                              phrase: `Le diagnostic de ${l.nom} sera effacé définitivement, avec son rapport, son entretien et sa conversation.`,
-                              projetIds: [l.diag!.id],
-                              testIds: [],
-                            })
-                          }
-                        >
-                          <Icon name="trash" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <p className="small muted">Pas encore lancé.</p>
-                        {l.id && (
+                  {(!archivePartielle || l.diag) && (
+                    <section className="dg-bloc">
+                      <h3>Diagnostic d’endurance commerciale</h3>
+                      {l.diag ? (
+                        <>
+                          <div className="dg-etapes">
+                            {ETAPES.map((_, i) => (
+                              <span
+                                key={i}
+                                className={
+                                  i < l.diag!.etapeMax - 1
+                                    ? 'fait'
+                                    : i === l.diag!.etapeMax - 1
+                                      ? 'en-cours'
+                                      : ''
+                                }
+                              />
+                            ))}
+                          </div>
+                          <p className="small muted">
+                            Étape {l.diag.etape} · {ETAPES[l.diag.etape - 1]}
+                          </p>
                           <button
-                            className="btn go"
+                            className="btn"
                             type="button"
-                            onClick={() => setModale({ type: 'diag', preselect: l.id! })}
+                            onClick={() => setProjetOuvert(l.diag!.id)}
                           >
-                            Lancer le diagnostic
+                            Ouvrir le diagnostic
+                          </button>{' '}
+                          {!blocArchive && (
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => basculerArchive(cleDiagArchive(l.diag!.id))}
+                            >
+                              {voirArchives ? 'Restaurer le diagnostic' : 'Archiver le diagnostic'}
+                            </button>
+                          )}{' '}
+                          <button
+                            className="btn carre danger"
+                            aria-label="Supprimer le diagnostic"
+                            title="Supprimer le diagnostic"
+                            type="button"
+                            onClick={() =>
+                              setSuppression({
+                                titre: 'Supprimer le diagnostic',
+                                phrase: `Le diagnostic de ${l.nom} sera effacé définitivement, avec son rapport, son entretien et sa conversation.`,
+                                projetIds: [l.diag!.id],
+                                testIds: [],
+                              })
+                            }
+                          >
+                            <Icon name="trash" />
                           </button>
-                        )}
-                      </>
-                    )}
-                  </section>
+                        </>
+                      ) : (
+                        <>
+                          <p className="small muted">Pas encore lancé.</p>
+                          {l.id && (
+                            <button
+                              className="btn go"
+                              type="button"
+                              onClick={() => setModale({ type: 'diag', preselect: l.id! })}
+                            >
+                              Lancer le diagnostic
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </section>
+                  )}
 
                   <section className="dg-bloc">
                     <h3>Tests VMA</h3>
@@ -478,76 +699,115 @@ export function Diagnostics({
                       <p className="small muted">Aucun test pour l’instant.</p>
                     ) : (
                       <ul className="dg-tests">
-                        {l.tests.map((t) => (
-                          <li key={t.id}>
-                            <span>
-                              {libelleTest(t)} · {libelleStatut(t)}
-                              {t.recueLe ? ` · reçu le ${date(t.recueLe)}` : ''}
-                            </span>
-                            {etapesFrise(t).length > 0 && (
-                              <ol className="frise small">
-                                {etapesFrise(t).map((e, i) => (
-                                  <li key={i} className="pastille">
-                                    {e.libelle}
-                                  </li>
-                                ))}
-                              </ol>
-                            )}
-                            {t.echecEnvoi && (
-                              <span className="small muted">
-                                Dernier envoi en échec : {t.echecEnvoi}
+                        {l.tests
+                          .filter((t) => !testCible || t.id === testCible)
+                          .map((t) => (
+                            <li key={t.id}>
+                              <div className="dg-test-identite">
+                                <strong>
+                                  {t.contactNom || t.contactEmail || 'Destinataire non renseigné'}
+                                </strong>
+                                {t.contactNom && t.contactEmail && (
+                                  <span className="dg-test-email">{t.contactEmail}</span>
+                                )}
+                                <span className="small muted">{libelleTest(t)}</span>
+                              </div>
+                              <span
+                                className={`dg-test-statut ${testTermine(t) ? 'termine' : t.statut === 'revoquee' ? 'inactif' : 'en-attente'}`}
+                              >
+                                {testTermine(t) ? 'Terminé' : libelleStatut(t)}
                               </span>
-                            )}
-                            <span className="dg-actions">
-                              {t.statut === 'envoyee' && (
-                                <>
-                                  {peutRelancer(t) && (
+                              <div
+                                className="dg-frise-defilement"
+                                role="region"
+                                aria-label={`Suivi du test de ${t.contactNom || t.contactEmail || t.entrepriseNom}`}
+                                tabIndex={0}
+                              >
+                                <ol className="frise small">
+                                  {etapesFrise(t).map((e) => (
+                                    <li
+                                      key={e.cle}
+                                      className={`${e.atteinte ? 'atteinte' : 'a-venir'} ${e.cle}`}
+                                      title={e.detail}
+                                    >
+                                      <strong>{e.libelle}</strong>
+                                      <span>{e.date ?? (e.atteinte ? 'Reçu' : '—')}</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                              {t.echecEnvoi && (
+                                <span className="small muted">
+                                  Dernier envoi en échec : {t.echecEnvoi}
+                                </span>
+                              )}
+                              <span className="dg-actions">
+                                {!blocArchive && (
+                                  <button
+                                    className="btn"
+                                    type="button"
+                                    onClick={() => basculerArchive(cleTestArchive(t.id))}
+                                  >
+                                    {voirArchives ? 'Restaurer ce test' : 'Archiver ce test'}
+                                  </button>
+                                )}
+                                {t.statut === 'envoyee' && !testTermine(t) && (
+                                  <>
+                                    {peutRelancer(t) && (
+                                      <button
+                                        className="btn"
+                                        type="button"
+                                        onClick={() => {
+                                          setRelance({ test: t, tu: t.tutoiement });
+                                        }}
+                                      >
+                                        Relancer
+                                      </button>
+                                    )}
                                     <button
                                       className="btn"
                                       type="button"
-                                      onClick={() => {
-                                        setInfoRelance(null);
-                                        setRelance({ test: t, tu: t.tutoiement });
-                                      }}
+                                      onClick={() => void navigator.clipboard?.writeText(t.lien)}
                                     >
-                                      Relancer
+                                      Copier le lien
                                     </button>
-                                  )}
+                                    <button
+                                      className="btn"
+                                      type="button"
+                                      onClick={() => void revoquer(t)}
+                                    >
+                                      Révoquer
+                                    </button>
+                                  </>
+                                )}
+                                {t.resultat && (
                                   <button
                                     className="btn"
                                     type="button"
-                                    onClick={() => void navigator.clipboard?.writeText(t.lien)}
+                                    onClick={() => setTestOuvert(t.id)}
                                   >
-                                    Copier le lien
+                                    Voir le résultat
                                   </button>
-                                  <button
-                                    className="btn"
-                                    type="button"
-                                    onClick={() => void revoquer(t)}
-                                  >
-                                    Révoquer
-                                  </button>
-                                </>
-                              )}
-                              <button
-                                className="btn carre danger"
-                                aria-label="Supprimer le test"
-                                title="Supprimer le test"
-                                type="button"
-                                onClick={() =>
-                                  setSuppression({
-                                    titre: 'Supprimer le test',
-                                    phrase: `Ce test VMA de ${t.entrepriseNom} sera effacé définitivement${t.statut === 'envoyee' ? ' ; son lien cessera de fonctionner' : ''}.`,
-                                    projetIds: [],
-                                    testIds: [t.id],
-                                  })
-                                }
-                              >
-                                <Icon name="trash" />
-                              </button>
-                            </span>
-                          </li>
-                        ))}
+                                )}
+                                <button
+                                  className="btn carre danger"
+                                  aria-label="Supprimer le test"
+                                  title="Supprimer le test"
+                                  type="button"
+                                  onClick={() =>
+                                    setSuppression({
+                                      titre: 'Supprimer le test',
+                                      phrase: `Ce test VMA de ${t.entrepriseNom} sera effacé définitivement${t.statut === 'envoyee' && !testTermine(t) ? ' ; son lien cessera de fonctionner' : ''}.`,
+                                      projetIds: [],
+                                      testIds: [t.id],
+                                    })
+                                  }
+                                >
+                                  <Icon name="trash" />
+                                </button>
+                              </span>
+                            </li>
+                          ))}
                       </ul>
                     )}
                     {l.id && (
@@ -560,30 +820,48 @@ export function Diagnostics({
                       </button>
                     )}
                   </section>
-                  <div className="dg-supprimer-bloc">
-                    <button
-                      className="btn carre danger"
-                      aria-label="Supprimer ce bloc"
-                      title="Supprimer ce bloc"
-                      type="button"
-                      onClick={() => {
-                        const projetIds = l.id
-                          ? projets.filter((p) => p.entrepriseId === l.id).map((p) => p.id)
-                          : l.diag
-                            ? [l.diag.id]
-                            : [];
-                        const testIds = l.tests.map((t) => t.id);
-                        setSuppression({
-                          titre: 'Supprimer ce bloc',
-                          phrase: `${l.nom} : ${listeEffacee(projetIds, testIds)} seront effacés définitivement.${l.id ? ' La fiche de l’entreprise est conservée.' : ''}`,
-                          projetIds,
-                          testIds,
-                        });
-                      }}
-                    >
-                      <Icon name="trash" />
-                    </button>
-                  </div>
+                  {voirArchives && l.id && (
+                    <div className="dg-supprimer-bloc dg-actions">
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => setModale({ type: 'diag', preselect: l.id! })}
+                      >
+                        + Nouveau diagnostic
+                      </button>
+                    </div>
+                  )}
+                  {!archivePartielle && !cibleSansBloc && (
+                    <div className="dg-supprimer-bloc dg-actions">
+                      <button className="btn" type="button" onClick={() => basculerArchive(cle)}>
+                        {voirArchives ? 'Restaurer ce bloc' : 'Archiver ce bloc'}
+                      </button>
+                      <button
+                        className="btn carre danger"
+                        aria-label="Supprimer ce bloc"
+                        title="Supprimer ce bloc"
+                        type="button"
+                        onClick={() => {
+                          const projetIds = l.id
+                            ? projets.filter((p) => p.entrepriseId === l.id).map((p) => p.id)
+                            : l.diag
+                              ? [l.diag.id]
+                              : [];
+                          const testIds = toutes
+                            .find((ligne) => cleDe(ligne) === cle)!
+                            .tests.map((t) => t.id);
+                          setSuppression({
+                            titre: 'Supprimer ce bloc',
+                            phrase: `${l.nom} : ${listeEffacee(projetIds, testIds)} seront effacés définitivement.${l.id ? ' La fiche de l’entreprise est conservée.' : ''}`,
+                            projetIds,
+                            testIds,
+                          });
+                        }}
+                      >
+                        <Icon name="trash" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -646,9 +924,9 @@ export function Diagnostics({
           projets={projets}
           preselect={modale.preselect}
           onFermer={() => setModale(null)}
-          onCree={() => {
+          onCree={(entrepriseId) => {
             setModale(null);
-            void charger();
+            apresCreation(entrepriseId);
           }}
         />
       )}
@@ -658,7 +936,7 @@ export function Diagnostics({
           entreprises={entreprises}
           preselect={modale.preselect}
           onFermer={() => setModale(null)}
-          onCree={() => void charger()}
+          onCree={apresCreation}
         />
       )}
 

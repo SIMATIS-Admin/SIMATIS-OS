@@ -1,3 +1,7 @@
+import { RoutineProspects } from './RoutineProspects.js';
+import { RechercheProspects } from './RechercheProspects.js';
+import { SessionsEnrichissement } from './SessionsEnrichissement.js';
+import { SuiviRecherche } from './SuiviRecherche.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   annulerImportBase,
@@ -22,6 +26,11 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { BaseTable } from './BaseTable.js';
+import { AlerteSignaux } from './AlerteSignaux.js';
+import { EntreprisesBase } from './EntreprisesBase.js';
+import { ExportWaalaxy } from './ExportWaalaxy.js';
+import { ListesBase } from './ListesBase.js';
+import { RechercheEntreprises } from './RechercheEntreprises.js';
 import { Fenetre } from './Fenetre.js';
 import { RapprochementMail } from './RapprochementMail.js';
 import { ReponsesBase } from './ReponsesBase.js';
@@ -555,21 +564,40 @@ function FenetreImport({
   );
 }
 
-type Fenetres = null | { quoi: 'import'; etape: 1 | 2 | 3 } | { quoi: 'mail' } | { quoi: 'triage' };
+type Fenetres =
+  | null
+  | { quoi: 'import'; etape: 1 | 2 | 3 }
+  | { quoi: 'mail' }
+  | { quoi: 'triage' }
+  | { quoi: 'waalaxy' }
+  | { quoi: 'listes' }
+  | { quoi: 'alerte' }
+  | { quoi: 'entreprises' }
+  | { quoi: 'recherche' }
+  | { quoi: 'routine-recherche' };
 
 export function Bases({ slug }: { slug: string }) {
   const [etat, setEtat] = useState<EtatBase | null>(null);
   const [apercus, setApercus] = useState<ImportBase[]>([]);
-  const [filtres, setFiltres] = useState<FiltresBaseWeb>({});
+  const [filtres, setFiltres] = useState<FiltresBaseWeb>({ tri: 'entreprise' });
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [fenetre, setFenetre] = useState<Fenetres>(null);
+  const [vue, setVue] = useState<'contacts' | 'entreprises'>('contacts');
   const [reponses, setReponses] = useState<{ aValider: ReponseBase[]; aClasser: number }>({
     aValider: [],
     aClasser: 0,
   });
   const recherche = useRef<HTMLInputElement>(null);
+  // La liste complète est longue : repliée par défaut, le choix de Marc est retenu.
+  const [listeOuverte, setListeOuverte] = useState(
+    () => window.localStorage.getItem('base-liste-ouverte') === '1',
+  );
+  const basculerListe = () => {
+    window.localStorage.setItem('base-liste-ouverte', listeOuverte ? '0' : '1');
+    setListeOuverte(!listeOuverte);
+  };
   // Closed previews: the list may still hold them until it is read again.
   const termines = useRef(new Set<string>());
 
@@ -585,6 +613,13 @@ export function Bases({ slug }: { slug: string }) {
     [slug, filtres, page],
   );
   useEffect(() => void charger(), [charger]);
+  useEffect(() => {
+    const actualiser = () => {
+      void charger();
+    };
+    window.addEventListener('recherche-importee', actualiser);
+    return () => window.removeEventListener('recherche-importee', actualiser);
+  }, [charger]);
 
   const chargerReponses = useCallback(
     () => fetchReponsesBase(slug).then(setReponses, () => undefined),
@@ -597,7 +632,8 @@ export function Bases({ slug }: { slug: string }) {
     const touche = (e: KeyboardEvent) => {
       if (e.key !== '/' || (e.target as HTMLElement).matches?.('input, select, textarea')) return;
       e.preventDefault();
-      recherche.current?.focus();
+      setListeOuverte(true);
+      setTimeout(() => recherche.current?.focus());
     };
     document.addEventListener('keydown', touche);
     return () => document.removeEventListener('keydown', touche);
@@ -626,7 +662,7 @@ export function Bases({ slug }: { slug: string }) {
     void charger();
   };
   const integres = etat.imports.filter((i) => i.statut === 'integre');
-  const total = etat.compteurs.aEnrichir + etat.compteurs.prospectable;
+  const total = etat.compteurs.total ?? etat.compteurs.aEnrichir + etat.compteurs.prospectable;
   const fermer = () => {
     setFenetre(null);
     void charger();
@@ -680,55 +716,112 @@ export function Bases({ slug }: { slug: string }) {
 
   return (
     <div className="bv">
-      <div className="bv-tete">
+      <SuiviRecherche slug={slug} />
+      <div className="bv-tete bv-entete">
         <p className="muted">
-          Toutes vos listes de prospection au même endroit, propres et sans doublons.
-          {total > 0 &&
-            ` ${entier(total)} fiches : ${entier(etat.compteurs.prospectable)} prospectables, ${entier(etat.compteurs.aEnrichir)} à enrichir.`}
+          Vos contacts, leurs sources et leur historique, prêts pour la prospection.
         </p>
-        <div className="bv-actions">
-          <input
-            ref={recherche}
-            className="input bv-recherche"
-            type="search"
-            aria-label="Rechercher dans la base"
-            placeholder="Entreprise, nom, email…   ( / )"
-            value={filtres.q ?? ''}
-            onChange={(e) => {
-              setFiltres({ ...filtres, q: e.target.value });
-              setPage(0);
-            }}
-          />
-          <button className="btn" onClick={() => setFenetre({ quoi: 'mail' })}>
-            Mettre à jour depuis les mails
-          </button>
+        <div className="bv-entete-liens">
+          <a className="link" href={`#/${slug}/prospection`}>
+            Ouvrir Prospection
+          </a>
           <details className="bv-menu">
-            <summary className="btn">Autres actions</summary>
+            <summary className="btn sm">
+              <Icon name="gear" />
+              Gérer la base
+            </summary>
             <div className="bv-menu-liste">
+              <button className="btn ghost" onClick={() => setFenetre({ quoi: 'mail' })}>
+                Mettre à jour depuis les mails
+              </button>
               <button className="btn ghost" disabled={total === 0} onClick={actualiser}>
                 Actualiser l'historique
               </button>
               <a className="btn ghost" href={urlExportBase(slug, filtres)} download>
                 Exporter en CSV
               </a>
+              <button className="btn ghost" onClick={() => setFenetre({ quoi: 'alerte' })}>
+                Alerte quotidienne du BODACC
+              </button>
+              <button className="btn ghost" onClick={() => setFenetre({ quoi: 'listes' })}>
+                Gérer les listes
+              </button>
+              <button
+                className="btn ghost"
+                disabled={total === 0}
+                onClick={() => setFenetre({ quoi: 'waalaxy' })}
+              >
+                Exporter pour Waalaxy
+              </button>
             </div>
           </details>
-          <button className="btn primary" onClick={() => setFenetre({ quoi: 'import', etape: 1 })}>
-            + Importer une liste
-          </button>
         </div>
       </div>
 
-      {total > 0 && (
-        <div
-          className="bv-barre"
-          role="img"
-          aria-label={`${entier(etat.compteurs.prospectable)} prospectables, ${entier(etat.compteurs.aEnrichir)} à enrichir`}
-        >
-          <i className="prospectable" style={{ flex: etat.compteurs.prospectable }} />
-          <i className="a-enrichir" style={{ flex: etat.compteurs.aEnrichir }} />
+      <div className="grid g3 bv-reperes" aria-label="Vue d’ensemble de la base">
+        <div className="panel">
+          <div className="panel-b">
+            <div className="small muted">DANS LA BASE</div>
+            <strong className="num bv-chiffre">{entier(total)}</strong>
+            <span className="small muted">fiches réunies, sans doublons</span>
+          </div>
         </div>
-      )}
+        <div className="panel">
+          <div className="panel-b">
+            <div className="small muted">COORDONNÉES COMPLÈTES</div>
+            <strong className="num bv-chiffre">{entier(etat.compteurs.prospectable)}</strong>
+            <span className="small muted">contacts avec e-mail ou téléphone</span>
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-b">
+            <div className="small muted">À ENRICHIR</div>
+            <strong className="num bv-chiffre">{entier(etat.compteurs.aEnrichir)}</strong>
+            <span className="small muted">fiches à compléter</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid g2 bv-parcours">
+        <section className="panel bv-parcours-recherche" aria-label="Trouver des prospects">
+          <div className="panel-b">
+            <h2>Trouver de nouveaux prospects</h2>
+            <p className="small muted">
+              Définissez votre cible, puis retrouvez les contacts vérifiés et leurs sources avant de
+              les ajouter à la base.
+            </p>
+            <div className="bv-parcours-actions">
+              <button className="btn primary" onClick={() => setFenetre({ quoi: 'recherche' })}>
+                Rechercher de nouveaux prospects
+              </button>
+              <button className="btn" onClick={() => setFenetre({ quoi: 'entreprises' })}>
+                Chercher des entreprises
+              </button>
+              <button
+                className="link small"
+                onClick={() => setFenetre({ quoi: 'routine-recherche' })}
+              >
+                Recherche quotidienne
+              </button>
+            </div>
+          </div>
+        </section>
+        <section className="panel bv-parcours-import" aria-label="Importer des contacts">
+          <div className="panel-b">
+            <h2>Importer vos contacts</h2>
+            <p className="small muted">
+              Ajoutez un fichier ou des lignes copiées. Vérifiez les colonnes et les doublons avant
+              l’intégration.
+            </p>
+            <div className="bv-parcours-actions">
+              <button className="btn go" onClick={() => setFenetre({ quoi: 'import', etape: 1 })}>
+                + Importer une liste
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
       {info && <div className="small muted">{info}</div>}
 
       {taches.length > 0 && (
@@ -744,17 +837,84 @@ export function Bases({ slug }: { slug: string }) {
         </div>
       )}
 
-      <BaseTable
-        slug={slug}
-        etat={etat}
-        filtres={filtres}
-        onFiltres={setFiltres}
-        page={page}
-        onPage={setPage}
-        onChange={() => void charger()}
-        onImporter={() => setFenetre({ quoi: 'import', etape: 1 })}
-      />
+      <SessionsEnrichissement slug={slug} version={fenetre === null ? 0 : 1} />
 
+      <div className="bv-liste-bascule">
+        <button className="btn" type="button" aria-expanded={listeOuverte} onClick={basculerListe}>
+          {listeOuverte ? 'Réduire la liste des contacts' : 'Afficher la liste des contacts'}
+        </button>
+      </div>
+
+      {listeOuverte && (
+        <div className="bv-onglets" role="tablist" aria-label="Contenu de la base">
+          {(['contacts', 'entreprises'] as const).map((v) => (
+            <button
+              key={v}
+              role="tab"
+              aria-selected={vue === v}
+              className="bv-onglet"
+              onClick={() => setVue(v)}
+            >
+              {v === 'contacts' ? 'Contacts' : 'Entreprises'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {listeOuverte && vue === 'entreprises' && (
+        <EntreprisesBase
+          slug={slug}
+          listes={etat?.listes ?? []}
+          onChange={() => void charger()}
+          onVoirContacts={(liste) => {
+            setFiltres({ tri: 'entreprise', liste });
+            setPage(0);
+            setVue('contacts');
+          }}
+        />
+      )}
+
+      {listeOuverte && vue === 'contacts' && (
+        <BaseTable
+          slug={slug}
+          etat={etat}
+          filtres={filtres}
+          onFiltres={setFiltres}
+          page={page}
+          onPage={setPage}
+          onChange={() => void charger()}
+          onImporter={() => setFenetre({ quoi: 'import', etape: 1 })}
+          recherche={
+            <input
+              ref={recherche}
+              className="input bv-recherche"
+              type="search"
+              aria-label="Rechercher dans la base"
+              placeholder="Rechercher une entreprise, un nom, un e-mail…"
+              value={filtres.q ?? ''}
+              onChange={(e) => {
+                setFiltres({ ...filtres, q: e.target.value });
+                setPage(0);
+              }}
+            />
+          }
+        />
+      )}
+
+      {fenetre?.quoi === 'routine-recherche' && (
+        <RoutineProspects slug={slug} fermer={() => setFenetre(null)} />
+      )}
+      {fenetre?.quoi === 'recherche' && (
+        <RechercheProspects
+          slug={slug}
+          fermer={() => setFenetre(null)}
+          termine={(bilan) => {
+            setFenetre(null);
+            setInfo(bilan);
+            void charger();
+          }}
+        />
+      )}
       {fenetre?.quoi === 'import' && (
         <FenetreImport
           slug={slug}
@@ -777,6 +937,37 @@ export function Bases({ slug }: { slug: string }) {
           onFermer={fermer}
         >
           <RapprochementMail slug={slug} onTermine={() => void charger()} />
+        </Fenetre>
+      )}
+      {fenetre?.quoi === 'entreprises' && (
+        <Fenetre
+          titre="Chercher des entreprises"
+          sousTitre="Décrivez la cible : l'annuaire des entreprises de l'État fournit la liste, vous choisissez celles à ajouter. Les contacts se trouvent ensuite avec « Rechercher avec Codex »."
+          onFermer={fermer}
+        >
+          <RechercheEntreprises
+            slug={slug}
+            listes={etat?.listes ?? []}
+            onAjoute={(m) => {
+              setInfo(m);
+              void charger();
+            }}
+          />
+        </Fenetre>
+      )}
+      {fenetre?.quoi === 'alerte' && (
+        <Fenetre titre="Alerte quotidienne du BODACC" onFermer={fermer}>
+          <AlerteSignaux slug={slug} />
+        </Fenetre>
+      )}
+      {fenetre?.quoi === 'listes' && (
+        <Fenetre titre="Mes listes" onFermer={fermer}>
+          <ListesBase slug={slug} listes={etat?.listes ?? []} onChange={() => void charger()} />
+        </Fenetre>
+      )}
+      {fenetre?.quoi === 'waalaxy' && (
+        <Fenetre titre="Exporter pour Waalaxy" onFermer={fermer}>
+          <ExportWaalaxy slug={slug} filtres={filtres} />
         </Fenetre>
       )}
       {fenetre?.quoi === 'triage' && (

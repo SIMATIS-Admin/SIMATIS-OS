@@ -180,6 +180,54 @@ describe('Fiches détaillées', () => {
     }
   });
 
+  it('edits the estimated signature in the OS only, even while the CRM is read-only', async () => {
+    const opp = await id('opportunites', '301');
+    await withInstance(t.app.db, a.id, (tx) =>
+      configureConnexion(tx, {
+        kind: 'crm',
+        fournisseur: 'hubspot',
+        reglages: { sens: 'lecture' },
+      }),
+    );
+    const app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
+    try {
+      const f = (await updateFiche(
+        t.app.db,
+        armed,
+        'affaire',
+        opp,
+        { signatureEstimee: '2027-02-01' },
+        on(),
+      )) as Fiche;
+      expect(f.fiche).toMatchObject({ signatureEstimee: '2027-02-01' });
+      expect(portal.calls).toHaveLength(0);
+      const effacee = (await updateFiche(
+        t.app.db,
+        armed,
+        'affaire',
+        opp,
+        { signatureEstimee: null },
+        on(),
+      )) as Fiche;
+      expect(effacee.fiche).toMatchObject({ signatureEstimee: null });
+      const mauvaise = await app.inject({
+        method: 'PATCH',
+        url: `/api/i/mandat-fiches/fiches/affaire/${opp}`,
+        payload: { signatureEstimee: 'pas une date' },
+      });
+      expect(mauvaise.statusCode).toBe(400);
+    } finally {
+      await app.close();
+      await withInstance(t.app.db, a.id, (tx) =>
+        configureConnexion(tx, {
+          kind: 'crm',
+          fournisseur: 'hubspot',
+          reglages: { sens: 'deux_sens' },
+        }),
+      );
+    }
+  });
+
   it('adds a note in HubSpot with the deal links, or only in the OS', async () => {
     const opp = await id('opportunites', '301');
     const f = (await ajouterNote(

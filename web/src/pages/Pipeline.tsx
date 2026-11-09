@@ -100,45 +100,76 @@ function Card({
   label,
   seuil,
   onOpen,
+  destinations,
+  onMove,
 }: {
   o: PipelineOpp;
   draggable: boolean;
   label: (id: string) => string;
   seuil: number;
   onOpen: () => void;
+  destinations: { id: string; label: string }[];
+  onMove?: (destination: string) => void;
 }) {
   const inactive = !o.clos && (o.joursInactif ?? 0) > seuil;
   return (
     <div
       className={`card ${inactive ? 'inactive' : ''}`}
       draggable={draggable}
-      tabIndex={0}
-      onClick={onOpen}
       onDragStart={(e) => e.dataTransfer.setData(OPP_MIME, o.id)}
     >
-      <div className="soc">
-        {o.entreprise ?? '—'}
-        {!o.clos && <EtatActivite o={o} />}
-      </div>
-      <div className="ttl">{o.titre}</div>
-      {o.contact && <div className="pers small muted">{o.contact}</div>}
-      {o.clos === 'perdu' ? (
-        <div className="motif">
-          Perdue{label(o.etape) !== o.etape ? ` en ${label(o.etape).toLowerCase()}` : ''}
-          {o.motif ? ` : ${o.motif.toLowerCase()}` : ''}
+      <button
+        className="card-open"
+        type="button"
+        aria-label={`Ouvrir ${o.titre}`}
+        onClick={onOpen}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpen();
+          }
+        }}
+      >
+        <div className="soc">
+          {o.entreprise ?? '—'}
+          {!o.clos && <EtatActivite o={o} />}
         </div>
-      ) : o.clos ? null : (
-        o.prochaineEtape && (
-          <div className={`next ${enRetard(o) ? 'late' : ''}`}>{o.prochaineEtape}</div>
-        )
+        <div className="ttl">{o.titre}</div>
+        {o.contact && <div className="pers small muted">{o.contact}</div>}
+        {o.clos === 'perdu' ? (
+          <div className="motif">
+            Perdue{label(o.etape) !== o.etape ? ` en ${label(o.etape).toLowerCase()}` : ''}
+            {o.motif ? ` : ${o.motif.toLowerCase()}` : ''}
+          </div>
+        ) : o.clos ? null : (
+          o.prochaineEtape && (
+            <div className={`next ${enRetard(o) ? 'late' : ''}`}>{o.prochaineEtape}</div>
+          )
+        )}
+        {inactive && <div className="inactif">{o.joursInactif} j sans activité</div>}
+        <div className="ft">
+          <Score q={o.qualification} />
+          <span className="small">
+            {o.montant ? montantEur(o) : <span className="muted">à estimer</span>}
+          </span>
+        </div>
+      </button>
+      {onMove && !o.clos && (
+        <label className="card-move">
+          <span>Déplacer</span>
+          <select
+            aria-label={`Déplacer ${o.titre}`}
+            value={o.etape}
+            onChange={(event) => onMove(event.target.value)}
+          >
+            {destinations.map((destination) => (
+              <option key={destination.id} value={destination.id}>
+                {destination.label}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
-      {inactive && <div className="inactif">{o.joursInactif} j sans activité</div>}
-      <div className="ft">
-        <Score q={o.qualification} />
-        <span className="small">
-          {o.montant ? montantEur(o) : <span className="muted">à estimer</span>}
-        </span>
-      </div>
     </div>
   );
 }
@@ -368,6 +399,9 @@ export function Pipeline({ slug }: { slug: string }) {
   const [mode, setMode] = useState<'board' | 'liste' | 'matrice'>('board');
   const [cloture, setCloture] = useState<{ id: string; r: 'gagne' | 'perdu' } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState('');
+  const [activite, setActivite] = useState('toutes');
+  const [afficherCloses, setAfficherCloses] = useState(false);
   const [over, setOver] = useState<string | null>(null);
   const [nouvelle, setNouvelle] = useState<string | null>(null);
 
@@ -376,7 +410,12 @@ export function Pipeline({ slug }: { slug: string }) {
   }, [slug]);
   useEffect(load, [load]);
 
-  if (!data) return message ? <div className="empty">{message}</div> : null;
+  if (!data)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {message ?? 'Chargement du pipeline…'}
+      </div>
+    );
 
   const label = (id: string) => data.etapes.find((e) => e.id === id)?.label ?? id;
   const change = (id: string, c: Changement) =>
@@ -392,12 +431,29 @@ export function Pipeline({ slug }: { slug: string }) {
       (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
     );
   const find = (id: string) => data.opportunites.find((o) => o.id === id);
-  const ouvertes = data.opportunites.filter((o) => !o.clos);
+  const normaliser = (v: string) =>
+    v
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+  const visibles = data.opportunites.filter((o) => {
+    const correspond = normaliser([o.titre, o.entreprise, o.contact].join(' ')).includes(
+      normaliser(recherche.trim()),
+    );
+    const activityMatch =
+      activite === 'toutes' ||
+      (!o.clos &&
+        (activite === 'retard'
+          ? o.prochaine?.enRetard
+          : activite === 'sans'
+            ? !o.prochaine
+            : (o.joursInactif ?? 0) > data.inactiviteJours));
+    return correspond && activityMatch;
+  });
+  const ouvertes = visibles.filter((o) => !o.clos);
 
-  const drop = (cible: string) => (e: DragEvent) => {
-    e.preventDefault();
-    setOver(null);
-    const id = e.dataTransfer.getData(OPP_MIME);
+  const move = (id: string, cible: string) => {
+    if (!data.ecrit) return;
     const o = find(id);
     if (!o) return;
     // Winning or losing always goes through the closing window, to keep the reason.
@@ -408,6 +464,16 @@ export function Pipeline({ slug }: { slug: string }) {
     if (o.etape === cible && !o.clos) return;
     void change(id, { etape: cible });
   };
+  const drop = (cible: string) => (e: DragEvent) => {
+    e.preventDefault();
+    setOver(null);
+    move(e.dataTransfer.getData(OPP_MIME), cible);
+  };
+  const destinations = [
+    ...data.etapes.map((etape) => ({ id: etape.id, label: etape.label })),
+    { id: 'gagne', label: 'Clôturer gagnée' },
+    { id: 'perdu', label: 'Clôturer perdue' },
+  ];
   const col = (
     id: string,
     nom: string,
@@ -461,6 +527,8 @@ export function Pipeline({ slug }: { slug: string }) {
           label={label}
           seuil={data.inactiviteJours}
           onOpen={() => ouvrir(o.id)}
+          destinations={destinations}
+          onMove={data.ecrit ? (destination) => move(o.id, destination) : undefined}
         />
       ))}
       {os.length === 0 && (
@@ -500,8 +568,59 @@ export function Pipeline({ slug }: { slug: string }) {
   // Pipedrive: a card opens the deal page.
   const ouvrir = (id: string) => (location.hash = `#/${slug}/fiche/affaire/${id}`);
   return (
-    <>
-      <div className="page-actions">
+    <section className="pipeline-page" aria-label="Gestion du pipeline">
+      <div className="pipeline-toolbar">
+        <div className="seg" aria-label="Vue du pipeline">
+          {(['board', 'liste', 'matrice'] as const).map((vue) => (
+            <button
+              key={vue}
+              className={mode === vue ? 'on' : ''}
+              aria-pressed={mode === vue}
+              onClick={() => setMode(vue)}
+            >
+              <Icon name={vue === 'board' ? 'kanban' : vue === 'liste' ? 'list' : 'radar'} />
+              {vue === 'board' ? 'Étapes' : vue === 'liste' ? 'Liste' : 'Matrice'}
+            </button>
+          ))}
+        </div>
+        {data.ecrit && data.etapes[0] && (
+          <button className="btn primary" onClick={() => setNouvelle(data.etapes[0]!.id)}>
+            + Affaire
+          </button>
+        )}
+        <label className="pipeline-search">
+          <Icon name="search" />
+          <input
+            className="input"
+            type="search"
+            aria-label="Rechercher dans le pipeline"
+            placeholder="Rechercher une affaire…"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+          />
+        </label>
+        <select
+          className="input pipeline-filter"
+          aria-label="Filtrer les activités"
+          value={activite}
+          onChange={(e) => setActivite(e.target.value)}
+        >
+          <option value="toutes">Toutes les activités</option>
+          <option value="retard">Activités en retard</option>
+          <option value="sans">Sans activité prévue</option>
+          <option value="inactives">Affaires inactives</option>
+        </select>
+        {mode === 'board' && (
+          <button
+            className="btn"
+            aria-pressed={afficherCloses}
+            onClick={() => setAfficherCloses(!afficherCloses)}
+          >
+            {afficherCloses ? 'Masquer les clôturées' : 'Voir les clôturées'}
+          </button>
+        )}
+      </div>
+      <div className="page-actions pipeline-settings">
         {data.source === 'hubspot' && (
           <>
             <span className="badge blue">Miroir HubSpot, {depuis(data.derniereSynchro)}</span>
@@ -539,17 +658,6 @@ export function Pipeline({ slug }: { slug: string }) {
           />
           <Tip text="Une opportunité ouverte sans activité faite depuis ce nombre de jours est bordée de rouge. Icône verte : prochaine activité planifiée ; rouge : activité en retard ; alerte : aucune activité prévue." />
         </label>
-        <div className="seg">
-          <button className={mode === 'board' ? 'on' : ''} onClick={() => setMode('board')}>
-            Étapes
-          </button>
-          <button className={mode === 'liste' ? 'on' : ''} onClick={() => setMode('liste')}>
-            Liste
-          </button>
-          <button className={mode === 'matrice' ? 'on' : ''} onClick={() => setMode('matrice')}>
-            Matrice
-          </button>
-        </div>
       </div>
       {data.source === 'hubspot' && !data.ecrit && (
         <div className="alert amber" style={{ marginBottom: 12 }}>
@@ -591,24 +699,51 @@ export function Pipeline({ slug }: { slug: string }) {
               ),
               arrow(k),
             ])}
-            {col(
-              'gagne',
-              'Gagnées',
-              data.opportunites.filter((o) => o.clos === 'gagne'),
-              'won closed',
-            )}
-            {col(
-              'perdu',
-              'Perdues',
-              data.opportunites.filter((o) => o.clos === 'perdu'),
-              'lost closed',
-            )}
+            {afficherCloses &&
+              col(
+                'gagne',
+                'Gagnées',
+                visibles.filter((o) => o.clos === 'gagne'),
+                'won closed',
+              )}
+            {afficherCloses &&
+              col(
+                'perdu',
+                'Perdues',
+                visibles.filter((o) => o.clos === 'perdu'),
+                'lost closed',
+              )}
           </div>
+          {ouvertes.length === 0 && (
+            <p className="pipeline-empty" role="status">
+              Aucune affaire ouverte ne correspond à cette vue.
+            </p>
+          )}
+          {data.ecrit && (
+            <div className="pipeline-closing" aria-label="Zones de clôture rapide">
+              <span>Glisser une affaire ici, ou utiliser son menu Déplacer</span>
+              {(['gagne', 'perdu'] as const).map((resultat) => (
+                <div
+                  key={resultat}
+                  className={`pipeline-drop ${resultat} ${over === resultat ? 'drop' : ''}`}
+                  onDragOver={(e) => {
+                    if (!e.dataTransfer.types.includes(OPP_MIME)) return;
+                    e.preventDefault();
+                    setOver(resultat);
+                  }}
+                  onDragLeave={() => setOver(null)}
+                  onDrop={drop(resultat)}
+                >
+                  {resultat === 'gagne' ? 'Gagnée' : 'Perdue'}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       ) : mode === 'liste' ? (
         <Tableau
           cle="affaires"
-          lignes={data.opportunites}
+          lignes={visibles}
           titre={(o) => o.titre}
           onOuvrir={(o) => ouvrir(o.id)}
           onModifier={() => Promise.resolve()}
@@ -693,6 +828,6 @@ export function Pipeline({ slug }: { slug: string }) {
           }}
         />
       )}
-    </>
+    </section>
   );
 }

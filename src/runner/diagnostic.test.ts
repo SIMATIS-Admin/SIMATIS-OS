@@ -6,15 +6,36 @@ import {
   depuisDerniereProduction,
   outilsCapitalisation,
   outilsEntretien,
+  BIBLIOTHEQUE_PRECONISATIONS,
+  FICHE_REGLES_ANALYSE,
+  FICHE_REGLES_COMMUNES,
+  FICHE_REGLES_RAPPORT,
+  FICHE_REGLES_RESTITUTION,
+  FICHE_REGLES_SUPPORT,
   outilsRapport,
+  outilsRegles,
+  outilsReglesRestitution,
+  outilsCadrageRapport,
+  outilsRevue,
   outilsExportRestitution,
   outilsRestitution,
   outilsSupport,
   promptCapitalisation,
   promptDiagnostic,
   promptEntretien,
+  promptAnnulerRegle,
+  promptCadrageRapport,
   promptRapport,
+  promptReglesAnalyse,
+  promptRevue,
+  promptReglesRapport,
+  promptReglesRestitution,
+  promptReglesSupport,
   promptExportRestitution,
+  promptExportRevue,
+  promptDossierRapport,
+  outilsDossierRapport,
+  outilsExportRevue,
   promptRestitution,
   promptSupport,
   skillsDe,
@@ -55,7 +76,24 @@ const attente: AttenteDiag = {
   rapportVersion: null,
   rapportContenu: null,
   rapportNom: null,
+  relireFinaux: true,
+  rapportsFinaux: [],
+  rapportFinalTexte: null,
+  rapportBrouillon: null,
+  regleAAnnuler: null,
+  relireSupports: true,
+  supportsFinaux: [],
+  supportFinalTexte: null,
+  relireRestitutions: true,
+  restitutionsFinales: [],
+  restitutionFinaleLien: null,
+  revueValideeTexte: null,
+  revuesValidees: [],
+  revueEnCoursTexte: null,
   restitutionLien: null,
+  revueExportLien: null,
+  dossierExportLien: null,
+  rapportWordTexte: null,
   restitutionAvecProposition: true,
   proposition: null,
   pdf: null,
@@ -65,6 +103,23 @@ const attente: AttenteDiag = {
 };
 
 describe('Prompt du chat de diagnostic', () => {
+  it('le chat reçoit la revue en entier, lisible, avec les commentaires du pilote', () => {
+    const preconisations = Object.fromEntries(
+      Array.from({ length: 8 }, (_, i) => [
+        `p${i + 1}`,
+        {
+          titre: `Titre ${i + 1}`,
+          texte: 'x'.repeat(4_000),
+          choix: 'modifier',
+          detail: `Commentaire fictif ${i + 1}`,
+        },
+      ]),
+    );
+    const texte = promptDiagnostic({ ...attente, etapeMessage: 4, revue: { preconisations } });
+    for (let i = 1; i <= 8; i++)
+      expect(texte).toContain(`texte du pilote : Commentaire fictif ${i}`);
+  });
+
   it('demande une seule réponse via l outil, pour ce projet et cette étape', () => {
     const texte = promptDiagnostic(attente, new Date('2026-10-19T08:00:00Z'));
     expect(texte).toContain(`projetId ${attente.id}`);
@@ -72,10 +127,17 @@ describe('Prompt du chat de diagnostic', () => {
     expect(texte).toContain('étape 2 sur 5');
   });
 
-  it("ne reprend que l'échange de l'étape en cours", () => {
+  it('reprend les échanges de toutes les étapes, en les datant par étape', () => {
     const texte = promptDiagnostic(attente);
-    expect(texte).toContain('Question fictive');
-    expect(texte).not.toContain('Ancienne question');
+    expect(texte).toContain('[étape 2] Pilote : Question fictive');
+    expect(texte).toContain('[étape 1] Pilote : Ancienne question');
+  });
+
+  it('ajoute la lecture du second cerveau seulement quand il est accessible', () => {
+    expect(promptDiagnostic(attente)).not.toContain('/cerveau-fictif');
+    const texte = promptDiagnostic(attente, new Date(), '/cerveau-fictif');
+    expect(texte).toContain('/cerveau-fictif');
+    expect(texte).toContain('Tu ne modifies rien dans le second cerveau');
   });
 });
 
@@ -168,6 +230,31 @@ describe('Support d ouverture par le runner', () => {
     });
     return args;
   };
+
+  it('donne au chat la lecture du second cerveau quand il est accessible', async () => {
+    const cerveau = await mkdtemp(path.join(tmpdir(), 'cerveau-fictif-'));
+    try {
+      let args: string[] = [];
+      await tourDiagnostic({
+        base: 'http://os.test',
+        token: 'r',
+        claude: 'claude',
+        cerveau,
+        fetch: fauxOs(attente, []),
+        poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [] }),
+        lancer: (_c, a2) => {
+          args = a2;
+          return Promise.resolve(0);
+        },
+      });
+      expect(args[args.indexOf('--add-dir') + 1]).toBe(cerveau);
+      const outils = args[args.indexOf('--allowedTools') + 1]!;
+      expect(outils).toContain('Grep');
+      expect(outils).not.toMatch(/Edit|Write/);
+    } finally {
+      await rm(cerveau, { recursive: true, force: true });
+    }
+  });
 
   it('passe le modèle et l effort choisis dans le chat à Claude', async () => {
     const args = await lanceAvec({ ...attente, modele: 'opus', effort: 'max' });
@@ -469,6 +556,113 @@ describe('Production par le runner : modifications et deck', () => {
     expect((appels.at(-1)?.body as { erreur?: string }).erreur).toContain(SKILL_RESTITUTION);
   });
 
+  it('l export de la revue crée un artifact fidèle à la revue et en enregistre le lien', () => {
+    const texte = promptExportRevue({
+      ...restitution,
+      demande: 'revue_exporter',
+      revue: {
+        statut: 'validée',
+        preconisations: { r1: { titre: 'Titre fictif', choix: 'retenue' } },
+      },
+    });
+    expect(texte).toContain('Titre fictif');
+    expect(texte).toContain('retenue');
+    expect(texte).toContain('quickstart');
+    expect(texte).toContain('enregistrer_revue_export');
+    expect(texte).toContain(`projetId ${restitution.id}`);
+    expect(texte).toContain("n'ajoute rien");
+  });
+
+  it('l export de la revue révise l artifact existant au lieu d en créer un autre', () => {
+    const texte = promptExportRevue({
+      ...restitution,
+      demande: 'revue_exporter',
+      revue: { statut: 'validée' },
+      revueExportLien: 'https://claude.ai/artifact/RevueFictive0001',
+    });
+    expect(texte).toContain(
+      "révise l'artifact existant (https://claude.ai/artifact/RevueFictive0001)",
+    );
+    expect(texte).not.toContain('quickstart');
+  });
+
+  it('les outils de l export de la revue : artifact et enregistrement, ni skill ni second cerveau', () => {
+    const outils = outilsExportRevue(['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_revue_export');
+    expect(outils).toContain('Artifact');
+    expect(outils).not.toContain('Skill');
+    expect(outils).not.toContain('cerveau');
+  });
+
+  it('le dossier de travail réunit les données, renvoie à la skill et aux fiches, ne copie rien du cerveau', () => {
+    const texte = promptDossierRapport({
+      ...restitution,
+      demande: 'dossier_exporter',
+      contexte: 'Contexte fictif',
+      dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
+      revue: {
+        statut: 'validée',
+        preconisations: { r1: { titre: 'Titre fictif', choix: 'retenue' } },
+      },
+    });
+    expect(texte).toContain('Contexte fictif');
+    expect(texte).toContain('Titre fictif');
+    expect(texte).toContain(SKILL_RAPPORT);
+    expect(texte).toContain('Word A4 en portrait');
+    expect(texte).toContain('quickstart');
+    expect(texte).toContain('enregistrer_dossier_rapport');
+    expect(texte).toContain(`projetId ${restitution.id}`);
+    expect(texte).toContain("N'y mets rien qui vienne du second cerveau");
+    // Claude Chat ne lit pas les images du second cerveau : le logo voyage dans le dossier, en SVG.
+    expect(texte).toContain('<svg');
+    expect(texte).toContain('Le cap. Le rythme. La durée.');
+    expect(texte).toContain('en haut à droite');
+  });
+
+  it('la révision du rapport part du Word déposé quand il n y a pas de version rédigée par l OS', () => {
+    const texte = promptRapport(
+      { ...base, rapportNom: 'importe.docx', rapportWordTexte: 'Texte fictif du Word déposé' },
+      null,
+    );
+    expect(texte).toContain('Texte fictif du Word déposé');
+    expect(texte).not.toContain("dont tu n'as pas le contenu");
+  });
+
+  it('la restitution et le dossier partent du Word affiché quand il y en a un', () => {
+    const base = { ...restitution, rapportNom: 'Rapport Fictif - v3.docx', rapportContenu: null };
+    const avec = { ...base, rapportWordTexte: 'Texte fictif du Word final' };
+    for (const texte of [
+      promptRestitution({ ...avec, demande: 'restitution' }),
+      promptDossierRapport({ ...avec, demande: 'dossier_exporter' }),
+    ]) {
+      expect(texte).toContain('Texte fictif du Word final');
+      expect(texte).not.toContain("dont tu n'as pas le contenu");
+    }
+    expect(promptRestitution({ ...base, demande: 'restitution' })).toContain(
+      "dont tu n'as pas le contenu",
+    );
+  });
+
+  it('le dossier de travail révise l artifact existant au lieu d en créer un autre', () => {
+    const texte = promptDossierRapport({
+      ...restitution,
+      demande: 'dossier_exporter',
+      dossierExportLien: 'https://claude.ai/artifact/DossierFictif0001',
+    });
+    expect(texte).toContain(
+      "révise l'artifact existant (https://claude.ai/artifact/DossierFictif0001)",
+    );
+    expect(texte).not.toContain('quickstart');
+  });
+
+  it('les outils du dossier : artifact et enregistrement, ni skill ni second cerveau', () => {
+    const outils = outilsDossierRapport(['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_dossier_rapport');
+    expect(outils).toContain('Artifact');
+    expect(outils).not.toContain('Skill');
+    expect(outils).not.toContain('cerveau');
+  });
+
   it('l export PowerPoint relit le deck publié et rend ses diapositives, sans rien publier', () => {
     const texte = promptExportRestitution({
       ...restitution,
@@ -526,6 +720,33 @@ describe('Production par le runner : modifications et deck', () => {
     expect(args.join(' ')).not.toContain(SKILL_RESTITUTION);
   });
 
+  it.each(['revue_exporter', 'dossier_exporter'] as const)(
+    "l'export %s se lance sans aucune skill sur le poste",
+    async (demande) => {
+      let lance = false;
+      await tourDiagnostic({
+        base: 'http://os.test',
+        token: 'r',
+        claude: 'claude',
+        fetch: ((url: string) =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify(
+                url.endsWith('/attentes') ? [{ ...restitution, demande }] : { ok: true },
+              ),
+              { status: 200 },
+            ),
+          )) as typeof fetch,
+        poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [] }),
+        lancer: () => {
+          lance = true;
+          return Promise.resolve(0);
+        },
+      });
+      expect(lance).toBe(true);
+    },
+  );
+
   it('les outils du deck sont ceux de la restitution seulement', () => {
     const outils = outilsRestitution(null, ['/travail']);
     expect(outils).toContain('mcp__simatis__enregistrer_restitution');
@@ -557,6 +778,29 @@ describe('Rapport par le runner', () => {
     expect(texte).toContain('Second cerveau non accessible');
   });
 
+  it('donne la revue sous forme lisible, avec les commentaires du pilote, sans la couper', () => {
+    const revue = {
+      statut: 'validée',
+      preconisations: {
+        p1: {
+          titre: 'Cadencer la prospection',
+          texte: 'Texte proposé fictif',
+          choix: 'remplacer',
+          detail: 'Ma version fictive',
+        },
+      },
+      planAction: { court: { libre: 'Commentaire libre fictif du pilote', blocs: {} } },
+      indicateurs: 'Indicateur fictif ' + 'x'.repeat(25_000),
+    };
+    const texte = promptRapport({ ...rapport, revue }, null);
+    expect(texte).toContain('choix : remplacer');
+    expect(texte).toContain('texte du pilote : Ma version fictive');
+    expect(texte).toContain('Court terme · commentaire libre : Commentaire libre fictif du pilote');
+    expect(texte).not.toContain('"preconisations"');
+    expect(texte).toMatch(/chaque commentaire/i);
+    expect(texte.length).toBeGreaterThan(25_000);
+  });
+
   it('ne donne que l outil du rapport, jamais celui du support', () => {
     const outils = outilsRapport(null, ['/travail']);
     expect(outils).toContain('mcp__simatis__enregistrer_rapport');
@@ -564,8 +808,60 @@ describe('Rapport par le runner', () => {
     expect(outils).not.toContain('Artifact');
     const avec = outilsRapport('/cerveau-fictif', ['/travail']);
     expect(avec).toContain('Read(//cerveau-fictif/**)');
-    // Le second cerveau se lit seulement pour le rapport : aucune règle Edit dessus.
+    // Le second cerveau se lit pour le rapport ; l'écriture est limitée au dossier du diagnostic
+    // (amorçage de la fiche de règles), jamais au second cerveau entier.
     expect(avec).not.toContain('Edit(//cerveau-fictif/**)');
+    expect(avec).toContain(
+      'Edit(//cerveau-fictif/brain/methodes/diagnostic-endurance-commerciale/**)',
+    );
+    expect(outilsRapport(null, ['/travail'])).not.toContain('cerveau');
+  });
+
+  const finaux = [
+    { nom: 'Rapport final 1', version: 5, texte: 'Texte fictif du premier finaux.' },
+    { nom: 'Rapport final 2', version: 4, texte: 'Texte fictif du second final.' },
+  ];
+
+  it('joint les rapports finaux comme modèle de structure, jamais de faits', () => {
+    const texte = promptRapport({ ...rapport, rapportsFinaux: finaux }, '/cerveau-fictif');
+    expect(texte).toContain('Texte fictif du premier finaux.');
+    expect(texte).toContain('Texte fictif du second final.');
+    expect(texte).toContain('structure');
+    expect(texte).toMatch(/jamais.*(fait|nom|chiffre)/);
+  });
+
+  it('réglage désactivé : plus de bloc des finaux, les règles restent', () => {
+    const texte = promptRapport(
+      { ...rapport, relireFinaux: false, rapportsFinaux: finaux },
+      '/cerveau-fictif',
+    );
+    expect(texte).not.toContain('Texte fictif du premier finaux.');
+    expect(texte).toContain(FICHE_REGLES_RAPPORT);
+  });
+
+  it('texte d un final indisponible, et un seul final trouvé : le dit sans afficher null', () => {
+    const texte = promptRapport(
+      { ...rapport, rapportsFinaux: [{ nom: 'Rapport final 1', version: 5, texte: null }] },
+      '/cerveau-fictif',
+    );
+    expect(texte).toContain('texte indisponible');
+    expect(texte).toMatch(/un seul|1 rapport final/);
+    expect(texte).not.toMatch(/null|undefined/);
+  });
+
+  it('la fiche de règles : règles fermes impératives, amorçage si absente avec deux finaux', () => {
+    const texte = promptRapport({ ...rapport, rapportsFinaux: finaux }, '/cerveau-fictif');
+    expect(texte).toContain(FICHE_REGLES_RAPPORT);
+    expect(texte).toMatch(/règles fermes.*impératives/);
+    expect(texte).toMatch(/priment/);
+    expect(texte).toMatch(/n'existe pas.*crée/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+  });
+
+  it('sans second cerveau : pas de consigne sur la fiche', () => {
+    const texte = promptRapport({ ...rapport, rapportsFinaux: finaux }, null);
+    expect(texte).toContain('Second cerveau non accessible');
+    expect(texte).not.toContain(FICHE_REGLES_RAPPORT);
   });
 });
 
@@ -706,5 +1002,457 @@ describe('Capitalisation de la restitution par le runner', () => {
     } finally {
       await rm(dossier, { recursive: true, force: true });
     }
+  });
+});
+
+describe('Capitalisation des règles de rédaction par le runner', () => {
+  const regles: AttenteDiag = {
+    ...attente,
+    etape: 4,
+    etapeMessage: 4,
+    demande: 'regles_rapport',
+    rapportFinalTexte: 'Texte fictif de la version finale.',
+    rapportBrouillon: { entreprise: 'Atelier Fictif', note: 'brouillon fictif' },
+    rapportsFinaux: [
+      { nom: 'Rapport final 1', version: 4, texte: 'Texte fictif d un final précédent.' },
+    ],
+  };
+
+  it('donne la finale, le brouillon et les finaux précédents comme données à lire', () => {
+    const texte = promptReglesRapport(regles);
+    expect(texte).toContain('Texte fictif de la version finale.');
+    expect(texte).toContain('brouillon fictif');
+    expect(texte).toContain('Texte fictif d un final précédent.');
+    expect(texte).toContain(FICHE_REGLES_RAPPORT);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toContain(`projetId ${regles.id}`);
+    expect(texte).toContain('enregistrer_regles_rapport');
+  });
+
+  it('pose les règles du jeu : deux constats, contradiction signalée, aucun nom', () => {
+    const texte = promptReglesRapport(regles);
+    expect(texte).toMatch(/au moins deux rapports finaux/);
+    expect(texte).toMatch(/ne la supprime jamais/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+    expect(texte).toMatch(/règles communes/);
+  });
+
+  it('sans brouillon de l OS, le dit', () => {
+    const texte = promptReglesRapport({ ...regles, rapportBrouillon: null });
+    expect(texte).toMatch(/Aucun brouillon/);
+    expect(texte).not.toMatch(/null|undefined/);
+  });
+
+  it('une finale illisible est signalée et le travail continue sans elle', () => {
+    const texte = promptReglesRapport({ ...regles, rapportFinalTexte: null });
+    expect(texte).toMatch(/texte de la version finale.*indisponible/i);
+  });
+
+  it('l annulation donne l ancien et le nouveau texte, et la condition du rétablissement', () => {
+    const texte = promptAnnulerRegle({
+      ...regles,
+      demande: 'regles_annuler',
+      regleAAnnuler: {
+        id: '00000000-0000-4000-8000-0000000000aa',
+        libelle: 'Libellé fictif',
+        avant: 'Ancien texte fictif',
+        apres: 'Nouveau texte fictif',
+        fiche: 'communes',
+      },
+    });
+    expect(texte).toContain('Ancien texte fictif');
+    expect(texte).toContain('Nouveau texte fictif');
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/seulement si.*contient encore/);
+    expect(texte).toContain('effectuee');
+    expect(texte).toContain('00000000-0000-4000-8000-0000000000aa');
+  });
+
+  it('écrit seulement dans le dossier du diagnostic, jamais dans tout le second cerveau', () => {
+    const outils = outilsRegles('/cerveau-fictif', ['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_regles_rapport');
+    expect(outils).toContain('mcp__simatis__repondre_diagnostic');
+    expect(outils).toContain('Read(//cerveau-fictif/**)');
+    expect(outils).toContain(
+      'Edit(//cerveau-fictif/brain/methodes/diagnostic-endurance-commerciale/**)',
+    );
+    expect(outils).not.toContain('Edit(//cerveau-fictif/**)');
+    expect(outils).not.toContain('enregistrer_rapport,');
+  });
+
+  it('le rapport lit aussi les règles communes', () => {
+    const texte = promptRapport({ ...regles, demande: 'rapport' }, '/cerveau-fictif');
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+  });
+});
+
+describe("Règles de rédaction du support d'ouverture par le runner", () => {
+  const finaux = [
+    { nom: 'Support final 1', texte: 'Diapositive 1 : Premier modèle fictif' },
+    { nom: 'Support final 2', texte: 'Diapositive 1 : Second modèle fictif' },
+  ];
+  const preparer: AttenteDiag = {
+    ...attente,
+    etape: 1,
+    etapeMessage: 1,
+    demande: 'preparer_support',
+    supportsFinaux: finaux,
+  };
+
+  it('la préparation lit les deux fiches et les supports finaux comme modèles', () => {
+    const texte = promptSupport(preparer, null, '/cerveau-fictif');
+    expect(texte).toContain(FICHE_REGLES_SUPPORT);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/règles fermes.*impératives/);
+    expect(texte).toContain('Premier modèle fictif');
+    expect(texte).toContain('Second modèle fictif');
+    expect(texte).toMatch(/jamais.*(fait|nom|chiffre)/);
+  });
+
+  it('sans second cerveau : ni fiche, mais les modèles restent', () => {
+    const texte = promptSupport(preparer, null, null);
+    expect(texte).not.toContain(FICHE_REGLES_SUPPORT);
+    expect(texte).toContain('Premier modèle fictif');
+  });
+
+  it('réglage désactivé, ou autre demande : pas de supports finaux, les règles restent', () => {
+    const coupe = promptSupport({ ...preparer, relireSupports: false }, null, '/cerveau-fictif');
+    expect(coupe).not.toContain('Premier modèle fictif');
+    expect(coupe).toContain(FICHE_REGLES_SUPPORT);
+    const chat = promptSupport({ ...preparer, demande: null }, null, '/cerveau-fictif');
+    expect(chat).not.toContain('Premier modèle fictif');
+  });
+
+  it('un texte absent ne s affiche pas comme null ou undefined', () => {
+    const texte = promptSupport(
+      { ...preparer, supportsFinaux: [{ nom: 'Support final 1', texte: '' }] },
+      null,
+      '/cerveau-fictif',
+    );
+    expect(texte).toContain('texte indisponible');
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  const regles: AttenteDiag = {
+    ...attente,
+    etape: 1,
+    etapeMessage: 1,
+    demande: 'regles_support',
+    supportFinalTexte: 'Diapositive 1 : Titre final fictif',
+    supportsFinaux: finaux,
+  };
+
+  it('la capitalisation donne le support final, les précédents, les fiches et les règles du jeu', () => {
+    const texte = promptReglesSupport(regles);
+    expect(texte).toContain('Titre final fictif');
+    expect(texte).toContain('Premier modèle fictif');
+    expect(texte).toContain(FICHE_REGLES_SUPPORT);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/au moins deux supports finaux/);
+    expect(texte).toMatch(/ne la supprime jamais/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+    expect(texte).toContain(`projetId ${regles.id}`);
+    expect(texte).toContain('enregistrer_regles_rapport');
+    expect(texte).toMatch(/fiche « support »/);
+  });
+
+  it('sans support précédent, le dit sans afficher null', () => {
+    const texte = promptReglesSupport({ ...regles, supportsFinaux: [] });
+    expect(texte).toMatch(/Aucun autre support final/);
+    expect(texte).not.toMatch(/null|undefined/);
+  });
+
+  it('l annulation d une règle de la fiche du support cite cette fiche', () => {
+    const texte = promptAnnulerRegle({
+      ...regles,
+      demande: 'regles_annuler',
+      regleAAnnuler: {
+        id: '00000000-0000-4000-8000-0000000000bb',
+        libelle: 'Libellé fictif',
+        avant: null,
+        apres: 'Texte fictif',
+        fiche: 'support',
+      },
+    });
+    expect(texte).toContain(FICHE_REGLES_SUPPORT);
+  });
+});
+
+describe('Règles du deck de restitution par le runner', () => {
+  const decks = [
+    { nom: 'Deck final 1', lien: 'https://claude.ai/artifact/PremierDeckFictif' },
+    { nom: 'Deck final 2', lien: 'https://claude.ai/artifact/SecondDeckFictif' },
+  ];
+  const production: AttenteDiag = {
+    ...attente,
+    etape: 5,
+    etapeMessage: 5,
+    demande: 'restitution',
+    restitutionsFinales: decks,
+  };
+  const date = new Date('2026-10-25T08:00:00Z');
+
+  it('la production lit les deux fiches et les liens des decks finaux comme modèles', () => {
+    const texte = promptRestitution(production, date, '/cerveau-fictif');
+    expect(texte).toContain(FICHE_REGLES_RESTITUTION);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/règles fermes.*impératives/);
+    expect(texte).toContain('PremierDeckFictif');
+    expect(texte).toContain('SecondDeckFictif');
+    expect(texte).toMatch(/jamais un fait, un nom, un chiffre ni un tarif/);
+  });
+
+  it('sans second cerveau : ni fiche, mais les modèles restent', () => {
+    const texte = promptRestitution(production, date, null);
+    expect(texte).not.toContain(FICHE_REGLES_RESTITUTION);
+    expect(texte).toContain('PremierDeckFictif');
+  });
+
+  it('réglage désactivé : pas de deck final, les règles restent', () => {
+    const texte = promptRestitution(
+      { ...production, relireRestitutions: false },
+      date,
+      '/cerveau-fictif',
+    );
+    expect(texte).not.toContain('PremierDeckFictif');
+    expect(texte).not.toContain('Aucun deck de restitution final');
+    expect(texte).toContain(FICHE_REGLES_RESTITUTION);
+  });
+
+  it('sans deck final, le dit sans afficher null', () => {
+    const texte = promptRestitution(
+      { ...production, restitutionsFinales: [] },
+      date,
+      '/cerveau-fictif',
+    );
+    expect(texte).toMatch(/Aucun deck de restitution final/);
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  const regles: AttenteDiag = {
+    ...production,
+    demande: 'regles_restitution',
+    restitutionFinaleLien: 'https://claude.ai/artifact/DeckFinalFictif',
+  };
+
+  it('la capitalisation donne le deck final, les précédents, les fiches et les règles du jeu', () => {
+    const texte = promptReglesRestitution(regles);
+    expect(texte).toContain('DeckFinalFictif');
+    expect(texte).toContain('PremierDeckFictif');
+    expect(texte).toContain(FICHE_REGLES_RESTITUTION);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/au moins deux decks finaux/);
+    expect(texte).toMatch(/ne la supprime jamais/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+    expect(texte).toMatch(/aucun montant ni tarif/);
+    expect(texte).toContain(`projetId ${regles.id}`);
+    expect(texte).toContain('enregistrer_regles_rapport');
+    expect(texte).toMatch(/fiche « restitution »/);
+  });
+
+  it('sans deck précédent, le dit sans afficher null', () => {
+    const texte = promptReglesRestitution({ ...regles, restitutionsFinales: [] });
+    expect(texte).toMatch(/Aucun autre deck final/);
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  it('les outils lisent les decks, écrivent seulement dans le dossier des règles, ne publient pas', () => {
+    const outils = outilsReglesRestitution('/cerveau-fictif', ['/travail']);
+    expect(outils).toContain('Artifact');
+    expect(outils).toContain(
+      'Edit(//cerveau-fictif/brain/methodes/diagnostic-endurance-commerciale/**)',
+    );
+    expect(outils).not.toContain('Edit(//cerveau-fictif/**)');
+    expect(outils).not.toContain('enregistrer_restitution');
+  });
+
+  it('l annulation d une règle de la fiche du deck cite cette fiche', () => {
+    const texte = promptAnnulerRegle({
+      ...regles,
+      demande: 'regles_annuler',
+      regleAAnnuler: {
+        id: '00000000-0000-4000-8000-0000000000cc',
+        libelle: 'Libellé fictif',
+        avant: null,
+        apres: 'Texte fictif',
+        fiche: 'restitution',
+      },
+    });
+    expect(texte).toContain(FICHE_REGLES_RESTITUTION);
+  });
+});
+
+describe("Règles d'analyse de la revue par le runner", () => {
+  const regles: AttenteDiag = {
+    ...attente,
+    etape: 3,
+    etapeMessage: 3,
+    demande: 'regles_analyse',
+    revueValideeTexte:
+      'Préconisation fictive — proposé : Texte proposé fictif — choix : remplacer — texte du pilote : Texte du pilote fictif',
+    revuesValidees: [
+      { nom: 'Revue validée 1', texte: 'Préconisation précédente fictive — choix : garder' },
+    ],
+  };
+
+  it('donne la revue validée, les précédentes, les fiches et les règles du jeu', () => {
+    const texte = promptReglesAnalyse(regles);
+    expect(texte).toContain('Texte du pilote fictif');
+    expect(texte).toContain('Préconisation précédente fictive');
+    expect(texte).toContain(FICHE_REGLES_ANALYSE);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/au moins deux revues validées/);
+    expect(texte).toMatch(/ne la supprime jamais/);
+    expect(texte).toMatch(/aucun nom d'entreprise/);
+    expect(texte).toMatch(/garde.*remplace.*retire/is);
+    expect(texte).toContain(`projetId ${regles.id}`);
+    expect(texte).toContain('enregistrer_regles_rapport');
+    expect(texte).toMatch(/fiche « analyse »/);
+  });
+
+  it('sans revue précédente, le dit sans afficher null', () => {
+    const texte = promptReglesAnalyse({ ...regles, revuesValidees: [] });
+    expect(texte).toMatch(/Aucune autre revue validée/);
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  it('sans texte proposé, compare seulement aux autres revues', () => {
+    const texte = promptReglesAnalyse({
+      ...regles,
+      revueValideeTexte: 'Préconisation fictive — choix : non précisé',
+    });
+    expect(texte).toMatch(/pas de texte proposé/i);
+    expect(texte).toMatch(/n'invente aucune proposition/);
+  });
+
+  it('une revue absente est signalée', () => {
+    const texte = promptReglesAnalyse({ ...regles, revueValideeTexte: null });
+    expect(texte).toMatch(/revue validée.*indisponible/i);
+  });
+
+  it('l annulation d une règle de la fiche d analyse cite cette fiche', () => {
+    const texte = promptAnnulerRegle({
+      ...regles,
+      demande: 'regles_annuler',
+      regleAAnnuler: {
+        id: '00000000-0000-4000-8000-0000000000cc',
+        libelle: 'Libellé fictif',
+        avant: null,
+        apres: 'Texte fictif',
+        fiche: 'analyse',
+      },
+    });
+    expect(texte).toContain(FICHE_REGLES_ANALYSE);
+  });
+
+  it('le rapport lit aussi la fiche des règles d analyse', () => {
+    expect(promptRapport({ ...regles, demande: 'rapport' }, '/cerveau-fictif')).toContain(
+      FICHE_REGLES_ANALYSE,
+    );
+  });
+});
+
+describe('Préparation de la revue par le runner', () => {
+  const preparer: AttenteDiag = {
+    ...attente,
+    etape: 3,
+    etapeMessage: 3,
+    demande: 'revue_preparer',
+    contexte: 'Contexte fictif du projet.',
+    revueEnCoursTexte: 'Préconisation en cours fictive — choix : garder',
+    revuesValidees: [
+      { nom: 'Revue validée 1', texte: 'Préconisation modèle fictive — choix : remplacer' },
+    ],
+  };
+
+  it('donne le projet, la revue en cours, les revues validées et les trois fiches à lire', () => {
+    const texte = promptRevue(preparer, '/cerveau-fictif');
+    expect(texte).toContain('Contexte fictif du projet.');
+    expect(texte).toContain('Préconisation en cours fictive');
+    expect(texte).toContain('Préconisation modèle fictive');
+    expect(texte).toContain(BIBLIOTHEQUE_PRECONISATIONS);
+    expect(texte).toContain(FICHE_REGLES_ANALYSE);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toMatch(/règles fermes.*impératives/);
+    expect(texte).toContain(`projetId ${preparer.id}`);
+    expect(texte).toContain('enregistrer_revue_proposee');
+  });
+
+  it('interdit de fixer les choix, de citer un nom d entreprise ou de proposer un accompagnement', () => {
+    const texte = promptRevue(preparer, '/cerveau-fictif');
+    expect(texte).toMatch(/ne fixe jamais.*choix.*detail/is);
+    expect(texte).toMatch(/jamais un fait, un nom ni un chiffre/);
+    expect(texte).toMatch(/conclusion.*aucune proposition d'accompagnement/is);
+    expect(texte).toContain('sept blocs');
+  });
+
+  it('sans revue en cours ni revue validée, le dit sans afficher null', () => {
+    const texte = promptRevue(
+      { ...preparer, revueEnCoursTexte: null, revuesValidees: [] },
+      '/cerveau-fictif',
+    );
+    expect(texte).toMatch(/Aucune revue n'est encore commencée/);
+    expect(texte).toMatch(/Aucune revue validée précédente/);
+    expect(texte).not.toMatch(/\bnull\b|undefined/);
+  });
+
+  it('outils : lecture du second cerveau, jamais d écriture dessus', () => {
+    const outils = outilsRevue('/cerveau-fictif', ['/travail']);
+    expect(outils).toContain('mcp__simatis__enregistrer_revue_proposee');
+    expect(outils).toContain('mcp__simatis__repondre_diagnostic');
+    expect(outils).toContain('Read(//cerveau-fictif/**)');
+    expect(outils).not.toMatch(/Edit\(\/\/cerveau-fictif/);
+    expect(outils).not.toContain('enregistrer_rapport,');
+  });
+});
+
+describe('Cadrage du rapport par le runner', () => {
+  const cadrer: AttenteDiag = {
+    ...attente,
+    etape: 4,
+    etapeMessage: 4,
+    demande: 'rapport_cadrer',
+    contexte: 'Contexte fictif du projet.',
+    revue: {
+      statut: 'validée',
+      preconisations: {
+        p1: {
+          titre: 'Cadencer la prospection',
+          texte: 'Texte fictif',
+          choix: 'remplacer',
+          detail: 'Ma version fictive',
+        },
+      },
+    },
+    conversation: [
+      { etape: 4, de: 'pilote', texte: 'Cadrer le rapport.', at: '2026-11-06T08:00:00Z' },
+    ],
+  };
+
+  it('fait de Claude un partenaire : questions, plan proposé, rien de rédigé', () => {
+    const texte = promptCadrageRapport(cadrer, '/cerveau-fictif');
+    expect(texte).toContain(SKILL_RAPPORT);
+    expect(texte).toContain('Contexte fictif du projet.');
+    expect(texte).toContain('texte du pilote : Ma version fictive');
+    expect(texte).not.toContain('"preconisations"');
+    expect(texte).toMatch(/pose.*questions/i);
+    expect(texte).toMatch(/propose.*plan/i);
+    expect(texte).toMatch(/ne rédiges pas le rapport/i);
+    expect(texte).toContain(FICHE_REGLES_COMMUNES);
+    expect(texte).toContain('Pilote : Cadrer le rapport.');
+    expect(texte).toContain(`projetId ${cadrer.id}`);
+    expect(texte).not.toContain('enregistrer_rapport');
+  });
+
+  it('sans second cerveau, le dit au lieu de deviner', () => {
+    expect(promptCadrageRapport(cadrer, null)).toContain('Second cerveau non accessible');
+  });
+
+  it('ne permet que de lire : jamais d enregistrer_rapport, d écriture ni de Bash', () => {
+    const outils = outilsCadrageRapport('/cerveau', ['/travail']);
+    expect(outils).toContain('mcp__simatis__repondre_diagnostic');
+    expect(outils).toContain('Read(//cerveau/**)');
+    expect(outils).not.toContain('enregistrer_rapport');
+    expect(outils).not.toMatch(/Edit|Write|Bash/);
   });
 });

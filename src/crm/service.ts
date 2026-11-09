@@ -248,17 +248,21 @@ export async function createEntreprise(
     ville?: string | null;
     taille?: number | null;
     domaine?: string | null;
+    siren?: string | null;
   },
   deps: CreationDeps,
 ) {
+  // The SIREN stays in the OS: what is sent to the CRM is the rest.
+  const { siren, ...pourLeCrm } = input;
   return withInstance(db, instance.id, async (tx) => {
-    const crm = await createInCrm(tx, instance, 'company.create', input, deps);
+    const crm = await createInCrm(tx, instance, 'company.create', pourLeCrm, deps);
     if (crm && 'simulation' in crm) return crm;
     const [row] = await tx
       .insert(entreprises)
       .values({
         instanceId: currentInstance,
-        ...input,
+        ...pourLeCrm,
+        siren: siren ?? null,
         ...(crm ? { source: 'hubspot', sourceId: crm.sourceId } : {}),
       })
       .returning();

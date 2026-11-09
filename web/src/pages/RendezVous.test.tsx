@@ -49,6 +49,7 @@ const envoi = (fin: string, methode: string) =>
 describe('RendezVous list', () => {
   beforeEach(() => {
     calls = [];
+    sessionStorage.clear();
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -69,7 +70,7 @@ describe('RendezVous list', () => {
 
   it('marks a block as not being a meeting', async () => {
     render(<RendezVous slug="simatis" />);
-    const ligne = (await screen.findByText('Déjeuner fictif')).closest('tr');
+    const ligne = (await screen.findByText('Déjeuner fictif')).closest('article');
     if (!ligne) throw new Error('no row');
     fireEvent.click(within(ligne).getByRole('button', { name: 'Pas un RDV' }));
     await waitFor(() => expect(envoi('/rendez-vous/b1', 'PATCH')).toHaveLength(1));
@@ -86,7 +87,7 @@ describe('RendezVous list', () => {
 
   it('validates the contact suggested by the guests: links it, then makes it a meeting', async () => {
     render(<RendezVous slug="simatis" />);
-    const ligne = (await screen.findByText('Point suggéré')).closest('tr');
+    const ligne = (await screen.findByText('Point suggéré')).closest('article');
     if (!ligne) throw new Error('no row');
     fireEvent.click(within(ligne).getByRole('button', { name: 'C’est un RDV' }));
     await waitFor(() => expect(envoi('/rendez-vous/b2', 'PATCH')).toHaveLength(1));

@@ -178,7 +178,12 @@ export function Parametres({ slug, onRenamed }: Props) {
     );
   }, [slug]);
 
-  if (!fiche) return message ? <div className="empty">{message}</div> : null;
+  if (!fiche)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        {message ?? 'Chargement des paramètres…'}
+      </div>
+    );
 
   const save = () =>
     renameInstance(slug, nom).then(

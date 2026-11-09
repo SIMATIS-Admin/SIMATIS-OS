@@ -17,8 +17,19 @@ import { creationSchema, projetSchema } from '../diagnostic/saisie.js';
 import { ChatIndisponible, envoyerMessage, viderConversation } from '../diagnostic/chat.js';
 import { exporterRapportDrive } from '../diagnostic/drive.js';
 import {
+  demanderCapitalisationAnalyse,
+  demanderPreparationRevue,
+  revueVientDEtreValidee,
+  statutRevueDe,
+} from '../diagnostic/analyse.js';
+import { listerJournalRegles } from '../diagnostic/regles.js';
+import {
+  demanderAnnulationRegle,
+  demanderCapitalisationRapport,
+  demanderCadrageRapport,
   demanderRapport,
   importerRapport,
+  marquerVersionFinale,
   renvoyerRapportSurDrive,
 } from '../diagnostic/rapport.js';
 import {
@@ -28,12 +39,21 @@ import {
 } from '../diagnostic/capitalisation.js';
 import {
   demanderExportRestitution,
+  demanderReglesRestitution,
   demanderRestitution,
+  marquerDeckFinal,
   pptxRestitutionDe,
 } from '../diagnostic/restitution.js';
+import { demanderDossier } from '../diagnostic/dossier-export.js';
+import { demanderExportRevue } from '../diagnostic/revue-export.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
 import { GrilleInvalide, LETTRES } from '../diagnostic/grille.js';
-import { demanderSupport, logoDe, rouvrirSupport } from '../diagnostic/support.js';
+import {
+  demanderCapitalisationSupport,
+  demanderSupport,
+  logoDe,
+  rouvrirSupport,
+} from '../diagnostic/support.js';
 import {
   createContact,
   createEntreprise,
@@ -491,7 +511,17 @@ export function registerApi(
           .code(400)
           .send({ error: parsed.error.issues[0]?.message ?? 'Projet invalide' });
       try {
-        return await updateProjet(db, i, request.params.id, parsed.data);
+        const avant = await statutRevueDe(db, i, request.params.id);
+        const projet = await updateProjet(db, i, request.params.id, parsed.data);
+        if (!revueVientDEtreValidee(avant, projet.revue?.statut)) return projet;
+        // La revue reste validée quoi qu'il arrive : si Claude répond déjà, la capitalisation se
+        // relance à la main.
+        try {
+          return await demanderCapitalisationAnalyse(db, i, request.params.id);
+        } catch (error) {
+          if (error instanceof ChatIndisponible) return projet;
+          throw error;
+        }
       } catch (error) {
         return diagnosticErreur(error, reply);
       }
@@ -524,6 +554,47 @@ export function registerApi(
           return reply.code(409).send({ error: error.message });
         return diagnosticErreur(error, reply);
       }
+    }),
+  );
+  // Réglages du module Diagnostic : relire les deux derniers rapports finaux (ou supports finaux)
+  // avant de rédiger. Actifs par défaut.
+  const reglagesDiag = (i: {
+    config: {
+      diagnostic?: {
+        relireFinaux?: boolean;
+        relireSupports?: boolean;
+        relireRestitutions?: boolean;
+      };
+    };
+  }) => ({
+    relireFinaux: i.config.diagnostic?.relireFinaux !== false,
+    relireSupports: i.config.diagnostic?.relireSupports !== false,
+    relireRestitutions: i.config.diagnostic?.relireRestitutions !== false,
+  });
+  app.get<SlugParams>(
+    '/api/i/:slug/diagnostic/reglages',
+    onInstance((i) => Promise.resolve(reglagesDiag(i))),
+  );
+  app.put<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/diagnostic/reglages',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = z
+        .object({
+          relireFinaux: z.boolean().optional(),
+          relireSupports: z.boolean().optional(),
+          relireRestitutions: z.boolean().optional(),
+        })
+        .refine((r) => Object.values(r).some((v) => v !== undefined))
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Réglage invalide' });
+      const diagnostic = { ...i.config.diagnostic, ...parsed.data };
+      await withInstance(db, i.id, (tx) =>
+        tx
+          .update(instances)
+          .set({ config: { ...i.config, diagnostic }, updatedAt: new Date() })
+          .where(eq(instances.id, i.id)),
+      );
+      return reglagesDiag({ config: { ...i.config, diagnostic } });
     }),
   );
   // Rapport : le pilote demande sa rédaction par Claude (étape 4, revue validée).
@@ -576,6 +647,139 @@ export function registerApi(
       }
     }),
   );
+  // Version finale du rapport : le pilote désigne le Google Doc qui servira de référence de rédaction.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/finale',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z
+        .object({ lien: z.string().trim().min(1).max(500), finale: z.boolean() })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Lien et choix attendus' });
+      try {
+        return await marquerVersionFinale(db, i, id, corps.data.lien, corps.data.finale);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Cadrage du rapport (étape 4) : questions et plan proposés par Claude avant la production.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/cadrer',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderCadrageRapport(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Préparation de la revue par Claude (étape 3) : propositions de textes, choix du pilote intacts.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/revue/preparer',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderPreparationRevue(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Capitalisation de l'analyse à la demande (étape 3), si elle n'est pas partie à la validation.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/revue/capitaliser',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderCapitalisationAnalyse(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Règles de rédaction apprises : journal, capitalisation à la demande, annulation d'une règle.
+  app.get<SlugParams>(
+    '/api/i/:slug/diagnostic/regles-journal',
+    onInstance((i) => listerJournalRegles(db, i)),
+  );
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/capitaliser',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderCapitalisationRapport(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Version finale du deck de restitution, et relance de la capitalisation de ses règles.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/finale',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z
+        .object({ lien: z.string().trim().min(1).max(500), finale: z.boolean() })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Lien et choix attendus' });
+      try {
+        return await marquerDeckFinal(db, i, id, corps.data.lien, corps.data.finale);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/regles',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderReglesRestitution(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.post<{ Params: { slug: string; id: string; entree: string } }>(
+    '/api/i/:slug/diagnostic/projets/:id/regles-journal/:entree/annuler',
+    onInstance<{ Params: { slug: string; id: string; entree: string } }>(
+      async (i, request, reply) => {
+        const { id, entree } = request.params;
+        if (!UUID.test(id) || !UUID.test(entree))
+          return reply.code(400).send({ error: 'Identifiant invalide' });
+        try {
+          return await demanderAnnulationRegle(db, i, id, entree);
+        } catch (error) {
+          if (error instanceof ChatIndisponible)
+            return reply.code(409).send({ error: error.message });
+          return diagnosticErreur(error, reply);
+        }
+      },
+    ),
+  );
   // Restitution : le pilote demande le deck de présentation du rapport (étape 5).
   app.post<ProjetRoute>(
     '/api/i/:slug/diagnostic/projets/:id/restitution/produire',
@@ -584,6 +788,36 @@ export function registerApi(
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
       try {
         return await demanderRestitution(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Export de la revue validée (étape 3) en artifact, à rouvrir dans Claude Chat pour le rapport.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/revue/exporter',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderExportRevue(db, i, id);
+      } catch (error) {
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Dossier de travail du rapport (étape 4) en artifact, à rouvrir dans Claude Chat.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/rapport/dossier',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await demanderDossier(db, i, id);
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
@@ -789,6 +1023,7 @@ export function registerApi(
         if (action === 'preparer') return await demanderSupport(db, i, id, 'preparer_support');
         if (action === 'final') return await demanderSupport(db, i, id, 'support_final');
         if (action === 'rouvrir') return await rouvrirSupport(db, i, id);
+        if (action === 'capitaliser') return await demanderCapitalisationSupport(db, i, id);
         return reply.code(404).send({ error: 'Action inconnue' });
       } catch (error) {
         if (error instanceof ChatIndisponible)
@@ -856,6 +1091,7 @@ export function registerApi(
       dureeEngagementMois: z.number().int().min(1).max(120),
       taciteReconduction: z.boolean(),
       probabiliteManuelle: z.number().int().min(0).max(100).nullable(),
+      signatureEstimee: z.iso.date().nullable(),
       echeance: z.iso.date().nullable(),
       fonction: texteCourt.nullable(),
       email: z.email().nullable(),
@@ -896,7 +1132,29 @@ export function registerApi(
       const kind = ficheParams(request.params);
       if (!kind || !(await getFiche(db, i, kind, request.params.id)))
         return reply.code(404).send({ error: 'Fiche introuvable' });
-      return mailsDeFiche(db, i, kind, request.params.id, connexionDeps);
+      const message = (request.query as { message?: unknown }).message;
+      if (message !== undefined && (typeof message !== 'string' || message.length > 1000))
+        return reply.code(400).send({ error: 'Message invalide' });
+      reply.header('Cache-Control', 'no-store');
+      const result = await mailsDeFiche(
+        db,
+        i,
+        kind,
+        request.params.id,
+        connexionDeps,
+        undefined,
+        message,
+      );
+      if (message) {
+        const mail = result.mails.find((m) => m.id === message);
+        if (!mail) return reply.code(404).send({ error: 'Mail introuvable sur cette fiche' });
+        if (!mail.mail?.charge)
+          return reply.code(502).send({
+            error: 'Le mail complet est indisponible. Réessayez ou ouvrez la messagerie.',
+          });
+        return { ...result, mails: [mail] };
+      }
+      return result;
     }),
   );
   app.patch<FicheRoute>(

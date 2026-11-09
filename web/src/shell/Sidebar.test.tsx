@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InstanceSummary } from '../nav.js';
 import { Sidebar } from './Sidebar.js';
 
@@ -78,12 +78,14 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: /Gestion/ })).toBeNull();
   });
 
-  it('shows the Favourites group first, in the saved order', () => {
+  it('keeps daily links first and removes duplicates from shortcuts and spaces', () => {
     const { container } = renderSidebar(simatis, ['pipeline', 'brief']);
     const groups = container.querySelectorAll('.nav-group');
-    expect(groups[0]?.classList.contains('favs')).toBe(true);
-    const labels = [...(groups[0]?.querySelectorAll('.lbl') ?? [])].map((n) => n.textContent);
-    expect(labels).toEqual(['Pipeline', 'Brief du jour']);
+    expect(groups[0]?.classList.contains('quotidien')).toBe(true);
+    const labels = [...(groups[1]?.querySelectorAll('.lbl') ?? [])].map((n) => n.textContent);
+    expect(labels).toEqual(['Agenda', 'Pipeline', 'Contacts', 'Entreprises', 'Rendez-vous']);
+    expect(screen.getAllByText('Brief du jour')).toHaveLength(1);
+    expect(screen.getAllByText('Pipeline')).toHaveLength(1);
   });
 
   it('hides Devis for a mandate, even when it is a favourite', () => {
@@ -117,6 +119,7 @@ describe('Sidebar', () => {
 
   it('folds a section on click, and keeps the favourites open', () => {
     renderSidebar(simatis, []);
+    fireEvent.click(screen.getByRole('button', { name: 'Mes espaces' }));
     const sections = document.querySelectorAll<HTMLButtonElement>('.nav-group > .later-btn');
     const section = [...sections].find((b) => b.getAttribute('aria-expanded') === 'true');
     if (!section) throw new Error('aucune section ouverte');
@@ -150,8 +153,34 @@ describe('Sidebar', () => {
     expect(document.querySelector('.side')?.classList.contains('reduite')).toBe(false);
   });
 
+  it('opens all spaces explicitly and exposes tools without duplicated shortcuts', () => {
+    renderSidebar(simatis, ['pipeline']);
+    expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Mes espaces' }));
+    expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: /Pipeline/ })).toHaveLength(1);
+  });
+
   it('shows the SIMATIS logo, not a plain letter', () => {
     renderSidebar(simatis, []);
     expect(document.querySelector('.brand-mark')?.tagName).toBe('IMG');
+  });
+
+  it('keeps favourite controls outside links and exposes reorder buttons', () => {
+    const move = vi.fn();
+    const { container } = render(
+      <Sidebar
+        instances={[simatis, mandat]}
+        current={simatis}
+        view="entreprises"
+        open={false}
+        favoris={['prospection', 'bases']}
+        onToggleFavori={() => undefined}
+        onMoveFavori={move}
+      />,
+    );
+    expect(container.querySelector('a button, a [role="button"]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Descendre Prospection' }));
+    expect(move).toHaveBeenCalledWith('prospection', 'bases', true);
   });
 });

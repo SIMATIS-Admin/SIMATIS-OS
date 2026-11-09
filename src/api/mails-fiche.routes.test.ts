@@ -39,6 +39,23 @@ describe('Route des mails d’une fiche', () => {
     expect(r.json<{ message: string }>().message).toMatch(/Aucune messagerie connectée/);
   });
 
+  it('refuse de lire un message extérieur au périmètre de la fiche', async () => {
+    const { id } = (
+      await app.inject({
+        method: 'POST',
+        url: `${base}/contacts`,
+        payload: { nom: 'Autre contact fictif', email: 'autre@exemple.test' },
+      })
+    ).json<{ id: string }>();
+    const url = `${base}/fiches/contact/${id}/mails`;
+    const response = await app.inject({ method: 'GET', url: `${url}?message=mail-boite-inconnue` });
+    expect(response.statusCode).toBe(404);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(
+      (await app.inject({ method: 'GET', url: `${url}?message=${'x'.repeat(1001)}` })).statusCode,
+    ).toBe(400);
+  });
+
   it('refuse une fiche inconnue ou un type invalide', async () => {
     const inconnu = '00000000-0000-4000-8000-000000000000';
     expect(

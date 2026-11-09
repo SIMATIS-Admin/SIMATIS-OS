@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FreinVma, TestVma } from '../../api.js';
 import { ResultatComplet } from './ResultatComplet.js';
@@ -56,6 +56,29 @@ const test = (resultat: Partial<NonNullable<TestVma['resultat']>>): TestVma => (
 });
 
 describe('Résultat complet : même contenu que le mail', () => {
+  it('compares current, projected and target values on the same scale with direct labels', () => {
+    const { container } = render(<ResultatComplet onRetour={() => {}} test={test({})} />);
+    const figure = screen.getByRole('figure', { name: 'Comparaison des allures commerciales' });
+    expect(within(figure).getByText('Aujourd’hui')).toBeTruthy();
+    expect(within(figure).getByText('Sur votre lancée dans 2 ans')).toBeTruthy();
+    expect(within(figure).getByText('Objectif')).toBeTruthy();
+    const widths = [...container.querySelectorAll<HTMLElement>('.rc-comparaison-rail > span')].map(
+      (bar) => parseFloat(bar.style.width),
+    );
+    expect(widths).toHaveLength(3);
+    expect(widths[0]! / widths[2]!).toBeCloseTo(94000 / 125000, 2);
+    expect(widths[1]! / widths[2]!).toBeCloseTo(107000 / 125000, 2);
+    expect(widths.every((w) => w >= 0 && w <= 100)).toBe(true);
+  });
+
+  it('does not draw a projected value when no recurring base is known', () => {
+    render(
+      <ResultatComplet onRetour={() => {}} test={test({ recurrent: null, trajectoire: null })} />,
+    );
+    const figure = screen.getByRole('figure', { name: 'Comparaison des allures commerciales' });
+    expect(within(figure).queryByText(/Sur votre lancée/)).toBeNull();
+  });
+
   it('mode portefeuille : allure en tête, socle et nouvelles affaires, deux listes de freins', () => {
     render(
       <ResultatComplet

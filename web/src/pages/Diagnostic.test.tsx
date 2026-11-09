@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   majProjetDiag: vi.fn(),
   envoyerMessageDiag: vi.fn(),
   demandeSupportDiag: vi.fn(),
+  cadrerRapportDiag: vi.fn(),
   demandeRapportDiag: vi.fn(),
   demandeRestitutionDiag: vi.fn(),
   exporterRestitutionDiag: vi.fn(),
@@ -29,6 +30,19 @@ const api = vi.hoisted(() => ({
   importerEntretienDiag: vi.fn(),
   importerRapportDiag: vi.fn(),
   envoyerRapportDriveDiag: vi.fn(),
+  marquerRapportFinal: vi.fn(),
+  reglagesDiagnostic: vi.fn(),
+  journalReglesDiag: vi.fn(),
+  capitaliserSupportDiag: vi.fn(),
+  capitaliserDeckDiag: vi.fn(),
+  marquerDeckFinalDiag: vi.fn(),
+  capitaliserAnalyseDiag: vi.fn(),
+  preparerRevueDiag: vi.fn(),
+  exporterRevueDiag: vi.fn(),
+  preparerDossierRapportDiag: vi.fn(),
+  capitaliserRapportDiag: vi.fn(),
+  annulerRegleDiag: vi.fn(),
+  majReglagesDiagnostic: vi.fn(),
   viderConversationDiag: vi.fn(),
   urlLogoDiag: (slug: string, id: string) => `/api/i/${slug}/diagnostic/projets/${id}/logo`,
   urlExportRapportDiag: (slug: string, id: string) =>
@@ -68,6 +82,10 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   rapportLien: null,
   rapportLiens: [],
   rapportVersions: [],
+  revueExportStatut: 'aucun',
+  revueExportLien: null,
+  dossierExportStatut: 'aucun',
+  dossierExportLien: null,
   restitutionStatut: 'aucun',
   restitutionLien: null,
   restitutionLiens: [],
@@ -495,6 +513,22 @@ describe('Rapport à l étape 4', () => {
     expect(screen.getByText(/Saisissez d'abord le résultat/)).toBeTruthy();
   });
 
+  it('met le dossier pour Claude Chat et le dépôt du Word en avant, la rédaction de l OS repliée', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const dossier = await screen.findByRole('button', {
+      name: 'Préparer le dossier pour Claude Chat',
+    });
+    expect(dossier.closest('details')).toBeNull();
+    expect(screen.getByLabelText('Importer ma version du rapport').closest('details')).toBeNull();
+    for (const nom of ['Produire le rapport', 'Cadrer le rapport avec Claude']) {
+      expect(screen.getByRole('button', { name: nom }).closest('details.diag-plus')).not.toBeNull();
+    }
+  });
+
   it('active le bouton dès le résultat saisi, sans revue validée, puis demande le rapport', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
       projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', revue: null }),
@@ -509,6 +543,43 @@ describe('Rapport à l étape 4', () => {
     fireEvent.click(bouton);
     await waitFor(() => expect(api.demandeRapportDiag).toHaveBeenCalledWith('simatis', 'p1'));
     expect(await screen.findByText(/Claude rédige le rapport/)).toBeTruthy();
+  });
+
+  it('propose de cadrer le rapport avec Claude : désactivé sans résultat ou pendant qu il répond', async () => {
+    const bouton = { name: 'Cadrer le rapport avec Claude' };
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 4, etapeMax: 4 })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
+    cleanup();
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', statutChat: 'attente_claude' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
+  });
+
+  it('lance le cadrage, et affiche le message de l API en cas de refus', async () => {
+    const bouton = { name: 'Cadrer le rapport avec Claude' };
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur' }),
+    ]);
+    api.cadrerRapportDiag.mockResolvedValue(
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', statutChat: 'attente_claude' }),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', bouton));
+    await waitFor(() => expect(api.cadrerRapportDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    api.cadrerRapportDiag.mockRejectedValue(
+      new Error('Un rapport est déjà en cours de rédaction.'),
+    );
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', bouton));
+    expect(await screen.findByText(/déjà en cours de rédaction/)).toBeTruthy();
   });
 
   it('prévient avant de produire une nouvelle version, et s arrête si on refuse', async () => {
@@ -526,7 +597,9 @@ describe('Rapport à l étape 4', () => {
     const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    expect(await screen.findByText(/Discutez des modifications avec Claude/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Le parcours : préparez le dossier pour Claude Chat/),
+    ).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Produire la version 2' }));
     expect(confirmation).toHaveBeenCalled();
     expect(api.demandeRapportDiag).not.toHaveBeenCalled();
@@ -578,16 +651,56 @@ describe('Rapport à l étape 4', () => {
     confirmation.mockRestore();
   });
 
-  it('place la conversation sous le rapport, pas à côté', async () => {
+  it('place la conversation dans une fenêtre flottante, réductible, fermable et rouvrable', async () => {
     api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 4, etapeMax: 4, dims })]);
     const { container } = render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     await screen.findByText('Rapport remis au dirigeant');
-    const mise = container.querySelector('.diag-layout')!;
-    expect(mise.classList.contains('empile')).toBe(true);
-    const principal = container.querySelector('.diag-main')!;
-    expect(principal.querySelector('.diag-chat')).not.toBeNull();
-    expect(mise.querySelectorAll('.diag-chat')).toHaveLength(1);
+    expect(container.querySelector('.diag-main .diag-chat')).toBeNull();
+    const fenetre = container.querySelector('.diag-flottant')!;
+    expect(fenetre.querySelectorAll('.diag-chat')).toHaveLength(1);
+    expect(fenetre.classList.contains('reduit')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Agrandir la fenêtre Claude' }));
+    expect(fenetre.classList.contains('ouvert')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer la fenêtre Claude' }));
+    expect(fenetre.classList.contains('ferme')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir Claude' }));
+    expect(fenetre.classList.contains('ouvert')).toBe(true);
+  });
+
+  it('une seule liste de versions : Google Doc et Word sur la même ligne', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        aRapport: true,
+        rapportNom: 'Rapport - v2.docx',
+        rapportLiens: [
+          {
+            lien: 'https://docs.google.com/document/d/b/edit',
+            le: '2026-11-06T08:00:00.000Z',
+            version: 2,
+          },
+          {
+            lien: 'https://docs.google.com/document/d/a/edit',
+            le: '2026-11-05T08:00:00.000Z',
+            version: 1,
+          },
+        ],
+        rapportVersions: [
+          { version: 1, le: '2026-11-05T08:00:00.000Z' },
+          { version: 2, le: '2026-11-06T08:00:00.000Z' },
+        ],
+      }),
+    ]);
+    const { container } = render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    await screen.findByText('Versions du rapport');
+    expect(screen.queryByText(/Versions précédentes/)).toBeNull();
+    expect(screen.queryByText(/Rapports précédents/)).toBeNull();
+    expect(container.querySelectorAll('.diag-main li')).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: 'Word' })).toHaveLength(2);
   });
 });
 
@@ -922,7 +1035,8 @@ describe('Versions du rapport et chat de l étape 4', () => {
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     expect(await screen.findByRole('button', { name: 'Produire la version 3' })).toBeTruthy();
-    const ancienne = await screen.findByRole('link', { name: /Version 1, du/ });
+    const ligne = (await screen.findByText(/Version 1 du/)).closest('li')!;
+    const ancienne = within(ligne as HTMLElement).getByRole('link', { name: 'Word' });
     expect(ancienne.getAttribute('href')).toBe(
       '/api/i/simatis/diagnostic/projets/p1/rapport?version=1',
     );
@@ -1223,5 +1337,634 @@ describe('Affaire du projet de diagnostic', () => {
     await waitFor(() =>
       expect(api.majProjetDiag).toHaveBeenCalledWith('simatis', 'p1', { opportuniteId: 'o1' }),
     );
+  });
+});
+
+describe('Rapport : version finale', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const doc = (n: number) => `https://docs.google.com/document/d/doc-${n}/edit`;
+  const enEtape4 = (extra: Partial<ProjetDiag> = {}) =>
+    projet({
+      etape: 4,
+      etapeMax: 4,
+      dims,
+      profil: 'Joggeur',
+      aRapport: true,
+      rapportNom: 'Rapport - v4.docx',
+      rapportLienStatut: 'pret',
+      rapportLien: doc(4),
+      rapportLiens: [
+        { lien: doc(4), le: '2026-10-29T08:00:00.000Z', version: 4 },
+        { lien: doc(3), le: '2026-10-28T08:00:00.000Z', version: 3 },
+        { lien: 'https://claude.ai/artifact/AncienFictif', le: '2026-10-22T08:00:00.000Z' },
+      ],
+      ...extra,
+    });
+  const ouvrir = async (p: ProjetDiag) => {
+    api.fetchProjetsDiag.mockResolvedValue([p]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+
+  it('une case par Google Doc, aucune pour un artifact', async () => {
+    await ouvrir(enEtape4());
+    expect(await screen.findAllByRole('checkbox', { name: /Version finale/ })).toHaveLength(2);
+  });
+
+  it('cocher appelle l API et met en évidence la version finale', async () => {
+    const p = enEtape4();
+    api.marquerRapportFinal.mockResolvedValue({
+      ...p,
+      rapportLiens: p.rapportLiens.map((l) => (l.lien === doc(4) ? { ...l, finale: true } : l)),
+    });
+    await ouvrir(p);
+    const cases = await screen.findAllByRole('checkbox', { name: /Version finale/ });
+    fireEvent.click(cases[0]!);
+    await waitFor(() =>
+      expect(api.marquerRapportFinal).toHaveBeenCalledWith('simatis', 'p1', doc(4), true),
+    );
+    await waitFor(() =>
+      expect(
+        (screen.getAllByRole('checkbox', { name: /Version finale/ })[0] as HTMLInputElement)
+          .checked,
+      ).toBe(true),
+    );
+  });
+
+  it('décocher la version finale', async () => {
+    const p = enEtape4({
+      rapportLiens: [{ lien: doc(4), le: '2026-10-29T08:00:00.000Z', version: 4, finale: true }],
+    });
+    api.marquerRapportFinal.mockResolvedValue({
+      ...p,
+      rapportLiens: [{ lien: doc(4), le: '2026-10-29T08:00:00.000Z', version: 4 }],
+    });
+    await ouvrir(p);
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Version finale/ }));
+    await waitFor(() =>
+      expect(api.marquerRapportFinal).toHaveBeenCalledWith('simatis', 'p1', doc(4), false),
+    );
+  });
+
+  it('cases désactivées pendant la production', async () => {
+    await ouvrir(enEtape4({ rapportLienStatut: 'en_cours' }));
+    const cases = await screen.findAllByRole('checkbox', { name: /Version finale/ });
+    expect(cases.every((c) => (c as HTMLInputElement).disabled)).toBe(true);
+  });
+
+  it('affiche le message de l API quand le choix est refusé', async () => {
+    api.marquerRapportFinal.mockRejectedValue(
+      new Error('Cette version n’appartient pas à ce projet.'),
+    );
+    await ouvrir(enEtape4());
+    fireEvent.click((await screen.findAllByRole('checkbox', { name: /Version finale/ }))[0]!);
+    expect(await screen.findByText(/n’appartient pas à ce projet/)).toBeTruthy();
+  });
+});
+
+describe('Rapport : réglage Relire les finaux', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur' }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const libelle = /Relire les deux derniers rapports finaux/;
+
+  it('la case est cochée par défaut', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    await ouvrir();
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
+    await waitFor(() => expect(c.checked).toBe(true));
+  });
+
+  it('décocher enregistre le réglage', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    api.majReglagesDiagnostic.mockResolvedValue({ relireFinaux: false, relireSupports: true });
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('checkbox', { name: libelle }));
+    await waitFor(() =>
+      expect(api.majReglagesDiagnostic).toHaveBeenCalledWith('simatis', { relireFinaux: false }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLInputElement>('checkbox', { name: libelle }).checked).toBe(false),
+    );
+  });
+
+  it('un réglage décoché au chargement s affiche décoché', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: false, relireSupports: true });
+    await ouvrir();
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
+    await waitFor(() => expect(c.checked).toBe(false));
+  });
+});
+
+describe('Rapport : règles apprises', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const doc = 'https://docs.google.com/document/d/doc-4/edit';
+  const entree = (extra: Record<string, unknown> = {}) => ({
+    id: 'e1',
+    le: '2026-11-05T10:00:00.000Z',
+    projetId: 'p1',
+    fiche: 'rapport',
+    action: 'ajoutée',
+    libelle: 'Aucune proposition dans le rapport',
+    avant: null,
+    apres: 'Règle fictive',
+    origine: 'version finale 4',
+    statut: 'actif',
+    motifRefus: null,
+    ...extra,
+  });
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 4,
+        etapeMax: 4,
+        dims,
+        profil: 'Joggeur',
+        aRapport: true,
+        rapportNom: 'Rapport - v4.docx',
+        rapportLienStatut: 'pret',
+        rapportLien: doc,
+        rapportLiens: [{ lien: doc, le: '2026-10-29T08:00:00.000Z', version: 4, finale: true }],
+        ...extra,
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+
+  it('liste les règles apprises avec leur libellé', async () => {
+    api.journalReglesDiag.mockResolvedValue([entree()]);
+    await ouvrir();
+    expect(await screen.findByText('Aucune proposition dans le rapport')).toBeTruthy();
+    expect(screen.getByText(/Règles apprises \(1\)/)).toBeTruthy();
+  });
+
+  it('annuler appelle l API, seulement sur une règle active et annulable', async () => {
+    api.journalReglesDiag.mockResolvedValue([
+      entree(),
+      entree({ id: 'e2', libelle: 'Déjà annulée', statut: 'annule' }),
+      entree({ id: 'e3', libelle: 'Contradiction fictive', action: 'signalée' }),
+    ]);
+    api.annulerRegleDiag.mockResolvedValue(projet({ etape: 4, etapeMax: 4, dims }));
+    await ouvrir();
+    await screen.findByText('Aucune proposition dans le rapport');
+    const boutons = screen.getAllByRole('button', { name: /^Annuler la règle/ });
+    expect(boutons).toHaveLength(1);
+    fireEvent.click(boutons[0]!);
+    await waitFor(() => expect(api.annulerRegleDiag).toHaveBeenCalledWith('simatis', 'p1', 'e1'));
+  });
+
+  it('affiche le motif quand une annulation n a pas pu se faire', async () => {
+    api.journalReglesDiag.mockResolvedValue([entree({ motifRefus: 'La fiche a changé depuis.' })]);
+    await ouvrir();
+    expect(await screen.findByText(/La fiche a changé depuis\./)).toBeTruthy();
+  });
+
+  it('affiche le message de l API quand l annulation est refusée', async () => {
+    api.journalReglesDiag.mockResolvedValue([entree()]);
+    api.annulerRegleDiag.mockRejectedValue(new Error('Cette règle n’est plus annulable.'));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('button', { name: /^Annuler la règle/ }));
+    expect(await screen.findByText(/n’est plus annulable/)).toBeTruthy();
+  });
+
+  it('« Capitaliser cette version » : absent sans finale, actif avec, désactivé pendant une production', async () => {
+    api.journalReglesDiag.mockResolvedValue([]);
+    await ouvrir({ rapportLiens: [{ lien: doc, le: '2026-10-29T08:00:00.000Z', version: 4 }] });
+    await screen.findByText(/Rapport remis au dirigeant/);
+    expect(screen.queryByRole('button', { name: 'Capitaliser cette version' })).toBeNull();
+    cleanup();
+    api.capitaliserRapportDiag.mockResolvedValue(projet({ etape: 4, etapeMax: 4, dims }));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('button', { name: 'Capitaliser cette version' }));
+    await waitFor(() => expect(api.capitaliserRapportDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    await ouvrir({ rapportLienStatut: 'en_cours' });
+    expect(
+      (await screen.findByRole<HTMLButtonElement>('button', { name: 'Capitaliser cette version' }))
+        .disabled,
+    ).toBe(true);
+  });
+});
+
+describe("Support d'ouverture : règles apprises", () => {
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 1, etapeMax: 1, ...extra })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const libelle = /Relire les deux derniers supports finaux/;
+
+  it('la case est cochée par défaut et enregistre le réglage du support seul', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    api.majReglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: false });
+    await ouvrir();
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
+    await waitFor(() => expect(c.checked).toBe(true));
+    fireEvent.click(c);
+    await waitFor(() =>
+      expect(api.majReglagesDiagnostic).toHaveBeenCalledWith('simatis', { relireSupports: false }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLInputElement>('checkbox', { name: libelle }).checked).toBe(false),
+    );
+  });
+
+  it('« Capitaliser ce support » : absent avant l archivage, actif ensuite', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    await ouvrir({ supportStatut: 'pret', supportLien: 'https://claude.ai/artifact/AbCdEfGh12' });
+    await screen.findByText(/Support d’ouverture/);
+    expect(screen.queryByRole('button', { name: 'Capitaliser ce support' })).toBeNull();
+    cleanup();
+    api.capitaliserSupportDiag.mockResolvedValue(projet({ etape: 1, etapeMax: 1 }));
+    await ouvrir({ supportStatut: 'final', supportLien: 'https://claude.ai/artifact/AbCdEfGh12' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Capitaliser ce support' }));
+    await waitFor(() => expect(api.capitaliserSupportDiag).toHaveBeenCalledWith('simatis', 'p1'));
+  });
+
+  it('désactivé pendant que Claude travaille, et message de l API en cas de refus', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    api.capitaliserSupportDiag.mockRejectedValue(new Error('Archivez d’abord le support final.'));
+    await ouvrir({ supportStatut: 'final', supportLien: 'https://claude.ai/artifact/AbCdEfGh12' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Capitaliser ce support' }));
+    expect(await screen.findByText(/Archivez d’abord le support final/)).toBeTruthy();
+    cleanup();
+    await ouvrir({
+      supportStatut: 'final',
+      supportLien: 'https://claude.ai/artifact/AbCdEfGh12',
+      statutChat: 'attente_claude',
+    });
+    expect(
+      (await screen.findByRole<HTMLButtonElement>('button', { name: 'Capitaliser ce support' }))
+        .disabled,
+    ).toBe(true);
+  });
+
+  it('le journal nomme la fiche du support « règles du support »', async () => {
+    api.reglagesDiagnostic.mockResolvedValue({ relireFinaux: true, relireSupports: true });
+    api.journalReglesDiag.mockResolvedValue([
+      {
+        id: 'e9',
+        le: '2026-11-05T10:00:00.000Z',
+        projetId: 'p1',
+        fiche: 'support',
+        action: 'ajoutée',
+        libelle: 'Ouvrir par le cadre de la séance',
+        avant: null,
+        apres: 'R',
+        origine: 'support final',
+        statut: 'actif',
+        motifRefus: null,
+      },
+    ]);
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 } }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/règles du support/)).toBeTruthy();
+  });
+});
+
+describe('Deck de restitution : règles apprises', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const L1 = 'https://claude.ai/artifact/DeckFictifUn';
+  const L2 = 'https://claude.ai/artifact/DeckFictifDeux';
+  const reglages = { relireFinaux: true, relireSupports: true, relireRestitutions: true };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 5,
+        etapeMax: 5,
+        dims,
+        aRapport: true,
+        restitutionStatut: 'pret',
+        restitutionLien: L2,
+        restitutionLiens: [
+          { lien: L2, le: '2026-10-26T08:00:00.000Z' },
+          { lien: L1, le: '2026-10-25T08:00:00.000Z' },
+        ],
+        ...extra,
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+
+  it('cocher « Version finale » sur le deck affiché appelle l API, décocher aussi', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.marquerDeckFinalDiag.mockResolvedValue(projet({ etape: 5, etapeMax: 5 }));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Version finale : deck affiché' }));
+    await waitFor(() =>
+      expect(api.marquerDeckFinalDiag).toHaveBeenCalledWith('simatis', 'p1', L2, true),
+    );
+    cleanup();
+    await ouvrir({
+      restitutionLiens: [
+        { lien: L2, le: '2026-10-26T08:00:00.000Z', finale: true },
+        { lien: L1, le: '2026-10-25T08:00:00.000Z' },
+      ],
+    });
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Version finale : deck affiché',
+    });
+    expect(c.checked).toBe(true);
+    fireEvent.click(c);
+    await waitFor(() =>
+      expect(api.marquerDeckFinalDiag).toHaveBeenCalledWith('simatis', 'p1', L2, false),
+    );
+  });
+
+  it('un deck précédent se coche aussi, et une seule case est cochée', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.marquerDeckFinalDiag.mockResolvedValue(projet({ etape: 5, etapeMax: 5 }));
+    await ouvrir({
+      restitutionLiens: [
+        { lien: L2, le: '2026-10-26T08:00:00.000Z' },
+        { lien: L1, le: '2026-10-25T08:00:00.000Z', finale: true },
+      ],
+    });
+    fireEvent.click(await screen.findByText(/Decks précédents/));
+    const cochees = (await screen.findAllByRole<HTMLInputElement>('checkbox')).filter(
+      (c) => c.checked && /Version finale/.test(c.getAttribute('aria-label') ?? ''),
+    );
+    expect(cochees).toHaveLength(1);
+    expect(
+      screen.getByRole<HTMLInputElement>('checkbox', { name: /Version finale : deck du/ }).checked,
+    ).toBe(true);
+  });
+
+  it('la case de réglage est cochée par défaut et enregistre le réglage du deck seul', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.majReglagesDiagnostic.mockResolvedValue({ ...reglages, relireRestitutions: false });
+    await ouvrir();
+    const libelle = /Relire les deux derniers decks finaux/;
+    const c = await screen.findByRole<HTMLInputElement>('checkbox', { name: libelle });
+    await waitFor(() => expect(c.checked).toBe(true));
+    fireEvent.click(c);
+    await waitFor(() =>
+      expect(api.majReglagesDiagnostic).toHaveBeenCalledWith('simatis', {
+        relireRestitutions: false,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLInputElement>('checkbox', { name: libelle }).checked).toBe(false),
+    );
+  });
+
+  it('« Capitaliser ce deck » : absent sans deck final, actif ensuite, désactivé si Claude travaille', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    await ouvrir();
+    await screen.findByRole('checkbox', { name: 'Version finale : deck affiché' });
+    expect(screen.queryByRole('button', { name: 'Capitaliser ce deck' })).toBeNull();
+    cleanup();
+    api.capitaliserDeckDiag.mockResolvedValue(projet({ etape: 5, etapeMax: 5 }));
+    const finaux = [
+      { lien: L2, le: '2026-10-26T08:00:00.000Z', finale: true },
+      { lien: L1, le: '2026-10-25T08:00:00.000Z' },
+    ];
+    await ouvrir({ restitutionLiens: finaux });
+    fireEvent.click(await screen.findByRole('button', { name: 'Capitaliser ce deck' }));
+    await waitFor(() => expect(api.capitaliserDeckDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    await ouvrir({ restitutionLiens: finaux, statutChat: 'attente_claude' });
+    expect(
+      (await screen.findByRole<HTMLButtonElement>('button', { name: 'Capitaliser ce deck' }))
+        .disabled,
+    ).toBe(true);
+  });
+
+  it('affiche le message de l API en cas de refus', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.marquerDeckFinalDiag.mockRejectedValue(new Error('Ce deck n’appartient pas à ce projet.'));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Version finale : deck affiché' }));
+    expect(await screen.findByText(/n’appartient pas à ce projet/)).toBeTruthy();
+  });
+
+  it('le journal nomme la fiche « règles du deck de restitution »', async () => {
+    api.reglagesDiagnostic.mockResolvedValue(reglages);
+    api.journalReglesDiag.mockResolvedValue([
+      {
+        id: 'e10',
+        le: '2026-11-05T10:00:00.000Z',
+        projetId: 'p1',
+        fiche: 'restitution',
+        action: 'ajoutée',
+        libelle: 'Placer les options en dernière diapositive',
+        avant: null,
+        apres: 'R',
+        origine: 'deck final',
+        statut: 'actif',
+        motifRefus: null,
+      },
+    ]);
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 } }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/règles du deck de restitution/)).toBeTruthy();
+  });
+});
+
+describe("Revue : règles d'analyse", () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 3, etapeMax: 3, dims, profil: 'Joggeur', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const bouton = { name: 'Capitaliser cette analyse' };
+
+  it('absent sans revue ou en brouillon, actif sur une revue validée', async () => {
+    api.capitaliserAnalyseDiag.mockResolvedValue(projet({ etape: 3, etapeMax: 3, dims }));
+    await ouvrir({ revue: { statut: 'brouillon' } });
+    await screen.findByText('Valider la revue');
+    expect(screen.queryByRole('button', bouton)).toBeNull();
+    cleanup();
+    await ouvrir({ revue: { statut: 'validée' } });
+    fireEvent.click(await screen.findByRole('button', bouton));
+    await waitFor(() => expect(api.capitaliserAnalyseDiag).toHaveBeenCalledWith('simatis', 'p1'));
+  });
+
+  it('désactivé pendant que Claude travaille, message de l API en cas de refus', async () => {
+    api.capitaliserAnalyseDiag.mockRejectedValue(new Error('Validez d’abord la revue.'));
+    await ouvrir({ revue: { statut: 'validée' } });
+    fireEvent.click(await screen.findByRole('button', bouton));
+    expect(await screen.findByText(/Validez d’abord la revue/)).toBeTruthy();
+    cleanup();
+    await ouvrir({ revue: { statut: 'validée' }, statutChat: 'attente_claude' });
+    expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
+  });
+
+  it('le journal nomme la fiche d analyse « règles d analyse »', async () => {
+    api.journalReglesDiag.mockResolvedValue([
+      {
+        id: 'e7',
+        le: '2026-11-05T10:00:00.000Z',
+        projetId: 'p1',
+        fiche: 'analyse',
+        action: 'ajoutée',
+        libelle: 'Garder le plan d’action tel quel',
+        avant: null,
+        apres: 'R',
+        origine: 'analyse validée',
+        statut: 'actif',
+        motifRefus: null,
+      },
+    ]);
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 4, etapeMax: 4, dims })]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/règles d’analyse/)).toBeTruthy();
+  });
+});
+
+describe('Revue : préparer avec Claude', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 3, etapeMax: 3, dims, profil: 'Joggeur', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const bouton = { name: 'Préparer la revue avec Claude' };
+
+  it('présent sans revue et sur un brouillon, avec son texte d aide', async () => {
+    await ouvrir({ revue: null });
+    expect(await screen.findByRole('button', bouton)).toBeTruthy();
+    expect(screen.getByText(/vos choix et vos textes ne sont jamais modifiés/)).toBeTruthy();
+    cleanup();
+    await ouvrir({ revue: { statut: 'brouillon' } });
+    expect(await screen.findByRole('button', bouton)).toBeTruthy();
+  });
+
+  it('absent sur une revue validée, et sans résultat saisi', async () => {
+    await ouvrir({ revue: { statut: 'validée' } });
+    await screen.findByText('Valider la revue');
+    expect(screen.queryByRole('button', bouton)).toBeNull();
+    cleanup();
+    await ouvrir({ dims: null, profil: null });
+    await screen.findByText(/Pas encore de résultat/);
+    expect(screen.queryByRole('button', bouton)).toBeNull();
+  });
+
+  it('appelle l API, désactivé pendant que Claude travaille, message de l API en cas de refus', async () => {
+    api.preparerRevueDiag.mockResolvedValue(projet({ etape: 3, etapeMax: 3, dims }));
+    await ouvrir({ revue: null });
+    fireEvent.click(await screen.findByRole('button', bouton));
+    await waitFor(() => expect(api.preparerRevueDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    api.preparerRevueDiag.mockRejectedValue(new Error('La revue est validée : modifiez-la.'));
+    await ouvrir({ revue: null });
+    fireEvent.click(await screen.findByRole('button', bouton));
+    expect(await screen.findByText(/modifiez-la/)).toBeTruthy();
+    cleanup();
+    await ouvrir({ revue: null, statutChat: 'attente_claude' });
+    expect((await screen.findByRole<HTMLButtonElement>('button', bouton)).disabled).toBe(true);
+  });
+});
+
+describe('Diagnostic : export de la revue pour Claude Chat', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 3, etapeMax: 3, dims, profil: 'Joggeur', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const exporter = { name: 'Exporter la revue pour Claude Chat' };
+
+  it('absent tant que la revue n est pas validée', async () => {
+    await ouvrir({ revue: { statut: 'brouillon' } });
+    await screen.findByText('Valider la revue');
+    expect(screen.queryByRole('button', exporter)).toBeNull();
+  });
+
+  it('présent sur une revue validée, appelle l API et affiche son refus', async () => {
+    api.exporterRevueDiag.mockResolvedValue(projet({ etape: 3, etapeMax: 3, dims }));
+    await ouvrir({ revue: { statut: 'validée' } });
+    fireEvent.click(await screen.findByRole('button', exporter));
+    await waitFor(() => expect(api.exporterRevueDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    cleanup();
+    api.exporterRevueDiag.mockRejectedValue(new Error('Validez d’abord la revue.'));
+    await ouvrir({ revue: { statut: 'validée' } });
+    fireEvent.click(await screen.findByRole('button', exporter));
+    expect(await screen.findByText(/Validez d’abord la revue/)).toBeTruthy();
+  });
+
+  it('pendant l export : message d attente et bouton désactivé', async () => {
+    await ouvrir({ revue: { statut: 'validée' }, revueExportStatut: 'en_cours' });
+    expect(await screen.findByText(/Claude crée l’artefact de la revue/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', exporter).disabled).toBe(true);
+  });
+
+  it('avec un lien : ouvre l artefact et propose la mise à jour', async () => {
+    await ouvrir({
+      revue: { statut: 'validée' },
+      revueExportStatut: 'pret',
+      revueExportLien: 'https://claude.ai/artifact/RevueFictive0001',
+    });
+    const lien = await screen.findByRole('link', { name: 'Ouvrir la revue pour Claude Chat' });
+    expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/RevueFictive0001');
+    expect(screen.getByRole('button', { name: 'Mettre à jour l’export' })).toBeTruthy();
+  });
+});
+
+describe('Diagnostic : dossier de travail du rapport pour Claude Chat', () => {
+  const dims = { outils: 2.5, strategie: 5.3, polyvalence: 9.5 };
+  const ouvrir = async (extra: Partial<ProjetDiag> = {}) => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ etape: 4, etapeMax: 4, dims, profil: 'Joggeur', ...extra }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+  };
+  const preparer = { name: 'Préparer le dossier pour Claude Chat' };
+
+  it('désactivé sans résultat saisi', async () => {
+    await ouvrir({ dims: null, profil: null });
+    expect((await screen.findByRole<HTMLButtonElement>('button', preparer)).disabled).toBe(true);
+  });
+
+  it('appelle l API et affiche son refus', async () => {
+    api.preparerDossierRapportDiag.mockResolvedValue(projet({ etape: 4, etapeMax: 4, dims }));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('button', preparer));
+    await waitFor(() =>
+      expect(api.preparerDossierRapportDiag).toHaveBeenCalledWith('simatis', 'p1'),
+    );
+    cleanup();
+    api.preparerDossierRapportDiag.mockRejectedValue(new Error('Claude répond déjà.'));
+    await ouvrir();
+    fireEvent.click(await screen.findByRole('button', preparer));
+    expect(await screen.findByText(/Claude répond déjà/)).toBeTruthy();
+  });
+
+  it('pendant la préparation : message d attente et bouton désactivé', async () => {
+    await ouvrir({ dossierExportStatut: 'en_cours' });
+    expect(await screen.findByText(/Claude prépare le dossier de travail/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', preparer).disabled).toBe(true);
+  });
+
+  it('avec un lien : ouvre le dossier et propose la mise à jour', async () => {
+    await ouvrir({
+      dossierExportStatut: 'pret',
+      dossierExportLien: 'https://claude.ai/artifact/DossierFictif0001',
+    });
+    const lien = await screen.findByRole('link', { name: 'Ouvrir le dossier pour Claude Chat' });
+    expect(lien.getAttribute('href')).toBe('https://claude.ai/artifact/DossierFictif0001');
+    expect(screen.getByRole('button', { name: 'Mettre à jour le dossier' })).toBeTruthy();
   });
 });

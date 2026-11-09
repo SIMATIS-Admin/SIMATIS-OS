@@ -983,7 +983,7 @@ export function Inbox({
   const agir = (p: Promise<unknown>, texte: string) => p.then(() => apres(texte), erreur);
 
   const detail = () => {
-    if (!choisi) return <div className="panel empty">Sélectionnez un sujet à gauche.</div>;
+    if (!choisi) return null;
     const s = choisi;
     // Pending or decided, a proposal shows its own content and decision.
     if (s.type === 'a_valider' && s.proposition) {
@@ -1174,11 +1174,22 @@ export function Inbox({
             )
           ) : (
             <div className="empty">
-              {list === null
-                ? ''
-                : filtre === 'traites'
-                  ? 'Aucun sujet traité pour l’instant.'
-                  : 'Rien à traiter. La prochaine routine déposera les nouveaux sujets.'}
+              {list === null ? (
+                ''
+              ) : filtre === 'traites' ? (
+                'Aucun sujet traité pour l’instant.'
+              ) : list.length > 0 || filtre !== 'tout' || mandat || secteur ? (
+                'Aucun sujet dans cette sélection. Essaie un autre filtre.'
+              ) : (
+                <div className="inbox-sereine">
+                  <Icon name="check" />
+                  <h2>Tout est à jour.</h2>
+                  <p>Rien à traiter. La prochaine routine déposera les nouveaux sujets.</p>
+                  <a className="btn primary" href={`#/${slug}/brief`}>
+                    Revenir à mon brief
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>

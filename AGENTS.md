@@ -3,6 +3,8 @@
 
 Système d'exploitation interne de SIMATIS (direction commerciale en mode partagé). Vue d'ensemble et démarrage : `README.md`. Plan de développement : `docs/plan.md`.
 
+Ce fichier est la source de vérité des consignes du dépôt. En cas de divergence avec d'autres consignes du projet, il prévaut.
+
 ## Vérifier son travail
 
     npm run verify      # format, lint, types, tests, build
@@ -44,7 +46,7 @@ Committer seulement un changement vérifié. La CI rejoue ces commandes sur chaq
 ## Tests (règle permanente)
 
 - Chaque nouvelle fonctionnalité arrive avec ses tests, écrits avant ou avec le code, et lancés (`npm run verify`) avant chaque commit.
-- Après chaque push sur une PR : relancer les tests en local et suivre la CI jusqu'au vert.
+- Après chaque push : relancer les tests en local et suivre la CI jusqu'au vert.
 - Jamais de merge avec des tests rouges ou une CI non verte.
 
 ## Confidentialité (règle absolue)
@@ -54,23 +56,23 @@ Ce dépôt est **public** sur GitHub. Ne jamais y écrire, committer ni pousser 
 - noms de clients, prospects, contacts, mandats réels, ni montants, tarifs ou marges réels ;
 - données extraites de HubSpot, Gmail, Google Agenda ou tout autre outil réel ;
 - identifiants, mots de passe, clés d'API, jetons, fichiers `.env` ;
-- méthodes ou contenus propriétaires (questionnaires, grilles de scoring détaillées, trames de rapport) ;
+- méthodes ou contenus propriétaires (questionnaires, grilles de scoring, trames de rapport) ;
 - contenu du second cerveau, en tout ou partie.
 
-Seule exception, décidée par Christophe : l'**ID client** de l'application Google « SIMATIS OS » (type application de bureau) est dans le code (`src/connecteurs/google/oauth.ts`), pour que l'OS marche à l'identique sur tous les postes. Son **secret** n'est jamais commité : il se colle une fois dans Paramètres > Connexions.
-
 Les exemples, tests et démonstrations utilisent **uniquement des données fictives**.
-Un secret poussé une fois reste récupérable dans l'historique : en cas de doute, ne pas committer, demander.
+Un secret poussé une fois reste récupérable dans l'historique : en cas de doute, ne pas committer, demander à Marc.
 
 ## Second cerveau
 
 Le second cerveau est privé et contient toute l'information confidentielle et métier. Ce dépôt peut le **référencer par concept** (« voir le second cerveau, fiche mandat »), jamais en copier le contenu.
+**Référence : le dépôt GitHub privé `SIMATIS-Admin/second-cerveau`** (plus le Drive), cloné sur le poste de Marc dans `~/Second Cerveau` (`SECOND_CERVEAU_DIR`). Toute écriture dans le second cerveau, par l'agent ou par l'OS (routines, éditeur de notes), se termine par : `git pull --rebase`, `git add` des fichiers modifiés (jamais `-A`), commit, `git push` sur `main`. En fin de travail, ne jamais laisser de modification non poussée dans ce clone. Le dépôt est privé : y mettre du contenu métier est permis, mais il ne doit jamais être copié dans le présent dépôt public.
 La configuration locale (chemins, URL, jetons) passe par des variables d'environnement ou des fichiers ignorés par git.
 
 ## Branches (pas de worktree)
 
 - Toujours vérifier `git branch --show-current` avant de travailler.
 - **Pas de worktree** : on travaille toujours dans le dossier principal du dépôt, en changeant de branche. Un seul agent travaille à la fois dans ce dépôt.
+- Si des modifications non commitées que l'agent n'a pas faites sont présentes, s'arrêter et prévenir Marc.
 - Chaque branche part de `main` à jour : `git fetch` puis `git switch -c feature/nom-court origin/main`.
 - Jamais de travail ni de commit direct sur `main`.
 - Avant de changer de branche, l'arbre de travail doit être propre : committer plutôt que stasher.
@@ -83,14 +85,20 @@ Marc n'est pas développeur : l'agent gère tout git seul, sans demander de conf
 - **Une nouvelle branche par feature** (`feature/nom-court`).
 - **Feature terminée** : l'agent ouvre une PR, fait lui-même la revue de code (corrige ce qu'il trouve), vérifie que la CI est verte, puis merge dans `main`. Marc n'a pas à relire.
 - **Marc est débutant** : à chaque fin de feature, expliquer simplement, étape par étape, comment tester l'app. L'agent s'occupe de tout le reste.
-- **Second cerveau à jour** : en fin de feature, mettre à jour dans le second cerveau `brain/outils/simatis-os-structure.md` (ce qui a changé dans la structure de l'OS) et `brain/outils/simatis-os-feuille-de-route.md` (étape faite, nouvelles étapes). Écrire dans le dossier du Drive et noter la modification dans `log.md` ; ne rien en copier dans ce dépôt.
+- **Second cerveau à jour** : en fin de feature, mettre à jour dans le second cerveau `brain/outils/simatis-os-structure.md` (ce qui a changé dans la structure de l'OS) et `brain/outils/simatis-os-feuille-de-route.md` (étape faite, nouvelles étapes). Écrire dans le clone local du second cerveau (`SECOND_CERVEAU_DIR`), noter la modification dans `log.md`, puis la committer et la pousser sur le dépôt privé (voir « Second cerveau ») ; ne rien en copier dans ce dépôt.
 
 ### Garde-fou confidentialité (avant chaque commit, non négociable)
 
 1. Relire `git diff --staged` en cherchant toute donnée réelle ou secret (voir liste ci-dessus).
-2. Ne jamais utiliser `git add -A` à l'aveugle : ajouter les fichiers explicitement.
+2. Ne jamais utiliser `git add -A` : ajouter les fichiers explicitement.
 3. En cas de doute sur une donnée, ne pas committer et demander à Marc : c'est la seule exception à l'autonomie.
 
 ## Langue
 
 Documentation et interface en français. Code et identifiants techniques en anglais ou français, de façon cohérente.
+
+## Livraison
+
+- Toutes les fonctionnalités terminées doivent être intégrées à `main` après vérification et CI verte. Un déploiement local seul ne clôt pas une livraison.
+- Après un merge : reconstruire l'application et relancer le conteneur depuis `origin/main` à jour.
+- Avant de remplacer le conteneur actif, vérifier que les sources et l'image active n'ont pas changé pendant la construction.

@@ -1,3 +1,8 @@
+import { tournerBrouillons } from './prospection/quotidienne.js';
+import { tournerAlertes } from './base-vivante/alerte-signaux.js';
+import { creerClientBodacc } from './signaux/bodacc.js';
+import { tournerRecherche } from './enrichissement/routine.js';
+import { fileCodex } from './enrichissement/codex.js';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type pg from 'pg';
 import { registerApi } from './api/routes.js';
@@ -36,6 +41,8 @@ export type AppDeps = {
   vma?: { url: string; token: string } | null;
   // Relais d'agents des OS partenaires ; null ou absent = module éteint.
   relais?: { url: string; cleInscription?: string; fetch?: typeof fetch } | null;
+  // Lien du dossier de l'espace partagé sur le kDrive ; null ou absent = pas de lien affiché.
+  partageKdriveUrl?: string | null;
   // Enrichissement de listes par IA ; null ou absent = fonction éteinte (pas de clé OpenAI).
   enrichissement?: Config['enrichissement'];
   clientIA?: ClientIA;
@@ -55,6 +62,7 @@ export function buildApp({
   imapServeur,
   vma = null,
   relais = null,
+  partageKdriveUrl = null,
   enrichissement = null,
   clientIA,
   logger = false,
@@ -65,7 +73,67 @@ export function buildApp({
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
   if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
+  const codex = fileCodex();
+  let timerRecherche: ReturnType<typeof setInterval> | undefined;
+  let rechercheEnCours = false;
+  app.addHook('onListen', () => {
+    timerRecherche = setInterval(() => {
+      if (rechercheEnCours) return;
+      rechercheEnCours = true;
+      void tournerRecherche(db, codex.client)
+        .catch((err: unknown) => app.log.error(err, 'Routine de recherche'))
+        .finally(() => {
+          rechercheEnCours = false;
+        });
+    }, 60_000);
+    return Promise.resolve();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(timerRecherche);
+    return Promise.resolve();
+  });
+  // Veille quotidienne du BODACC : les nouvelles annonces sur les entreprises de la base
+  // arrivent dans l'Inbox.
+  const bodacc = creerClientBodacc();
+  let timerSignaux: ReturnType<typeof setInterval> | undefined;
+  let veilleEnCours = false;
+  app.addHook('onListen', () => {
+    timerSignaux = setInterval(() => {
+      if (veilleEnCours) return;
+      veilleEnCours = true;
+      void tournerAlertes(db, bodacc)
+        .catch((err: unknown) => app.log.error(err, 'Veille du BODACC'))
+        .finally(() => {
+          veilleEnCours = false;
+        });
+    }, 60_000);
+    return Promise.resolve();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(timerSignaux);
+    return Promise.resolve();
+  });
+  let timerBrouillons: ReturnType<typeof setInterval> | undefined;
+  let preparationEnCours = false;
+  app.addHook('onListen', () => {
+    timerBrouillons = setInterval(() => {
+      if (preparationEnCours) return;
+      preparationEnCours = true;
+      void tournerBrouillons(db, vma)
+        .catch((err: unknown) => app.log.error(err, 'Préparation quotidienne'))
+        .finally(() => {
+          preparationEnCours = false;
+        });
+    }, 60_000);
+    return Promise.resolve();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(timerBrouillons);
+    return Promise.resolve();
+  });
+
   registerEnrichissementRoutes(app, {
+    codex: codex.client,
     db,
     enrichissement,
     ...(clientIA ? { client: clientIA } : {}),
@@ -75,8 +143,12 @@ export function buildApp({
   registerAtelierRoutes(app, { db });
   registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
-  registerRunnerApi(app, { db });
-  registerCerveauRoutes(app, { db });
+  registerRunnerApi(app, {
+    db,
+    codex,
+    drive: { secretsDir, realWrites, ...(googleFetch ? { fetch: googleFetch } : {}) },
+  });
+  registerCerveauRoutes(app, { db, lienKdrive: partageKdriveUrl });
   registerWeb(app);
   return app;
 }

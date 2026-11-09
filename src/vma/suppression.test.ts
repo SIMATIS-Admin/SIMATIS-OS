@@ -85,6 +85,32 @@ describe('suppression d’un test VMA', () => {
     expect(appels).toEqual([]);
   });
 
+  it('supprime un résultat reçu avec un ancien statut envoyé sans révoquer le lien', async () => {
+    const test = await creer(mandat);
+    await t.owner.pool.query('update vma_tests set recue_le = now() where id = $1', [test.id]);
+    appels = [];
+    const res = await route(null).inject({
+      method: 'DELETE',
+      url: `/api/i/${mandat.slug}/vma/tests/${test.id}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await compter()).toBe(0);
+    expect(appels).toEqual([]);
+  });
+
+  it('refuse de révoquer un test déjà reçu, même avec le statut envoyé', async () => {
+    const test = await creer(mandat);
+    await t.owner.pool.query('update vma_tests set recue_le = now() where id = $1', [test.id]);
+    appels = [];
+    const res = await route().inject({
+      method: 'POST',
+      url: `/api/i/${mandat.slug}/vma/tests/${test.id}/revoquer`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await compter()).toBe(1);
+    expect(appels).toEqual([]);
+  });
+
   it('révoque d’abord côté site une invitation encore ouverte', async () => {
     const test = await creer(mandat);
     appels = [];

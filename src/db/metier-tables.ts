@@ -11,8 +11,17 @@ import {
   baseVivante,
 } from '../base-vivante/schema.js';
 import {
+  gestionCcaMouvements,
   gestionDepenseExceptions,
   gestionDepenses,
+  gestionIkBaremes,
+  gestionIkLieux,
+  gestionIkMois,
+  gestionIkTrajets,
+  gestionImportCles,
+  gestionMandatReglages,
+  gestionFactures,
+  gestionIkVehicules,
   gestionReglages,
   gestionRevenuExceptions,
   gestionRevenus,
@@ -40,14 +49,27 @@ import {
   enrichissementLignes,
   enrichissementSuggestions,
   enrichissementTaches,
+  rechercheSessions,
 } from '../enrichissement/schema.js';
+import { diagnosticReglesJournal } from '../diagnostic/schema.js';
 
 // Every business table, children before parents (purge order). Each new business table goes here.
 export const METIER_TABLES = [
+  diagnosticReglesJournal,
+  rechercheSessions,
   enrichissementSuggestions,
   enrichissementLignes,
   enrichissementTaches,
+  gestionCcaMouvements,
+  gestionIkTrajets,
+  gestionIkVehicules,
+  gestionIkBaremes,
+  gestionIkLieux,
+  gestionIkMois,
   gestionTvaMois,
+  gestionImportCles,
+  gestionMandatReglages,
+  gestionFactures,
   gestionReglages,
   gestionDepenseExceptions,
   gestionRevenuExceptions,

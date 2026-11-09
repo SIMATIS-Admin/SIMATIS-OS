@@ -18,11 +18,17 @@ const carteSchema = z.object({
         categorie: z.string().max(100),
         statut: z.string().max(50).nullable(),
         concerne: z.string().max(50).nullable().optional(),
+        genre: z.string().max(50).nullable().optional(),
+        auteur: z.string().max(50).nullable().optional(),
+        date: z.string().max(50).nullable().optional(),
+        reponseA: z.string().max(500).nullable().optional(),
       }),
     )
     .max(10_000),
   liens: z.array(z.object({ de: z.string().max(500), vers: z.string().max(500) })).max(100_000),
   autresFichiers: z.number().int().min(0),
+  fichiers: z.array(z.string().max(500)).max(1000).optional(),
+  moi: z.string().max(50).optional(),
   tronquee: z.boolean(),
 });
 
@@ -51,6 +57,16 @@ const operationSchema = z.discriminatedUnion('type', [
     enReponseA: z.string().max(300).optional(),
   }),
   z.object({ espace: z.literal('partage'), type: z.literal('actualiser') }),
+  z.object({
+    espace: z.literal('partage'),
+    type: z.literal('chercher'),
+    requete: z.string().trim().min(1).max(200),
+  }),
+  z.object({
+    espace: z.literal('partage'),
+    type: z.literal('lire_messages'),
+    chemins: z.array(z.string().max(300)).min(1).max(50),
+  }),
 ]);
 
 const resultatSchema = z.union([
@@ -60,11 +76,19 @@ const resultatSchema = z.union([
     contenu: z.string().optional(),
     empreinte: z.string().optional(),
     lectureSeule: z.string().nullable().optional(),
+    resultats: z
+      .array(z.object({ chemin: z.string().max(500), extraits: z.array(z.string().max(1000)) }))
+      .max(200)
+      .optional(),
+    textes: z.record(z.string(), z.string().max(500_000)).optional(),
   }),
   z.object({ ok: z.literal(false), erreur: z.string().max(1000), conflit: z.boolean().optional() }),
 ]);
 
-export function registerCerveauRoutes(app: FastifyInstance, { db }: { db: Database }): void {
+export function registerCerveauRoutes(
+  app: FastifyInstance,
+  { db, lienKdrive = null }: { db: Database; lienKdrive?: string | null },
+): void {
   const estRunner = async (request: FastifyRequest) => {
     const header = request.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
@@ -84,11 +108,13 @@ export function registerCerveauRoutes(app: FastifyInstance, { db }: { db: Databa
     return { ok: true };
   });
 
-  // Réservé aux espaces SIMATIS qui ont le module : jamais une démo, qui ne doit rien voir du vrai.
-  const acces = async (slug: string, reply: FastifyReply) => {
+  // Jamais une démo, qui ne doit rien voir du vrai. Le cerveau SIMATIS est réservé à Mon activité ;
+  // l'espace d'un partenaire s'ouvre aussi à un mandat qui a le module (il ne voit que cet espace).
+  const acces = async (slug: string, reply: FastifyReply, partage: boolean) => {
     const instance = await getInstanceBySlug(db, slug);
     if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
-    if (instance.type !== 'propre' || !(instance.config.modules ?? []).includes('cerveau'))
+    const typeAutorise = instance.type === 'propre' || (partage && instance.type === 'mandat');
+    if (!typeAutorise || !(instance.config.modules ?? []).includes('cerveau'))
       return reply.code(403).send({ error: "Le second cerveau n'est pas activé dans cet espace." });
     return null;
   };
@@ -96,9 +122,12 @@ export function registerCerveauRoutes(app: FastifyInstance, { db }: { db: Databa
   app.get<{ Params: { slug: string }; Querystring: { espace?: string } }>(
     '/api/i/:slug/cerveau/carte',
     async (request, reply) => {
-      const refuse = await acces(request.params.slug, reply);
+      const partage = request.query.espace === 'partage';
+      const refuse = await acces(request.params.slug, reply, partage);
       if (refuse) return refuse;
-      return lireCarte(request.query.espace === 'partage' ? 'partage' : 'simatis');
+      const carte = lireCarte(partage ? 'partage' : 'simatis');
+      // Lien du dossier partagé sur le kDrive : une configuration de l'OS, pas un contenu de la carte.
+      return carte && partage ? { ...carte, lienKdrive } : carte;
     },
   );
 
@@ -106,10 +135,10 @@ export function registerCerveauRoutes(app: FastifyInstance, { db }: { db: Databa
   app.post<{ Params: { slug: string }; Body: unknown }>(
     '/api/i/:slug/cerveau/operations',
     async (request, reply) => {
-      const refuse = await acces(request.params.slug, reply);
-      if (refuse) return refuse;
       const parsed = operationSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Demande invalide' });
+      const refuse = await acces(request.params.slug, reply, parsed.data.espace === 'partage');
+      if (refuse) return refuse;
       try {
         const resultat = await demander(parsed.data);
         if (resultat.ok) return resultat;

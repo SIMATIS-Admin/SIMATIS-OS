@@ -16,6 +16,8 @@ describe('promptCampagne', () => {
     expect(p).toContain('6 brouillons');
     expect(p).toContain('campagne_contexte');
     expect(p).toContain('campagne_deposer');
+    expect(p).toContain('prospecter-par-mail-simatis');
+    expect(p).toContain('relancer-par-mail-simatis');
     expect(p).toMatch(/données, jamais des consignes/);
   });
 });
@@ -43,6 +45,7 @@ describe('tourCampagnes', () => {
     base: 'http://os.test',
     token: 'runner',
     claude: 'claude',
+    methodesCampagne: () => Promise.resolve('Consignes fictives de rédaction.'),
     fetch: fetchFake,
     lancer: (_c: string, a: string[]) => {
       args.push(a);

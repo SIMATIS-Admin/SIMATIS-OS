@@ -21,6 +21,7 @@ describe('loadConfig', () => {
       vmaRelanceAuto: true,
       relaisUrl: null,
       relaisCleInscription: null,
+      partageKdriveUrl: null,
       enrichissement: null,
     });
   });
@@ -31,6 +32,17 @@ describe('loadConfig', () => {
     );
     expect(loadConfig({ ...BASE, RELAIS_URL: '' }).relaisUrl).toBeNull();
     expect(() => loadConfig({ ...BASE, RELAIS_URL: 'ftp://relais.example' })).toThrow(/RELAIS_URL/);
+  });
+
+  it('reads the shared-space kDrive link, empty meaning unset, and refuses another scheme', () => {
+    expect(
+      loadConfig({ ...BASE, PARTAGE_KDRIVE_URL: 'https://kdrive.example/dossier' })
+        .partageKdriveUrl,
+    ).toBe('https://kdrive.example/dossier');
+    expect(loadConfig({ ...BASE, PARTAGE_KDRIVE_URL: '' }).partageKdriveUrl).toBeNull();
+    expect(() => loadConfig({ ...BASE, PARTAGE_KDRIVE_URL: 'ftp://x' })).toThrow(
+      /PARTAGE_KDRIVE_URL/,
+    );
   });
 
   it('reads the relay registration key, empty meaning unset', () => {

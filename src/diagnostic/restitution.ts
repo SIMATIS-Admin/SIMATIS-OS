@@ -5,7 +5,7 @@ import type { Instance } from '../instances/schema.js';
 import { ChatIndisponible, envoyerMessage } from './chat.js';
 import { genererDeckPptx, nomFichierDeck } from './restitution-pptx.js';
 import { diagnosticProjets, type Diapositive, type Projet } from './schema.js';
-import { ProjetIntrouvable, verifierEspace, type ProjetVue } from './service.js';
+import { ProjetIntrouvable, verifierEspace, vue, type ProjetVue } from './service.js';
 import { LIEN_ARTIFACT, SupportInvalide, type Decision } from './support.js';
 
 // Deck de restitution (étape 5) : le pilote le demande une fois le rapport rédigé ; le runner le
@@ -41,6 +41,66 @@ export function demanderRestitution(
 
 // Export PowerPoint : le pilote le demande quand le deck lui convient. Claude relit le deck publié
 // et rend ses diapositives, dont l'OS fait le fichier.
+// Le pilote désigne le deck final : celui qu'il a retravaillé et validé. Un seul par projet. Les
+// règles se capitalisent ensuite ; si Claude répond déjà, la case reste posée et le pilote relance.
+export const DEBUT_MESSAGE_REGLES_RESTITUTION = 'Capitaliser le deck de restitution final';
+
+export async function marquerDeckFinal(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  lien: string,
+  finale: boolean,
+): Promise<ProjetVue> {
+  verifierEspace(instance);
+  const vueMarquee = await withInstance(db, instance.id, async (tx) => {
+    const [projet] = await tx
+      .select()
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
+    if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    if (!projet.restitutionLiens.some((l) => l.lien === lien))
+      throw new ChatIndisponible("Ce deck n'appartient pas à ce projet.");
+    const [row] = await tx
+      .update(diagnosticProjets)
+      .set({
+        restitutionLiens: projet.restitutionLiens.map((l) => {
+          const autre = { ...l };
+          delete autre.finale;
+          return finale && l.lien === lien ? { ...autre, finale: true } : autre;
+        }),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
+      .returning();
+    return vue(row!);
+  });
+  if (!finale) return vueMarquee;
+  try {
+    return await demanderReglesRestitution(db, instance, id);
+  } catch (error) {
+    if (error instanceof ChatIndisponible) return vueMarquee;
+    throw error;
+  }
+}
+
+// Claude relit le deck final et les decks finaux précédents, met à jour la fiche de règles du
+// second cerveau et déclare ses changements au journal.
+export function demanderReglesRestitution(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<ProjetVue> {
+  return envoyerMessage(db, instance, id, `${DEBUT_MESSAGE_REGLES_RESTITUTION}.`, {
+    type: 'regles_restitution',
+    etape: 5,
+    verifier: (projet) => {
+      if (!projet.restitutionLiens.some((l) => l.finale))
+        throw new ChatIndisponible("Désignez d'abord le deck de restitution final.");
+    },
+  });
+}
+
 export const DEBUT_MESSAGE_EXPORT = 'Exporter le deck de restitution en PowerPoint';
 
 export function demanderExportRestitution(
@@ -136,6 +196,11 @@ export async function autoriserSiRestitution(
     return outil === 'Artifact' && input.action === 'read'
       ? { behavior: 'allow', updatedInput: input }
       : refus("Pendant l'export PowerPoint, seule la lecture du deck est permise.");
+  // Capitalisation des règles : le deck final et ses prédécesseurs se lisent, rien ne s'y publie.
+  if (enCours.length === 1 && projet?.demande === 'regles_restitution')
+    return outil === 'Artifact' && input.action === 'read'
+      ? { behavior: 'allow', updatedInput: input }
+      : refus('Pendant la capitalisation du deck, seule la lecture des decks est permise.');
   if (enCours.length !== 1 || projet?.demande !== 'restitution') return null;
   if (outil !== 'Artifact')
     return refus(`Outil ${outil} non autorisé pour le deck de restitution.`);

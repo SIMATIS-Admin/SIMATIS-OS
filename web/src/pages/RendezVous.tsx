@@ -15,6 +15,9 @@ import {
   type StatutRdv,
 } from '../api.js';
 import { Fenetre } from './Fenetre.js';
+import { EnteteCommercial, useChoixCommercial } from './commercial/commun.js';
+import { ApercuCommercial, type ReferenceCommerciale } from './commercial/Apercu.js';
+import { SearchBox } from './SearchBox.js';
 import { Lien } from './taches/Edition.js';
 
 type Choix = { id: string; nom: string } | null;
@@ -29,7 +32,7 @@ export const quand = (iso: string) =>
     timeZone: 'Europe/Paris',
   });
 
-function PreparationPanel({ slug, rdv }: { slug: string; rdv: Rdv }) {
+export function PreparationPanel({ slug, rdv }: { slug: string; rdv: Pick<Rdv, 'opportunite'> }) {
   const [p, setP] = useState<Preparation | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -179,8 +182,9 @@ function LienRdv({ slug, rdv, onDone }: { slug: string; rdv: Rdv; onDone: () => 
   );
 }
 
-type Onglet = 'a_trier' | 'rdv' | 'sans_cr' | 'ignore';
+type Onglet = 'avenir' | 'a_trier' | 'rdv' | 'sans_cr' | 'ignore';
 const ONGLETS: [Onglet, string][] = [
+  ['avenir', 'À venir'],
   ['a_trier', 'À trier'],
   ['rdv', 'Rendez-vous'],
   ['sans_cr', 'Sans compte rendu'],
@@ -189,9 +193,11 @@ const ONGLETS: [Onglet, string][] = [
 // A block the pilot has not sorted yet carries no statut in older answers.
 const statutDe = (r: Rdv): StatutRdv => r.statut ?? 'a_trier';
 const dansOnglet = (r: Rdv, onglet: Onglet, maintenant: number) =>
-  onglet === 'sans_cr'
-    ? statutDe(r) === 'rdv' && !r.compteRendu && new Date(r.debut).getTime() <= maintenant
-    : statutDe(r) === onglet;
+  onglet === 'avenir'
+    ? statutDe(r) === 'rdv' && new Date(r.debut).getTime() > maintenant
+    : onglet === 'sans_cr'
+      ? statutDe(r) === 'rdv' && !r.compteRendu && new Date(r.debut).getTime() <= maintenant
+      : statutDe(r) === onglet;
 const jour = (iso: string) =>
   new Date(iso).toLocaleDateString('fr-FR', {
     weekday: 'long',
@@ -306,6 +312,8 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
   const [ouvert, setOuvert] = useState<{ id: string; vue: 'prep' | 'cr' | 'lien' } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creation, setCreation] = useState(false);
+  const [recherche, setRecherche] = useChoixCommercial(`${slug}.rdv.recherche`, '');
+  const [apercu, setApercu] = useState<ReferenceCommerciale | null>(null);
   // The first read picks the tab: the blocks to sort when there are some, else the meetings.
   const premiere = useRef(true);
   const load = useCallback(() => {
@@ -349,7 +357,12 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
     })().catch((e: unknown) => setError(String(e)));
 
   if (error) return <div className="empty">{error}</div>;
-  if (!data) return null;
+  if (!data)
+    return (
+      <div className="empty" role="status" aria-live="polite">
+        Chargement des rendez-vous…
+      </div>
+    );
   // Google's state goes next to the list: meetings created in the OS show whatever it says.
   const bandeau =
     data.etat === 'non_configure'
@@ -359,11 +372,11 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
         : null;
   const creerBloc = (
     <>
-      <div className="rdv-actions">
+      <EnteteCommercial description="Préparez vos échanges, retrouvez les liens et donnez une suite à chaque rendez-vous.">
         <button className="btn primary" onClick={() => setCreation(true)}>
           + Nouveau rendez-vous
         </button>
-      </div>
+      </EnteteCommercial>
       {creation && <NouveauRdv slug={slug} onFermer={() => setCreation(false)} />}
     </>
   );
@@ -376,12 +389,20 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
     );
   }
   const maintenant = Date.now();
-  const visibles = data.rdv.filter((r) => dansOnglet(r, onglet, maintenant));
+  const q = recherche.trim().toLocaleLowerCase('fr');
+  const visibles = data.rdv.filter(
+    (r) =>
+      dansOnglet(r, onglet, maintenant) &&
+      [r.titre, r.contact?.nom, r.entreprise?.nom, r.opportunite?.titre, r.lieu]
+        .join(' ')
+        .toLocaleLowerCase('fr')
+        .includes(q),
+  );
   const introuvable = ouvrir && !data.rdv.some((r) => r.id === ouvrir);
   return (
-    <>
+    <section className="commercial-page com-rendezvous">
       {creerBloc}
-      <div className="panel">
+      <div className="com-rdv-contenu">
         {bandeau && (
           <p className="small muted" style={{ padding: '10px 12px 0', margin: 0 }}>
             {bandeau}
@@ -415,145 +436,180 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
             Connexions.
           </p>
         )}
+        <div className="com-rdv-recherche">
+          <SearchBox
+            value={recherche}
+            onChange={setRecherche}
+            placeholder="Rechercher un rendez-vous, une entreprise, un contact…"
+          />
+          <span className="small muted">{visibles.length} rendez-vous</span>
+        </div>
         {visibles.length ? (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Rendez-vous</th>
-                <th>Liens</th>
-                <th>Lieu</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {visibles.map((r, i) => {
-                const passe = new Date(r.debut).getTime() <= maintenant;
-                const statut = statutDe(r);
-                const precedent = visibles[i - 1];
-                return [
-                  (!precedent || jour(precedent.debut) !== jour(r.debut)) && (
-                    <tr key={`${r.id}-jour`} className="rdv-jour">
-                      <td colSpan={5}>{jour(r.debut)}</td>
-                    </tr>
-                  ),
-                  <tr key={r.id} id={`rdv-${r.id}`} className={r.id === ouvrir ? 'cible' : ''}>
-                    <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                      {quand(r.debut)}
-                    </td>
-                    <td>
-                      <a href={`#/${slug}/fiche/rdv/${encodeURIComponent(r.id)}`}>
-                        <b>{r.titre}</b>
-                      </a>
-                      {r.opportunite && <div className="small muted">{r.opportunite.titre}</div>}
-                      {r.compteRendu && (
-                        <div className="small" style={{ color: 'var(--green)' }}>
-                          Compte rendu fait
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      {r.contact || r.entreprise ? (
-                        <div className="rdv-puces">
-                          {r.entreprise && (
-                            <a
-                              className="fi-puce"
-                              href={`#/${slug}/fiche/entreprise/${r.entreprise.id}`}
-                            >
-                              {r.entreprise.nom}
-                            </a>
-                          )}
-                          {r.contact && (
-                            <a className="fi-puce" href={`#/${slug}/fiche/contact/${r.contact.id}`}>
-                              {r.contact.nom}
-                            </a>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="muted">Hors CRM</span>
-                      )}
-                      {statut !== 'ignore' && (
-                        <div>
-                          <button
-                            className="lien"
-                            onClick={() => setOuvert({ id: r.id, vue: 'lien' })}
-                            aria-label={`Lier « ${r.titre} » à un contact ou une entreprise`}
+          <div className="com-rdv-liste" role="list">
+            {visibles.map((r, i) => {
+              const passe = new Date(r.debut).getTime() <= maintenant;
+              const statut = statutDe(r);
+              const precedent = visibles[i - 1];
+              return [
+                (!precedent || jour(precedent.debut) !== jour(r.debut)) && (
+                  <h2 key={`${r.id}-jour`} className="com-rdv-jour">
+                    {jour(r.debut)}
+                  </h2>
+                ),
+                <article
+                  key={r.id}
+                  role="listitem"
+                  id={`rdv-${r.id}`}
+                  className={`com-rdv ${r.id === ouvrir ? 'cible' : ''}`}
+                >
+                  <div className="com-rdv-heure">
+                    <strong>
+                      {new Date(r.debut).toLocaleTimeString('fr-FR', {
+                        timeZone: 'Europe/Paris',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </strong>
+                    <small>
+                      {new Date(r.fin).toLocaleTimeString('fr-FR', {
+                        timeZone: 'Europe/Paris',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </small>
+                  </div>
+                  <div className="com-rdv-identite">
+                    <a
+                      href={`#/${slug}/fiche/rdv/${encodeURIComponent(r.id)}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setApercu({ kind: 'rdv', id: r.id });
+                      }}
+                    >
+                      <b>{r.titre}</b>
+                    </a>
+                    {r.opportunite && <div className="small muted">{r.opportunite.titre}</div>}
+                    {r.compteRendu && (
+                      <div className="small" style={{ color: 'var(--green)' }}>
+                        Compte rendu fait
+                      </div>
+                    )}
+                  </div>
+                  <div className="com-rdv-liens">
+                    {r.contact || r.entreprise ? (
+                      <div className="rdv-puces">
+                        {r.entreprise && (
+                          <a
+                            className="fi-puce"
+                            href={`#/${slug}/fiche/entreprise/${r.entreprise.id}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setApercu({ kind: 'entreprise', id: r.entreprise!.id });
+                            }}
                           >
-                            {r.contact || r.entreprise ? 'Changer le lien' : 'Lier'}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td>{r.lieu ?? <span className="muted">—</span>}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {statut === 'ignore' ? (
-                        <button className="btn sm" onClick={() => trier(r, 'a_trier')}>
-                          Remettre à trier
+                            {r.entreprise.nom}
+                          </a>
+                        )}
+                        {r.contact && (
+                          <a
+                            className="fi-puce"
+                            href={`#/${slug}/fiche/contact/${r.contact.id}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setApercu({ kind: 'contact', id: r.contact!.id });
+                            }}
+                          >
+                            {r.contact.nom}
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="muted">Hors CRM</span>
+                    )}
+                    {statut !== 'ignore' && (
+                      <div>
+                        <button
+                          className="lien"
+                          onClick={() => setOuvert({ id: r.id, vue: 'lien' })}
+                          aria-label={`Lier « ${r.titre} » à un contact ou une entreprise`}
+                        >
+                          {r.contact || r.entreprise ? 'Changer le lien' : 'Lier'}
                         </button>
-                      ) : statut === 'a_trier' ? (
-                        <>
+                      </div>
+                    )}
+                  </div>
+                  {r.lieu && <div className="com-rdv-lieu">{r.lieu}</div>}
+                  <div className="com-rdv-actions">
+                    {statut === 'ignore' ? (
+                      <button className="btn sm" onClick={() => trier(r, 'a_trier')}>
+                        Remettre à trier
+                      </button>
+                    ) : statut === 'a_trier' ? (
+                      <>
+                        <button
+                          className="btn go sm"
+                          title={r.contact && !r.lienManuel ? `Lier à ${r.contact.nom}` : undefined}
+                          onClick={() =>
+                            r.contact && !r.lienManuel ? validerSuggestion(r) : trier(r, 'rdv')
+                          }
+                        >
+                          C’est un RDV
+                        </button>{' '}
+                        <button className="btn sm" onClick={() => trier(r, 'ignore')}>
+                          Pas un RDV
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="btn sm"
+                          onClick={() => setOuvert({ id: r.id, vue: 'prep' })}
+                        >
+                          Préparer
+                        </button>{' '}
+                        {passe && !r.compteRendu && (
                           <button
                             className="btn go sm"
-                            title={
-                              r.contact && !r.lienManuel ? `Lier à ${r.contact.nom}` : undefined
-                            }
-                            onClick={() =>
-                              r.contact && !r.lienManuel ? validerSuggestion(r) : trier(r, 'rdv')
-                            }
+                            onClick={() => setOuvert({ id: r.id, vue: 'cr' })}
                           >
-                            C’est un RDV
-                          </button>{' '}
-                          <button className="btn sm" onClick={() => trier(r, 'ignore')}>
-                            Pas un RDV
+                            Compte rendu
                           </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className="btn sm"
-                            onClick={() => setOuvert({ id: r.id, vue: 'prep' })}
-                          >
-                            Préparer
-                          </button>{' '}
-                          {passe && !r.compteRendu && (
-                            <button
-                              className="btn go sm"
-                              onClick={() => setOuvert({ id: r.id, vue: 'cr' })}
-                            >
-                              Compte rendu
-                            </button>
-                          )}{' '}
-                          <button className="btn ghost sm" onClick={() => trier(r, 'ignore')}>
-                            Pas un RDV
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>,
-                  ouvert?.id === r.id && (
-                    <tr key={`${r.id}-detail`}>
-                      <td colSpan={5}>
-                        {ouvert.vue === 'lien' ? (
-                          <LienRdv
-                            slug={slug}
-                            rdv={r}
-                            onDone={() => {
-                              setOuvert(null);
-                              load();
-                            }}
-                          />
-                        ) : ouvert.vue === 'prep' ? (
-                          <PreparationPanel slug={slug} rdv={r} />
-                        ) : (
-                          <CompteRendu slug={slug} rdv={r} onDone={load} />
-                        )}
-                      </td>
-                    </tr>
-                  ),
-                ];
-              })}
-            </tbody>
-          </table>
+                        )}{' '}
+                        <button className="btn ghost sm" onClick={() => trier(r, 'ignore')}>
+                          Pas un RDV
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </article>,
+                ouvert?.id === r.id && (
+                  <section
+                    key={`${r.id}-detail`}
+                    className="com-rdv-detail"
+                    aria-label={`Détail de ${r.titre}`}
+                  >
+                    <button className="btn ghost sm" onClick={() => setOuvert(null)}>
+                      Fermer le détail
+                    </button>
+                    {ouvert.vue === 'lien' ? (
+                      <LienRdv
+                        slug={slug}
+                        rdv={r}
+                        onDone={() => {
+                          setOuvert(null);
+                          load();
+                        }}
+                      />
+                    ) : ouvert.vue === 'prep' ? (
+                      <PreparationPanel slug={slug} rdv={r} />
+                    ) : (
+                      <CompteRendu slug={slug} rdv={r} onDone={load} />
+                    )}
+                  </section>
+                ),
+              ];
+            })}
+          </div>
         ) : (
           <div className="empty">
             {onglet === 'a_trier'
@@ -564,6 +620,14 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
           </div>
         )}
       </div>
-    </>
+      {apercu && (
+        <ApercuCommercial
+          key={`${apercu.kind}-${apercu.id}`}
+          slug={slug}
+          reference={apercu}
+          onFermer={() => setApercu(null)}
+        />
+      )}
+    </section>
   );
 }

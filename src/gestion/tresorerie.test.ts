@@ -6,8 +6,11 @@ import {
   calculerBfr,
   debutPeriode,
   mouvementsDepenses,
+  mouvementsFacturesIk,
   mouvementsRecettes,
 } from './tresorerie.js';
+import type { FactureEmise } from './factures-emission.js';
+import type { IkRefacturable } from './ik.js';
 
 const dep = (
   o: Partial<OccurrenceVue> & { date: string; montantTtcCents: number },
@@ -192,5 +195,122 @@ describe('calculerBfr', () => {
     expect(b.limites.join(' ')).toContain('TVA');
     const neg = calculerBfr([], depenses, '2026-11-02', '2026-10-01');
     expect(neg).toMatchObject({ bfrCents: -30_000, seuilCents: 0 });
+  });
+});
+
+describe('mouvementsRecettes — recettes d’un mandat', () => {
+  const p = { ...base, delaiJours: 30, retardJours: 0 };
+  const delaisMandat = new Map<string, number | null>([['m1', 45]]);
+
+  it('date une recette prévue d’un mandat à la fin du mois + le délai du mandat', () => {
+    const r = mouvementsRecettes(
+      [rec({ date: '2026-11-10', montantHtCents: 100_000, mandat: 'm1' })],
+      { ...p, delaisMandat },
+    );
+    expect(r.mouvements[0]!.date).toBe('2027-01-14');
+  });
+
+  it('un mandat sans délai propre retombe sur le délai général', () => {
+    const r = mouvementsRecettes(
+      [rec({ date: '2026-11-10', montantHtCents: 100_000, mandat: 'm2' })],
+      { ...p, delaisMandat },
+    );
+    expect(r.mouvements[0]!.date).toBe('2026-12-30');
+  });
+
+  it('une recette de mandat dont le jour est passé est facturée à la fin du mois courant', () => {
+    const r = mouvementsRecettes(
+      [rec({ date: '2026-11-01', montantHtCents: 100_000, mandat: 'm1' })],
+      { ...p, delaisMandat },
+    );
+    expect(r.mouvements[0]!.date).toBe('2027-01-14');
+  });
+
+  it('une recette de mandat antérieure au solde reste à facturer : comptée à la fin du mois courant', () => {
+    const r = mouvementsRecettes(
+      [rec({ date: '2026-10-20', montantHtCents: 100_000, mandat: 'm1' })],
+      { ...p, delaisMandat },
+    );
+    expect(r.mouvements[0]!.date).toBe('2027-01-14');
+    expect(r.ignorees).toBe(0);
+  });
+
+  it('sans mandat, la date reste celle de la recette + le délai général', () => {
+    const r = mouvementsRecettes([rec({ date: '2026-11-10', montantHtCents: 100_000 })], {
+      ...p,
+      delaisMandat,
+    });
+    expect(r.mouvements[0]!.date).toBe('2026-12-10');
+  });
+
+  it('une recette émise suit la date d’émission de sa facture et son délai figé', () => {
+    const o = rec({ date: '2026-11-10', montantHtCents: 100_000, mandat: 'm1', etat: 'emise' });
+    const factures = new Map([[o.cle, { dateEmission: '2026-11-12', delaiJours: 20 }]]);
+    const r = mouvementsRecettes([o], { ...p, delaisMandat, factures });
+    expect(r.mouvements[0]!.date).toBe('2026-12-02');
+  });
+});
+
+describe('mouvementsFacturesIk', () => {
+  const e = {
+    ...base,
+    delaiJours: 30 as number | null,
+    retardJours: 0,
+    delaisMandat: new Map<string, number | null>([['m1', 45]]),
+  };
+  const ik = (o: Partial<IkRefacturable> = {}): IkRefacturable => ({
+    trajetId: 't1',
+    mandat: 'm1',
+    date: '2026-11-04',
+    libelle: 'Trajet fictif',
+    indemniteCents: 4_000,
+    ...o,
+  });
+  const facture = (o: Partial<FactureEmise> = {}): FactureEmise => ({
+    id: 'f1',
+    mandat: 'm1',
+    numero: 'F-1',
+    dateEmission: '2026-11-12',
+    delaiJours: 20,
+    totalHtCents: 4_000,
+    etat: 'emise',
+    dateEncaissement: null,
+    lignes: [
+      {
+        cle: 'ik:t9',
+        sorte: 'ik',
+        libelle: 'Trajet facturé',
+        date: '2026-11-04',
+        montantHtCents: 4_000,
+        tvaCents: null,
+      },
+    ],
+    ...o,
+  });
+
+  it('un trajet à venir entre à la fin du mois + le délai du mandat', () => {
+    const m = mouvementsFacturesIk({ ...e, ik: [ik()], factures: [] });
+    expect(m).toHaveLength(1);
+    expect(m[0]).toMatchObject({ date: '2027-01-14', montantCents: 4_000, sens: 'entree' });
+  });
+
+  it('un trajet sans montant ne produit rien', () => {
+    expect(
+      mouvementsFacturesIk({ ...e, ik: [ik({ indemniteCents: null })], factures: [] }),
+    ).toEqual([]);
+  });
+
+  it('la ligne IK d’une facture émise entre à l’émission + le délai figé', () => {
+    const m = mouvementsFacturesIk({ ...e, ik: [], factures: [facture()] });
+    expect(m[0]).toMatchObject({ date: '2026-12-02', montantCents: 4_000 });
+  });
+
+  it('une facture encaissée après la date du solde compte à son encaissement, avant elle jamais', () => {
+    const apres = facture({ etat: 'encaissee', dateEncaissement: '2026-11-20' });
+    expect(mouvementsFacturesIk({ ...e, ik: [], factures: [apres] })[0]).toMatchObject({
+      date: '2026-11-20',
+    });
+    const avant = facture({ etat: 'encaissee', dateEncaissement: '2026-10-20' });
+    expect(mouvementsFacturesIk({ ...e, ik: [], factures: [avant] })).toEqual([]);
   });
 });

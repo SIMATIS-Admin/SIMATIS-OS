@@ -379,6 +379,7 @@ export type CampagneResume = {
   statut: Campagne['statut'];
   creeLe: Date;
   brouillons: number;
+  envoyes: number;
   resultat: Campagne['resultat'];
 };
 
@@ -387,12 +388,27 @@ export async function campagnesRecentes(
   tx: Executor,
   limite = 5,
 ): Promise<{ recentes: CampagneResume[]; enCours: string | null; nbEnCours: number }> {
-  const rows = await tx
-    .select()
-    .from(prospectionCampagnes)
-    .where(eq(prospectionCampagnes.instanceId, currentInstance))
-    .orderBy(desc(prospectionCampagnes.createdAt))
-    .limit(Math.max(limite, 20));
+  const liste = () => tx.select().from(prospectionCampagnes);
+  const [actives, terminees] = await Promise.all([
+    liste()
+      .where(
+        and(
+          eq(prospectionCampagnes.instanceId, currentInstance),
+          ne(prospectionCampagnes.statut, 'terminee'),
+        ),
+      )
+      .orderBy(desc(prospectionCampagnes.createdAt)),
+    liste()
+      .where(
+        and(
+          eq(prospectionCampagnes.instanceId, currentInstance),
+          eq(prospectionCampagnes.statut, 'terminee'),
+        ),
+      )
+      .orderBy(desc(prospectionCampagnes.createdAt))
+      .limit(limite),
+  ]);
+  const rows = [...actives, ...terminees];
   const ids = rows.map((r) => r.id);
   const bs = ids.length
     ? await tx
@@ -406,16 +422,29 @@ export async function campagnesRecentes(
           ),
         )
     : [];
+  const envois = ids.length
+    ? await tx
+        .select({ lot: prospectionOccurrences.lot })
+        .from(prospectionOccurrences)
+        .where(
+          and(
+            eq(prospectionOccurrences.instanceId, currentInstance),
+            inArray(prospectionOccurrences.lot, ids),
+            isNotNull(prospectionOccurrences.envoyeAt),
+          ),
+        )
+    : [];
   const resume = rows.map((r) => ({
     id: r.id,
     mode: r.mode,
     statut: r.statut,
     creeLe: r.createdAt,
     brouillons: bs.filter((b) => b.campagneId === r.id).length,
+    envoyes: envois.filter((e) => e.lot === r.id).length,
     resultat: r.resultat,
   }));
   return {
-    recentes: resume.filter((r) => r.statut === 'terminee').slice(0, limite),
+    recentes: resume,
     enCours: resume.find((r) => r.statut !== 'terminee')?.id ?? null,
     nbEnCours: resume.filter((r) => r.statut !== 'terminee').length,
   };

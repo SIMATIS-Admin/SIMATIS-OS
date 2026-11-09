@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import {
   fetchCompteurInbox,
   fetchCompteurRdv,
@@ -15,35 +15,50 @@ import {
   vueCanonique,
   type InstanceSummary,
 } from './nav.js';
-import { Inbox } from './pages/Inbox.js';
-import { Bientot } from './pages/Bientot.js';
-import { Prospection } from './pages/Prospection.js';
-import { Brief } from './pages/Brief.js';
-import { Fiche } from './pages/Fiche.js';
-import { FicheRdv } from './pages/FicheRdv.js';
 import { Barre } from './shell/Barre.js';
 import { Console } from './shell/Console.js';
 import type { KindFiche } from './api.js';
-import { Agenda } from './pages/Agenda.js';
-import { Bases } from './pages/Bases.js';
-import { RendezVous } from './pages/RendezVous.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
-import { Cerveau } from './pages/Cerveau.js';
-import { FeuilleDeRouteOS } from './pages/FeuilleDeRouteOS.js';
-import { Gestion } from './pages/Gestion.js';
-import { Journal } from './pages/Journal.js';
-import { Parametres } from './pages/Parametres.js';
 import { Pipeline } from './pages/Pipeline.js';
-import { Portefeuille } from './pages/Portefeuille.js';
-import { Tableau } from './pages/Tableau.js';
-import { Routines } from './pages/Routines.js';
-import { Devis } from './pages/Devis.js';
-import { Atelier } from './pages/Atelier.js';
-import { Diagnostics } from './pages/Diagnostics.js';
-import { PresentationDiagnostic } from './pages/PresentationDiagnostic.js';
-import { SiteWeb } from './pages/SiteWeb.js';
 import { Sidebar } from './shell/Sidebar.js';
+
+const Agenda = lazy(() => import('./pages/Agenda.js').then((m) => ({ default: m.Agenda })));
+const Atelier = lazy(() => import('./pages/Atelier.js').then((m) => ({ default: m.Atelier })));
+const Bases = lazy(() => import('./pages/Bases.js').then((m) => ({ default: m.Bases })));
+const Bientot = lazy(() => import('./pages/Bientot.js').then((m) => ({ default: m.Bientot })));
+const Brief = lazy(() => import('./pages/Brief.js').then((m) => ({ default: m.Brief })));
+const Cerveau = lazy(() => import('./pages/Cerveau.js').then((m) => ({ default: m.Cerveau })));
+const Devis = lazy(() => import('./pages/Devis.js').then((m) => ({ default: m.Devis })));
+const Diagnostics = lazy(() =>
+  import('./pages/Diagnostics.js').then((m) => ({ default: m.Diagnostics })),
+);
+const FeuilleDeRouteOS = lazy(() =>
+  import('./pages/FeuilleDeRouteOS.js').then((m) => ({ default: m.FeuilleDeRouteOS })),
+);
+const Fiche = lazy(() => import('./pages/Fiche.js').then((m) => ({ default: m.Fiche })));
+const FicheRdv = lazy(() => import('./pages/FicheRdv.js').then((m) => ({ default: m.FicheRdv })));
+const Gestion = lazy(() => import('./pages/Gestion.js').then((m) => ({ default: m.Gestion })));
+const Inbox = lazy(() => import('./pages/Inbox.js').then((m) => ({ default: m.Inbox })));
+const Journal = lazy(() => import('./pages/Journal.js').then((m) => ({ default: m.Journal })));
+const Parametres = lazy(() =>
+  import('./pages/Parametres.js').then((m) => ({ default: m.Parametres })),
+);
+const Portefeuille = lazy(() =>
+  import('./pages/Portefeuille.js').then((m) => ({ default: m.Portefeuille })),
+);
+const PresentationDiagnostic = lazy(() =>
+  import('./pages/PresentationDiagnostic.js').then((m) => ({ default: m.PresentationDiagnostic })),
+);
+const Prospection = lazy(() =>
+  import('./pages/Prospection.js').then((m) => ({ default: m.Prospection })),
+);
+const RendezVous = lazy(() =>
+  import('./pages/RendezVous.js').then((m) => ({ default: m.RendezVous })),
+);
+const Routines = lazy(() => import('./pages/Routines.js').then((m) => ({ default: m.Routines })));
+const SiteWeb = lazy(() => import('./pages/SiteWeb.js').then((m) => ({ default: m.SiteWeb })));
+const Tableau = lazy(() => import('./pages/Tableau.js').then((m) => ({ default: m.Tableau })));
 
 const DEFAULT_VIEW = 'brief';
 
@@ -132,7 +147,12 @@ export function App() {
   };
 
   if (error) return <p className="empty">Impossible de joindre l'OS : {error}</p>;
-  if (!instances) return null;
+  if (!instances)
+    return (
+      <p className="empty" role="status" aria-live="polite">
+        Chargement de SIMATIS OS…
+      </p>
+    );
   if (instances.length === 0) return <p className="empty">Aucune instance.</p>;
 
   const current = instances.find((i) => i.slug === route.slug) ?? instances[0];
@@ -191,8 +211,9 @@ export function App() {
       case 'diagnostics':
         return (
           <Diagnostics
-            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            key={`${current.slug}-${route.id ?? ''}`}
             slug={current.slug}
+            ouvrirTest={route.kind === 'test' ? route.id : undefined}
             ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
             onTitre={setTitreOutil}
           />
@@ -223,7 +244,9 @@ export function App() {
       case 'tableau':
         return <Tableau key={current.slug} slug={current.slug} />;
       case 'cerveau':
-        return <Cerveau key={current.slug} slug={current.slug} />;
+        return (
+          <Cerveau key={current.slug} slug={current.slug} seulPartage={current.type !== 'propre'} />
+        );
       case 'gestion':
         return (
           <Gestion
@@ -270,11 +293,20 @@ export function App() {
   };
 
   return (
-    <div className="app">
+    <div className="app" data-view={view}>
       <Sidebar
         instances={instances}
         current={current}
-        view={view}
+        view={
+          view === 'fiche'
+            ? ({
+                contact: 'contacts',
+                entreprise: 'entreprises',
+                affaire: 'pipeline',
+                rdv: 'rendez-vous',
+              }[route.kind ?? ''] ?? view)
+            : view
+        }
         open={menuOpen}
         favoris={favoris}
         compteurs={compteurs}
@@ -323,7 +355,17 @@ export function App() {
           </div>
           {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
         </div>
-        <div className="content">{page()}</div>
+        <div className="content">
+          <Suspense
+            fallback={
+              <div className="empty" role="status" aria-live="polite">
+                Chargement de l’espace…
+              </div>
+            }
+          >
+            {page()}
+          </Suspense>
+        </div>
         {view !== 'portefeuille' && <Console key={current.slug} slug={current.slug} />}
       </main>
     </div>

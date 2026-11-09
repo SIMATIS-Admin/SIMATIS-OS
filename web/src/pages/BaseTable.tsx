@@ -1,8 +1,15 @@
-import { useEffect, useState } from 'react';
+import { OrigineContact } from './OrigineContact.js';
+import { emailGenerique, normaliserLinkedin } from '../../../src/base-vivante/nettoyage.js';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  ajouterALaListeBase,
+  creerListeBase,
   enrichirFicheBase,
+  etiqueterBase,
   etatEnrichissement,
   majConformiteBase,
+  retirerDeLaListeBase,
+  supprimerFichesBase,
   type AlerteBase,
   type EtatBase,
   type EtatEnrichissement,
@@ -10,30 +17,34 @@ import {
   type FicheBase,
   type FiltresBaseWeb,
   type StatutProspectionBase,
-  type ZoneBase,
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { LancerEnrichissement, SuggestionsEnrichissement } from './EnrichissementIA.js';
+import { EntrepriseFiche } from './EntrepriseFiche.js';
+import { EtiquettesFiche } from './EtiquettesFiche.js';
 import { Fenetre } from './Fenetre.js';
 
 export const PAR_PAGE = 50;
 const entier = (n: number) => n.toLocaleString('fr-FR');
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-// One list, five views: each tab is a pair of server filters (zone, status).
-const ONGLETS: { id: string; libelle: string; zone?: ZoneBase; statut?: StatutProspectionBase }[] =
-  [
-    { id: 'toutes', libelle: 'Toutes' },
-    { id: 'a_enrichir', libelle: 'À enrichir', zone: 'a_enrichir' },
-    {
-      id: 'pretes',
-      libelle: 'Prêtes à contacter',
-      zone: 'prospectable',
-      statut: 'jamais_contacte',
-    },
-    { id: 'contactees', libelle: 'Contactées', statut: 'contacte' },
-    { id: 'reponses', libelle: 'Ont répondu', statut: 'a_repondu' },
-  ];
+// Chaque onglet applique ses filtres à la même liste.
+const ONGLETS: (Pick<FiltresBaseWeb, 'canal' | 'zone' | 'statut'> & {
+  id: string;
+  libelle: string;
+})[] = [
+  { id: 'a_enrichir', libelle: 'À enrichir', zone: 'a_enrichir' },
+  { id: 'email', libelle: 'À prospecter par e-mail', canal: 'email' },
+  { id: 'linkedin', libelle: 'À prospecter sur LinkedIn', canal: 'linkedin' },
+  {
+    id: 'pretes',
+    libelle: 'Prêtes à contacter',
+    zone: 'prospectable',
+    statut: 'jamais_contacte',
+  },
+  { id: 'contactees', libelle: 'Contactées', statut: 'contacte' },
+  { id: 'reponses', libelle: 'Ont répondu', statut: 'a_repondu' },
+];
 const ALERTES: [AlerteBase | undefined, string][] = [
   [undefined, 'Toutes alertes'],
   ['recontact', 'Contactés depuis moins de 6 mois'],
@@ -58,8 +69,14 @@ const LIBELLE_RESULTAT: Record<string, string> = {
 const ASTUCE_ENRICHIR =
   "Ces fiches n'ont pas encore de contact (nom et email ou téléphone). Ouvrez une fiche pour le renseigner : une fiche à enrichir n'entre jamais dans un CRM, et devient prête à contacter dès qu'elle a un nom et un moyen de contact valide.";
 
-const libelleZone = (zone: ZoneBase) =>
-  zone === 'prospectable' ? (
+export const libelleZone = (
+  f: Pick<FicheBase, 'zone' | 'nom' | 'linkedin' | 'email' | 'emailInvalide'>,
+) =>
+  f.nom &&
+  normaliserLinkedin(f.linkedin) &&
+  (!f.email || f.emailInvalide || emailGenerique(f.email)) ? (
+    <span className="badge linkedin">LinkedIn</span>
+  ) : f.zone === 'prospectable' ? (
     <span className="badge green">Prospectable</span>
   ) : (
     <span className="badge amber">À enrichir</span>
@@ -117,6 +134,7 @@ function EnrichirFiche({ slug, f, onFait }: { slug: string; f: FicheBase; onFait
     email: f.email ?? '',
     telephone: f.telephone ?? '',
     fonction: f.fonction ?? '',
+    linkedin: f.linkedin ?? '',
   });
   const [occupe, setOccupe] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +169,7 @@ function EnrichirFiche({ slug, f, onFait }: { slug: string; f: FicheBase; onFait
       {champ('email', 'Email')}
       {champ('telephone', 'Téléphone')}
       {champ('fonction', 'Fonction')}
+      {champ('linkedin', 'Profil LinkedIn')}
       {error && (
         <div className="alert amber">
           <Icon name="info" />
@@ -174,13 +193,22 @@ function FicheTiroir({
   slug,
   f,
   onConformite,
+  onSupprimer,
+  occupe,
   onEnrichi,
+  onActualiser,
+  etiquettes,
   onFermer,
 }: {
   slug: string;
   f: FicheBase;
   onConformite: (valeur: string) => void;
+  onSupprimer: () => void;
+  occupe: boolean;
   onEnrichi: () => void;
+  // Reload the list but keep the drawer open (a company link does not move the record).
+  onActualiser: () => void;
+  etiquettes: string[];
   onFermer: () => void;
 }) {
   return (
@@ -188,13 +216,24 @@ function FicheTiroir({
       tiroir
       titre={nomComplet(f)}
       sousTitre={[f.fonction, f.entreprise].filter(Boolean).join(', ')}
+      pied={
+        <button className="btn" disabled={occupe} onClick={onSupprimer}>
+          Supprimer la fiche
+        </button>
+      }
       onFermer={onFermer}
     >
       <dl className="bv-fiche">
         <dt>Zone</dt>
-        <dd>{libelleZone(f.zone)}</dd>
+        <dd>{libelleZone(f)}</dd>
         <dt>Email</dt>
         <dd>{f.email ?? '—'}</dd>
+        {f.emailEntreprise && (
+          <>
+            <dt>E-mail général de {f.entreprise}</dt>
+            <dd>{f.emailEntreprise}</dd>
+          </>
+        )}
         <dt>Téléphone</dt>
         <dd>{f.telephone ?? '—'}</dd>
         <dt>Source</dt>
@@ -208,6 +247,21 @@ function FicheTiroir({
         </dd>
       </dl>
       {f.zone === 'a_enrichir' && <EnrichirFiche key={f.id} slug={slug} f={f} onFait={onEnrichi} />}
+      <EtiquettesFiche
+        key={`etiquettes-${f.id}`}
+        slug={slug}
+        ficheId={f.id}
+        tags={f.tags ?? []}
+        suggestions={etiquettes}
+        onChange={onActualiser}
+      />
+      <EntrepriseFiche
+        key={f.id}
+        slug={slug}
+        ficheId={f.id}
+        entrepriseId={f.entrepriseId ?? null}
+        onChange={onActualiser}
+      />
       <h3 className="bv-sous-titre">Historique</h3>
       <p>
         {LIBELLE_STATUT[f.statutProspection]}
@@ -231,6 +285,7 @@ export function BaseTable({
   onPage,
   onChange,
   onImporter,
+  recherche,
 }: {
   slug: string;
   etat: EtatBase;
@@ -240,15 +295,19 @@ export function BaseTable({
   onPage: (p: number) => void;
   onChange: () => void;
   onImporter: () => void;
+  recherche?: ReactNode;
 }) {
+  const [note, setNote] = useState<FicheBase | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
+  const fichesPrecedentes = useRef(etat.fiches);
   const [ouverte, setOuverte] = useState<string | null>(null);
   const [ia, setIa] = useState<EtatEnrichissement | null>(null);
   const [lancement, setLancement] = useState(false);
   const [tacheIa, setTacheIa] = useState<string | null>(null);
-  const total = etat.compteurs.aEnrichir + etat.compteurs.prospectable;
+  const total = etat.compteurs.total ?? etat.compteurs.aEnrichir + etat.compteurs.prospectable;
 
   // L'enrichissement par IA n'apparaît que si le serveur a une clé OpenAI.
   useEffect(() => {
@@ -263,14 +322,22 @@ export function BaseTable({
   }, [slug, tacheIa]);
 
   // A selection never outlives the rows it was made on.
-  useEffect(() => setSelection(new Set()), [etat.fiches]);
+  useEffect(() => {
+    if (fichesPrecedentes.current !== etat.fiches) setSelection(new Set());
+    fichesPrecedentes.current = etat.fiches;
+  }, [etat.fiches]);
 
   const filtrer = (f: FiltresBaseWeb) => {
     onFiltres({ ...filtres, ...f });
     onPage(0);
   };
-  const actif =
-    ONGLETS.find((o) => o.zone === filtres.zone && o.statut === filtres.statut)?.id ?? null;
+  const baseComplete =
+    !filtres.zone && !filtres.canal && (filtres.tri !== undefined || !filtres.statut);
+  const actif = baseComplete
+    ? 'tous'
+    : (ONGLETS.find(
+        (o) => o.zone === filtres.zone && o.statut === filtres.statut && o.canal === filtres.canal,
+      )?.id ?? null);
 
   const agir = async (f: () => Promise<void>) => {
     setError(null);
@@ -284,9 +351,48 @@ export function BaseTable({
     }
   };
 
+  const supprimer = (ids: string[], confirmation: string) => {
+    if (!window.confirm(confirmation)) return;
+    void agir(async () => {
+      await supprimerFichesBase(slug, ids);
+      if (ouverte && ids.includes(ouverte)) setOuverte(null);
+      setSelection(new Set());
+      if (page > 0 && ids.length === etat.fiches.length) onPage(page - 1);
+      else onChange();
+    });
+  };
+
   const conformite = (ids: string[], valeur: string) =>
     agir(async () => {
       for (const id of ids) await majConformiteBase(slug, id, patchConformite(valeur));
+      onChange();
+    });
+
+  const ajouterAListe = (valeur: string) =>
+    agir(async () => {
+      let id = valeur;
+      if (valeur === 'nouvelle') {
+        const nom = window.prompt('Nom de la nouvelle liste');
+        if (!nom?.trim()) return;
+        id = (await creerListeBase(slug, nom)).id;
+      }
+      const { ajoutees } = await ajouterALaListeBase(slug, id, [...selection]);
+      setInfo(
+        `${ajoutees} contact${ajoutees > 1 ? 's' : ''} ajouté${ajoutees > 1 ? 's' : ''} à la liste.`,
+      );
+      onChange();
+    });
+  const etiqueter = () => {
+    const saisie = window.prompt('Étiquette à ajouter aux contacts sélectionnés');
+    if (!saisie?.trim()) return;
+    void agir(async () => {
+      await etiqueterBase(slug, [...selection], { ajouter: [saisie] });
+      onChange();
+    });
+  };
+  const retirerDeLaListe = (liste: string) =>
+    agir(async () => {
+      await retirerDeLaListeBase(slug, liste, [...selection]);
       onChange();
     });
 
@@ -301,55 +407,233 @@ export function BaseTable({
 
   return (
     <section className="bv-liste" aria-label="Fiches de la base">
-      <div className="bv-onglets" role="tablist">
+      <div className="panel-h bv-liste-entete">
+        <h2>Contacts</h2>
+        <span className="small muted">
+          {entier(etat.total)} fiche{etat.total > 1 ? 's' : ''} affichée{etat.total > 1 ? 's' : ''}
+        </span>
+      </div>
+      <div className="bv-onglets" role="tablist" aria-label="Vues des contacts">
+        <button
+          role="tab"
+          aria-selected={baseComplete}
+          className="bv-onglet"
+          onClick={() => {
+            onFiltres({ tri: 'entreprise' });
+            onPage(0);
+          }}
+        >
+          Base complète ({entier(total)})
+        </button>
         {ONGLETS.map((o) => (
           <button
             key={o.id}
             role="tab"
+            aria-label={o.id === 'email' || o.id === 'linkedin' ? o.libelle : undefined}
             aria-selected={actif === o.id}
             className="bv-onglet"
-            onClick={() => filtrer({ zone: o.zone, statut: o.statut })}
+            onClick={() =>
+              filtrer({ zone: o.zone, statut: o.statut, canal: o.canal, tri: undefined })
+            }
           >
-            {o.libelle}
+            {o.id === 'email' ? 'E-mail' : o.id === 'linkedin' ? 'LinkedIn' : o.libelle}
+            {o.id === 'a_enrichir' && ` (${entier(etat.compteurs.aEnrichir)})`}
           </button>
         ))}
       </div>
       {actif === 'a_enrichir' && (
-        <div className="bv-astuce">
-          <Icon name="info" />
-          <span>{ASTUCE_ENRICHIR}</span>
-        </div>
+        <details className="bv-aide">
+          <summary>
+            <Icon name="info" />
+            Comment enrichir les fiches ?
+          </summary>
+          <p>{ASTUCE_ENRICHIR}</p>
+        </details>
       )}
       <div className="bv-outils">
-        <select
-          className="input"
-          aria-label="Filtrer par alerte"
-          value={filtres.alerte ?? ''}
-          onChange={(e) => filtrer({ alerte: (e.target.value || undefined) as AlerteBase })}
-        >
-          {ALERTES.map(([v, libelle]) => (
-            <option key={libelle} value={v ?? ''}>
-              {libelle}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
-          aria-label="Filtrer par source"
-          value={filtres.provenance ?? ''}
-          onChange={(e) => filtrer({ provenance: e.target.value || undefined })}
-        >
-          <option value="">Toutes sources</option>
-          {etat.provenances.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        <span className="bv-compte small muted">
-          {entier(etat.total)} fiche{etat.total > 1 ? 's' : ''}
-        </span>
+        {recherche}
+        <details className="bv-filtres">
+          <summary className="btn sm">
+            <Icon name="sliders" />
+            Filtres et tri
+            {filtres.alerte ||
+            filtres.provenance ||
+            filtres.liste ||
+            filtres.tag ||
+            (baseComplete && filtres.statut)
+              ? ' · actifs'
+              : ''}
+          </summary>
+          <div className="bv-filtres-options">
+            {baseComplete && (
+              <>
+                <select
+                  className="input"
+                  aria-label="Trier les fiches"
+                  value={filtres.tri ?? 'entreprise'}
+                  onChange={(e) => filtrer({ tri: e.target.value as FiltresBaseWeb['tri'] })}
+                >
+                  <option value="entreprise">Entreprise (A–Z)</option>
+                  <option value="tentatives">Plus de tentatives</option>
+                  <option value="dernier_contact">Dernier contact récent</option>
+                </select>
+                <select
+                  className="input"
+                  aria-label="Filtrer par statut de prospection"
+                  value={filtres.statut ?? ''}
+                  onChange={(e) =>
+                    filtrer({ statut: (e.target.value || undefined) as StatutProspectionBase })
+                  }
+                >
+                  <option value="">Tous les statuts</option>
+                  {Object.entries(LIBELLE_STATUT).map(([valeur, libelle]) => (
+                    <option key={valeur} value={valeur}>
+                      {libelle}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+            <select
+              className="input"
+              aria-label="Filtrer par alerte"
+              value={filtres.alerte ?? ''}
+              onChange={(e) => filtrer({ alerte: (e.target.value || undefined) as AlerteBase })}
+            >
+              {ALERTES.map(([v, libelle]) => (
+                <option key={libelle} value={v ?? ''}>
+                  {libelle}
+                </option>
+              ))}
+            </select>
+            <select
+              className="input"
+              aria-label="Filtrer par source"
+              value={filtres.provenance ?? ''}
+              onChange={(e) => filtrer({ provenance: e.target.value || undefined })}
+            >
+              <option value="">Toutes sources</option>
+              {etat.provenances.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <select
+              className="input"
+              aria-label="Filtrer par liste"
+              value={filtres.liste ?? ''}
+              onChange={(e) => filtrer({ liste: e.target.value || undefined })}
+            >
+              <option value="">Toutes les listes</option>
+              {etat.listes.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nom} ({l.nombre}
+                  {l.type === 'entreprises' ? ' entreprises' : ''})
+                </option>
+              ))}
+            </select>
+            <select
+              className="input"
+              aria-label="Filtrer par étiquette"
+              value={filtres.tag ?? ''}
+              onChange={(e) => filtrer({ tag: e.target.value || undefined })}
+            >
+              <option value="">Toutes les étiquettes</option>
+              {etat.tags.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+        </details>
       </div>
+      {selection.size > 0 && (
+        <div className="bv-selection" role="region" aria-label="Actions sur la sélection">
+          <strong>
+            {selection.size} sélectionnée{selection.size > 1 ? 's' : ''}
+          </strong>
+          {ia?.disponible && (
+            <button className="btn sm" disabled={occupe} onClick={() => setLancement(true)}>
+              Rechercher avec Codex
+            </button>
+          )}
+          <button
+            className="btn sm"
+            disabled={occupe}
+            onClick={() => void conformite([...selection], 'opposition')}
+          >
+            Ne plus contacter
+          </button>
+          <button
+            className="btn sm"
+            disabled={occupe}
+            onClick={() =>
+              supprimer(
+                [...selection],
+                `Supprimer les fiches sélectionnées (${selection.size}) de la Base vivante ?`,
+              )
+            }
+          >
+            Supprimer la sélection
+          </button>
+          <select
+            className="input"
+            aria-label="Ajouter la sélection à une liste"
+            value=""
+            disabled={occupe}
+            onChange={(e) => e.target.value && void ajouterAListe(e.target.value)}
+          >
+            <option value="">Ajouter à une liste…</option>
+            {etat.listes
+              .filter((l) => l.type === 'contacts')
+              .map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nom}
+                </option>
+              ))}
+            <option value="nouvelle">+ Nouvelle liste…</option>
+          </select>
+          {filtres.liste && (
+            <button
+              className="btn sm"
+              disabled={occupe}
+              onClick={() => void retirerDeLaListe(filtres.liste ?? '')}
+            >
+              Retirer de cette liste
+            </button>
+          )}
+          <button className="btn sm" disabled={occupe} onClick={etiqueter}>
+            Étiqueter…
+          </button>
+          <select
+            className="input"
+            aria-label="Exclure la sélection comme"
+            value=""
+            disabled={occupe}
+            onChange={(e) => e.target.value && void conformite([...selection], e.target.value)}
+          >
+            <option value="">Exclure comme…</option>
+            <option value="exclusion:client">Client</option>
+            <option value="exclusion:partenaire">Partenaire</option>
+            <option value="exclusion:concurrent">Concurrent</option>
+          </select>
+          <button
+            className="bv-fermer clair"
+            aria-label="Désélectionner"
+            onClick={() => setSelection(new Set())}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {info && (
+        <p className="small muted" role="status">
+          {info}
+        </p>
+      )}
       {error && (
         <div className="alert amber">
           <Icon name="info" />
@@ -392,6 +676,7 @@ export function BaseTable({
                 <th>Entreprise</th>
                 <th>Coordonnées</th>
                 <th>Dernier contact</th>
+                {baseComplete && <th>Tentatives</th>}
                 <th>Statut</th>
               </tr>
             </thead>
@@ -405,7 +690,7 @@ export function BaseTable({
                   <td className="bv-case" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
-                      aria-label={`Sélectionner ${nomComplet(f)}`}
+                      aria-label={`Sélectionner ${f.nom ? nomComplet(f) : f.entreprise}`}
                       checked={selection.has(f.id)}
                       onChange={() => basculer(f.id)}
                     />
@@ -414,19 +699,43 @@ export function BaseTable({
                     <button className="bv-lien" onClick={() => setOuverte(f.id)}>
                       {nomComplet(f)}
                     </button>
-                    <div className="small muted">{f.fonction ?? ''}</div>
+                    <div className="small muted bv-fonction" title={f.fonction ?? undefined}>
+                      {f.fonction ?? ''}
+                    </div>
+                    <button
+                      className="bv-note"
+                      aria-label={`Note d’origine de ${nomComplet(f)}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNote(f);
+                      }}
+                    >
+                      <Icon name="info" /> Note d’origine
+                    </button>
                   </td>
                   <td>{f.entreprise}</td>
                   <td>
                     {f.email ?? <span className="muted">Pas d'email</span>}
                     <div className="small muted">{f.telephone ?? ''}</div>
+                    {f.linkedin &&
+                      /^https:\/\/(?:[a-z0-9-]+\.)?linkedin\.com\/in\/[^ /]+/i.test(f.linkedin) && (
+                        <a
+                          href={f.linkedin}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Profil LinkedIn
+                        </a>
+                      )}
                   </td>
                   <td>
                     {LIBELLE_STATUT[f.statutProspection]}
                     <div className="small muted">{detailContact(f)}</div>
                   </td>
+                  {baseComplete && <td>{entier(f.nbContacts)}</td>}
                   <td>
-                    {libelleZone(f.zone)}
+                    {libelleZone(f)}
                     {f.alertes.map((a) => (
                       <div key={a.code}>
                         <span className={`badge ${a.bloquante ? 'red' : 'amber'}`}>
@@ -473,45 +782,6 @@ export function BaseTable({
           </button>
         </div>
       )}
-      {selection.size > 0 && (
-        <div className="bv-selection" role="region" aria-label="Actions sur la sélection">
-          <strong>
-            {selection.size} sélectionnée{selection.size > 1 ? 's' : ''}
-          </strong>
-          {ia?.disponible && (
-            <button className="btn sm" disabled={occupe} onClick={() => setLancement(true)}>
-              Enrichir avec l'IA
-            </button>
-          )}
-          <button
-            className="btn sm"
-            disabled={occupe}
-            onClick={() => void conformite([...selection], 'opposition')}
-          >
-            Ne plus contacter
-          </button>
-          <select
-            className="input"
-            aria-label="Exclure la sélection comme"
-            value=""
-            disabled={occupe}
-            onChange={(e) => e.target.value && void conformite([...selection], e.target.value)}
-          >
-            <option value="">Exclure comme…</option>
-            <option value="exclusion:client">Client</option>
-            <option value="exclusion:partenaire">Partenaire</option>
-            <option value="exclusion:concurrent">Concurrent</option>
-          </select>
-          <button
-            className="bv-fermer clair"
-            aria-label="Désélectionner"
-            onClick={() => setSelection(new Set())}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       {lancement && ia && (
         <LancerEnrichissement
           slug={slug}
@@ -535,6 +805,14 @@ export function BaseTable({
         />
       )}
 
+      {note && (
+        <OrigineContact
+          slug={slug}
+          id={note.id}
+          nom={nomComplet(note)}
+          fermer={() => setNote(null)}
+        />
+      )}
       {fiche && (
         <FicheTiroir
           slug={slug}
@@ -543,7 +821,16 @@ export function BaseTable({
             setOuverte(null);
             onChange();
           }}
+          onActualiser={onChange}
+          etiquettes={etat.tags}
           onFermer={() => setOuverte(null)}
+          occupe={occupe}
+          onSupprimer={() =>
+            supprimer(
+              [fiche.id],
+              `Supprimer la fiche « ${nomComplet(fiche)} » de la Base vivante ?`,
+            )
+          }
           onConformite={(v) => void conformite([fiche.id], v)}
         />
       )}

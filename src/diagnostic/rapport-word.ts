@@ -1,5 +1,11 @@
 import { zipSync, strToU8 } from 'fflate';
 import { z } from 'zod';
+import {
+  LOGO_DIAGNOSTIC_COULEUR_PNG_BASE64,
+  LOGO_DIAGNOSTIC_COULEUR_RATIO,
+  LOGO_DIAGNOSTIC_SIMPLIFIE_PNG_BASE64,
+  LOGO_DIAGNOSTIC_SIMPLIFIE_RATIO,
+} from './logo-diagnostic.js';
 import { LOGO_PNG_BASE64, MODELE } from './modele-word.js';
 
 // Contenu du rapport remis au dirigeant : rédigé par Claude, mis en page ici. La mise en page est
@@ -23,7 +29,8 @@ export const contenuRapportSchema = z.object({
       .array(z.object({ quand: texte(60), objectif: texte(300), enPlace: texte(500) }))
       .min(1)
       .max(4),
-    proposition: texte(2000),
+    // Facultatif : une règle de rédaction peut retirer toute proposition du rapport.
+    proposition: texte(2000).optional(),
   }),
   contexte: paragraphes,
   resultats: z.object({
@@ -61,8 +68,8 @@ export const contenuRapportSchema = z.object({
   }),
   conclusion: z.object({
     paragraphes,
-    propositionTitre: texte(200),
-    proposition: paragraphes,
+    propositionTitre: texte(200).optional(),
+    proposition: paragraphes.optional(),
   }),
 });
 export type ContenuRapport = z.infer<typeof contenuRapportSchema>;
@@ -159,6 +166,51 @@ function carte(numero: number, etiquette: string, titre: string, textes: string[
   return `${o}</w:tc></w:tr></w:tbl>`;
 }
 
+const EMU_PAR_CM = 360000;
+
+// Image en ligne (hauteur en cm) ; `id` doit être unique dans la partie Word qui la porte.
+function imageEnLigne(rid: string, id: number, descr: string, hauteurCm: number, ratio: number) {
+  const cy = Math.round(hauteurCm * EMU_PAR_CM);
+  const cx = Math.round(cy * ratio);
+  return (
+    `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>` +
+    `<wp:docPr id="${id}" name="logo-diagnostic-${id}" descr="${esc(descr)}"/>` +
+    '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>' +
+    '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+    '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+    `<pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+    '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>'
+  );
+}
+
+const ALT_LOGO_DIAGNOSTIC = 'Logo du diagnostic d’endurance commerciale';
+
+// Bandeau blanc du haut : logo SIMATIS à gauche, logo du diagnostic (couleurs d'origine) et son slogan à droite.
+function enteteCouverture() {
+  const droite = (contenu: string, apres = 0) =>
+    `<w:p><w:pPr><w:spacing w:after="${apres}"/><w:jc w:val="right"/></w:pPr>${contenu}</w:p>`;
+  const col = (w: number, contenu: string) =>
+    `<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="${w}"/>${NOB}<w:vAlign w:val="top"/></w:tcPr>${contenu}</w:tc>`;
+  return (
+    `<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="9638"/>${TBB}</w:tblPr><w:tblGrid><w:gridCol w:w="4819"/><w:gridCol w:w="4819"/></w:tblGrid><w:tr>` +
+    col(4819, `<w:p><w:r>${MODELE.coverDrawing}</w:r></w:p>`) +
+    col(
+      4819,
+      droite(
+        `<w:r>${imageEnLigne('rId12', 2, ALT_LOGO_DIAGNOSTIC, 1.5, LOGO_DIAGNOSTIC_COULEUR_RATIO)}</w:r>`,
+        40,
+      ) +
+        droite(
+          run('ENDURANCE COMMERCIALE', { font: MAN, color: '0C376B', sz: 18, b: true, sp: 10 }),
+          0,
+        ) +
+        droite(run('Le cap. Le rythme. La durée.', { color: '41A594', sz: 17, i: true })),
+    ) +
+    '</w:tr></w:tbl><w:p><w:pPr><w:spacing w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>'
+  );
+}
+
 function couverture(c: ContenuRapport) {
   const ligne = (
     t: string,
@@ -170,7 +222,7 @@ function couverture(c: ContenuRapport) {
   const mono = { font: 'IBM Plex Mono', color: '9FF7E8', sz: 18, b: true, sp: 12 };
   return (
     `<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="11906"/>${TBB}</w:tblPr><w:tblGrid><w:gridCol w:w="11906"/></w:tblGrid>` +
-    cellule(2700, `<w:p><w:r>${MODELE.coverDrawing}</w:r></w:p>`) +
+    cellule(2700, enteteCouverture()) +
     cellule(
       10400,
       ligne('DIAGNOSTIC D’ENDURANCE COMMERCIALE', { ...mono, after: 300 }) +
@@ -267,8 +319,7 @@ function corpsDocument(c: ContenuRapport) {
       ['QUAND', 'OBJECTIF', 'CE QUI SERA EN PLACE'],
       e.plan.map((p) => [p.quand, p.objectif, p.enPlace]),
     ),
-    h2('Ma proposition'),
-    para(e.proposition),
+    ...(e.proposition ? [h2('Ma proposition'), para(e.proposition)] : []),
   );
   b.push(demarche());
   b.push(h1(`Le contexte ${deEntreprise(c.entreprise)}`), ...c.contexte.map((t) => para(t)));
@@ -304,7 +355,11 @@ function corpsDocument(c: ContenuRapport) {
   if (c.plan.nePasFaire.length > 0)
     b.push(h2('Ce que l’entreprise ne fera pas'), ...c.plan.nePasFaire.map((t) => corps(t)));
   b.push(h1('Conclusion et prochaine étape'), ...c.conclusion.paragraphes.map((t) => para(t)));
-  b.push(h2(c.conclusion.propositionTitre), ...c.conclusion.proposition.map((t) => corps(t, 200)));
+  if (c.conclusion.propositionTitre && c.conclusion.proposition)
+    b.push(
+      h2(c.conclusion.propositionTitre),
+      ...c.conclusion.proposition.map((t) => corps(t, 200)),
+    );
   b.push(
     `<w:p><w:pPr><w:spacing w:after="200" w:before="120" w:line="300"/></w:pPr>${run('Bien à vous,')}</w:p>`,
     `<w:p><w:pPr><w:spacing w:after="40"/></w:pPr>${run('Marc Tabouret', { color: '0C376B', sz: 24, b: true })}</w:p>`,
@@ -331,7 +386,13 @@ const RELS_DOCUMENT =
   '<Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>' +
   '<Relationship Id="rId8" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' +
   '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo.png"/>' +
+  '<Relationship Id="rId12" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo-diagnostic-couleur.png"/>' +
   '<Relationship Id="rId11" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>' +
+  '</Relationships>';
+
+const RELS_PIED =
+  '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+  '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo-diagnostic-simplifie.png"/>' +
   '</Relationships>';
 
 function proprietes(c: ContenuRapport, maintenant: Date) {
@@ -342,6 +403,11 @@ function proprietes(c: ContenuRapport, maintenant: Date) {
 // Fichier Word du rapport : gabarit SIMATIS (couverture, en-tête, pied de page, styles) + contenu.
 export function genererRapportWord(contenu: ContenuRapport, maintenant = new Date()): Uint8Array {
   const document = `${MODELE.documentOuvre}${corpsDocument(contenu)}</w:body></w:document>`;
+  // Pied de page : version simplifiée, petite, avant le texte.
+  const pied = MODELE.footer.replace(
+    '<w:p><w:r>',
+    `<w:p><w:r>${imageEnLigne('rId1', 3, ALT_LOGO_DIAGNOSTIC, 0.6, LOGO_DIAGNOSTIC_SIMPLIFIE_RATIO)}</w:r><w:r><w:t xml:space="preserve">  </w:t></w:r><w:r>`,
+  );
   const entete = MODELE.header.replace('{{ENTREPRISE}}', esc(contenu.entreprise.toUpperCase()));
   const fichiers: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(MODELE.contentTypes),
@@ -362,8 +428,14 @@ export function genererRapportWord(contenu: ContenuRapport, maintenant = new Dat
     'word/_rels/endnotes.xml.rels': strToU8(MODELE.endnotesRels),
     'word/header1.xml': strToU8(entete),
     'word/_rels/header1.xml.rels': strToU8(MODELE.headerRels),
-    'word/footer1.xml': strToU8(MODELE.footer),
-    'word/_rels/footer1.xml.rels': strToU8(MODELE.footerRels),
+    'word/footer1.xml': strToU8(pied),
+    'word/_rels/footer1.xml.rels': strToU8(RELS_PIED),
+    'word/media/logo-diagnostic-couleur.png': Uint8Array.from(
+      Buffer.from(LOGO_DIAGNOSTIC_COULEUR_PNG_BASE64, 'base64'),
+    ),
+    'word/media/logo-diagnostic-simplifie.png': Uint8Array.from(
+      Buffer.from(LOGO_DIAGNOSTIC_SIMPLIFIE_PNG_BASE64, 'base64'),
+    ),
     'word/media/logo.png': Uint8Array.from(Buffer.from(LOGO_PNG_BASE64, 'base64')),
   };
   return zipSync(fichiers, { level: 6 });

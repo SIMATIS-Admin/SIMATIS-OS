@@ -29,6 +29,7 @@ export function Grille({
   onOpen,
   onPatch,
   onJour,
+  onRdv,
 }: {
   jours: string[];
   data: SemaineTaches;
@@ -37,6 +38,7 @@ export function Grille({
   maintenant: Date;
   onOpen: (t: TacheVue) => void;
   onPatch: (t: TacheVue, patch: TacheSaisie) => void;
+  onRdv?: (id: string) => void;
   onJour?: (jour: string) => void;
 }) {
   const toutes = [...data.enRetard, ...data.taches, ...data.sansEcheance];
@@ -138,6 +140,14 @@ export function Grille({
               className="gr-rdv"
               style={{ ...pos, ...couleur(couleurRdv(r)) }}
               href={`#/${slug}/rendez-vous/ouvrir/${r.id}`}
+              onClick={
+                onRdv
+                  ? (e) => {
+                      e.preventDefault();
+                      onRdv(r.id);
+                    }
+                  : undefined
+              }
               title={`${heureParis(r.debut)} – ${heureParis(r.fin)} · ${r.titre}${r.lieu ? ` · ${r.lieu}` : ''}`}
             >
               <small>{heureParis(r.debut)}</small> <b>{r.titre}</b>

@@ -11,7 +11,9 @@ import {
   demanderExportRestitution,
   demanderRestitution,
   enregistrerDiapositivesRestitution,
+  demanderReglesRestitution,
   enregistrerRestitution,
+  marquerDeckFinal,
   pptxRestitutionDe,
   restitutionPrete,
 } from './restitution.js';
@@ -190,6 +192,127 @@ describe('Deck de restitution', () => {
     );
     expect(decision).toBeNull();
   });
+  describe('version finale du deck', () => {
+    const deckPret = async (nom: string, lien = LIEN_1) => {
+      const id = await enCours(nom);
+      await enregistrer(id, lien);
+      await finirAttente(t.app.db, simatis, id);
+      return id;
+    };
+
+    it('cocher pose la finale seule et lance la capitalisation à l étape 5', async () => {
+      const id = await deckPret('Finale Fictive A');
+      const vue = await marquerDeckFinal(t.app.db, simatis, id, LIEN_1, true);
+      expect(vue.demande).toBe('regles_restitution');
+      expect(vue.conversation.at(-1)).toMatchObject({
+        etape: 5,
+        de: 'pilote',
+        texte: 'Capitaliser le deck de restitution final.',
+      });
+      expect((await relire(id)).restitutionLiens.filter((l) => l.finale)).toHaveLength(1);
+    });
+
+    it('déplace la finale sur un autre deck du même projet', async () => {
+      const id = await deckPret('Finale Fictive B');
+      await marquerDeckFinal(t.app.db, simatis, id, LIEN_1, true);
+      await demarrerAttente(t.app.db, simatis, id);
+      await finirAttente(t.app.db, simatis, id);
+      await demanderRestitution(t.app.db, simatis, id);
+      await demarrerAttente(t.app.db, simatis, id);
+      await enregistrer(id, LIEN_2);
+      await finirAttente(t.app.db, simatis, id);
+      await marquerDeckFinal(t.app.db, simatis, id, LIEN_2, true);
+      const liens = (await relire(id)).restitutionLiens;
+      expect(liens.filter((l) => l.finale).map((l) => l.lien)).toEqual([LIEN_2]);
+    });
+
+    it('un nouveau deck garde le drapeau final des anciens', async () => {
+      const id = await deckPret('Finale Fictive C');
+      await marquerDeckFinal(t.app.db, simatis, id, LIEN_1, true);
+      await demarrerAttente(t.app.db, simatis, id);
+      await finirAttente(t.app.db, simatis, id);
+      await demanderRestitution(t.app.db, simatis, id);
+      await demarrerAttente(t.app.db, simatis, id);
+      await enregistrer(id, LIEN_2);
+      const liens = (await relire(id)).restitutionLiens;
+      expect(liens.find((l) => l.lien === LIEN_1)?.finale).toBe(true);
+    });
+
+    it('refuse un lien étranger au projet sans rien modifier', async () => {
+      const id = await deckPret('Finale Fictive D');
+      await expect(marquerDeckFinal(t.app.db, simatis, id, LIEN_2, true)).rejects.toBeInstanceOf(
+        ChatIndisponible,
+      );
+      const relu = await relire(id);
+      expect(relu.restitutionLiens.some((l) => l.finale)).toBe(false);
+      expect(relu.demande).toBeNull();
+    });
+
+    it('garde la case cochée si Claude répond déjà, sans lancer de demande', async () => {
+      const id = await deckPret('Finale Fictive E');
+      await demanderExportRestitution(t.app.db, simatis, id);
+      await demarrerAttente(t.app.db, simatis, id);
+      const vue = await marquerDeckFinal(t.app.db, simatis, id, LIEN_1, true);
+      expect(vue.demande).toBe('restitution_export');
+      expect(vue.restitutionLiens[0]?.finale).toBe(true);
+    });
+
+    it('décocher ne lance rien', async () => {
+      const id = await deckPret('Finale Fictive F');
+      await marquerDeckFinal(t.app.db, simatis, id, LIEN_1, true);
+      await demarrerAttente(t.app.db, simatis, id);
+      await finirAttente(t.app.db, simatis, id);
+      const vue = await marquerDeckFinal(t.app.db, simatis, id, LIEN_1, false);
+      expect(vue.demande).toBeNull();
+      expect(vue.restitutionLiens.some((l) => l.finale)).toBe(false);
+    });
+
+    it('refuse la capitalisation sans deck final', async () => {
+      const id = await deckPret('Finale Fictive G');
+      await expect(demanderReglesRestitution(t.app.db, simatis, id)).rejects.toBeInstanceOf(
+        ChatIndisponible,
+      );
+    });
+
+    // Instance à part : la permission ne se prononce que si un seul projet est en cours.
+    it('pendant la capitalisation, seule la lecture d un artifact est permise', async () => {
+      const instance = await createInstance(t.owner.db, {
+        slug: 'simatis-restitution-regles',
+        nom: 'SIMATIS',
+        type: 'propre',
+      });
+      const p = await createProjet(t.app.db, instance, {
+        nom: 'Finale Fictive H',
+        activite: 'services',
+      });
+      await updateProjet(t.app.db, instance, p.id, { dims });
+      await demanderRapport(t.app.db, instance, p.id);
+      await demarrerAttente(t.app.db, instance, p.id);
+      await withInstance(t.app.db, instance.id, (tx) =>
+        enregistrerRapport(tx, p.id, contenuRapportFictif),
+      );
+      await finirAttente(t.app.db, instance, p.id);
+      await demanderRestitution(t.app.db, instance, p.id);
+      await demarrerAttente(t.app.db, instance, p.id);
+      await withInstance(t.app.db, instance.id, (tx) => enregistrerRestitution(tx, p.id, LIEN_1));
+      await finirAttente(t.app.db, instance, p.id);
+      await marquerDeckFinal(t.app.db, instance, p.id, LIEN_1, true);
+      await demarrerAttente(t.app.db, instance, p.id);
+      const decider = (outil: string, input: Record<string, unknown>) =>
+        withInstance(t.app.db, instance.id, (tx) => autoriserSiRestitution(tx, outil, input));
+      expect(await decider('Artifact', { action: 'read', url: LIEN_2 })).toMatchObject({
+        behavior: 'allow',
+      });
+      for (const [outil, input] of [
+        ['Artifact', { action: 'publish', url: LIEN_1 }],
+        ['Artifact', { action: 'delete', url: LIEN_1 }],
+        ['Edit', {}],
+        ['Bash', {}],
+      ] as const)
+        expect(await decider(outil, { ...input })).toMatchObject({ behavior: 'deny' });
+    });
+  });
+
   describe('export PowerPoint', () => {
     const DIAPOS = [
       { titre: 'Couverture fictive', texte: 'Sous-titre fictif', notes: 'Accueil, 5 min' },

@@ -4,11 +4,19 @@ export type NoeudCerveau = {
   categorie: string;
   statut: string | null;
   concerne?: string | null;
+  genre?: string | null;
+  auteur?: string | null;
+  date?: string | null;
+  reponseA?: string | null;
 };
 export type CarteCerveau = {
   noeuds: NoeudCerveau[];
   liens: { de: string; vers: string }[];
   autresFichiers: number;
+  fichiers?: string[];
+  moi?: string;
+  // Lien du dossier de l'espace partagé sur le kDrive (espace Alpes IA seulement).
+  lienKdrive?: string | null;
   tronquee: boolean;
   misAJour: string;
 };

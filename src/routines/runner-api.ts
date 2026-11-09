@@ -1,3 +1,4 @@
+import type { fileCodex } from '../enrichissement/codex.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Database } from '../db.js';
@@ -7,12 +8,9 @@ import { createToken, resolveToken, revokeToken } from '../mcp/tokens.js';
 import { executions } from '../routines/schema.js';
 import { echangesAjout } from '../inbox/schema.js';
 import { demarrerEchange, EchangeInconnu, EchangeRefuse, finirEchange } from '../inbox/echanges.js';
-import {
-  attentesClaude,
-  ChatIndisponible,
-  demarrerAttente,
-  finirAttente,
-} from '../diagnostic/chat.js';
+import { attentesClaude, ChatIndisponible, demarrerAttente } from '../diagnostic/chat.js';
+import type { DriveDeps } from '../diagnostic/drive.js';
+import { finDeDemande } from '../diagnostic/support.js';
 import { and, eq } from 'drizzle-orm';
 import { currentInstance } from '../db/columns.js';
 import { CampagneInvalide } from '../prospection/campagnes.js';
@@ -39,7 +37,10 @@ const UN_QUART_HEURE = 15 * 60_000;
 // API of the local runner (npm run runner): it picks the requested runs, gets a temporary MCP token
 // limited to the run's instance, launches Claude, then reports the end. Only a « runner » token
 // opens it.
-export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }): void {
+export function registerRunnerApi(
+  app: FastifyInstance,
+  { db, codex, drive }: { db: Database; codex?: ReturnType<typeof fileCodex>; drive?: DriveDeps },
+): void {
   const auth = async (request: FastifyRequest, reply: FastifyReply) => {
     const header = request.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
@@ -50,6 +51,22 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
     }
     return true;
   };
+
+  if (codex) {
+    app.get('/api/runner/codex', async (request, reply) => {
+      if (!(await auth(request, reply))) return reply;
+      return { travail: codex.prendre() };
+    });
+    app.post('/api/runner/codex', async (request, reply) => {
+      if (!(await auth(request, reply))) return reply;
+      const corps = z
+        .object({ id: z.string().uuid(), ok: z.boolean(), resultat: z.unknown() })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Résultat Codex invalide' });
+      codex.finir(corps.data.id, corps.data.resultat, corps.data.ok);
+      return { ok: true };
+    });
+  }
 
   const presence = z.object({
     nom: z.string().trim().min(1).max(200),
@@ -151,7 +168,7 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
   // Conversations du diagnostic en attente de Claude (un projet à la fois, comme l'Inbox).
   app.get('/api/runner/diagnostic/attentes', async (request, reply) => {
     if (!(await auth(request, reply))) return reply;
-    return attentesClaude(db);
+    return attentesClaude(db, drive);
   });
 
   app.post<Route>('/api/runner/diagnostic/attentes/:id/demarrer', async (request, reply) => {
@@ -182,7 +199,7 @@ export function registerRunnerApi(app: FastifyInstance, { db }: { db: Database }
     const instance = parsed.success ? await getInstanceBySlug(db, parsed.data.instance) : null;
     if (!parsed.success || !instance) return reply.code(404).send({ error: 'Instance inconnue' });
     if (parsed.data.tokenId) await revokeToken(db, parsed.data.tokenId);
-    await finirAttente(db, instance, request.params.id, parsed.data.erreur);
+    await finDeDemande(db, instance, request.params.id, parsed.data.erreur);
     return { ok: true };
   });
 

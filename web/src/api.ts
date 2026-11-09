@@ -139,6 +139,8 @@ export type FreinVma = {
   signe?: string;
 };
 export type TestVma = {
+  contactId?: string | null;
+  opportuniteId?: string | null;
   id: string;
   entrepriseId: string | null;
   entrepriseNom: string;
@@ -277,6 +279,39 @@ export type NouveauTestVma = {
   confirmerSemestre?: boolean;
 };
 
+export type ContactVma = TestVma & {
+  contactId: string | null;
+  contactPrenom: string | null;
+  contactNomFamille: string | null;
+  contactPoste: string | null;
+  contactTelephone: string | null;
+  origine: 'inscription' | 'invitation';
+  consentement: { accepteLe: string; version: string; texte: string; retireLe?: string } | null;
+  contactLie: {
+    id: string;
+    nom: string;
+    email: string | null;
+    fonction: string | null;
+    telephone: string | null;
+    source: string;
+  } | null;
+  entrepriseLiee: { id: string; nom: string; source: string } | null;
+};
+export const fetchContactsVma = (slug: string) => getJson<ContactVma[]>(inst(slug, 'vma/contacts'));
+export const creerLienProspectionVma = (slug: string) =>
+  sendJson<{ lien: string; expireLe: string }>('POST', inst(slug, 'vma/liens-prospection'), {});
+export const rattacherVma = (
+  slug: string,
+  id: string,
+  choix: { entrepriseId?: string | null; contactId?: string | null; opportuniteId?: string | null },
+) => sendJson<{ ok: true }>('PATCH', inst(slug, `vma/tests/${encodeURIComponent(id)}/crm`), choix);
+export const retirerAccordVma = (slug: string, id: string) =>
+  sendJson<{ ok: true }>(
+    'POST',
+    inst(slug, `vma/tests/${encodeURIComponent(id)}/retirer-accord`),
+    {},
+  );
+
 export const fetchTestsVma = (slug: string) => getJson<TestVma[]>(inst(slug, 'vma/tests'));
 // Le mail d'invitation part à la création quand une adresse est donnée : null sans adresse.
 export type EnvoiInvitation = { statut: 'envoye' | 'simule' | 'echec'; raison?: string };
@@ -315,15 +350,19 @@ export type OperationCerveau =
       corps: string;
       enReponseA?: string;
     }
-  | { espace: 'partage'; type: 'actualiser' };
+  | { espace: 'partage'; type: 'actualiser' }
+  | { espace: 'partage'; type: 'chercher'; requete: string }
+  | { espace: 'partage'; type: 'lire_messages'; chemins: string[] };
 // Lire, enregistrer une note, ajouter une idée, déposer un message : exécuté sur le dossier du Drive
-// (SIMATIS) ou dans l'espace partagé kDrive (Partagé).
+// (SIMATIS) ou dans l'espace partagé kDrive (Alpes IA).
 export const operationCerveau = (slug: string, operation: OperationCerveau) =>
   sendJson<{
     chemin?: string;
     contenu?: string;
     empreinte?: string;
     lectureSeule?: string | null;
+    resultats?: { chemin: string; extraits: string[] }[];
+    textes?: Record<string, string>;
   }>('POST', inst(slug, 'cerveau/operations'), operation);
 export const fetchConsole = (slug: string) => getJson<ConsoleOS>(inst(slug, 'console'));
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
@@ -378,6 +417,7 @@ export const createContact = (
     nom: string;
     fonction?: string;
     email?: string;
+    telephone?: string;
     entrepriseId?: string | null;
     lierA?: RefFiche;
   },
@@ -1049,6 +1089,19 @@ export type Evenement = {
   at: string;
   origine: 'hubspot' | 'os';
   compte?: string;
+  mail?: {
+    fil: string;
+    objet: string;
+    de: string | null;
+    a: string | null;
+    cc?: string | null;
+    sens: 'envoye' | 'recu';
+    reponse: boolean;
+    lien?: string;
+    html?: string;
+    corps?: string;
+    charge?: boolean;
+  };
 };
 export type RdvLie = { id: string; titre: string; debut: string | null; compteRendu: boolean };
 export type LienFiche = { id: string; nom: string; principal: boolean };
@@ -1074,6 +1127,7 @@ export type FicheDetail = {
   aVenir: TacheVue[];
   rendezVous: RdvLie[];
   // Espace SIMATIS, organisation ou contact seulement.
+  testsVma?: { id: string; nom: string; date: string | null }[];
   diagnostics?: {
     id: string;
     nom: string;
@@ -1095,8 +1149,10 @@ export const fetchFiche = (slug: string, kind: KindFiche, id: string) =>
   getJson<FicheDetail>(fiche(slug, kind, id));
 // Mails exchanged with the record, read from the instance's mailbox (apart from the card: slow).
 export type MailsFiche = { mails: Evenement[]; adresses: number; message?: string };
-export const fetchMailsFiche = (slug: string, kind: KindFiche, id: string) =>
-  getJson<MailsFiche>(`${fiche(slug, kind, id)}/mails`);
+export const fetchMailsFiche = (slug: string, kind: KindFiche, id: string, message?: string) =>
+  getJson<MailsFiche>(
+    `${fiche(slug, kind, id)}/mails${message ? `?message=${encodeURIComponent(message)}` : ''}`,
+  );
 export const patchFiche = (
   slug: string,
   kind: KindFiche,
@@ -1272,6 +1328,8 @@ export type ProjetDiag = {
     | 'rapport'
     | 'restitution'
     | 'restitution_export'
+    | 'revue_exporter'
+    | 'dossier_exporter'
     | 'capitalisation_proposer'
     | 'capitalisation_enregistrer'
     | 'entretien'
@@ -1292,11 +1350,17 @@ export type ProjetDiag = {
   rapportNom: string | null;
   rapportLienStatut: 'aucun' | 'en_cours' | 'pret';
   rapportLien: string | null;
-  rapportLiens: { lien: string; le: string; version?: number }[];
+  rapportLiens: { lien: string; le: string; version?: number; finale?: boolean }[];
   rapportVersions: { version: number; le: string }[];
+  // Export de la revue validée en artifact claude.ai, à rouvrir dans Claude Chat.
+  revueExportStatut: 'aucun' | 'en_cours' | 'pret';
+  revueExportLien: string | null;
+  // Dossier de travail du rapport en artifact claude.ai, à rouvrir dans Claude Chat.
+  dossierExportStatut: 'aucun' | 'en_cours' | 'pret';
+  dossierExportLien: string | null;
   restitutionStatut: 'aucun' | 'en_cours' | 'pret';
   restitutionLien: string | null;
-  restitutionLiens: { lien: string; le: string }[];
+  restitutionLiens: { lien: string; le: string; finale?: boolean }[];
   restitutionAvecProposition: boolean;
   // PowerPoint exporté depuis le deck : disponible au téléchargement, avec la date de l'export.
   aPptx: boolean;
@@ -1395,6 +1459,101 @@ export const importerRapportDiag = (
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/importer`),
     word,
   );
+// Version finale du rapport : le Google Doc coché sert de référence pour rédiger les suivants.
+export const marquerRapportFinal = (slug: string, id: string, lien: string, finale: boolean) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/finale`),
+    { lien, finale },
+  );
+// Réglage du module Diagnostic : relire les deux derniers rapports finaux avant de rédiger.
+export type ReglagesDiag = {
+  relireFinaux: boolean;
+  relireSupports: boolean;
+  relireRestitutions: boolean;
+};
+export const reglagesDiagnostic = (slug: string) =>
+  getJson<ReglagesDiag>(inst(slug, 'diagnostic/reglages'));
+export const majReglagesDiagnostic = (slug: string, reglage: Partial<ReglagesDiag>) =>
+  sendJson<ReglagesDiag>('PUT', inst(slug, 'diagnostic/reglages'), reglage);
+// Préparation de la revue par Claude (étape 3) : il propose des textes, le pilote garde ses choix.
+export const preparerRevueDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/revue/preparer`),
+    {},
+  );
+// Export de la revue validée en artifact (étape 3) : Claude le crée, le lien s'ouvre dans Claude Chat.
+export const exporterRevueDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/revue/exporter`),
+    {},
+  );
+// Dossier de travail du rapport en artifact (étape 4) : Claude le crée, le lien s'ouvre dans Claude Chat.
+export const preparerDossierRapportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/dossier`),
+    {},
+  );
+// Capitalisation des règles à partir de la revue validée (étape 3).
+export const capitaliserAnalyseDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/revue/capitaliser`),
+    {},
+  );
+// Capitalisation des règles à partir du support final archivé (étape 1).
+export const capitaliserSupportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/support/capitaliser`),
+    {},
+  );
+// Règles de rédaction apprises (journal), capitalisation à la demande et annulation d'une règle.
+export type EntreeReglesDiag = {
+  id: string;
+  le: string;
+  projetId: string;
+  fiche: 'rapport' | 'communes' | 'support' | 'analyse';
+  action: 'ajoutée' | 'durcie' | 'modifiée' | 'signalée' | 'annulée';
+  libelle: string;
+  avant: string | null;
+  apres: string | null;
+  origine: string;
+  statut: 'actif' | 'annule';
+  motifRefus: string | null;
+};
+export const journalReglesDiag = (slug: string) =>
+  getJson<EntreeReglesDiag[]>(inst(slug, 'diagnostic/regles-journal'));
+export const capitaliserRapportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/capitaliser`),
+    {},
+  );
+export const marquerDeckFinalDiag = (slug: string, id: string, lien: string, finale: boolean) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/finale`),
+    { lien, finale },
+  );
+export const capitaliserDeckDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/regles`),
+    {},
+  );
+export const annulerRegleDiag = (slug: string, id: string, entree: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(
+      slug,
+      `diagnostic/projets/${encodeURIComponent(id)}/regles-journal/${encodeURIComponent(entree)}/annuler`,
+    ),
+    {},
+  );
 // Correction d'une réponse lue : le profil se recalcule côté OS.
 export const corrigerReponseDiag = (
   slug: string,
@@ -1418,6 +1577,13 @@ export const demandeRapportDiag = (slug: string, id: string) =>
   sendJson<ProjetDiag>(
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/produire`),
+    {},
+  );
+// Cadrage du rapport (étape 4) : Claude pose ses questions et propose le plan avant la production.
+export const cadrerRapportDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/rapport/cadrer`),
     {},
   );
 // Demande le deck de restitution du rapport (étape 5).
@@ -1533,6 +1699,7 @@ export type ResumeImportBase = Pick<
   'id' | 'nomFichier' | 'feuille' | 'provenance' | 'mandat' | 'statut' | 'creeLe' | 'rapport'
 > & { compteurs: CompteursImportBase };
 export type FicheBase = {
+  linkedin?: string | null;
   id: string;
   zone: ZoneBase;
   entreprise: string;
@@ -1541,6 +1708,7 @@ export type FicheBase = {
   // Empty while the record only knows its company (« à enrichir »).
   nom: string;
   email: string | null;
+  emailEntreprise?: string | null;
   telephone: string | null;
   fonction: string | null;
   provenance: string;
@@ -1555,6 +1723,8 @@ export type FicheBase = {
   exclusion: ExclusionBase | null;
   emailInvalide: boolean;
   crmMandat: string | null;
+  entrepriseId?: string | null;
+  tags?: string[];
   alertes: { code: string; libelle: string; bloquante: boolean }[];
 };
 export type StatutProspectionBase = 'jamais_contacte' | 'contacte' | 'a_repondu';
@@ -1562,17 +1732,30 @@ export type ExclusionBase = 'client' | 'partenaire' | 'concurrent';
 export type AlerteBase =
   'recontact' | 'opposition' | 'email_invalide' | 'exclusion' | 'deja_en_crm';
 export type FiltresBaseWeb = {
+  tri?: 'entreprise' | 'tentatives' | 'dernier_contact';
+  canal?: 'email' | 'linkedin';
   zone?: ZoneBase;
   statut?: StatutProspectionBase;
   alerte?: AlerteBase;
   provenance?: string;
+  liste?: string;
+  tag?: string;
   q?: string;
+};
+export type ResumeListeBase = {
+  id: string;
+  nom: string;
+  type: 'contacts' | 'entreprises';
+  mandat: string | null;
+  nombre: number;
 };
 export type EtatBase = {
   fiches: FicheBase[];
   total: number;
-  compteurs: { aEnrichir: number; prospectable: number };
+  compteurs: { aEnrichir: number; prospectable: number; total?: number };
   provenances: string[];
+  listes: ResumeListeBase[];
+  tags: string[];
   imports: ResumeImportBase[];
 };
 const paramsBase = (filtres: FiltresBaseWeb) => {
@@ -1591,17 +1774,293 @@ export const urlExportBase = (slug: string, filtres: FiltresBaseWeb = {}) => {
   const suite = paramsBase(filtres).toString();
   return inst(slug, `base/export.csv${suite ? `?${suite}` : ''}`);
 };
+export type ApercuWaalaxy = {
+  retenues: number;
+  parties: number;
+  ecartees: { opposition: number; exclusion: number; sansProfil: number; alerte: number };
+  nonVerifiees: number;
+};
+export const fetchApercuWaalaxy = (slug: string, filtres: FiltresBaseWeb = {}) => {
+  const suite = paramsBase(filtres).toString();
+  return getJson<ApercuWaalaxy>(inst(slug, `base/export-waalaxy${suite ? `?${suite}` : ''}`));
+};
+export const urlExportWaalaxy = (slug: string, filtres: FiltresBaseWeb, partie: number) => {
+  const params = paramsBase(filtres);
+  params.set('partie', String(partie));
+  return inst(slug, `base/export-waalaxy.csv?${params.toString()}`);
+};
 export const actualiserHistoriqueBase = (slug: string) =>
   sendJson<{ verifiees: number; trouvees: number }>(
     'POST',
     inst(slug, 'base/historique/actualiser'),
     {},
   );
+export const supprimerFichesBase = (slug: string, ids: string[]) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, 'base/fiches'), { ids });
+export type SecteurWeb = { code: string; libelle: string };
+export type CriteresWeb = {
+  q?: string;
+  secteurs: SecteurWeb[];
+  departements: string[];
+  effectifs: string[];
+  categories: string[];
+  caMin?: number;
+  caMax?: number;
+};
+export type ResultatEntrepriseWeb = EntrepriseAnnuaireWeb & {
+  finances: { annee: number; ca: number | null; resultat: number | null }[];
+};
+export type PageEntreprisesWeb = {
+  resultats: ResultatEntrepriseWeb[];
+  total: number;
+  pages: number;
+  page: number;
+  dejaDansLaBase: string[];
+};
+export const interpreterEntreprisesBase = (slug: string, demande: string) =>
+  sendJson<{ criteres: CriteresWeb; nonTraites: string[]; resume: string }>(
+    'POST',
+    inst(slug, 'base/entreprises/interpreter'),
+    { demande },
+  );
+export const rechercherEntreprisesBase = (slug: string, criteres: CriteresWeb, page = 1) =>
+  sendJson<PageEntreprisesWeb>('POST', inst(slug, 'base/entreprises/recherche'), {
+    criteres,
+    page,
+  });
+export const ajouterEntreprisesBase = (slug: string, sirens: string[], liste?: string) =>
+  sendJson<{ ajoutees: number; existantes: number; introuvables: number }>(
+    'POST',
+    inst(slug, 'base/entreprises/ajouter'),
+    { sirens, liste },
+  );
+export const creerListeBase = (
+  slug: string,
+  nom: string,
+  mandat?: string | null,
+  type: 'contacts' | 'entreprises' = 'contacts',
+) => sendJson<ResumeListeBase>('POST', inst(slug, 'base/listes'), { nom, mandat, type });
+export type LigneEntrepriseBase = {
+  id: string;
+  siren: string;
+  nom: string;
+  ville: string | null;
+  departement: string | null;
+  naf: string | null;
+  effectif: string | null;
+  categorie: string | null;
+  ca: number | null;
+  nbContacts: number;
+  listes: string[];
+  signal: { gravite: GraviteSignal; nature: string; date: string } | null;
+  signauxLe: string | null;
+};
+export type GraviteSignal = 'alerte' | 'attention' | 'info';
+export type SignalWeb = {
+  id: string;
+  date: string;
+  famille: string;
+  nature: string;
+  gravite: GraviteSignal;
+  detail: string | null;
+  url: string | null;
+};
+export type SignauxWeb = { signaux: SignalWeb[]; verifieLe: string | null };
+export const fetchSignauxEntreprise = (slug: string, id: string) =>
+  getJson<SignauxWeb>(inst(slug, `base/entreprises/${id}/signaux`));
+export const actualiserSignauxEntreprise = (slug: string, id: string) =>
+  sendJson<SignauxWeb & { nouveaux: number }>(
+    'POST',
+    inst(slug, `base/entreprises/${id}/signaux/actualiser`),
+    {},
+  );
+export const actualiserSignauxPlusieurs = (slug: string, ids: string[]) =>
+  sendJson<{ verifiees: number; nouveaux: number; echecs: number }>(
+    'POST',
+    inst(slug, 'base/entreprises/signaux/actualiser'),
+    { ids },
+  );
+export type AlerteSignauxWeb = {
+  active: boolean;
+  heure: string;
+  dernierJour?: string;
+  bilan?: string;
+};
+export const lireAlerteSignaux = (slug: string) =>
+  getJson<AlerteSignauxWeb>(inst(slug, 'base/signaux/routine'));
+export const enregistrerAlerteSignaux = (
+  slug: string,
+  reglages: { active: boolean; heure: string },
+) => sendJson<AlerteSignauxWeb>('PUT', inst(slug, 'base/signaux/routine'), reglages);
+export const lancerAlerteSignaux = (slug: string) =>
+  sendJson<{
+    verifiees: number;
+    nouveaux: number;
+    deposes: number;
+    echecs: number;
+    bilan: string;
+  }>('POST', inst(slug, 'base/signaux/routine/lancer'), {});
+export const fetchEntreprisesBase = (
+  slug: string,
+  { q, liste, signal, page }: { q?: string; liste?: string; signal?: string; page?: number },
+) => {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set('q', q.trim());
+  if (liste) params.set('liste', liste);
+  if (signal) params.set('signal', signal);
+  if (page) params.set('page', String(page));
+  const suite = params.toString();
+  return getJson<{ entreprises: LigneEntrepriseBase[]; total: number }>(
+    inst(slug, `base/entreprises${suite ? `?${suite}` : ''}`),
+  );
+};
+export type PointCarteWeb = {
+  id: string;
+  siren: string;
+  nom: string;
+  ville: string | null;
+  latitude: number;
+  longitude: number;
+  nbContacts: number;
+};
+export const fetchCarteEntreprises = (
+  slug: string,
+  { q, liste }: { q?: string; liste?: string },
+) => {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set('q', q.trim());
+  if (liste) params.set('liste', liste);
+  const suite = params.toString();
+  return getJson<{ points: PointCarteWeb[]; sansCoordonnees: number; total: number }>(
+    inst(slug, `base/entreprises/carte${suite ? `?${suite}` : ''}`),
+  );
+};
+export type EtapeTourneeWeb = {
+  id: string | null;
+  nom: string;
+  ville: string | null;
+  adresse: string | null;
+  latitude: number;
+  longitude: number;
+  distanceM: number;
+  dureeS: number;
+};
+export type TourneeWeb = {
+  etapes: EtapeTourneeWeb[];
+  distanceM: number;
+  dureeS: number;
+  trace: [number, number][];
+  source: 'routes' | 'estimation';
+  ignorees: string[];
+};
+export const calculerTourneeBase = (slug: string, ids: string[], depart?: string) =>
+  sendJson<TourneeWeb>('POST', inst(slug, 'base/tournee'), { ids, depart: depart || undefined });
+export const ajouterEntreprisesALaListeBase = (slug: string, id: string, ids: string[]) =>
+  sendJson<{ ajoutees: number }>('POST', inst(slug, `base/listes/${id}/entreprises`), { ids });
+export const retirerEntreprisesDeLaListeBase = (slug: string, id: string, ids: string[]) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/listes/${id}/entreprises`), { ids });
+export const majListeBase = (
+  slug: string,
+  id: string,
+  patch: { nom?: string; mandat?: string | null },
+) => sendJson<{ ok: true }>('PATCH', inst(slug, `base/listes/${id}`), patch);
+export const supprimerListeBase = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/listes/${id}`), {});
+export const ajouterALaListeBase = (slug: string, id: string, ids: string[]) =>
+  sendJson<{ ajoutees: number }>('POST', inst(slug, `base/listes/${id}/fiches`), { ids });
+export const retirerDeLaListeBase = (slug: string, id: string, ids: string[]) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/listes/${id}/fiches`), { ids });
+export const etiqueterBase = (
+  slug: string,
+  ids: string[],
+  etiquettes: { ajouter?: string[]; retirer?: string[] },
+) => sendJson<{ ok: true }>('POST', inst(slug, 'base/tags'), { ids, ...etiquettes });
+export type EntrepriseAnnuaireWeb = {
+  siren: string;
+  nom: string;
+  naf: string | null;
+  categorie: string | null;
+  effectif: string | null;
+  adresse: string | null;
+  ville: string | null;
+  active: boolean;
+};
+export type EntrepriseBaseWeb = EntrepriseAnnuaireWeb & {
+  id: string;
+  formeJuridique: string | null;
+  creeLe: string | null;
+  oppositionDiffusion: boolean;
+  etablissementsOuverts: number | null;
+  finances: { annee: number; ca: number | null; resultat: number | null }[];
+  dirigeants: { nom: string; fonction: string | null; societe: boolean }[];
+};
+export const fetchCandidatsEntreprise = (slug: string, ficheId: string) =>
+  getJson<{ candidats: EntrepriseAnnuaireWeb[] }>(
+    inst(slug, `base/fiches/${ficheId}/entreprise/candidats`),
+  );
+export const rattacherEntrepriseBase = (slug: string, ficheId: string, siren: string) =>
+  sendJson<{ entreprise: EntrepriseBaseWeb; rattachees: number }>(
+    'POST',
+    inst(slug, `base/fiches/${ficheId}/entreprise`),
+    { siren },
+  );
+export const detacherEntrepriseBase = (slug: string, ficheId: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `base/fiches/${ficheId}/entreprise`), {});
+export const fetchEntrepriseBase = (slug: string, id: string) =>
+  getJson<EntrepriseBaseWeb>(inst(slug, `base/entreprises/${id}`));
 export const majConformiteBase = (
   slug: string,
   id: string,
   patch: { opposition?: boolean; exclusion?: ExclusionBase | null; emailInvalide?: boolean },
 ) => sendJson<{ ok: true }>('PATCH', inst(slug, `base/fiches/${id}`), patch);
+export type RoutineBrouillonsVue = {
+  active: boolean;
+  heure: string;
+  dernierJour?: string;
+  bilan?: string;
+};
+export const lireRoutineBrouillons = (slug: string) =>
+  getJson<RoutineBrouillonsVue>(inst(slug, 'prospection/routine'));
+export const sauverRoutineBrouillons = (slug: string, { active, heure }: RoutineBrouillonsVue) =>
+  sendJson<RoutineBrouillonsVue>('PUT', inst(slug, 'prospection/routine'), { active, heure });
+
+export type RoutineProspectsVue = {
+  active: boolean;
+  consignes: string;
+  nombre: number;
+  heure: string;
+  dernierJour?: string;
+  bilan?: string;
+};
+
+export const lireRoutineProspects = (slug: string) =>
+  getJson<RoutineProspectsVue>(inst(slug, 'base/recherche/routine'));
+
+export const sauverRoutineProspects = (
+  slug: string,
+  { active, consignes, nombre, heure }: RoutineProspectsVue,
+) =>
+  sendJson<RoutineProspectsVue>('PUT', inst(slug, 'base/recherche/routine'), {
+    active,
+    consignes,
+    nombre,
+    heure,
+  });
+
+export type ProspectRecherche = {
+  entreprise: string;
+  prenom: string;
+  nom: string;
+  fonction: string;
+  email: string | null;
+  linkedin: string | null;
+  source: string;
+  qualification: string;
+};
+
+export const rechercherProspectsBase = (slug: string, consignes: string, nombre: number) =>
+  sendJson<ProspectRecherche[]>('POST', inst(slug, 'base/recherche'), { consignes, nombre });
+
 export const creerImportBase = (
   slug: string,
   payload: {
@@ -1641,6 +2100,7 @@ export type ApportContactBase = {
   email?: string;
   telephone?: string;
   fonction?: string;
+  linkedin?: string;
 };
 export const enrichirFicheBase = (slug: string, id: string, apport: ApportContactBase) =>
   sendJson<{ zone: ZoneBase }>('POST', inst(slug, `base/fiches/${id}/enrichir`), apport);
@@ -1827,6 +2287,7 @@ export type CampagneResume = {
   statut: StatutCampagne;
   creeLe: string;
   brouillons: number;
+  envoyes?: number;
   resultat: ResultatCampagne | null;
 };
 export type VueProspection = {
@@ -1980,6 +2441,12 @@ export const reformulerBrouillonsCampagne = (
     'POST',
     inst(slug, `prospection/campagnes/${encodeURIComponent(campagneId)}/reformuler`),
     { consigne, ...(ids ? { ids } : {}) },
+  );
+export const abandonnerCampagne = (slug: string, id: string) =>
+  sendJson<{ abandonnees: number }>(
+    'DELETE',
+    inst(slug, `prospection/campagnes/${encodeURIComponent(id)}`),
+    {},
   );
 export const abandonnerCampagnesEnCours = (slug: string) =>
   sendJson<{ abandonnees: number }>('DELETE', inst(slug, 'prospection/campagnes-en-cours'), {});
@@ -2175,6 +2642,67 @@ export const fetchRevenuGestion = (slug: string, id: string) =>
   getJson<RevenuGestion>(inst(slug, `gestion/revenus/${id}`));
 export const fetchFacturesAEmettre = (slug: string, jusqua: string) =>
   getJson<OccurrenceRevenu[]>(inst(slug, `gestion/factures-a-emettre?jusqua=${jusqua}`));
+export type SorteLigneFacture = 'recurrent' | 'commission' | 'frais' | 'ik';
+export type LigneFacture = {
+  cle: string;
+  sorte: SorteLigneFacture;
+  libelle: string;
+  date: string;
+  montantHtCents: number | null;
+  tvaCents: number | null;
+  certitude: 'certaine' | 'probable' | 'hypothese' | null;
+  avertissement: string | null;
+};
+export type FactureAEmettre = {
+  mandat: string;
+  emissionPrevue: string;
+  delaiJours: number | null;
+  delaiMandatJours: number | null;
+  encaissementAttendu: string | null;
+  totalHtCents: number;
+  lignes: LigneFacture[];
+  avertissements: string[];
+};
+export type FacturesAEmettre = { factures: FactureAEmettre[]; sansMandat: LigneFacture[] };
+export type LigneFigee = {
+  cle: string;
+  sorte: SorteLigneFacture;
+  libelle: string;
+  date: string;
+  montantHtCents: number;
+  tvaCents: number | null;
+};
+export type FactureEmise = {
+  id: string;
+  mandat: string;
+  numero: string;
+  dateEmission: string;
+  delaiJours: number | null;
+  totalHtCents: number;
+  etat: 'emise' | 'encaissee';
+  dateEncaissement: string | null;
+  lignes: LigneFigee[];
+};
+export type EmissionFacture = {
+  mandat: string;
+  numero: string;
+  dateEmission: string;
+  exclure: string[];
+};
+export const fetchFacturesEmises = (slug: string) =>
+  getJson<FactureEmise[]>(inst(slug, 'gestion/factures/emises'));
+export const emettreFacture = (slug: string, e: EmissionFacture) =>
+  sendJson<FactureEmise>('POST', inst(slug, 'gestion/factures/emettre'), e);
+export const encaisserFacture = (slug: string, id: string, dateEncaissement: string) =>
+  sendJson<FactureEmise>('POST', inst(slug, `gestion/factures/${id}/encaisser`), {
+    dateEncaissement,
+  });
+export const fetchFactures = (slug: string) =>
+  getJson<FacturesAEmettre>(inst(slug, 'gestion/factures'));
+export const poserDelaiMandat = (slug: string, mandat: string, delaiPaiementJours: number | null) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, `gestion/mandats/${mandat}/reglages`), {
+    delaiPaiementJours,
+  });
 export const creerRevenuGestion = (slug: string, r: Partial<NouveauRevenu>) =>
   sendJson<RevenuGestion>('POST', inst(slug, 'gestion/revenus'), r);
 export const modifierRevenuGestion = (slug: string, id: string, r: Partial<NouveauRevenu>) =>
@@ -2205,6 +2733,23 @@ export type ReglagesGestion = {
   seuilMode: 'aucun' | 'montant' | 'bfr';
   seuilCents: number | null;
   delaiPaiementJours: number | null;
+  scenarios: Record<ScenarioTresorerie, ConfigScenarioTresorerie>;
+  remuneration: RemunerationGestion | null;
+};
+export type ScenarioTresorerie = 'securise' | 'central' | 'ambitieux';
+export type CertitudeTresorerie = 'certaine' | 'probable' | 'hypothese';
+// Ce que retient un scénario : les prévisions de recettes selon leur certitude, et le pipe.
+export type ConfigScenarioTresorerie = {
+  certitudes: CertitudeTresorerie[];
+  pipe: 'aucun' | 'pondere' | 'total' | 'chaud';
+};
+export type RemunerationGestion = {
+  actif: boolean;
+  base: 'brut' | 'net' | 'cout';
+  montantCents: number;
+  tauxSalarial: number;
+  tauxPatronal: number;
+  periodicite: 'mensuelle' | 'trimestrielle';
 };
 export type MouvementTresorerie = {
   date: string;
@@ -2224,6 +2769,20 @@ export type PeriodeTresorerie = {
   soldeFinCents: number | null;
   variationCumuleeCents: number;
   mouvements: MouvementTresorerie[];
+};
+// Affaire ouverte du Pipeline vue par la trésorerie ; `statut` dit pourquoi elle est écartée.
+export type AffairePipe = {
+  id: string;
+  titre: string;
+  entreprise: string | null;
+  probabilite: number | null;
+  totalCents: number;
+  recurrent: boolean;
+  mensuelCents: number | null;
+  dureeMois: number;
+  signature: string | null;
+  surcharge: boolean;
+  statut: 'comptee' | 'sans_date' | 'sans_montant' | 'sans_probabilite';
 };
 export type ProjectionTresorerie = {
   aujourdhui: string;
@@ -2245,6 +2804,16 @@ export type ProjectionTresorerie = {
     periodes: PeriodeTresorerie[];
     alerte: { debut: string; soldeFinCents: number } | null;
   }[];
+  pipe: { affaires: AffairePipe[]; decalageMois: number };
+  remuneration: {
+    brutCents: number;
+    netCents: number;
+    salarialCents: number;
+    patronalCents: number;
+    urssafCents: number;
+    coutCents: number;
+    inclus: boolean;
+  } | null;
   avertissements: string[];
 };
 export type SuiviTvaGestion = {
@@ -2259,15 +2828,82 @@ export type SuiviTvaGestion = {
   declaree: { montantCents: number | null; note: string | null } | null;
   avertissements: string[];
 };
+// Hypothèses de simulation d'une affaire : montant en euros (mensualité pour un abonnement), probabilité en %.
+export type HypothesePipe = { montant?: number | null; probabilite?: number | null };
+const hypParam = (h?: Record<string, HypothesePipe>) => {
+  const l = Object.entries(h ?? {})
+    .filter(([, x]) => x.montant != null || x.probabilite != null)
+    .map(([id, x]) => `${id}:${x.montant ?? ''}:${x.probabilite ?? ''}`);
+  return l.length ? `&hyp=${l.join(',')}` : '';
+};
 export const fetchTresorerie = (
   slug: string,
-  p: { horizon: number; granularite: 'mois' | 'semaine'; retard: number },
+  p: {
+    horizon: number;
+    granularite: 'mois' | 'semaine';
+    retard: number;
+    decalage?: number;
+    exclus?: string[];
+    pipe?: boolean;
+    remuneration?: boolean;
+    hypotheses?: Record<string, HypothesePipe>;
+  },
 ) =>
   getJson<ProjectionTresorerie>(
     inst(
       slug,
-      `gestion/tresorerie?horizon=${p.horizon}&granularite=${p.granularite}&retard=${p.retard}`,
+      `gestion/tresorerie?horizon=${p.horizon}&granularite=${p.granularite}&retard=${p.retard}` +
+        `&decalage=${p.decalage ?? 0}` +
+        (p.exclus?.length ? `&exclus=${p.exclus.join(',')}` : '') +
+        (p.pipe === false ? '&pipe=0' : '') +
+        (p.remuneration === false ? '&remuneration=0' : '') +
+        hypParam(p.hypotheses),
     ),
+  );
+// Import des transactions bancaires Pennylane (voir src/gestion/import.ts).
+export type RapprochementImport = {
+  type: 'depense' | 'recette';
+  id: string;
+  recurrente: boolean;
+  dejaCompte: boolean;
+  dateOrigine: string;
+  libelle: string;
+  date: string;
+  montantCents: number;
+};
+export type LigneImportAnalysee = {
+  rang: number;
+  cle: string;
+  date: string;
+  libelle: string;
+  montantCents: number;
+  compte: string;
+  sens: 'sortie' | 'entree';
+  issue: 'nouvelle' | 'deja' | 'a_verifier';
+  raison: string | null;
+  rapprochement: RapprochementImport | null;
+};
+export type AnalyseImport = {
+  lignes: LigneImportAnalysee[];
+  compteurs: { nouvelles: number; deja: number; aVerifier: number; nonFinalisees: number };
+  avertissements: string[];
+};
+export type DecisionImport = 'importer' | 'rapprocher' | 'ignorer';
+export const analyserImport = (slug: string, nomFichier: string, contenuBase64: string) =>
+  sendJson<AnalyseImport>('POST', inst(slug, 'gestion/import/analyse'), {
+    nomFichier,
+    contenuBase64,
+  });
+export const validerImport = (
+  slug: string,
+  nomFichier: string,
+  contenuBase64: string,
+  decisions: Record<string, DecisionImport>,
+) =>
+  sendJson<{ importees: number; rapprochees: number; ignorees: number }>(
+    'POST',
+    inst(slug, 'gestion/import/valider'),
+    { nomFichier, contenuBase64, decisions },
   );
 export const fetchReglagesGestion = (slug: string) =>
   getJson<ReglagesGestion>(inst(slug, 'gestion/reglages'));
@@ -2280,6 +2916,182 @@ export const saveTva = (
   mois: string,
   s: { declareeCents: number | null; note: string | null },
 ) => sendJson<SuiviTvaGestion>('PUT', inst(slug, `gestion/tva/${mois}`), s);
+
+// Gestion — IK et compte courant d'associé (Lot D).
+export type VehiculeIk = {
+  id: string;
+  libelle: string;
+  categorie: string;
+  puissanceFiscale: number | null;
+};
+export type LieuIk = { id: string; nom: string; distanceKm: number; origine: string };
+export type TrancheIk = {
+  deKm: number;
+  jusquaKm: number | null;
+  tauxDixMilliemes: number;
+  forfaitCents: number;
+};
+export type BaremeIk = {
+  id: string;
+  annee: number;
+  categorie: string;
+  version: number;
+  source: string;
+  valideLe: string | null;
+  tranches: TrancheIk[];
+};
+export type ConfigIk = {
+  vehicules: VehiculeIk[];
+  lieux: LieuIk[];
+  baremes: BaremeIk[];
+  mois: { mois: string; abonnement: boolean }[];
+};
+export type StatutIk = 'brouillon' | 'a_controler' | 'valide' | 'comptabilise' | 'rembourse';
+export type LigneIk = {
+  id: string;
+  date: string;
+  trajet: string;
+  commentaire: string;
+  km: number;
+  statut: StatutIk;
+  cumulKm: number;
+  indemniteCents: number | null;
+  mandat: string | null;
+  refacturer: boolean;
+};
+export type EtatIk = {
+  mois: string;
+  vehiculeId: string;
+  abonnement: boolean | null;
+  bareme: { annee: number; version: number; source: string; valideLe: string } | null;
+  lignes: LigneIk[];
+  totalKm: number;
+  totalIndemniteCents: number | null;
+  cumulAnnuelKm: number;
+  derniereDateTransmise: string | null;
+  cca: { montantCents: number; ecartCents: number } | null;
+  avertissements: string[];
+};
+export type ActionMoisIk = 'a_controler' | 'valide' | 'rouvrir' | 'comptabilise' | 'rembourse';
+export type MouvementCca = {
+  id: string;
+  date: string;
+  type: string;
+  libelle: string;
+  montantCents: number;
+  etat: 'prevu' | 'comptabilise';
+  source: string | null;
+  derive: boolean;
+  avantOuverture: boolean;
+};
+export type SuiviCcaGestion = {
+  confirmeCents: number | null;
+  estimeCents: number | null;
+  ouverture: { date: string; montantCents: number; source: string | null } | null;
+  mouvements: MouvementCca[];
+  avertissements: string[];
+};
+export const fetchConfigIk = (slug: string) => getJson<ConfigIk>(inst(slug, 'gestion/ik/config'));
+export const fetchEtatIk = (slug: string, mois: string, vehiculeId: string) =>
+  getJson<EtatIk>(inst(slug, `gestion/ik/etat?mois=${mois}&vehiculeId=${vehiculeId}`));
+export const urlExportIk = (slug: string, mois: string, vehiculeId: string) =>
+  inst(slug, `gestion/ik/export.csv?mois=${mois}&vehiculeId=${vehiculeId}`);
+export const creerVehiculeIk = (slug: string, v: Omit<VehiculeIk, 'id'>) =>
+  sendJson<VehiculeIk>('POST', inst(slug, 'gestion/ik/vehicules'), v);
+export const creerLieuIk = (
+  slug: string,
+  l: { nom: string; distanceKm: number; origine: string },
+) => sendJson<LieuIk>('POST', inst(slug, 'gestion/ik/lieux'), l);
+export const archiverLieuIk = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/ik/lieux/${id}`), {});
+export const creerBaremeIk = (
+  slug: string,
+  b: { annee: number; categorie: string; source: string; tranches: TrancheIk[] },
+) => sendJson<BaremeIk>('POST', inst(slug, 'gestion/ik/baremes'), b);
+export const validerBaremeIk = (slug: string, id: string, date: string) =>
+  sendJson<BaremeIk>('POST', inst(slug, `gestion/ik/baremes/${id}/valider`), { date });
+export const poserAbonnementIk = (slug: string, mois: string, abonnement: boolean) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, `gestion/ik/mois/${mois}/abonnement`), { abonnement });
+export const creerTrajetIk = (
+  slug: string,
+  t: {
+    vehiculeId: string;
+    date: string;
+    trajet: string;
+    commentaire: string;
+    kmAllerRetour: number;
+    mandat?: string | null;
+    refacturer?: boolean;
+  },
+) => sendJson<{ id: string }>('POST', inst(slug, 'gestion/ik/trajets'), t);
+export const modifierTrajetIk = (
+  slug: string,
+  id: string,
+  patch: { refacturer?: boolean; mandat?: string | null },
+) => sendJson<{ id: string }>('PATCH', inst(slug, `gestion/ik/trajets/${id}`), patch);
+export const archiverTrajetIk = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `gestion/ik/trajets/${id}`), {});
+export const avancerMoisIk = (
+  slug: string,
+  mois: string,
+  e: { vehiculeId: string; action: ActionMoisIk; date?: string; source?: string },
+) => sendJson<EtatIk>('POST', inst(slug, `gestion/ik/mois/${mois}/avancer`), e);
+export const fetchCca = (slug: string) => getJson<SuiviCcaGestion>(inst(slug, 'gestion/cca'));
+export const creerMouvementCca = (
+  slug: string,
+  m: {
+    date: string;
+    type: string;
+    libelle: string;
+    montantCents: number;
+    etat: 'prevu' | 'comptabilise';
+    source: string | null;
+  },
+) => sendJson<SuiviCcaGestion>('POST', inst(slug, 'gestion/cca/mouvements'), m);
+export const comptabiliserMouvementCca = (slug: string, id: string, source: string) =>
+  sendJson<SuiviCcaGestion>('POST', inst(slug, `gestion/cca/mouvements/${id}/comptabiliser`), {
+    source,
+  });
+export const archiverMouvementCca = (slug: string, id: string) =>
+  sendJson<SuiviCcaGestion>('DELETE', inst(slug, `gestion/cca/mouvements/${id}`), {});
+
+// Dernières sessions de recherche de prospects et d'enrichissement (voir src/enrichissement/sessions.ts).
+export type SessionEnrichissement = {
+  id: string;
+  date: string;
+  nature: 'recherche' | 'enrichissement';
+  libelle: string;
+  mode: 'manuel' | 'automatique';
+  etat: 'en_cours' | 'terminee' | 'incomplete' | 'erreur';
+  traites: number;
+  ajoutees: number | null;
+  detail: string | null;
+  commentaire: string | null;
+};
+export type ContactSessionEnrichissement = {
+  entreprise: string;
+  prenom: string;
+  nom: string;
+  fonction: string;
+  statut: string | null;
+};
+const urlSession = (slug: string, s: Pick<SessionEnrichissement, 'nature' | 'id'>) =>
+  inst(slug, `base/enrichissement-sessions/${s.nature}/${s.id}`);
+export const fetchContactsSession = (
+  slug: string,
+  s: Pick<SessionEnrichissement, 'nature' | 'id'>,
+) => getJson<ContactSessionEnrichissement[]>(`${urlSession(slug, s)}/contacts`);
+export const commenterSessionEnrichissement = (
+  slug: string,
+  s: Pick<SessionEnrichissement, 'nature' | 'id'>,
+  commentaire: string,
+) => sendJson<{ ok: boolean }>('PATCH', urlSession(slug, s), { commentaire });
+export const supprimerSessionEnrichissement = (
+  slug: string,
+  s: Pick<SessionEnrichissement, 'nature' | 'id'>,
+) => sendJson<{ ok: boolean }>('DELETE', urlSession(slug, s), {});
+export const fetchSessionsEnrichissement = (slug: string) =>
+  getJson<SessionEnrichissement[]>(inst(slug, 'base/enrichissement-sessions'));
 
 // Enrichissement de listes par IA (voir src/enrichissement).
 export type EtatEnrichissement = {
@@ -2309,7 +3121,9 @@ export type SuggestionEnrichissement = {
   nom: string | null;
   fonction: string | null;
   email: string | null;
+  emailEntreprise?: string | null;
   telephone: string | null;
+  linkedin?: string | null;
   sourceUrl: string | null;
   confiance: 'haute' | 'moyenne' | 'basse';
   modeEmail: 'trouve' | 'deduit' | null;
@@ -2342,3 +3156,38 @@ export const validerEnrichissement = (
     inst(slug, `base/enrichissement/${tacheId}/valider`),
     { accepter, refuser },
   );
+
+export type RechercheEnCours = {
+  id: string;
+  etat: 'en_cours' | 'terminee' | 'a_completer' | 'erreur';
+  passage?: number;
+  message?: string;
+  consignes?: string;
+  nombre: number;
+  debut: string;
+  fin?: string;
+  contacts?: ProspectRecherche[];
+  erreur?: string;
+};
+export const lireRechercheProspects = (slug: string) =>
+  getJson<RechercheEnCours | null>(inst(slug, 'base/recherche/tache'));
+export const lancerRechercheProspects = (slug: string, consignes: string, nombre: number) =>
+  sendJson<RechercheEnCours>('POST', inst(slug, 'base/recherche/tache'), { consignes, nombre });
+export const effacerRechercheProspects = (
+  slug: string,
+  id: string,
+  bilan?: { ajoutees: number; rapprochees: number },
+) => sendJson<{ ok: boolean }>('DELETE', inst(slug, 'base/recherche/tache'), { id, ...bilan });
+
+export const continuerRechercheProspects = (slug: string, consignes?: string) =>
+  sendJson<RechercheEnCours>('POST', inst(slug, 'base/recherche/tache/continuer'), { consignes });
+
+export type OrigineContactBase = {
+  provenance: string;
+  collecteLe: string | null;
+  notes: { date: string; origine: string; texte: string; source: string | null }[];
+};
+export const lireOrigineContactBase = (slug: string, id: string) =>
+  getJson<OrigineContactBase>(inst(slug, `base/fiches/${id}/origine`));
+export const noterContactsRechercheBase = (slug: string, contacts: ProspectRecherche[]) =>
+  sendJson<{ ok: boolean }>('POST', inst(slug, 'base/notes-recherche'), { contacts });

@@ -12,6 +12,7 @@ export type AppelerPartage = (outil: string, args: Record<string, unknown>) => P
 // Qui publie où : copie de la règle du serveur, pour griser l'édition. Le serveur refuse de toute façon.
 const DOSSIERS: Record<string, string> = { reference: 'christophe', prospection: 'marc' };
 const MAX_NOTES = 200;
+const MAX_FICHIERS = 500;
 
 const empreinteDe = (contenu: string) => createHash('sha256').update(contenu).digest('hex');
 
@@ -160,6 +161,46 @@ export async function cartePartage(appeler: AppelerPartage, auteur: string): Pro
     }),
   );
   lus.sort((a, b) => a.id.localeCompare(b.id));
-  const carte = carteDepuisNotes(lus, { autresFichiers: fichiers.length - md.length });
-  return { ...carte, tronquee: md.length > MAX_NOTES };
+  const autres = fichiers.filter((f) => !f.endsWith('.md'));
+  const carte = carteDepuisNotes(lus, {
+    autresFichiers: autres.length,
+    fichiers: autres.slice(0, MAX_FICHIERS),
+  });
+  return { ...carte, ...(auteur ? { moi: auteur } : {}), tronquee: md.length > MAX_NOTES };
+}
+
+// Lit plusieurs messages d'un coup (quatre lectures à la fois : l'API kDrive limite le débit) ; un
+// message illisible est simplement absent du résultat.
+export async function lireMessages(appeler: AppelerPartage, chemins: string[], auteur: string) {
+  const file = [...new Set(chemins)].slice(0, 50);
+  const textes: Record<string, string> = {};
+  await Promise.all(
+    Array.from({ length: 4 }, async () => {
+      for (let id = file.shift(); id; id = file.shift()) {
+        const note = await lirePartage(appeler, id, auteur).catch(() => null);
+        if (note) textes[id] = note.contenu;
+      }
+    }),
+  );
+  return textes;
+}
+
+export type ResultatRecherche = { chemin: string; extraits: string[] };
+
+// Recherche dans le contenu des fichiers (« - chemin » suivi d'extraits en retrait).
+export async function chercherPartage(
+  appeler: AppelerPartage,
+  requete: string,
+): Promise<ResultatRecherche[]> {
+  const mot = requete.trim();
+  if (!mot) throw new ErreurCerveau('Tapez au moins un mot à chercher.');
+  const texte = await appeler('chercher_partage', { requete: mot }).catch((e: unknown) => {
+    throw echec(e);
+  });
+  const resultats: ResultatRecherche[] = [];
+  for (const ligne of texte.split('\n')) {
+    if (ligne.startsWith('- ')) resultats.push({ chemin: ligne.slice(2).trim(), extraits: [] });
+    else if (/^\s+\S/.test(ligne)) resultats.at(-1)?.extraits.push(ligne.trim());
+  }
+  return resultats;
 }

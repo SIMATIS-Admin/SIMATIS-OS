@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjetDiag, TestVma } from '../../api.js';
-import { filtrer, grouper, lignesSuivies, paginer, resumerVma } from './grouper.js';
+import { filtrer, grouper, lignesSuivies, paginer, rattacher, resumerVma } from './grouper.js';
 
 const projet = (extra: Partial<ProjetDiag>): ProjetDiag =>
   ({
@@ -31,6 +31,36 @@ const entreprises = [
   { id: 'e1', nom: 'Entreprise Fictive A', secteur: 'Conseil' },
   { id: 'e2', nom: 'Entreprise Fictive B', secteur: 'Artisanat' },
 ];
+
+describe('Diagnostics : rattachement par le nom', () => {
+  it('réunit un diagnostic et un test sans entreprise choisie dans le bloc de l’entreprise du même nom', () => {
+    const projets = rattacher(
+      entreprises,
+      [projet({ id: 'p1', nom: 'entreprise fictive a' })],
+      (p) => p.nom,
+    );
+    const tests = rattacher(
+      entreprises,
+      [test({ id: 't1', entrepriseNom: 'Entreprise Fictive A ' })],
+      (t) => t.entrepriseNom,
+    );
+    const lignes = lignesSuivies(grouper(entreprises, projets, tests));
+    expect(lignes).toHaveLength(1);
+    expect(lignes[0]?.id).toBe('e1');
+    expect(lignes[0]?.diag?.id).toBe('p1');
+    expect(lignes[0]?.tests.map((t) => t.id)).toEqual(['t1']);
+  });
+
+  it('laisse tel quel un nom inconnu ou une entreprise déjà choisie', () => {
+    const [a, b] = rattacher(
+      entreprises,
+      [test({ id: 'a', entrepriseNom: 'Inconnue' }), test({ id: 'b', entrepriseId: 'e2' })],
+      (t) => t.entrepriseNom,
+    );
+    expect(a?.entrepriseId).toBeNull();
+    expect(b?.entrepriseId).toBe('e2');
+  });
+});
 
 describe('Diagnostics : regroupement par entreprise', () => {
   it('range un diagnostic et plusieurs tests sous une même entreprise', () => {
@@ -92,6 +122,20 @@ describe('Diagnostics : recherche et pagination', () => {
   it('filtre sans tenir compte de la casse ni des accents', () => {
     expect(filtrer(lignes, 'elodie').map((l) => l.id)).toEqual(['e1']);
     expect(filtrer(lignes, 'ATELIER').map((l) => l.id)).toEqual(['e2']);
+  });
+
+  it('retrouve une entreprise par le nom ou l’adresse du destinataire', () => {
+    const lignes = [
+      {
+        id: 'e1',
+        nom: 'Atelier Fictif',
+        diag: null,
+        tests: [test({ contactNom: 'Élodie Exemple', contactEmail: 'elodie@exemple.test' })],
+      },
+    ];
+    expect(filtrer(lignes, 'elodie exemple')).toHaveLength(1);
+    expect(filtrer(lignes, 'elodie@exemple.test')).toHaveLength(1);
+    expect(filtrer(lignes, 'inconnu')).toHaveLength(0);
   });
 
   it('pagine 5 par page et borne la page demandée', () => {
