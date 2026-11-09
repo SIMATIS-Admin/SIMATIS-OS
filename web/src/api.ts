@@ -1738,7 +1738,8 @@ export const urlExportBase = (slug: string, filtres: FiltresBaseWeb = {}) => {
 export type ApercuWaalaxy = {
   retenues: number;
   parties: number;
-  ecartees: { opposition: number; exclusion: number; sansProfil: number };
+  ecartees: { opposition: number; exclusion: number; sansProfil: number; alerte: number };
+  nonVerifiees: number;
 };
 export const fetchApercuWaalaxy = (slug: string, filtres: FiltresBaseWeb = {}) => {
   const suite = paramsBase(filtres).toString();
