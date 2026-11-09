@@ -183,4 +183,12 @@ describe('Sidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Descendre Prospection' }));
     expect(move).toHaveBeenCalledWith('prospection', 'bases', true);
   });
+
+  it('offers no star on the entries that carry a notification counter', () => {
+    renderSidebar(simatis, [], { inbox: 3 });
+    expect(screen.queryAllByRole('button', { name: /favoris/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Ajouter Inbox aux favoris' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ajouter Agenda aux favoris' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ajouter Rendez-vous aux favoris' })).toBeNull();
+  });
 });

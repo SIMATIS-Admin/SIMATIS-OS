@@ -28,6 +28,8 @@ const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
 const QUOTIDIEN = ['brief', 'inbox'];
+// Rubriques à pastille de notification : l'étoile n'y est pas proposée (elle chevauchait le compteur).
+const SANS_ETOILE = ['agenda', 'inbox', 'rendez-vous'];
 const COMMERCIAL = ['agenda', 'pipeline', 'contacts', 'entreprises', 'rendez-vous'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
@@ -111,15 +113,17 @@ export function Sidebar({
           {(compteurs[it.id] ?? 0) > 0 && <span className="pastille">{compteurs[it.id]}</span>}
           {!isBuilt(it.id) && <span className="soon-tag">Bientôt</span>}
         </a>
-        <button
-          type="button"
-          className={`fav ${fav ? 'on' : ''}`}
-          aria-label={fav ? `Retirer ${it.label} des favoris` : `Ajouter ${it.label} aux favoris`}
-          title={fav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-          onClick={() => onToggleFavori(it.id)}
-        >
-          <Icon name="star" />
-        </button>
+        {!SANS_ETOILE.includes(it.id) && (
+          <button
+            type="button"
+            className={`fav ${fav ? 'on' : ''}`}
+            aria-label={fav ? `Retirer ${it.label} des favoris` : `Ajouter ${it.label} aux favoris`}
+            title={fav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+            onClick={() => onToggleFavori(it.id)}
+          >
+            <Icon name="star" />
+          </button>
+        )}
         {inFavoris && index > 0 && (
           <button
             type="button"
