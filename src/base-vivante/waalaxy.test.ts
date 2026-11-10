@@ -1,12 +1,16 @@
+import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { integrerFiches } from './integration.js';
+import type { EntrepriseAnnuaire } from '../annuaire/client.js';
+import { enregistrerEntreprise } from './entreprises.js';
+import { integrerFiches, rattacherEntreprise } from './integration.js';
 import { normaliserFiche, type Brut } from './nettoyage.js';
 import { registerBaseVivanteRoutes } from './routes.js';
+import { baseEntreprises, baseSignaux } from './schema.js';
 import { modifierConformite } from './service.js';
 import { COLONNES_WAALAXY, exporterWaalaxy } from './waalaxy.js';
 
@@ -22,7 +26,13 @@ describe('base vivante : export Waalaxy', () => {
     await t.drop();
   });
   beforeEach(async () => {
-    for (const table of ['base_lignes_brutes', 'base_vivante', 'base_imports'])
+    for (const table of [
+      'base_signaux',
+      'base_lignes_brutes',
+      'base_vivante',
+      'base_entreprises',
+      'base_imports',
+    ])
       await t.owner.pool.query(`delete from ${table}`);
   });
 
@@ -66,7 +76,8 @@ describe('base vivante : export Waalaxy', () => {
     expect(apercu).toEqual({
       retenues: 1,
       parties: 1,
-      ecartees: { opposition: 0, exclusion: 0, sansProfil: 2 },
+      ecartees: { opposition: 0, exclusion: 0, sansProfil: 2, alerte: 0 },
+      nonVerifiees: 0,
     });
   });
 
@@ -83,7 +94,7 @@ describe('base vivante : export Waalaxy', () => {
     expect(csv).toContain('/in/trois');
     expect(csv).not.toContain('/in/un');
     expect(csv).not.toContain('/in/deux');
-    expect(apercu.ecartees).toEqual({ opposition: 1, exclusion: 1, sansProfil: 0 });
+    expect(apercu.ecartees).toEqual({ opposition: 1, exclusion: 1, sansProfil: 0, alerte: 0 });
   });
 
   it('vide les e-mails génériques ou en erreur, protège les formules et les virgules', async () => {
@@ -135,6 +146,104 @@ describe('base vivante : export Waalaxy', () => {
     expect(un.csv).not.toContain(lignes(deux.csv)[1] ?? 'absent');
   });
 
+  const annuaire = (siren: string, nom: string): EntrepriseAnnuaire => ({
+    siren,
+    nom,
+    formeJuridique: null,
+    naf: null,
+    categorie: null,
+    effectif: null,
+    creeLe: null,
+    active: true,
+    etablissementsOuverts: null,
+    oppositionDiffusion: false,
+    siret: null,
+    adresse: null,
+    codePostal: null,
+    ville: null,
+    departement: null,
+    latitude: null,
+    longitude: null,
+    finances: [],
+    dirigeants: [],
+  });
+  // Trois contacts avec profil : l'un chez une entreprise en alerte, l'un chez une entreprise
+  // saine, l'un chez une entreprise jamais vérifiée ; un quatrième n'est rattaché à rien.
+  const monterSignaux = async () => {
+    const [enAlerte, sain, jamais] = await integrer(
+      { entreprise: 'A Fictif', nom: 'Un', linkedin: 'https://linkedin.com/in/un' },
+      { entreprise: 'B Fictif', nom: 'Deux', linkedin: 'https://linkedin.com/in/deux' },
+      { entreprise: 'C Fictif', nom: 'Trois', linkedin: 'https://linkedin.com/in/trois' },
+      { entreprise: 'D Fictif', nom: 'Quatre', linkedin: 'https://linkedin.com/in/quatre' },
+    );
+    await withInstance(t.app.db, base.id, async (tx) => {
+      const a = await enregistrerEntreprise(tx, base.id, annuaire('111111111', 'A FICTIF'));
+      const b = await enregistrerEntreprise(tx, base.id, annuaire('222222222', 'B FICTIF'));
+      const c = await enregistrerEntreprise(tx, base.id, annuaire('333333333', 'C FICTIF'));
+      await rattacherEntreprise(tx, base.id, enAlerte ?? '', a.id);
+      await rattacherEntreprise(tx, base.id, sain ?? '', b.id);
+      await rattacherEntreprise(tx, base.id, jamais ?? '', c.id);
+      const verifie = new Date();
+      await tx
+        .update(baseEntreprises)
+        .set({ signauxLe: verifie })
+        .where(eq(baseEntreprises.id, a.id));
+      await tx
+        .update(baseEntreprises)
+        .set({ signauxLe: verifie })
+        .where(eq(baseEntreprises.id, b.id));
+      await tx.insert(baseSignaux).values([
+        {
+          instanceId: base.id,
+          entrepriseId: a.id,
+          source: 'bodacc',
+          sourceId: 'A1',
+          date: '2026-10-05',
+          famille: 'Procédure collective',
+          nature: 'Liquidation judiciaire',
+          gravite: 'alerte',
+        },
+        {
+          instanceId: base.id,
+          entrepriseId: b.id,
+          source: 'bodacc',
+          sourceId: 'B1',
+          date: '2026-10-05',
+          famille: 'Vente ou cession',
+          nature: 'Cession de fonds',
+          gravite: 'attention',
+        },
+      ]);
+    });
+  };
+
+  it('écarte les contacts d’une entreprise en alerte au BODACC et le dit', async () => {
+    await monterSignaux();
+    const { csv, apercu } = await exporterWaalaxy(t.app.db, base.id);
+    expect(csv).not.toContain('/in/un\r\n');
+    expect(csv).not.toContain('/in/un,');
+    expect(csv).toContain('/in/deux');
+    expect(csv).toContain('/in/trois');
+    expect(csv).toContain('/in/quatre');
+    expect(apercu).toMatchObject({
+      retenues: 3,
+      ecartees: { alerte: 1, sansProfil: 0 },
+    });
+  });
+
+  it('signale les contacts retenus dont l’entreprise n’a jamais été vérifiée', async () => {
+    await monterSignaux();
+    const { apercu } = await exporterWaalaxy(t.app.db, base.id);
+    // « Trois » (entreprise jamais vérifiée) est retenu mais non vérifié ; « Quatre » n'est rattaché à aucune entreprise.
+    expect(apercu.nonVerifiees).toBe(1);
+  });
+
+  it('une cession ne suffit pas à écarter une entreprise', async () => {
+    await monterSignaux();
+    const { csv } = await exporterWaalaxy(t.app.db, base.id, { q: 'deux' });
+    expect(csv).toContain('/in/deux');
+  });
+
   it('expose l’aperçu et le fichier par l’API, avec un téléchargement CSV', async () => {
     await integrer(
       { entreprise: 'A Fictif', nom: 'Un', linkedin: 'https://linkedin.com/in/un' },
@@ -146,7 +255,8 @@ describe('base vivante : export Waalaxy', () => {
     expect(apercu.json()).toEqual({
       retenues: 1,
       parties: 1,
-      ecartees: { opposition: 0, exclusion: 0, sansProfil: 1 },
+      ecartees: { opposition: 0, exclusion: 0, sansProfil: 1, alerte: 0 },
+      nonVerifiees: 0,
     });
     const fichier = await a.inject({
       method: 'GET',

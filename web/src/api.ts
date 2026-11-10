@@ -130,7 +130,9 @@ export type FreinVma = {
   titre: string;
   phrase: string;
   // v2.1 : estimation moyenne, réponse du dirigeant, pratique la plus avancée, par où commencer.
-  enjeu?: number;
+  // Méthode 3.0 : null quand l'enjeu n'est pas chiffré ; `nature` dit s'il s'agit d'un gain, d'une perte évitée ou d'un revenu sécurisé.
+  enjeu?: number | null;
+  nature?: string;
   reponse?: string;
   cible?: string;
   debut?: string[];
@@ -162,6 +164,33 @@ export type TestVma = {
   // Écran du dirigeant (ce qu'il a vu) : seulement après l'envoi.
   resultat: {
     entreprise: string;
+    // Méthode 3.0 : trois catégories de revenus, flux séparés, deux conclusions (voir le cadrage du site).
+    methode?: string;
+    periode?: number;
+    caMensuel?: { total: number; regulier: number; engage: number; ponctuel: number };
+    tauxObserve?: number | null;
+    objectif?: {
+      caMensuel: number;
+      echeance: number;
+      partEngageeVisee: number | null;
+      montantEngageMensuel: number | null;
+    };
+    projection?: {
+      ca: number;
+      caAvecReconduction: number | null;
+      engage: number;
+      engageAvecReconduction: number | null;
+      echu: number;
+    };
+    conclusionCa?: {
+      statut: string;
+      manque: string[];
+      ecart: number;
+      ecartAvecReconduction: number | null;
+      ecartPct: number | null;
+    };
+    composition?: { statut: string; partVisee?: number; cible?: number; partActuelle?: number };
+    alertes?: { code: string }[];
     vma: number | null;
     mesurable: boolean;
     statut: string;
@@ -209,6 +238,14 @@ export type TestVma = {
     potentiel?: number;
     // v2.0 : potentiel de la seule VMA, et dynamique du portefeuille (taux annuels).
     potentielVma?: number;
+    // Méthode 3.0 : CA mensuel par catégorie, ce qui manque pour conclure, rapport des montants.
+    caMensuel?: number;
+    regulier?: number;
+    engage?: number;
+    ponctuel?: number;
+    manque?: string[];
+    tauxObserve?: number | null;
+    ecartReference?: number | null;
     trajectoire?: number;
     socleEcheance?: number;
     partRec?: number;
@@ -219,13 +256,15 @@ export type TestVma = {
       n: number;
       label: string;
       note: number;
-      gainMax: number;
-      gainRestant: number;
+      // Absents (méthode 3.0) pour les freins sur les clients réguliers et les contrats : aucun coefficient.
+      gainMax?: number | null;
+      gainRestant?: number | null;
       bloc: string;
       moteur?: string;
       effet?: string;
-      // Gain d'allure à l'échéance si ce frein seul était levé (v2.0).
-      impact?: number;
+      nature?: string;
+      // Gain d'allure à l'échéance si ce frein seul était levé (v2.0) ; null en méthode 3.0 quand il n'est pas chiffré.
+      impact?: number | null;
     }[];
   } | null;
 };
@@ -1586,6 +1625,11 @@ export const exporterRestitutionDiag = (slug: string, id: string) =>
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/exporter`),
     {},
   );
+// Diapositives du dernier export de la restitution, pour les présenter dans l'OS.
+export const fetchDiapositivesRestitution = (slug: string, id: string) =>
+  getJson<{ nom: string; diapositives: Diapositive[] }>(
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/diapositives`),
+  );
 export const urlPptxRestitutionDiag = (slug: string, id: string) =>
   inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/pptx`);
 export const urlRapportDiag = (slug: string, id: string, version?: number) =>
@@ -1738,7 +1782,8 @@ export const urlExportBase = (slug: string, filtres: FiltresBaseWeb = {}) => {
 export type ApercuWaalaxy = {
   retenues: number;
   parties: number;
-  ecartees: { opposition: number; exclusion: number; sansProfil: number };
+  ecartees: { opposition: number; exclusion: number; sansProfil: number; alerte: number };
+  nonVerifiees: number;
 };
 export const fetchApercuWaalaxy = (slug: string, filtres: FiltresBaseWeb = {}) => {
   const suite = paramsBase(filtres).toString();
@@ -1814,6 +1859,8 @@ export type LigneEntrepriseBase = {
   listes: string[];
   signal: { gravite: GraviteSignal; nature: string; date: string } | null;
   signauxLe: string | null;
+  siteWeb: string | null;
+  standard: string | null;
 };
 export type GraviteSignal = 'alerte' | 'attention' | 'info';
 export type SignalWeb = {
@@ -1840,6 +1887,26 @@ export const actualiserSignauxPlusieurs = (slug: string, ids: string[]) =>
     inst(slug, 'base/entreprises/signaux/actualiser'),
     { ids },
   );
+export type AlerteSignauxWeb = {
+  active: boolean;
+  heure: string;
+  dernierJour?: string;
+  bilan?: string;
+};
+export const lireAlerteSignaux = (slug: string) =>
+  getJson<AlerteSignauxWeb>(inst(slug, 'base/signaux/routine'));
+export const enregistrerAlerteSignaux = (
+  slug: string,
+  reglages: { active: boolean; heure: string },
+) => sendJson<AlerteSignauxWeb>('PUT', inst(slug, 'base/signaux/routine'), reglages);
+export const lancerAlerteSignaux = (slug: string) =>
+  sendJson<{
+    verifiees: number;
+    nouveaux: number;
+    deposes: number;
+    echecs: number;
+    bilan: string;
+  }>('POST', inst(slug, 'base/signaux/routine/lancer'), {});
 export const fetchEntreprisesBase = (
   slug: string,
   { q, liste, signal, page }: { q?: string; liste?: string; signal?: string; page?: number },
@@ -1931,6 +1998,12 @@ export type EntrepriseBaseWeb = EntrepriseAnnuaireWeb & {
   creeLe: string | null;
   oppositionDiffusion: boolean;
   etablissementsOuverts: number | null;
+  siteWeb: string | null;
+  siteTelephones: string[];
+  siteEmails: string[];
+  linkedin: string | null;
+  siteConfirme: boolean;
+  siteLuLe: string | null;
   finances: { annee: number; ca: number | null; resultat: number | null }[];
   dirigeants: { nom: string; fonction: string | null; societe: boolean }[];
 };
@@ -1946,6 +2019,12 @@ export const rattacherEntrepriseBase = (slug: string, ficheId: string, siren: st
   );
 export const detacherEntrepriseBase = (slug: string, ficheId: string) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `base/fiches/${ficheId}/entreprise`), {});
+export const lireSiteEntrepriseBase = (slug: string, id: string, url?: string) =>
+  sendJson<EntrepriseBaseWeb>(
+    'POST',
+    inst(slug, `base/entreprises/${id}/site`),
+    url ? { url } : {},
+  );
 export const fetchEntrepriseBase = (slug: string, id: string) =>
   getJson<EntrepriseBaseWeb>(inst(slug, `base/entreprises/${id}`));
 export const majConformiteBase = (

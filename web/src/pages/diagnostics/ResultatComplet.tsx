@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { FreinVma, TestVma } from '../../api.js';
 import { fmtEur } from '../TestsVma.js';
 import { exporterResultatPdf } from './exportPdf.js';
+import { CorpsV3 } from './ResultatV3.js';
 
 const NB = ' ';
 const pct = (x: number) =>
@@ -28,6 +29,52 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
   };
   const e = test.resultat;
   if (!e) return null;
+  const entete = (
+    <>
+      <div className="panel">
+        <div className="panel-h rc-header">
+          <div className="rc-heading">
+            <h2>Résultat complet · {test.entrepriseNom}</h2>
+            <div className="small muted">
+              Tel que le dirigeant l’a vu
+              {test.recueLe
+                ? ` · reçu le ${new Date(test.recueLe).toLocaleDateString('fr-FR')}`
+                : ''}
+              {test.type === 'essai' ? ' · essai (non compté dans l’historique)' : ''}
+            </div>
+          </div>
+          <div className="rc-actions" data-pdf-exclude>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => void exporter()}
+              disabled={exportEnCours}
+              title="Choisissez Enregistrer au format PDF dans la fenêtre d’impression"
+            >
+              {exportEnCours ? 'Préparation…' : 'Exporter en PDF'}
+            </button>
+            <button className="btn" type="button" onClick={onRetour}>
+              ← Retour
+            </button>
+          </div>
+        </div>
+      </div>
+      {erreurExport && (
+        <div className="alert amber" role="alert" data-pdf-exclude>
+          {erreurExport}
+        </div>
+      )}
+    </>
+  );
+  // Méthode 3.0 : même en-tête, corps propre (CA mensuel en trois catégories, deux conclusions).
+  if (e.methode?.startsWith('3') && e.caMensuel) {
+    return (
+      <div className="stack rc" ref={fiche}>
+        {entete}
+        <CorpsV3 e={e} />
+      </div>
+    );
+  }
   const t = e.textes ?? {};
   const socle = e.recurrent !== null && e.recurrent !== undefined;
   const allure = e.allureActuelle ?? 0;
@@ -110,39 +157,7 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
 
   return (
     <div className="stack rc" ref={fiche}>
-      <div className="panel">
-        <div className="panel-h rc-header">
-          <div className="rc-heading">
-            <h2>Résultat complet · {test.entrepriseNom}</h2>
-            <div className="small muted">
-              Tel que le dirigeant l’a vu
-              {test.recueLe
-                ? ` · reçu le ${new Date(test.recueLe).toLocaleDateString('fr-FR')}`
-                : ''}
-              {test.type === 'essai' ? ' · essai (non compté dans l’historique)' : ''}
-            </div>
-          </div>
-          <div className="rc-actions" data-pdf-exclude>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => void exporter()}
-              disabled={exportEnCours}
-              title="Choisissez Enregistrer au format PDF dans la fenêtre d’impression"
-            >
-              {exportEnCours ? 'Préparation…' : 'Exporter en PDF'}
-            </button>
-            <button className="btn" type="button" onClick={onRetour}>
-              ← Retour
-            </button>
-          </div>
-        </div>
-      </div>
-      {erreurExport && (
-        <div className="alert amber" role="alert" data-pdf-exclude>
-          {erreurExport}
-        </div>
-      )}
+      {entete}
 
       <div className="panel rc-carte rc-synthese">
         <div className="rc-eyebrow">

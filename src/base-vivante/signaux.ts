@@ -18,6 +18,8 @@ export type SignalBase = {
   detail: string | null;
   url: string | null;
 };
+// A notice just stored, with the BODACC's own identifier.
+export type SignalAjoute = SignalBase & { sourceId: string | null };
 export type SignauxEntreprise = { signaux: SignalBase[]; verifieLe: string | null };
 
 const RANG = sql`case ${baseSignaux.gravite} when 'alerte' then 0 when 'attention' then 1 else 2 end`;
@@ -60,15 +62,19 @@ const depuis = (): string => {
 
 // Reads the BODACC for one company and keeps what matters. A notice already known is not added
 // twice. A BODACC that does not answer leaves the company as it was.
-export async function actualiserSignaux(
+export async function lireEtRanger(
   db: Executor,
   bodacc: ClientBodacc,
   instanceId: string,
   entrepriseId: string,
-): Promise<number> {
+): Promise<{ ajoutes: SignalAjoute[]; dejaVerifiee: boolean; nom: string }> {
   const [e] = await withInstance(db, instanceId, (tx) =>
     tx
-      .select({ siren: baseEntreprises.siren })
+      .select({
+        siren: baseEntreprises.siren,
+        nom: baseEntreprises.nom,
+        signauxLe: baseEntreprises.signauxLe,
+      })
       .from(baseEntreprises)
       .where(and(eq(baseEntreprises.id, entrepriseId), eq(baseEntreprises.instanceId, instanceId))),
   );
@@ -77,7 +83,7 @@ export async function actualiserSignaux(
     const s = classer(a);
     return s ? [s] : [];
   });
-  return withInstance(db, instanceId, async (tx) => {
+  const ajoutes = await withInstance(db, instanceId, async (tx) => {
     const nouveaux =
       signaux.length === 0
         ? []
@@ -98,13 +104,32 @@ export async function actualiserSignaux(
               })),
             )
             .onConflictDoNothing()
-            .returning({ id: baseSignaux.id });
+            .returning({
+              id: baseSignaux.id,
+              date: baseSignaux.date,
+              famille: baseSignaux.famille,
+              nature: baseSignaux.nature,
+              gravite: baseSignaux.gravite,
+              detail: baseSignaux.detail,
+              url: baseSignaux.url,
+              sourceId: baseSignaux.sourceId,
+            });
     await tx
       .update(baseEntreprises)
       .set({ signauxLe: new Date() })
       .where(and(eq(baseEntreprises.id, entrepriseId), eq(baseEntreprises.instanceId, instanceId)));
-    return nouveaux.length;
+    return nouveaux;
   });
+  return { ajoutes, dejaVerifiee: e.signauxLe !== null, nom: e.nom };
+}
+
+export async function actualiserSignaux(
+  db: Executor,
+  bodacc: ClientBodacc,
+  instanceId: string,
+  entrepriseId: string,
+): Promise<number> {
+  return (await lireEtRanger(db, bodacc, instanceId, entrepriseId)).ajoutes.length;
 }
 
 export type RapportSignaux = { verifiees: number; nouveaux: number; echecs: number };

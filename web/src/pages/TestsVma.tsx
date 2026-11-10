@@ -11,6 +11,7 @@ import {
   type TestVmaType,
 } from '../api.js';
 import { messageEnvoi } from './diagnostics/envoi.js';
+import { ListeFreinsV3, textesV3 } from './diagnostics/ResultatV3.js';
 
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -125,7 +126,7 @@ export function TestsVma({ slug }: { slug: string }) {
         <div className="panel-b stack">
           <p className="small muted">
             Auto-diagnostic envoyé par invitation : le dirigeant ouvre le lien, passe le test en
-            environ 15 minutes, et son résultat arrive ici. Cette procédure est séparée des
+            environ 10 minutes, et son résultat arrive ici. Cette procédure est séparée des
             diagnostics d’endurance.
           </p>
           {erreur && <div className="alert amber">{erreur}</div>}
@@ -354,14 +355,55 @@ function FicheResultat({ t }: { t: TestVma }) {
   const r = t.resultat;
   const c = t.calcul;
   if (!r) return null;
+  const v3 = r.methode?.startsWith('3') === true && r.caMensuel !== undefined;
   return (
     <div className="panel">
       <div className="panel-h">
         <span>Résultat de {t.entrepriseNom}</span>
       </div>
       <div className="panel-b stack">
+        {!v3 && t.version?.startsWith('3') !== true && t.version !== null && (
+          <p className="small muted">
+            Méthode {t.version} : la VMA de ce résultat n’est pas comparable à celle de la méthode
+            3.0.
+          </p>
+        )}
+        {v3 && r.caMensuel && (
+          <>
+            <p>
+              <strong>CA mensuel : </strong>
+              {fmtEur(r.caMensuel.total)} par mois · régulier variable{' '}
+              {fmtEur(r.caMensuel.regulier)} · sous engagement {fmtEur(r.caMensuel.engage)} ·
+              ponctuel {fmtEur(r.caMensuel.ponctuel)}
+            </p>
+            {r.conclusionCa && (
+              <p>
+                <strong>Objectif de CA couvert : </strong>
+                {(
+                  r.textes as unknown as
+                    { conclusions?: { ca: Record<string, string> } } | undefined
+                )?.conclusions?.ca[r.conclusionCa.statut] ?? r.conclusionCa.statut}
+                {r.conclusionCa.manque.length > 0
+                  ? ` · il manque : ${r.conclusionCa.manque.join(', ')}`
+                  : ''}
+              </p>
+            )}
+            {r.composition && r.composition.statut !== 'non-demande' && (
+              <p>
+                <strong>Objectif sous engagement : </strong>
+                {r.composition.statut}
+              </p>
+            )}
+            {r.alertes && r.alertes.length > 0 && (
+              <p className="small">
+                <strong>À vérifier : </strong>
+                {r.alertes.map((a) => a.code).join(', ')}
+              </p>
+            )}
+          </>
+        )}
         <p>
-          <strong>VMA : </strong>
+          <strong>VMA{v3 ? ' ponctuelle' : ''} : </strong>
           {r.mesurable
             ? `${fmtEur(r.vma)} de CA commandé par mois (${fmtEur((r.vma ?? 0) * 12)} par an)`
             : 'non mesurable'}
@@ -388,7 +430,20 @@ function FicheResultat({ t }: { t: TestVma }) {
         </p>
         <p className="small muted">{r.niveau.phrase}</p>
         <div className="small muted">Ce que le dirigeant a vu</div>
-        <FreinsVus r={r} />
+        {v3 ? (
+          <>
+            <div className="small muted">
+              {textesV3(r.textes).titreConquete ?? 'Prestations ponctuelles'}
+            </div>
+            <ListeFreinsV3 liste={r.freins} t={textesV3(r.textes)} />
+            <div className="small muted">
+              {textesV3(r.textes).titrePortefeuille ?? 'Clients réguliers et contrats'}
+            </div>
+            <ListeFreinsV3 liste={r.freinsPortefeuille ?? []} t={textesV3(r.textes)} note />
+          </>
+        ) : (
+          <FreinsVus r={r} />
+        )}
 
         <div className="small muted">Pour Marc uniquement</div>
         {c?.potentiel !== undefined && (
@@ -437,9 +492,11 @@ function FicheResultat({ t }: { t: TestVma }) {
                     {f.moteur === 'portefeuille' ? ' (portefeuille)' : ''}
                   </td>
                   <td>{f.note} / 4</td>
-                  <td>{pct(f.gainMax)}</td>
-                  <td>{pct(f.gainRestant)}</td>
-                  <td>{f.impact !== undefined ? `+${fmtEur(f.impact)} / mois` : '—'}</td>
+                  <td>{typeof f.gainMax === 'number' ? pct(f.gainMax) : '—'}</td>
+                  <td>{typeof f.gainRestant === 'number' ? pct(f.gainRestant) : '—'}</td>
+                  <td>
+                    {typeof f.impact === 'number' ? `+${fmtEur(f.impact)} / mois` : 'non chiffré'}
+                  </td>
                   <td>{f.bloc}</td>
                 </tr>
               ))}

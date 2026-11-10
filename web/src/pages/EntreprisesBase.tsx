@@ -271,6 +271,7 @@ export function EntreprisesBase({
                 <th>Effectif</th>
                 <th>CA publié</th>
                 <th>Contacts</th>
+                <th>Site</th>
                 <th>Signal</th>
                 <th>Listes</th>
               </tr>
@@ -299,6 +300,23 @@ export function EntreprisesBase({
                   <td>{l.effectif ?? '—'}</td>
                   <td>{euros(l.ca)}</td>
                   <td>{l.nbContacts}</td>
+                  <td>
+                    {l.siteWeb ? (
+                      <a href={l.siteWeb} target="_blank" rel="noreferrer">
+                        {l.siteWeb.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                    {l.standard && (
+                      <div className="small muted">
+                        {l.standard.replace(
+                          /^\+33(\d)(\d{2})(\d{2})(\d{2})(\d{2})$/,
+                          '0$1 $2 $3 $4 $5',
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     {l.signal ? (
                       <span

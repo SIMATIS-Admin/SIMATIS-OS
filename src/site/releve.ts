@@ -7,6 +7,7 @@ import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import { mailAccuse } from './accuse.js';
+import { ACCUSES_MAX_PAR_RELEVE, evaluerDemande } from './filtre.js';
 
 // A request left on the public website's contact form, as the site's queue returns it.
 const demandeSchema = z.object({
@@ -30,7 +31,11 @@ export type ReleveDeps = {
   fetch?: typeof fetch;
   // Sans elle, aucun accusé de réception n'est envoyé.
   ecriture?: ConnexionDeps;
+  // Pour les tests : remplace l'envoi réel de l'accusé.
+  accuse?: (tx: Tx, instance: Instance, d: DemandeSite) => Promise<void>;
 };
+
+type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 export type ResultatReleve = { recues: number; creees: number; ignorees: number };
 
@@ -69,7 +74,7 @@ export function resumeDe(d: DemandeSite): string {
 // Accusé de réception au visiteur, depuis la messagerie de l'instance. Jamais bloquant : la demande
 // est déjà dans l'Inbox. Savepoint : une erreur ne casse pas la transaction.
 async function accuser(
-  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+  tx: Tx,
   instance: Instance,
   d: DemandeSite,
   ecriture: ConnexionDeps,
@@ -117,12 +122,16 @@ export async function releverDemandesSite(db: Database, deps: ReleveDeps): Promi
   }
 
   let creees = 0;
+  let accuses = 0;
   await withInstance(db, propre.id, async (tx) => {
     for (const d of valides) {
+      const verdict = evaluerDemande(d);
       const { statut } = await deposerSujet(tx, {
         type: d.objet === 'diagnostic' ? 'diagnostic' : 'mail_a_repondre',
-        titre: `${LIBELLE[d.objet]} — ${d.entreprise} (${d.nom})`,
-        resume: resumeDe(d),
+        titre: `${verdict.ok ? '' : '⚠ Suspecte — '}${LIBELLE[d.objet]} — ${d.entreprise} (${d.nom})`,
+        resume: verdict.ok
+          ? resumeDe(d)
+          : `⚠ Demande suspecte, accusé de réception non envoyé : ${verdict.raisons.join(' ; ')}.\n${resumeDe(d)}`,
         origine: 'site',
         source: 'site',
         sourceId: d.id,
@@ -130,7 +139,16 @@ export async function releverDemandesSite(db: Database, deps: ReleveDeps): Promi
       });
       if (statut === 'cree') {
         creees++;
-        if (deps.ecriture) await accuser(tx, propre, d, deps.ecriture);
+        // Accusé seulement si les filtres passent, et au plus quelques-uns par relevé.
+        if (verdict.ok && accuses < ACCUSES_MAX_PAR_RELEVE) {
+          if (deps.accuse) {
+            await deps.accuse(tx, propre, d);
+            accuses++;
+          } else if (deps.ecriture) {
+            await accuser(tx, propre, d, deps.ecriture);
+            accuses++;
+          }
+        }
       }
     }
     if (creees > 0) {

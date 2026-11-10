@@ -10,7 +10,6 @@ const api = vi.hoisted(() => ({
   fetchTestsVma: vi.fn(),
   revoquerTestVma: vi.fn(),
   supprimerTestVma: vi.fn(),
-  ouvrirEspaceTesteurVma: vi.fn(),
   supprimerProjetDiag: vi.fn(),
 }));
 vi.mock('../api.js', () => api);
@@ -102,42 +101,23 @@ describe('Diagnostics : écran fusionné', () => {
     charger([entreprise(1)], [diagPour(1)]);
     render(<Diagnostics slug="demo" />);
     await screen.findByText('Entreprise Fictive A');
-    const lien = screen.getByRole('link', {
-      name: /Diagnostic d’endurance commerciale : présentation/,
-    });
+    const lien = screen.getByRole('link', { name: 'Diagnostic d’endurance commerciale' });
     expect(lien.getAttribute('href')).toBe('#/demo/presentation-diagnostic');
   });
 
-  describe("module d'essai du test VMA", () => {
-    const fenetre = { location: { href: '' }, close: vi.fn() };
-    beforeEach(() => {
-      fenetre.location.href = '';
-      vi.spyOn(window, 'open').mockReturnValue(fenetre as unknown as Window);
-    });
-    afterEach(() => vi.restoreAllMocks());
+  it('ouvre la présentation de SIMATIS depuis la barre d’outils', async () => {
+    charger([entreprise(1)], [diagPour(1)]);
+    render(<Diagnostics slug="demo" />);
+    const lien = await screen.findByRole('link', { name: 'SIMATIS' });
+    expect(lien.getAttribute('href')).toBe('#/demo/presentation-simatis');
+  });
 
-    it('ouvre l’espace testeur dans un nouvel onglet, sans créer de lien à envoyer', async () => {
-      charger([entreprise(1)], [diagPour(1)]);
-      api.ouvrirEspaceTesteurVma.mockResolvedValue({
-        lien: 'https://site.test/test-vma/testeur?t=abc',
-        expireLe: '2030-01-01T00:00:00Z',
-      });
-      render(<Diagnostics slug="demo" />);
-      fireEvent.click(await screen.findByRole('button', { name: /module d'essai/ }));
-      await waitFor(() =>
-        expect(fenetre.location.href).toBe('https://site.test/test-vma/testeur?t=abc'),
-      );
-      expect(api.ouvrirEspaceTesteurVma).toHaveBeenCalledWith('demo');
-    });
-
-    it('referme l’onglet et affiche la raison quand le site refuse', async () => {
-      charger([entreprise(1)], [diagPour(1)]);
-      api.ouvrirEspaceTesteurVma.mockRejectedValue(new Error('Test de VMA non configuré'));
-      render(<Diagnostics slug="demo" />);
-      fireEvent.click(await screen.findByRole('button', { name: /module d'essai/ }));
-      expect(await screen.findByText(/non configuré/)).toBeTruthy();
-      expect(fenetre.close).toHaveBeenCalled();
-    });
+  it('ouvre la présentation du Test VMA depuis la barre d’outils', async () => {
+    charger([entreprise(1)], [diagPour(1)]);
+    render(<Diagnostics slug="demo" />);
+    const lien = await screen.findByRole('link', { name: 'Test VMA' });
+    expect(lien.getAttribute('href')).toBe('#/demo/presentation-vma');
+    expect(screen.queryByRole('button', { name: /module d'essai/ })).toBeNull();
   });
 
   it('donne le nom du diagnostic à l’en-tête quand il est ouvert, puis le rend', async () => {

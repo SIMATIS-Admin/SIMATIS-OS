@@ -12,6 +12,7 @@ import {
   demanderRestitution,
   enregistrerDiapositivesRestitution,
   demanderReglesRestitution,
+  diapositivesRestitutionDe,
   enregistrerRestitution,
   marquerDeckFinal,
   pptxRestitutionDe,
@@ -379,6 +380,25 @@ describe('Deck de restitution', () => {
       const { nom, contenu } = await pptxRestitutionDe(t.app.db, simatis, id);
       expect(nom).toBe('Restitution - Export Fictif F.pptx');
       expect(Array.from(contenu.subarray(0, 2))).toEqual([0x50, 0x4b]);
+    });
+
+    it('n a pas de diapositives à présenter avant un export', async () => {
+      const id = await deckPret('Export Fictif H');
+      await expect(diapositivesRestitutionDe(t.app.db, simatis, id)).rejects.toBeInstanceOf(
+        ProjetIntrouvable,
+      );
+    });
+
+    it('rend les dernières diapositives exportées pour la présentation dans l OS', async () => {
+      const id = await deckPret('Export Fictif I');
+      await demanderExportRestitution(t.app.db, simatis, id);
+      await demarrerAttente(t.app.db, simatis, id);
+      await enregistrerDiapos(id);
+      await finirAttente(t.app.db, simatis, id);
+      const { nom, diapositives } = await diapositivesRestitutionDe(t.app.db, simatis, id);
+      expect(nom).toBe('Export Fictif I');
+      expect(diapositives.length).toBeGreaterThan(0);
+      expect(diapositives[0]).toHaveProperty('titre');
     });
 
     it('pendant l export, seule la lecture du deck est permise', async () => {

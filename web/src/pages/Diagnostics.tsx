@@ -3,7 +3,6 @@ import {
   fetchEntreprises,
   fetchProjetsDiag,
   fetchTestsVma,
-  ouvrirEspaceTesteurVma,
   relancerTestVma,
   revoquerTestVma,
   supprimerProjetDiag,
@@ -13,6 +12,9 @@ import {
   type TestVma,
 } from '../api.js';
 import { ContactsVma } from './diagnostics/ContactsVma.js';
+import logoDiagnostic from '../assets/diagnostic-endurance.svg';
+import logoSimatis from '../assets/simatis-mark.png';
+import logoVma from '../assets/test-vma.svg';
 import { Icon } from '../icons.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
@@ -118,19 +120,6 @@ export function Diagnostics({
   const [enCours, setEnCours] = useState(false);
   const [relance, setRelance] = useState<{ test: TestVma; tu: boolean } | null>(null);
   const [sansReponseSeul, setSansReponseSeul] = useState(false);
-
-  // L'onglet s'ouvre tout de suite, pendant le clic : après une attente, le navigateur le bloquerait.
-  const ouvrirTesteur = async () => {
-    const onglet = window.open('', '_blank');
-    try {
-      const { lien } = await ouvrirEspaceTesteurVma(slug);
-      if (onglet) onglet.location.href = lien;
-      else window.location.href = lien;
-    } catch (e) {
-      onglet?.close();
-      setErreur(e instanceof Error ? e.message : 'Espace testeur indisponible');
-    }
-  };
 
   const charger = async () => {
     try {
@@ -431,12 +420,18 @@ export function Diagnostics({
             <button className="btn" type="button" onClick={() => setContactsOuverts(true)}>
               Contacts
             </button>
-            <button className="btn" type="button" onClick={() => void ouvrirTesteur()}>
-              Test VMA: module d'essai
-            </button>
-            {/* Hors du menu latéral : la présentation s'ouvre depuis cette barre. */}
-            <a className="btn" href={`#/${slug}/presentation-diagnostic`}>
-              Diagnostic d’endurance commerciale : présentation
+            {/* Hors du menu latéral : chaque présentation s'ouvre depuis cette barre. */}
+            <a className="btn dg-outil" href={`#/${slug}/presentation-vma`}>
+              <img src={logoVma} alt="" />
+              Test VMA
+            </a>
+            <a className="btn dg-outil" href={`#/${slug}/presentation-diagnostic`}>
+              <img src={logoDiagnostic} alt="" />
+              Diagnostic d’endurance commerciale
+            </a>
+            <a className="btn dg-outil" href={`#/${slug}/presentation-simatis`}>
+              <img src={logoSimatis} alt="" />
+              SIMATIS
             </a>
             <div className="dg-menu">
               <button
@@ -625,13 +620,27 @@ export function Diagnostics({
                     {resume.dernier && (
                       <div className="dg-resultat">
                         <div className="dg-grand">
-                          {resume.dernier.allure != null
-                            ? fmtEur(resume.dernier.allure)
-                            : resume.dernier.vma != null
-                              ? fmtEur(resume.dernier.vma)
-                              : 'Non mesurable'}
-                          <small> de CA commandé par mois</small>
+                          {resume.dernier.caMensuel != null
+                            ? fmtEur(resume.dernier.caMensuel)
+                            : resume.dernier.allure != null
+                              ? fmtEur(resume.dernier.allure)
+                              : resume.dernier.vma != null
+                                ? fmtEur(resume.dernier.vma)
+                                : 'Non mesurable'}
+                          <small>
+                            {resume.dernier.caMensuel != null
+                              ? ' de chiffre d’affaires par mois'
+                              : ' de CA commandé par mois'}
+                          </small>
                         </div>
+                        {resume.dernier.caMensuel != null && (
+                          <p className="small">
+                            VMA ponctuelle :{' '}
+                            {resume.dernier.vma != null
+                              ? fmtEur(resume.dernier.vma)
+                              : 'non mesurable'}
+                          </p>
+                        )}
                         <p className="small muted">
                           Dernier résultat · {libelleTest(resume.dernier)} · reçu le{' '}
                           {date(resume.dernier.date)}
@@ -661,6 +670,13 @@ export function Diagnostics({
                                 {fmtEur(resume.ecart.euros)} par mois (
                                 {resume.ecart.pourcentage >= 0 ? '+' : ''}
                                 {resume.ecart.pourcentage} %) depuis le premier test.
+                              </p>
+                            )}
+                            {resume.methodesMelangees && (
+                              <p className="small muted">
+                                Méthodes différentes : la VMA de la méthode 3.0 ne compte plus les
+                                nouveaux contrats récurrents. Seuls les résultats d’une même méthode
+                                se comparent.
                               </p>
                             )}
                           </div>

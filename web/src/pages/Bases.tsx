@@ -26,6 +26,7 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { BaseTable } from './BaseTable.js';
+import { AlerteSignaux } from './AlerteSignaux.js';
 import { EntreprisesBase } from './EntreprisesBase.js';
 import { ExportWaalaxy } from './ExportWaalaxy.js';
 import { ListesBase } from './ListesBase.js';
@@ -570,6 +571,7 @@ type Fenetres =
   | { quoi: 'triage' }
   | { quoi: 'waalaxy' }
   | { quoi: 'listes' }
+  | { quoi: 'alerte' }
   | { quoi: 'entreprises' }
   | { quoi: 'recherche' }
   | { quoi: 'routine-recherche' };
@@ -738,6 +740,9 @@ export function Bases({ slug }: { slug: string }) {
               <a className="btn ghost" href={urlExportBase(slug, filtres)} download>
                 Exporter en CSV
               </a>
+              <button className="btn ghost" onClick={() => setFenetre({ quoi: 'alerte' })}>
+                Alerte quotidienne du BODACC
+              </button>
               <button className="btn ghost" onClick={() => setFenetre({ quoi: 'listes' })}>
                 Gérer les listes
               </button>
@@ -948,6 +953,11 @@ export function Bases({ slug }: { slug: string }) {
               void charger();
             }}
           />
+        </Fenetre>
+      )}
+      {fenetre?.quoi === 'alerte' && (
+        <Fenetre titre="Alerte quotidienne du BODACC" onFermer={fermer}>
+          <AlerteSignaux slug={slug} />
         </Fenetre>
       )}
       {fenetre?.quoi === 'listes' && (

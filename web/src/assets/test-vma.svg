@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -14 176 148" fill="none">
+  <title>Test de VMA</title>
+  <desc>Une piste de course continue et une flèche qui avance, avec une pastille VMA au centre : le Test de VMA, outil distinct du Diagnostic d’endurance commerciale.</desc>
+  <defs>
+    <mask id="pastille" maskUnits="userSpaceOnUse" x="40" y="40" width="80" height="40">
+      <rect x="47" y="47" width="66" height="26" rx="13" fill="#fff"/>
+      <g stroke="#000" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M60.5 53.5 65 66.5 69.5 53.5"/>
+        <path d="M74.3 66.5V53.5L79.8 62 85.3 53.5V66.5"/>
+        <path d="M90.1 66.5 95.1 53.5 100.1 66.5M91.9 62.3H98.3"/>
+      </g>
+    </mask>
+  </defs>
+  <g transform="rotate(-24 80 60)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M104 24H56a36 36 0 0 0 0 72h48a36 36 0 0 0 36-36" stroke="#0c376b" stroke-width="12"/>
+    <path d="M104 41H56a19 19 0 0 0 0 38h48a19 19 0 0 0 19-19" stroke="#41a594" stroke-width="6"/>
+    <path d="M91 24h40" stroke="#41a594" stroke-width="12"/>
+    <path d="m119 10 18 14-18 14" stroke="#41a594" stroke-width="9"/>
+    <rect x="47" y="47" width="66" height="26" rx="13" fill="#41a594" stroke="none" mask="url(#pastille)"/>
+  </g>
+</svg>

@@ -263,9 +263,15 @@ a {
 .nav-entry > a {
   flex: 1;
   min-width: 0;
-  padding-right: 48px;
+  padding-right: 10px;
 }
-.nav-entry:has(.fav-order) > a {
+/* Les boutons étoile et ordre n'apparaissent qu'au survol : la place n'est réservée qu'alors. */
+.nav-entry:has(.fav):hover > a,
+.nav-entry:has(.fav):focus-within > a {
+  padding-right: 36px;
+}
+.nav-entry:has(.fav-order):hover > a,
+.nav-entry:has(.fav-order):focus-within > a {
   padding-right: 136px;
 }
 .nav a:hover {
@@ -288,6 +294,9 @@ a {
 .nav a .lbl {
   flex: 1;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .nav a .badge {
   margin-left: 0;
@@ -2314,6 +2323,20 @@ textarea.input {
   .side.reduite .nav svg {
     width: 19px;
     height: 19px;
+  }
+  /* Menu replié : la pastille bêta ne tient pas, elle devient un point sur l'icône. */
+  .side.reduite .nav a .beta {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    width: 9px;
+    height: 9px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: #d9a441;
+    font-size: 0;
   }
   .side.reduite .nav a .pastille {
     position: absolute;
@@ -5503,49 +5526,6 @@ label.btn.off {
   .at-grille-4 {
     grid-template-columns: 1fr;
   }
-}
-
-.presentation-diag {
-  display: grid;
-  gap: 24px;
-  max-width: 980px;
-}
-.presentation-diag h2 {
-  margin: 0 0 12px;
-}
-.presentation-diag p {
-  margin: 4px 0 0;
-}
-.pd-profils {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
-}
-.pd-etapes {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 12px;
-}
-.pd-etapes li {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-.pd-etapes .diag-num {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--teal);
-  color: var(--white);
-  font: 600 13px var(--f-num);
 }
 
 /* Menu : le libellé suivi d'une pastille bêta reste sur une seule ligne. */

@@ -45,6 +45,31 @@ describe('résumé du sujet d’Inbox (contenu du rangement)', () => {
     expect(texte).toMatch(new RegExp(`Allure actuelle : 23${SEP}000${SEP}€ par mois`));
   });
 
+  it('méthode 3.0 : CA mensuel par catégorie, conclusions et points à vérifier', () => {
+    const texte = resumeResultat({
+      ...resultat({
+        caMensuel: 24000,
+        regulier: 22000,
+        engage: 0,
+        ponctuel: 2000,
+        conclusionCa: { statut: 'a-confirmer', manque: ['clients réguliers partis'] },
+        composition: { statut: 'non-atteint' },
+        alertes: [{ code: 'coherence-ca' }],
+        top: [],
+        topPortefeuille: [{ label: 'Forfaits engagés', bloc: '2. Types d’affaires' }],
+      }),
+      version: '3.0',
+    });
+    expect(texte).toMatch(new RegExp(`CA mensuel : 24${SEP}000${SEP}€`));
+    expect(texte).toContain('VMA ponctuelle');
+    expect(texte).toContain('Objectif de CA couvert : a-confirmer');
+    expect(texte).toContain('Ce qui manque pour conclure : clients réguliers partis');
+    expect(texte).toContain('Objectif sous engagement : non-atteint');
+    expect(texte).toContain('À vérifier : coherence-ca');
+    expect(texte).toContain('Forfaits engagés (bloc 2. Types d’affaires)');
+    expect(texte).toContain('Version de la configuration : 3.0');
+  });
+
   it('dit qu’un essai ne se range pas', () => {
     const essai = { ...resultat({ top: [] }), type: 'essai' } as Parameters<
       typeof resumeResultat
