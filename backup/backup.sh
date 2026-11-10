@@ -16,19 +16,24 @@ rm -rf "$DUMP_DIR" && mkdir -p "$DUMP_DIR"
 pg_dump --format=custom --file="$DUMP_DIR/simatis.dump" || fail "pg_dump"
 
 paths="$DUMP_DIR"
+SECRETS_COPY=/tmp/simatis-secrets
 # Temporary switch for a host that cannot read the secrets files (I/O errors on the bind mount):
 # the database is still saved and /health keeps a warning until the switch is removed.
 sans_secrets=""
 if [ "${BACKUP_SANS_SECRETS:-}" = "oui" ]; then
   sans_secrets="Sauvegarde SANS les secrets (BACKUP_SANS_SECRETS=oui) : à rétablir"
 elif [ -d /secrets ]; then
-  paths="$paths /secrets"
+  # restic lit mal les fichiers du montage (erreur d'entrée/sortie) alors que cp les lit : copie d'abord.
+  rm -rf "$SECRETS_COPY" && mkdir -p "$SECRETS_COPY/secrets" \
+    && cp -R /secrets/. "$SECRETS_COPY/secrets/" && chmod -R go-rwx "$SECRETS_COPY" \
+    || fail "copie des secrets"
+  paths="$paths $SECRETS_COPY/secrets"
 fi
 # shellcheck disable=SC2086
 restic backup --host simatis-os --tag simatis $paths || fail "restic backup"
 restic forget --host simatis-os --tag simatis --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune \
   || fail "restic forget"
-rm -rf "$DUMP_DIR"
+rm -rf "$DUMP_DIR" "$SECRETS_COPY"
 
 write_status "$started" "$restore_at" true "$sans_secrets"
 echo "backup ok: $started"
