@@ -14,8 +14,14 @@ export const COULEURS = {
 } as const;
 
 export const POLICE = "Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif";
-const LOGO = 'https://www.simatis.fr/assets/logo-simatis-crop.png';
 const SITE = 'https://www.simatis.fr';
+const LOGO = `${SITE}/assets/logo-simatis-crop.png`;
+// Images des mails, servies par le site (formats lus par toutes les messageries : PNG et JPEG, jamais SVG).
+const PHOTO_MARC = `${SITE}/assets/mail/marc-tabouret-192.jpg`;
+export const LOGOS_OUTILS = {
+  testVma: `${SITE}/assets/mail/logo-test-vma.png`,
+  testVmaBlanc: `${SITE}/assets/mail/logo-test-vma-blanc.png`,
+} as const;
 
 const C = COULEURS;
 
@@ -52,36 +58,63 @@ export const paragraphe = (contenu: string, extra = '') =>
 
 // Bouton plein, comme sur le site ; `libelle` est du texte brut, `lien` une adresse https.
 export const bouton = (libelle: string, lien: string) =>
-  `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 16px;"><tr><td style="background:${C.marine};border-radius:4px;"><a href="${echapper(lien)}" style="display:inline-block;padding:12px 24px;font:700 16px/1.2 ${POLICE};color:#FFFFFF;text-decoration:none;">${echapper(libelle)}</a></td></tr></table>`;
+  `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 18px;"><tr><td style="background:${C.marine};border-radius:6px;"><a href="${echapper(lien)}" style="display:inline-block;padding:14px 28px;font:700 16px/1.2 ${POLICE};color:#FFFFFF;text-decoration:none;border-radius:6px;">${echapper(libelle)}&nbsp;&rarr;</a></td></tr></table>`;
 
-// Signature : même police, même taille et même couleur que le texte ; seul le nom est en gras.
+// Signature : photo, nom en gras, fonction, adresse et site. Même police que le texte, séparée par un filet.
 export const signature = (tutoiement = false) =>
-  `<tr><td style="padding:28px 32px 30px;font:16px/1.6 ${POLICE};color:${C.nuit};">${paragraphe(tutoiement ? 'Bien à toi,' : 'Bien à vous,', 'margin:0 0 10px;')}
-<div><strong>Marc Tabouret</strong></div>
-<div>Directeur commercial en mode partagé · SIMATIS</div>
-<div><a href="mailto:marc.tabouret@simatis.fr" style="color:${C.nuit};text-decoration:underline;">marc.tabouret@simatis.fr</a></div></td></tr>`;
+  `<tr><td style="padding:26px 32px 30px;">${paragraphe(tutoiement ? 'Bien à toi,' : 'Bien à vous,', 'margin:0 0 18px;')}
+<table role="presentation" cellpadding="0" cellspacing="0" style="border-top:1px solid ${C.trait};width:100%;"><tr>
+<td valign="top" width="76" style="padding:18px 16px 0 0;width:76px;"><img src="${PHOTO_MARC}" alt="Marc Tabouret" width="64" height="64" style="display:block;border:0;width:64px;height:64px;border-radius:32px;"></td>
+<td valign="top" style="padding:18px 0 0;font:15px/1.5 ${POLICE};color:${C.nuit};">
+<div style="font:700 16px/1.4 ${POLICE};color:${C.marine};">Marc Tabouret</div>
+<div style="color:${C.roche};">Directeur commercial en mode partagé · SIMATIS</div>
+<div style="margin-top:4px;"><a href="mailto:marc.tabouret@simatis.fr" style="color:${C.teal};text-decoration:none;font-weight:600;">marc.tabouret@simatis.fr</a> <span style="color:${C.trait};">|</span> <a href="${SITE}" style="color:${C.teal};text-decoration:none;font-weight:600;">simatis.fr</a></div>
+</td></tr></table></td></tr>`;
 
-// Habille des lignes de tableau (`<tr>…`) : logo, filet menthe, contenu, signature (sauf si le
-// contenu porte la sienne), pied nuit.
+// En-tête d'un outil (Test de VMA…) : son logo et son nom, à droite du logo SIMATIS.
+export type EnteteOutil = { logo: string; titre: string };
+// Les mails du Test de VMA portent le logo de l'outil, comme les pages du test sur le site.
+export const ENTETE_TEST_VMA: EnteteOutil = { logo: LOGOS_OUTILS.testVma, titre: 'Test de VMA' };
+
+// Habille des lignes de tableau (`<tr>…`) : en-tête (logo SIMATIS, outil éventuel), filet aux couleurs du site,
+// contenu, signature (sauf si le contenu porte la sienne), pied nuit. `apercu` : la ligne que la messagerie
+// affiche sous l'objet, cachée dans le mail lui-même.
 export function habillerMail(
   lignes: string,
-  options: { signature?: boolean; tutoiement?: boolean } = {},
+  options: {
+    signature?: boolean;
+    tutoiement?: boolean;
+    entete?: EnteteOutil;
+    apercu?: string;
+  } = {},
 ): string {
-  return `<div style="margin:0;padding:24px 12px;background:${C.glacier};">
-<table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border-radius:8px;overflow:hidden;">
-<tr><td style="padding:22px 32px 18px;border-bottom:4px solid ${C.menthe};"><a href="${SITE}"><img src="${LOGO}" alt="SIMATIS, conseil et formation" width="150" style="display:block;border:0;height:auto;"></a></td></tr>
+  const apercu = options.apercu
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:${C.glacier};">${echapper(options.apercu)}</div>`
+    : '';
+  const outil = options.entete
+    ? `<td align="right" valign="middle" style="padding:0;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td valign="middle" style="padding:0 10px 0 0;font:700 12px/1.3 ${POLICE};letter-spacing:1.5px;text-transform:uppercase;color:${C.teal};text-align:right;">${echapper(options.entete.titre)}</td><td valign="middle"><img src="${echapper(options.entete.logo)}" alt="" width="80" height="67" style="display:block;border:0;width:80px;height:auto;"></td></tr></table></td>`
+    : '';
+  return `<div style="margin:0;padding:32px 12px;background:${C.glacier};">${apercu}
+<table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid ${C.trait};border-radius:12px;overflow:hidden;border-collapse:separate;">
+<tr><td style="padding:20px 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td valign="middle" style="padding:0;"><a href="${SITE}"><img src="${LOGO}" alt="SIMATIS, conseil et formation" width="140" style="display:block;border:0;width:140px;height:auto;"></a></td>${outil}</tr></table></td></tr>
+<tr><td style="padding:0;font-size:0;line-height:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td width="28%" style="height:4px;background:${C.teal};font-size:0;line-height:0;">&nbsp;</td><td style="height:4px;background:${C.menthe};font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>
 ${lignes}
 ${options.signature === false ? '' : signature(options.tutoiement)}
-<tr><td style="background:${C.nuit};padding:14px 32px;font:12px/1.5 ${POLICE};color:${C.menthe};text-align:center;"><a href="${SITE}" style="color:${C.menthe};text-decoration:none;">simatis.fr</a></td></tr>
+<tr><td style="background:${C.nuit};padding:18px 32px;font:12px/1.6 ${POLICE};color:#C9D6E8;text-align:center;"><div style="font:700 12px/1.6 ${POLICE};letter-spacing:1.5px;text-transform:uppercase;color:${C.menthe};">SIMATIS</div><div>Direction commerciale en mode partagé · Conseil et formation</div><div><a href="${SITE}" style="color:${C.menthe};text-decoration:none;">simatis.fr</a></div></td></tr>
 </table></div>`;
 }
 
 // Mail courant : du HTML libre (déjà échappé) dans une seule cellule du gabarit.
 export const habillerTexte = (
   html: string,
-  options: { signature?: boolean; tutoiement?: boolean } = {},
+  options: {
+    signature?: boolean;
+    tutoiement?: boolean;
+    entete?: EnteteOutil;
+    apercu?: string;
+  } = {},
 ) =>
   habillerMail(
-    `<tr><td style="padding:26px 32px 4px;font:16px/1.6 ${POLICE};color:${C.nuit};">${html}</td></tr>`,
+    `<tr><td style="padding:28px 32px 4px;font:16px/1.6 ${POLICE};color:${C.nuit};">${html}</td></tr>`,
     options,
   );

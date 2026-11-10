@@ -319,8 +319,75 @@ describe('brouillon du résultat au dirigeant', () => {
       expect(html).toContain('un excédent de variable ne compense pas');
       expect(html).toContain('27\u00a0k€ avec la reconduction indiquée');
       expect(html).toContain(
-        'Sans reconduction, il vous manquera 6\u00a0k€ par mois à l’échéance (+25\u00a0%)',
+        'Sans reconduction de vos engagements, il vous manquera 6\u00a0k€ par mois à l’échéance, soit 72\u00a0k€ par an (+25\u00a0% par rapport à votre trajectoire estimée).',
       );
+    });
+
+    it('ouvre sur une synthèse : verdict, écart et premier frein à lever', () => {
+      const { html } = brouillonResultat({ contactNom: null, ecran: v3() });
+      const debut = html.indexOf('En bref');
+      const bref = html.slice(debut, html.indexOf('Votre chiffre d’affaires mensuel', debut));
+      expect(html.indexOf('En bref')).toBeGreaterThan(-1);
+      expect(bref).toContain('Écart à combler');
+      expect(bref).toContain('Non : il manque du chiffre d’affaires.');
+      expect(bref).toContain('il vous manquera 6\u00a0k€ par mois');
+      expect(bref).toContain('Le premier frein à lever :');
+      expect(bref).toContain('frein ponctuel.');
+    });
+
+    it('activité ponctuelle atteignable : nuance le « non » par le niveau, sans parler de reconduction', () => {
+      const lancement = v3({
+        parcours: 'lancement',
+        caMensuel: { total: 0, regulier: 0, engage: 0, ponctuel: 0 },
+        projection: {
+          ca: 4000,
+          caAvecReconduction: null,
+          engage: 0,
+          engageAvecReconduction: null,
+          echu: 0,
+        },
+        conclusionCa: {
+          statut: 'non-couvert',
+          manque: [],
+          ecart: 6000,
+          ecartAvecReconduction: null,
+          ecartPct: 1.5,
+        },
+        composition: { statut: 'non-demande' },
+        niveau: { cle: 'real', label: 'Réaliste', phrase: 'Phrase fictive.' },
+        freinsPortefeuille: [],
+        textes: {
+          ...v3().textes,
+          conclusions: {
+            ...v3().textes.conclusions!,
+            ca: {
+              'non-couvert': 'Non : il manque du chiffre d’affaires.',
+              'non-couvert-atteignable': 'Pas encore à votre rythme actuel, mais atteignable.',
+            },
+          },
+        },
+      });
+      const { html } = brouillonResultat({ contactNom: null, ecran: lancement });
+      expect(html).toContain('Pas encore à votre rythme actuel, mais atteignable.');
+      expect(html).not.toContain('Non : il manque du chiffre d’affaires.');
+      expect(html).not.toContain('Sans reconduction');
+      expect(html).toContain('Il vous manquera 6\u00a0k€ par mois à l’échéance');
+      // Le parcours Lancement n'a pas de revenus sous engagement : la catégorie n'est pas affichée.
+      expect(html).not.toContain('Revenus sous engagement');
+    });
+
+    it('porte le logo du Test de VMA dans l’en-tête et une ligne d’aperçu', () => {
+      const { html } = brouillonResultat({ contactNom: null, ecran: v3() });
+      expect(html).toContain('https://www.simatis.fr/assets/mail/logo-test-vma.png');
+      expect(html).toContain('Écart à combler. Votre chiffre d’affaires mensuel');
+    });
+
+    it('résultat plus ancien sans texte nuancé : garde la conclusion d’origine', () => {
+      const { html } = brouillonResultat({
+        contactNom: null,
+        ecran: v3({ niveau: { cle: 'amb', label: 'Ambitieux', phrase: 'Phrase fictive.' } }),
+      });
+      expect(html).toContain('Non : il manque du chiffre d’affaires.');
     });
 
     it('type chaque enjeu : en euros pour le ponctuel, non chiffré pour les contrats', () => {
