@@ -3,6 +3,7 @@
 
 import {
   COULEURS,
+  ENTETE_TEST_VMA,
   POLICE,
   echapper,
   habillerMail,
@@ -286,14 +287,16 @@ ${portefeuille || mesure ? `<div style="margin:8px 0 4px;font:800 44px/1.1 ${POL
       ? `<tr><td style="padding:28px 32px 0;"><div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">Où se perd votre ${lancee ? 'allure' : 'VMA'} :</div></td></tr>${e.freins.map(carte).join('')}${noteEnjeu}`
       : `<tr><td style="padding:22px 32px 0;">${p(esc(e.textes.aucunFrein), 'margin:0;')}</td></tr>`;
 
-  const html =
-    habillerMail(`<tr><td style="padding:26px 32px 20px;">${p(salut, 'margin:0 0 10px;')}${p(`Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.`, 'margin:0;')}</td></tr>
+  const html = habillerMail(
+    `<tr><td style="padding:26px 32px 20px;">${p(salut, 'margin:0 0 10px;')}${p(`Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.`, 'margin:0;')}</td></tr>
 ${hero}
 ${allure}
 ${objectif}
 ${trajectoire}
 ${phrase}
-${freins}`);
+${freins}`,
+    { entete: ENTETE_TEST_VMA },
+  );
   return { subject: 'Votre résultat au Test de VMA', html };
 }
 
@@ -327,9 +330,12 @@ function brouillonResultatV3(p0: { contactNom: string | null; ecran: EcranDirige
     `<div style="font:${fort ? '700 ' : ''}15px/1.7 ${POLICE};color:${C.nuit};">${esc(x)}</div>`;
   const part = (k: 'regulier' | 'engage' | 'ponctuel') =>
     cm.total > 0 ? ` (${pct(cm[k] / cm.total)})` : '';
-  const categories = (['regulier', 'engage', 'ponctuel'] as const).map(
-    (k) => `${lib[k] ?? k} : ${euros(cm[k])} par mois${part(k)}`,
-  );
+  // Le parcours Lancement n'a pas de revenus sous engagement : la catégorie n'est ni affichée ni comptée.
+  const cles =
+    e.parcours === 'lancement'
+      ? (['regulier', 'ponctuel'] as const)
+      : (['regulier', 'engage', 'ponctuel'] as const);
+  const categories = cles.map((k) => `${lib[k] ?? k} : ${euros(cm[k])} par mois${part(k)}`);
   const hero = `<tr><td style="background:${C.nuit};padding:28px 32px 26px;">
 <div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.menthe};">${esc(t.libelleCaMensuel ?? 'Votre chiffre d’affaires mensuel')}</div>
 <div style="margin:8px 0 4px;font:800 44px/1.1 ${POLICE};color:#FFFFFF;">${esc(euros(cm.total))}<span style="font:400 16px/1.4 ${POLICE};color:#FFFFFF;"> par mois</span></div>
@@ -347,16 +353,32 @@ ${e.indicatif === true && t.indicatif ? `<div style="margin-top:4px;font:14px/1.
 </div></td></tr>`;
 
   const conclusions = t.conclusions;
+  const conclusionsTextes = conclusions;
   const bloc = (titre: string, texte: string, detail = '') =>
     `<div style="margin-top:12px;font:15px/1.6 ${POLICE};color:${C.nuit};"><strong style="color:${C.marine};">${esc(titre)}</strong> ${esc(texte)}${detail ? `<div style="font:14px/1.5 ${POLICE};color:${C.roche};">${esc(detail)}</div>` : ''}</div>`;
   const avecRec = typeof pr?.caAvecReconduction === 'number';
+  // Même lecture que la page de résultat du site : pour une activité purement ponctuelle, le niveau d'ambition nuance
+  // le « non » (écart que la levée des freins peut combler, ou non). Un résultat plus ancien sans ces textes garde le sien.
+  const texteCa = (() => {
+    if (!conclusionsTextes || !c) return '';
+    const ca = conclusionsTextes.ca;
+    if (
+      c.statut === 'non-couvert' &&
+      ['real', 'amb'].includes(e.niveau.cle) &&
+      ca['non-couvert-atteignable']
+    )
+      return ca['non-couvert-atteignable'];
+    if (c.statut === 'non-couvert' && e.niveau.cle === 'tres' && ca['non-couvert-hors-portee'])
+      return ca['non-couvert-hors-portee'];
+    return ca[c.statut] ?? '';
+  })();
+  // « Sans reconduction » n'est dit que s'il y a des engagements qui arrivent à terme.
+  const ecartTexte =
+    c && c.statut !== 'a-confirmer' && c.ecart > 0
+      ? `${pr && (pr.echu > 0 || avecRec) ? 'Sans reconduction de vos engagements, il' : 'Il'} vous manquera ${euros(c.ecart)} par mois à l’échéance, soit ${euros(c.ecart * 12)} par an${c.ecartPct !== null ? ` (+${pct(c.ecartPct)} par rapport à votre trajectoire estimée).` : '.'}`
+      : '';
   const detailCa = c
-    ? [
-        c.statut !== 'a-confirmer' && c.ecart > 0
-          ? `Sans reconduction, il vous manquera ${euros(c.ecart)} par mois à l’échéance${c.ecartPct !== null ? ` (+${pct(c.ecartPct)})` : ''}, soit ${euros(c.ecart * 12)} par an.`
-          : '',
-        c.manque.length ? `Ce qui manque pour conclure : ${c.manque.join(', ')}.` : '',
-      ]
+    ? [ecartTexte, c.manque.length ? `Ce qui manque pour conclure : ${c.manque.join(', ')}.` : '']
         .filter(Boolean)
         .join(' ')
     : '';
@@ -367,7 +389,7 @@ ${e.indicatif === true && t.indicatif ? `<div style="margin-top:4px;font:14px/1.
   const objectif = `<tr><td style="padding:22px 32px 0;"><div style="padding:16px 18px;border:1px solid ${C.trait};border-left:4px solid ${C.teal};border-radius:6px;">
 <div style="font:700 17px/1.4 ${POLICE};color:${C.marine};">Votre objectif : ${esc(e.niveau.label)}</div>
 <div style="margin-top:4px;font:15px/1.6 ${POLICE};color:${C.nuit};">${esc(`${euros(o?.caMensuel ?? e.allureVisee)} par mois dans ${ans(e.echeance)}, soit ${euros((o?.caMensuel ?? e.allureVisee) * 12)} par an.`)}${pr ? ` ${esc(`Sur votre lancée, ${euros(pr.ca)} par mois${avecRec ? ` sans reconduction, ${euros(pr.caAvecReconduction as number)} avec la reconduction indiquée` : ''}.`)}` : ''}</div>
-${conclusions && c ? bloc(conclusions.titreCa, conclusions.ca[c.statut] ?? '', detailCa) : ''}
+${conclusions && c ? bloc(conclusions.titreCa, texteCa, detailCa) : ''}
 ${conclusions && comp && comp.statut !== 'non-demande' ? bloc(conclusions.titreComposition, conclusions.composition[comp.statut] ?? '', detailComposition) : ''}
 </div></td></tr>
 <tr><td style="padding:16px 32px 0;">${p(esc(e.niveau.phrase), 'margin:0;')}</td></tr>`;
@@ -385,11 +407,37 @@ ${conclusions && comp && comp.statut !== 'non-demande' ? bloc(conclusions.titreC
     `<tr><td style="padding:28px 32px 0;"><div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">${esc(titre)}</div></td></tr>${liste.length ? liste.map(carte).join('') : `<tr><td style="padding:12px 32px 0;">${p(esc(t.aucunFrein), 'margin:0;')}</td></tr>`}`;
   const freins = `${e.freins.length || mesure ? section(`Vos freins : ${(t.titreConquete ?? 'Prestations ponctuelles').toLowerCase()}`, e.freins) : ''}${cm.regulier + cm.engage > 0 || (e.freinsPortefeuille ?? []).length ? section(`Vos freins : ${(t.titrePortefeuille ?? 'Clients réguliers et contrats').toLowerCase()}`, e.freinsPortefeuille ?? []) : ''}${noteEnjeu}`;
 
-  const html =
-    habillerMail(`<tr><td style="padding:26px 32px 20px;">${p(salutation(p0.contactNom), 'margin:0 0 10px;')}${p(`Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.`, 'margin:0;')}</td></tr>
+  // Synthèse en tête, comme sur la page : le verdict, l'écart (ou ce qui manque, ou la trajectoire), le premier frein.
+  const premier = e.freins[0] ?? (e.freinsPortefeuille ?? [])[0];
+  const ligneBref = (titre: string, texte: string) =>
+    `<div style="margin-top:8px;font:15px/1.6 ${POLICE};color:${C.nuit};"><strong style="color:${C.marine};">${esc(titre)}</strong> ${esc(texte)}</div>`;
+  const brefSuite = ecartTexte
+    ? ligneBref('L’écart :', ecartTexte)
+    : c?.statut === 'a-confirmer' && c.manque.length
+      ? ligneBref('Pour conclure, il manque :', `${c.manque.join(', ')}.`)
+      : pr
+        ? ligneBref(
+            'Votre trajectoire :',
+            `${euros(pr.ca)} par mois dans ${ans(e.echeance)}, pour un objectif de ${euros(o?.caMensuel ?? e.allureVisee)} par mois.`,
+          )
+        : '';
+  const bref = `<tr><td style="padding:0 32px 22px;"><div style="padding:16px 18px;border:1px solid ${C.trait};border-left:4px solid ${C.teal};border-radius:6px;">
+<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">En bref</div>
+<div style="margin-top:6px;font:700 17px/1.4 ${POLICE};color:${C.marine};">${esc(e.niveau.label)}</div>
+${texteCa ? ligneBref('Votre objectif :', texteCa) : ''}${brefSuite}${premier ? ligneBref('Le premier frein à lever :', `${premier.titre.charAt(0).toLowerCase()}${premier.titre.slice(1)}.`) : ''}
+</div></td></tr>`;
+
+  const html = habillerMail(
+    `<tr><td style="padding:26px 32px 20px;">${p(salutation(p0.contactNom), 'margin:0 0 10px;')}${p(`Voici votre résultat au Test de VMA pour ${esc(e.entreprise)}.`, 'margin:0;')}</td></tr>
+${bref}
 ${hero}
 ${vma}
 ${objectif}
-${freins}`);
+${freins}`,
+    {
+      entete: ENTETE_TEST_VMA,
+      apercu: `${e.niveau.label}. Votre chiffre d’affaires mensuel, votre VMA et les freins à lever en premier.`,
+    },
+  );
   return { subject: 'Votre résultat au Test de VMA', html };
 }

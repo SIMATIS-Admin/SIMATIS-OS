@@ -1,5 +1,6 @@
 import {
   COULEURS,
+  ENTETE_TEST_VMA,
   bouton,
   echapper as echapperMail,
   habillerMail,
@@ -202,7 +203,11 @@ export function mailInvitation(p: ParamsMail): { subject: string; html: string }
         p,
         `${p.origine === 'inscription' ? 'Conformément à votre demande, voici votre lien' : r.lienVoici} pour passer le test VMA de ${echapper(p.entrepriseNom)} :`,
       ),
-      { tutoiement: p.tutoiement },
+      {
+        tutoiement: p.tutoiement,
+        entete: ENTETE_TEST_VMA,
+        apercu: `Lien personnel, valable jusqu’au ${p.expireLe.toLocaleDateString('fr-FR')}.`,
+      },
     ),
   };
 }
@@ -217,7 +222,11 @@ export function mailRelance(p: ParamsMail): { subject: string; html: string } {
         p,
         `Je me permets de revenir vers ${p.tutoiement ? 'toi' : 'vous'} au sujet du test VMA de ${echapper(p.entrepriseNom)}, que ${p.tutoiement ? 'tu n’as' : 'vous n’avez'} pas encore passé. ${r.lienVoici} :`,
       ),
-      { tutoiement: p.tutoiement },
+      {
+        tutoiement: p.tutoiement,
+        entete: ENTETE_TEST_VMA,
+        apercu: `Lien personnel, valable jusqu’au ${p.expireLe.toLocaleDateString('fr-FR')}.`,
+      },
     ),
   };
 }
