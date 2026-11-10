@@ -10,6 +10,7 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { perimetre } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
+import { estEchange, miroirVersRelais } from '../partenaires/echanges.js';
 import { enrichirPropositions } from '../pilotage/validations.js';
 import { propositions } from '../propositions/schema.js';
 import { deposerSujet } from './depot.js';
@@ -477,11 +478,12 @@ export async function repondreMessagePartage(
   id: string,
   reponse: { sujet: string; corps: string },
   demanderOperation: (op: Operation) => Promise<Resultat> = demander,
+  realWrites = false,
 ): Promise<SujetVue | null> {
   if (reponsesEnCours.has(id)) throw new SujetRefuse('Réponse déjà en cours.');
   reponsesEnCours.add(id);
   try {
-    return await deposerReponse(db, instance, id, reponse, demanderOperation);
+    return await deposerReponse(db, instance, id, reponse, demanderOperation, realWrites);
   } finally {
     reponsesEnCours.delete(id);
   }
@@ -493,6 +495,7 @@ async function deposerReponse(
   id: string,
   reponse: { sujet: string; corps: string },
   demanderOperation: (op: Operation) => Promise<Resultat>,
+  realWrites: boolean,
 ): Promise<SujetVue | null> {
   const s = await withInstance(db, instance.id, (tx) => charger(tx, id));
   if (!s) return null;
@@ -515,6 +518,15 @@ async function deposerReponse(
     throw error;
   }
   if (!depot.ok) throw new DepotRefuse(depot.erreur);
+  // Le même message part par le relais ; son échec ne défait pas le dépôt (déjà fait, irréversible).
+  if (depot.chemin && estEchange(depot.chemin))
+    await miroirVersRelais(db, instance, realWrites, {
+      genre: 'reponse',
+      sujet: reponse.sujet,
+      corps: reponse.corps,
+      enReponseA: source.chemin,
+      chemin: depot.chemin,
+    }).catch(() => undefined);
   return withInstance(db, instance.id, async (tx) => {
     const actuel = await charger(tx, id);
     // Traitée entre-temps (autre onglet) : la réponse est partie, rien à marquer de plus.

@@ -1583,7 +1583,7 @@ export function registerApi(
           .code(403)
           .send({ error: "L'espace partagé n'est pas activé dans cet espace." });
       try {
-        return await repondreMessagePartage(db, i, id, parsed.data);
+        return await repondreMessagePartage(db, i, id, parsed.data, undefined, realWrites);
       } catch (error) {
         if (error instanceof DepotRefuse) return reply.code(502).send({ error: error.message });
         throw error;
