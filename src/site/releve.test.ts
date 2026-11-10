@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
+import { ACCUSES_MAX_PAR_RELEVE } from './filtre.js';
 import {
   echeanceDe,
   releverDemandesSite,
@@ -214,6 +215,47 @@ describe('Site web : relevé des demandes de contact', () => {
     ).rejects.toThrow(/acquittement/);
     // Committed before the acknowledgement: the next pass re-delivers it and the key dedupes it.
     expect(await sujetsSite()).toHaveLength(1);
+  });
+
+  it('sends the acknowledgement only for requests that pass the filters', async () => {
+    const saine = demande({ nom: 'Saine Fictive' });
+    const louche = demande({ nom: 'Louche Fictif', email: 'x@exemple.my.id' });
+    const avecLien = demande({ nom: 'Lien Fictif', message: 'Voir https://exemple.test/doc' });
+    const accuses: string[] = [];
+    const r = await releverDemandesSite(t.app.db, {
+      url: 'https://site.test',
+      token: TOKEN,
+      fetch: faux([saine, louche, avecLien]).fetch,
+      accuse: (_tx, _instance, d) => {
+        accuses.push(d.nom);
+        return Promise.resolve();
+      },
+    });
+
+    expect(r.creees).toBe(3);
+    expect(accuses).toEqual(['Saine Fictive']);
+    // The suspicious requests stay in the Inbox, marked, so no real prospect is lost.
+    const sujets = await sujetsSite();
+    expect(sujets).toHaveLength(3);
+    const suspects = sujets.filter((s) => s.titre.startsWith('⚠ Suspecte — '));
+    expect(suspects).toHaveLength(2);
+    expect(suspects[0]?.resume).toContain('accusé de réception non envoyé');
+  });
+
+  it('caps the acknowledgements sent in one pass', async () => {
+    const file = Array.from({ length: ACCUSES_MAX_PAR_RELEVE + 3 }, () => demande());
+    let envoyes = 0;
+    const r = await releverDemandesSite(t.app.db, {
+      url: 'https://site.test',
+      token: TOKEN,
+      fetch: faux(file).fetch,
+      accuse: () => {
+        envoyes++;
+        return Promise.resolve();
+      },
+    });
+    expect(r.creees).toBe(ACCUSES_MAX_PAR_RELEVE + 3);
+    expect(envoyes).toBe(ACCUSES_MAX_PAR_RELEVE);
   });
 });
 
