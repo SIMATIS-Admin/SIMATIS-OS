@@ -2233,6 +2233,27 @@ textarea.input {
   }
 }
 /* Narrow icon-only sidebar, chosen with the button beside the logo. */
+.recharger-btn {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r-s);
+  background: none;
+  color: #8fa7c6;
+  cursor: pointer;
+}
+.recharger-btn:hover {
+  background: var(--navy-3);
+  color: var(--white);
+}
+.recharger-btn svg {
+  width: 14px;
+  height: 14px;
+}
 .reduire-btn {
   margin-left: auto;
   display: inline-flex;

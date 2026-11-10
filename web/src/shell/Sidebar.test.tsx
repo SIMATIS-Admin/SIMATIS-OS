@@ -138,6 +138,15 @@ describe('Sidebar', () => {
     expect(plusTard?.getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('reloads the app from the button next to the logo', () => {
+    const reload = vi.fn();
+    vi.stubGlobal('location', { ...window.location, reload });
+    renderSidebar(simatis, []);
+    fireEvent.click(screen.getByRole('button', { name: "Recharger l'OS" }));
+    expect(reload).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
+
   it('narrows to icons on click, remembers it, and widens back', () => {
     renderSidebar(simatis, []);
     const bouton = screen.getByRole('button', { name: 'Réduire le menu' });
