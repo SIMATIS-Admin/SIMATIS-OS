@@ -15,6 +15,7 @@ import type { Database } from './db.js';
 import type { CompteImap } from './secrets.js';
 import { registerHealth } from './health.js';
 import { registerMcp } from './mcp/server.js';
+import { registerOriginGuard } from './origin-guard.js';
 import { registerPartenairesRoutes } from './partenaires/routes.js';
 import { registerCerveauRoutes } from './cerveau/routes.js';
 import { registerRunnerApi } from './routines/runner-api.js';
@@ -68,6 +69,7 @@ export function buildApp({
   logger = false,
 }: AppDeps): FastifyInstance {
   const app = Fastify({ logger });
+  registerOriginGuard(app);
   registerHealth(app, { pool, version, backupStatusFile });
   registerApi(app, { db, secretsDir, realWrites, googleFetch, imapServeur });
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });

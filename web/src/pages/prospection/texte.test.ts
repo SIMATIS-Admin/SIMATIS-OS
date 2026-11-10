@@ -1,5 +1,26 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { htmlVersTexte, texteVersHtml } from './texte.js';
+import { corpsSur, htmlVersTexte, texteVersHtml } from './texte.js';
+
+describe('corps affiché à la relecture', () => {
+  it('garde la mise en forme et les liens', () => {
+    const html =
+      '<p>Bonjour,</p><ul><li><strong>Jeudi</strong></li></ul><p><a href="https://exemple.test/vma">Le test</a></p>';
+    expect(corpsSur(html)).toBe(html);
+  });
+
+  // Charges qui passaient le nettoyage du serveur (src/prospection/redaction.ts).
+  it.each([
+    '<img/src=x/onerror=alert(1)>',
+    '<a href=javascript:alert(1)>lien</a>',
+    '<a href="java&#115;cript:alert(1)">lien</a>',
+    '<svg><script>alert(1)</script></svg>',
+    '<p style="background:url(https://pistage.test/p)">texte</p>',
+  ])('retire ce qui s’exécute ou charge quelque chose : %s', (charge) => {
+    const propre = corpsSur(charge);
+    expect(propre).not.toMatch(/onerror|javascript|script|<img|<svg|style|url\(/i);
+  });
+});
 
 describe('texte du mail', () => {
   const html =

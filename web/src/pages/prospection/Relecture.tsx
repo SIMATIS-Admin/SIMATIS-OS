@@ -12,7 +12,7 @@ import {
   type SignatureProspection,
   type SuiviBrouillon,
 } from '../../api.js';
-import { htmlVersTexte, texteVersHtml } from './texte.js';
+import { corpsSur, htmlVersTexte, texteVersHtml } from './texte.js';
 
 const ETATS: Record<string, [string, string]> = {
   pret: ['green', 'Prêt'],
@@ -332,7 +332,7 @@ export function Relecture({
               </div>
             ) : (
               <div style={{ lineHeight: 1.55 }}>
-                <div dangerouslySetInnerHTML={{ __html: b.corps ?? '' }} />
+                <div dangerouslySetInnerHTML={{ __html: corpsSur(b.corps ?? '') }} />
                 {signature ? (
                   <img
                     src={urlImageSignature(slug, signature.id)}
