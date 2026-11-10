@@ -91,10 +91,101 @@ export const contenuRapportFictif: ContenuRapport = {
     ],
     indicateurs: ['Quatre ou cinq indicateurs au plus.'],
     nePasFaire: ['Pas d’embauche à temps plein.'],
+    conditions: [],
   },
   conclusion: {
     paragraphes: ['Atelier Fictif Nord est un Sprinteur.'],
     propositionTitre: 'De Sprinteur à Marathonien',
     proposition: ['Une direction commerciale à temps partagé.'],
+    blocs: [],
   },
+  annexes: [],
+};
+
+// Même rapport avec les blocs de la structure « v3 » : thèmes en nombre libre, récapitulatif des
+// préconisations, tableaux d'actions à trois colonnes, conditions de réussite, suite de la
+// proposition et annexes. Données fictives.
+export const contenuRapportFictifV3: ContenuRapport = {
+  ...contenuRapportFictif,
+  resultats: {
+    ...contenuRapportFictif.resultats,
+    dimensions: [
+      ...contenuRapportFictif.resultats.dimensions,
+      { nom: 'Suivi des devis', note: '4,0', constat: 'Aucun suivi chiffré.' },
+      { nom: 'Fichier de prospects', note: '3,5', constat: 'Pas de fichier unique.' },
+    ],
+  },
+  preconisations: {
+    ...contenuRapportFictif.preconisations,
+    items: contenuRapportFictif.preconisations.items.map((p, n) => ({
+      ...p,
+      etiquette: n === 0 ? 'Mois 1' : 'Mois 4 à 12',
+      potentiel: n === 0 ? 'Aujourd’hui, seuls les devis sont comptés.' : 'Après chaque vague.',
+    })),
+  },
+  plan: {
+    ...contenuRapportFictif.plan,
+    horizons: [
+      {
+        ...contenuRapportFictif.plan.horizons[0]!,
+        actions: [
+          {
+            quand: 'Mois 1',
+            action: 'Un tableau des devis.',
+            resultat: 'Le taux de transformation.',
+          },
+          {
+            quand: 'Mois 2',
+            action: 'Un fichier de prospects.',
+            resultat: 'Une liste à relancer.',
+          },
+        ],
+      },
+      {
+        ...contenuRapportFictif.plan.horizons[1]!,
+        actions: [{ action: 'Deux segments prioritaires.', resultat: 'Une cible par trimestre.' }],
+      },
+      contenuRapportFictif.plan.horizons[2]!,
+    ],
+    indicateurs: ['La part des devis qui deviennent des commandes.', 'Le délai d’envoi des devis.'],
+    conditions: ['Un point mensuel avec le dirigeant.'],
+  },
+  conclusion: {
+    ...contenuRapportFictif.conclusion,
+    blocs: [
+      {
+        titre: 'Mon intervention',
+        paragraphes: ['Une demi-journée par semaine.'],
+        puces: [],
+      },
+      {
+        titre: 'Qui fait quoi',
+        paragraphes: [],
+        puces: [],
+        tableau: {
+          entetes: ['Intervenant', 'Rôle dans la démarche'],
+          lignes: [
+            ['Le dirigeant', 'Décide et arbitre.'],
+            ['Le conseil', 'Cadre et suit la démarche.'],
+          ],
+        },
+      },
+    ],
+  },
+  annexes: [
+    {
+      titre: 'Suivre les devis',
+      paragraphes: ['Un devis suivi est un devis relancé.'],
+      puces: ['Les devis établis.', 'Les commandes.'],
+    },
+    {
+      titre: 'Trier les demandes',
+      paragraphes: [],
+      puces: [],
+      tableau: {
+        entetes: ['Critère', 'La question à se poser', 'La note de 0 à 3'],
+        lignes: [['Budget', 'Le budget est-il connu ?', '0 à 3']],
+      },
+    },
+  ],
 };
