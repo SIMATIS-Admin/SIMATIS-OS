@@ -168,6 +168,14 @@ export function Sidebar({
           SIMATIS <span>OS</span>
         </div>
         <button
+          className="recharger-btn"
+          aria-label="Recharger l'OS"
+          title="Recharger l'OS (récupérer la dernière version)"
+          onClick={() => window.location.reload()}
+        >
+          <Icon name="refresh" />
+        </button>
+        <button
           className="reduire-btn"
           aria-label={reduite ? 'Agrandir le menu' : 'Réduire le menu'}
           title={reduite ? 'Agrandir le menu' : 'Réduire le menu'}
