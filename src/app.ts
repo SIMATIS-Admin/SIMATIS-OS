@@ -148,7 +148,7 @@ export function buildApp({
     codex,
     drive: { secretsDir, realWrites, ...(googleFetch ? { fetch: googleFetch } : {}) },
   });
-  registerCerveauRoutes(app, { db, lienKdrive: partageKdriveUrl });
+  registerCerveauRoutes(app, { db, lienKdrive: partageKdriveUrl, realWrites });
   registerWeb(app);
   return app;
 }

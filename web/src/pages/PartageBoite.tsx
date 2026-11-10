@@ -74,6 +74,7 @@ function FilMessages({
 
   useEffect(() => {
     let vivant = true;
+    for (const m of fil.messages) if (m.texte && !lus.has(m.id)) lus.set(m.id, m.texte);
     const manquants = fil.messages.map((m) => m.id).filter((id) => !lus.has(id));
     (manquants.length
       ? operationCerveau(slug, {

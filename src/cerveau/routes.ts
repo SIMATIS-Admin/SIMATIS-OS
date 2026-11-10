@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Database } from '../db.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { resolveToken } from '../mcp/tokens.js';
+import { estEchange, messagesRelayes, miroirVersRelais } from '../partenaires/echanges.js';
 import { demander, prendre, repondre, RunnerInjoignable } from './file.js';
 import { deposerCarte, lireCarte } from './store.js';
 
@@ -87,7 +88,11 @@ const resultatSchema = z.union([
 
 export function registerCerveauRoutes(
   app: FastifyInstance,
-  { db, lienKdrive = null }: { db: Database; lienKdrive?: string | null },
+  {
+    db,
+    lienKdrive = null,
+    realWrites = false,
+  }: { db: Database; lienKdrive?: string | null; realWrites?: boolean },
 ): void {
   const estRunner = async (request: FastifyRequest) => {
     const header = request.headers.authorization ?? '';
@@ -126,8 +131,14 @@ export function registerCerveauRoutes(
       const refuse = await acces(request.params.slug, reply, partage);
       if (refuse) return refuse;
       const carte = lireCarte(partage ? 'partage' : 'simatis');
+      if (!carte || !partage) return carte;
+      // Les messages reçus par le relais sans fichier dans echanges/ s'ajoutent aux échanges.
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      const relayes = instance ? await messagesRelayes(db, instance, carte.moi ?? 'marc') : [];
+      const connus = new Set(carte.noeuds.map((n) => n.id));
+      const noeuds = [...carte.noeuds, ...relayes.filter((n) => !connus.has(n.id))];
       // Lien du dossier partagé sur le kDrive : une configuration de l'OS, pas un contenu de la carte.
-      return carte && partage ? { ...carte, lienKdrive } : carte;
+      return { ...carte, noeuds, lienKdrive };
     },
   );
 
@@ -141,7 +152,26 @@ export function registerCerveauRoutes(
       if (refuse) return refuse;
       try {
         const resultat = await demander(parsed.data);
-        if (resultat.ok) return resultat;
+        if (resultat.ok) {
+          // Le fichier est déposé : le même message part par le relais. Un échec du relais ne défait
+          // pas le dépôt (le message est dans echanges/), il est signalé à l'écran.
+          const op = parsed.data;
+          if (op.type !== 'message' || op.espace !== 'partage') return resultat;
+          const instance = await getInstanceBySlug(db, request.params.slug);
+          const chemin = resultat.chemin;
+          if (!instance || !chemin || !estEchange(chemin)) return resultat;
+          const relais = await miroirVersRelais(db, instance, realWrites, {
+            genre: op.genre,
+            sujet: op.sujet,
+            corps: op.corps,
+            enReponseA: op.enReponseA,
+            chemin,
+          }).catch((e: unknown) => ({
+            statut: 'erreur' as const,
+            raison: e instanceof Error ? e.message : String(e),
+          }));
+          return { ...resultat, relais };
+        }
         return reply.code(resultat.conflit ? 409 : 400).send({ error: resultat.erreur });
       } catch (e) {
         if (e instanceof RunnerInjoignable)

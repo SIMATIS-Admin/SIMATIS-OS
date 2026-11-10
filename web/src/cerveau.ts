@@ -8,6 +8,8 @@ export type NoeudCerveau = {
   auteur?: string | null;
   date?: string | null;
   reponseA?: string | null;
+  // Texte d'un message reçu par le relais, sans fichier dans le kDrive pour le lire.
+  texte?: string | null;
 };
 export type CarteCerveau = {
   noeuds: NoeudCerveau[];

@@ -31,6 +31,8 @@ import { loadInstanceSecrets } from '../secrets.js';
 import { tourPartenaires } from './releve.js';
 import { messagesPartenaires, missions, partenaires, relaisSorties } from './schema.js';
 import { traiterEnveloppe, type RelaisDeps } from './service.js';
+import { messagesRelayes, miroirVersRelais } from './echanges.js';
+import { deposerSujet } from '../inbox/depot.js';
 import './types-propositions.js';
 
 // Every name and value below is fictitious.
@@ -609,6 +611,68 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
       ['recu', 'question'],
       ['envoye', 'reponse'],
     ]);
+  });
+
+  it('mirrors an echanges/ message to the relay and keeps one id for both channels', async () => {
+    const chemin = 'echanges/2026-11-10-1000-marc-essai-miroir.md';
+    const message = {
+      genre: 'info' as const,
+      sujet: 'Miroir fictif',
+      corps: 'Un message **déposé** dans echanges/.',
+      chemin,
+    };
+    expect(await miroirVersRelais(t.app.db, client, true, message)).toMatchObject({
+      statut: 'envoye',
+    });
+    // The same file asked twice sends nothing more.
+    expect(await miroirVersRelais(t.app.db, client, true, message)).toMatchObject({
+      statut: 'deja',
+    });
+    await tourPartenaires(t.app.db, client, deps);
+    const recus = (await releverAlpes()).filter((e) => e.type === 'message');
+    expect(recus).toHaveLength(1);
+    expect(lireMessageLibre(recus[0]?.corps as Message)).toMatchObject({
+      id: chemin,
+      type: 'info',
+      sujet: 'Miroir fictif',
+    });
+
+    // Alpes answers by the relay with the id of its own echanges/ file: one Inbox entry, whichever
+    // channel (relay, or the Inbox routine reading the kDrive) comes first.
+    const p = await partenaireAlpes();
+    const reponse = 'echanges/2026-11-10-1005-christophe-re-miroir.md';
+    const cle = `partage:${reponse}`;
+    const avant = (await sujetsRelais()).length;
+    const envoi = messageLibre({
+      type: 'reponse',
+      sujet: 'Re : miroir fictif',
+      texte: 'Bien reçu.',
+      en_reponse_a: chemin,
+    });
+    envoi.messageId = reponse;
+    await envoyer(alpes, p.connexionId, 'message', envoi);
+    await tourPartenaires(t.app.db, client, deps);
+    const entrees = (await sujetsRelais()).slice(avant);
+    expect(entrees.map((e) => [e.source, e.sourceId])).toEqual([['routine', cle]]);
+    // The routine reading the same kDrive file later finds the key taken.
+    const doublon = await withInstance(t.app.db, client.id, (tx) =>
+      deposerSujet(tx, {
+        type: 'autre',
+        titre: 'Alpes OS répond : Re : miroir fictif',
+        origine: 'messagerie',
+        source: 'routine',
+        sourceId: cle,
+      }),
+    );
+    expect(doublon.statut).toBe('existant');
+
+    const nœuds = await messagesRelayes(t.app.db, client, 'marc');
+    expect(nœuds.map((n) => [n.id, n.auteur, n.reponseA])).toEqual(
+      expect.arrayContaining([
+        [chemin, 'marc', null],
+        [reponse, 'christophe', chemin],
+      ]),
+    );
   });
 
   it('marks the partner cut when it cuts, and gives up what was still queued for it', async () => {

@@ -275,6 +275,8 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
       });
       expect(m.statusCode).toBe(200);
       expect(m.json<{ chemin: string }>().chemin).toMatch(/^echanges\//);
+      // Aucun partenaire connecté dans cette instance : le dépôt reste valable, le relais le dit.
+      expect(m.json<{ relais: { statut: string } }>().relais.statut).toBe('aucun');
       const carte = await app.inject({
         method: 'GET',
         url: '/api/i/op-ok/cerveau/carte?espace=partage',

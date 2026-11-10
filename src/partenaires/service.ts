@@ -91,6 +91,9 @@ function verifierEcriture(instance: Instance, deps: RelaisDeps): void {
   }
 }
 
+// Identifiant d'un message qui a aussi son fichier dans echanges/ de l'espace partagé (voir echanges.ts).
+export const estEchange = (id: string) => /^echanges\/[^/]+\.md$/.test(id);
+
 export const nomCourt = (nom: string) => nom.split(' · ')[0]?.trim() || nom;
 
 async function enregistrerPartenaire(
@@ -656,8 +659,11 @@ async function recevoirMessageLibre(tx: Tx, env: Enveloppe, p: Partenaire): Prom
           : `${nom} : ${lu.sujet}`,
     resume: lu.texte || null,
     origine: 'partenaire',
-    source: 'relais',
-    sourceId: env.id,
+    // Un message qui a aussi son fichier dans echanges/ prend la clé de la routine Inbox : qu'il
+    // arrive d'abord par le relais ou par le kDrive, une seule entrée, et « Répondre » y reste.
+    ...(estEchange(lu.id)
+      ? { source: 'routine' as const, sourceId: `partage:${lu.id}` }
+      : { source: 'relais' as const, sourceId: env.id }),
     priorite: lu.type === 'question' ? 4 : 3,
   });
 }
