@@ -111,7 +111,16 @@ function DetailSession({
 }
 
 // Les derniers passages d'enrichissement, lancés à la main ou par la routine quotidienne.
-export function SessionsEnrichissement({ slug, version }: { slug: string; version?: number }) {
+export function SessionsEnrichissement({
+  slug,
+  version,
+  surRelancer,
+}: {
+  slug: string;
+  version?: number;
+  // Rouvre la recherche de prospects : une recherche interrompue ou en erreur n'a pas d'autre issue.
+  surRelancer?: () => void;
+}) {
   const [sessions, setSessions] = useState<SessionEnrichissement[] | null>(null);
   const [ouverte, setOuverte] = useState(
     () => window.localStorage.getItem('sessions-enrichissement-ouvertes') !== '0',
@@ -193,6 +202,13 @@ export function SessionsEnrichissement({ slug, version }: { slug: string; versio
                     ouverte={detail === cle(s)}
                     basculer={() => setDetail(detail === cle(s) ? null : cle(s))}
                     supprimer={() => supprimer(s)}
+                    relancer={
+                      surRelancer &&
+                      s.nature === 'recherche' &&
+                      (s.etat === 'erreur' || s.etat === 'incomplete')
+                        ? surRelancer
+                        : undefined
+                    }
                     surCommentaire={(commentaire) =>
                       setSessions(
                         (l) =>
@@ -216,6 +232,7 @@ function SessionLigne({
   ouverte,
   basculer,
   supprimer,
+  relancer,
   surCommentaire,
 }: {
   slug: string;
@@ -223,6 +240,7 @@ function SessionLigne({
   ouverte: boolean;
   basculer: () => void;
   supprimer: () => void;
+  relancer?: () => void;
   surCommentaire: (commentaire: string | null) => void;
 }) {
   return (
@@ -230,7 +248,8 @@ function SessionLigne({
       <tr>
         <td>
           <button
-            className="link"
+            className="link lien-seul"
+            style={{ whiteSpace: 'nowrap' }}
             aria-expanded={ouverte}
             title="Voir les contacts de cette session"
             onClick={basculer}
@@ -245,17 +264,24 @@ function SessionLigne({
         <td className="r num">{s.ajoutees ?? '—'}</td>
         <td className="muted">{[s.detail, s.commentaire].filter(Boolean).join(' · ')}</td>
         <td style={{ paddingLeft: 24 }}>
-          <button
-            className="btn sm"
-            style={{ color: '#b42318' }}
-            aria-label="Supprimer la session"
-            title="Supprimer la session"
-            onClick={supprimer}
-          >
-            <span style={{ display: 'inline-flex', width: 16, height: 16 }}>
-              <Icon name="trash" />
-            </span>
-          </button>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 20 }}>
+            {relancer && (
+              <button className="btn sm primary" onClick={relancer}>
+                Relancer la recherche
+              </button>
+            )}
+            <button
+              className="btn sm"
+              style={{ color: '#b42318' }}
+              aria-label="Supprimer la session"
+              title="Supprimer la session"
+              onClick={supprimer}
+            >
+              <span style={{ display: 'inline-flex', width: 16, height: 16 }}>
+                <Icon name="trash" />
+              </span>
+            </button>
+          </span>
         </td>
       </tr>
       {ouverte && (

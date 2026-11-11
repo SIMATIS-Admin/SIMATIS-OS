@@ -11,6 +11,7 @@ let enrichissement: Record<string, unknown> | null = null;
 let mandats: unknown[] = [];
 let rapprochement: unknown = null;
 let reponses: unknown[] = [];
+let rechercheEnErreur = false;
 
 // La liste complète est repliée par défaut : les tests qui la lisent l'ouvrent d'avance.
 beforeEach(() => window.localStorage.setItem('base-liste-ouverte', '1'));
@@ -121,10 +122,10 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
         nature: 'recherche',
         libelle: 'Recherche de nouveaux prospects',
         mode: 'automatique',
-        etat: 'terminee',
+        etat: rechercheEnErreur ? 'erreur' : 'terminee',
         traites: 12,
         ajoutees: 9,
-        detail: null,
+        detail: rechercheEnErreur ? 'Recherche interrompue.' : null,
         commentaire: null,
       },
       {
@@ -181,6 +182,7 @@ describe('base vivante : import en trois temps', () => {
     mandats = [];
     rapprochement = null;
     reponses = [];
+    rechercheEnErreur = false;
     etat = videEtat();
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
@@ -308,6 +310,7 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     mandats = [];
     rapprochement = null;
     reponses = [];
+    rechercheEnErreur = false;
     etat = {
       fiches: [fiche],
       total: 1,
@@ -574,6 +577,26 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     expect(await within(panneau).findByText('Automatique')).toBeTruthy();
     expect(within(panneau).getByText('Manuel')).toBeTruthy();
     expect(within(panneau).getByText('Quota atteint')).toBeTruthy();
+  });
+
+  it('propose de relancer une recherche en erreur, pas une session réussie ni un enrichissement', async () => {
+    rechercheEnErreur = true;
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    const relances = await within(panneau).findAllByRole('button', {
+      name: 'Relancer la recherche',
+    });
+    // La session d'enrichissement en erreur (quota) n'est pas une recherche : une seule relance.
+    expect(relances).toHaveLength(1);
+    fireEvent.click(relances[0]!);
+    expect(screen.getByRole('dialog', { name: 'Rechercher de nouveaux prospects' })).toBeTruthy();
+  });
+
+  it('ne propose aucune relance quand la recherche a abouti', async () => {
+    render(<Bases slug="simatis" />);
+    const panneau = await screen.findByRole('region', { name: "Sessions d'enrichissement" });
+    await within(panneau).findByText('Quota atteint');
+    expect(within(panneau).queryByRole('button', { name: 'Relancer la recherche' })).toBeNull();
   });
 
   it('replie la liste des sessions et retient le choix', async () => {

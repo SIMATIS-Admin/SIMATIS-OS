@@ -722,7 +722,7 @@ export function Bases({ slug }: { slug: string }) {
           Vos contacts, leurs sources et leur historique, prêts pour la prospection.
         </p>
         <div className="bv-entete-liens">
-          <a className="link" href={`#/${slug}/prospection`}>
+          <a className="link lien-seul" href={`#/${slug}/prospection`}>
             Ouvrir Prospection
           </a>
           <details className="bv-menu">
@@ -798,7 +798,7 @@ export function Bases({ slug }: { slug: string }) {
                 Chercher des entreprises
               </button>
               <button
-                className="link small"
+                className="link small lien-seul"
                 onClick={() => setFenetre({ quoi: 'routine-recherche' })}
               >
                 Recherche quotidienne
@@ -814,7 +814,7 @@ export function Bases({ slug }: { slug: string }) {
               l’intégration.
             </p>
             <div className="bv-parcours-actions">
-              <button className="btn go" onClick={() => setFenetre({ quoi: 'import', etape: 1 })}>
+              <button className="btn" onClick={() => setFenetre({ quoi: 'import', etape: 1 })}>
                 + Importer une liste
               </button>
             </div>
@@ -837,7 +837,11 @@ export function Bases({ slug }: { slug: string }) {
         </div>
       )}
 
-      <SessionsEnrichissement slug={slug} version={fenetre === null ? 0 : 1} />
+      <SessionsEnrichissement
+        slug={slug}
+        version={fenetre === null ? 0 : 1}
+        surRelancer={() => setFenetre({ quoi: 'recherche' })}
+      />
 
       <div className="bv-liste-bascule">
         <button className="btn" type="button" aria-expanded={listeOuverte} onClick={basculerListe}>
