@@ -675,6 +675,29 @@ describe('Partenaires : relais d’agents (brique 1)', () => {
     );
   });
 
+  it('sends from Mon activité through the partner held by a mandate', async () => {
+    const propre = await createInstance(t.owner.db, {
+      slug: 'activite-fictive',
+      nom: 'Activité fictive',
+      type: 'propre',
+      config: { ecrituresReelles: true },
+    });
+    const chemin = 'echanges/2026-11-10-1100-marc-depuis-mon-activite.md';
+    const resultat = await miroirVersRelais(t.app.db, propre, true, {
+      genre: 'info',
+      sujet: 'Depuis Mon activité (fictif)',
+      corps: 'Le partenaire est porté par le mandat.',
+      chemin,
+    });
+    expect(resultat).toMatchObject({ statut: 'envoye', partenaire: 'Alpes OS · Essai' });
+    await tourPartenaires(t.app.db, client, deps);
+    const recus = (await releverAlpes()).filter((e) => e.type === 'message');
+    expect(recus.map((e) => (e.corps as Message).messageId)).toContain(chemin);
+    // Le message relayé se lit aussi depuis Mon activité.
+    const nœuds = await messagesRelayes(t.app.db, propre, 'marc');
+    expect(nœuds.map((n) => n.id)).toContain(chemin);
+  });
+
   it('marks the partner cut when it cuts, and gives up what was still queued for it', async () => {
     const { mission: id } = await confier('Une dernière mission fictive', 'Dernière (essai)');
     const [c] = (await alpes.connexions()).filter(

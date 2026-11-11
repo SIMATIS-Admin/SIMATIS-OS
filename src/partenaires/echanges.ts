@@ -4,6 +4,7 @@ import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
+import { listInstances } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import { canWriteReal } from '../propositions/service.js';
 import { messagesPartenaires, type TypeMessage } from './schema.js';
@@ -15,6 +16,25 @@ import { stockageTx } from './stockage.js';
 // Un message de l'espace partagé et son envoi par le relais sont le même message : l'identifiant
 // du message relayé EST le chemin du fichier déposé dans echanges/. Chaque côté reconnaît ainsi
 // ce qu'il a déjà, qu'il l'ait reçu par le kDrive, par le relais ou par les deux.
+
+// La connexion au relais est portée par un mandat (Alpes IA), alors que les échanges sont ouverts
+// depuis Mon activité : sans ce détour, l'envoi cherche un partenaire là où il n'y en a pas.
+// Un mandat ou une démo reste sur sa propre instance. Le partenaire dont le nom évoque Alpes est
+// préféré, à défaut le seul mandat qui en a un d'actif.
+export async function instanceDuRelais(db: Executor, instance: Instance): Promise<Instance> {
+  if (instance.type !== 'propre') return instance;
+  const porteurs: { instance: Instance; alpes: boolean }[] = [];
+  for (const i of (await listInstances(db)).filter((x) => x.type === 'mandat')) {
+    const actifs = (await withInstance(db, i.id, (tx) => listerPartenaires(tx))).filter(
+      (p) => p.statut === 'active',
+    );
+    if (actifs.length)
+      porteurs.push({ instance: i, alpes: actifs.some((p) => /alpes|alpia/i.test(p.nom)) });
+  }
+  const alpes = porteurs.filter((x) => x.alpes);
+  const choisis = alpes.length ? alpes : porteurs;
+  return choisis.length === 1 && choisis[0] ? choisis[0].instance : instance;
+}
 
 export type MiroirResultat =
   | { statut: 'envoye' | 'simulation' | 'deja'; partenaire: string }
@@ -35,7 +55,8 @@ export async function miroirVersRelais(
     chemin: string;
   },
 ): Promise<MiroirResultat> {
-  return withInstance(db, instance.id, async (tx): Promise<MiroirResultat> => {
+  const porteur = await instanceDuRelais(db, instance);
+  return withInstance(db, porteur.id, async (tx): Promise<MiroirResultat> => {
     const actifs = (await listerPartenaires(tx)).filter((p) => p.statut === 'active');
     const p = actifs.length === 1 ? actifs[0] : actifs.find((a) => /alpes|alpia/i.test(a.nom));
     if (!p) {
@@ -63,7 +84,7 @@ export async function miroirVersRelais(
       ...(m.enReponseA ? { en_reponse_a: m.enReponseA } : {}),
     });
     msg.messageId = m.chemin;
-    const reel = canWriteReal(instance, realWrites);
+    const reel = canWriteReal(porteur, realWrites);
     const sortie = reel
       ? await deposer({
           stockage: stockageTx(tx),
@@ -97,7 +118,8 @@ export async function miroirVersRelais(
 // dans echanges/ porte le même identifiant que lui : l'appelant garde alors celui du kDrive. Les
 // autres (sans fichier) portent leur texte, que le kDrive ne peut pas fournir.
 export async function messagesRelayes(db: Executor, instance: Instance, moi: string) {
-  const rows = await withInstance(db, instance.id, async (tx) => {
+  const porteur = await instanceDuRelais(db, instance);
+  const rows = await withInstance(db, porteur.id, async (tx) => {
     const noms = new Map((await listerPartenaires(tx)).map((p) => [p.id, nomCourt(p.nom)]));
     const messages = await tx
       .select()
