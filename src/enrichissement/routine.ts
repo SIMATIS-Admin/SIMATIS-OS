@@ -1,13 +1,15 @@
 import { noterContactsRecherches } from '../base-vivante/origine.js';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { creerImports, integrerImport } from '../base-vivante/service.js';
 import type { Database } from '../db.js';
+import { withInstance } from '../db/context.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { preferences } from '../preferences/schema.js';
 import { CIBLE } from './cible.js';
 import type { ClientIA } from './client.js';
 import { chercherNouveauxProspects, type ProspectRecherche } from './recherche-nouveaux.js';
+import { rechercheSessions } from './schema.js';
 import { cloreSessionRecherche, ouvrirSessionRecherche } from './sessions.js';
 
 export const reglagesRecherche = z.object({
@@ -161,5 +163,39 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
         options: sql`jsonb_set(${preferences.options}, '{rechercheBase,bilan}', to_jsonb(${bilan}::text))`,
       })
       .where(eq(preferences.utilisateur, ligne.utilisateur));
+  }
+}
+
+// Un redémarrage de l'app tue la recherche en cours sans la clore et le jour est déjà marqué fait :
+// on clôt la session en erreur et on rouvre le jour pour que la routine la relance.
+export async function reprendreRecherchesInterrompues(db: Database, maintenant = new Date()) {
+  const jour = jourDe(maintenant);
+  const lignes = await db
+    .select()
+    .from(preferences)
+    .where(sql`${preferences.utilisateur} like ${prefixe + '%'}`);
+  for (const ligne of lignes) {
+    const instanceId = ligne.utilisateur.slice(prefixe.length);
+    const ouvertes = await withInstance(db, instanceId, (tx) =>
+      tx
+        .select({ id: rechercheSessions.id, trouves: rechercheSessions.trouves })
+        .from(rechercheSessions)
+        .where(
+          and(eq(rechercheSessions.mode, 'automatique'), eq(rechercheSessions.etat, 'en_cours')),
+        ),
+    );
+    for (const o of ouvertes)
+      await cloreSessionRecherche(db, instanceId, o.id, {
+        etat: 'erreur',
+        trouves: o.trouves,
+        erreur: "Recherche interrompue par un redémarrage de l'application.",
+      });
+    if (ouvertes.length && ligne.options.rechercheBase?.dernierJour === jour)
+      await db
+        .update(preferences)
+        .set({
+          options: sql`jsonb_set(${preferences.options}, '{rechercheBase}', (${preferences.options}->'rechercheBase') - 'dernierJour')`,
+        })
+        .where(eq(preferences.utilisateur, ligne.utilisateur));
   }
 }
