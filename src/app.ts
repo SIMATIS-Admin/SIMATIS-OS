@@ -25,6 +25,7 @@ import { registerGestionRoutes } from './gestion/routes.js';
 import { registerProspectionRoutes } from './prospection/routes.js';
 import { registerTransfertRoutes } from './transfert/routes.js';
 import { registerWeb } from './web.js';
+import { lireLimitesIA } from './ia/limites.js';
 import { registerLimitesIARoutes } from './ia/routes.js';
 
 export type AppDeps = {
@@ -86,7 +87,7 @@ export function buildApp({
     timerRecherche = setInterval(() => {
       if (rechercheEnCours) return;
       rechercheEnCours = true;
-      void tournerRecherche(db, codex.client)
+      void tournerRecherche(db, codex.client, new Date(), () => lireLimitesIA(limitesIAFile))
         .catch((err: unknown) => app.log.error(err, 'Routine de recherche'))
         .finally(() => {
           rechercheEnCours = false;
