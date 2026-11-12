@@ -18,6 +18,7 @@ import { cleDejaDansUnAutreEspace } from './cle-unique.js';
 import { deposerSujet } from './depot.js';
 import { evenementsClos, sansRendezVousClos } from './rdv-clos.js';
 import { brouillonSchema, repondreClaude } from './echanges.js';
+import { preparerReponse } from './reponse-preparee.js';
 import {
   comptesRendusEnAttente,
   deposerReunion,
@@ -87,6 +88,30 @@ registerTool({
       entrepriseId: input.entrepriseId ?? null,
     });
   },
+});
+
+registerTool({
+  name: 'preparer_reponse',
+  description:
+    "Rattache à un mail à répondre déjà déposé la réponse que tu as rédigée, pour que le pilote la relise dans son Cockpit : le texte, l'objet et, si tu as créé le brouillon dans sa messagerie, l'adresse web de ce brouillon. Rien n'est envoyé : le pilote valide dans sa messagerie. La clé est celle du dépôt. « introuvable » est normal : le sujet n'existe pas dans cet espace ou il est déjà traité, ne rien faire de plus.",
+  input: z.object({
+    cle: z.string().trim().min(1).max(300).describe('La clé donnée à deposer_sujet'),
+    objet: z.string().trim().max(300).optional(),
+    texte: z.string().trim().min(1).max(10000).describe('Le corps de la réponse, texte brut'),
+    lienBrouillon: z
+      .string()
+      .max(2000)
+      .optional()
+      .describe('Adresse web (http ou https) du brouillon dans la messagerie'),
+    executionId: execution,
+  }),
+  scope: 'instance',
+  handler: ({ tx }, input) =>
+    preparerReponse(tx, input.cle, {
+      objet: input.objet ?? null,
+      texte: input.texte,
+      lienBrouillon: input.lienBrouillon ?? null,
+    }),
 });
 
 registerTool({

@@ -46,6 +46,7 @@ const vue = (id: string, echeance: string | null, createdAt: string): SujetVue =
   proposition: null,
   livreBlanc: null,
   partage: null,
+  reponsePreparee: null,
   reunion: null,
 });
 

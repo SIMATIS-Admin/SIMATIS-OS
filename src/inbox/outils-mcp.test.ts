@@ -86,6 +86,26 @@ describe('Inbox : outils MCP', () => {
     await t.drop();
   });
 
+  it('attache une réponse préparée au sujet déposé, sans rien envoyer', async () => {
+    await call('deposer_sujet', sujet('fil-reponse'));
+    const ok = await call('preparer_reponse', {
+      cle: 'fil-reponse',
+      texte: 'Bonjour, voici la réponse fictive.',
+      lienBrouillon: 'https://mail.exemple.fr/brouillon/1',
+    });
+    expect(ok.isError).toBe(false);
+    expect(ok.json()).toEqual({ statut: 'enregistree' });
+    expect((await call('preparer_reponse', { cle: 'fil-absent', texte: 'x' })).json()).toEqual({
+      statut: 'introuvable',
+    });
+    const refus = await call('preparer_reponse', {
+      cle: 'fil-reponse',
+      texte: 'x',
+      lienBrouillon: 'javascript:alert(1)',
+    });
+    expect(refus.isError).toBe(true);
+  });
+
   it('deposits a subject, then answers existant for the same key', async () => {
     const premier = await call(
       'deposer_sujet',

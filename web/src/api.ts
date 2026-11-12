@@ -727,6 +727,13 @@ export type SujetVue = {
   livreBlanc: { email: string; nom: string | null } | null;
   // Message de l'espace partagé (Christophe) auquel l'entrée permet de répondre.
   partage: { chemin: string } | null;
+  // Réponse rédigée par la routine, à relire puis à valider dans la messagerie.
+  reponsePreparee: {
+    objet: string | null;
+    texte: string;
+    lienBrouillon: string | null;
+    prepareeLe: string;
+  } | null;
   // Réunion Wispr Flow ; dejaRelie : elle s'est reliée à un compte rendu déjà à faire.
   reunion: {
     critique: boolean;
