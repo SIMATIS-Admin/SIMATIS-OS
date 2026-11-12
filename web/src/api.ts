@@ -411,6 +411,62 @@ export const fetchEntreprises = (slug: string, q: string) =>
     `/api/i/${encodeURIComponent(slug)}/entreprises?q=${encodeURIComponent(q)}`,
   );
 
+export type SuspectBase = {
+  id: string;
+  nom: string;
+  entreprise: string;
+  fonction: string | null;
+  email: string | null;
+  telephone: string | null;
+};
+export const fetchSuspectsBase = (slug: string, q: string) =>
+  getJson<SuspectBase[]>(
+    `/api/i/${encodeURIComponent(slug)}/base/suspects?q=${encodeURIComponent(q)}`,
+  );
+
+export type FicheRadar = {
+  id: string;
+  entreprise: string;
+  nom: string;
+  fonction: string | null;
+  nbContacts: number;
+  dernierContactLe: string | null;
+  // Étiquettes de la fiche, dont celle de l'ICP d'où elle vient.
+  tags: string[];
+};
+export type ColonneRadar = { total: number; fiches: FicheRadar[] };
+export type EtatRadar = {
+  aEnrichir: ColonneRadar;
+  prets: ColonneRadar;
+  contactes: ColonneRadar;
+  ontRepondu: ColonneRadar;
+  // Affaires ouvertes sans rendez-vous : personnes déjà approchées, reprises dans « Contactés ».
+  reprise: {
+    total: number;
+    fiches: { id: string; nom: string; entreprise: string | null; fonction: string | null }[];
+  };
+  rdvAccepte: {
+    total: number;
+    fiches: { id: string; nom: string; entreprise: string | null; fonction: string | null }[];
+  };
+};
+export type ChampCiblage = { cle: string; valeur: string };
+// Un ICP de l'Atelier avec son persona et la demande de recherche composée à partir d'eux.
+export type CiblageAtelier = {
+  atelierId: string;
+  atelierTitre: string;
+  entreprise: string | null;
+  code: string;
+  nom: string;
+  offre: string;
+  icp: ChampCiblage[];
+  persona: ChampCiblage[];
+  demande: string;
+};
+export const fetchCiblages = (slug: string) =>
+  getJson<CiblageAtelier[]>(inst(slug, 'ateliers-strategie/ciblages'));
+export const fetchRadar = (slug: string) => getJson<EtatRadar>(inst(slug, 'radar'));
+
 export const fetchContacts = (slug: string, q: string) =>
   getJson<Contact[]>(`/api/i/${encodeURIComponent(slug)}/contacts?q=${encodeURIComponent(q)}`);
 
@@ -714,6 +770,15 @@ export type SujetVue = {
   livreBlanc: { email: string; nom: string | null } | null;
   // Message de l'espace partagé (Christophe) auquel l'entrée permet de répondre.
   partage: { chemin: string } | null;
+  // Réponse rédigée par la routine, à relire puis à valider dans la messagerie.
+  reponsePreparee: {
+    objet: string | null;
+    texte: string;
+    lienBrouillon: string | null;
+    prepareeLe: string;
+  } | null;
+  // Compte rendu rédigé par la routine pour une entrée « compte rendu », à relire.
+  compteRenduPrepare: { texte: string; prepareeLe: string } | null;
   // Réunion Wispr Flow ; dejaRelie : elle s'est reliée à un compte rendu déjà à faire.
   reunion: {
     critique: boolean;
@@ -1849,11 +1914,16 @@ export const rechercherEntreprisesBase = (slug: string, criteres: CriteresWeb, p
     criteres,
     page,
   });
-export const ajouterEntreprisesBase = (slug: string, sirens: string[], liste?: string) =>
+export const ajouterEntreprisesBase = (
+  slug: string,
+  sirens: string[],
+  liste?: string,
+  etiquette?: string,
+) =>
   sendJson<{ ajoutees: number; existantes: number; introuvables: number }>(
     'POST',
     inst(slug, 'base/entreprises/ajouter'),
-    { sirens, liste },
+    { sirens, liste, etiquette },
   );
 export const creerListeBase = (
   slug: string,

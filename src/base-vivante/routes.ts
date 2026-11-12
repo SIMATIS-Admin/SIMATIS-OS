@@ -45,6 +45,9 @@ import {
   validerReponse,
 } from './reponses.js';
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
+import { listerSuspectsHorsCrm } from './suspects.js';
+import { etatRadar } from './radar.js';
+import { searchContacts } from '../crm/service.js';
 import { exporterWaalaxy } from './waalaxy.js';
 import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
 import { creerGeocodeur, type Geocodeur } from '../routage/geocodage.js';
@@ -354,6 +357,48 @@ export function registerBaseVivanteRoutes(
     q: q.q,
   });
 
+  // Le Radar : les quatre premières étapes viennent de la base vivante, la cinquième (rendez-vous
+  // accepté) est la liste des contacts du CRM devenus prospects.
+  app.get<Route>(
+    '/api/i/:slug/radar',
+    surInstance(async (instanceId) => {
+      const crm = await searchContacts(db, instanceId);
+      const prospects = crm.filter((c) => c.statut === 'prospect');
+      // Reprise de l'existant : une affaire ouverte sans rendez-vous est une personne déjà approchée
+      // qui n'a pas encore répondu. Rien n'est écrit : le statut suspect vient des rendez-vous.
+      const reprise = crm.filter((c) => c.statut === 'suspect' && c.oppsOuvertes > 0);
+      return {
+        ...(await etatRadar(db, instanceId)),
+        reprise: {
+          total: reprise.length,
+          fiches: reprise.slice(0, 5).map((c) => ({
+            id: c.id,
+            nom: c.nom,
+            entreprise: c.entreprise,
+            fonction: c.fonction,
+          })),
+        },
+        rdvAccepte: {
+          total: prospects.length,
+          fiches: prospects.slice(0, 5).map((c) => ({
+            id: c.id,
+            nom: c.nom,
+            entreprise: c.entreprise,
+            fonction: c.fonction,
+          })),
+        },
+      };
+    }),
+  );
+
+  // Les suspects de la base qui ne sont pas encore des contacts du CRM, pour la liste Contacts.
+  app.get<Route>(
+    '/api/i/:slug/base/suspects',
+    surInstance((instanceId, request) =>
+      listerSuspectsHorsCrm(db, instanceId, request.query.q ?? ''),
+    ),
+  );
+
   app.get<Route>(
     '/api/i/:slug/base',
     surInstance(async (instanceId, request) => {
@@ -608,7 +653,11 @@ export function registerBaseVivanteRoutes(
     })
     .strict();
   const ajoutSchema = z
-    .object({ sirens: z.array(z.string()).max(100), liste: z.string().regex(UUID).optional() })
+    .object({
+      sirens: z.array(z.string()).max(100),
+      liste: z.string().regex(UUID).optional(),
+      etiquette: z.string().max(200).optional(),
+    })
     .strict();
   app.post<Route>(
     '/api/i/:slug/base/entreprises/recherche',
@@ -620,8 +669,8 @@ export function registerBaseVivanteRoutes(
   app.post<Route>(
     '/api/i/:slug/base/entreprises/ajouter',
     surInstance((instanceId, request) => {
-      const { sirens, liste } = ajoutSchema.parse(request.body);
-      return ajouterEntreprises(db, annuaire, instanceId, sirens, liste);
+      const { sirens, liste, etiquette } = ajoutSchema.parse(request.body);
+      return ajouterEntreprises(db, annuaire, instanceId, sirens, liste, etiquette);
     }),
   );
 

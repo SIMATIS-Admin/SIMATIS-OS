@@ -113,6 +113,47 @@ describe('Routines Claude', () => {
     expect(tout.some((x) => x.canal === 'appel')).toBe(true);
   });
 
+  it('proposer_rendez_vous : une proposition à valider, aucun rendez-vous créé tant que le pilote ne valide pas', async () => {
+    const i = await instanceOf('simatis');
+    const { token } = await createToken(t.owner.db, {
+      nom: 'test',
+      portee: 'instance',
+      instanceSlug: 'simatis',
+    });
+    const client = await connect(token);
+    const avant = await t.owner.pool.query<{ n: number }>(
+      'select count(*)::int as n from rendez_vous where instance_id = $1',
+      [i.id],
+    );
+    const r = await call(client, 'proposer_rendez_vous', {
+      titre: 'Point fictif avec Alice',
+      debut: '2026-11-17T10:00:00+01:00',
+      dureeMinutes: 30,
+    });
+    expect(r.isError).toBe(false);
+    expect(r.json<{ statut: string; type: string }>()).toMatchObject({
+      statut: 'proposee',
+      type: 'rdv.creer',
+    });
+    const apres = await t.owner.pool.query<{ n: number }>(
+      'select count(*)::int as n from rendez_vous where instance_id = $1',
+      [i.id],
+    );
+    expect(apres.rows[0]?.n).toBe(avant.rows[0]?.n);
+    const sujet = await t.owner.pool.query<{ titre: string; type: string }>(
+      "select titre, type from sujets where instance_id = $1 and titre like 'Créer le rendez-vous%'",
+      [i.id],
+    );
+    expect(sujet.rows).toEqual([
+      { titre: 'Créer le rendez-vous : Point fictif avec Alice', type: 'a_valider' },
+    ]);
+    const refus = await call(client, 'proposer_rendez_vous', {
+      titre: 'Date absurde',
+      debut: '1999-01-01T10:00:00+01:00',
+    });
+    expect(refus.isError).toBe(true);
+  });
+
   it('stops a run when the instance has no messaging, with the reason in the report', async () => {
     const i = await instanceOf('sans-outils');
     const execution = await withInstance(t.app.db, i.id, (tx) =>

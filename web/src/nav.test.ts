@@ -27,18 +27,21 @@ const inst = (
 });
 
 describe('nav', () => {
-  it('has Inbox in Piloter la journée instead of À valider', () => {
+  it('has the Cockpit (Brief and Inbox together) in Piloter la journée, and no À valider', () => {
     const pilotage = NAV.find((g) => g.title === 'Piloter la journée');
-    expect(pilotage?.items.find((i) => i.id === 'inbox')).toMatchObject({
-      label: 'Inbox',
-      icon: 'inbox',
+    expect(pilotage?.items.find((i) => i.id === 'cockpit')).toMatchObject({
+      label: 'Cockpit',
+      icon: 'sun',
     });
+    expect(allItems().some((i) => i.id === 'brief' || i.id === 'inbox')).toBe(false);
     expect(allItems().some((i) => i.id === 'validations' || i.label === 'À valider')).toBe(false);
-    expect(isBuilt('inbox')).toBe(true);
+    expect(isBuilt('cockpit')).toBe(true);
   });
 
-  it('redirects the former validations screen to the Inbox', () => {
-    expect(vueCanonique('validations')).toBe('inbox');
+  it('redirects the former validations, Brief and Inbox screens to the Cockpit', () => {
+    expect(vueCanonique('validations')).toBe('cockpit');
+    expect(vueCanonique('brief')).toBe('cockpit');
+    expect(vueCanonique('inbox')).toBe('cockpit');
     expect(vueCanonique('taches')).toBe('agenda');
     expect(vueCanonique('rendez-vous')).toBe('rendez-vous');
   });
@@ -111,7 +114,7 @@ describe('nav', () => {
     expect(isBuilt('contacts')).toBe(true);
     expect(isBuilt('agenda')).toBe(true);
     expect(isBuilt('pipeline')).toBe(true);
-    expect(isBuilt('brief')).toBe(true);
+    expect(isBuilt('cockpit')).toBe(true);
     expect(isBuilt('tableau')).toBe(true);
     expect(isBuilt('devis')).toBe(true);
     expect(isBuilt('prospection')).toBe(true);

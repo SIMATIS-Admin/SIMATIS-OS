@@ -6952,3 +6952,125 @@ div.pb-ligne {
 .bv-tournee-resultat {
   margin-top: 10px;
 }
+
+/* Cockpit : l'Inbox puis le brief du jour, séparés par un filet. */
+.cockpit {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.cockpit-brief {
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
+
+/* Réponse préparée par la routine, dans le détail d'une entrée de l'Inbox. */
+.reponse-preparee {
+  margin-bottom: 12px;
+}
+.reponse-texte {
+  white-space: pre-wrap;
+  font: inherit;
+  margin: 8px 0;
+  max-height: 240px;
+  overflow: auto;
+}
+
+/* Radar : le pipe de détection, une colonne par étape. */
+.radar-intro {
+  margin: 0 0 12px;
+}
+.radar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.radar-colonnes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.radar-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.radar-colonne header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.radar-colonne h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.radar-total {
+  font-size: 22px;
+  font-weight: 600;
+}
+.radar-carte {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.radar-carte-lien {
+  color: inherit;
+  text-decoration: none;
+}
+.radar-carte-lien:hover,
+.radar-carte-lien:focus-visible {
+  border-color: var(--accent, currentColor);
+}
+.radar-carte-lien {
+  color: inherit;
+  text-decoration: none;
+}
+.radar-carte-lien:hover,
+.radar-carte-lien:focus-visible {
+  border-color: var(--accent, currentColor);
+}
+
+/* Radar : chercher des suspects d'après l'ICP de l'Atelier. */
+.radar-strategie {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.radar-strategie h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.radar-demande {
+  white-space: pre-wrap;
+  font: inherit;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--soft, rgba(0, 0, 0, 0.04));
+}
+
+.radar-icp {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--soft, rgba(0, 0, 0, 0.06));
+}

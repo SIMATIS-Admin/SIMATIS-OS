@@ -8,7 +8,13 @@ import {
 import { criteresValides, versParametres } from '../annuaire/criteres.js';
 import type { Executor, Tx } from '../db.js';
 import { withInstance } from '../db/context.js';
-import { FicheIntrouvable, integrerFiches, rattacherEntreprise } from './integration.js';
+import {
+  FicheIntrouvable,
+  integrerFiches,
+  modifierEtiquettes,
+  normaliserEtiquette,
+  rattacherEntreprise,
+} from './integration.js';
 import { ajouterALaListe, ajouterEntreprisesALaListe, typeDeLaListe } from './listes.js';
 import { normaliserFiche } from './nettoyage.js';
 import { baseEntreprises, baseVivante, type EntrepriseBase } from './schema.js';
@@ -174,6 +180,8 @@ export async function ajouterEntreprises(
   instanceId: string,
   sirens: string[],
   listeId?: string,
+  // Étiquette posée sur chaque fiche ajoutée ou rattachée : l'ICP d'où vient la recherche.
+  etiquette?: string,
 ): Promise<RapportAjout> {
   const uniques = [...new Set(sirens.map((s) => s.replace(/\s/g, '')))];
   if (uniques.length === 0) throw new RechercheRefusee('Choisissez au moins une entreprise.');
@@ -186,6 +194,8 @@ export async function ajouterEntreprises(
   const entrepriseIds: string[] = [];
   // A bad list is refused before anything is written.
   const typeListe = listeId ? await typeDeLaListe(db, instanceId, listeId) : null;
+  // Étiquette invalide : refusée avant d'écrire quoi que ce soit.
+  const tag = etiquette?.trim() ? normaliserEtiquette(etiquette) : null;
   for (const siren of uniques) {
     const e = await annuaire.parSiren(siren);
     if (!e) {
@@ -226,6 +236,10 @@ export async function ajouterEntreprises(
       entrepriseIds.push(entreprise.id);
     });
   }
+  if (tag && ficheIds.length > 0)
+    await withInstance(db, instanceId, (tx) =>
+      modifierEtiquettes(tx, instanceId, ficheIds, { ajouter: [tag] }),
+    );
   if (listeId && typeListe === 'entreprises')
     await ajouterEntreprisesALaListe(db, instanceId, listeId, entrepriseIds);
   else if (listeId) await ajouterALaListe(db, instanceId, listeId, ficheIds);

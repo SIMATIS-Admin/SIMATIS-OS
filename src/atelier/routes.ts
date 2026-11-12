@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Database } from '../db.js';
+import { composerDemande, lireCiblages } from './ciblage.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { creationSchema, importSchema, patchSchema } from './saisie.js';
 import {
@@ -48,6 +49,15 @@ export function registerAtelierRoutes(app: FastifyInstance, deps: { db: Database
 
   const invalide = (reply: FastifyReply, message?: string) =>
     reply.code(400).send({ error: message ?? 'Atelier invalide' });
+
+  // Les ICP et personas des ateliers, pour chercher des suspects selon la stratégie. Déclarée avant
+  // « :id » pour que « ciblages » ne soit pas lu comme un identifiant.
+  app.get<Rt>(
+    '/api/i/:slug/ateliers-strategie/ciblages',
+    surInstance(async (instance) =>
+      (await lireCiblages(db, instance)).map((c) => ({ ...c, demande: composerDemande(c) })),
+    ),
+  );
 
   app.get<Rt>(
     '/api/i/:slug/ateliers-strategie',

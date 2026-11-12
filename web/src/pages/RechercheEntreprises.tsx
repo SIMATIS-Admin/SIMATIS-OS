@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ajouterEntreprisesBase,
   interpreterEntreprisesBase,
@@ -37,12 +37,19 @@ export function RechercheEntreprises({
   slug,
   listes,
   onAjoute,
+  demandeInitiale = '',
+  etiquette,
 }: {
   slug: string;
   listes: ResumeListeBase[];
   onAjoute: (message: string) => void;
+  // Demande composée à partir d'un ICP de l'Atelier : elle est comprise dès l'ouverture, le pilote
+  // vérifie les critères et les résultats avant d'ajouter quoi que ce soit.
+  demandeInitiale?: string;
+  // Étiquette posée sur chaque entreprise ajoutée : l'ICP d'où vient la recherche.
+  etiquette?: string;
 }) {
-  const [demande, setDemande] = useState('');
+  const [demande, setDemande] = useState(demandeInitiale);
   const [criteres, setCriteres] = useState<CriteresWeb>(VIDES);
   const [departements, setDepartements] = useState('');
   const [secteur, setSecteur] = useState('');
@@ -93,7 +100,7 @@ export function RechercheEntreprises({
 
   const ajouter = () =>
     agir(async () => {
-      const r = await ajouterEntreprisesBase(slug, [...choisies], liste || undefined);
+      const r = await ajouterEntreprisesBase(slug, [...choisies], liste || undefined, etiquette);
       const morceaux = [
         r.ajoutees > 0 && `${r.ajoutees} ajoutée${r.ajoutees > 1 ? 's' : ''} à enrichir`,
         r.existantes > 0 &&
@@ -104,6 +111,11 @@ export function RechercheEntreprises({
       setChoisies(new Set());
       if (page) setPage({ ...page, dejaDansLaBase: [...page.dejaDansLaBase, ...choisies] });
     });
+
+  useEffect(() => {
+    if (demandeInitiale.trim()) void comprendre();
+    // Une seule fois, à l'ouverture : la demande modifiée ensuite se comprend au clic.
+  }, []);
 
   const aUnCritere =
     Boolean(criteres.q) ||

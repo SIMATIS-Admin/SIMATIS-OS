@@ -28,7 +28,8 @@ const Agenda = lazy(() => import('./pages/Agenda.js').then((m) => ({ default: m.
 const Atelier = lazy(() => import('./pages/Atelier.js').then((m) => ({ default: m.Atelier })));
 const Bases = lazy(() => import('./pages/Bases.js').then((m) => ({ default: m.Bases })));
 const Bientot = lazy(() => import('./pages/Bientot.js').then((m) => ({ default: m.Bientot })));
-const Brief = lazy(() => import('./pages/Brief.js').then((m) => ({ default: m.Brief })));
+const Radar = lazy(() => import('./pages/Radar.js').then((m) => ({ default: m.Radar })));
+const Cockpit = lazy(() => import('./pages/Cockpit.js').then((m) => ({ default: m.Cockpit })));
 const Cerveau = lazy(() => import('./pages/Cerveau.js').then((m) => ({ default: m.Cerveau })));
 const Devis = lazy(() => import('./pages/Devis.js').then((m) => ({ default: m.Devis })));
 const Diagnostics = lazy(() =>
@@ -40,7 +41,6 @@ const FeuilleDeRouteOS = lazy(() =>
 const Fiche = lazy(() => import('./pages/Fiche.js').then((m) => ({ default: m.Fiche })));
 const FicheRdv = lazy(() => import('./pages/FicheRdv.js').then((m) => ({ default: m.FicheRdv })));
 const Gestion = lazy(() => import('./pages/Gestion.js').then((m) => ({ default: m.Gestion })));
-const Inbox = lazy(() => import('./pages/Inbox.js').then((m) => ({ default: m.Inbox })));
 const Journal = lazy(() => import('./pages/Journal.js').then((m) => ({ default: m.Journal })));
 const Parametres = lazy(() =>
   import('./pages/Parametres.js').then((m) => ({ default: m.Parametres })),
@@ -70,7 +70,7 @@ const Routines = lazy(() => import('./pages/Routines.js').then((m) => ({ default
 const SiteWeb = lazy(() => import('./pages/SiteWeb.js').then((m) => ({ default: m.SiteWeb })));
 const Tableau = lazy(() => import('./pages/Tableau.js').then((m) => ({ default: m.Tableau })));
 
-const DEFAULT_VIEW = 'brief';
+const DEFAULT_VIEW = 'cockpit';
 
 // Same URL scheme as the mockup: #/<instance>/<screen>.
 // `#/<slug>/<view>`, or `#/<slug>/fiche/<kind>/<id>` for a detail page.
@@ -154,7 +154,7 @@ export function App() {
         fetchCompteurInbox(slugCourant).catch(() => 0),
         fetchCompteurRdv(slugCourant).catch(() => 0),
       ]).then(([taches, inbox, rdv]) =>
-        setCompteurs({ agenda: taches, inbox, 'rendez-vous': rdv }),
+        setCompteurs({ agenda: taches, cockpit: inbox, 'rendez-vous': rdv }),
       );
     void charger();
     const minuteur = window.setInterval(() => void charger(), 5 * 60_000);
@@ -206,11 +206,9 @@ export function App() {
         return <Entreprises key={current.slug} slug={current.slug} />;
       case 'contacts':
         return <Contacts key={current.slug} slug={current.slug} />;
-      case 'brief':
-        return <Brief key={current.slug} slug={current.slug} />;
-      case 'inbox':
+      case 'cockpit':
         return (
-          <Inbox
+          <Cockpit
             key={current.slug}
             slug={current.slug}
             onChange={() => setRecharge((n) => n + 1)}
@@ -220,6 +218,8 @@ export function App() {
             entete={{ gauche: enteteGauche, droite: enteteDroite }}
           />
         );
+      case 'radar':
+        return <Radar key={current.slug} slug={current.slug} />;
       case 'pipeline':
         return <Pipeline key={current.slug} slug={current.slug} />;
       case 'routines':
@@ -274,7 +274,13 @@ export function App() {
       case 'presentation-vma':
         return <PresentationVma slug={current.slug} />;
       case 'bases':
-        return <Bases key={current.slug} slug={current.slug} />;
+        return (
+          <Bases
+            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            slug={current.slug}
+            ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+          />
+        );
       case 'prospection':
         return (
           <Prospection
@@ -377,11 +383,11 @@ export function App() {
               >
                 <Icon name="menu" />
               </button>
-              {view === 'inbox' && <span className="entete-slot" ref={setEnteteGauche} />}
+              {view === 'cockpit' && <span className="entete-slot" ref={setEnteteGauche} />}
               <h1>
                 {(view === 'diagnostics' || view === 'atelier') && titreOutil ? titreOutil : title}
               </h1>
-              {view === 'inbox' && (
+              {view === 'cockpit' && (
                 <button
                   className="btn carre"
                   aria-label="Ajouter une entrée à l'Inbox"
@@ -394,7 +400,7 @@ export function App() {
                   </span>
                 </button>
               )}
-              {view === 'inbox' && (
+              {view === 'cockpit' && (
                 <button
                   className={`btn sm ${pasAPasInbox ? '' : 'primary'}`}
                   aria-pressed={pasAPasInbox}
@@ -403,7 +409,7 @@ export function App() {
                   {pasAPasInbox ? 'Quitter le pas à pas' : 'Pas à pas'}
                 </button>
               )}
-              {view === 'inbox' && <span className="entete-slot" ref={setEnteteDroite} />}
+              {view === 'cockpit' && <span className="entete-slot" ref={setEnteteDroite} />}
             </div>
             {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
           </div>

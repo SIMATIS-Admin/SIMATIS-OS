@@ -95,15 +95,36 @@ describe('Sidebar', () => {
       [...(container.querySelectorAll('.nav-group')[i]?.querySelectorAll('.lbl') ?? [])].map(
         (n) => n.textContent,
       );
-    expect(libelles(0)).toEqual(['Brief du jour', 'Inbox', 'Agenda']);
-    expect(libelles(1)).toEqual(['Prospection', 'Bases vivantes']);
+    expect(libelles(0)).toEqual(['Cockpit', 'Agenda']);
+    expect(libelles(1)).toEqual(['Radar']);
     expect(libelles(2)).toContain('Pipeline');
     expect(libelles(3)).toEqual(['Entreprises', 'Contacts']);
   });
 
+  it('lights up the Radar while Prospection or Bases vivantes is open, and hides them from the menu', () => {
+    const { container, unmount } = render(
+      <Sidebar
+        instances={[simatis, mandat]}
+        current={simatis}
+        view="prospection"
+        open={false}
+        favoris={[]}
+        onToggleFavori={() => undefined}
+        onMoveFavori={() => undefined}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /Prospection/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Bases vivantes/ })).toBeNull();
+    expect(screen.getByRole('link', { name: /Radar/ }).getAttribute('aria-current')).toBe('page');
+    expect(container.querySelectorAll('.nav a.on')).toHaveLength(1);
+    unmount();
+    renderSidebar(simatis, ['prospection']);
+    expect(screen.getAllByRole('link', { name: /Prospection/ })).toHaveLength(1);
+  });
+
   it('removes the favourites from their section, so nothing appears twice', () => {
-    renderSidebar(simatis, ['pipeline', 'brief']);
-    expect(screen.getAllByText('Brief du jour')).toHaveLength(1);
+    renderSidebar(simatis, ['pipeline', 'cockpit']);
+    expect(screen.getAllByText('Cockpit')).toHaveLength(1);
     expect(screen.getAllByText('Pipeline')).toHaveLength(1);
   });
 
@@ -211,9 +232,9 @@ describe('Sidebar', () => {
   });
 
   it('offers no star on the entries that carry a notification counter', () => {
-    renderSidebar(simatis, [], { inbox: 3 });
+    renderSidebar(simatis, [], { cockpit: 3 });
     expect(screen.queryAllByRole('button', { name: /favoris/ }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: 'Ajouter Inbox aux favoris' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ajouter Cockpit aux favoris' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ajouter Agenda aux favoris' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ajouter Rendez-vous aux favoris' })).toBeNull();
   });

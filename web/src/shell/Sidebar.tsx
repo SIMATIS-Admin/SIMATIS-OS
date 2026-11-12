@@ -28,7 +28,9 @@ const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
 // Rubriques à pastille de notification : l'étoile n'y est pas proposée (elle chevauchait le compteur).
-const SANS_ETOILE = ['agenda', 'inbox', 'rendez-vous'];
+const SANS_ETOILE = ['agenda', 'cockpit', 'rendez-vous'];
+// Prospection et Bases vivantes s'ouvrent depuis le Radar : lui seul est allumé dans le menu.
+const SOUS_ECRANS_RADAR = ['prospection', 'bases'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
 const memoriser = (cle: string, valeur: string) => {
@@ -77,6 +79,8 @@ export function Sidebar({
     memoriser(CLE_REDUITE, reduite ? '0' : '1');
   };
 
+  const actif = (it: NavItem) =>
+    view === it.id || (it.id === 'radar' && SOUS_ECRANS_RADAR.includes(view));
   const link = (it: NavItem, inFavoris = false, index = -1) => {
     const fav = favoris.includes(it.id);
     const dragProps = inFavoris
@@ -100,9 +104,9 @@ export function Sidebar({
       <div key={`${inFavoris ? 'fav-' : ''}${it.id}`} className="nav-entry" {...dragProps}>
         <a
           href={`#/${current.slug}/${it.id}`}
-          className={[view === it.id ? 'on' : '', isBuilt(it.id) ? '' : 'soon'].join(' ')}
+          className={[actif(it) ? 'on' : '', isBuilt(it.id) ? '' : 'soon'].join(' ')}
           title={reduite ? it.label : undefined}
-          aria-current={view === it.id ? 'page' : undefined}
+          aria-current={actif(it) ? 'page' : undefined}
         >
           <Icon name={it.icon} />
           <span className="lbl">{it.label}</span>
@@ -242,7 +246,8 @@ export function Sidebar({
         )}
         {NAV.map((g) => {
           const items = g.items.filter(
-            (it) => allowed(it, current.modules) && !favItems.some((f) => f.id === it.id),
+            (it) =>
+              allowed(it, current.modules) && !it.masque && !favItems.some((f) => f.id === it.id),
           );
           if (items.length === 0) return null;
           const ouvert = ouverts[g.title] ?? !g.later;

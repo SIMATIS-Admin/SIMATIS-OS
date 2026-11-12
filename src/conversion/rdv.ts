@@ -186,6 +186,20 @@ export async function creerRendezVousOs(
   saisie: z.infer<typeof rdvOsSchema>,
   deps?: ConnexionDeps & GoogleOptions,
 ): Promise<{ id: string; google: CopieAgenda }> {
+  const { id, google } = await withInstance(db, instance.id, (tx) =>
+    creerRendezVousDansTx(tx, instance, saisie, deps),
+  );
+  return { id, google };
+}
+
+// Même création, dans la transaction de l'appelant (une proposition validée l'utilise). `ligneId`
+// est l'identifiant de la ligne créée, pour y rattacher un contact.
+export async function creerRendezVousDansTx(
+  tx: Tx,
+  instance: Instance,
+  saisie: z.infer<typeof rdvOsSchema>,
+  deps?: ConnexionDeps & GoogleOptions,
+): Promise<{ id: string; ligneId: string; google: CopieAgenda }> {
   const debut = new Date(saisie.debut);
   const fin = new Date(debut.getTime() + saisie.dureeMinutes * 60_000);
   const eventId = `os:${randomUUID()}`;
@@ -194,8 +208,9 @@ export async function creerRendezVousOs(
     !!deps &&
     !!secrets.GOOGLE_REFRESH_TOKEN &&
     scopeAccorde(secrets.GOOGLE_SCOPE, CALENDAR_EVENTS_SCOPE);
-  const google = await withInstance(db, instance.id, async (tx): Promise<CopieAgenda> => {
-    await tx.insert(rendezVous).values({
+  const [ligne] = await tx
+    .insert(rendezVous)
+    .values({
       instanceId: currentInstance,
       eventId,
       titre: saisie.titre,
@@ -204,40 +219,41 @@ export async function creerRendezVousOs(
       lieu: saisie.lieu || null,
       participants: [],
       statut: 'rdv',
-    });
-    await logEvent(tx, {
-      acteur: 'pilote',
-      action: 'Rendez-vous créé dans l’OS',
-      niveau: 'L1',
-      details: { eventId },
-    });
-    if (!branche || !deps) return 'indisponible';
-    const ctx: SyncCtx = {
-      instance,
-      tx,
-      secrets,
-      reglages: {},
-      connexionId: '',
-      derniereSynchro: null,
-      reel: canWriteReal(instance, deps.realWrites),
-    };
-    try {
-      const copie = await creerEvenement(
-        ctx,
-        { osId: eventId, titre: saisie.titre, debut, fin, lieu: saisie.lieu },
-        deps.fetch ? { fetch: deps.fetch } : {},
-      );
-      return copie.simulation ? 'simulation' : 'ok';
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await logEvent(tx, {
-        acteur: 'os',
-        action: `Rendez-vous non copié dans Google Agenda (${saisie.titre}) : ${message}`,
-      });
-      return 'erreur';
-    }
+    })
+    .returning({ id: rendezVous.id });
+  if (!ligne) throw new Error('Rendez-vous non créé');
+  await logEvent(tx, {
+    acteur: 'pilote',
+    action: 'Rendez-vous créé dans l’OS',
+    niveau: 'L1',
+    details: { eventId },
   });
-  return { id: eventId, google };
+  const resultat = (google: CopieAgenda) => ({ id: eventId, ligneId: ligne.id, google });
+  if (!branche || !deps) return resultat('indisponible');
+  const ctx: SyncCtx = {
+    instance,
+    tx,
+    secrets,
+    reglages: {},
+    connexionId: '',
+    derniereSynchro: null,
+    reel: canWriteReal(instance, deps.realWrites),
+  };
+  try {
+    const copie = await creerEvenement(
+      ctx,
+      { osId: eventId, titre: saisie.titre, debut, fin, lieu: saisie.lieu },
+      deps.fetch ? { fetch: deps.fetch } : {},
+    );
+    return resultat(copie.simulation ? 'simulation' : 'ok');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await logEvent(tx, {
+      acteur: 'os',
+      action: `Rendez-vous non copié dans Google Agenda (${saisie.titre}) : ${message}`,
+    });
+    return resultat('erreur');
+  }
 }
 
 // The calendars the instance's Google account can see, to choose which ones the agenda reads.

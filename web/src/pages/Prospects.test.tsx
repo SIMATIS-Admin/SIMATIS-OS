@@ -48,7 +48,7 @@ describe('prospect screens', () => {
     fireEvent.click(screen.getByText('Créer la démonstration'));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(calls.find((c) => c.url === '/api/prospects')?.body).toEqual({ nom: 'Atelier Neuf' });
-    expect(location.hash).toBe('#/atelier-neuf/brief');
+    expect(location.hash).toBe('#/atelier-neuf/cockpit');
   });
 
   it('asks a second click before resetting the demo', async () => {

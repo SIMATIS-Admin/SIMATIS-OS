@@ -73,6 +73,8 @@ export const sujets = pgTable(
     reporteAt: timestamp('reporte_at', { withTimezone: true }),
     // Entries added by hand: when the Inbox routine noted their creation in the second brain.
     noteCerveauAt: timestamp('note_cerveau_at', { withTimezone: true }),
+    reponsePreparee: jsonb('reponse_preparee').$type<ReponsePreparee>(),
+    compteRenduPrepare: jsonb('compte_rendu_prepare').$type<CompteRenduPrepare>(),
   },
   (t) => [
     index('sujets_instance_statut_idx').on(t.instanceId, t.statut),
@@ -80,6 +82,19 @@ export const sujets = pgTable(
     instanceIsolation('sujets'),
   ],
 );
+
+// Réponse que la routine a rédigée pour un mail à répondre : le texte et, quand elle l'a créé, le
+// brouillon de la messagerie. Rien n'est envoyé par l'OS : c'est le pilote qui valide dans sa messagerie.
+export type ReponsePreparee = {
+  objet: string | null;
+  texte: string;
+  lienBrouillon: string | null;
+  prepareeLe: string;
+};
+
+// Compte rendu rédigé par la routine d'après la transcription ou le résumé de la réunion. Il remplit
+// le champ de l'entrée « compte rendu » : le pilote le relit, le corrige, puis l'enregistre.
+export type CompteRenduPrepare = { texte: string; prepareeLe: string };
 
 export type Sujet = typeof sujets.$inferSelect;
 

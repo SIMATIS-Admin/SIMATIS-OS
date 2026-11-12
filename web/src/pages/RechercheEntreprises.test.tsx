@@ -40,6 +40,38 @@ const listes = [
 ];
 
 describe('Chercher des entreprises', () => {
+  it("comprend tout de suite une demande venue d'un ICP, sans rien ajouter", async () => {
+    const appels = simuler({
+      '/entreprises/interpreter': {
+        corps: {
+          resume: 'PME industrielles en Rhône-Alpes',
+          nonTraites: [],
+          criteres: { secteurs: [], departements: ['69'], effectifs: [], categories: ['PME'] },
+        },
+      },
+    });
+    render(
+      <RechercheEntreprises
+        slug="simatis"
+        listes={[]}
+        onAjoute={vi.fn()}
+        demandeInitiale={'Entreprises : PME industrielles\nLocalisation : Rhône-Alpes'}
+      />,
+    );
+    expect(await screen.findByText(/PME industrielles en Rhône-Alpes/)).toBeTruthy();
+    const interpreter = appels.find((c) => c.url.endsWith('/entreprises/interpreter'));
+    expect(interpreter?.body).toEqual({
+      demande: 'Entreprises : PME industrielles\nLocalisation : Rhône-Alpes',
+    });
+    expect(appels.some((c) => c.url.endsWith('/entreprises/ajouter'))).toBe(false);
+  });
+
+  it('ne comprend rien tout seul sans demande initiale', () => {
+    const appels = simuler({});
+    render(<RechercheEntreprises slug="simatis" listes={[]} onAjoute={vi.fn()} />);
+    expect(appels).toHaveLength(0);
+  });
+
   it('comprend la demande, cherche, et ajoute les entreprises choisies à une liste', async () => {
     const appels = simuler({
       '/entreprises/interpreter': {

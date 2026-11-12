@@ -191,6 +191,14 @@ describe('base vivante : import en trois temps', () => {
     vi.unstubAllGlobals();
   });
 
+  it('ouvre les fiches à enrichir depuis le lien du Radar', async () => {
+    render(<Bases slug="simatis" ouvrir="a-enrichir" />);
+    await screen.findByText(/La base est vide/);
+    expect(calls.some((c) => c.url.includes('/base?') && c.url.includes('zone=a_enrichir'))).toBe(
+      true,
+    );
+  });
+
   it('invite à importer une première liste quand la base est vide', async () => {
     render(<Bases slug="simatis" />);
     expect(await screen.findByText(/La base est vide/)).toBeTruthy();

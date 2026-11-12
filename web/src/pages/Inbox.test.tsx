@@ -63,6 +63,8 @@ const sujet = (id: string, extra: Record<string, unknown> = {}) => ({
   proposition: null,
   livreBlanc: null,
   partage: null,
+  reponsePreparee: null,
+  compteRenduPrepare: null,
   reunion: null,
   ...extra,
 });
@@ -218,7 +220,7 @@ describe('Inbox screen', () => {
     vi.unstubAllGlobals();
   });
 
-  it('offers a calm empty state with a working return to the brief', async () => {
+  it('offers a calm empty state with a working way on to prospecting', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string, init?: { method?: string; body?: string }) =>
@@ -229,8 +231,8 @@ describe('Inbox screen', () => {
     );
     render(<Inbox slug="simatis" />);
     expect(await screen.findByText('Tout est à jour.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Revenir à mon brief' }).getAttribute('href')).toBe(
-      '#/simatis/brief',
+    expect(screen.getByRole('link', { name: 'Prospecter' }).getAttribute('href')).toBe(
+      '#/simatis/prospection',
     );
     expect(screen.queryByText('Sélectionnez un sujet à gauche.')).toBeNull();
     expect(posts()).toHaveLength(0);

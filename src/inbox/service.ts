@@ -25,7 +25,9 @@ import {
   reunionsWispr,
   SOURCE_MANUELLE,
   sujets,
+  type CompteRenduPrepare,
   type OrigineSujet,
+  type ReponsePreparee,
   type StatutSujet,
   type TypeSujet,
 } from './schema.js';
@@ -75,6 +77,10 @@ export type SujetVue = {
   livreBlanc: DestinataireLivreBlanc | null;
   // Pour un message de l'espace partagé (Christophe) : le message auquel répondre.
   partage: { chemin: string } | null;
+  // Réponse rédigée par la routine, à relire puis à valider dans la messagerie.
+  reponsePreparee: ReponsePreparee | null;
+  // Compte rendu rédigé par la routine pour une entrée « compte rendu », à relire avant de l'enregistrer.
+  compteRenduPrepare: CompteRenduPrepare | null;
   // Réunion Wispr Flow de l'entrée ; dejaRelie = elle s'est reliée à un compte rendu déjà à faire.
   reunion: {
     critique: boolean;
@@ -170,6 +176,8 @@ async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise
     proposition: liees.find((p) => p.id === s.propositionId) ?? null,
     livreBlanc: destinataireLivreBlanc(s.titre, s.resume),
     partage: cheminPartage(s.source, s.sourceId),
+    reponsePreparee: s.reponsePreparee ?? null,
+    compteRenduPrepare: s.compteRenduPrepare ?? null,
     reunion: (() => {
       const r = reunions.find((x) => x.sujetId === s.id);
       return r
