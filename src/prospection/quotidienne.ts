@@ -114,6 +114,91 @@ export async function preparerBrouillonsVma(db: Database, instanceId: string, vm
   }
 }
 
+// Relances préparées par jour : de quoi relire sans submerger. Les premiers mails gardent leur
+// fonctionnement habituel (par lots de 60).
+export const RELANCES_PAR_JOUR = 30;
+
+// Les relances dont le délai de la séquence est écoulé : un brouillon par contact, avec deux
+// créneaux libres de l'agenda, repris sur l'angle du premier mail (même lien individuel). Rien n'est
+// envoyé : chaque brouillon passe par la rédaction puis par la relecture du pilote.
+export async function preparerRelancesVma(
+  db: Database,
+  instanceId: string,
+  vma: InvitationDeps,
+): Promise<number> {
+  return withInstance(db, instanceId, async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${'prospection-froid:' + instanceId}))`,
+    );
+    const candidats = (await echantillonFroid(tx, { nombre: 20_000 })).filter((c) => c.touche >= 2);
+    if (!candidats.length) return 0;
+    const enAttente = await tx
+      .select({ baseId: prospectionBrouillons.baseId })
+      .from(prospectionBrouillons)
+      .innerJoin(
+        prospectionCampagnes,
+        eq(prospectionCampagnes.id, prospectionBrouillons.campagneId),
+      )
+      .where(
+        and(
+          eq(prospectionBrouillons.instanceId, instanceId),
+          inArray(
+            prospectionBrouillons.baseId,
+            candidats.map((c) => c.id),
+          ),
+          sql`${prospectionCampagnes.statut} <> 'terminee'`,
+        ),
+      );
+    const reserves = new Set(enAttente.map((b) => b.baseId));
+    const ids = candidats
+      .filter((c) => !reserves.has(c.id))
+      .slice(0, RELANCES_PAR_JOUR)
+      .map((c) => c.id);
+    if (!ids.length) return 0;
+    const signatures = await listerSignatures(tx);
+    const reglage = {
+      ...reglageParDefaut(),
+      creneaux: true,
+      signatureId: signatures.find((s) => s.defaut)?.id ?? null,
+    };
+    const campagne = await creerCampagneFroid(tx, { baseIds: ids, reglage });
+    const brouillons = await tx
+      .select()
+      .from(prospectionBrouillons)
+      .where(eq(prospectionBrouillons.campagneId, campagne.campagneId));
+    // Le lien individuel déjà donné à ce contact lors d'une touche précédente est repris.
+    const anciens = await tx
+      .select({ baseId: prospectionBrouillons.baseId, lien: prospectionBrouillons.lienVma })
+      .from(prospectionBrouillons)
+      .where(
+        and(
+          eq(prospectionBrouillons.instanceId, instanceId),
+          inArray(
+            prospectionBrouillons.baseId,
+            brouillons.flatMap((b) => (b.baseId ? [b.baseId] : [])),
+          ),
+          sql`${prospectionBrouillons.lienVma} is not null`,
+          sql`${prospectionBrouillons.campagneId} <> ${campagne.campagneId}`,
+        ),
+      )
+      .orderBy(sql`${prospectionBrouillons.createdAt} desc`);
+    const lienDe = new Map<string, string>();
+    for (const a of anciens)
+      if (a.baseId && a.lien && !lienDe.has(a.baseId)) lienDe.set(a.baseId, a.lien);
+    for (const b of brouillons) {
+      const lien = (b.baseId && lienDe.get(b.baseId)) || (await creerLienProspectionVma(vma)).lien;
+      await tx
+        .update(prospectionBrouillons)
+        .set({
+          lienVma: lien,
+          consigne: `Rédige la relance numéro ${b.touche} via la skill relancer-par-mail-simatis : rappel court, angle différent des mails précédents, et propose deux créneaux de rendez-vous. Reprends le formulaire VMA avec le lien individuel fourni.`,
+        })
+        .where(eq(prospectionBrouillons.id, b.id));
+    }
+    return brouillons.length;
+  });
+}
+
 export async function tournerBrouillons(
   db: Database,
   vma: InvitationDeps | null,
@@ -149,8 +234,10 @@ export async function tournerBrouillons(
     if (!prise) continue;
     let bilan: string;
     try {
-      const nombre = await preparerBrouillonsVma(db, p.utilisateur.slice(prefixe.length), vma);
-      bilan = `${nombre} brouillon(s) transmis à la rédaction via les skills.`;
+      const instanceId = p.utilisateur.slice(prefixe.length);
+      const premiers = await preparerBrouillonsVma(db, instanceId, vma);
+      const relances = await preparerRelancesVma(db, instanceId, vma);
+      bilan = `${premiers + relances} brouillon(s) transmis à la rédaction via les skills (${premiers} premier(s) mail(s), ${relances} relance(s)).`;
     } catch {
       bilan = 'Préparation interrompue. Vérifiez la configuration du site VMA.';
     }
