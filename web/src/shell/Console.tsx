@@ -8,6 +8,8 @@ import {
   type LimiteIA,
   type LimitesIA,
 } from '../api.js';
+import claudeMark from '../assets/claude-mark.svg';
+import openaiMark from '../assets/openai-mark.svg';
 
 // The label says what the colour means, so a line can be read without knowing the code.
 const ETIQUETTES: Record<LigneConsole['niveau'], string> = {
@@ -77,23 +79,106 @@ function Jauge({ nom, limite, maintenant }: { nom: string; limite: LimiteIA; mai
   );
 }
 
+function MarqueIA({ fournisseur }: { fournisseur: FournisseurIA }) {
+  return (
+    <span className="limite-ia-marque" aria-hidden="true">
+      <img src={fournisseur.id === 'claude' ? claudeMark : openaiMark} alt="" />
+    </span>
+  );
+}
+
+function MiniJauge({ nom, limite }: { nom: string; limite: LimiteIA }) {
+  return (
+    <div className="limite-ia-mini-jauge">
+      <div className="limite-ia-mini-valeur">
+        <span>{nom}</span>
+        <b>{Math.round(limite.restant)} %</b>
+      </div>
+      <div
+        className="limite-ia-mini-barre"
+        role="progressbar"
+        aria-label={`${nom} : capacité restante`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(limite.restant)}
+      >
+        <span style={{ width: `${limite.restant}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function FournisseurCompact({
+  fournisseur,
+  chargement = false,
+}: {
+  fournisseur: FournisseurIA;
+  chargement?: boolean;
+}) {
+  return (
+    <section
+      className={`limite-ia-compacte ${fournisseur.id}`}
+      aria-label={`${fournisseur.nom}, limites compactes`}
+    >
+      <div className="limite-ia-compacte-titre">
+        <MarqueIA fournisseur={fournisseur} />
+        <b>{fournisseur.nom}</b>
+      </div>
+      {fournisseur.etat === 'ok' && fournisseur.fenetre5h && fournisseur.hebdomadaire ? (
+        <>
+          <MiniJauge nom="5 h" limite={fournisseur.fenetre5h} />
+          <MiniJauge nom="Sem." limite={fournisseur.hebdomadaire} />
+        </>
+      ) : (
+        <span className="limite-ia-compacte-vide">
+          {chargement
+            ? 'Chargement…'
+            : fournisseur.etat === 'erreur'
+              ? 'Indisponible'
+              : 'À connecter'}
+        </span>
+      )}
+    </section>
+  );
+}
+
 function Fournisseur({
   fournisseur,
   maintenant,
+  actualiseLe,
+  enCours,
+  onActualiser,
+  chargement = false,
 }: {
   fournisseur: FournisseurIA;
   maintenant: number;
+  actualiseLe?: string | null;
+  enCours?: boolean;
+  onActualiser?: () => void;
+  chargement?: boolean;
 }) {
   return (
-    <section className="limite-ia-fournisseur" aria-label={fournisseur.nom}>
+    <section className={`limite-ia-fournisseur ${fournisseur.id}`} aria-label={fournisseur.nom}>
       <div className="limite-ia-fournisseur-titre">
-        <span className="limite-ia-marque" aria-hidden="true">
-          {fournisseur.id === 'claude' ? 'C' : 'G'}
-        </span>
+        <MarqueIA fournisseur={fournisseur} />
         <span>
           <b>{fournisseur.nom}</b>
-          {fournisseur.plan && <small>Abonnement {fournisseur.plan}</small>}
+          <small>
+            {fournisseur.plan ? `Abonnement ${fournisseur.plan}` : 'Abonnement non identifié'}
+            {actualiseLe ? ` · Màj ${heure(actualiseLe)}` : ''}
+          </small>
         </span>
+        {onActualiser && (
+          <button
+            className="limites-ia-actualiser"
+            type="button"
+            aria-label="Actualiser les limites IA"
+            disabled={enCours}
+            onClick={onActualiser}
+          >
+            Actualiser
+          </button>
+        )}
       </div>
       {fournisseur.etat === 'ok' && fournisseur.fenetre5h && fournisseur.hebdomadaire ? (
         <>
@@ -102,7 +187,11 @@ function Fournisseur({
         </>
       ) : (
         <p className={`limite-ia-vide ${fournisseur.etat}`}>
-          {fournisseur.etat === 'erreur' ? 'Données illisibles' : 'Source à connecter'}
+          {chargement
+            ? 'Chargement des limites…'
+            : fournisseur.etat === 'erreur'
+              ? 'Données illisibles'
+              : 'Source à connecter'}
         </p>
       )}
     </section>
@@ -225,112 +314,116 @@ export function Console({ slug }: { slug: string }) {
     ecrire(cleCoupe, null);
     setCoupe(null);
   };
+  const chargementLimites = !limites && !limitesEnPanne;
+  const fournisseurs =
+    limites?.fournisseurs ??
+    (['claude', 'chatgpt'] as const).map((id): FournisseurIA => ({
+      id,
+      nom: id === 'claude' ? 'Claude' : 'ChatGPT',
+      etat: limitesEnPanne ? 'erreur' : 'indisponible',
+      plan: null,
+      fenetre5h: null,
+      hebdomadaire: null,
+    }));
 
   return (
     <section className={`console ${ouverte ? 'ouverte' : ''}`} aria-label="Console de l'OS">
-      <div className="console-barre">
-        <button
-          className="console-titre"
-          aria-expanded={ouverte}
-          aria-label={ouverte ? 'Replier la console' : 'Déplier la console'}
-          onClick={basculer}
-        >
-          <span className="console-prompt" aria-hidden="true">
-            {donnees?.enCours ? '⠿' : '▸'}
-          </span>
-          <span className="console-dernier">
-            {panne ? (
-              'Console injoignable…'
-            ) : derniere ? (
-              <>
-                <span className={`console-badge ${derniere.niveau}`}>
-                  {ETIQUETTES[derniere.niveau]}
-                </span>
-                {derniere.texte}
-              </>
-            ) : donnees ? (
-              'Tout est calme, rien à signaler.'
-            ) : (
-              'Réveil de la console…'
-            )}
-          </span>
-        </button>
-        {masquees > 0 && (
-          <button className="console-lien" onClick={reafficher}>
-            tout réafficher ({masquees})
-          </button>
-        )}
-        <button className="console-lien" onClick={vider} disabled={visibles.length === 0}>
-          Vider
-        </button>
-      </div>
-      <div className={`console-deplie ${ouverte ? '' : 'console-deplie-repliee'}`}>
-        {ouverte && (
-          <div className="console-corps" ref={corps} role="log" aria-live="polite">
-            {visibles.length === 0 && (
-              <div className="console-ligne vide">
-                <span className="console-curseur" aria-hidden="true" />
-                Rien pour l'instant. Les routines et vos actions s'afficheront ici.
-              </div>
-            )}
-            {visibles.map((l) => (
-              <div
-                key={l.id}
-                className={`console-ligne ${l.niveau} ${nouvelles.has(l.id) ? 'nouvelle' : ''}`}
-              >
-                <span className="console-heure">{heure(l.at)}</span>
-                <span className="console-badge">{ETIQUETTES[l.niveau]}</span>
-                <span aria-hidden="true">{emoji(l)}</span>
-                <span className="console-texte">{l.texte}</span>
-              </div>
-            ))}
-            {donnees?.enCours && (
-              <div className="console-ligne info">
-                <span className="console-heure" />
-                <span className="console-badge">INFO</span>
-                <span className="console-texte">
-                  Claude travaille
-                  <span className="console-curseur" aria-hidden="true" />
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-        <aside
-          className={`limites-ia ${ouverte ? '' : 'limites-ia-compactes'}`}
-          aria-label="Limites des abonnements IA"
-        >
-          <div className="limites-ia-entete">
-            <b>Limites IA</b>
-            <span>
-              {limites?.actualiseLe ? `Actualisé à ${heure(limites.actualiseLe)}` : 'Non connecté'}
-            </span>
+      {!ouverte && (
+        <div className="console-barre">
+          <div className="console-log-compacte">
             <button
-              className="limites-ia-actualiser"
-              type="button"
-              aria-label="Actualiser les limites IA"
-              disabled={limitesEnCours}
-              onClick={() => void chargerLimites()}
+              className="console-titre"
+              aria-expanded={false}
+              aria-label="Déplier la console"
+              onClick={basculer}
             >
-              Actualiser
+              <span className="console-prompt" aria-hidden="true">
+                {donnees?.enCours ? '⠿' : '▸'}
+              </span>
+              <span className="console-dernier">
+                {panne ? (
+                  'Console injoignable…'
+                ) : derniere ? (
+                  <>
+                    <span className={`console-badge ${derniere.niveau}`}>
+                      {ETIQUETTES[derniere.niveau]}
+                    </span>
+                    {derniere.texte}
+                  </>
+                ) : donnees ? (
+                  'Tout est calme, rien à signaler.'
+                ) : (
+                  'Réveil de la console…'
+                )}
+              </span>
+            </button>
+            {masquees > 0 && (
+              <button className="console-lien" onClick={reafficher}>
+                tout réafficher ({masquees})
+              </button>
+            )}
+            <button className="console-lien" onClick={vider} disabled={visibles.length === 0}>
+              Vider
             </button>
           </div>
-          {limitesEnPanne ? (
-            <p className="limites-ia-panne">Impossible de lire les limites pour le moment.</p>
-          ) : limites ? (
-            <div className="limites-ia-liste">
-              {limites.fournisseurs.map((f) => (
-                <Fournisseur key={f.id} fournisseur={f} maintenant={maintenant} />
+          {fournisseurs.map((fournisseur) => (
+            <FournisseurCompact
+              key={fournisseur.id}
+              fournisseur={fournisseur}
+              chargement={chargementLimites}
+            />
+          ))}
+        </div>
+      )}
+      {ouverte && (
+        <div className="console-deplie">
+          <div className="console-journal-ouvert">
+            <button className="console-replier" type="button" onClick={basculer}>
+              Replier
+            </button>
+            <div className="console-corps" ref={corps} role="log" aria-live="polite">
+              {visibles.length === 0 && (
+                <div className="console-ligne vide">
+                  <span className="console-curseur" aria-hidden="true" />
+                  Rien pour l'instant. Les routines et vos actions s'afficheront ici.
+                </div>
+              )}
+              {visibles.map((l) => (
+                <div
+                  key={l.id}
+                  className={`console-ligne ${l.niveau} ${nouvelles.has(l.id) ? 'nouvelle' : ''}`}
+                >
+                  <span className="console-heure">{heure(l.at)}</span>
+                  <span className="console-badge">{ETIQUETTES[l.niveau]}</span>
+                  <span aria-hidden="true">{emoji(l)}</span>
+                  <span className="console-texte">{l.texte}</span>
+                </div>
               ))}
+              {donnees?.enCours && (
+                <div className="console-ligne info">
+                  <span className="console-heure" />
+                  <span className="console-badge">INFO</span>
+                  <span className="console-texte">
+                    Claude travaille
+                    <span className="console-curseur" aria-hidden="true" />
+                  </span>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="limites-ia-chargement" aria-label="Chargement des limites IA">
-              <span />
-              <span />
-            </div>
-          )}
-        </aside>
-      </div>
+          </div>
+          {fournisseurs.map((fournisseur) => (
+            <Fournisseur
+              key={fournisseur.id}
+              fournisseur={fournisseur}
+              maintenant={maintenant}
+              actualiseLe={fournisseur.id === 'chatgpt' ? limites?.actualiseLe : null}
+              enCours={limitesEnCours}
+              onActualiser={fournisseur.id === 'chatgpt' ? () => void chargerLimites() : undefined}
+              chargement={chargementLimites}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
