@@ -614,7 +614,7 @@ const profilLinkedin = sql`coalesce(${baseVivante.linkedin} ~* '^https://([a-z0-
 const joignableSurLinkedin = sql`trim(${baseVivante.nom}) <> '' and ${profilLinkedin}
   and not ${baseVivante.opposition} and ${baseVivante.exclusion} is null`;
 // Keep the company record, but stop asking for a first contact once one is reachable.
-const aEnrichir = sql`${baseVivante.zone} = 'a_enrichir' and not (${joignableSurLinkedin})
+export const aEnrichir = sql`${baseVivante.zone} = 'a_enrichir' and not (${joignableSurLinkedin})
   and (trim(${baseVivante.nom}) <> '' or not exists (
     select 1 from base_vivante contact
     where contact.instance_id = ${baseVivante.instanceId}

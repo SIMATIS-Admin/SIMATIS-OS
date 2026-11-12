@@ -14,7 +14,10 @@ const etapes = (slug: string, radar: EtatRadar) => [
       titre: f.entreprise,
       detail: f.nom || 'Contact à trouver',
     })),
-    lien: { href: `#/${slug}/bases`, libelle: 'Ouvrir les Bases vivantes' },
+    lien: {
+      href: `#/${slug}/bases/ouvrir/a-enrichir`,
+      libelle: `Enrichir les ${radar.aEnrichir.total}`,
+    },
   },
   {
     id: 'prets',
@@ -26,7 +29,10 @@ const etapes = (slug: string, radar: EtatRadar) => [
       titre: f.nom,
       detail: f.entreprise,
     })),
-    lien: { href: `#/${slug}/prospection`, libelle: 'Prospecter à froid' },
+    lien: {
+      href: `#/${slug}/prospection/ouvrir/froid`,
+      libelle: `Écrire aux ${radar.prets.total}`,
+    },
   },
   {
     id: 'contactes',
@@ -38,7 +44,7 @@ const etapes = (slug: string, radar: EtatRadar) => [
       titre: f.nom,
       detail: `${f.entreprise} · ${f.nbContacts} touche${f.nbContacts > 1 ? 's' : ''}`,
     })),
-    lien: { href: `#/${slug}/prospection`, libelle: 'Voir les campagnes' },
+    lien: { href: `#/${slug}/prospection/ouvrir/froid`, libelle: 'Relancer' },
   },
   {
     id: 'ont-repondu',
@@ -50,7 +56,7 @@ const etapes = (slug: string, radar: EtatRadar) => [
       titre: f.nom,
       detail: f.entreprise,
     })),
-    lien: { href: `#/${slug}/cockpit`, libelle: 'Ouvrir le Cockpit' },
+    lien: { href: `#/${slug}/cockpit`, libelle: 'Répondre depuis le Cockpit' },
   },
   {
     id: 'rdv-accepte',

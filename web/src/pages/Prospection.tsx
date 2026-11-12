@@ -97,8 +97,12 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
     fetchProspection(slug).then(setVue, (e: unknown) => setMessage(messageErreur(e)));
 
   useEffect(() => {
+    // Liens du Radar : « froid » ouvre le choix des contacts jamais sollicités, « relance » celui des
+    // tâches de relance. Tout autre identifiant est une campagne.
+    if (ouvrir === 'froid') setEtape({ nom: 'choix-froid' });
+    else if (ouvrir === 'relance') setEtape({ nom: 'choix' });
     // Lien « Rédiger la réponse » de l'Inbox : la campagne s'ouvre directement.
-    if (ouvrir) {
+    else if (ouvrir) {
       fetchCampagne(slug, ouvrir).then(
         (c) =>
           setEtape(

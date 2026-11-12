@@ -67,6 +67,29 @@ describe('Prospection', () => {
     expect(screen.queryByText(/sur 0/)).toBeNull();
   });
 
+  it('ouvre directement le choix des contacts à froid depuis le lien du Radar', async () => {
+    render(<Prospection slug="simatis" ouvrir="froid" />);
+    expect(await screen.findByText('Échantillon de la base vivante')).toBeTruthy();
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some(([url]) => typeof url === 'string' && url.includes('/campagnes/froid')),
+    ).toBe(false);
+  });
+
+  it('ouvre directement le choix des tâches à relancer depuis le lien du Radar', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('/prospection/taches-relance')
+          ? Promise.resolve(new Response('[]'))
+          : reponse(),
+      ),
+    );
+    render(<Prospection slug="simatis" ouvrir="relance" />);
+    expect(await screen.findByText('Quelles tâches relancer ?')).toBeTruthy();
+  });
+
   it('affiche la semaine, les réponses, les thèmes et les touches', async () => {
     render(<Prospection slug="simatis" />);
     await screen.findByText(/62 envoyés/);

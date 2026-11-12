@@ -63,6 +63,25 @@ describe('Radar', () => {
     );
   });
 
+  it('offre une action par colonne, qui ouvre le bon écran déjà préparé', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(radar)))),
+    );
+    render(<Radar slug="simatis" />);
+    const lien = async (colonne: string, nom: string | RegExp) =>
+      within(await screen.findByRole('region', { name: colonne }))
+        .getByRole('link', { name: nom })
+        .getAttribute('href');
+    expect(await lien('À enrichir', 'Enrichir les 14')).toBe('#/simatis/bases/ouvrir/a-enrichir');
+    expect(await lien('Prêts à contacter', 'Écrire aux 48')).toBe(
+      '#/simatis/prospection/ouvrir/froid',
+    );
+    expect(await lien('Contactés', 'Relancer')).toBe('#/simatis/prospection/ouvrir/froid');
+    expect(await lien('Ont répondu', /Répondre/)).toBe('#/simatis/cockpit');
+    expect(await lien('RDV accepté', /Pipeline/)).toBe('#/simatis/pipeline');
+  });
+
   it("explique l'échec de chargement", async () => {
     vi.stubGlobal(
       'fetch',

@@ -274,7 +274,13 @@ export function App() {
       case 'presentation-vma':
         return <PresentationVma slug={current.slug} />;
       case 'bases':
-        return <Bases key={current.slug} slug={current.slug} />;
+        return (
+          <Bases
+            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            slug={current.slug}
+            ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+          />
+        );
       case 'prospection':
         return (
           <Prospection

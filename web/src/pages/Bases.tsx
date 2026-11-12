@@ -576,10 +576,13 @@ type Fenetres =
   | { quoi: 'recherche' }
   | { quoi: 'routine-recherche' };
 
-export function Bases({ slug }: { slug: string }) {
+export function Bases({ slug, ouvrir }: { slug: string; ouvrir?: string | undefined }) {
   const [etat, setEtat] = useState<EtatBase | null>(null);
   const [apercus, setApercus] = useState<ImportBase[]>([]);
-  const [filtres, setFiltres] = useState<FiltresBaseWeb>({ tri: 'entreprise' });
+  // Lien du Radar : « a-enrichir » ouvre directement les fiches sans contact.
+  const [filtres, setFiltres] = useState<FiltresBaseWeb>(
+    ouvrir === 'a-enrichir' ? { zone: 'a_enrichir' } : { tri: 'entreprise' },
+  );
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
