@@ -6,9 +6,11 @@ import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { preferences } from '../preferences/schema.js';
+import type { LimitesIA } from '../ia/limites.js';
 import { CIBLE } from './cible.js';
 import type { ClientIA } from './client.js';
 import { chercherNouveauxProspects, type ProspectRecherche } from './recherche-nouveaux.js';
+import { attenteQuota, expliquerEchec, quotaBas, quotaCodex } from './quota.js';
 import { rechercheSessions } from './schema.js';
 import { cloreSessionRecherche, ouvrirSessionRecherche } from './sessions.js';
 
@@ -23,7 +25,12 @@ export type ReglagesRecherche = z.infer<typeof reglagesRecherche>;
 export type RoutineRecherche = ReglagesRecherche & {
   dernierJour?: string;
   bilan?: string;
+  // Essais du jour interrompus par un quota ChatGPT bas : la journée reste ouverte pour un nouvel
+  // essai après le renouvellement, au plus ESSAIS_PAR_JOUR fois.
+  essais?: { jour: string; n: number };
 };
+
+export const ESSAIS_PAR_JOUR = 2;
 
 const defaut = { active: false, consignes: CIBLE, nombre: 10, heure: '09:00' };
 const prefixe = 'routine-recherche-base:';
@@ -59,7 +66,13 @@ export async function enregistrerRoutineRecherche(
 
 const csv = (v: string | null) => '"' + (v ?? '').replaceAll('"', '""') + '"';
 
-export async function tournerRecherche(db: Database, client: ClientIA, maintenant = new Date()) {
+export async function tournerRecherche(
+  db: Database,
+  client: ClientIA,
+  maintenant = new Date(),
+  // Compteur de limites de la console : sert à ne pas lancer Codex quand son quota est presque épuisé.
+  limites?: () => Promise<LimitesIA | null>,
+) {
   const jour = jourDe(maintenant);
   const heure = new Intl.DateTimeFormat('fr-FR', {
     timeZone: 'Europe/Paris',
@@ -74,6 +87,20 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
   for (const ligne of lignes) {
     const routine = ligne.options.rechercheBase;
     if (!routine?.active || routine.heure > heure || routine.dernierJour === jour) continue;
+    // Quota presque épuisé : la journée n'est pas entamée, la recherche attend le renouvellement.
+    const quota = limites ? quotaCodex(await limites().catch(() => null), maintenant) : null;
+    if (quotaBas(quota)) {
+      const attente = attenteQuota(quota);
+      if (routine.bilan !== attente)
+        await db
+          .update(preferences)
+          .set({
+            options: sql`jsonb_set(${preferences.options}, '{rechercheBase,bilan}', to_jsonb(${attente}::text))`,
+          })
+          .where(eq(preferences.utilisateur, ligne.utilisateur));
+      continue;
+    }
+    const essaisAvant = routine.essais?.jour === jour ? routine.essais.n : 0;
     const [prise] = await db
       .update(preferences)
       .set({
@@ -93,6 +120,7 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
       nombreVise: routine.nombre,
     });
     let fin: Parameters<typeof cloreSessionRecherche>[3];
+    let rouvrir = false;
     const contacts: ProspectRecherche[] = [];
     let creees = 0;
     let fusionnees = 0;
@@ -140,7 +168,11 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
         })),
       };
       bilan = `${creees} fiche(s) ajoutée(s), ${fusionnees} rapprochée(s), sur ${routine.nombre} contacts visés.`;
-    } catch {
+    } catch (erreur) {
+      const apres = limites ? quotaCodex(await limites().catch(() => null), maintenant) : null;
+      const cause = expliquerEchec(erreur, apres);
+      // Quota bas : la journée reste ouverte pour un nouvel essai après le renouvellement.
+      rouvrir = cause.quotaBas && essaisAvant + 1 < ESSAIS_PAR_JOUR;
       fin = {
         etat: 'erreur',
         trouves: creees,
@@ -152,9 +184,9 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
           nom: c.nom,
           fonction: c.fonction,
         })),
-        erreur: 'Codex indisponible ou réponse invalide.',
+        erreur: cause.erreur,
       };
-      bilan = 'Recherche interrompue. Vérifiez la connexion de Codex sur le Mac.';
+      bilan = cause.bilan;
     }
     await cloreSessionRecherche(db, instanceId, session, fin);
     await db
@@ -163,6 +195,18 @@ export async function tournerRecherche(db: Database, client: ClientIA, maintenan
         options: sql`jsonb_set(${preferences.options}, '{rechercheBase,bilan}', to_jsonb(${bilan}::text))`,
       })
       .where(eq(preferences.utilisateur, ligne.utilisateur));
+    // Quota bas : on retire le marqueur du jour (la recherche pourra repartir) et on compte l'essai.
+    if (rouvrir || essaisAvant > 0) {
+      const essais = JSON.stringify({ essais: { jour, n: essaisAvant + 1 } });
+      await db
+        .update(preferences)
+        .set({
+          options: rouvrir
+            ? sql`jsonb_set(${preferences.options}, '{rechercheBase}', ((${preferences.options}->'rechercheBase') - 'dernierJour') || ${essais}::jsonb)`
+            : sql`jsonb_set(${preferences.options}, '{rechercheBase}', (${preferences.options}->'rechercheBase') || ${essais}::jsonb)`,
+        })
+        .where(eq(preferences.utilisateur, ligne.utilisateur));
+    }
   }
 }
 
