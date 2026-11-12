@@ -6,6 +6,8 @@ export type NavItem = {
   module?: string;
   // Écran en bêta : une pastille s'affiche à côté du nom.
   beta?: boolean;
+  // Écran qui existe mais ne figure pas dans le menu : on l'ouvre depuis un autre écran (Radar).
+  masque?: boolean;
 };
 export type NavGroup = { title: string; later?: boolean; items: NavItem[] };
 
@@ -28,7 +30,12 @@ export const NAV: NavGroup[] = [
   },
   {
     title: '1 · Détecter',
-    items: [item('prospection', 'Prospection', 'send'), item('bases', 'Bases vivantes', 'db')],
+    items: [
+      item('radar', 'Radar', 'radar'),
+      // Gardés pour leurs adresses, leurs titres et les favoris ; on y accède depuis le Radar.
+      { ...item('prospection', 'Prospection', 'send'), masque: true },
+      { ...item('bases', 'Bases vivantes', 'db'), masque: true },
+    ],
   },
   {
     title: '2 · Vendre',
@@ -77,6 +84,7 @@ export const NAV: NavGroup[] = [
 // Screens already built in the real app; every other menu entry shows « Bientôt ».
 export const BUILT = new Set([
   'cockpit',
+  'radar',
   'pipeline',
   'entreprises',
   'contacts',

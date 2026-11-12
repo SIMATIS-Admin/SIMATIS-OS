@@ -96,9 +96,30 @@ describe('Sidebar', () => {
         (n) => n.textContent,
       );
     expect(libelles(0)).toEqual(['Cockpit', 'Agenda']);
-    expect(libelles(1)).toEqual(['Prospection', 'Bases vivantes']);
+    expect(libelles(1)).toEqual(['Radar']);
     expect(libelles(2)).toContain('Pipeline');
     expect(libelles(3)).toEqual(['Entreprises', 'Contacts']);
+  });
+
+  it('lights up the Radar while Prospection or Bases vivantes is open, and hides them from the menu', () => {
+    const { container, unmount } = render(
+      <Sidebar
+        instances={[simatis, mandat]}
+        current={simatis}
+        view="prospection"
+        open={false}
+        favoris={[]}
+        onToggleFavori={() => undefined}
+        onMoveFavori={() => undefined}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /Prospection/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Bases vivantes/ })).toBeNull();
+    expect(screen.getByRole('link', { name: /Radar/ }).getAttribute('aria-current')).toBe('page');
+    expect(container.querySelectorAll('.nav a.on')).toHaveLength(1);
+    unmount();
+    renderSidebar(simatis, ['prospection']);
+    expect(screen.getAllByRole('link', { name: /Prospection/ })).toHaveLength(1);
   });
 
   it('removes the favourites from their section, so nothing appears twice', () => {
