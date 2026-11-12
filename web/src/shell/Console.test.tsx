@@ -24,6 +24,27 @@ const lignes: ConsoleOS['lignes'] = [
 ];
 let reponse: ConsoleOS;
 let urls: string[];
+const limites = {
+  actualiseLe: '2026-11-12T13:18:00.000Z',
+  fournisseurs: [
+    {
+      id: 'claude',
+      nom: 'Claude',
+      etat: 'ok',
+      plan: 'Pro',
+      fenetre5h: { restant: 72, reinitialiseLe: '2026-11-12T15:00:00.000Z' },
+      hebdomadaire: { restant: 28, reinitialiseLe: '2026-11-16T08:00:00.000Z' },
+    },
+    {
+      id: 'chatgpt',
+      nom: 'ChatGPT',
+      etat: 'ok',
+      plan: 'Plus',
+      fenetre5h: { restant: 84, reinitialiseLe: '2026-11-12T16:25:00.000Z' },
+      hebdomadaire: { restant: 63, reinitialiseLe: '2026-11-14T23:00:00.000Z' },
+    },
+  ],
+};
 
 describe('Console (journal en lecture seule)', () => {
   beforeEach(() => {
@@ -34,7 +55,9 @@ describe('Console (journal en lecture seule)', () => {
       'fetch',
       vi.fn((url: string) => {
         urls.push(url);
-        return Promise.resolve(new Response(JSON.stringify(reponse)));
+        return Promise.resolve(
+          new Response(JSON.stringify(url === '/api/limites-ia' ? limites : reponse)),
+        );
       }),
     );
   });
@@ -60,6 +83,26 @@ describe('Console (journal en lecture seule)', () => {
     const journal = screen.getByRole('log');
     expect(journal.textContent).toContain('INFO');
     expect(journal.textContent).toContain('À VOIR');
+  });
+
+  it('shows the 5-hour and weekly limits beside the open log', async () => {
+    render(<Console slug="simatis" />);
+    await screen.findByText('Test de VMA reçu : ACME non rangé');
+    fireEvent.click(screen.getByLabelText('Déplier la console'));
+
+    expect(await screen.findByText('Claude')).toBeTruthy();
+    expect(screen.getByText('ChatGPT')).toBeTruthy();
+    expect(screen.getByText('72 % restant')).toBeTruthy();
+    expect(screen.getByText('28 % restant')).toBeTruthy();
+    expect(screen.getByText('84 % restant')).toBeTruthy();
+    expect(screen.getByText('63 % restant')).toBeTruthy();
+    expect(screen.getAllByText('Fenêtre 5 h')).toHaveLength(2);
+    expect(screen.getAllByText('Hebdomadaire')).toHaveLength(2);
+
+    fireEvent.click(screen.getByLabelText('Actualiser les limites IA'));
+    await waitFor(() =>
+      expect(urls.filter((url) => url === '/api/limites-ia').length).toBeGreaterThan(1),
+    );
   });
 
   it('empties the display without losing anything, then shows everything again', async () => {
@@ -93,7 +136,9 @@ describe('Console (journal en lecture seule)', () => {
       enCours: true,
     };
     fireEvent.click(screen.getByLabelText('Déplier la console'));
-    await waitFor(() => expect(urls.length).toBeGreaterThan(1));
+    await waitFor(() =>
+      expect(urls.filter((url) => url === '/api/i/simatis/console').length).toBeGreaterThan(1),
+    );
     await waitFor(() => expect(screen.getByRole('log').textContent).toContain('Nouveau message'));
     expect(screen.getByText(/Claude travaille/)).toBeTruthy();
     expect(screen.queryByText('Tâche créée : Appeler')).toBeNull();
