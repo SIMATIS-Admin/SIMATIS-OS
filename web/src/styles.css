@@ -4565,6 +4565,9 @@ label.btn.off {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(470px, 540px);
 }
+.console-deplie-repliee {
+  grid-template-columns: 1fr;
+}
 .limites-ia {
   min-width: 0;
   height: 210px;
@@ -4729,6 +4732,32 @@ label.btn.off {
   background: #183452;
   animation: limites-ia-pulse 1.2s ease-in-out infinite alternate;
 }
+.limites-ia-compactes {
+  height: auto;
+  border-left: 0;
+}
+.limites-ia-compactes .limites-ia-entete {
+  min-height: 32px;
+  padding-block: 4px;
+}
+.limites-ia-compactes .limites-ia-liste {
+  gap: 24px;
+  padding-block: 8px 9px;
+}
+.limites-ia-compactes .limite-ia-fournisseur {
+  display: grid;
+  grid-template-columns: minmax(105px, 0.65fr) repeat(2, minmax(130px, 1fr));
+  align-items: center;
+  gap: 12px;
+}
+.limites-ia-compactes .limite-ia-fournisseur-titre,
+.limites-ia-compactes .limite-ia-jauge + .limite-ia-jauge {
+  margin: 0;
+}
+.limites-ia-compactes .limite-ia-vide {
+  grid-column: 2 / -1;
+  margin: 0;
+}
 @keyframes limites-ia-pulse {
   to {
     background: #213e5e;
@@ -4797,6 +4826,20 @@ label.btn.off {
   .limites-ia {
     height: auto;
     border-left: 0;
+  }
+  .limites-ia-compactes .limite-ia-fournisseur {
+    grid-template-columns: minmax(105px, 0.5fr) repeat(2, minmax(120px, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .limites-ia-liste {
+    grid-template-columns: 1fr;
+  }
+  .limites-ia-compactes .limite-ia-fournisseur {
+    grid-template-columns: minmax(105px, 0.5fr) repeat(2, minmax(0, 1fr));
+  }
+  .limites-ia-compactes .limite-ia-reset {
+    display: none;
   }
 }
 

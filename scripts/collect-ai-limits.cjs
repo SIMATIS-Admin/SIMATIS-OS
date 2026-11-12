@@ -1,17 +1,89 @@
 const { spawn } = require('node:child_process');
-const { readFile, rename, writeFile } = require('node:fs/promises');
-const { homedir } = require('node:os');
+const { rename, writeFile } = require('node:fs/promises');
 const path = require('node:path');
 
 const CODEX =
   process.env.CODEX_BIN ??
   '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
+const CLAUDE = process.env.CLAUDE_BIN ?? 'claude';
 const SORTIE = path.resolve(process.env.IA_LIMITS_FILE ?? 'secrets/ia-limites.json');
 const SURVEILLER = process.argv.includes('--watch');
 const CINQ_MINUTES = 5 * 60_000;
 
 const iso = (secondes) => new Date(secondes * 1000).toISOString();
 const restant = (utilise) => Math.max(0, Math.min(100, 100 - utilise));
+
+function executer(executable, arguments_, duree = 20_000) {
+  return new Promise((resolve, reject) => {
+    const enfant = spawn(executable, arguments_, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let sortie = '';
+    let erreur = '';
+    const delai = setTimeout(() => {
+      enfant.kill();
+      reject(new Error(`${executable} ne répond pas`));
+    }, duree);
+    enfant.stdout.setEncoding('utf8');
+    enfant.stderr.setEncoding('utf8');
+    enfant.stdout.on('data', (morceau) => (sortie += morceau));
+    enfant.stderr.on('data', (morceau) => (erreur += morceau));
+    enfant.once('error', reject);
+    enfant.once('close', (code) => {
+      clearTimeout(delai);
+      if (code === 0) resolve(sortie);
+      else reject(new Error(erreur.trim() || `${executable} s'est arrêté avec le code ${code}`));
+    });
+  });
+}
+
+const MOIS = new Map(
+  ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(
+    (mois, index) => [mois, index],
+  ),
+);
+
+function dateClaude(texte, maintenant) {
+  const resultat = texte.match(/([A-Z][a-z]{2}) (\d{1,2}) at (\d{1,2}):(\d{2})(am|pm)/);
+  if (!resultat) throw new Error('Date de réinitialisation Claude illisible');
+  const mois = MOIS.get(resultat[1]);
+  if (mois === undefined) throw new Error('Mois de réinitialisation Claude illisible');
+  let heure = Number(resultat[3]) % 12;
+  if (resultat[5] === 'pm') heure += 12;
+  let date = new Date(
+    maintenant.getFullYear(),
+    mois,
+    Number(resultat[2]),
+    heure,
+    Number(resultat[4]),
+  );
+  if (date.getTime() < maintenant.getTime() - 24 * 60 * 60_000) {
+    date = new Date(
+      maintenant.getFullYear() + 1,
+      mois,
+      Number(resultat[2]),
+      heure,
+      Number(resultat[4]),
+    );
+  }
+  return date.toISOString();
+}
+
+function analyserUsageClaude(sortie, maintenant = new Date()) {
+  const session = sortie.match(/Current session:\s*([\d.]+)% used\s*·\s*resets (.+?) \(/);
+  const semaine = sortie.match(
+    /Current week \(all models\):\s*([\d.]+)% used\s*·\s*resets (.+?) \(/,
+  );
+  if (!session || !semaine) throw new Error('Fenêtres Claude absentes');
+  return {
+    fenetre5h: {
+      restant: restant(Number(session[1])),
+      reinitialiseLe: dateClaude(session[2], maintenant),
+    },
+    hebdomadaire: {
+      restant: restant(Number(semaine[1])),
+      reinitialiseLe: dateClaude(semaine[2], maintenant),
+    },
+  };
+}
 
 async function limitesChatGPT() {
   const enfant = spawn(CODEX, ['app-server', '--stdio'], {
@@ -77,40 +149,24 @@ async function limitesChatGPT() {
   });
 }
 
-async function jetonClaude() {
-  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) return process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  try {
-    const brut = JSON.parse(await readFile(path.join(homedir(), '.claude', '.credentials.json')));
-    return brut.claudeAiOauth?.accessToken ?? null;
-  } catch {
-    return null;
-  }
-}
-
 async function limitesClaude() {
-  const jeton = await jetonClaude();
-  if (!jeton) return null;
-  const reponse = await fetch('https://api.anthropic.com/api/oauth/usage', {
-    headers: {
-      authorization: `Bearer ${jeton}`,
-      'anthropic-beta': 'oauth-2025-04-20',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!reponse.ok) throw new Error(`Limites Claude indisponibles (${reponse.status})`);
-  const source = await reponse.json();
-  if (!source.five_hour?.resets_at || !source.seven_day?.resets_at)
-    throw new Error('Fenêtres Claude absentes');
+  const [usage, statut] = await Promise.all([
+    executer(CLAUDE, [
+      '-p',
+      '/usage',
+      '--output-format',
+      'text',
+      '--no-session-persistence',
+      '--permission-mode',
+      'dontAsk',
+    ]),
+    executer(CLAUDE, ['auth', 'status', '--json']),
+  ]);
+  const source = analyserUsageClaude(usage);
+  const abonnement = JSON.parse(statut).subscriptionType;
   return {
-    plan: null,
-    fenetre5h: {
-      restant: restant(source.five_hour.utilization),
-      reinitialiseLe: source.five_hour.resets_at,
-    },
-    hebdomadaire: {
-      restant: restant(source.seven_day.utilization),
-      reinitialiseLe: source.seven_day.resets_at,
-    },
+    plan: abonnement ? abonnement[0].toUpperCase() + abonnement.slice(1) : null,
+    ...source,
   };
 }
 
@@ -134,7 +190,11 @@ async function main() {
   if (SURVEILLER) setInterval(() => void collecter().catch(console.error), CINQ_MINUTES);
 }
 
-void main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  void main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { analyserUsageClaude };
