@@ -46,6 +46,8 @@ import {
 } from './reponses.js';
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
 import { listerSuspectsHorsCrm } from './suspects.js';
+import { etatRadar } from './radar.js';
+import { searchContacts } from '../crm/service.js';
 import { exporterWaalaxy } from './waalaxy.js';
 import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
 import { creerGeocodeur, type Geocodeur } from '../routage/geocodage.js';
@@ -354,6 +356,29 @@ export function registerBaseVivanteRoutes(
     tag: q.tag?.trim() || undefined,
     q: q.q,
   });
+
+  // Le Radar : les quatre premières étapes viennent de la base vivante, la cinquième (rendez-vous
+  // accepté) est la liste des contacts du CRM devenus prospects.
+  app.get<Route>(
+    '/api/i/:slug/radar',
+    surInstance(async (instanceId) => {
+      const prospects = (await searchContacts(db, instanceId)).filter(
+        (c) => c.statut === 'prospect',
+      );
+      return {
+        ...(await etatRadar(db, instanceId)),
+        rdvAccepte: {
+          total: prospects.length,
+          fiches: prospects.slice(0, 5).map((c) => ({
+            id: c.id,
+            nom: c.nom,
+            entreprise: c.entreprise,
+            fonction: c.fonction,
+          })),
+        },
+      };
+    }),
+  );
 
   // Les suspects de la base qui ne sont pas encore des contacts du CRM, pour la liste Contacts.
   app.get<Route>(

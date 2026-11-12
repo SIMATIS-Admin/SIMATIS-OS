@@ -6932,3 +6932,52 @@ div.pb-ligne {
   max-height: 240px;
   overflow: auto;
 }
+
+/* Radar : le pipe de détection, une colonne par étape. */
+.radar-intro {
+  margin: 0 0 12px;
+}
+.radar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.radar-colonnes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.radar-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.radar-colonne header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.radar-colonne h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.radar-total {
+  font-size: 22px;
+  font-weight: 600;
+}
+.radar-carte {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}

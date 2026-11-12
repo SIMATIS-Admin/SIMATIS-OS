@@ -424,6 +424,27 @@ export const fetchSuspectsBase = (slug: string, q: string) =>
     `/api/i/${encodeURIComponent(slug)}/base/suspects?q=${encodeURIComponent(q)}`,
   );
 
+export type FicheRadar = {
+  id: string;
+  entreprise: string;
+  nom: string;
+  fonction: string | null;
+  nbContacts: number;
+  dernierContactLe: string | null;
+};
+export type ColonneRadar = { total: number; fiches: FicheRadar[] };
+export type EtatRadar = {
+  aEnrichir: ColonneRadar;
+  prets: ColonneRadar;
+  contactes: ColonneRadar;
+  ontRepondu: ColonneRadar;
+  rdvAccepte: {
+    total: number;
+    fiches: { id: string; nom: string; entreprise: string | null; fonction: string | null }[];
+  };
+};
+export const fetchRadar = (slug: string) => getJson<EtatRadar>(inst(slug, 'radar'));
+
 export const fetchContacts = (slug: string, q: string) =>
   getJson<Contact[]>(`/api/i/${encodeURIComponent(slug)}/contacts?q=${encodeURIComponent(q)}`);
 
