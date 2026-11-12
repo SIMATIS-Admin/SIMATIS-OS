@@ -32,4 +32,16 @@ Current week (all models): 71% used · resets Nov 13 at 1:59pm (Europe/Paris)`,
       },
     });
   });
+
+  it('accepte une heure de réinitialisation sans minutes', () => {
+    const maintenant = new Date(2026, 10, 12, 15, 0);
+    const resultat = analyserUsageClaude(
+      `Current session: 3% used · resets Nov 12 at 8pm (Europe/Paris)
+Current week (all models): 71% used · resets Nov 13 at 2pm (Europe/Paris)`,
+      maintenant,
+    );
+
+    expect(resultat.fenetre5h.reinitialiseLe).toBe(new Date(2026, 10, 12, 20, 0).toISOString());
+    expect(resultat.hebdomadaire.reinitialiseLe).toBe(new Date(2026, 10, 13, 14, 0).toISOString());
+  });
 });

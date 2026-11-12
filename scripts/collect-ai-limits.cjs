@@ -42,7 +42,7 @@ const MOIS = new Map(
 );
 
 function dateClaude(texte, maintenant) {
-  const resultat = texte.match(/([A-Z][a-z]{2}) (\d{1,2}) at (\d{1,2}):(\d{2})(am|pm)/);
+  const resultat = texte.match(/([A-Z][a-z]{2}) (\d{1,2}) at (\d{1,2})(?::(\d{2}))?(am|pm)/);
   if (!resultat) throw new Error('Date de réinitialisation Claude illisible');
   const mois = MOIS.get(resultat[1]);
   if (mois === undefined) throw new Error('Mois de réinitialisation Claude illisible');
@@ -53,7 +53,7 @@ function dateClaude(texte, maintenant) {
     mois,
     Number(resultat[2]),
     heure,
-    Number(resultat[4]),
+    Number(resultat[4] ?? 0),
   );
   if (date.getTime() < maintenant.getTime() - 24 * 60 * 60_000) {
     date = new Date(
@@ -61,7 +61,7 @@ function dateClaude(texte, maintenant) {
       mois,
       Number(resultat[2]),
       heure,
-      Number(resultat[4]),
+      Number(resultat[4] ?? 0),
     );
   }
   return date.toISOString();
