@@ -80,6 +80,16 @@ const jourCourt = (iso: string) =>
     month: 'short',
   });
 
+const quandRdv = (iso: string) =>
+  new Date(iso).toLocaleString('fr-FR', {
+    timeZone: 'Europe/Paris',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
 // Pipedrive-like state: next activity planned, overdue, or none at all.
 function EtatActivite({ o }: { o: PipelineOpp }) {
   const [classe, texte] = !o.prochaine
@@ -136,6 +146,10 @@ function Card({
         </div>
         <div className="ttl">{o.titre}</div>
         {o.contact && <div className="pers small muted">{o.contact}</div>}
+        {!o.clos && o.prochainRdv && <div className="rdv small">RDV {quandRdv(o.prochainRdv)}</div>}
+        {o.sansRdv && (
+          <div className="sans-rdv small muted">Sans rendez-vous, suivi dans le Radar</div>
+        )}
         {o.clos === 'perdu' ? (
           <div className="motif">
             Perdue{label(o.etape) !== o.etape ? ` en ${label(o.etape).toLowerCase()}` : ''}
@@ -447,7 +461,9 @@ export function Pipeline({ slug }: { slug: string }) {
           ? o.prochaine?.enRetard
           : activite === 'sans'
             ? !o.prochaine
-            : (o.joursInactif ?? 0) > data.inactiviteJours));
+            : activite === 'sansrdv'
+              ? o.sansRdv
+              : (o.joursInactif ?? 0) > data.inactiviteJours));
     return correspond && activityMatch;
   });
   const ouvertes = visibles.filter((o) => !o.clos);
@@ -609,6 +625,7 @@ export function Pipeline({ slug }: { slug: string }) {
           <option value="retard">Activités en retard</option>
           <option value="sans">Sans activité prévue</option>
           <option value="inactives">Affaires inactives</option>
+          <option value="sansrdv">Sans rendez-vous</option>
         </select>
         {mode === 'board' && (
           <button

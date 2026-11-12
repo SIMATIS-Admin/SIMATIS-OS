@@ -75,6 +75,17 @@ export async function pipelineSource(tx: Tx): Promise<Source> {
 export const INACTIVITE_DEFAUT = 14;
 const JOUR_MS = 86_400_000;
 
+// Vrai pour un rendez-vous commercial lié à l'affaire de la ligne en cours (« opportunites »), à son
+// contact ou à son entreprise. Un créneau écarté n'en est pas un.
+const rdvDeLAffaire = sql`r.instance_id = ${currentInstance} and r.statut = 'rdv' and (
+  exists (select 1 from rdv_affaires x
+    where x.rendez_vous_id = r.id and x.opportunite_id = "opportunites"."id")
+  or exists (select 1 from rdv_contacts x
+    where x.rendez_vous_id = r.id and x.contact_id = "opportunites"."contact_id")
+  or exists (select 1 from rdv_entreprises x
+    where x.rendez_vous_id = r.id and x.entreprise_id = "opportunites"."entreprise_id")
+)`;
+
 export async function getPipeline(db: Executor, instance: Instance, maintenant = new Date()) {
   const aujourdhui = zoned(jourDe(maintenant, 'Europe/Paris'), '00:00', 'Europe/Paris');
   return withInstance(db, instance.id, async (tx) => {
@@ -100,6 +111,10 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         creeLe: opportunites.createdAt,
         entreprise: entreprises.nom,
         contact: contacts.nom,
+        // Rendez-vous commerciaux liés à l'affaire, à son contact ou à son entreprise.
+        prochainRdv: sql<Date | null>`(select min(r.debut) from rendez_vous r
+          where ${rdvDeLAffaire} and r.debut >= ${maintenant})`,
+        aUnRdv: sql<boolean>`exists (select 1 from rendez_vous r where ${rdvDeLAffaire})`,
       })
       .from(opportunites)
       .leftJoin(
@@ -141,12 +156,15 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         src.etapes.map((e) => e.id),
       ),
       inactiviteJours: instance.config.inactiviteJours ?? INACTIVITE_DEFAUT,
-      opportunites: opps.map(({ derniereActivite, creeLe, ...o }) => {
+      opportunites: opps.map(({ derniereActivite, creeLe, prochainRdv, aUnRdv, ...o }) => {
         const prochaine = o.clos ? null : (prochaines.get(o.id) ?? null);
         const depuis = derniereActivite ?? creeLe;
         return {
           ...o,
           derniereActivite: derniereActivite?.toISOString() ?? null,
+          // Ouverte sans rendez-vous : une personne encore en prospection, aussi dans le Radar.
+          sansRdv: !o.clos && !aUnRdv,
+          prochainRdv: o.clos || !prochainRdv ? null : new Date(prochainRdv).toISOString(),
           prochaine: prochaine
             ? { echeance: prochaine.toISOString(), enRetard: prochaine < aujourdhui }
             : null,

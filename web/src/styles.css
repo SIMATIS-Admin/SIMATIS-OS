@@ -7104,3 +7104,13 @@ div.pb-ligne {
   gap: 4px;
   width: 120px;
 }
+
+/* Pipeline : prochain rendez-vous et affaires encore en prospection. */
+.card .rdv {
+  margin-top: 4px;
+  color: var(--accent, inherit);
+  font-weight: 600;
+}
+.card .sans-rdv {
+  margin-top: 4px;
+}
