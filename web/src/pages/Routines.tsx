@@ -8,6 +8,7 @@ import {
   type RoutineInfo,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import { AutresAutomatismes } from './automatismes/Autres.js';
 import {
   AUTOMATISMES,
   phraseDuResultat,
@@ -231,6 +232,7 @@ export function Routines({ slug }: { slug: string }) {
             </section>
           ),
       )}
+      <AutresAutomatismes slug={slug} />
     </div>
   );
 }

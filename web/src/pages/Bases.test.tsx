@@ -199,6 +199,14 @@ describe('base vivante : import en trois temps', () => {
     );
   });
 
+  it("ouvre d'emblée la fenêtre de réglage demandée par les Automatismes", async () => {
+    const { unmount } = render(<Bases slug="simatis" ouvrir="alerte" />);
+    expect(await screen.findByRole('dialog', { name: /BODACC/ })).toBeTruthy();
+    unmount();
+    render(<Bases slug="simatis" ouvrir="routine-recherche" />);
+    expect(await screen.findByRole('dialog', { name: /Recherche quotidienne/ })).toBeTruthy();
+  });
+
   it('invite à importer une première liste quand la base est vide', async () => {
     render(<Bases slug="simatis" />);
     expect(await screen.findByText(/La base est vide/)).toBeTruthy();

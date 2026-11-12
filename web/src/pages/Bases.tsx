@@ -586,7 +586,14 @@ export function Bases({ slug, ouvrir }: { slug: string; ouvrir?: string | undefi
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [fenetre, setFenetre] = useState<Fenetres>(null);
+  // Liens des Automatismes : la fenêtre de réglage de la routine ou de l'alerte s'ouvre d'emblée.
+  const [fenetre, setFenetre] = useState<Fenetres>(
+    ouvrir === 'alerte'
+      ? { quoi: 'alerte' }
+      : ouvrir === 'routine-recherche'
+        ? { quoi: 'routine-recherche' }
+        : null,
+  );
   const [vue, setVue] = useState<'contacts' | 'entreprises'>('contacts');
   const [reponses, setReponses] = useState<{ aValider: ReponseBase[]; aClasser: number }>({
     aValider: [],
