@@ -186,7 +186,6 @@ export function Console({ slug }: { slug: string }) {
   }, []);
 
   useEffect(() => {
-    if (!ouverte) return;
     void chargerLimites();
     const rafraichirSiVisible = () => {
       if (document.visibilityState === 'visible') void chargerLimites();
@@ -201,7 +200,7 @@ export function Console({ slug }: { slug: string }) {
       window.removeEventListener('focus', rafraichirSiVisible);
       document.removeEventListener('visibilitychange', rafraichirSiVisible);
     };
-  }, [ouverte, chargerLimites]);
+  }, [chargerLimites]);
 
   const toutes = donnees?.lignes ?? [];
   const visibles = coupe ? toutes.filter((l) => l.at > coupe) : toutes;
@@ -265,8 +264,8 @@ export function Console({ slug }: { slug: string }) {
           Vider
         </button>
       </div>
-      {ouverte && (
-        <div className="console-deplie">
+      <div className={`console-deplie ${ouverte ? '' : 'console-deplie-repliee'}`}>
+        {ouverte && (
           <div className="console-corps" ref={corps} role="log" aria-live="polite">
             {visibles.length === 0 && (
               <div className="console-ligne vide">
@@ -296,41 +295,42 @@ export function Console({ slug }: { slug: string }) {
               </div>
             )}
           </div>
-          <aside className="limites-ia" aria-label="Limites des abonnements IA">
-            <div className="limites-ia-entete">
-              <b>Limites IA</b>
-              <span>
-                {limites?.actualiseLe
-                  ? `Actualisé à ${heure(limites.actualiseLe)}`
-                  : 'Non connecté'}
-              </span>
-              <button
-                className="limites-ia-actualiser"
-                type="button"
-                aria-label="Actualiser les limites IA"
-                disabled={limitesEnCours}
-                onClick={() => void chargerLimites()}
-              >
-                Actualiser
-              </button>
+        )}
+        <aside
+          className={`limites-ia ${ouverte ? '' : 'limites-ia-compactes'}`}
+          aria-label="Limites des abonnements IA"
+        >
+          <div className="limites-ia-entete">
+            <b>Limites IA</b>
+            <span>
+              {limites?.actualiseLe ? `Actualisé à ${heure(limites.actualiseLe)}` : 'Non connecté'}
+            </span>
+            <button
+              className="limites-ia-actualiser"
+              type="button"
+              aria-label="Actualiser les limites IA"
+              disabled={limitesEnCours}
+              onClick={() => void chargerLimites()}
+            >
+              Actualiser
+            </button>
+          </div>
+          {limitesEnPanne ? (
+            <p className="limites-ia-panne">Impossible de lire les limites pour le moment.</p>
+          ) : limites ? (
+            <div className="limites-ia-liste">
+              {limites.fournisseurs.map((f) => (
+                <Fournisseur key={f.id} fournisseur={f} maintenant={maintenant} />
+              ))}
             </div>
-            {limitesEnPanne ? (
-              <p className="limites-ia-panne">Impossible de lire les limites pour le moment.</p>
-            ) : limites ? (
-              <div className="limites-ia-liste">
-                {limites.fournisseurs.map((f) => (
-                  <Fournisseur key={f.id} fournisseur={f} maintenant={maintenant} />
-                ))}
-              </div>
-            ) : (
-              <div className="limites-ia-chargement" aria-label="Chargement des limites IA">
-                <span />
-                <span />
-              </div>
-            )}
-          </aside>
-        </div>
-      )}
+          ) : (
+            <div className="limites-ia-chargement" aria-label="Chargement des limites IA">
+              <span />
+              <span />
+            </div>
+          )}
+        </aside>
+      </div>
     </section>
   );
 }

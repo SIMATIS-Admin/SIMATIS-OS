@@ -85,10 +85,9 @@ describe('Console (journal en lecture seule)', () => {
     expect(journal.textContent).toContain('À VOIR');
   });
 
-  it('shows the 5-hour and weekly limits beside the open log', async () => {
+  it('keeps the 5-hour and weekly limits visible when the log is folded', async () => {
     render(<Console slug="simatis" />);
     await screen.findByText('Test de VMA reçu : ACME non rangé');
-    fireEvent.click(screen.getByLabelText('Déplier la console'));
 
     expect(await screen.findByText('Claude')).toBeTruthy();
     expect(screen.getByText('ChatGPT')).toBeTruthy();
@@ -98,6 +97,11 @@ describe('Console (journal en lecture seule)', () => {
     expect(screen.getByText('63 % restant')).toBeTruthy();
     expect(screen.getAllByText('Fenêtre 5 h')).toHaveLength(2);
     expect(screen.getAllByText('Hebdomadaire')).toHaveLength(2);
+    expect(screen.queryByRole('log')).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Déplier la console'));
+    expect(screen.getByRole('log')).toBeTruthy();
+    expect(screen.getByText('Claude')).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText('Actualiser les limites IA'));
     await waitFor(() =>

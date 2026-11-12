@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Keeps the Claude and ChatGPT subscription limits fresh for the local OS. Copy to
+     ~/Library/LaunchAgents/, replace CHEMIN_DU_DEPOT, then load it with launchctl. -->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>fr.simatis.ai-limits</string>
+    <key>WorkingDirectory</key>
+    <string>CHEMIN_DU_DEPOT</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/zsh</string>
+      <string>-lc</string>
+      <string>npm run ai:limits -- --watch</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/simatis-ai-limits.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/simatis-ai-limits.log</string>
+  </dict>
+</plist>
