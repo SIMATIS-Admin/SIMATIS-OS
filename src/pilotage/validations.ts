@@ -9,6 +9,7 @@ import { getPropositionType } from '../propositions/registry.js';
 import { propositions, type Proposition } from '../propositions/schema.js';
 import { decide } from '../propositions/service.js';
 import './types-propositions.js';
+import '../conversion/types-rdv.js';
 
 export type Filtre = 'tout' | 'brouillon' | 'tache' | 'cerveau' | 'traites';
 
