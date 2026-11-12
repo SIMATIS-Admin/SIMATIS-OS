@@ -25,6 +25,7 @@ import { registerGestionRoutes } from './gestion/routes.js';
 import { registerProspectionRoutes } from './prospection/routes.js';
 import { registerTransfertRoutes } from './transfert/routes.js';
 import { registerWeb } from './web.js';
+import { registerLimitesIARoutes } from './ia/routes.js';
 
 export type AppDeps = {
   pool: pg.Pool;
@@ -48,6 +49,7 @@ export type AppDeps = {
   enrichissement?: Config['enrichissement'];
   clientIA?: ClientIA;
   logger?: FastifyServerOptions['logger'];
+  limitesIAFile?: string;
 };
 
 export function buildApp({
@@ -67,10 +69,12 @@ export function buildApp({
   enrichissement = null,
   clientIA,
   logger = false,
+  limitesIAFile = './secrets/ia-limites.json',
 }: AppDeps): FastifyInstance {
   const app = Fastify({ logger });
   registerOriginGuard(app);
   registerHealth(app, { pool, version, backupStatusFile });
+  registerLimitesIARoutes(app, limitesIAFile);
   registerApi(app, { db, secretsDir, realWrites, googleFetch, imapServeur });
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
   if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });

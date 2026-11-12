@@ -8,6 +8,7 @@ import { withInstance } from '../db/context.js';
 import { logEvent } from '../journal/service.js';
 import { contactEmails, contacts, entreprises, opportunites, taches } from './schema.js';
 import { assurerLiensPrincipaux } from './liens.js';
+import { statutContactSql, statutEntrepriseSql, type StatutCommercial } from './statut.js';
 
 export const likePattern = (q: string) => `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
@@ -32,6 +33,7 @@ export async function searchEntreprises(db: Executor, instanceId: string, q = ''
         ville: entreprises.ville,
         taille: entreprises.taille,
         domaine: entreprises.domaine,
+        statut: sql<StatutCommercial>`${statutEntrepriseSql()}`,
         nbContacts: sql<number>`(select count(*) from ${contacts} c
           where c.entreprise_id = ${outerId} and c.instance_id = ${currentInstance})::int`,
         oppsOuvertes: sql<number>`(select count(*) from ${opportunites} o
@@ -80,6 +82,7 @@ export async function searchContacts(db: Executor, instanceId: string, q = '') {
         role: contacts.role,
         entreprise: entreprises.nom,
         entrepriseId: entreprises.id,
+        statut: sql<StatutCommercial>`${statutContactSql()}`,
         oppsOuvertes: sql<number>`(select count(*) from ${opportunites} o
           where o.contact_id = ${contactId} and o.instance_id = ${currentInstance}
           and o.clos is null)::int`,

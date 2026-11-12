@@ -19,6 +19,12 @@ import {
 } from './commercial/commun.js';
 import { ApercuCommercial, type ReferenceCommerciale } from './commercial/Apercu.js';
 import { SearchBox } from './SearchBox.js';
+import {
+  correspondAuStatut,
+  FiltreStatut,
+  LIBELLE_STATUT,
+  type ChoixStatut,
+} from './commercial/FiltreStatut.js';
 
 // Simulated creation (no id) or created-but-not-linked answer: what to tell the person.
 const messageDe = (r: { avertissement?: string; message?: string }) => r.avertissement ?? r.message;
@@ -116,6 +122,7 @@ export function NouveauContact({
 export function Contacts({ slug }: { slug: string }) {
   const [q, setQ] = useChoixCommercial(`${slug}.contacts.recherche`, '');
   const [filtre, setFiltre] = useChoixCommercial(`${slug}.contacts.filtre`, 'tous');
+  const [statut, setStatut] = useChoixCommercial<ChoixStatut>(`${slug}.contacts.statut`, 'tous');
   const [apercu, setApercu] = useState<ReferenceCommerciale | null>(null);
   const [list, setList] = useState<Contact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,8 +150,14 @@ export function Contacts({ slug }: { slug: string }) {
     };
   }, [slug, q, version]);
 
-  const visibles = list?.filter((c) =>
-    filtre === 'affaires' ? c.oppsOuvertes > 0 : filtre === 'sans' ? !c.prochaineActivite : true,
+  const visibles = list?.filter(
+    (c) =>
+      correspondAuStatut(c, statut) &&
+      (filtre === 'affaires'
+        ? c.oppsOuvertes > 0
+        : filtre === 'sans'
+          ? !c.prochaineActivite
+          : true),
   );
   return (
     <section className="commercial-page com-contacts">
@@ -153,6 +166,7 @@ export function Contacts({ slug }: { slug: string }) {
           Nouveau contact
         </button>
       </EnteteCommercial>
+      <FiltreStatut lignes={list} valeur={statut} onChange={setStatut} />
       <nav className="com-onglets" aria-label="Vues des contacts">
         {(
           [
@@ -230,6 +244,11 @@ export function Contacts({ slug }: { slug: string }) {
                   ) : (
                     <span className="muted">{c.entreprise ?? '—'}</span>
                   ),
+              },
+              {
+                cle: 'statut',
+                label: 'Statut',
+                valeur: (c) => LIBELLE_STATUT[c.statut],
               },
               {
                 cle: 'fonction',

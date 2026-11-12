@@ -48,6 +48,7 @@ const entreprise: FicheDetail = {
 const contacts: Contact[] = [
   {
     id: 'c1',
+    statut: 'prospect',
     nom: 'Claire Exemple',
     fonction: 'Dirigeante',
     email: null,
@@ -60,6 +61,7 @@ const contacts: Contact[] = [
   },
   {
     id: 'c2',
+    statut: 'suspect',
     nom: 'Paul Démonstration',
     fonction: 'Commercial',
     email: null,

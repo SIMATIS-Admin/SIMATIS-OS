@@ -20,6 +20,7 @@
     "db:generate": "drizzle-kit generate",
     "dev:web": "vite",
     "admin": "tsx --env-file=.env src/admin/main.ts",
+    "ai:limits": "node scripts/collect-ai-limits.cjs",
     "runner": "tsx --env-file=.env src/runner/runner.ts"
   },
   "dependencies": {

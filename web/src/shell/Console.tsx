@@ -1,5 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { fetchConsole, type ConsoleOS, type LigneConsole } from '../api.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  fetchConsole,
+  fetchLimitesIA,
+  type ConsoleOS,
+  type FournisseurIA,
+  type LigneConsole,
+  type LimiteIA,
+  type LimitesIA,
+} from '../api.js';
 
 // The label says what the colour means, so a line can be read without knowing the code.
 const ETIQUETTES: Record<LigneConsole['niveau'], string> = {
@@ -22,6 +30,84 @@ const heure = (iso: string) =>
     hour: '2-digit',
     minute: '2-digit',
   });
+
+const dateHeure = (iso: string) =>
+  new Date(iso).toLocaleString('fr-FR', {
+    timeZone: 'Europe/Paris',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+const delai = (iso: string, maintenant: number) => {
+  const minutes = Math.max(0, Math.ceil((new Date(iso).getTime() - maintenant) / 60_000));
+  if (minutes === 0) return 'maintenant';
+  if (minutes < 60) return `dans ${minutes} min`;
+  const heures = Math.floor(minutes / 60);
+  const reste = minutes % 60;
+  if (heures < 24) return `dans ${heures} h${reste ? ` ${String(reste).padStart(2, '0')}` : ''}`;
+  const jours = Math.floor(heures / 24);
+  return `dans ${jours} j ${heures % 24} h`;
+};
+
+function Jauge({ nom, limite, maintenant }: { nom: string; limite: LimiteIA; maintenant: number }) {
+  const faible = limite.restant <= 25;
+  return (
+    <div className="limite-ia-jauge">
+      <div className="limite-ia-valeur">
+        <span>{nom}</span>
+        <b>{Math.round(limite.restant)} % restant</b>
+      </div>
+      <div
+        className={`limite-ia-barre ${faible ? 'faible' : ''}`}
+        role="progressbar"
+        aria-label={`${nom} : capacité restante`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(limite.restant)}
+      >
+        <span style={{ width: `${limite.restant}%` }} />
+      </div>
+      <div className="limite-ia-reset">
+        Réinit. <b>{dateHeure(limite.reinitialiseLe)}</b> ·{' '}
+        {delai(limite.reinitialiseLe, maintenant)}
+      </div>
+    </div>
+  );
+}
+
+function Fournisseur({
+  fournisseur,
+  maintenant,
+}: {
+  fournisseur: FournisseurIA;
+  maintenant: number;
+}) {
+  return (
+    <section className="limite-ia-fournisseur" aria-label={fournisseur.nom}>
+      <div className="limite-ia-fournisseur-titre">
+        <span className="limite-ia-marque" aria-hidden="true">
+          {fournisseur.id === 'claude' ? 'C' : 'G'}
+        </span>
+        <span>
+          <b>{fournisseur.nom}</b>
+          {fournisseur.plan && <small>Abonnement {fournisseur.plan}</small>}
+        </span>
+      </div>
+      {fournisseur.etat === 'ok' && fournisseur.fenetre5h && fournisseur.hebdomadaire ? (
+        <>
+          <Jauge nom="Fenêtre 5 h" limite={fournisseur.fenetre5h} maintenant={maintenant} />
+          <Jauge nom="Hebdomadaire" limite={fournisseur.hebdomadaire} maintenant={maintenant} />
+        </>
+      ) : (
+        <p className={`limite-ia-vide ${fournisseur.etat}`}>
+          {fournisseur.etat === 'erreur' ? 'Données illisibles' : 'Source à connecter'}
+        </p>
+      )}
+    </section>
+  );
+}
 
 // Local conveniences only: storage can be missing or blocked, the console works without it.
 const lire = (cle: string) => {
@@ -49,6 +135,10 @@ export function Console({ slug }: { slug: string }) {
   const [coupe, setCoupe] = useState<string | null>(() => lire(cleCoupe));
   const [donnees, setDonnees] = useState<ConsoleOS | null>(null);
   const [panne, setPanne] = useState(false);
+  const [limites, setLimites] = useState<LimitesIA | null>(null);
+  const [limitesEnPanne, setLimitesEnPanne] = useState(false);
+  const [limitesEnCours, setLimitesEnCours] = useState(false);
+  const [maintenant, setMaintenant] = useState(Date.now);
   const connues = useRef<Set<string> | null>(null);
   const [nouvelles, setNouvelles] = useState<Set<string>>(new Set());
   const corps = useRef<HTMLDivElement>(null);
@@ -79,6 +169,39 @@ export function Console({ slug }: { slug: string }) {
       window.clearInterval(minuteur);
     };
   }, [slug, ouverte]);
+
+  const chargerLimites = useCallback(() => {
+    setLimitesEnCours(true);
+    return fetchLimitesIA().then(
+      (d) => {
+        setLimites(d);
+        setLimitesEnPanne(false);
+        setLimitesEnCours(false);
+      },
+      () => {
+        setLimitesEnPanne(true);
+        setLimitesEnCours(false);
+      },
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!ouverte) return;
+    void chargerLimites();
+    const rafraichirSiVisible = () => {
+      if (document.visibilityState === 'visible') void chargerLimites();
+    };
+    const minuteur = window.setInterval(() => void chargerLimites(), 5 * 60_000);
+    const horloge = window.setInterval(() => setMaintenant(Date.now()), 60_000);
+    window.addEventListener('focus', rafraichirSiVisible);
+    document.addEventListener('visibilitychange', rafraichirSiVisible);
+    return () => {
+      window.clearInterval(minuteur);
+      window.clearInterval(horloge);
+      window.removeEventListener('focus', rafraichirSiVisible);
+      document.removeEventListener('visibilitychange', rafraichirSiVisible);
+    };
+  }, [ouverte, chargerLimites]);
 
   const toutes = donnees?.lignes ?? [];
   const visibles = coupe ? toutes.filter((l) => l.at > coupe) : toutes;
@@ -143,34 +266,69 @@ export function Console({ slug }: { slug: string }) {
         </button>
       </div>
       {ouverte && (
-        <div className="console-corps" ref={corps} role="log" aria-live="polite">
-          {visibles.length === 0 && (
-            <div className="console-ligne vide">
-              <span className="console-curseur" aria-hidden="true" />
-              Rien pour l'instant. Les routines et vos actions s'afficheront ici.
-            </div>
-          )}
-          {visibles.map((l) => (
-            <div
-              key={l.id}
-              className={`console-ligne ${l.niveau} ${nouvelles.has(l.id) ? 'nouvelle' : ''}`}
-            >
-              <span className="console-heure">{heure(l.at)}</span>
-              <span className="console-badge">{ETIQUETTES[l.niveau]}</span>
-              <span aria-hidden="true">{emoji(l)}</span>
-              <span className="console-texte">{l.texte}</span>
-            </div>
-          ))}
-          {donnees?.enCours && (
-            <div className="console-ligne info">
-              <span className="console-heure" />
-              <span className="console-badge">INFO</span>
-              <span className="console-texte">
-                Claude travaille
+        <div className="console-deplie">
+          <div className="console-corps" ref={corps} role="log" aria-live="polite">
+            {visibles.length === 0 && (
+              <div className="console-ligne vide">
                 <span className="console-curseur" aria-hidden="true" />
+                Rien pour l'instant. Les routines et vos actions s'afficheront ici.
+              </div>
+            )}
+            {visibles.map((l) => (
+              <div
+                key={l.id}
+                className={`console-ligne ${l.niveau} ${nouvelles.has(l.id) ? 'nouvelle' : ''}`}
+              >
+                <span className="console-heure">{heure(l.at)}</span>
+                <span className="console-badge">{ETIQUETTES[l.niveau]}</span>
+                <span aria-hidden="true">{emoji(l)}</span>
+                <span className="console-texte">{l.texte}</span>
+              </div>
+            ))}
+            {donnees?.enCours && (
+              <div className="console-ligne info">
+                <span className="console-heure" />
+                <span className="console-badge">INFO</span>
+                <span className="console-texte">
+                  Claude travaille
+                  <span className="console-curseur" aria-hidden="true" />
+                </span>
+              </div>
+            )}
+          </div>
+          <aside className="limites-ia" aria-label="Limites des abonnements IA">
+            <div className="limites-ia-entete">
+              <b>Limites IA</b>
+              <span>
+                {limites?.actualiseLe
+                  ? `Actualisé à ${heure(limites.actualiseLe)}`
+                  : 'Non connecté'}
               </span>
+              <button
+                className="limites-ia-actualiser"
+                type="button"
+                aria-label="Actualiser les limites IA"
+                disabled={limitesEnCours}
+                onClick={() => void chargerLimites()}
+              >
+                Actualiser
+              </button>
             </div>
-          )}
+            {limitesEnPanne ? (
+              <p className="limites-ia-panne">Impossible de lire les limites pour le moment.</p>
+            ) : limites ? (
+              <div className="limites-ia-liste">
+                {limites.fournisseurs.map((f) => (
+                  <Fournisseur key={f.id} fournisseur={f} maintenant={maintenant} />
+                ))}
+              </div>
+            ) : (
+              <div className="limites-ia-chargement" aria-label="Chargement des limites IA">
+                <span />
+                <span />
+              </div>
+            )}
+          </aside>
         </div>
       )}
     </section>
