@@ -26,7 +26,8 @@ export function CompteRendu({
 }) {
   const [candidats, setCandidats] = useState<CandidatRdv[] | null>(null);
   const [choix, setChoix] = useState(NOUVEAU);
-  const [texte, setTexte] = useState('');
+  // Le brouillon de la routine remplit le champ : le pilote le relit et le corrige avant d'enregistrer.
+  const [texte, setTexte] = useState(s.compteRenduPrepare?.texte ?? '');
   useEffect(() => {
     let actuel = true;
     fetchCandidatsRdv(slug, s.id).then(
@@ -64,9 +65,14 @@ export function CompteRendu({
       {choisi?.compteRendu && (
         <div className="small muted">Ce rendez-vous a déjà un compte rendu : il sera remplacé.</div>
       )}
+      {s.compteRenduPrepare && (
+        <div className="small muted">
+          Brouillon préparé d’après la réunion : relisez-le et corrigez-le avant d’enregistrer.
+        </div>
+      )}
       <textarea
         className="input"
-        rows={6}
+        rows={s.compteRenduPrepare ? 12 : 6}
         aria-label="Compte rendu"
         placeholder="Compte rendu du rendez-vous"
         value={texte}

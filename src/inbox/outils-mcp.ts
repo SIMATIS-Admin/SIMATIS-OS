@@ -18,6 +18,7 @@ import { cleDejaDansUnAutreEspace } from './cle-unique.js';
 import { deposerSujet } from './depot.js';
 import { evenementsClos, sansRendezVousClos } from './rdv-clos.js';
 import { brouillonSchema, repondreClaude } from './echanges.js';
+import { preparerCompteRendu } from './compte-rendu-prepare.js';
 import { preparerReponse } from './reponse-preparee.js';
 import {
   comptesRendusEnAttente,
@@ -112,6 +113,19 @@ registerTool({
       texte: input.texte,
       lienBrouillon: input.lienBrouillon ?? null,
     }),
+});
+
+registerTool({
+  name: 'preparer_compte_rendu',
+  description:
+    "Rattache à une entrée « compte rendu » le compte rendu de réunion que tu as rédigé d'après la transcription (réunion cochée critique) ou, à défaut, le résumé de Wispr Flow. Il remplit le champ de l'entrée : le pilote le relit, le corrige et l'enregistre lui-même. Rien n'est enregistré sur le rendez-vous par cet outil. « introuvable » est normal (entrée déjà traitée, d'un autre type ou d'un autre espace) : ne rien faire de plus.",
+  input: z.object({
+    sujetId: z.uuid().describe("L'identifiant de l'entrée « compte rendu »"),
+    texte: z.string().trim().min(1).max(10000).describe('Le compte rendu, texte brut'),
+    executionId: execution,
+  }),
+  scope: 'instance',
+  handler: ({ tx }, input) => preparerCompteRendu(tx, input.sujetId, input.texte),
 });
 
 registerTool({

@@ -64,6 +64,7 @@ const sujet = (id: string, extra: Record<string, unknown> = {}) => ({
   livreBlanc: null,
   partage: null,
   reponsePreparee: null,
+  compteRenduPrepare: null,
   reunion: null,
   ...extra,
 });

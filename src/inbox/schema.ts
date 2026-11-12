@@ -74,6 +74,7 @@ export const sujets = pgTable(
     // Entries added by hand: when the Inbox routine noted their creation in the second brain.
     noteCerveauAt: timestamp('note_cerveau_at', { withTimezone: true }),
     reponsePreparee: jsonb('reponse_preparee').$type<ReponsePreparee>(),
+    compteRenduPrepare: jsonb('compte_rendu_prepare').$type<CompteRenduPrepare>(),
   },
   (t) => [
     index('sujets_instance_statut_idx').on(t.instanceId, t.statut),
@@ -90,6 +91,10 @@ export type ReponsePreparee = {
   lienBrouillon: string | null;
   prepareeLe: string;
 };
+
+// Compte rendu rédigé par la routine d'après la transcription ou le résumé de la réunion. Il remplit
+// le champ de l'entrée « compte rendu » : le pilote le relit, le corrige, puis l'enregistre.
+export type CompteRenduPrepare = { texte: string; prepareeLe: string };
 
 export type Sujet = typeof sujets.$inferSelect;
 

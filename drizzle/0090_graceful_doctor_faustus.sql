@@ -1,0 +1,1 @@
+ALTER TABLE "sujets" ADD COLUMN "compte_rendu_prepare" jsonb;
