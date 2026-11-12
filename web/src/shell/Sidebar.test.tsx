@@ -78,12 +78,31 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: /Gestion/ })).toBeNull();
   });
 
-  it('keeps daily links first and removes duplicates from shortcuts and spaces', () => {
-    const { container } = renderSidebar(simatis, ['pipeline', 'brief']);
-    const groups = container.querySelectorAll('.nav-group');
-    expect(groups[0]?.classList.contains('quotidien')).toBe(true);
-    const labels = [...(groups[1]?.querySelectorAll('.lbl') ?? [])].map((n) => n.textContent);
-    expect(labels).toEqual(['Agenda', 'Pipeline', 'Contacts', 'Entreprises', 'Rendez-vous']);
+  it('groups the menu along the sales cycle, with the day first', () => {
+    const { container } = renderSidebar(simatis, []);
+    const titres = [...container.querySelectorAll('.nav-group > .later-btn')].map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(titres).toEqual([
+      'Piloter la journée',
+      '1 · Détecter',
+      '2 · Vendre',
+      'Ma base',
+      "Piloter l'activité",
+      'Plus',
+    ]);
+    const libelles = (i: number) =>
+      [...(container.querySelectorAll('.nav-group')[i]?.querySelectorAll('.lbl') ?? [])].map(
+        (n) => n.textContent,
+      );
+    expect(libelles(0)).toEqual(['Brief du jour', 'Inbox', 'Agenda']);
+    expect(libelles(1)).toEqual(['Prospection', 'Bases vivantes']);
+    expect(libelles(2)).toContain('Pipeline');
+    expect(libelles(3)).toEqual(['Entreprises', 'Contacts']);
+  });
+
+  it('removes the favourites from their section, so nothing appears twice', () => {
+    renderSidebar(simatis, ['pipeline', 'brief']);
     expect(screen.getAllByText('Brief du jour')).toHaveLength(1);
     expect(screen.getAllByText('Pipeline')).toHaveLength(1);
   });
@@ -119,7 +138,6 @@ describe('Sidebar', () => {
 
   it('folds a section on click, and keeps the favourites open', () => {
     renderSidebar(simatis, []);
-    fireEvent.click(screen.getByRole('button', { name: 'Mes espaces' }));
     const sections = document.querySelectorAll<HTMLButtonElement>('.nav-group > .later-btn');
     const section = [...sections].find((b) => b.getAttribute('aria-expanded') === 'true');
     if (!section) throw new Error('aucune section ouverte');
@@ -131,11 +149,11 @@ describe('Sidebar', () => {
     expect(document.querySelectorAll('.nav a').length).toBe(avant);
   });
 
-  it('shows no favourites group when nothing is a favourite, and folds « Plus tard » by default', () => {
+  it('shows no favourites group when nothing is a favourite, and folds « Plus » by default', () => {
     renderSidebar(simatis, []);
     expect(document.querySelector('.nav-group.favs')).toBeNull();
-    const plusTard = document.querySelector('.nav-group.later > .later-btn');
-    expect(plusTard?.getAttribute('aria-expanded')).toBe('false');
+    const plus = document.querySelector('.nav-group.later > .later-btn');
+    expect(plus?.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('reloads the app from the button next to the logo', () => {
@@ -162,10 +180,9 @@ describe('Sidebar', () => {
     expect(document.querySelector('.side')?.classList.contains('reduite')).toBe(false);
   });
 
-  it('opens all spaces explicitly and exposes tools without duplicated shortcuts', () => {
+  it('shows every section without a toggle, and keeps one entry per screen', () => {
     renderSidebar(simatis, ['pipeline']);
-    expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Mes espaces' }));
+    expect(screen.queryByRole('button', { name: 'Mes espaces' })).toBeNull();
     expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /Pipeline/ })).toHaveLength(1);
   });

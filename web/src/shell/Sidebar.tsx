@@ -27,10 +27,8 @@ type Props = {
 const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
-const QUOTIDIEN = ['brief', 'inbox'];
 // Rubriques à pastille de notification : l'étoile n'y est pas proposée (elle chevauchait le compteur).
 const SANS_ETOILE = ['agenda', 'inbox', 'rendez-vous'];
-const COMMERCIAL = ['agenda', 'pipeline', 'contacts', 'entreprises', 'rendez-vous'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
 const memoriser = (cle: string, valeur: string) => {
@@ -66,8 +64,7 @@ export function Sidebar({
   onMoveFavori,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [espaces, setEspaces] = useState(false);
-  // Sections fold and unfold; « Plus tard » starts folded, the others open.
+  // Sections fold and unfold; « Plus » starts folded, the others open.
   const [ouverts, setOuverts] = useState(lireOuverts);
   const basculer = (titre: string, ouvert: boolean) => {
     const suivant = { ...ouverts, [titre]: !ouvert };
@@ -148,16 +145,9 @@ export function Sidebar({
     );
   };
 
-  const quotidien = allItems().filter(
-    (it) => QUOTIDIEN.includes(it.id) && allowed(it, current.modules),
-  );
   const favItems = favoris
-    .filter((id) => !QUOTIDIEN.includes(id) && !COMMERCIAL.includes(id))
     .map((id) => allItems().find((it) => it.id === id))
     .filter((it): it is NavItem => !!it && allowed(it, current.modules));
-  const commercial = COMMERCIAL.map((id) => allItems().find((it) => it.id === id)).filter(
-    (it): it is NavItem => !!it && allowed(it, current.modules),
-  );
   const isPortefeuille = view === 'portefeuille';
 
   return (
@@ -241,14 +231,6 @@ export function Sidebar({
         </div>
       )}
       <nav className="nav" aria-label="Navigation principale">
-        <div className="nav-group quotidien">
-          <span>Mon quotidien</span>
-          {quotidien.map((it) => link(it))}
-        </div>
-        <div className="nav-group commercial">
-          <span>Relation commerciale</span>
-          {commercial.map((it) => link(it))}
-        </div>
         {favItems.length > 0 && (
           <div className="nav-group favs">
             <span>
@@ -258,48 +240,28 @@ export function Sidebar({
             {favItems.map((it, index) => link(it, true, index))}
           </div>
         )}
-        <button
-          className="espaces-btn"
-          aria-expanded={espaces}
-          aria-controls="nav-espaces"
-          title="Mes espaces"
-          onClick={() => {
-            setEspaces(!espaces);
-            if (reduite) basculerReduite();
-          }}
-        >
-          <Icon name="panel" />
-          <span>Mes espaces</span>
-          <Icon name="down" />
-        </button>
-        <div id="nav-espaces" hidden={!espaces}>
-          {NAV.map((g) => {
-            const items = g.items.filter(
-              (it) =>
-                allowed(it, current.modules) &&
-                !QUOTIDIEN.includes(it.id) &&
-                !COMMERCIAL.includes(it.id) &&
-                !favItems.some((f) => f.id === it.id),
-            );
-            if (items.length === 0) return null;
-            const ouvert = ouverts[g.title] ?? !g.later;
-            return (
-              <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
-                <button
-                  className="later-btn"
-                  aria-expanded={ouvert}
-                  onClick={() => basculer(g.title, ouvert)}
-                >
-                  {g.title}
-                  <span className={`chev ${ouvert ? 'open' : ''}`}>
-                    <Icon name="down" />
-                  </span>
-                </button>
-                {ouvert && items.map((it) => link(it))}
-              </div>
-            );
-          })}
-        </div>
+        {NAV.map((g) => {
+          const items = g.items.filter(
+            (it) => allowed(it, current.modules) && !favItems.some((f) => f.id === it.id),
+          );
+          if (items.length === 0) return null;
+          const ouvert = ouverts[g.title] ?? !g.later;
+          return (
+            <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
+              <button
+                className="later-btn"
+                aria-expanded={ouvert}
+                onClick={() => basculer(g.title, ouvert)}
+              >
+                {g.title}
+                <span className={`chev ${ouvert ? 'open' : ''}`}>
+                  <Icon name="down" />
+                </span>
+              </button>
+              {ouvert && items.map((it) => link(it))}
+            </div>
+          );
+        })}
       </nav>
       {current.type === 'propre' &&
         (current.modules.includes('cerveau') || current.modules.includes('gestion')) && (
