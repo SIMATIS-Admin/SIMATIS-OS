@@ -38,13 +38,25 @@ const etapes = (slug: string, radar: EtatRadar) => [
   {
     id: 'contactes',
     titre: 'Contactés',
-    aide: 'Une ou plusieurs touches envoyées',
-    total: radar.contactes.total,
-    cartes: radar.contactes.fiches.map((f): Carte => ({
-      id: f.id,
-      titre: f.nom,
-      detail: `${f.entreprise} · ${f.nbContacts} touche${f.nbContacts > 1 ? 's' : ''}`,
-    })),
+    aide:
+      radar.reprise.total > 0
+        ? `Touches envoyées, dont ${radar.reprise.total} affaire${radar.reprise.total > 1 ? 's' : ''} du Pipeline sans rendez-vous`
+        : 'Une ou plusieurs touches envoyées',
+    total: radar.contactes.total + radar.reprise.total,
+    // Les affaires du Pipeline d'abord : ce sont des personnes déjà approchées, avec une fiche.
+    cartes: [
+      ...radar.reprise.fiches.slice(0, 3).map((f): Carte => ({
+        id: f.id,
+        titre: f.nom,
+        detail: f.entreprise ? `${f.entreprise} · affaire en cours` : 'Affaire en cours',
+        href: `#/${slug}/fiche/contact/${f.id}`,
+      })),
+      ...radar.contactes.fiches.map((f): Carte => ({
+        id: f.id,
+        titre: f.nom,
+        detail: `${f.entreprise} · ${f.nbContacts} touche${f.nbContacts > 1 ? 's' : ''}`,
+      })),
+    ].slice(0, 5),
     lien: { href: `#/${slug}/prospection/ouvrir/froid`, libelle: 'Relancer' },
   },
   {

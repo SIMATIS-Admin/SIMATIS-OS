@@ -438,6 +438,11 @@ export type EtatRadar = {
   prets: ColonneRadar;
   contactes: ColonneRadar;
   ontRepondu: ColonneRadar;
+  // Affaires ouvertes sans rendez-vous : personnes déjà approchées, reprises dans « Contactés ».
+  reprise: {
+    total: number;
+    fiches: { id: string; nom: string; entreprise: string | null; fonction: string | null }[];
+  };
   rdvAccepte: {
     total: number;
     fiches: { id: string; nom: string; entreprise: string | null; fonction: string | null }[];

@@ -362,11 +362,22 @@ export function registerBaseVivanteRoutes(
   app.get<Route>(
     '/api/i/:slug/radar',
     surInstance(async (instanceId) => {
-      const prospects = (await searchContacts(db, instanceId)).filter(
-        (c) => c.statut === 'prospect',
-      );
+      const crm = await searchContacts(db, instanceId);
+      const prospects = crm.filter((c) => c.statut === 'prospect');
+      // Reprise de l'existant : une affaire ouverte sans rendez-vous est une personne déjà approchée
+      // qui n'a pas encore répondu. Rien n'est écrit : le statut suspect vient des rendez-vous.
+      const reprise = crm.filter((c) => c.statut === 'suspect' && c.oppsOuvertes > 0);
       return {
         ...(await etatRadar(db, instanceId)),
+        reprise: {
+          total: reprise.length,
+          fiches: reprise.slice(0, 5).map((c) => ({
+            id: c.id,
+            nom: c.nom,
+            entreprise: c.entreprise,
+            fonction: c.fonction,
+          })),
+        },
         rdvAccepte: {
           total: prospects.length,
           fiches: prospects.slice(0, 5).map((c) => ({
