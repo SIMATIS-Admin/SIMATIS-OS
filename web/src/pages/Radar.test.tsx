@@ -48,6 +48,20 @@ describe('Radar', () => {
     ).toBeTruthy();
   });
 
+  it('ouvre la fiche du prospect, avec ses affaires, depuis la colonne RDV accepté', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(radar)))),
+    );
+    render(<Radar slug="simatis" />);
+    const colonne = await screen.findByRole('region', { name: 'RDV accepté' });
+    const carte = within(colonne).getByRole('link', { name: /Alice Fictive/ });
+    expect(carte.getAttribute('href')).toBe('#/simatis/fiche/contact/r1');
+    // Les fiches de la base vivante n'ont pas de fiche CRM : leurs cartes ne sont pas des liens.
+    const prets = screen.getByRole('region', { name: 'Prêts à contacter' });
+    expect(within(prets).queryByRole('link', { name: /Paul Dumont/ })).toBeNull();
+  });
+
   it('garde les écrans Prospection et Bases vivantes accessibles', async () => {
     vi.stubGlobal(
       'fetch',
