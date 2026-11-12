@@ -52,7 +52,9 @@ export function SequenceReglage({ slug }: { slug: string }) {
         <>
           <p>
             Mail d’approche, puis relances à <b>{sequence.cumul.map((j) => `J+${j}`).join(', ')}</b>
-            . Chaque mail reste un brouillon à relire : rien ne part sans votre clic.
+            . Chaque mail reste un brouillon à relire : rien ne part sans votre clic. Si la routine
+            « Brouillons » est active, elle prépare chaque jour les relances dont le délai est
+            écoulé (30 au plus), avec deux créneaux de votre agenda.
           </p>
           <button className="btn" onClick={() => setEdition(sequence.cumul.map(String))}>
             Modifier la séquence
