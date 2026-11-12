@@ -411,6 +411,19 @@ export const fetchEntreprises = (slug: string, q: string) =>
     `/api/i/${encodeURIComponent(slug)}/entreprises?q=${encodeURIComponent(q)}`,
   );
 
+export type SuspectBase = {
+  id: string;
+  nom: string;
+  entreprise: string;
+  fonction: string | null;
+  email: string | null;
+  telephone: string | null;
+};
+export const fetchSuspectsBase = (slug: string, q: string) =>
+  getJson<SuspectBase[]>(
+    `/api/i/${encodeURIComponent(slug)}/base/suspects?q=${encodeURIComponent(q)}`,
+  );
+
 export const fetchContacts = (slug: string, q: string) =>
   getJson<Contact[]>(`/api/i/${encodeURIComponent(slug)}/contacts?q=${encodeURIComponent(q)}`);
 

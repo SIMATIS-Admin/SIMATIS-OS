@@ -45,6 +45,7 @@ import {
   validerReponse,
 } from './reponses.js';
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
+import { listerSuspectsHorsCrm } from './suspects.js';
 import { exporterWaalaxy } from './waalaxy.js';
 import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
 import { creerGeocodeur, type Geocodeur } from '../routage/geocodage.js';
@@ -353,6 +354,14 @@ export function registerBaseVivanteRoutes(
     tag: q.tag?.trim() || undefined,
     q: q.q,
   });
+
+  // Les suspects de la base qui ne sont pas encore des contacts du CRM, pour la liste Contacts.
+  app.get<Route>(
+    '/api/i/:slug/base/suspects',
+    surInstance((instanceId, request) =>
+      listerSuspectsHorsCrm(db, instanceId, request.query.q ?? ''),
+    ),
+  );
 
   app.get<Route>(
     '/api/i/:slug/base',
