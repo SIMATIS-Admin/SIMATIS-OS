@@ -17,6 +17,10 @@ const radar: EtatRadar = {
   prets: { total: 48, fiches: [fiche('p1', 'Industrie Fictive', 'Paul Dumont')] },
   contactes: { total: 63, fiches: [fiche('c1', 'Usinage Fictif', 'Anne Leroux')] },
   ontRepondu: { total: 0, fiches: [] },
+  reprise: {
+    total: 42,
+    fiches: [{ id: 'x1', nom: 'Jean Fictif', entreprise: 'Fonderie Fictive', fonction: null }],
+  },
   rdvAccepte: {
     total: 1,
     fiches: [{ id: 'r1', nom: 'Alice Fictive', entreprise: 'Bureau Fictif', fonction: null }],
@@ -40,7 +44,7 @@ describe('Radar', () => {
     expect(within(prets).getByText('Paul Dumont')).toBeTruthy();
     expect(within(prets).getByText('+ 47 autres')).toBeTruthy();
     expect(within(screen.getByRole('region', { name: 'À enrichir' })).getByText('14')).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: 'Contactés' })).getByText('63')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Contactés' })).getByText('105')).toBeTruthy();
     const reponses = screen.getByRole('region', { name: 'Ont répondu' });
     expect(within(reponses).getByText('Personne à cette étape.')).toBeTruthy();
     expect(
@@ -60,6 +64,21 @@ describe('Radar', () => {
     // Les fiches de la base vivante n'ont pas de fiche CRM : leurs cartes ne sont pas des liens.
     const prets = screen.getByRole('region', { name: 'Prêts à contacter' });
     expect(within(prets).queryByRole('link', { name: /Paul Dumont/ })).toBeNull();
+  });
+
+  it('reprend dans Contactés les affaires du Pipeline sans rendez-vous, avec un lien vers leur fiche', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(radar)))),
+    );
+    render(<Radar slug="simatis" />);
+    const colonne = await screen.findByRole('region', { name: 'Contactés' });
+    expect(within(colonne).getByText(/dont 42 affaires du Pipeline sans rendez-vous/)).toBeTruthy();
+    const carte = within(colonne).getByRole('link', { name: /Jean Fictif/ });
+    expect(carte.getAttribute('href')).toBe('#/simatis/fiche/contact/x1');
+    expect(within(colonne).getByText('Fonderie Fictive · affaire en cours')).toBeTruthy();
+    // Les cartes de la base suivent, sans lien.
+    expect(within(colonne).getByText('Anne Leroux')).toBeTruthy();
   });
 
   it('garde les écrans Prospection et Bases vivantes accessibles', async () => {
