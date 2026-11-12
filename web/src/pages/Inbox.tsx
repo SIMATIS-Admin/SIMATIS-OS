@@ -1185,8 +1185,8 @@ export function Inbox({
                   <Icon name="check" />
                   <h2>Tout est à jour.</h2>
                   <p>Rien à traiter. La prochaine routine déposera les nouveaux sujets.</p>
-                  <a className="btn primary" href={`#/${slug}/brief`}>
-                    Revenir à mon brief
+                  <a className="btn primary" href={`#/${slug}/prospection`}>
+                    Prospecter
                   </a>
                 </div>
               )}
