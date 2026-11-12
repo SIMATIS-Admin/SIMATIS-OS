@@ -68,6 +68,14 @@ describe('Prospection', () => {
   });
 
   it('ouvre directement le choix des contacts à froid depuis le lien du Radar', async () => {
+    // L'échantillon est une liste : sans réponse propre à cette adresse, l'écran recevrait la vue de
+    // la prospection et planterait après la fin du test.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('/prospection/echantillon') ? Promise.resolve(new Response('[]')) : reponse(),
+      ),
+    );
     render(<Prospection slug="simatis" ouvrir="froid" />);
     expect(await screen.findByText('Échantillon de la base vivante')).toBeTruthy();
     expect(
