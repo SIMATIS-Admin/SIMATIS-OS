@@ -3,7 +3,16 @@ import { fetchRadar, type EtatRadar } from '../api.js';
 import { RechercheStrategie } from './radar/RechercheStrategie.js';
 
 // `href` : la carte ouvre la fiche (les prospects du CRM en ont une, pas les fiches de la base).
-type Carte = { id: string; titre: string; detail: string | null; href?: string };
+type Carte = {
+  id: string;
+  titre: string;
+  detail: string | null;
+  href?: string;
+  // Étiquettes ICP de la fiche : l'ICP d'où elle vient.
+  icp?: string[];
+};
+
+const etiquettesIcp = (tags: string[]) => tags.filter((t) => t.startsWith('icp '));
 
 const etapes = (slug: string, radar: EtatRadar) => [
   {
@@ -15,6 +24,7 @@ const etapes = (slug: string, radar: EtatRadar) => [
       id: f.id,
       titre: f.entreprise,
       detail: f.nom || 'Contact à trouver',
+      icp: etiquettesIcp(f.tags),
     })),
     lien: {
       href: `#/${slug}/bases/ouvrir/a-enrichir`,
@@ -30,6 +40,7 @@ const etapes = (slug: string, radar: EtatRadar) => [
       id: f.id,
       titre: f.nom,
       detail: f.entreprise,
+      icp: etiquettesIcp(f.tags),
     })),
     lien: {
       href: `#/${slug}/prospection/ouvrir/froid`,
@@ -56,6 +67,7 @@ const etapes = (slug: string, radar: EtatRadar) => [
         id: f.id,
         titre: f.nom,
         detail: `${f.entreprise} · ${f.nbContacts} touche${f.nbContacts > 1 ? 's' : ''}`,
+        icp: etiquettesIcp(f.tags),
       })),
     ].slice(0, 5),
     lien: { href: `#/${slug}/prospection/ouvrir/froid`, libelle: 'Relancer' },
@@ -69,6 +81,7 @@ const etapes = (slug: string, radar: EtatRadar) => [
       id: f.id,
       titre: f.nom,
       detail: f.entreprise,
+      icp: etiquettesIcp(f.tags),
     })),
     lien: { href: `#/${slug}/cockpit`, libelle: 'Répondre depuis le Cockpit' },
   },
@@ -144,6 +157,11 @@ export function Radar({ slug }: { slug: string }) {
                 <>
                   <b>{c.titre}</b>
                   {c.detail && <span className="small muted">{c.detail}</span>}
+                  {c.icp?.map((t) => (
+                    <span key={t} className="radar-icp">
+                      {t.toUpperCase()}
+                    </span>
+                  ))}
                 </>
               );
               return c.href ? (

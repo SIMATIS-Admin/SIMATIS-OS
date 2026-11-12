@@ -3,6 +3,10 @@ import { fetchCiblages, type CiblageAtelier } from '../../api.js';
 import { Fenetre } from '../Fenetre.js';
 import { RechercheEntreprises } from '../RechercheEntreprises.js';
 
+// L'étiquette de l'ICP : son code et l'entreprise de l'atelier (deux ateliers peuvent avoir un « ICP A »).
+export const etiquetteIcp = (c: Pick<CiblageAtelier, 'code' | 'entreprise'>) =>
+  `icp ${c.code.replace(/^icp\s*/i, '')}${c.entreprise ? ` (${c.entreprise})` : ''}`.slice(0, 40);
+
 type Etat = { etat: 'charge' } | { etat: 'absent' } | { etat: 'pret'; ciblages: CiblageAtelier[] };
 
 // « Chercher selon ma stratégie » : l'ICP et le persona viennent de l'Atelier stratégique. Le Radar
@@ -84,6 +88,7 @@ export function RechercheStrategie({ slug, onAjoute }: { slug: string; onAjoute:
             slug={slug}
             listes={[]}
             demandeInitiale={c.demande}
+            etiquette={etiquetteIcp(c)}
             onAjoute={(m) => {
               setInfo(m);
               onAjoute();
