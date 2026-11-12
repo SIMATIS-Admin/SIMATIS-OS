@@ -448,6 +448,21 @@ export type EtatRadar = {
     fiches: { id: string; nom: string; entreprise: string | null; fonction: string | null }[];
   };
 };
+export type ChampCiblage = { cle: string; valeur: string };
+// Un ICP de l'Atelier avec son persona et la demande de recherche composée à partir d'eux.
+export type CiblageAtelier = {
+  atelierId: string;
+  atelierTitre: string;
+  entreprise: string | null;
+  code: string;
+  nom: string;
+  offre: string;
+  icp: ChampCiblage[];
+  persona: ChampCiblage[];
+  demande: string;
+};
+export const fetchCiblages = (slug: string) =>
+  getJson<CiblageAtelier[]>(inst(slug, 'ateliers-strategie/ciblages'));
 export const fetchRadar = (slug: string) => getJson<EtatRadar>(inst(slug, 'radar'));
 
 export const fetchContacts = (slug: string, q: string) =>

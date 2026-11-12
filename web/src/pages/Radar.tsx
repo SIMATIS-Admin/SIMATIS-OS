@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchRadar, type EtatRadar } from '../api.js';
+import { RechercheStrategie } from './radar/RechercheStrategie.js';
 
 // `href` : la carte ouvre la fiche (les prospects du CRM en ont une, pas les fiches de la base).
 type Carte = { id: string; titre: string; detail: string | null; href?: string };
@@ -92,6 +93,11 @@ const etapes = (slug: string, radar: EtatRadar) => [
 export function Radar({ slug }: { slug: string }) {
   const [radar, setRadar] = useState<EtatRadar | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  const recharger = () =>
+    fetchRadar(slug).then(
+      (r) => setRadar(r),
+      (e: unknown) => setErreur(e instanceof Error ? e.message : String(e)),
+    );
   useEffect(() => {
     let actif = true;
     fetchRadar(slug).then(
@@ -124,6 +130,7 @@ export function Radar({ slug }: { slug: string }) {
           Campagnes et envois
         </a>
       </div>
+      <RechercheStrategie slug={slug} onAjoute={() => void recharger()} />
       <div className="radar-colonnes">
         {etapes(slug, radar).map((e) => (
           <section key={e.id} className="radar-colonne" aria-label={e.titre}>

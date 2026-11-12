@@ -6997,3 +6997,27 @@ div.pb-ligne {
 .radar-carte-lien:focus-visible {
   border-color: var(--accent, currentColor);
 }
+
+/* Radar : chercher des suspects d'après l'ICP de l'Atelier. */
+.radar-strategie {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.radar-strategie h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.radar-demande {
+  white-space: pre-wrap;
+  font: inherit;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--soft, rgba(0, 0, 0, 0.04));
+}
