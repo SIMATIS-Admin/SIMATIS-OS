@@ -6,6 +6,7 @@ import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { integrerFiches } from './integration.js';
 import { normaliserFiche, type Brut } from './nettoyage.js';
+import { prospectionSuiviFroid } from '../prospection/schema.js';
 import { etatRadar } from './radar.js';
 import { modifierConformite } from './service.js';
 
@@ -64,6 +65,49 @@ describe('Radar : colonnes de la base vivante', () => {
     expect(radar.contactes.fiches[0]?.entreprise).toBe('Atelier Deux');
     expect(radar.ontRepondu.total).toBe(1);
     expect(radar.ontRepondu.fiches[0]?.entreprise).toBe('Atelier Trois');
+  });
+
+  it('compte comme contactée une fiche qui a reçu une touche de prospection à froid, même sans statut', async () => {
+    const autre = await createInstance(t.owner.db, {
+      slug: 'radar-froid',
+      nom: 'F',
+      type: 'propre',
+    });
+    const ids = await withInstance(t.owner.db, autre.id, async (tx) => {
+      const r = await integrer(tx, autre.id, [
+        { entreprise: 'Jamais Touchée', nom: 'Neuve', email: 'neuve@exemple.test' },
+        { entreprise: 'Déjà Touchée', nom: 'Touchee', email: 'touchee@exemple.test' },
+        { entreprise: 'Suivi Sans Touche', nom: 'Vide', email: 'vide@exemple.test' },
+      ]);
+      await tx.insert(prospectionSuiviFroid).values([
+        { instanceId: autre.id, baseId: r[1]!.id, touches: 2 },
+        { instanceId: autre.id, baseId: r[2]!.id, touches: 0 },
+      ]);
+      return r;
+    });
+    const radar = await etatRadar(t.app.db, autre.id);
+    expect(ids).toHaveLength(3);
+    expect(radar.contactes.fiches.map((f) => [f.entreprise, f.nbContacts])).toEqual([
+      ['Déjà Touchée', 2],
+    ]);
+    expect(radar.prets.fiches.map((f) => f.entreprise).sort()).toEqual([
+      'Jamais Touchée',
+      'Suivi Sans Touche',
+    ]);
+  });
+
+  it('ne compte pas « à enrichir » une entreprise dont un contact est déjà joignable', async () => {
+    const autre = await createInstance(t.owner.db, { slug: 'radar-enr', nom: 'E', type: 'propre' });
+    await withInstance(t.owner.db, autre.id, (tx) =>
+      integrer(tx, autre.id, [
+        { entreprise: 'Société Complète' },
+        { entreprise: 'Société Complète', nom: 'Joignable', email: 'joignable@exemple.test' },
+        { entreprise: 'Société Vide' },
+      ]),
+    );
+    const radar = await etatRadar(t.app.db, autre.id);
+    expect(radar.aEnrichir.fiches.map((f) => f.entreprise)).toEqual(['Société Vide']);
+    expect(radar.aEnrichir.total).toBe(1);
   });
 
   it('limite les fiches montrées mais compte toutes celles de la colonne', async () => {
