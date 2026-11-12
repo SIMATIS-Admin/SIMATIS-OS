@@ -433,6 +433,8 @@ export type FicheRadar = {
   dernierContactLe: string | null;
   // Étiquettes de la fiche, dont celle de l'ICP d'où elle vient.
   tags: string[];
+  // Date à partir de laquelle la touche suivante de la séquence peut partir ; null si aucune.
+  prochaineRelanceLe: string | null;
 };
 export type ColonneRadar = { total: number; fiches: FicheRadar[] };
 export type EtatRadar = {
@@ -465,6 +467,11 @@ export type CiblageAtelier = {
 };
 export const fetchCiblages = (slug: string) =>
   getJson<CiblageAtelier[]>(inst(slug, 'ateliers-strategie/ciblages'));
+export type SequenceFroid = { delais: number[]; cumul: number[] };
+export const fetchSequence = (slug: string) =>
+  getJson<SequenceFroid>(inst(slug, 'prospection/sequence'));
+export const enregistrerSequence = (slug: string, delais: number[]) =>
+  sendJson<SequenceFroid>('PUT', inst(slug, 'prospection/sequence'), { delais });
 export const fetchRadar = (slug: string) => getJson<EtatRadar>(inst(slug, 'radar'));
 
 export const fetchContacts = (slug: string, q: string) =>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchRadar, type EtatRadar } from '../api.js';
 import { RechercheStrategie } from './radar/RechercheStrategie.js';
+import { SequenceReglage } from './radar/SequenceReglage.js';
 
 // `href` : la carte ouvre la fiche (les prospects du CRM en ont une, pas les fiches de la base).
 type Carte = {
@@ -10,6 +11,15 @@ type Carte = {
   href?: string;
   // Étiquettes ICP de la fiche : l'ICP d'où elle vient.
   icp?: string[];
+};
+
+// « · relance possible » quand le délai est écoulé, sinon « · relance le 17 nov. ».
+const relance = (iso: string | null) => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return date.getTime() <= Date.now()
+    ? ' · relance possible'
+    : ` · relance le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' })}`;
 };
 
 const etiquettesIcp = (tags: string[]) => tags.filter((t) => t.startsWith('icp '));
@@ -66,7 +76,7 @@ const etapes = (slug: string, radar: EtatRadar) => [
       ...radar.contactes.fiches.map((f): Carte => ({
         id: f.id,
         titre: f.nom,
-        detail: `${f.entreprise} · ${f.nbContacts} touche${f.nbContacts > 1 ? 's' : ''}`,
+        detail: `${f.entreprise} · ${f.nbContacts} touche${f.nbContacts > 1 ? 's' : ''}${relance(f.prochaineRelanceLe)}`,
         icp: etiquettesIcp(f.tags),
       })),
     ].slice(0, 5),
@@ -144,6 +154,7 @@ export function Radar({ slug }: { slug: string }) {
         </a>
       </div>
       <RechercheStrategie slug={slug} onAjoute={() => void recharger()} />
+      <SequenceReglage slug={slug} />
       <div className="radar-colonnes">
         {etapes(slug, radar).map((e) => (
           <section key={e.id} className="radar-colonne" aria-label={e.titre}>

@@ -7074,3 +7074,33 @@ div.pb-ligne {
   font-weight: 600;
   background: var(--soft, rgba(0, 0, 0, 0.06));
 }
+
+/* Radar : réglage de la séquence de relance. */
+.radar-sequence {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.radar-sequence h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.radar-sequence p {
+  margin: 0;
+}
+.radar-sequence-jours {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.radar-sequence-jours label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 120px;
+}

@@ -1,5 +1,6 @@
 import type { RechercheTache } from '../enrichissement/recherche-tache.js';
 import type { RoutineBrouillons } from '../prospection/quotidienne.js';
+import type { SequenceFroid } from '../prospection/sequence.js';
 import type { RoutineRecherche } from '../enrichissement/routine.js';
 import type { RoutineAlerte } from '../base-vivante/alerte-signaux.js';
 import { jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
@@ -15,6 +16,7 @@ export const preferences = pgTable('preferences', {
       rechercheBase?: RoutineRecherche;
       signauxBase?: RoutineAlerte;
       brouillons?: RoutineBrouillons;
+      sequence?: SequenceFroid;
     }>()
     .notNull()
     .default({}),

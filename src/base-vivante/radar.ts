@@ -2,6 +2,7 @@ import { and, asc, count, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { Executor } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { prospectionSuiviFroid } from '../prospection/schema.js';
+import { lireSequence, prochaineTouche } from '../prospection/sequence.js';
 import { baseVivante } from './schema.js';
 import { aEnrichir } from './service.js';
 
@@ -14,6 +15,8 @@ export type FicheRadar = {
   dernierContactLe: string | null;
   // Étiquettes de la fiche, dont celle de l'ICP d'où elle vient.
   tags: string[];
+  // Date à partir de laquelle la touche suivante de la séquence peut partir ; null si aucune.
+  prochaineRelanceLe: string | null;
 };
 export type ColonneRadar = { total: number; fiches: FicheRadar[] };
 export type EtatRadar = {
@@ -39,6 +42,7 @@ const touchesEnvoyees = sql<number>`coalesce((select max(s.touches) from ${prosp
 // La cinquième, le rendez-vous accepté, vient du CRM : la fiche est alors devenue un contact.
 export async function etatRadar(db: Executor, instanceId: string, limite = 5): Promise<EtatRadar> {
   return withInstance(db, instanceId, async (tx) => {
+    const { delais } = await lireSequence(tx, instanceId);
     const colonne = async (conditions: SQL[]): Promise<ColonneRadar> => {
       const filtre = and(eq(baseVivante.instanceId, instanceId), ...conditions);
       const [{ n } = { n: 0 }] = await tx.select({ n: count() }).from(baseVivante).where(filtre);
@@ -54,8 +58,18 @@ export async function etatRadar(db: Executor, instanceId: string, limite = 5): P
           ),
           dernierContactLe: baseVivante.dernierContactLe,
           tags: baseVivante.tags,
+          touchesSuivi: prospectionSuiviFroid.touches,
+          touchesMax: prospectionSuiviFroid.touchesMax,
+          derniereLe: prospectionSuiviFroid.derniereLe,
         })
         .from(baseVivante)
+        .leftJoin(
+          prospectionSuiviFroid,
+          and(
+            eq(prospectionSuiviFroid.baseId, baseVivante.id),
+            eq(prospectionSuiviFroid.instanceId, instanceId),
+          ),
+        )
         .where(filtre)
         .orderBy(asc(baseVivante.entreprise), asc(baseVivante.nom), asc(baseVivante.id))
         .limit(limite);
@@ -69,6 +83,13 @@ export async function etatRadar(db: Executor, instanceId: string, limite = 5): P
           nbContacts: l.nbContacts,
           dernierContactLe: l.dernierContactLe?.toISOString() ?? null,
           tags: l.tags,
+          prochaineRelanceLe:
+            l.touchesSuivi !== null && l.touchesMax !== null
+              ? (prochaineTouche(
+                  { touches: l.touchesSuivi, touchesMax: l.touchesMax, derniereLe: l.derniereLe },
+                  delais,
+                )?.toISOString() ?? null)
+              : null,
         })),
       };
     };
