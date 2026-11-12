@@ -45,6 +45,45 @@ describe('Atelier stratégique : routes', () => {
     expect((await app().inject({ method: 'GET', url: url('inconnue') })).statusCode).toBe(404);
   });
 
+  it('GET ciblages renvoie les ICP renseignés avec la demande de recherche, 403 sans le module', async () => {
+    const icp = ['PME industrielles', 'Rhône-Alpes', '', '', '', '', ''];
+    const crea = await app().inject({
+      method: 'POST',
+      url: url('rt-ok'),
+      payload: { entrepriseId, titre: 'Atelier ciblage fictif' },
+    });
+    expect(crea.statusCode).toBe(200);
+    const maj = await app().inject({
+      method: 'PATCH',
+      url: url('rt-ok', `/${crea.json<{ id: string }>().id}`),
+      payload: {
+        etat: {
+          v: 1,
+          step: 4,
+          icps: [
+            {
+              code: 'ICP A',
+              name: 'Industrie',
+              offer: '',
+              icp,
+              persona: ['Dirigeant', '', '', '', '', '', ''],
+            },
+          ],
+        },
+      },
+    });
+    expect(maj.statusCode).toBe(200);
+    const res = await app().inject({ method: 'GET', url: url('rt-ok', '/ciblages') });
+    expect(res.statusCode).toBe(200);
+    const lignes = res.json<{ code: string; demande: string }[]>();
+    expect(lignes.find((l) => l.code === 'ICP A')?.demande).toBe(
+      'Entreprises : PME industrielles\nLocalisation : Rhône-Alpes\nInterlocuteur : Dirigeant',
+    );
+    expect(
+      (await app().inject({ method: 'GET', url: url('rt-sans', '/ciblages') })).statusCode,
+    ).toBe(403);
+  });
+
   it("POST crée puis GET :id renvoie l'état", async () => {
     const crea = await app().inject({
       method: 'POST',
