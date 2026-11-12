@@ -4,12 +4,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CiblageAtelier } from '../../api.js';
 
 vi.mock('../RechercheEntreprises.js', () => ({
-  RechercheEntreprises: ({ demandeInitiale }: { demandeInitiale?: string }) => (
-    <p>Recherche avec : {demandeInitiale}</p>
+  RechercheEntreprises: ({
+    demandeInitiale,
+    etiquette,
+  }: {
+    demandeInitiale?: string;
+    etiquette?: string;
+  }) => (
+    <p>
+      Recherche avec : {demandeInitiale} / étiquette : {etiquette}
+    </p>
   ),
 }));
 
-import { RechercheStrategie } from './RechercheStrategie.js';
+import { etiquetteIcp, RechercheStrategie } from './RechercheStrategie.js';
 
 const icp = (code: string, demande: string): CiblageAtelier => ({
   atelierId: 'a1',
@@ -42,7 +50,19 @@ describe('RechercheStrategie', () => {
     fireEvent.change(screen.getByLabelText('ICP à cibler'), { target: { value: '1' } });
     expect(screen.getByLabelText('Demande composée').textContent).toBe('Entreprises : ETI');
     fireEvent.click(screen.getByRole('button', { name: 'Chercher selon cet ICP' }));
-    expect(screen.getByText('Recherche avec : Entreprises : ETI')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Recherche avec : Entreprises : ETI / étiquette : icp B (Entreprise Fictive)',
+      ),
+    ).toBeTruthy();
+  });
+
+  it("compose l'étiquette de l'ICP avec l'entreprise de l'atelier, sans dépasser 40 caractères", () => {
+    expect(etiquetteIcp({ code: 'ICP A', entreprise: 'SIMATIS' })).toBe('icp A (SIMATIS)');
+    expect(etiquetteIcp({ code: 'ICP C', entreprise: null })).toBe('icp C');
+    expect(
+      etiquetteIcp({ code: 'ICP A', entreprise: 'Une entreprise au nom vraiment très long' }),
+    ).toHaveLength(40);
   });
 
   it("invite à remplir l'Atelier quand aucun ICP n'est renseigné", async () => {

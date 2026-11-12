@@ -11,10 +11,16 @@ const fiche = (id: string, entreprise: string, nom: string) => ({
   fonction: null,
   nbContacts: 2,
   dernierContactLe: null,
+  tags: [] as string[],
 });
 const radar: EtatRadar = {
   aEnrichir: { total: 14, fiches: [fiche('a1', 'Atelier Fictif', '')] },
-  prets: { total: 48, fiches: [fiche('p1', 'Industrie Fictive', 'Paul Dumont')] },
+  prets: {
+    total: 48,
+    fiches: [
+      { ...fiche('p1', 'Industrie Fictive', 'Paul Dumont'), tags: ['icp a (simatis)', 'salon'] },
+    ],
+  },
   contactes: { total: 63, fiches: [fiche('c1', 'Usinage Fictif', 'Anne Leroux')] },
   ontRepondu: { total: 0, fiches: [] },
   reprise: {
@@ -79,6 +85,17 @@ describe('Radar', () => {
     expect(within(colonne).getByText('Fonderie Fictive · affaire en cours')).toBeTruthy();
     // Les cartes de la base suivent, sans lien.
     expect(within(colonne).getByText('Anne Leroux')).toBeTruthy();
+  });
+
+  it("montre l'ICP d'où vient une fiche, et seulement lui parmi ses étiquettes", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(radar)))),
+    );
+    render(<Radar slug="simatis" />);
+    const prets = await screen.findByRole('region', { name: 'Prêts à contacter' });
+    expect(within(prets).getByText('ICP A (SIMATIS)')).toBeTruthy();
+    expect(within(prets).queryByText(/salon/i)).toBeNull();
   });
 
   it('garde les écrans Prospection et Bases vivantes accessibles', async () => {

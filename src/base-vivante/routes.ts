@@ -653,7 +653,11 @@ export function registerBaseVivanteRoutes(
     })
     .strict();
   const ajoutSchema = z
-    .object({ sirens: z.array(z.string()).max(100), liste: z.string().regex(UUID).optional() })
+    .object({
+      sirens: z.array(z.string()).max(100),
+      liste: z.string().regex(UUID).optional(),
+      etiquette: z.string().max(200).optional(),
+    })
     .strict();
   app.post<Route>(
     '/api/i/:slug/base/entreprises/recherche',
@@ -665,8 +669,8 @@ export function registerBaseVivanteRoutes(
   app.post<Route>(
     '/api/i/:slug/base/entreprises/ajouter',
     surInstance((instanceId, request) => {
-      const { sirens, liste } = ajoutSchema.parse(request.body);
-      return ajouterEntreprises(db, annuaire, instanceId, sirens, liste);
+      const { sirens, liste, etiquette } = ajoutSchema.parse(request.body);
+      return ajouterEntreprises(db, annuaire, instanceId, sirens, liste, etiquette);
     }),
   );
 

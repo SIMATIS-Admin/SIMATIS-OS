@@ -12,6 +12,8 @@ export type FicheRadar = {
   fonction: string | null;
   nbContacts: number;
   dernierContactLe: string | null;
+  // Étiquettes de la fiche, dont celle de l'ICP d'où elle vient.
+  tags: string[];
 };
 export type ColonneRadar = { total: number; fiches: FicheRadar[] };
 export type EtatRadar = {
@@ -51,6 +53,7 @@ export async function etatRadar(db: Executor, instanceId: string, limite = 5): P
             Number,
           ),
           dernierContactLe: baseVivante.dernierContactLe,
+          tags: baseVivante.tags,
         })
         .from(baseVivante)
         .where(filtre)
@@ -65,6 +68,7 @@ export async function etatRadar(db: Executor, instanceId: string, limite = 5): P
           fonction: l.fonction,
           nbContacts: l.nbContacts,
           dernierContactLe: l.dernierContactLe?.toISOString() ?? null,
+          tags: l.tags,
         })),
       };
     };

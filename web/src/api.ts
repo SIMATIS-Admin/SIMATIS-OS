@@ -431,6 +431,8 @@ export type FicheRadar = {
   fonction: string | null;
   nbContacts: number;
   dernierContactLe: string | null;
+  // Étiquettes de la fiche, dont celle de l'ICP d'où elle vient.
+  tags: string[];
 };
 export type ColonneRadar = { total: number; fiches: FicheRadar[] };
 export type EtatRadar = {
@@ -1912,11 +1914,16 @@ export const rechercherEntreprisesBase = (slug: string, criteres: CriteresWeb, p
     criteres,
     page,
   });
-export const ajouterEntreprisesBase = (slug: string, sirens: string[], liste?: string) =>
+export const ajouterEntreprisesBase = (
+  slug: string,
+  sirens: string[],
+  liste?: string,
+  etiquette?: string,
+) =>
   sendJson<{ ajoutees: number; existantes: number; introuvables: number }>(
     'POST',
     inst(slug, 'base/entreprises/ajouter'),
-    { sirens, liste },
+    { sirens, liste, etiquette },
   );
 export const creerListeBase = (
   slug: string,
