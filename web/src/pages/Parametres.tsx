@@ -207,7 +207,7 @@ export function Parametres({ slug, onRenamed }: Props) {
           Partenaires
         </button>
         <button className={tab === 'routines' ? 'on' : ''} onClick={() => setTab('routines')}>
-          Routines Claude
+          Automatismes
         </button>
         <button className={tab === 'prospection' ? 'on' : ''} onClick={() => setTab('prospection')}>
           Prospection

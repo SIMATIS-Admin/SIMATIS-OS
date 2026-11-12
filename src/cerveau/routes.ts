@@ -177,7 +177,7 @@ export function registerCerveauRoutes(
         if (e instanceof RunnerInjoignable)
           return reply.code(504).send({
             error:
-              "L'exécuteur de l'ordinateur ne répond pas : vérifiez qu'il tourne (Routines Claude) et que le Drive est synchronisé.",
+              "L'exécuteur de l'ordinateur ne répond pas : vérifiez qu'il tourne (Automatismes) et que le Drive est synchronisé.",
           });
         throw e;
       }
