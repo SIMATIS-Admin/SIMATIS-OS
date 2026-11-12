@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { fetchRadar, type EtatRadar } from '../api.js';
 
-type Carte = { id: string; titre: string; detail: string | null };
+// `href` : la carte ouvre la fiche (les prospects du CRM en ont une, pas les fiches de la base).
+type Carte = { id: string; titre: string; detail: string | null; href?: string };
 
 const etapes = (slug: string, radar: EtatRadar) => [
   {
@@ -67,6 +68,7 @@ const etapes = (slug: string, radar: EtatRadar) => [
       id: f.id,
       titre: f.nom,
       detail: f.entreprise,
+      href: `#/${slug}/fiche/contact/${f.id}`,
     })),
     lien: { href: `#/${slug}/pipeline`, libelle: 'Ouvrir le Pipeline' },
   },
@@ -118,12 +120,23 @@ export function Radar({ slug }: { slug: string }) {
               <span className="radar-total num">{e.total}</span>
             </header>
             <p className="small muted">{e.aide}</p>
-            {e.cartes.map((c) => (
-              <div key={c.id} className="radar-carte">
-                <b>{c.titre}</b>
-                {c.detail && <span className="small muted">{c.detail}</span>}
-              </div>
-            ))}
+            {e.cartes.map((c) => {
+              const contenu = (
+                <>
+                  <b>{c.titre}</b>
+                  {c.detail && <span className="small muted">{c.detail}</span>}
+                </>
+              );
+              return c.href ? (
+                <a key={c.id} className="radar-carte radar-carte-lien" href={c.href}>
+                  {contenu}
+                </a>
+              ) : (
+                <div key={c.id} className="radar-carte">
+                  {contenu}
+                </div>
+              );
+            })}
             {e.total === 0 && <p className="small muted">Personne à cette étape.</p>}
             {e.total > e.cartes.length && (
               <p className="small muted">+ {e.total - e.cartes.length} autres</p>

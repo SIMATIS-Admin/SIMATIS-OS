@@ -6981,3 +6981,19 @@ div.pb-ligne {
   border-radius: 8px;
   overflow-wrap: anywhere;
 }
+.radar-carte-lien {
+  color: inherit;
+  text-decoration: none;
+}
+.radar-carte-lien:hover,
+.radar-carte-lien:focus-visible {
+  border-color: var(--accent, currentColor);
+}
+.radar-carte-lien {
+  color: inherit;
+  text-decoration: none;
+}
+.radar-carte-lien:hover,
+.radar-carte-lien:focus-visible {
+  border-color: var(--accent, currentColor);
+}
