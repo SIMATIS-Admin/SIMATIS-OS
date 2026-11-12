@@ -135,9 +135,10 @@ export function Brief({ slug }: { slug: string }) {
             }
           : {
               titre: 'De la place pour avancer.',
-              texte: 'Aucune tâche prévue aujourd’hui. Consulte ton Inbox pour choisir la suite.',
-              action: 'Ouvrir mon Inbox',
-              lien: `#/${slug}/inbox`,
+              texte:
+                'Aucune tâche prévue aujourd’hui. Le plus utile : faire avancer la prospection.',
+              action: 'Prospecter',
+              lien: `#/${slug}/prospection`,
             };
 
   return (

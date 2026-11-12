@@ -203,7 +203,7 @@ function Mandat({
       <div className="panel-b stack">
         {mandat ? (
           <p style={{ margin: 0 }}>
-            Mandat : <a href={`#/${mandat.slug}/brief`}>{mandat.nom}</a>
+            Mandat : <a href={`#/${mandat.slug}/cockpit`}>{mandat.nom}</a>
           </p>
         ) : (
           <>

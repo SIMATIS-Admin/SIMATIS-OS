@@ -21,8 +21,8 @@ export const NAV: NavGroup[] = [
   {
     title: 'Piloter la journée',
     items: [
-      item('brief', 'Brief du jour', 'sun'),
-      item('inbox', 'Inbox', 'inbox'),
+      // Brief du jour et Inbox réunis : on agit sur l'Inbox, puis on lit le brief.
+      item('cockpit', 'Cockpit', 'sun'),
       item('agenda', 'Agenda', 'clock'),
     ],
   },
@@ -76,8 +76,7 @@ export const NAV: NavGroup[] = [
 
 // Screens already built in the real app; every other menu entry shows « Bientôt ».
 export const BUILT = new Set([
-  'brief',
-  'inbox',
+  'cockpit',
   'pipeline',
   'entreprises',
   'contacts',
@@ -106,10 +105,13 @@ export const LOTS: Record<string, string> = {
 
 export const isBuilt = (id: string) => BUILT.has(id);
 
-// Former screen ids still found in bookmarks: « À valider » became the Inbox,
+// Former screen ids still found in bookmarks: « À valider » became the Inbox, then the Inbox and
+// the Brief became the Cockpit,
 // and the Diagnostic and Tests VMA screens became one Diagnostics screen.
 const ANCIENNES_VUES = new Map<string, string>([
-  ['validations', 'inbox'],
+  ['validations', 'cockpit'],
+  ['brief', 'cockpit'],
+  ['inbox', 'cockpit'],
   ['taches', 'agenda'],
   ['diagnostic', 'diagnostics'],
   ['tests-vma', 'diagnostics'],

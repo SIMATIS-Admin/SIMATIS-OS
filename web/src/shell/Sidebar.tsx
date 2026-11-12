@@ -28,7 +28,7 @@ const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
 // Rubriques à pastille de notification : l'étoile n'y est pas proposée (elle chevauchait le compteur).
-const SANS_ETOILE = ['agenda', 'inbox', 'rendez-vous'];
+const SANS_ETOILE = ['agenda', 'cockpit', 'rendez-vous'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
 const memoriser = (cle: string, valeur: string) => {

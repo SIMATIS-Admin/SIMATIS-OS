@@ -239,7 +239,7 @@ describe('Fiche page', () => {
     mandat = { slug: 'beta', nom: 'Beta' };
     render(<Fiche slug="simatis" kind="affaire" id="o1" />);
     const lienMandat = await screen.findByRole('link', { name: 'Beta' });
-    expect(lienMandat.getAttribute('href')).toBe('#/beta/brief');
+    expect(lienMandat.getAttribute('href')).toBe('#/beta/cockpit');
     expect(screen.queryByRole('button', { name: 'Créer le mandat' })).toBeNull();
   });
 

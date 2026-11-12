@@ -22,7 +22,7 @@ function NouveauProspect({ onCreated }: { onCreated: () => void }) {
     creerProspect(nom).then(
       (i) => {
         onCreated();
-        location.hash = `#/${i.slug}/brief`;
+        location.hash = `#/${i.slug}/cockpit`;
       },
       (e: unknown) => {
         setError(e instanceof Error ? e.message : String(e));

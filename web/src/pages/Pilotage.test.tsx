@@ -131,7 +131,7 @@ describe('pilot screens', () => {
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
-  it('brief: offers the inbox on a day without tasks or connected calendar', async () => {
+  it('brief: offers prospecting on a day without tasks or connected calendar', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -148,9 +148,9 @@ describe('pilot screens', () => {
       ),
     );
     render(<Brief slug="simatis" />);
-    expect(
-      (await screen.findByRole('link', { name: 'Ouvrir mon Inbox' })).getAttribute('href'),
-    ).toBe('#/simatis/inbox');
+    expect((await screen.findByRole('link', { name: 'Prospecter' })).getAttribute('href')).toBe(
+      '#/simatis/prospection',
+    );
     expect(screen.getByText('Agenda non connecté')).toBeTruthy();
   });
 });

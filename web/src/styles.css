@@ -6909,3 +6909,14 @@ div.pb-ligne {
 .bv-tournee-resultat {
   margin-top: 10px;
 }
+
+/* Cockpit : l'Inbox puis le brief du jour, séparés par un filet. */
+.cockpit {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.cockpit-brief {
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
