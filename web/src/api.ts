@@ -734,6 +734,8 @@ export type SujetVue = {
     lienBrouillon: string | null;
     prepareeLe: string;
   } | null;
+  // Compte rendu rédigé par la routine pour une entrée « compte rendu », à relire.
+  compteRenduPrepare: { texte: string; prepareeLe: string } | null;
   // Réunion Wispr Flow ; dejaRelie : elle s'est reliée à un compte rendu déjà à faire.
   reunion: {
     critique: boolean;

@@ -106,6 +106,23 @@ describe('Inbox : outils MCP', () => {
     expect(refus.isError).toBe(true);
   });
 
+  it('attache un compte rendu préparé à une entrée compte rendu, et refuse les autres types', async () => {
+    const cr = await call(
+      'deposer_sujet',
+      sujet('evt-cr', { type: 'compte_rendu', origine: 'agenda' }),
+    );
+    const { id } = cr.json<{ id: string }>();
+    const ok = await call('preparer_compte_rendu', { sujetId: id, texte: 'Compte rendu fictif.' });
+    expect(ok.isError).toBe(false);
+    expect(ok.json()).toEqual({ statut: 'enregistree' });
+    const mail = await call('deposer_sujet', sujet('fil-cr'));
+    const refus = await call('preparer_compte_rendu', {
+      sujetId: mail.json<{ id: string }>().id,
+      texte: 'x',
+    });
+    expect(refus.json()).toEqual({ statut: 'introuvable' });
+  });
+
   it('deposits a subject, then answers existant for the same key', async () => {
     const premier = await call(
       'deposer_sujet',
