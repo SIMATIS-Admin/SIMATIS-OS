@@ -8,6 +8,12 @@ import {
   type RoutineInfo,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import {
+  AUTOMATISMES,
+  phraseDuResultat,
+  TITRES_GROUPES,
+  type GroupeAutomatisme,
+} from './automatismes.js';
 
 const OUVERTE = new Set(['demandee', 'en_cours']);
 const quand = (iso: string | null) =>
@@ -121,13 +127,15 @@ function Carte({ slug, r, onChange }: { slug: string; r: RoutineInfo; onChange: 
     );
   };
   const ouverte = execution && OUVERTE.has(execution.statut);
+  const fiche = AUTOMATISMES[r.cle];
 
   return (
     <div className="panel">
       <div className="panel-h">
         <div>
-          <h2>{r.nom}</h2>
-          <div className="small muted">{r.rythme}</div>
+          <h2>{fiche?.nom ?? r.nom}</h2>
+          {fiche && <p className="small">{fiche.utilite}</p>}
+          <div className="small muted">Quand : {r.rythme}</div>
         </div>
         <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
@@ -139,7 +147,7 @@ function Carte({ slug, r, onChange }: { slug: string; r: RoutineInfo; onChange: 
               );
             }}
           />
-          {r.actif ? 'Active' : 'En pause'}
+          {r.actif ? 'Activé' : 'En pause'}
         </label>
       </div>
       <div className="panel-b report-col">
@@ -147,16 +155,22 @@ function Carte({ slug, r, onChange }: { slug: string; r: RoutineInfo; onChange: 
           <Suivi e={execution} />
         ) : (
           <>
-            <h4 style={{ marginTop: 0 }}>Ce que fait la routine</h4>
-            <ol className="rt-steps">
-              {r.etapes.map((e) => (
-                <li key={e}>{e}</li>
-              ))}
-            </ol>
-            <div className="small muted" style={{ marginTop: 10 }}>
-              Dernière exécution : {quand(execution?.fin ?? execution?.createdAt ?? null)}
-            </div>
-            {execution && <Rapport e={execution} />}
+            <p style={{ marginTop: 0 }}>
+              <b>Dernier résultat</b> : {phraseDuResultat(execution)}
+            </p>
+            <details>
+              <summary>Voir le détail</summary>
+              <h4>Ce que fait la routine</h4>
+              <ol className="rt-steps">
+                {r.etapes.map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+              </ol>
+              <div className="small muted" style={{ marginTop: 10 }}>
+                Dernière exécution : {quand(execution?.fin ?? execution?.createdAt ?? null)}
+              </div>
+              {execution && <Rapport e={execution} />}
+            </details>
           </>
         )}
         {error && (
@@ -190,11 +204,33 @@ export function Routines({ slug }: { slug: string }) {
         Chargement des routines…
       </div>
     );
+  const groupes: [GroupeAutomatisme | 'autres', typeof list][] = [
+    ['quotidien', list.filter((r) => AUTOMATISMES[r.cle]?.groupe === 'quotidien')],
+    ['occasionnel', list.filter((r) => AUTOMATISMES[r.cle]?.groupe === 'occasionnel')],
+    ['autres', list.filter((r) => !AUTOMATISMES[r.cle])],
+  ];
   return (
-    <div className="grid g2">
-      {list.map((r) => (
-        <Carte key={r.cle} slug={slug} r={r} onChange={load} />
-      ))}
+    <div className="automatismes">
+      <p className="muted">
+        Ce que Claude fait pour vous, tout seul ou à la demande. Rien n’est jamais envoyé sans votre
+        accord : tout attend dans l’Inbox.
+      </p>
+      {groupes.map(
+        ([groupe, routines]) =>
+          routines.length > 0 && (
+            <section
+              key={groupe}
+              aria-label={groupe === 'autres' ? 'Autres' : TITRES_GROUPES[groupe]}
+            >
+              <h2>{groupe === 'autres' ? 'Autres' : TITRES_GROUPES[groupe]}</h2>
+              <div className="grid g2">
+                {routines.map((r) => (
+                  <Carte key={r.cle} slug={slug} r={r} onChange={load} />
+                ))}
+              </div>
+            </section>
+          ),
+      )}
     </div>
   );
 }

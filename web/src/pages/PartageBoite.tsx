@@ -231,7 +231,7 @@ export function PartageBoite({ slug }: { slug: string }) {
     return (
       <div className="empty">
         La carte de l’espace partagé n’est pas encore arrivée. Elle est envoyée par l’exécuteur de
-        cet ordinateur : vérifiez qu’il tourne (Routines Claude) et que le serveur « partage » de
+        cet ordinateur : vérifiez qu’il tourne (Automatismes) et que le serveur « partage » de
         Claude Code est installé.{' '}
         <button className="btn" onClick={actualiser} disabled={actualisation}>
           {actualisation ? 'Lecture du kDrive…' : 'Actualiser'}

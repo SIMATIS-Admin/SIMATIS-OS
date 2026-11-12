@@ -70,7 +70,7 @@ export const NAV: NavGroup[] = [
     title: 'Plus',
     later: true,
     items: [
-      item('routines', 'Routines Claude', 'clock'),
+      item('routines', 'Automatismes', 'clock'),
       item('siteweb', 'Site web', 'globe', 'site-web'),
       item('parametres', 'Paramètres', 'gear'),
       item('plan', "Plan d'action", 'map'),

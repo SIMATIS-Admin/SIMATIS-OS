@@ -109,8 +109,8 @@ export function CerveauEspace({ slug, espace }: { slug: string; espace: EspaceCe
         {partage
           ? 'La carte de l’espace partagé n’est pas encore arrivée. '
           : 'La carte n’est pas encore arrivée. '}
-        Elle est envoyée par l’exécuteur de cet ordinateur : vérifiez qu’il tourne (Routines Claude)
-        et que{' '}
+        Elle est envoyée par l’exécuteur de cet ordinateur : vérifiez qu’il tourne (Automatismes) et
+        que{' '}
         {partage
           ? 'le serveur « partage » de Claude Code est installé'
           : 'le dossier du second cerveau est configuré'}
