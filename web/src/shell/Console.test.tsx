@@ -91,17 +91,25 @@ describe('Console (journal en lecture seule)', () => {
 
     expect(await screen.findByText('Claude')).toBeTruthy();
     expect(screen.getByText('ChatGPT')).toBeTruthy();
+    expect(screen.getByText('72 %')).toBeTruthy();
+    expect(screen.getByText('28 %')).toBeTruthy();
+    expect(screen.getByText('84 %')).toBeTruthy();
+    expect(screen.getByText('63 %')).toBeTruthy();
+    expect(screen.getAllByText('5 h')).toHaveLength(2);
+    expect(screen.getAllByText('Sem.')).toHaveLength(2);
+    expect(screen.queryByRole('log')).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Déplier la console'));
+    expect(screen.getByRole('log')).toBeTruthy();
+    expect(screen.getByText('Claude')).toBeTruthy();
     expect(screen.getByText('72 % restant')).toBeTruthy();
     expect(screen.getByText('28 % restant')).toBeTruthy();
     expect(screen.getByText('84 % restant')).toBeTruthy();
     expect(screen.getByText('63 % restant')).toBeTruthy();
     expect(screen.getAllByText('Fenêtre 5 h')).toHaveLength(2);
     expect(screen.getAllByText('Hebdomadaire')).toHaveLength(2);
-    expect(screen.queryByRole('log')).toBeNull();
-
-    fireEvent.click(screen.getByLabelText('Déplier la console'));
-    expect(screen.getByRole('log')).toBeTruthy();
-    expect(screen.getByText('Claude')).toBeTruthy();
+    expect(screen.queryByText('Sem.')).toBeNull();
+    expect(screen.getAllByText('Test de VMA reçu : ACME non rangé')).toHaveLength(1);
 
     fireEvent.click(screen.getByLabelText('Actualiser les limites IA'));
     await waitFor(() =>
