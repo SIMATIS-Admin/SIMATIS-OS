@@ -24,6 +24,8 @@ const opp = (id: string, etape: string, extra: Record<string, unknown> = {}) => 
   derniereActivite: null,
   prochaine: null,
   joursInactif: null,
+  sansRdv: false,
+  prochainRdv: null,
   ...extra,
 });
 
@@ -40,10 +42,11 @@ const pipeline = () => ({
   opportunites: [
     opp('o1', 'qualification', {
       contact: 'Agathe Vallière',
+      prochainRdv: '2026-11-17T13:00:00.000Z',
       prochaine: { echeance: '2026-10-16T08:00:00.000Z', enRetard: false },
       joursInactif: 2,
     }),
-    opp('o2', 'proposition', { joursInactif: 20 }),
+    opp('o2', 'proposition', { joursInactif: 20, sansRdv: true }),
     opp('o4', 'proposition', {
       prochaine: { echeance: '2026-10-10T08:00:00.000Z', enRetard: true },
       joursInactif: 5,
@@ -190,6 +193,25 @@ describe('Pipeline screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Matrice' }));
     expect(screen.getByText('Entreprise o1')).toBeTruthy();
     expect(screen.queryByText('Entreprise o2')).toBeNull();
+  });
+
+  it('shows the next meeting of a deal, and flags the deals without any meeting as followed in the Radar', async () => {
+    render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    expect(screen.getByText(/RDV mar\. 17 nov\., 14:00/)).toBeTruthy();
+    // Une seule affaire ouverte sans rendez-vous dans la fixture : o2.
+    expect(screen.getAllByText('Sans rendez-vous, suivi dans le Radar')).toHaveLength(1);
+  });
+
+  it('filters the deals without a meeting', async () => {
+    render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    fireEvent.change(screen.getByLabelText('Filtrer les activités'), {
+      target: { value: 'sansrdv' },
+    });
+    expect(screen.getByText('Entreprise o2')).toBeTruthy();
+    expect(screen.queryByText('Entreprise o1')).toBeNull();
+    expect(screen.queryByText('Entreprise o4')).toBeNull();
   });
 
   it('opens a deal with the keyboard and reports an empty search', async () => {

@@ -687,6 +687,10 @@ export type PipelineOpp = {
   derniereActivite: string | null;
   prochaine: { echeance: string; enRetard: boolean } | null;
   joursInactif: number | null;
+  // Ouverte sans aucun rendez-vous : une personne encore en prospection, suivie aussi dans le Radar.
+  sansRdv: boolean;
+  // Prochain rendez-vous commercial lié à l'affaire, à son contact ou à son entreprise.
+  prochainRdv: string | null;
 };
 
 export type Pipeline = {
