@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchRadar, type EtatRadar } from '../api.js';
+import { creerAffaireContact, fetchRadar, type EtatRadar } from '../api.js';
 import { RechercheStrategie } from './radar/RechercheStrategie.js';
 import { SequenceReglage } from './radar/SequenceReglage.js';
 
@@ -11,6 +11,8 @@ type Carte = {
   href?: string;
   // Étiquettes ICP de la fiche : l'ICP d'où elle vient.
   icp?: string[];
+  // Action sur la carte (créer l'affaire d'un prospect qui n'en a pas encore).
+  action?: { libelle: string; fait: () => void };
 };
 
 // « · relance possible » quand le délai est écoulé, sinon « · relance le 17 nov. ».
@@ -24,7 +26,7 @@ const relance = (iso: string | null) => {
 
 const etiquettesIcp = (tags: string[]) => tags.filter((t) => t.startsWith('icp '));
 
-const etapes = (slug: string, radar: EtatRadar) => [
+const etapes = (slug: string, radar: EtatRadar, creerAffaire: (contactId: string) => void) => [
   {
     id: 'a-enrichir',
     titre: 'À enrichir',
@@ -105,6 +107,10 @@ const etapes = (slug: string, radar: EtatRadar) => [
       titre: f.nom,
       detail: f.entreprise,
       href: `#/${slug}/fiche/contact/${f.id}`,
+      action:
+        f.oppsOuvertes === 0
+          ? { libelle: 'Créer l’affaire', fait: () => creerAffaire(f.id) }
+          : undefined,
     })),
     lien: { href: `#/${slug}/pipeline`, libelle: 'Ouvrir le Pipeline' },
   },
@@ -116,6 +122,21 @@ const etapes = (slug: string, radar: EtatRadar) => [
 export function Radar({ slug }: { slug: string }) {
   const [radar, setRadar] = useState<EtatRadar | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const creerAffaire = (contactId: string) => {
+    setInfo(null);
+    creerAffaireContact(slug, contactId).then(
+      (r) => {
+        setInfo(
+          r.simulation
+            ? (r.message ?? 'Simulation : l’écriture réelle est fermée, aucune affaire créée.')
+            : 'Affaire créée à la première étape du Pipeline.',
+        );
+        void recharger();
+      },
+      (e: unknown) => setInfo(e instanceof Error ? e.message : String(e)),
+    );
+  };
   const recharger = () =>
     fetchRadar(slug).then(
       (r) => setRadar(r),
@@ -153,10 +174,15 @@ export function Radar({ slug }: { slug: string }) {
           Campagnes et envois
         </a>
       </div>
+      {info && (
+        <p className="small" role="status">
+          {info}
+        </p>
+      )}
       <RechercheStrategie slug={slug} onAjoute={() => void recharger()} />
       <SequenceReglage slug={slug} />
       <div className="radar-colonnes">
-        {etapes(slug, radar).map((e) => (
+        {etapes(slug, radar, creerAffaire).map((e) => (
           <section key={e.id} className="radar-colonne" aria-label={e.titre}>
             <header>
               <h2>{e.titre}</h2>
@@ -175,7 +201,16 @@ export function Radar({ slug }: { slug: string }) {
                   ))}
                 </>
               );
-              return c.href ? (
+              return c.href && c.action ? (
+                <div key={c.id} className="radar-carte">
+                  <a className="radar-carte-lien" href={c.href}>
+                    {contenu}
+                  </a>
+                  <button className="btn sm" onClick={c.action.fait}>
+                    {c.action.libelle}
+                  </button>
+                </div>
+              ) : c.href ? (
                 <a key={c.id} className="radar-carte radar-carte-lien" href={c.href}>
                   {contenu}
                 </a>
