@@ -16,53 +16,56 @@ const item = (id: string, label: string, icon: string, module?: string): NavItem
   module,
 });
 
+// Groupes dans l'ordre du cycle de vente : détecter des suspects, puis vendre aux prospects (spec du 12 novembre 2026).
 export const NAV: NavGroup[] = [
   {
-    title: 'Pilotage',
+    title: 'Piloter la journée',
     items: [
-      item('routines', 'Routines Claude', 'clock'),
       item('brief', 'Brief du jour', 'sun'),
       item('inbox', 'Inbox', 'inbox'),
-      item('tableau', 'Tableau de bord', 'chart'),
-      item('cerveau', 'Second cerveau', 'brain', 'cerveau'),
+      item('agenda', 'Agenda', 'clock'),
     ],
   },
   {
-    title: 'Stratégie',
+    title: '1 · Détecter',
+    items: [item('prospection', 'Prospection', 'send'), item('bases', 'Bases vivantes', 'db')],
+  },
+  {
+    title: '2 · Vendre',
     items: [
-      item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage'),
+      item('pipeline', 'Pipeline', 'kanban'),
+      item('rendez-vous', 'Rendez-vous', 'cal'),
+      item('devis', 'Devis', 'file', 'devis'),
       // Diagnostic et tests VMA réunis par entreprise (spec du 21 octobre 2026) ; la section s'appelle
       // « Outils et diagnostics » pour accueillir d'autres outils que le diagnostic.
       item('diagnostics', 'Outils et diagnostics', 'radar', 'diagnostic'),
+      item('relais', 'Relais internes', 'users', 'relais'),
+    ],
+  },
+  {
+    title: 'Ma base',
+    items: [
+      item('entreprises', 'Entreprises', 'building'),
+      item('contacts', 'Contacts', 'users'),
       // Atelier de lancement d'un mandat : stratégie, objectifs, ICP, feuille de route (spec du 28 octobre 2026).
       { ...item('atelier', 'Atelier stratégique', 'map', 'atelier'), beta: true },
     ],
   },
   {
-    title: 'Générer la demande',
+    title: "Piloter l'activité",
     items: [
-      item('prospection', 'Prospection', 'send'),
-      item('bases', 'Bases vivantes', 'db'),
-      item('siteweb', 'Site web', 'globe', 'site-web'),
+      item('tableau', 'Tableau de bord', 'chart'),
+      item('cerveau', 'Second cerveau', 'brain', 'cerveau'),
+      item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage'),
     ],
   },
   {
-    title: 'Convertir',
-    items: [
-      item('pipeline', 'Pipeline', 'kanban'),
-      item('entreprises', 'Entreprises', 'building'),
-      item('contacts', 'Contacts', 'users'),
-      item('agenda', 'Agenda', 'clock'),
-      item('rendez-vous', 'Rendez-vous', 'cal'),
-      item('devis', 'Devis', 'file', 'devis'),
-      item('relais', 'Relais internes', 'users', 'relais'),
-    ],
-  },
-  { title: 'Réglages', items: [item('parametres', 'Paramètres', 'gear')] },
-  {
-    title: 'Plus tard',
+    title: 'Plus',
     later: true,
     items: [
+      item('routines', 'Routines Claude', 'clock'),
+      item('siteweb', 'Site web', 'globe', 'site-web'),
+      item('parametres', 'Paramètres', 'gear'),
       item('plan', "Plan d'action", 'map'),
       item('detection', 'Détection', 'pulse'),
       item('autonomie', 'Autonomie', 'sliders'),

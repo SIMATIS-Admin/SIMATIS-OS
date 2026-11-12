@@ -27,8 +27,8 @@ const inst = (
 });
 
 describe('nav', () => {
-  it('has Inbox in Pilotage instead of À valider', () => {
-    const pilotage = NAV.find((g) => g.title === 'Pilotage');
+  it('has Inbox in Piloter la journée instead of À valider', () => {
+    const pilotage = NAV.find((g) => g.title === 'Piloter la journée');
     expect(pilotage?.items.find((i) => i.id === 'inbox')).toMatchObject({
       label: 'Inbox',
       icon: 'inbox',
@@ -54,9 +54,9 @@ describe('nav', () => {
     expect(vueCanonique('tests-vma')).toBe('diagnostics');
   });
 
-  it('a une entrée Atelier stratégique dans Stratégie, bêta, liée au module atelier', () => {
-    const strategie = NAV.find((g) => g.title === 'Stratégie');
-    const entree = strategie?.items.find((i) => i.id === 'atelier');
+  it('a une entrée Atelier stratégique dans Ma base, bêta, liée au module atelier', () => {
+    const maBase = NAV.find((g) => g.title === 'Ma base');
+    const entree = maBase?.items.find((i) => i.id === 'atelier');
     expect(entree).toMatchObject({ label: 'Atelier stratégique', beta: true, module: 'atelier' });
     expect(isBuilt('atelier')).toBe(true);
     expect(allowed(entree!, [])).toBe(false);
