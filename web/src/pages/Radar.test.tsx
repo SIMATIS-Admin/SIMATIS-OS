@@ -12,6 +12,7 @@ const fiche = (id: string, entreprise: string, nom: string) => ({
   nbContacts: 2,
   dernierContactLe: null,
   tags: [] as string[],
+  prochaineRelanceLe: null as string | null,
 });
 const radar: EtatRadar = {
   aEnrichir: { total: 14, fiches: [fiche('a1', 'Atelier Fictif', '')] },
@@ -21,7 +22,19 @@ const radar: EtatRadar = {
       { ...fiche('p1', 'Industrie Fictive', 'Paul Dumont'), tags: ['icp a (simatis)', 'salon'] },
     ],
   },
-  contactes: { total: 63, fiches: [fiche('c1', 'Usinage Fictif', 'Anne Leroux')] },
+  contactes: {
+    total: 63,
+    fiches: [
+      {
+        ...fiche('c1', 'Usinage Fictif', 'Anne Leroux'),
+        prochaineRelanceLe: '2020-01-01T00:00:00Z',
+      },
+      {
+        ...fiche('c2', 'Fonderie Fictive', 'Luc Perrin'),
+        prochaineRelanceLe: '2099-03-17T08:00:00Z',
+      },
+    ],
+  },
   ontRepondu: { total: 0, fiches: [] },
   reprise: {
     total: 42,
@@ -96,6 +109,19 @@ describe('Radar', () => {
     const prets = await screen.findByRole('region', { name: 'Prêts à contacter' });
     expect(within(prets).getByText('ICP A (SIMATIS)')).toBeTruthy();
     expect(within(prets).queryByText(/salon/i)).toBeNull();
+  });
+
+  it('indique la prochaine relance de chaque contact de la séquence', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(radar)))),
+    );
+    render(<Radar slug="simatis" />);
+    const colonne = await screen.findByRole('region', { name: 'Contactés' });
+    expect(within(colonne).getByText(/Usinage Fictif · 2 touches · relance possible/)).toBeTruthy();
+    expect(
+      within(colonne).getByText(/Fonderie Fictive · 2 touches · relance le 17 mars/),
+    ).toBeTruthy();
   });
 
   it('garde les écrans Prospection et Bases vivantes accessibles', async () => {

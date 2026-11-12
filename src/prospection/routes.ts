@@ -1,3 +1,4 @@
+import { cumul, lireSequence, sauverSequence, schemaSequence } from './sequence.js';
 import {
   lireRoutineBrouillons,
   sauverRoutineBrouillons,
@@ -164,6 +165,30 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
       envoiPossible: canWriteReal(instance, connexionDeps.realWrites),
     }));
   });
+
+  // Les délais entre les touches de la séquence à froid (J+4, J+9, J+15 par défaut).
+  app.get<{ Params: { slug: string } }>(
+    '/api/i/:slug/prospection/sequence',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      const { delais } = await lireSequence(db, instance.id);
+      return { delais, cumul: cumul(delais) };
+    },
+  );
+
+  app.put<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/sequence',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      const p = schemaSequence.safeParse(request.body);
+      if (!p.success)
+        return invalide(reply, 'Délais invalides : de 1 à 60 jours, 5 touches au plus.');
+      const { delais } = await sauverSequence(db, instance.id, p.data);
+      return { delais, cumul: cumul(delais) };
+    },
+  );
 
   app.put<{ Params: { slug: string }; Body: unknown }>(
     '/api/i/:slug/prospection/objectif',

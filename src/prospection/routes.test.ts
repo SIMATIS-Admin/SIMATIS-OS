@@ -72,6 +72,33 @@ describe('Routes de la prospection', () => {
     ).toBe(false);
   });
 
+  it('règle les délais de la séquence puis les relit, par espace, 400 si invalides', async () => {
+    const defaut = await app.inject({ method: 'GET', url: `${base}/sequence` });
+    expect(defaut.json()).toEqual({ delais: [4, 5, 6], cumul: [4, 9, 15] });
+    const ok = await app.inject({
+      method: 'PUT',
+      url: `${base}/sequence`,
+      payload: { delais: [3, 7] },
+    });
+    expect(ok.json()).toEqual({ delais: [3, 7], cumul: [3, 10] });
+    expect((await app.inject({ method: 'GET', url: `${base}/sequence` })).json()).toEqual({
+      delais: [3, 7],
+      cumul: [3, 10],
+    });
+    const autre = await app.inject({
+      method: 'GET',
+      url: '/api/i/prosp-autre/prospection/sequence',
+    });
+    expect(autre.json()).toEqual({ delais: [4, 5, 6], cumul: [4, 9, 15] });
+    for (const mauvais of [{ delais: [] }, { delais: [0] }, { delais: [1, 2, 3, 4, 5, 6] }, {}]) {
+      const r = await app.inject({ method: 'PUT', url: `${base}/sequence`, payload: mauvais });
+      expect(r.statusCode).toBe(400);
+    }
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/i/inconnue/prospection/sequence' })).statusCode,
+    ).toBe(404);
+  });
+
   it('404 sur une instance inconnue', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/i/inconnue/prospection' });
     expect(r.statusCode).toBe(404);

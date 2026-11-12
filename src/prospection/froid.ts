@@ -1,9 +1,10 @@
 import { MOTIF_EMAIL_GENERIQUE } from '../base-vivante/nettoyage.js';
-import { and, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { baseVivante } from '../base-vivante/schema.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { logEvent } from '../journal/service.js';
+import { delaisCourants } from './sequence.js';
 import { CampagneInvalide, MAX_TACHES_CAMPAGNE, verifierReglage } from './campagnes.js';
 import {
   prospectionBrouillons,
@@ -12,8 +13,6 @@ import {
   type ReglageCampagne,
 } from './schema.js';
 
-// Un contact touché doit laisser passer ce délai avant d'être proposé à nouveau.
-export const JOURS_ENTRE_TOUCHES = 14;
 const LIGNES_MAX = 20_000;
 
 const normaliser = (s: string) =>
@@ -34,7 +33,7 @@ export type ContactFroid = {
 // Qui peut recevoir un mail à froid : prospectable, joignable, sans opposition ni exclusion, qui n'a
 // pas répondu, et soit jamais contacté (nulle part : ni dans l'OS, ni dans le CRM d'un mandat),
 // soit en cours de séquence dans l'OS (délai écoulé, plafond de touches non atteint, pas épuisé).
-const eligibles = (maintenant: Date) =>
+const eligibles = (maintenant: Date, delais: number[]) =>
   and(
     eq(baseVivante.instanceId, currentInstance),
     eq(baseVivante.zone, 'prospectable'),
@@ -51,10 +50,11 @@ const eligibles = (maintenant: Date) =>
         sql`${prospectionSuiviFroid.touches} < ${prospectionSuiviFroid.touchesMax}`,
         or(
           isNull(prospectionSuiviFroid.derniereLe),
-          lte(
-            prospectionSuiviFroid.derniereLe,
-            new Date(maintenant.getTime() - JOURS_ENTRE_TOUCHES * 86400_000),
-          ),
+          // Le délai dépend de la touche déjà reçue (J+4, J+9, J+15…) : le dernier vaut ensuite.
+          sql`${prospectionSuiviFroid.derniereLe} <= ${maintenant}::timestamptz - (case ${prospectionSuiviFroid.touches} ${sql.join(
+            delais.map((d, i) => sql`when ${i + 1}::int then ${d}::int`),
+            sql` `,
+          )} else ${delais[delais.length - 1] ?? 4}::int end) * interval '1 day'`,
         ),
       ),
     ),
@@ -99,7 +99,9 @@ export async function echantillonFroid(
   { nombre, filtre }: { nombre: number; filtre?: string },
   maintenant = new Date(),
 ): Promise<ContactFroid[]> {
-  const lignes = await joindre(tx).where(eligibles(maintenant)).limit(LIGNES_MAX);
+  const lignes = await joindre(tx)
+    .where(eligibles(maintenant, await delaisCourants(tx)))
+    .limit(LIGNES_MAX);
   const f = filtre ? normaliser(filtre.trim()) : '';
   const retenus = f
     ? lignes.filter((c) =>
@@ -124,7 +126,7 @@ export async function destinataireFroidToujoursEligible(
   brouillon: { baseId: string; contactEmail: string; touche: number },
 ): Promise<boolean> {
   const [fiche] = await joindre(tx).where(
-    and(eq(baseVivante.id, brouillon.baseId), eligibles(new Date())),
+    and(eq(baseVivante.id, brouillon.baseId), eligibles(new Date(), await delaisCourants(tx))),
   );
   return (
     !!fiche &&
@@ -148,7 +150,7 @@ export async function creerCampagneFroid(
   }
   await verifierReglage(tx, input.reglage);
   const eligiblesDuLot = await joindre(tx).where(
-    and(inArray(baseVivante.id, ids), eligibles(maintenant)),
+    and(inArray(baseVivante.id, ids), eligibles(maintenant, await delaisCourants(tx))),
   );
   const enAttente = await tx
     .select({ baseId: prospectionBrouillons.baseId })
@@ -266,7 +268,9 @@ export async function compterFroid(
   tx: Executor,
   maintenant = new Date(),
 ): Promise<{ disponibles: number; aRelancer: number }> {
-  const lignes = await joindre(tx).where(eligibles(maintenant)).limit(LIGNES_MAX);
+  const lignes = await joindre(tx)
+    .where(eligibles(maintenant, await delaisCourants(tx)))
+    .limit(LIGNES_MAX);
   const aRelancer = lignes.filter((c) => (c.touches ?? 0) > 0).length;
   return { disponibles: lignes.length - aRelancer, aRelancer };
 }

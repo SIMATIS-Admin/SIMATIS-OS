@@ -80,7 +80,12 @@ describe('Radar : colonnes de la base vivante', () => {
         { entreprise: 'Suivi Sans Touche', nom: 'Vide', email: 'vide@exemple.test' },
       ]);
       await tx.insert(prospectionSuiviFroid).values([
-        { instanceId: autre.id, baseId: r[1]!.id, touches: 2 },
+        {
+          instanceId: autre.id,
+          baseId: r[1]!.id,
+          touches: 2,
+          derniereLe: new Date(Date.now() - 2 * 86_400_000),
+        },
         { instanceId: autre.id, baseId: r[2]!.id, touches: 0 },
       ]);
       return r;
@@ -90,6 +95,10 @@ describe('Radar : colonnes de la base vivante', () => {
     expect(radar.contactes.fiches.map((f) => [f.entreprise, f.nbContacts])).toEqual([
       ['Déjà Touchée', 2],
     ]);
+    // 2 touches reçues il y a 2 jours, délai de 5 jours après la 2e : prochaine touche dans 3 jours.
+    const prochaine = Date.parse(radar.contactes.fiches[0]?.prochaineRelanceLe ?? '');
+    expect(Math.round((prochaine - Date.now()) / 86_400_000)).toBe(3);
+    expect(radar.prets.fiches.every((f) => f.prochaineRelanceLe === null)).toBe(true);
     expect(radar.prets.fiches.map((f) => f.entreprise).sort()).toEqual([
       'Jamais Touchée',
       'Suivi Sans Touche',
