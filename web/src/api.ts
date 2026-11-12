@@ -449,7 +449,13 @@ export type EtatRadar = {
   };
   rdvAccepte: {
     total: number;
-    fiches: { id: string; nom: string; entreprise: string | null; fonction: string | null }[];
+    fiches: {
+      id: string;
+      nom: string;
+      entreprise: string | null;
+      fonction: string | null;
+      oppsOuvertes: number;
+    }[];
   };
 };
 export type ChampCiblage = { cle: string; valeur: string };
@@ -472,6 +478,12 @@ export const fetchSequence = (slug: string) =>
   getJson<SequenceFroid>(inst(slug, 'prospection/sequence'));
 export const enregistrerSequence = (slug: string, delais: number[]) =>
   sendJson<SequenceFroid>('PUT', inst(slug, 'prospection/sequence'), { delais });
+export const creerAffaireContact = (slug: string, contactId: string) =>
+  sendJson<{ id?: string; simulation?: boolean; message?: string }>(
+    'POST',
+    inst(slug, `contacts/${encodeURIComponent(contactId)}/affaire`),
+    {},
+  );
 export const fetchRadar = (slug: string) => getJson<EtatRadar>(inst(slug, 'radar'));
 
 export const fetchContacts = (slug: string, q: string) =>

@@ -1,3 +1,4 @@
+import { creerAffairePourContact } from '../crm/affaire-contact.js';
 import { and, count, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -1689,6 +1690,22 @@ export function registerApi(
         );
       } catch (error) {
         if (error instanceof ChangementInvalide || error instanceof FicheInvalide)
+          return reply.code(400).send({ error: error.message });
+        if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+
+  // Un prospect qui a un rendez-vous entre dans le Pipeline : son affaire, à la première étape.
+  app.post<SlugParams & { Params: { id: string } }>(
+    '/api/i/:slug/contacts/:id/affaire',
+    onInstance<SlugParams & { Params: { id: string } }>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Contact invalide' });
+      try {
+        return await creerAffairePourContact(db, i, request.params.id, connexionDeps);
+      } catch (error) {
+        if (error instanceof ChangementInvalide)
           return reply.code(400).send({ error: error.message });
         if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
         throw error;

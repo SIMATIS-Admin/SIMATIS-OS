@@ -385,6 +385,7 @@ export function registerBaseVivanteRoutes(
             nom: c.nom,
             entreprise: c.entreprise,
             fonction: c.fonction,
+            oppsOuvertes: c.oppsOuvertes,
           })),
         },
       };

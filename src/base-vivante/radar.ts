@@ -3,6 +3,7 @@ import type { Executor } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { prospectionSuiviFroid } from '../prospection/schema.js';
 import { lireSequence, prochaineTouche } from '../prospection/sequence.js';
+import { rdvObtenu } from './rdv-obtenu.js';
 import { baseVivante } from './schema.js';
 import { aEnrichir } from './service.js';
 
@@ -31,6 +32,8 @@ const exploitable = (): SQL[] => [
   eq(baseVivante.opposition, false),
   isNull(baseVivante.exclusion),
   sql`trim(${baseVivante.nom}) <> ''`,
+  // Une personne qui a obtenu un rendez-vous est passée dans « RDV accepté » : plus dans la séquence.
+  sql`not ${rdvObtenu}`,
 ];
 
 // Touches de prospection à froid déjà envoyées à la fiche : le suivi de séquence les compte, alors

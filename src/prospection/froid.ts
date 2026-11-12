@@ -1,5 +1,6 @@
 import { MOTIF_EMAIL_GENERIQUE } from '../base-vivante/nettoyage.js';
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { rdvObtenu } from '../base-vivante/rdv-obtenu.js';
 import { baseVivante } from '../base-vivante/schema.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -43,6 +44,8 @@ const eligibles = (maintenant: Date, delais: number[]) =>
     eq(baseVivante.opposition, false),
     isNull(baseVivante.exclusion),
     ne(baseVivante.statutProspection, 'a_repondu'),
+    // Un rendez-vous obtenu met fin à la séquence.
+    sql`not ${rdvObtenu}`,
     or(
       and(isNull(prospectionSuiviFroid.id), eq(baseVivante.statutProspection, 'jamais_contacte')),
       and(

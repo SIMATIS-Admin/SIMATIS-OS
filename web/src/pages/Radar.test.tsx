@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EtatRadar } from '../api.js';
 import { Radar } from './Radar.js';
@@ -42,7 +42,22 @@ const radar: EtatRadar = {
   },
   rdvAccepte: {
     total: 1,
-    fiches: [{ id: 'r1', nom: 'Alice Fictive', entreprise: 'Bureau Fictif', fonction: null }],
+    fiches: [
+      {
+        id: 'r1',
+        nom: 'Alice Fictive',
+        entreprise: 'Bureau Fictif',
+        fonction: null,
+        oppsOuvertes: 0,
+      },
+      {
+        id: 'r2',
+        nom: 'Bruno Fictif',
+        entreprise: 'Usine Fictive',
+        fonction: null,
+        oppsOuvertes: 1,
+      },
+    ],
   },
 };
 
@@ -122,6 +137,51 @@ describe('Radar', () => {
     expect(
       within(colonne).getByText(/Fonderie Fictive · 2 touches · relance le 17 mars/),
     ).toBeTruthy();
+  });
+
+  it("propose de créer l'affaire d'un prospect qui n'en a pas, et crée sans doublonner", async () => {
+    const appels: { url: string; method?: string }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string }) => {
+        appels.push({ url, method: init?.method });
+        return Promise.resolve(
+          new Response(JSON.stringify(init?.method === 'POST' ? { id: 'aff-1' } : radar)),
+        );
+      }),
+    );
+    render(<Radar slug="simatis" />);
+    const colonne = await screen.findByRole('region', { name: 'RDV accepté' });
+    // Alice n'a pas d'affaire : bouton. Bruno en a une : pas de bouton.
+    const boutons = within(colonne).getAllByRole('button', { name: 'Créer l’affaire' });
+    expect(boutons).toHaveLength(1);
+    expect(within(colonne).getByRole('link', { name: /Bruno Fictif/ })).toBeTruthy();
+    fireEvent.click(boutons[0]!);
+    expect(await screen.findByText('Affaire créée à la première étape du Pipeline.')).toBeTruthy();
+    expect(appels.some((c) => c.method === 'POST' && c.url.endsWith('/contacts/r1/affaire'))).toBe(
+      true,
+    );
+  });
+
+  it("dit clairement quand l'écriture réelle est fermée et que rien n'a été créé", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: { method?: string }) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(
+              init?.method === 'POST'
+                ? { simulation: true, message: 'Simulation : écriture HubSpot fermée.' }
+                : radar,
+            ),
+          ),
+        ),
+      ),
+    );
+    render(<Radar slug="simatis" />);
+    const colonne = await screen.findByRole('region', { name: 'RDV accepté' });
+    fireEvent.click(within(colonne).getByRole('button', { name: 'Créer l’affaire' }));
+    expect(await screen.findByText('Simulation : écriture HubSpot fermée.')).toBeTruthy();
   });
 
   it('garde les écrans Prospection et Bases vivantes accessibles', async () => {
