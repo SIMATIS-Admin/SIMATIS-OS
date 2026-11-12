@@ -33,6 +33,7 @@ import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { PropositionDetail } from './inbox/Proposition.js';
 import { CompteRendu } from './inbox/CompteRendu.js';
 import { ReponseCampagneCarte } from './inbox/ReponseCampagne.js';
+import { ReponsePreparee } from './inbox/ReponsePreparee.js';
 import { EditionTache } from './taches/Edition.js';
 import { MessagePartage } from './NoteCerveau.js';
 
@@ -497,6 +498,9 @@ function Detail({
             destinataire={s.livreBlanc.email}
             onEnvoyer={onLivreBlanc}
           />
+        )}
+        {s.statut === 'a_traiter' && s.reponsePreparee && (
+          <ReponsePreparee key={`reponse-preparee-${s.id}`} reponse={s.reponsePreparee} />
         )}
         {s.statut === 'a_traiter' && s.type === 'mail_a_repondre' && (
           <ReponseCampagneCarte key={`reponse-${s.id}`} slug={s.instance.slug} sujetId={s.id} />

@@ -6920,3 +6920,15 @@ div.pb-ligne {
   border-top: 1px solid var(--line);
   padding-top: 24px;
 }
+
+/* Réponse préparée par la routine, dans le détail d'une entrée de l'Inbox. */
+.reponse-preparee {
+  margin-bottom: 12px;
+}
+.reponse-texte {
+  white-space: pre-wrap;
+  font: inherit;
+  margin: 8px 0;
+  max-height: 240px;
+  overflow: auto;
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "sujets" ADD COLUMN "reponse_preparee" jsonb;

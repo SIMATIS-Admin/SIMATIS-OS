@@ -624,6 +624,13 @@
       "when": 1794239511701,
       "tag": "0088_brief_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1794478647487,
+      "tag": "0089_volatile_mentallo",
+      "breakpoints": true
     }
   ]
 }
