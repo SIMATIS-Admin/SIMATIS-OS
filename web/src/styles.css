@@ -267,12 +267,14 @@ a {
   padding-right: 10px;
 }
 /* Les boutons étoile et ordre n'apparaissent qu'au survol : la place n'est réservée qu'alors. */
+/* :focus-visible et non :focus-within : un clic souris laisse le focus sur le lien, et les boutons
+   restaient alors affichés (et le libellé tronqué) sur une ligne que la souris a quittée. */
 .nav-entry:has(.fav):hover > a,
-.nav-entry:has(.fav):focus-within > a {
+.nav-entry:has(.fav):has(:focus-visible) > a {
   padding-right: 36px;
 }
 .nav-entry:has(.fav-order):hover > a,
-.nav-entry:has(.fav-order):focus-within > a {
+.nav-entry:has(.fav-order):has(:focus-visible) > a {
   padding-right: 136px;
 }
 .nav a:hover {
@@ -324,7 +326,7 @@ a {
   height: 14px;
 }
 .nav-entry:hover .fav,
-.nav-entry:focus-within .fav {
+.nav-entry:has(:focus-visible) .fav {
   opacity: 1;
 }
 .nav .fav:hover {
@@ -353,11 +355,42 @@ a {
   right: 44px;
 }
 .nav-entry:hover .fav-order,
-.nav-entry:focus-within .fav-order {
+.nav-entry:has(:focus-visible) .fav-order {
   opacity: 1;
+}
+/* À la souris, trois boutons de 44 px mangent 136 px de la ligne : 32 px suffisent (WCAG 2.5.8). */
+@media (hover: hover) and (pointer: fine) {
+  .nav .fav,
+  .nav .fav-order {
+    top: 6px;
+    width: 32px;
+    height: 32px;
+  }
+  .nav .fav-order.up {
+    right: 64px;
+  }
+  .nav .fav-order.down {
+    right: 32px;
+  }
+  .nav-entry:has(.fav):hover > a,
+  .nav-entry:has(.fav):has(:focus-visible) > a {
+    padding-right: 36px;
+  }
+  .nav-entry:has(.fav-order):hover > a,
+  .nav-entry:has(.fav-order):has(:focus-visible) > a {
+    padding-right: 100px;
+  }
 }
 .nav .fav-order:hover {
   background: var(--navy-3);
+  color: var(--white);
+}
+/* Sur la ligne active (fond clair), le gris clair des boutons ne se lit plus. */
+.nav-entry:has(> a.on) .fav-order,
+.nav-entry:has(> a.on) .fav:not(.on) {
+  color: var(--navy);
+}
+.nav-entry:has(> a.on) .fav-order:hover {
   color: var(--white);
 }
 .nav .fav-order.up svg {
@@ -1005,6 +1038,12 @@ textarea.input {
   cursor: pointer;
   font: inherit;
   text-align: left;
+}
+/* Lien ou lien-bouton posé seul, hors d'un paragraphe : zone cliquable d'au moins 24 px (WCAG 2.5.8). */
+.lien-seul {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
 }
 .tasks {
   list-style: none;
@@ -6395,14 +6434,13 @@ div.pb-ligne {
   font-weight: 700;
   line-height: 1.3;
 }
-.bv-parcours .panel {
-  border-width: 2px;
-}
+/* Un seul parcours est mis en avant : la recherche. L'import reste une carte ordinaire. */
 .bv-parcours-recherche {
+  border-width: 2px;
   border-color: var(--navy);
 }
-.bv-parcours-import {
-  border-color: var(--teal);
+.bv-parcours-import .bv-parcours-actions {
+  margin-top: 0;
 }
 .bv-parcours .panel-b {
   display: flex;

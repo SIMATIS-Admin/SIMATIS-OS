@@ -333,7 +333,6 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
         <div className="panel" style={{ border: '2px solid var(--teal)' }}>
           <div className="panel-b">
             <h2 style={{ marginTop: 0 }}>Prospecter à froid</h2>
-            <a href={`#/${slug}/bases`}>Ouvrir la Base vivante</a>
             <p className="small muted">
               Vous tirez un échantillon de la base vivante, l'OS rédige un mail par contact.
             </p>
@@ -343,9 +342,14 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
               {vue.froid.disponibles > 1 ? 's' : ''} · <b className="num">{vue.froid.aRelancer}</b>{' '}
               à relancer
             </p>
-            <button className="btn go" onClick={() => setEtape({ nom: 'choix-froid' })}>
-              Tirer un échantillon
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <button className="btn go" onClick={() => setEtape({ nom: 'choix-froid' })}>
+                Tirer un échantillon
+              </button>
+              <a className="link lien-seul" href={`#/${slug}/bases`}>
+                Ouvrir la Base vivante
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -406,7 +410,7 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
                     <td className="r num">{c.envoyes ?? 0}</td>
                     <td style={{ paddingLeft: 24 }}>
                       {c.statut !== 'terminee' && (
-                        <span style={{ display: 'inline-flex', gap: 8 }}>
+                        <span style={{ display: 'inline-flex', gap: 20 }}>
                           <button
                             className="btn sm primary"
                             aria-label="Reprendre la campagne"
