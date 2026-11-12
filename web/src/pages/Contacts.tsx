@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   createContact,
   fetchContacts,
+  fetchSuspectsBase,
+  type SuspectBase,
   fetchEntreprises,
   type Contact,
   type Entreprise,
@@ -19,6 +21,7 @@ import {
 } from './commercial/commun.js';
 import { ApercuCommercial, type ReferenceCommerciale } from './commercial/Apercu.js';
 import { SearchBox } from './SearchBox.js';
+import { SuspectsBase } from './commercial/SuspectsBase.js';
 import {
   correspondAuStatut,
   FiltreStatut,
@@ -125,6 +128,7 @@ export function Contacts({ slug }: { slug: string }) {
   const [statut, setStatut] = useChoixCommercial<ChoixStatut>(`${slug}.contacts.statut`, 'tous');
   const [apercu, setApercu] = useState<ReferenceCommerciale | null>(null);
   const [list, setList] = useState<Contact[] | null>(null);
+  const [suspectsBase, setSuspectsBase] = useState<SuspectBase[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [version, setVersion] = useState(0);
@@ -144,6 +148,11 @@ export function Contacts({ slug }: { slug: string }) {
     fetchContacts(slug, q).then(
       (rows) => alive && (setList(rows), setError(null)),
       (e: unknown) => alive && setError(String(e)),
+    );
+    // Les Bases vivantes sont un complément : sans elles, la liste du CRM reste utilisable.
+    fetchSuspectsBase(slug, q).then(
+      (rows) => alive && setSuspectsBase(rows),
+      () => alive && setSuspectsBase([]),
     );
     return () => {
       alive = false;
@@ -166,7 +175,11 @@ export function Contacts({ slug }: { slug: string }) {
           Nouveau contact
         </button>
       </EnteteCommercial>
-      <FiltreStatut lignes={list} valeur={statut} onChange={setStatut} />
+      <FiltreStatut
+        lignes={list && [...list, ...suspectsBase.map(() => ({ statut: 'suspect' as const }))]}
+        valeur={statut}
+        onChange={setStatut}
+      />
       <nav className="com-onglets" aria-label="Vues des contacts">
         {(
           [
@@ -287,7 +300,12 @@ export function Contacts({ slug }: { slug: string }) {
             ]}
           />
         )}
-        {visibles?.length === 0 && <p className="empty">Aucun contact ne correspond.</p>}
+        {visibles?.length === 0 && suspectsBase.length === 0 && (
+          <p className="empty">Aucun contact ne correspond.</p>
+        )}
+        {(statut === 'tous' || statut === 'suspect') && filtre === 'tous' && (
+          <SuspectsBase slug={slug} suspects={suspectsBase} />
+        )}
       </div>
       {apercu && (
         <ApercuCommercial
