@@ -7,6 +7,7 @@ import { Gauge, Tip } from '../widgets.js';
 const TYPE_LIBELLE: Record<string, string> = {
   'email.brouillon': 'Brouillon',
   'crm.tache': 'Tâche CRM',
+  'rdv.creer': 'Rendez-vous',
   'note.second_cerveau': 'Second cerveau',
   'devis.transmettre': 'Transmission de devis',
   'partenaire.mission': 'Mission partenaire',
@@ -163,6 +164,41 @@ export function PropositionDetail({
             </div>
           </>
         )}
+        {p.type === 'rdv.creer' && (
+          <div className="meta-row">
+            {typeof p.contenu.debut === 'string' && (
+              <span>
+                Début :{' '}
+                <b>
+                  {new Date(p.contenu.debut).toLocaleString('fr-FR', {
+                    timeZone: 'Europe/Paris',
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </b>
+              </span>
+            )}
+            {typeof p.contenu.dureeMinutes === 'number' && (
+              <span>
+                Durée : <b>{p.contenu.dureeMinutes} min</b>
+              </span>
+            )}
+            {str(p.contenu.lieu) && (
+              <span>
+                Lieu : <b>{str(p.contenu.lieu)}</b>
+              </span>
+            )}
+            {p.contact && (
+              <span>
+                Contact : <b>{p.contact.nom}</b>
+                {p.contact.entreprise ? `, ${p.contact.entreprise}` : ''}
+              </span>
+            )}
+          </div>
+        )}
         {p.type === 'note.second_cerveau' && (
           <>
             <p>{str(p.contenu.texte)}</p>
@@ -206,15 +242,17 @@ export function PropositionDetail({
                 ? 'Créer le brouillon dans la boîte mail'
                 : p.type === 'crm.tache'
                   ? 'Créer la tâche'
-                  : p.type === 'devis.transmettre'
-                    ? 'Transmettre le devis'
-                    : p.type === 'partenaire.mission_recue'
-                      ? 'Accepter la mission'
-                      : p.type === 'partenaire.suppression'
-                        ? 'Supprimer ici aussi'
-                        : p.type.startsWith('partenaire.')
-                          ? 'Envoyer au partenaire'
-                          : 'Enregistrer en brouillon'}
+                  : p.type === 'rdv.creer'
+                    ? 'Créer le rendez-vous'
+                    : p.type === 'devis.transmettre'
+                      ? 'Transmettre le devis'
+                      : p.type === 'partenaire.mission_recue'
+                        ? 'Accepter la mission'
+                        : p.type === 'partenaire.suppression'
+                          ? 'Supprimer ici aussi'
+                          : p.type.startsWith('partenaire.')
+                            ? 'Envoyer au partenaire'
+                            : 'Enregistrer en brouillon'}
             </button>
             {p.type === 'email.brouillon' && (
               <button className="btn" onClick={() => setEdition(!edition)}>

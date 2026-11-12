@@ -47,6 +47,7 @@ export const AUTONOMIE: AutonomieDef[] = [
     limite: 'Toujours avec simulation et instantané.',
   }),
   def('tache', 'Créer ou modifier une tâche CRM', 'L2'),
+  def('rdv', 'Créer un rendez-vous dans l’agenda', 'L2'),
   def('cloture', 'Clôturer une tâche prouvée par un envoi réel', 'L3'),
   def('devis', 'Préparer un devis, fixer un prix ou une remise', 'L1', {
     max: 'L1',

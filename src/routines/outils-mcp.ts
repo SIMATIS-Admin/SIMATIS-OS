@@ -9,6 +9,7 @@ import { currentInstance } from '../db/columns.js';
 import { registerTool, type ToolCtx } from '../mcp/tools.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
+import '../conversion/types-rdv.js';
 import { propose } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { paramsOf, ROUTINES, rythme } from './params.js';
@@ -282,6 +283,38 @@ registerTool({
       ctx.tx,
       { instance: ctx.instance, realWrites: ctx.deps.realWrites, secretsDir: ctx.deps.secretsDir },
       { type: 'crm.tache', auteur: ctx.acteur, contenu: { ...input, origine: 'Routine Claude' } },
+    ),
+});
+
+registerTool({
+  name: 'proposer_rendez_vous',
+  description:
+    "Propose de créer un rendez-vous (titre, début, durée, lieu, contact) quand une réponse ou un mail accepte un créneau. Il attend la validation du pilote dans le Cockpit : tant qu'il n'a pas validé, rien n'est écrit dans l'OS ni dans l'agenda. La date est celle que le mail confirme, jamais une date devinée.",
+  input: z.object({
+    titre: z.string().trim().min(1).max(300),
+    debut: z.iso.datetime({ offset: true }).describe('Début, avec le fuseau horaire'),
+    dureeMinutes: z.number().int().min(5).max(1440).default(60),
+    lieu: z.string().trim().max(300).optional(),
+    contactId: z.uuid().optional(),
+    executionId: execution,
+  }),
+  scope: 'instance',
+  handler: async (ctx, input) =>
+    propose(
+      ctx.tx,
+      { instance: ctx.instance, realWrites: ctx.deps.realWrites, secretsDir: ctx.deps.secretsDir },
+      {
+        type: 'rdv.creer',
+        auteur: ctx.acteur,
+        contenu: {
+          titre: input.titre,
+          debut: new Date(input.debut).toISOString(),
+          dureeMinutes: input.dureeMinutes,
+          lieu: input.lieu ?? null,
+          contactId: input.contactId ?? null,
+          origine: 'Routine Claude',
+        },
+      },
     ),
 });
 

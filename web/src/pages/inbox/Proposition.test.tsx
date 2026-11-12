@@ -37,6 +37,33 @@ describe('Inbox : proposition pour un OS partenaire', () => {
     expect(onDecide).toHaveBeenCalledWith('valider', undefined);
   });
 
+  it('shows the date, duration, place and contact of a proposed meeting, and creates it on validation', () => {
+    const onDecide = vi.fn();
+    render(
+      <PropositionDetail
+        p={{
+          ...base,
+          type: 'rdv.creer',
+          contenu: {
+            titre: 'Point avec Alice',
+            debut: '2026-11-17T09:00:00.000Z',
+            dureeMinutes: 30,
+            lieu: 'Visio',
+          },
+          contact: { id: 'c-1', nom: 'Alice Fictive', entreprise: 'Société Fictive' },
+        }}
+        onDecide={onDecide}
+      />,
+    );
+    expect(screen.getByText('Point avec Alice')).toBeTruthy();
+    expect(screen.getByText('30 min')).toBeTruthy();
+    expect(screen.getByText('Visio')).toBeTruthy();
+    expect(screen.getByText(/mardi 17 novembre/)).toBeTruthy();
+    expect(screen.getByText('Alice Fictive')).toBeTruthy();
+    fireEvent.click(screen.getByText('Créer le rendez-vous'));
+    expect(onDecide).toHaveBeenCalledWith('valider', undefined);
+  });
+
   it('names a free message by its subject and shows its text', () => {
     render(
       <PropositionDetail

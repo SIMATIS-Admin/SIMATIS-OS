@@ -85,6 +85,7 @@ const texte = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
 export function titreProposition(p: Pick<Proposition, 'type' | 'contenu'>): string {
   const c = (p.contenu ?? {}) as Record<string, unknown>;
   const numero = texte(c.numero);
+  if (p.type === 'rdv.creer') return `Créer le rendez-vous : ${texte(c.titre) ?? 'sans titre'}`;
   if (p.type === 'partenaire.message') {
     return `Message à ${texte(c.partenaire) ?? 'un partenaire'} : ${String(c.sujet)}`;
   }
