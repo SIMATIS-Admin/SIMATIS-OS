@@ -19,6 +19,12 @@ import {
 import { ApercuCommercial, type ReferenceCommerciale } from './commercial/Apercu.js';
 import { Icon } from '../icons.js';
 import { SearchBox } from './SearchBox.js';
+import {
+  correspondAuStatut,
+  FiltreStatut,
+  LIBELLE_STATUT,
+  type ChoixStatut,
+} from './commercial/FiltreStatut.js';
 
 export function NouvelleEntreprise({
   slug,
@@ -80,6 +86,7 @@ export function NouvelleEntreprise({
 export function Entreprises({ slug }: { slug: string }) {
   const [q, setQ] = useChoixCommercial(`${slug}.entreprises.recherche`, '');
   const [filtre, setFiltre] = useChoixCommercial(`${slug}.entreprises.filtre`, 'toutes');
+  const [statut, setStatut] = useChoixCommercial<ChoixStatut>(`${slug}.entreprises.statut`, 'tous');
   const [vue, setVue] = useChoixCommercial(`${slug}.entreprises.vue.v2`, 'liste');
   const [apercu, setApercu] = useState<ReferenceCommerciale | null>(null);
   const [list, setList] = useState<Entreprise[] | null>(null);
@@ -108,17 +115,19 @@ export function Entreprises({ slug }: { slug: string }) {
     };
   }, [slug, q, version]);
 
-  const visibles = list?.filter((e) =>
-    filtre === 'affaires'
-      ? e.oppsOuvertes > 0
-      : filtre === 'sans'
-        ? !e.prochaineActivite
-        : filtre === 'sans-contact'
-          ? e.nbContacts === 0
-          : filtre === 'sans-nom'
-            ? /^Entreprise HubSpot \d+$/.test(e.nom)
-            : true,
-  );
+  const visibles = list
+    ?.filter((e) => correspondAuStatut(e, statut))
+    .filter((e) =>
+      filtre === 'affaires'
+        ? e.oppsOuvertes > 0
+        : filtre === 'sans'
+          ? !e.prochaineActivite
+          : filtre === 'sans-contact'
+            ? e.nbContacts === 0
+            : filtre === 'sans-nom'
+              ? /^Entreprise HubSpot \d+$/.test(e.nom)
+              : true,
+    );
   return (
     <section className="commercial-page com-entreprises">
       <EnteteCommercial description="Les personnes, les affaires et le prochain échange de chaque entreprise.">
@@ -139,6 +148,7 @@ export function Entreprises({ slug }: { slug: string }) {
           Nouvelle entreprise
         </button>
       </EnteteCommercial>
+      <FiltreStatut lignes={list} valeur={statut} onChange={setStatut} />
       <nav className="com-onglets" aria-label="Vues des entreprises">
         {(
           [
@@ -237,6 +247,7 @@ export function Entreprises({ slug }: { slug: string }) {
                   </button>
                 ),
               },
+              { cle: 'statut', label: 'Statut', valeur: (e) => LIBELLE_STATUT[e.statut] },
               { cle: 'secteur', label: 'Secteur', valeur: (e) => e.secteur },
               { cle: 'ville', label: 'Ville', valeur: (e) => e.ville, edition: { champ: 'ville' } },
               {

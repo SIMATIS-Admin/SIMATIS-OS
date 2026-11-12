@@ -64,10 +64,10 @@ export function ProchaineActivite({ date }: { date: string | null }) {
 }
 
 // Search and view choices survive a visit to a complete record, without changing its URL.
-export function useChoixCommercial(cle: string, defaut: string) {
-  const [valeur, setValeur] = useState(() => {
+export function useChoixCommercial<T extends string = string>(cle: string, defaut: NoInfer<T>) {
+  const [valeur, setValeur] = useState<T>(() => {
     try {
-      return sessionStorage.getItem(`simatis.commercial.${cle}`) ?? defaut;
+      return (sessionStorage.getItem(`simatis.commercial.${cle}`) as T | null) ?? defaut;
     } catch {
       return defaut;
     }

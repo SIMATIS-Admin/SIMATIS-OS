@@ -1,7 +1,10 @@
 import type { InstanceSummary } from './nav.js';
 
+export type StatutCommercial = 'suspect' | 'prospect' | 'client';
+
 export type Entreprise = {
   id: string;
+  statut: StatutCommercial;
   nom: string;
   secteur: string | null;
   ville: string | null;
@@ -43,6 +46,7 @@ export type FicheContact = {
 
 export type Contact = {
   id: string;
+  statut: StatutCommercial;
   nom: string;
   fonction: string | null;
   email: string | null;
@@ -71,6 +75,17 @@ export type LigneConsole = {
   texte: string;
 };
 export type ConsoleOS = { lignes: LigneConsole[]; enCours: boolean };
+
+export type LimiteIA = { restant: number; reinitialiseLe: string };
+export type FournisseurIA = {
+  id: 'claude' | 'chatgpt';
+  nom: string;
+  etat: 'ok' | 'indisponible' | 'erreur';
+  plan: string | null;
+  fenetre5h: LimiteIA | null;
+  hebdomadaire: LimiteIA | null;
+};
+export type LimitesIA = { actualiseLe: string | null; fournisseurs: FournisseurIA[] };
 
 export type InstanceFiche = InstanceSummary & {
   statut: 'actif' | 'archive';
@@ -365,6 +380,7 @@ export const operationCerveau = (slug: string, operation: OperationCerveau) =>
     textes?: Record<string, string>;
   }>('POST', inst(slug, 'cerveau/operations'), operation);
 export const fetchConsole = (slug: string) => getJson<ConsoleOS>(inst(slug, 'console'));
+export const fetchLimitesIA = () => getJson<LimitesIA>('/api/limites-ia');
 export const fetchInstanceFiche = (slug: string) => getJson<InstanceFiche>(inst(slug, 'instance'));
 export const renameInstance = (slug: string, nom: string) =>
   sendJson<InstanceSummary>('PATCH', inst(slug, 'instance'), { nom });
