@@ -201,7 +201,7 @@ export function App() {
             : view === 'presentation-vma'
               ? 'Test VMA'
               : view === 'cours'
-                ? 'Supports de formation'
+                ? 'Supports'
                 : view === 'presentation-simatis'
                   ? 'SIMATIS'
                   : view === 'feuille-de-route-os'

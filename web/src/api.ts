@@ -137,7 +137,7 @@ const sendJson = <T>(method: 'PUT' | 'PATCH' | 'POST' | 'DELETE', url: string, p
 
 const inst = (slug: string, path: string) => `/api/i/${encodeURIComponent(slug)}/${path}`;
 
-// Supports de formation : fichiers texte d'un dossier hors du dépôt, lus par le lecteur de l'OS.
+// Supports : fichiers texte d'un dossier hors du dépôt, lus par le lecteur de l'OS.
 export type DeckCours = { id: string; titre: string; soustitre: string };
 export const fetchDecksCours = (slug: string) => getJson<DeckCours[]>(inst(slug, 'cours'));
 export const urlFichierCours = (slug: string, deck: string, fichier: string) =>

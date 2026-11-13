@@ -45,6 +45,7 @@ describe('documentSlide', () => {
     );
     expect(d).toContain('section{color:red}');
     expect(d).toContain('width:1920px;height:1080px');
+    expect(d).toContain('h1,h2,h3,p,ul,ol,li{margin:0}');
     expect(d).toContain('<body><section>x</section></body>');
   });
   it('ne laisse pas une feuille de style fermer sa balise pour injecter du HTML', () => {

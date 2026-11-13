@@ -65,7 +65,7 @@ export const NAV: NavGroup[] = [
     later: true,
     items: [
       item('routines', 'Automatismes', 'clock'),
-      item('cours', 'Supports de formation', 'file'),
+      item('cours', 'Supports', 'file'),
       item('siteweb', 'Site web', 'globe', 'site-web'),
       item('parametres', 'Paramètres', 'gear'),
       item('plan', "Plan d'action", 'map'),

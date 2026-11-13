@@ -1,4 +1,4 @@
-/* Lecteur de supports de formation : une slide par écran, bandeau et couleur selon son type. */
+/* Lecteur de supports : une slide par écran, bandeau et couleur selon son type. */
 .cours {
   --marque: var(--navy);
   --accent: #9ff7e8;
@@ -8,6 +8,7 @@
   min-height: 0;
   display: grid;
   grid-template-rows: 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
   background: var(--white);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -217,6 +218,7 @@
 .cours-modules {
   display: flex;
   flex: 1;
+  min-width: 0;
   gap: 6px;
   overflow-x: auto;
 }
@@ -268,9 +270,13 @@
   align-items: center;
   justify-content: center;
 }
+.cours-slide.cours-slide-html {
+  position: relative;
+}
+/* Posé en absolu : la taille vient de la scène, pas du cadre (sinon l'échelle se mord la queue). */
 .cours-html {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -283,4 +289,11 @@
   transform-origin: top left;
   display: block;
   background: #fff;
+}
+
+/* Le lecteur remplit la zone de contenu, comme les présentations. */
+.app[data-view='cours'] .content {
+  display: flex;
+  padding-bottom: 20px;
+  overflow: hidden;
 }

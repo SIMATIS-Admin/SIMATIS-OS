@@ -6,8 +6,8 @@ import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 
-// Lecture des supports de formation : dossier hors dépôt, noms validés, aucune sortie du dossier.
-describe('Supports de formation : API', () => {
+// Lecture des supports : dossier hors dépôt, noms validés, aucune sortie du dossier.
+describe('Supports : API', () => {
   let t: TestApp;
   let app: ReturnType<typeof buildApp>;
   let dossier: string;

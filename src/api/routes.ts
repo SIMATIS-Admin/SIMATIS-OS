@@ -893,7 +893,7 @@ export function registerApi(
       }
     }),
   );
-  // Supports de formation : fichiers texte d'un dossier hors du dépôt, lus tels quels par le lecteur.
+  // Supports : fichiers texte d'un dossier hors du dépôt, lus tels quels par le lecteur.
   app.get<SlugParams>(
     '/api/i/:slug/cours',
     onInstance<SlugParams>(async (_i, _request, reply) => {

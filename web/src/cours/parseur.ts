@@ -1,4 +1,4 @@
-// Parseur des supports de formation : un manifest et des modules markdown deviennent des slides.
+// Parseur des supports : un manifest et des modules markdown deviennent des slides.
 // Fonctions pures, sans lecture de fichier ni de navigateur : on les teste en premier.
 export type Manifest = {
   titre: string;

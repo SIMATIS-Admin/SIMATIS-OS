@@ -47,7 +47,7 @@ services:
       ENRICHISSEMENT_LOT_MAX: ${ENRICHISSEMENT_LOT_MAX:-}
       ENRICHISSEMENT_BUDGET_JETONS: ${ENRICHISSEMENT_BUDGET_JETONS:-}
       # Grille de scoring du diagnostic : copie dans secrets/ (le conteneur ne voit pas le second cerveau).
-      # Supports de formation et restitutions : dossier hors du dépôt, monté en lecture seule.
+      # Supports et restitutions : dossier hors du dépôt, monté en lecture seule.
       SUPPORTS_DIR: /supports
       DIAGNOSTIC_GRILLE: /app/secrets/diagnostic/grille-scoring.json
       DIAGNOSTIC_CORRESPONDANCE: /app/secrets/diagnostic/correspondance-rapport.json

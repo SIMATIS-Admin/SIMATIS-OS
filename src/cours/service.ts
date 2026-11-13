@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-// Les supports de formation sont des dossiers de fichiers texte, hors du dépôt (confidentiel) :
+// Les supports sont des dossiers de fichiers texte, hors du dépôt (confidentiel) :
 // SUPPORTS_DIR donne leur dossier. Ce module ne fait que les lire, avec des noms strictement validés.
 export class SupportIntrouvable extends Error {}
 
