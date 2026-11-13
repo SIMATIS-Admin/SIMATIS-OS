@@ -265,10 +265,10 @@ export function Console({ slug }: { slug: string }) {
   const [limites, setLimites] = useState<LimitesIA | null>(null);
   const [limitesEnPanne, setLimitesEnPanne] = useState(false);
   const [limitesEnCours, setLimitesEnCours] = useState(false);
-  const [moteur, setMoteur] = useState<MoteurIA>('codex');
+  const [moteur, setMoteur] = useState<MoteurIA>('claude');
   useEffect(() => {
     void fetchOptions().then(
-      (o) => setMoteur(o?.moteurIA === 'claude' ? 'claude' : 'codex'),
+      (o) => setMoteur(o?.moteurIA === 'codex' ? 'codex' : 'claude'),
       () => undefined,
     );
   }, []);

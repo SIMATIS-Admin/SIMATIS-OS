@@ -29,11 +29,11 @@ export async function setFavoris(
   return unique;
 }
 
-// Moteur qui exécute les tâches IA de l'OS ; Codex par défaut, comme avant le commutateur.
+// Moteur qui exécute les tâches IA de l'OS ; Claude par défaut : routines et conversations tournaient dessus.
 export type MoteurIA = 'claude' | 'codex';
 export const MOTEURS_IA: readonly MoteurIA[] = ['claude', 'codex'];
 export type Options = { ensuite: boolean; moteurIA: MoteurIA };
-const OPTIONS_DEFAUT: Options = { ensuite: true, moteurIA: 'codex' };
+const OPTIONS_DEFAUT: Options = { ensuite: true, moteurIA: 'claude' };
 
 export async function getOptions(db: Executor, utilisateur: string): Promise<Options> {
   const [row] = await db

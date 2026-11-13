@@ -59,6 +59,7 @@ describe('tourCampagnes', () => {
     expect(await tourCampagnes(options(fetchFake, 0, args))).toBe(1);
     expect(appels).toEqual([
       '/api/runner/campagnes',
+      '/api/runner/moteur',
       `/api/runner/campagnes/${campagne.id}/demarrer`,
       `/api/runner/campagnes/${campagne.id}/fin`,
     ]);

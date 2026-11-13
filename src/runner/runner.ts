@@ -14,6 +14,8 @@ import { executer, type Operation, type Partage } from '../cerveau/file.js';
 import { cartePartage } from '../cerveau/partage.js';
 import { configPartage, connecterPartage } from '../cerveau/partage-mcp.js';
 import { consigneCerveau } from './cerveau.js';
+import { argumentsCodex } from './codex-mcp.js';
+import type { MoteurIA } from '../preferences/service.js';
 import { LOGO_DIAGNOSTIC_SVG } from '../diagnostic/logo-diagnostic.js';
 
 // Local runner (npm run runner, started by launchd on the workstation): picks the routine runs the
@@ -50,6 +52,8 @@ export type RunnerOptions = {
   partage?: () => Promise<Partage | null>;
   // What this workstation offers (Claude Code version, installed skills), sent at each pass.
   poste?: () => Promise<Poste>;
+  // Programme Codex du poste, pour les tâches que le pilote a confiées à Codex.
+  codex?: string;
 };
 
 export type Poste = { nom: string; claude: string | null; skills: string[] };
@@ -108,6 +112,30 @@ export const prompt = (d: Demande) =>
     "Signale chaque étape avec etape_routine, et termine toujours par rapport_routine (fait, en attente, échecs). N'envoie jamais rien : tout passe par des propositions à valider.",
   ].join('\n');
 
+const CODEX_PAR_DEFAUT =
+  '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
+
+// Moteur choisi dans la console. Sans réponse de l'OS, Claude : c'était le seul moteur de ces tâches.
+async function moteurChoisi(api: ReturnType<typeof clientOs>): Promise<MoteurIA> {
+  return api<{ moteur: MoteurIA }>('/api/runner/moteur').then(
+    (r) => (r.moteur === 'codex' ? 'codex' : 'claude'),
+    () => 'claude',
+  );
+}
+
+const NOM_MOTEUR: Record<MoteurIA, string> = { claude: 'Claude', codex: 'Codex' };
+
+// Texte d'une skill du poste (dossier du pilote, ou skills synchronisées de son compte claude.ai).
+async function lireSkill(nom: string): Promise<string> {
+  const racine = path.join(homedir(), '.claude', 'skills');
+  const comptes = await sousDossiers(path.join(racine, 'synced'));
+  for (const dossier of [racine, ...comptes.map((c) => path.join(racine, 'synced', c))]) {
+    const texte = await readFile(path.join(dossier, nom, 'SKILL.md'), 'utf8').catch(() => null);
+    if (texte?.trim()) return texte;
+  }
+  throw new Error(`Skill « ${nom} » absente du poste.`);
+}
+
 const dossierExiste = (dossier: string) =>
   stat(dossier).then(
     (s) => s.isDirectory(),
@@ -128,6 +156,38 @@ export const PARTAGE_OUTILS_LECTURE = [
   'mcp__partage__nouveautes_partage',
   'mcp__partage__lire_partage',
 ] as const;
+
+// Même routine avec Codex : la skill est collée dans la consigne. Wispr Flow et l'espace partagé
+// sont des connecteurs de Claude, absents de Codex : la routine le sait et le signale.
+export async function lancementCodexRoutine(
+  d: Demande,
+  base: string,
+  token: string,
+  cerveau: string | undefined,
+) {
+  const dossier = d.cerveau && cerveau && (await dossierExiste(cerveau)) ? cerveau : undefined;
+  const consigne = [
+    prompt(d),
+    `Voici la skill « ${d.skill} » à suivre pour cette routine :\n${await lireSkill(d.skill)}`,
+    d.skill === 'alimenter-inbox' && d.cerveau
+      ? "Wispr Flow et l'espace partagé ne sont pas accessibles avec Codex : saute ces sources et signale-le dans le rapport."
+      : '',
+    dossier
+      ? `${consigneCerveau(dossier, 'ajout')} Tu n'as pas Grep ni Glob : cherche avec rg ou find dans le shell, depuis ce dossier.`
+      : d.cerveau
+        ? 'Second cerveau non accessible sur ce poste : saute ce qui en a besoin et signale-le dans le rapport.'
+        : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return argumentsCodex({
+    base,
+    token,
+    consigne,
+    outils: ['mcp__simatis__*'],
+    ...(dossier ? { cerveau: dossier } : {}),
+  });
+}
 
 // Claude Code arguments of a run. Only a `cerveau` request with an existing folder gets file
 // tools, limited to that folder (a `//` rule prefix means an absolute path).
@@ -243,6 +303,7 @@ export async function tour(opts: RunnerOptions): Promise<number> {
   await api('/api/runner/presence', poste);
   await deposerCarte(api, opts.cerveau);
   const demandes = await api<Demande[]>('/api/runner/demandes');
+  const moteur = demandes.length > 0 ? await moteurChoisi(api) : 'claude';
   for (const d of demandes) {
     let demarre: { tokenId: string; token: string };
     try {
@@ -276,9 +337,15 @@ export async function tour(opts: RunnerOptions): Promise<number> {
         }),
         { mode: 0o600 },
       );
-      const { args, cwd } = await argumentsClaude(d, config, opts.cerveau);
-      const code = await lancer(opts.claude, args, cwd);
-      if (code !== 0) erreur = `Claude s'est arrêté avec le code ${code}.`;
+      let code: number;
+      if (moteur === 'codex') {
+        const l = await lancementCodexRoutine(d, opts.base, demarre.token, opts.cerveau);
+        code = await lancer(opts.codex ?? CODEX_PAR_DEFAUT, l.args, l.cwd, l.env);
+      } else {
+        const { args, cwd } = await argumentsClaude(d, config, opts.cerveau);
+        code = await lancer(opts.claude, args, cwd);
+      }
+      if (code !== 0) erreur = `${NOM_MOTEUR[moteur]} s'est arrêté avec le code ${code}.`;
     } finally {
       await rm(dossier, { recursive: true, force: true });
       // Revokes the token; a run left open without a report is marked failed.
@@ -332,6 +399,7 @@ export async function tourEchanges(opts: RunnerOptions): Promise<number> {
   const api = clientOs(opts);
 
   const echanges = await api<EchangeDemande[]>('/api/runner/echanges');
+  const moteur = echanges.length > 0 ? await moteurChoisi(api) : 'claude';
   for (const e of echanges) {
     let demarre: { tokenId: string; token: string };
     try {
@@ -365,8 +433,20 @@ export async function tourEchanges(opts: RunnerOptions): Promise<number> {
         '--allowedTools',
         'mcp__simatis__repondre_ajout',
       ];
-      const code = await lancer(opts.claude, args);
-      if (code !== 0) erreur = `Claude s'est arrêté avec le code ${code}. Réécrivez votre message.`;
+      const l =
+        moteur === 'codex'
+          ? argumentsCodex({
+              base: opts.base,
+              token: demarre.token,
+              consigne: promptEchange(e),
+              outils: ['mcp__simatis__repondre_ajout'],
+            })
+          : null;
+      const code = l
+        ? await lancer(opts.codex ?? CODEX_PAR_DEFAUT, l.args, l.cwd, l.env)
+        : await lancer(opts.claude, args);
+      if (code !== 0)
+        erreur = `${NOM_MOTEUR[moteur]} s'est arrêté avec le code ${code}. Réécrivez votre message.`;
     } finally {
       await rm(dossier, { recursive: true, force: true });
       await api(`/api/runner/echanges/${e.id}/fin`, {
@@ -393,17 +473,8 @@ const SKILLS_MAIL = ['prospecter-par-mail-simatis', 'relancer-par-mail-simatis']
 
 async function chargerMethodesCampagne(cerveau?: string) {
   if (!cerveau) throw new Error('Second Cerveau non configuré pour la rédaction.');
-  const racine = path.join(homedir(), '.claude', 'skills');
-  const comptes = await sousDossiers(path.join(racine, 'synced'));
   const skills = await Promise.all(
-    SKILLS_MAIL.map(async (nom) => {
-      const candidats = [racine, ...comptes.map((compte) => path.join(racine, 'synced', compte))];
-      for (const dossier of candidats) {
-        const texte = await readFile(path.join(dossier, nom, 'SKILL.md'), 'utf8').catch(() => null);
-        if (texte?.trim()) return `Skill ${nom} :\n${texte}`;
-      }
-      throw new Error(`Skill « ${nom} » absente du poste.`);
-    }),
+    SKILLS_MAIL.map(async (nom) => `Skill ${nom} :\n${await lireSkill(nom)}`),
   );
   const references = await Promise.all(
     [
@@ -436,6 +507,7 @@ export async function tourCampagnes(opts: RunnerOptions): Promise<number> {
   const api = clientOs(opts);
 
   const campagnes = await api<CampagneDemande[]>('/api/runner/campagnes');
+  const moteur = campagnes.length > 0 ? await moteurChoisi(api) : 'claude';
   for (const c of campagnes) {
     let demarre: { tokenId: string; token: string };
     try {
@@ -463,16 +535,25 @@ export async function tourCampagnes(opts: RunnerOptions): Promise<number> {
       const methodes = await (
         opts.methodesCampagne ?? (() => chargerMethodesCampagne(opts.cerveau))
       )();
-      const code = await lancer(opts.claude, [
-        '-p',
-        promptCampagne(c) + '\n\n' + methodes,
-        '--mcp-config',
-        config,
-        '--strict-mcp-config',
-        '--allowedTools',
-        'mcp__simatis__campagne_contexte,mcp__simatis__campagne_deposer',
-      ]);
-      if (code !== 0) erreur = `Claude s'est arrêté avec le code ${code}. Relancez la rédaction.`;
+      const consigne = promptCampagne(c) + '\n\n' + methodes;
+      const outils = ['mcp__simatis__campagne_contexte', 'mcp__simatis__campagne_deposer'];
+      const l =
+        moteur === 'codex'
+          ? argumentsCodex({ base: opts.base, token: demarre.token, consigne, outils })
+          : null;
+      const code = l
+        ? await lancer(opts.codex ?? CODEX_PAR_DEFAUT, l.args, l.cwd, l.env)
+        : await lancer(opts.claude, [
+            '-p',
+            consigne,
+            '--mcp-config',
+            config,
+            '--strict-mcp-config',
+            '--allowedTools',
+            outils.join(','),
+          ]);
+      if (code !== 0)
+        erreur = `${NOM_MOTEUR[moteur]} s'est arrêté avec le code ${code}. Relancez la rédaction.`;
     } catch (e) {
       erreur = e instanceof Error ? e.message : 'Rédaction impossible.';
     } finally {
@@ -1801,6 +1882,7 @@ function main() {
     base: process.env.SIMATIS_URL ?? 'http://127.0.0.1:4300',
     token,
     claude: process.env.CLAUDE_BIN ?? 'claude',
+    codex: process.env.CODEX_BIN ?? CODEX_PAR_DEFAUT,
     ...(process.env.SECOND_CERVEAU_DIR ? { cerveau: process.env.SECOND_CERVEAU_DIR } : {}),
   };
   const every = Number(process.env.RUNNER_INTERVAL_MS ?? 30_000);
@@ -1817,9 +1899,7 @@ function main() {
   passe();
   setInterval(passe, every);
 
-  const codex =
-    process.env.CODEX_BIN ??
-    '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
+  const codex = opts.codex;
   let occupeCodex = false;
   setInterval(() => {
     if (occupeCodex) return;

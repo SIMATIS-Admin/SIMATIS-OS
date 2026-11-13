@@ -92,7 +92,7 @@ export async function tournerRecherche(
     if (!routine?.active || routine.heure > heure || routine.dernierJour === jour) continue;
     // Quota presque épuisé : la journée n'est pas entamée, la recherche attend le renouvellement.
     const fournisseur =
-      (await moteur?.().catch(() => 'codex' as const)) === 'claude' ? 'claude' : 'chatgpt';
+      (await moteur?.().catch(() => undefined)) === 'claude' ? 'claude' : 'chatgpt';
     const quota = limites
       ? quotaCodex(await limites().catch(() => null), maintenant, fournisseur)
       : null;
