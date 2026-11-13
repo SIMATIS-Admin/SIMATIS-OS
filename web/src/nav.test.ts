@@ -57,9 +57,9 @@ describe('nav', () => {
     expect(vueCanonique('tests-vma')).toBe('diagnostics');
   });
 
-  it("range Mon espace en rubriques : Détecter (Radar, Recherches, ICP, Campagnes), Vendre, Ma base, Piloter l'activité", () => {
+  it("range Mon espace en rubriques : Détecter (Radar, Recherches, ICP, Campagnes, Base des suspects), Vendre, Ma base, Piloter l'activité", () => {
     const ids = (titre: string) => NAV.find((g) => g.title === titre)?.items.map((i) => i.id);
-    expect(ids('Détecter')).toEqual(['radar', 'bases', 'icp', 'prospection']);
+    expect(ids('Détecter')).toEqual(['radar', 'recherches', 'icp', 'prospection', 'bases']);
     expect(ids('Vendre')).toEqual(['pipeline', 'rendez-vous', 'devis', 'diagnostics', 'relais']);
     expect(ids('Ma base')).toEqual(['entreprises', 'contacts']);
     expect(ids("Piloter l'activité")).toEqual(['atelier', 'tableau', 'cerveau', 'demarrage']);

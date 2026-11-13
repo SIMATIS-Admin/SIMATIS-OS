@@ -1,3 +1,4 @@
+import { SequenceReglage } from './radar/SequenceReglage.js';
 import { Icon } from '../icons.js';
 import { useEffect, useState } from 'react';
 import {
@@ -351,12 +352,14 @@ export function Prospection({ slug, ouvrir }: { slug: string; ouvrir?: string | 
                 Tirer un échantillon
               </button>
               <a className="link lien-seul" href={`#/${slug}/bases`}>
-                Ouvrir la Base vivante
+                Voir la base des suspects
               </a>
             </div>
           </div>
         </div>
       </div>
+
+      <SequenceReglage slug={slug} />
 
       <div className="panel">
         <div className="panel-h">

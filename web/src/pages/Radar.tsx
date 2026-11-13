@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { creerAffaireContact, fetchRadar, type EtatRadar } from '../api.js';
-import { RechercheStrategie } from './radar/RechercheStrategie.js';
-import { SequenceReglage } from './radar/SequenceReglage.js';
 
 // `href` : la carte ouvre la fiche (les prospects du CRM en ont une, pas les fiches de la base).
 type Carte = {
@@ -117,8 +115,8 @@ const etapes = (slug: string, radar: EtatRadar, creerAffaire: (contactId: string
 ];
 
 // Le pipe de détection : des suspects jusqu'au rendez-vous. Les quatre premières étapes sont lues
-// dans la base vivante, la dernière est la liste des prospects du CRM. Prospection et Bases vivantes
-// gardent leurs écrans, accessibles d'ici.
+// dans la base vivante, la dernière est la liste des prospects du CRM. Les recherches, les campagnes
+// et la base ont leurs propres écrans, dans la même section Détecter.
 export function Radar({ slug }: { slug: string }) {
   const [radar, setRadar] = useState<EtatRadar | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -164,23 +162,16 @@ export function Radar({ slug }: { slug: string }) {
     <section className="radar">
       <p className="muted radar-intro">
         Du suspect au rendez-vous : chaque colonne est une étape. Un rendez-vous accepté fait passer
-        le contact dans le Pipeline.
+        le contact dans le Pipeline.{' '}
+        <a className="link" href={`#/${slug}/bases`}>
+          Voir la base
+        </a>
       </p>
-      <div className="radar-actions">
-        <a className="btn" href={`#/${slug}/bases`}>
-          Trouver des suspects
-        </a>
-        <a className="btn" href={`#/${slug}/prospection`}>
-          Campagnes et envois
-        </a>
-      </div>
       {info && (
         <p className="small" role="status">
           {info}
         </p>
       )}
-      <RechercheStrategie slug={slug} onAjoute={() => void recharger()} />
-      <SequenceReglage slug={slug} />
       <div className="radar-colonnes">
         {etapes(slug, radar, creerAffaire).map((e) => (
           <section key={e.id} className="radar-colonne" aria-label={e.titre}>

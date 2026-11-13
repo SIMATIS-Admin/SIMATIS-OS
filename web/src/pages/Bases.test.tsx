@@ -165,7 +165,6 @@ const videEtat = (): EtatBase => ({
   tags: [],
   imports: [],
 });
-const ouvrirImport = () => fireEvent.click(screen.getByText('+ Importer une liste'));
 const remplirDepot = (texte: string) => {
   fireEvent.change(screen.getByPlaceholderText('Sharp, LinkedIn, salon…'), {
     target: { value: 'Sharp' },
@@ -215,18 +214,16 @@ describe('base vivante : import en trois temps', () => {
   });
 
   it('exige la source de la liste avant de lire', async () => {
-    render(<Bases slug="simatis" />);
-    await screen.findByText(/La base est vide/);
-    ouvrirImport();
+    render(<Bases slug="simatis" ouvrir="import" />);
+    await screen.findByRole('dialog', { name: 'Importer une liste' });
     fireEvent.click(screen.getByText('Lire la liste'));
     expect(await screen.findByText(/Indiquez la source/)).toBeTruthy();
     expect(calls.some((c) => c.method === 'POST')).toBe(false);
   });
 
   it('lit du texte collé, fait vérifier les colonnes, puis intègre après validation', async () => {
-    render(<Bases slug="simatis" />);
-    await screen.findByText(/La base est vide/);
-    ouvrirImport();
+    render(<Bases slug="simatis" ouvrir="import" />);
+    await screen.findByRole('dialog', { name: 'Importer une liste' });
     remplirDepot('Société\tNom\nAtelier Fictif\tDurand');
     fireEvent.click(screen.getByText('Lire la liste'));
 
@@ -246,9 +243,8 @@ describe('base vivante : import en trois temps', () => {
   });
 
   it('corrige le contenu d’une colonne', async () => {
-    render(<Bases slug="simatis" />);
-    await screen.findByText(/La base est vide/);
-    ouvrirImport();
+    render(<Bases slug="simatis" ouvrir="import" />);
+    await screen.findByRole('dialog', { name: 'Importer une liste' });
     remplirDepot('x');
     fireEvent.click(screen.getByText('Lire la liste'));
     const colonne = await screen.findByLabelText('Contenu de la colonne Code');
@@ -281,9 +277,8 @@ describe('base vivante : import en trois temps', () => {
   });
 
   it('se ferme avec Échap', async () => {
-    render(<Bases slug="simatis" />);
-    await screen.findByText(/La base est vide/);
-    ouvrirImport();
+    render(<Bases slug="simatis" ouvrir="import" />);
+    await screen.findByRole('dialog', { name: 'Importer une liste' });
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -351,16 +346,9 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     expect(screen.getByRole('tab', { name: /Base complète/ }).getAttribute('aria-selected')).toBe(
       'true',
     );
-    expect(
-      within(screen.getByRole('region', { name: 'Trouver des prospects' })).getByRole('button', {
-        name: 'Rechercher de nouveaux prospects',
-      }),
-    ).toBeTruthy();
-    expect(
-      within(screen.getByRole('region', { name: 'Importer des contacts' })).getByRole('button', {
-        name: '+ Importer une liste',
-      }),
-    ).toBeTruthy();
+    // Les parcours d'ajout vivent dans Recherches : la base ne garde que la liste et ses outils.
+    expect(screen.queryByRole('region', { name: 'Trouver des prospects' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Importer des contacts' })).toBeNull();
     expect(
       within(screen.getByRole('region', { name: 'Fiches de la base' })).getByLabelText(
         'Rechercher dans la base',
@@ -468,9 +456,9 @@ describe('base vivante : liste unique, filtres, fiche, sélection', () => {
     );
   });
 
-  it('ouvre la recherche d’entreprises depuis le parcours de recherche', async () => {
-    render(<Bases slug="simatis" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Chercher des entreprises' }));
+  it('ouvre la recherche d’entreprises demandée par l’écran Recherches', async () => {
+    render(<Bases slug="simatis" ouvrir="entreprises" />);
+    expect(await screen.findByRole('dialog', { name: 'Chercher des entreprises' })).toBeTruthy();
     expect(screen.getByRole('dialog', { name: 'Chercher des entreprises' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Chercher dans l’annuaire' })).toBeTruthy();
   });
