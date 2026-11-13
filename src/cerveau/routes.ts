@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Database } from '../db.js';
+import { deposerMessagesPartage } from '../inbox/messages-partage.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import { resolveToken } from '../mcp/tokens.js';
 import { estEchange, messagesRelayes, miroirVersRelais } from '../partenaires/echanges.js';
@@ -110,6 +111,14 @@ export function registerCerveauRoutes(
     if (!parsed.success) return reply.code(400).send({ error: 'Carte invalide' });
     const { espace, ...carte } = parsed.data;
     deposerCarte(carte, espace);
+    // Un nouveau message de l'autre entre dans l'Inbox sans attendre la routine du matin.
+    if (espace === 'partage') {
+      const instance = await getInstanceBySlug(db, 'simatis');
+      if (instance)
+        await deposerMessagesPartage(db, instance, carte).catch((err: unknown) =>
+          request.log.error(err, 'Inbox : messages de l’espace partagé'),
+        );
+    }
     return { ok: true };
   });
 
