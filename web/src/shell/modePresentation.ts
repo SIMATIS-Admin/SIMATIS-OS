@@ -17,5 +17,6 @@ export const VUES_PRESENTATION = [
   'presentation-vma',
   'presentation-simatis',
   'diaporama',
+  'cours',
 ];
 export const estVuePresentation = (view: string) => VUES_PRESENTATION.includes(view);

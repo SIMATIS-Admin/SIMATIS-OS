@@ -51,6 +51,7 @@ import {
   purgerDiapositivesRestitution,
 } from '../diagnostic/restitution.js';
 import { SupportInvalide } from '../diagnostic/support.js';
+import { listerDecks, lireFichierDeck, SupportIntrouvable } from '../cours/service.js';
 import { demanderDossier } from '../diagnostic/dossier-export.js';
 import { demanderExportRevue } from '../diagnostic/revue-export.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
@@ -891,6 +892,41 @@ export function registerApi(
         return diagnosticErreur(error, reply);
       }
     }),
+  );
+  // Supports de formation : fichiers texte d'un dossier hors du dépôt, lus tels quels par le lecteur.
+  app.get<SlugParams>(
+    '/api/i/:slug/cours',
+    onInstance<SlugParams>(async (_i, _request, reply) => {
+      try {
+        return await listerDecks();
+      } catch (error) {
+        if (error instanceof SupportIntrouvable)
+          return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+  app.get<{ Params: { slug: string; deck: string; '*': string } }>(
+    '/api/i/:slug/cours/:deck/*',
+    onInstance<{ Params: { slug: string; deck: string; '*': string } }>(
+      async (_i, request, reply) => {
+        try {
+          const { contenu, type, modifie } = await lireFichierDeck(
+            request.params.deck,
+            request.params['*'],
+          );
+          reply.header('content-type', type);
+          reply.header('last-modified', modifie.toUTCString());
+          reply.header('cache-control', 'no-cache');
+          reply.header('x-content-type-options', 'nosniff');
+          return reply.send(contenu);
+        } catch (error) {
+          if (error instanceof SupportIntrouvable)
+            return reply.code(404).send({ error: error.message });
+          throw error;
+        }
+      },
+    ),
   );
   // Deck construit hors de l'OS : son lien est enregistré puis Claude en relit les diapositives.
   app.post<ProjetRoute>(

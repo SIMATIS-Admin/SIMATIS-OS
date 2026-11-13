@@ -47,11 +47,14 @@ services:
       ENRICHISSEMENT_LOT_MAX: ${ENRICHISSEMENT_LOT_MAX:-}
       ENRICHISSEMENT_BUDGET_JETONS: ${ENRICHISSEMENT_BUDGET_JETONS:-}
       # Grille de scoring du diagnostic : copie dans secrets/ (le conteneur ne voit pas le second cerveau).
+      # Supports de formation et restitutions : dossier hors du dépôt, monté en lecture seule.
+      SUPPORTS_DIR: /supports
       DIAGNOSTIC_GRILLE: /app/secrets/diagnostic/grille-scoring.json
       DIAGNOSTIC_CORRESPONDANCE: /app/secrets/diagnostic/correspondance-rapport.json
     volumes:
       # Writable: Paramètres > Connexions saves the instances' tokens here.
       - ./secrets:/app/secrets
+      - ${SUPPORTS_HOTE:-./private/supports}:/supports:ro
       - backup-status:/app/backup-status:ro
     ports:
       - '127.0.0.1:${APP_PORT:-4300}:3000'
