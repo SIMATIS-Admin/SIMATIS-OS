@@ -228,8 +228,8 @@ describe('Lecteur, support en HTML libre', () => {
   it('navigue entre les slides et les parties, et affiche les notes', async () => {
     render(<Cours slug="simatis" deck="html-fictif" />);
     await waitFor(() => expect(cadre()).not.toBeNull());
-    fireEvent.keyDown(document, { key: 'n' });
-    expect(screen.getByLabelText('Notes du formateur').textContent).toContain('Note une.');
+    fireEvent.click(screen.getByRole('button', { name: 'Notes' }));
+    expect((await screen.findByLabelText('Notes du formateur')).textContent).toContain('Note une.');
     fireEvent.keyDown(document, { key: 'ArrowRight' });
     expect(cadre()!.getAttribute('srcdoc')).toContain('<h2>Deuxième</h2>');
     fireEvent.keyDown(document, { key: 'ArrowRight' });
