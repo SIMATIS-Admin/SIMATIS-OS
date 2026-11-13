@@ -21,6 +21,7 @@ import {
 import { createProjet, DiagnosticIndisponible, listProjets, updateProjet } from './service.js';
 import {
   autoriserOutil,
+  demanderEnvoiIntroduction,
   demanderSupport,
   enregistrerSupport,
   logoDe,
@@ -127,6 +128,31 @@ describe("Diagnostic : support d'ouverture", () => {
     await expect(enregistrer(p.id, { lien: LIEN })).rejects.toBeInstanceOf(SupportInvalide);
     expect(await rouvrirSupport(t.app.db, simatis, p.id)).toMatchObject({ supportStatut: 'pret' });
     await expect(rouvrirSupport(t.app.db, simatis, p.id)).rejects.toBeInstanceOf(ChatIndisponible);
+  });
+
+  it('envoyer l introduction au lecteur : exige un deck, pose la demande support_envoyer', async () => {
+    const p = await createProjet(t.app.db, simatis, { nom: 'Support Fictif E', activite: 'autre' });
+    await expect(demanderEnvoiIntroduction(t.app.db, simatis, p.id)).rejects.toBeInstanceOf(
+      ChatIndisponible,
+    );
+    await demanderSupport(t.app.db, simatis, p.id, 'preparer_support');
+    await demarrerAttente(t.app.db, simatis, p.id);
+    await enregistrer(p.id, { lien: LIEN });
+    await finirAttente(t.app.db, simatis, p.id);
+    const vu = await demanderEnvoiIntroduction(t.app.db, simatis, p.id);
+    expect(vu).toMatchObject({
+      demande: 'support_envoyer',
+      supportLien: LIEN,
+      supportIntroId: 'introduction-support-fictif-e',
+    });
+    expect(vu.conversation.at(-1)).toMatchObject({ etape: 1, de: 'pilote' });
+    // Pendant l'envoi, le deck se lit (Artifact read) et rien d'autre ne passe.
+    const decider = (outil: string, input: Record<string, unknown>) =>
+      withInstance(t.app.db, simatis.id, (tx) => autoriserOutil(tx, outil, input));
+    expect(await decider('Artifact', { action: 'read', url: LIEN })).toMatchObject({
+      behavior: 'allow',
+    });
+    expect(await decider('Bash', {})).toMatchObject({ behavior: 'deny' });
   });
 
   it('sans deck enregistré, la préparation redevient possible et le pilote est averti', async () => {

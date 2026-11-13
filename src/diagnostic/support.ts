@@ -34,6 +34,26 @@ export function demanderSupport(
   });
 }
 
+// Envoi du deck d'introduction au lecteur de l'OS : Claude récupère les fichiers du deck publié.
+export const DEBUT_MESSAGE_ENVOI_INTRODUCTION = "Envoyer le support d'ouverture au lecteur";
+
+export function demanderEnvoiIntroduction(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<ProjetVue> {
+  return envoyerMessage(db, instance, id, `${DEBUT_MESSAGE_ENVOI_INTRODUCTION}.`, {
+    type: 'support_envoyer',
+    etape: 1,
+    verifier: (projet) => {
+      if (!projet.supportLien)
+        throw new ChatIndisponible("Aucun deck n'est encore enregistré pour ce projet.");
+      if (projet.supportStatut === 'preparation')
+        throw new ChatIndisponible('Le support est en cours de préparation.');
+    },
+  });
+}
+
 // Début du message qui lance la capitalisation des règles à partir du support final.
 export const DEBUT_MESSAGE_REGLES_SUPPORT = 'Capitaliser le support final';
 

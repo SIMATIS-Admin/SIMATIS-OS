@@ -1510,6 +1510,7 @@ export type ProjetDiag = {
     | 'restitution'
     | 'restitution_export'
     | 'restitution_support'
+    | 'support_envoyer'
     | 'revue_exporter'
     | 'dossier_exporter'
     | 'capitalisation_proposer'
@@ -1521,6 +1522,8 @@ export type ProjetDiag = {
   aPdfDeck: boolean;
   // Nom du support du lecteur où la restitution de ce projet s'envoie.
   supportId: string;
+  // Idem pour l'introduction (support d'ouverture).
+  supportIntroId: string;
   pdfEntretienNom: string | null;
   reponsesEntretien: { section: string; numero: number; reponse: LettreReponse }[];
   historiqueReponses: { question: string; ancienne: string; nouvelle: string; le: string }[];
@@ -1610,7 +1613,7 @@ export const envoyerMessageDiag = (slug: string, id: string, texte: string) =>
 export const demandeSupportDiag = (
   slug: string,
   id: string,
-  action: 'preparer' | 'final' | 'rouvrir',
+  action: 'preparer' | 'final' | 'rouvrir' | 'envoyer',
 ) =>
   sendJson<ProjetDiag>(
     'POST',

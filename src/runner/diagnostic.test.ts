@@ -731,6 +731,21 @@ describe('Production par le runner : modifications et deck', () => {
     expect(args.join(' ')).not.toContain(SKILL_RESTITUTION);
   });
 
+  it("l'envoi de l'introduction vise le deck du support d'ouverture", () => {
+    const texte = promptEnvoiSupport(
+      {
+        ...restitution,
+        demande: 'support_envoyer',
+        supportLien: 'https://claude.ai/artifact/IntroductionFictive01',
+        restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
+      },
+      '/travail/deck',
+    );
+    expect(texte).toContain("d'introduction");
+    expect(texte).toContain('https://claude.ai/artifact/IntroductionFictive01');
+    expect(texte).not.toContain('RestitutionFictive01');
+  });
+
   it("l'envoi au lecteur demande tous les fichiers du deck, sans rien publier ni réécrire", () => {
     const texte = promptEnvoiSupport(
       {
