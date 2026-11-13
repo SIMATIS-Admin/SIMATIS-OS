@@ -482,6 +482,23 @@ describe('Tâches', () => {
       });
       const relues = await app.inject({ method: 'GET', url: '/api/preferences' });
       expect(relues.json()).toMatchObject({ options: { ensuite: false } });
+      // Moteur IA : Codex par défaut, Claude sur demande, tout autre nom refusé.
+      expect(relues.json()).toMatchObject({ options: { moteurIA: 'codex' } });
+      const moteur = await app.inject({
+        method: 'PUT',
+        url: '/api/preferences/options',
+        payload: { moteurIA: 'claude' },
+      });
+      expect(moteur.json()).toMatchObject({ options: { moteurIA: 'claude', ensuite: false } });
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: '/api/preferences/options',
+            payload: { moteurIA: 'gpt' },
+          })
+        ).statusCode,
+      ).toBe(400);
       const bad = await app.inject({
         method: 'GET',
         url: '/api/i/sans-crm/taches?du=2026-10-18&au=2026-10-12',

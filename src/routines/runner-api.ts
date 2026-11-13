@@ -2,6 +2,7 @@ import type { fileCodex } from '../enrichissement/codex.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Database } from '../db.js';
+import type { MoteurIA } from '../preferences/service.js';
 import { withInstance } from '../db/context.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { createToken, resolveToken, revokeToken } from '../mcp/tokens.js';
@@ -39,7 +40,18 @@ const UN_QUART_HEURE = 15 * 60_000;
 // opens it.
 export function registerRunnerApi(
   app: FastifyInstance,
-  { db, codex, drive }: { db: Database; codex?: ReturnType<typeof fileCodex>; drive?: DriveDeps },
+  {
+    db,
+    codex,
+    drive,
+    moteur,
+  }: {
+    db: Database;
+    codex?: ReturnType<typeof fileCodex>;
+    drive?: DriveDeps;
+    // Moteur IA choisi par le pilote : le runner l'applique aux tâches de la file.
+    moteur?: () => Promise<MoteurIA>;
+  },
 ): void {
   const auth = async (request: FastifyRequest, reply: FastifyReply) => {
     const header = request.headers.authorization ?? '';
@@ -55,7 +67,7 @@ export function registerRunnerApi(
   if (codex) {
     app.get('/api/runner/codex', async (request, reply) => {
       if (!(await auth(request, reply))) return reply;
-      return { travail: codex.prendre() };
+      return { travail: codex.prendre(), moteur: (await moteur?.()) ?? 'codex' };
     });
     app.post('/api/runner/codex', async (request, reply) => {
       if (!(await auth(request, reply))) return reply;

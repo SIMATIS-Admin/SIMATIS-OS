@@ -70,7 +70,7 @@ describe('Console (journal en lecture seule)', () => {
     render(<Console slug="simatis" />);
     expect(await screen.findByText('Test de VMA reçu : ACME non rangé')).toBeTruthy();
     expect(screen.queryByText('Tâche créée : Appeler')).toBeNull();
-    expect(urls[0]).toBe('/api/i/simatis/console');
+    expect(urls).toContain('/api/i/simatis/console');
     fireEvent.click(screen.getByLabelText('Déplier la console'));
     expect(await screen.findByText('Tâche créée : Appeler')).toBeTruthy();
     expect(screen.getByRole('log').textContent).toContain('ACME non rangé');
@@ -163,5 +163,59 @@ describe('Console (journal en lecture seule)', () => {
     );
     render(<Console slug="simatis" />);
     expect(await screen.findByText('Console injoignable…')).toBeTruthy();
+  });
+});
+
+describe('Commutateur du moteur IA', () => {
+  let enregistre: unknown[];
+  beforeEach(() => {
+    enregistre = [];
+    localStorage.clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/preferences/options') {
+          enregistre.push(JSON.parse(init?.body as string));
+          return Promise.resolve(new Response(JSON.stringify({ options: {} })));
+        }
+        if (url === '/api/preferences')
+          return Promise.resolve(
+            new Response(JSON.stringify({ favoris: [], options: { moteurIA: 'claude' } })),
+          );
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(url === '/api/limites-ia' ? limites : { lignes: [], enCours: false }),
+          ),
+        );
+      }),
+    );
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('allume le moteur enregistré et enregistre le nouveau choix au clic', async () => {
+    render(<Console slug="simatis" />);
+    const claude = screen.getByRole('radio', { name: 'Claude' });
+    const codex = screen.getByRole('radio', { name: 'Codex' });
+    await waitFor(() => expect(claude.getAttribute('aria-checked')).toBe('true'));
+    expect(codex.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(codex);
+    expect(codex.getAttribute('aria-checked')).toBe('true');
+    expect(claude.getAttribute('aria-checked')).toBe('false');
+    await waitFor(() => expect(enregistre).toEqual([{ moteurIA: 'codex' }]));
+  });
+
+  it('revient au moteur précédent si le choix n’est pas enregistré', async () => {
+    render(<Console slug="simatis" />);
+    const claude = screen.getByRole('radio', { name: 'Claude' });
+    await waitFor(() => expect(claude.getAttribute('aria-checked')).toBe('true'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response('{}', { status: 500 }))),
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Codex' }));
+    await waitFor(() => expect(claude.getAttribute('aria-checked')).toBe('true'));
   });
 });

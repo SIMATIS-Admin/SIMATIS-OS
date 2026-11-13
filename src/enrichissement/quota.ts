@@ -7,17 +7,25 @@ export const SEUIL_QUOTA = 5;
 // Une mesure plus vieille que ça ne dit plus rien du quota d'aujourd'hui.
 const FRAICHEUR_MS = 2 * 3_600_000;
 
-export type QuotaCodex = { restant: number; reinitialiseLe: Date };
+export type QuotaCodex = {
+  restant: number;
+  reinitialiseLe: Date;
+  fournisseur: 'claude' | 'chatgpt';
+};
 
 // Le quota ChatGPT (Codex) restant sur la fenêtre de 5 heures, d'après la mesure du compteur de la
 // console. Rien quand la mesure est ancienne, absente, en erreur ou que la fenêtre est déjà renouvelée.
-export function quotaCodex(limites: LimitesIA | null, maintenant: Date): QuotaCodex | null {
-  const chatgpt = limites?.fournisseurs.find((f) => f.id === 'chatgpt');
+export function quotaCodex(
+  limites: LimitesIA | null,
+  maintenant: Date,
+  fournisseur: QuotaCodex['fournisseur'] = 'chatgpt',
+): QuotaCodex | null {
+  const chatgpt = limites?.fournisseurs.find((f) => f.id === fournisseur);
   if (!limites?.actualiseLe || !chatgpt || chatgpt.etat !== 'ok' || !chatgpt.fenetre5h) return null;
   if (maintenant.getTime() - Date.parse(limites.actualiseLe) > FRAICHEUR_MS) return null;
   const reinitialiseLe = new Date(chatgpt.fenetre5h.reinitialiseLe);
   if (reinitialiseLe <= maintenant) return null;
-  return { restant: chatgpt.fenetre5h.restant, reinitialiseLe };
+  return { restant: chatgpt.fenetre5h.restant, reinitialiseLe, fournisseur };
 }
 
 export const quotaBas = (q: QuotaCodex | null): q is QuotaCodex =>
@@ -34,8 +42,10 @@ const heureParis = (d: Date) =>
 // Heure du nouvel essai : une minute après le renouvellement de la fenêtre.
 export const apresRenouvellement = (q: QuotaCodex) => new Date(q.reinitialiseLe.getTime() + 60_000);
 
+const nomFournisseur = (q: QuotaCodex) => (q.fournisseur === 'claude' ? 'Claude' : 'ChatGPT');
+
 export const attenteQuota = (q: QuotaCodex) =>
-  `Quota ChatGPT presque épuisé (${q.restant} % restant). Nouvel essai à ${heureParis(apresRenouvellement(q))}.`;
+  `Quota ${nomFournisseur(q)} presque épuisé (${q.restant} % restant). Nouvel essai à ${heureParis(apresRenouvellement(q))}.`;
 
 // Ce que l'on peut honnêtement dire d'un échec : le quota s'il est bas, sinon ce que Codex a fait
 // savoir (rien de sa sortie, qui peut contenir des données de fiche).
@@ -44,7 +54,11 @@ export function expliquerEchec(
   quota: QuotaCodex | null,
 ): { bilan: string; erreur: string; quotaBas: boolean } {
   if (quotaBas(quota))
-    return { bilan: attenteQuota(quota), erreur: 'Quota ChatGPT presque épuisé.', quotaBas: true };
+    return {
+      bilan: attenteQuota(quota),
+      erreur: `Quota ${nomFournisseur(quota)} presque épuisé.`,
+      quotaBas: true,
+    };
   const message = erreur instanceof ErreurIA ? erreur.message : '';
   if (message.includes('n’a pas répondu'))
     return {

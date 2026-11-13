@@ -4602,6 +4602,52 @@ label.btn.off {
   background: #214462;
   color: #eef8ff;
 }
+/* Commutateur du moteur IA : le moteur choisi est allumé, l'autre est éteint. */
+.commutateur-moteur {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.console-journal-ouvert .commutateur-moteur {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  right: 82px;
+  margin: 0;
+}
+.commutateur-moteur-option {
+  display: grid;
+  place-items: center;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  opacity: 0.4;
+  filter: grayscale(1);
+  transition:
+    opacity 0.15s,
+    filter 0.15s;
+}
+.commutateur-moteur-option:hover {
+  opacity: 0.7;
+}
+.commutateur-moteur-option.actif {
+  opacity: 1;
+  filter: none;
+  border-color: var(--mint);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 8px rgba(120, 230, 200, 0.45);
+}
+.commutateur-moteur-option:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 1px;
+}
 .console-deplie {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(225px, 0.58fr) minmax(225px, 0.58fr);

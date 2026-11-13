@@ -29,8 +29,11 @@ export async function setFavoris(
   return unique;
 }
 
-export type Options = { ensuite: boolean };
-const OPTIONS_DEFAUT: Options = { ensuite: true };
+// Moteur qui exécute les tâches IA de l'OS ; Codex par défaut, comme avant le commutateur.
+export type MoteurIA = 'claude' | 'codex';
+export const MOTEURS_IA: readonly MoteurIA[] = ['claude', 'codex'];
+export type Options = { ensuite: boolean; moteurIA: MoteurIA };
+const OPTIONS_DEFAUT: Options = { ensuite: true, moteurIA: 'codex' };
 
 export async function getOptions(db: Executor, utilisateur: string): Promise<Options> {
   const [row] = await db
