@@ -4,8 +4,9 @@ import { RechercheStrategie } from './radar/RechercheStrategie.js';
 
 // La porte d'entrée des recherches de suspects. « Selon mon ICP » s'ouvre ici ; les autres entrées
 // ouvrent la fenêtre correspondante de la Base des suspects, qui garde les outils.
-export function Recherches({ slug }: { slug: string }) {
-  const [icp, setIcp] = useState(false);
+export function Recherches({ slug, icp: icpChoisi }: { slug: string; icp?: string | undefined }) {
+  // Arrivé depuis l'écran ICP, la recherche selon l'ICP s'ouvre d'emblée, sur celui qu'on a choisi.
+  const [icp, setIcp] = useState(!!icpChoisi);
   const base = `#/${slug}/bases`;
   return (
     <section className="recherches">
@@ -45,7 +46,7 @@ export function Recherches({ slug }: { slug: string }) {
           <span className="small muted">Un fichier ou des lignes copiées.</span>
         </a>
       </div>
-      {icp && <RechercheStrategie slug={slug} onAjoute={() => undefined} />}
+      {icp && <RechercheStrategie slug={slug} choisi={icpChoisi} onAjoute={() => undefined} />}
       <p className="recherches-pied">
         <a className="link" href={base}>
           Voir la base des suspects

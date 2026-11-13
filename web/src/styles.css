@@ -7139,6 +7139,97 @@ div.pb-ligne {
 .radar-intro {
   margin: 0 0 12px;
 }
+.icp-choix {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.icp-offre {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--ink-2);
+}
+.icp-detail summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.icp-detail .icp-champs {
+  margin-top: 8px;
+}
+.icp-intro {
+  margin: 0 0 14px;
+}
+.icp-cartes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+.icp-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+}
+.icp-carte header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.icp-carte header svg {
+  width: 22px;
+  height: 22px;
+  color: var(--navy);
+  flex: none;
+}
+.icp-carte h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.icp-carte h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+}
+.icp-carte dl {
+  margin: 0;
+  font-size: 14px;
+}
+.icp-carte dt {
+  display: inline;
+  color: var(--ink-2);
+}
+.icp-carte dt::after {
+  content: ' : ';
+}
+.icp-carte dd {
+  display: inline;
+  margin: 0;
+}
+.icp-carte dl > div {
+  margin-bottom: 2px;
+}
+.icp-champs {
+  display: grid;
+  gap: 10px;
+}
+.icp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+}
 .recherches-intro {
   margin: 0 0 14px;
 }

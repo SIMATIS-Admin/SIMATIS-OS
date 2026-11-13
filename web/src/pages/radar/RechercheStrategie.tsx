@@ -7,12 +7,25 @@ import { RechercheEntreprises } from '../RechercheEntreprises.js';
 export const etiquetteIcp = (c: Pick<CiblageAtelier, 'code' | 'entreprise'>) =>
   `icp ${c.code.replace(/^icp\s*/i, '')}${c.entreprise ? ` (${c.entreprise})` : ''}`.slice(0, 40);
 
+// Identifiant d'un ICP dans une adresse : l'atelier et le code (deux ateliers peuvent avoir un « ICP A »).
+export const cleCiblage = (c: Pick<CiblageAtelier, 'atelierId' | 'code'>) =>
+  `${c.atelierId}~${c.code}`;
+
 type Etat = { etat: 'charge' } | { etat: 'absent' } | { etat: 'pret'; ciblages: CiblageAtelier[] };
 
 // « Chercher selon ma stratégie » : l'ICP et le persona viennent de l'Atelier stratégique. Le Radar
 // compose la demande, la recherche d'entreprises existante la comprend, et le pilote vérifie
 // les critères et les résultats avant d'ajouter quoi que ce soit à la base.
-export function RechercheStrategie({ slug, onAjoute }: { slug: string; onAjoute: () => void }) {
+export function RechercheStrategie({
+  slug,
+  onAjoute,
+  choisi,
+}: {
+  slug: string;
+  onAjoute: () => void;
+  // Cle (cleCiblage) de l'ICP à présélectionner, quand on arrive depuis l'écran ICP.
+  choisi?: string | undefined;
+}) {
   const [lu, setLu] = useState<Etat>({ etat: 'charge' });
   const [choix, setChoix] = useState(0);
   const [ouvert, setOuvert] = useState(false);
@@ -21,8 +34,13 @@ export function RechercheStrategie({ slug, onAjoute }: { slug: string; onAjoute:
   useEffect(() => {
     let actif = true;
     fetchCiblages(slug).then(
-      (ciblages) =>
-        actif && setLu(Array.isArray(ciblages) ? { etat: 'pret', ciblages } : { etat: 'absent' }),
+      (ciblages) => {
+        if (!actif) return;
+        if (!Array.isArray(ciblages)) return setLu({ etat: 'absent' });
+        setLu({ etat: 'pret', ciblages });
+        const trouve = choisi ? ciblages.findIndex((c) => cleCiblage(c) === choisi) : -1;
+        if (trouve >= 0) setChoix(trouve);
+      },
       // Pas de module Atelier dans cet espace : la section n'a pas lieu d'être.
       () => actif && setLu({ etat: 'absent' }),
     );

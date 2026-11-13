@@ -42,6 +42,15 @@ describe('RechercheStrategie', () => {
     vi.unstubAllGlobals();
   });
 
+  it("présélectionne l'ICP choisi depuis l'écran ICP", async () => {
+    repondre([icp('ICP A', 'Entreprises : PME'), icp('ICP B', 'Entreprises : ETI')]);
+    render(<RechercheStrategie slug="simatis" choisi="a1~ICP B" onAjoute={vi.fn()} />);
+    await screen.findByLabelText('Demande composée');
+    await vi.waitFor(() =>
+      expect(screen.getByLabelText('Demande composée').textContent).toBe('Entreprises : ETI'),
+    );
+  });
+
   it("propose les ICP de l'Atelier avec la demande composée, et ouvre la recherche préremplie", async () => {
     repondre([icp('ICP A', 'Entreprises : PME'), icp('ICP B', 'Entreprises : ETI')]);
     render(<RechercheStrategie slug="simatis" onAjoute={vi.fn()} />);

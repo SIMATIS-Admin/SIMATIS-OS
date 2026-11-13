@@ -29,6 +29,7 @@ const Atelier = lazy(() => import('./pages/Atelier.js').then((m) => ({ default: 
 const Bases = lazy(() => import('./pages/Bases.js').then((m) => ({ default: m.Bases })));
 const Bientot = lazy(() => import('./pages/Bientot.js').then((m) => ({ default: m.Bientot })));
 const Radar = lazy(() => import('./pages/Radar.js').then((m) => ({ default: m.Radar })));
+const Icp = lazy(() => import('./pages/Icp.js').then((m) => ({ default: m.Icp })));
 const Recherches = lazy(() =>
   import('./pages/Recherches.js').then((m) => ({ default: m.Recherches })),
 );
@@ -228,7 +229,15 @@ export function App() {
       case 'radar':
         return <Radar key={current.slug} slug={current.slug} />;
       case 'recherches':
-        return <Recherches key={current.slug} slug={current.slug} />;
+        return (
+          <Recherches
+            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            slug={current.slug}
+            icp={route.kind === 'ouvrir' ? route.id : undefined}
+          />
+        );
+      case 'icp':
+        return <Icp key={current.slug} slug={current.slug} nom={current.nom} />;
       case 'pipeline':
         return <Pipeline key={current.slug} slug={current.slug} />;
       case 'routines':

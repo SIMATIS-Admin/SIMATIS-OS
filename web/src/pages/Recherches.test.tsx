@@ -3,7 +3,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./radar/RechercheStrategie.js', () => ({
-  RechercheStrategie: ({ slug }: { slug: string }) => <p>Recherche selon l'ICP de {slug}</p>,
+  RechercheStrategie: ({ slug, choisi }: { slug: string; choisi?: string }) => (
+    <p>
+      Recherche selon l'ICP de {slug}
+      {choisi ? ` : ${choisi}` : ''}
+    </p>
+  ),
 }));
 
 import { Recherches } from './Recherches.js';
@@ -32,5 +37,10 @@ describe('Recherches', () => {
     expect(carte.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(carte);
     expect(screen.queryByText(/ICP de simatis/)).toBeNull();
+  });
+
+  it("s'ouvre d'emblée sur l'ICP choisi depuis l'écran ICP", () => {
+    render(<Recherches slug="simatis" icp="a1~ICP A" />);
+    expect(screen.getByText(/ICP de simatis : a1~ICP A/)).toBeTruthy();
   });
 });
