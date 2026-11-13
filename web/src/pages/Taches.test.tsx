@@ -63,6 +63,7 @@ const semaine = () => ({
       journee: false,
       agenda: 'primary',
       couleur: null,
+      statut: 'ignore',
     },
     {
       id: 'g3',
@@ -491,6 +492,8 @@ describe('Tâches screen', () => {
       // Meetings: Google events (linked to Rendez-vous) and the CRM's timed meeting.
       const dejeuner = within(creneau('2026-10-15', 14)).getByText('Déjeuner Fonderie');
       expect(dejeuner.closest('a')?.getAttribute('href')).toBe('#/simatis/rendez-vous/ouvrir/g1');
+      // Un bloc d'organisation s'affiche atténué ; un rendez-vous reste en valeur.
+      expect(dejeuner.closest('a')?.classList.contains('gr-orga')).toBe(true);
       expect(within(creneau('2026-10-15', 16)).getByText('Point mensuel')).toBeTruthy();
       expect(within(bande('2026-10-16')).getByText('Salon fictif')).toBeTruthy();
       // A slot of more than two hours frames the day, without being a meeting to open.

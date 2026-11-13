@@ -8,6 +8,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { perimetre } from '../instances/service.js';
+import { statutsAgenda } from '../conversion/classement-rdv.js';
 import { logEvent } from '../journal/service.js';
 import { rendezVous } from '../pilotage/brief.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
@@ -188,11 +189,13 @@ export async function listTaches(
     )[0],
   }));
   const { rdv, etat } = await rendezVous(instance, data.agenda, deps, debut, fin);
+  // L'Agenda distingue les rendez-vous de l'organisation grâce au statut de chaque bloc.
+  const statuts = await statutsAgenda(db, instance, rdv);
   return {
     taches: data.taches,
     enRetard: data.enRetard,
     sansEcheance: data.sansEcheance,
-    rdv,
+    rdv: rdv.map((e) => ({ ...e, statut: statuts.get(e.id) ?? 'a_trier' })),
     rdvEtat: etat,
     hubspot: data.crm !== null,
     ecrit: data.crm?.sens === 'deux_sens',
