@@ -8,7 +8,7 @@ import {
   type DeckCours,
 } from '../api.js';
 import { useModePresentation } from '../shell/modePresentation.js';
-import { documentSlide, incorporerImages, lireSlideHtml } from './html.js';
+import { documentImpression, documentSlide, incorporerImages, lireSlideHtml } from './html.js';
 import { Markdown } from './Markdown.js';
 import { SlideHtml } from './SlideHtml.js';
 import {
@@ -31,7 +31,13 @@ const LIBELLES: Record<TypeSlide, string> = {
 };
 
 // Pour un support en HTML libre, le document de chaque slide est préparé au chargement.
-type Charge = { manifest: Manifest; modules: Module[]; documents: Map<string, string> };
+type Charge = {
+  manifest: Manifest;
+  modules: Module[];
+  documents: Map<string, string>;
+  // Le support entier, prêt à imprimer en PDF (supports HTML seulement).
+  impression: string | null;
+};
 type Position = { m: number; s: number };
 
 const AIDE: [string, string][] = [
@@ -91,6 +97,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
       if (manifest.format === 'html') {
         const css = manifest.css ? await fetchTexteCours(slug, deck, manifest.css) : '';
         const documents = new Map<string, string>();
+        const rendus = new Map<string, string>();
         const modules: Module[] = await Promise.all(
           manifest.parties.map(async (partie) => {
             const slides = await Promise.all(
@@ -104,6 +111,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
                 const html = await incorporerImages(slide.html, (c) =>
                   imageEnDonnees(slug, deck, c),
                 );
+                rendus.set(f, html);
                 documents.set(f, documentSlide(html, css, manifest.polices));
                 return { ...slide, html: f };
               }),
@@ -116,7 +124,15 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
             };
           }),
         );
-        return { manifest, modules, documents };
+        const pages = manifest.parties
+          .flatMap((p) => p.slides)
+          .flatMap((f) => (rendus.has(f) ? [rendus.get(f)!] : []));
+        return {
+          manifest,
+          modules,
+          documents,
+          impression: documentImpression(pages, css, manifest.polices),
+        };
       }
       const sources = await Promise.all(
         manifest.modules.map((f) => fetchTexteCours(slug, deck, f)),
@@ -124,7 +140,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
       const modules = sources.map((src) =>
         lireModule(remplacerVariables(src, profil, manifest.generique)),
       );
-      return { manifest, modules, documents: new Map<string, string>() };
+      return { manifest, modules, documents: new Map<string, string>(), impression: null };
     })().then(
       (c) => !annule && setEtat({ statut: 'pret', ...c }),
       (e: unknown) =>
@@ -204,6 +220,27 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
         message: e instanceof Error ? e.message : 'Suppression impossible',
       });
     }
+  };
+
+  // Archive : le support entier, une slide par page, dans la boîte d'impression du navigateur
+  // (« Enregistrer au format PDF »). Le cadre n'exécute aucun script.
+  const imprimer = (document_: string) => {
+    const cadre = document.createElement('iframe');
+    cadre.setAttribute('sandbox', 'allow-same-origin allow-modals');
+    cadre.setAttribute('aria-hidden', 'true');
+    cadre.style.cssText = 'position:fixed;left:-9999px;top:0;width:1920px;height:1080px;border:0';
+    cadre.srcdoc = document_;
+    cadre.onload = () => {
+      const fenetre = cadre.contentWindow;
+      void (fenetre?.document.fonts?.ready ?? Promise.resolve()).then(() => {
+        setTimeout(() => {
+          fenetre?.focus();
+          fenetre?.print();
+          setTimeout(() => cadre.remove(), 60_000);
+        }, 300);
+      });
+    };
+    document.body.appendChild(cadre);
   };
 
   const resoudre = useMemo(() => (src: string) => urlFichierCours(slug, deck, src), [slug, deck]);
@@ -358,6 +395,11 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
         >
           Notes
         </button>
+        {etat.impression && (
+          <button className="btn sm" type="button" onClick={() => imprimer(etat.impression!)}>
+            Imprimer en PDF
+          </button>
+        )}
         <button className="btn sm" type="button" onClick={() => void terminer()}>
           Terminer et supprimer
         </button>

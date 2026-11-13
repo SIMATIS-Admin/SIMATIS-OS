@@ -53,3 +53,14 @@ export function documentSlide(section: string, css: string, polices: string[]): 
     .join('');
   return `<!doctype html><html><head><meta charset="utf-8">${liens}<style>html,body{margin:0;padding:0;background:#fff}${BASE}body{width:1920px;height:1080px;overflow:hidden}body>section{position:relative;width:1920px;height:1080px;box-sizing:border-box;overflow:hidden}${css.replace(/<\/style/gi, '')}</style></head><body>${section}</body></html>`;
 }
+
+// Le support entier, une slide par page de 1920 × 1080, pour l'impression (« Enregistrer au format
+// PDF » du navigateur) : l'archive montre ce que le public a vu. Les fonds et couleurs sont
+// imprimés tels quels.
+export function documentImpression(sections: string[], css: string, polices: string[]): string {
+  const liens = polices
+    .map((h) => `<link rel="stylesheet" href="${h.replace(/"/g, '%22')}">`)
+    .join('');
+  const pages = sections.map((s) => `<div class="pg-impr">${s}</div>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8">${liens}<style>@page{size:1920px 1080px;margin:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0;background:#fff}${BASE}.pg-impr{position:relative;width:1920px;height:1080px;overflow:hidden;break-after:page;page-break-after:always}.pg-impr:last-child{break-after:auto;page-break-after:auto}.pg-impr>section{position:relative;width:1920px;height:1080px;box-sizing:border-box;overflow:hidden}${css.replace(/<\/style/gi, '')}</style></head><body>${pages}</body></html>`;
+}
