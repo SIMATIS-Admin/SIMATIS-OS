@@ -500,6 +500,10 @@ export type Evenement = {
   couleur: string | null;
   // Opens the meeting in Google Agenda.
   lien: string | null;
+  // One occurrence of a repeating series, and a video-call link: used to sort meetings from
+  // organisation blocks. Optional because meetings created in the OS carry neither.
+  recurrent?: boolean;
+  visio?: boolean;
 };
 
 // Google Agenda's fixed event palette (colorId 1 to 11), so a meeting keeps its Google colour.
@@ -580,6 +584,9 @@ export async function evenements(
           location?: string;
           htmlLink?: string;
           colorId?: string;
+          recurringEventId?: string;
+          hangoutLink?: string;
+          conferenceData?: { entryPoints?: { uri?: string }[] };
           extendedProperties?: { private?: Record<string, string> };
           attendees?: { email?: string; self?: boolean }[];
           start?: { dateTime?: string; date?: string };
@@ -615,6 +622,8 @@ export async function evenements(
           agenda: id,
           couleur: COULEURS_EVENEMENT[e.colorId ?? ''] ?? null,
           lien: e.htmlLink ?? null,
+          recurrent: !!e.recurringEventId,
+          visio: !!e.hangoutLink || !!e.conferenceData?.entryPoints?.length,
         });
       }
       pageToken = page.nextPageToken;

@@ -239,6 +239,85 @@ describe('Rendez-vous and Devis', () => {
     ).toBe(400);
   });
 
+  it('classe seul les événements, laisse le doute à Marc, respecte ses choix et trie en masse', async () => {
+    const instance = await getInstanceBySlug(t.app.db, 'helioval');
+    if (!instance) throw new Error('no instance');
+    const evenement = (id: string, extra: Record<string, unknown>, fin = '13:00') => ({
+      id,
+      summary: `Bloc fictif ${id}`,
+      start: { dateTime: '2026-10-14T12:00:00Z' },
+      end: { dateTime: `2026-10-14T${fin}:00Z` },
+      ...extra,
+    });
+    const inconnu = [{ email: 'moi@example.fr', self: true }, { email: 'qui@example.test' }];
+    const fetch = (url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url.includes('oauth2')
+              ? { access_token: 'a' }
+              : {
+                  items: [
+                    evenement('auto-serie', { attendees: inconnu, recurringEventId: 'serie' }),
+                    evenement(
+                      'auto-visio',
+                      { attendees: inconnu, hangoutLink: 'https://visio.test/x' },
+                      '12:30',
+                    ),
+                    evenement('auto-doute', { attendees: inconnu }),
+                    evenement('auto-solo', {}),
+                  ],
+                },
+          ),
+        ),
+      );
+    const lister = async () =>
+      new Map(
+        (
+          await listerRendezVous(
+            t.app.db,
+            instance,
+            { secretsDir, realWrites: false },
+            new Date('2026-10-09T08:00:00Z'),
+            { fetch },
+          )
+        ).rdv.map((r) => [r.id, r]),
+      );
+    const premier = await lister();
+    expect(premier.get('auto-serie')).toMatchObject({ statut: 'ignore', triAuto: true });
+    expect(premier.get('auto-visio')).toMatchObject({ statut: 'rdv', triAuto: true });
+    expect(premier.get('auto-solo')).toMatchObject({ statut: 'ignore', triAuto: true });
+    // Le doute reste à confirmer.
+    expect(premier.get('auto-doute')).toMatchObject({ statut: 'a_trier' });
+
+    // Un choix de Marc n'est jamais écrasé par une nouvelle lecture de l'agenda.
+    await send('PATCH', '/api/i/helioval/rendez-vous/auto-solo', { statut: 'rdv' });
+    expect((await lister()).get('auto-solo')).toMatchObject({ statut: 'rdv', triAuto: false });
+
+    // Tri en masse : tout ou rien, un identifiant inconnu refuse l'ensemble.
+    expect(
+      (await send('POST', '/api/i/helioval/rendez-vous/tri', { ids: [], statut: 'rdv' })).status,
+    ).toBe(400);
+    expect(
+      (
+        await send('POST', '/api/i/helioval/rendez-vous/tri', {
+          ids: ['auto-doute', 'os:inconnu'],
+          statut: 'ignore',
+        })
+      ).status,
+    ).toBe(404);
+    expect((await lister()).get('auto-doute')).toMatchObject({ statut: 'a_trier' });
+    const masse = await send('POST', '/api/i/helioval/rendez-vous/tri', {
+      ids: ['auto-doute', 'auto-serie'],
+      statut: 'rdv',
+    });
+    expect(masse.status).toBe(200);
+    expect(masse.body).toMatchObject({ n: 2 });
+    const apres = await lister();
+    expect(apres.get('auto-doute')).toMatchObject({ statut: 'rdv', triAuto: false });
+    expect(apres.get('auto-serie')).toMatchObject({ statut: 'rdv', triAuto: false });
+  });
+
   it('sorts a meeting as a RDV or not, links it to several records and keeps its compte rendu', async () => {
     const instance = await getInstanceBySlug(t.app.db, 'helioval');
     if (!instance) throw new Error('no instance');
@@ -278,8 +357,9 @@ describe('Rendez-vous and Devis', () => {
         new Date('2026-10-09T08:00:00Z'),
         { fetch },
       );
-    expect((await lister()).rdv[0]).toMatchObject({ id: 'evt-3', statut: 'a_trier' });
-    expect(await compterATrier(t.app.db, instance, new Date('2026-10-09T08:00:00Z'))).toBe(1);
+    // Un invité connu du CRM, une heure, sans série : classé rendez-vous par l'OS, rien à confirmer.
+    expect((await lister()).rdv[0]).toMatchObject({ id: 'evt-3', statut: 'rdv', triAuto: true });
+    expect(await compterATrier(t.app.db, instance, new Date('2026-10-09T08:00:00Z'))).toBe(0);
 
     // « Pas un RDV » sticks, even after the agenda is read again.
     expect(

@@ -263,6 +263,9 @@ export const rendezVous = pgTable(
     // Guests' emails (the pilot excluded), kept to offer creating the ones the CRM does not know.
     participants: jsonb('participants').$type<string[]>().notNull().default([]),
     statut: text('statut').notNull().default('a_trier'),
+    // Qui a fixé le statut : aucun (pas encore examiné), auto (classement automatique, qui peut
+    // se corriger) ou manuel (choix de Marc, jamais écrasé).
+    tri: text('tri').notNull().default('aucun'),
     compteRendu: text('compte_rendu'),
     compteRenduAt: timestamp('compte_rendu_at', { withTimezone: true }),
   },

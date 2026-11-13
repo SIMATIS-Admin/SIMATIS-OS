@@ -1011,6 +1011,8 @@ export type RendezVous = {
   compteRendu: boolean;
   // a_trier: not decided yet; rdv: a commercial meeting; ignore: « Pas un RDV ».
   statut: StatutRdv;
+  // Classé par l'OS plutôt que par Marc : l'écran le dit et se corrige d'un clic.
+  triAuto?: boolean;
 };
 export type StatutRdv = 'a_trier' | 'rdv' | 'ignore';
 export type RendezVousReponse = {
@@ -1077,6 +1079,8 @@ export const fetchRdv = (slug: string, id: string) =>
   getJson<RdvFiche>(inst(slug, `rendez-vous/${encodeURIComponent(id)}`));
 export const trierRdv = (slug: string, id: string, statut: StatutRdv) =>
   sendJson<{ ok: true }>('PATCH', inst(slug, `rendez-vous/${encodeURIComponent(id)}`), { statut });
+export const trierRdvEnMasse = (slug: string, ids: string[], statut: StatutRdv) =>
+  sendJson<{ ok: true; n: number }>('POST', inst(slug, 'rendez-vous/tri'), { ids, statut });
 export const lierRdv = (
   slug: string,
   id: string,
