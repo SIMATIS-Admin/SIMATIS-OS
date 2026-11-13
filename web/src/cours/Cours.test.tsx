@@ -238,6 +238,48 @@ describe('Lecteur, support en HTML libre', () => {
   });
 });
 
+describe('Archive PDF', () => {
+  const HTML = {
+    'manifest.json': JSON.stringify({
+      titre: 'Deck HTML fictif',
+      format: 'html',
+      css: 'deck.css',
+      parties: [{ titre: 'A', slides: ['slides/une.html', 'slides/deux.html'] }],
+    }),
+    'deck.css': 'section { color: red; }',
+    'slides/une.html': '<section id="une"><h2>Première</h2></section>',
+    'slides/deux.html': '<section id="deux"><h2>Deuxième</h2></section>',
+  } as Record<string, string>;
+
+  it('imprime le support entier, une slide par page, dans un cadre sans script', async () => {
+    api.fetchTexteCours.mockImplementation((_s: string, _d: string, f: string) =>
+      f in HTML ? Promise.resolve(HTML[f]) : Promise.reject(new Error('introuvable')),
+    );
+    location.hash = '#/simatis/cours/deck/html-fictif';
+    render(<Cours slug="simatis" deck="html-fictif" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Imprimer en PDF' }));
+    const cadre = document.querySelector<HTMLIFrameElement>('iframe[aria-hidden="true"]')!;
+    expect(cadre.getAttribute('sandbox')).toBe('allow-same-origin allow-modals');
+    expect(cadre.getAttribute('sandbox')).not.toContain('allow-scripts');
+    const doc = cadre.getAttribute('srcdoc')!;
+    expect(doc.match(/class="pg-impr"/g)).toHaveLength(2);
+    expect(doc).toContain('<h2>Première</h2>');
+    expect(doc).toContain('<h2>Deuxième</h2>');
+    expect(doc).toContain('@page{size:1920px 1080px;margin:0}');
+    cadre.remove();
+  });
+
+  it('un support en markdown n’a pas ce bouton', async () => {
+    location.hash = '#/simatis/cours/deck/exemple-fictif';
+    api.fetchTexteCours.mockImplementation((_s: string, _d: string, f: string) =>
+      f in FICHIERS ? Promise.resolve(FICHIERS[f]) : Promise.reject(new Error('introuvable')),
+    );
+    render(<Cours slug="simatis" deck="exemple-fictif" />);
+    await screen.findByRole('heading', { name: /Bonjour/ });
+    expect(screen.queryByRole('button', { name: 'Imprimer en PDF' })).toBeNull();
+  });
+});
+
 describe('Liste des supports', () => {
   it('propose chaque support, qui ouvre le lecteur', async () => {
     api.fetchDecksCours.mockResolvedValue([
