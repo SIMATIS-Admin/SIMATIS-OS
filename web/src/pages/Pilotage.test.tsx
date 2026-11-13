@@ -32,7 +32,8 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
-  return json(brief);
+  // Le Brief lit aussi le Radar pour sa tuile « Ont répondu ».
+  return json(url.endsWith('/radar') ? { ontRepondu: { total: 2 } } : brief);
 }
 
 describe('pilot screens', () => {

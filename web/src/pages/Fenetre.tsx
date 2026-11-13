@@ -8,6 +8,7 @@ export function Fenetre({
   sousTitre,
   onFermer,
   tiroir = false,
+  large = false,
   children,
   pied,
 }: {
@@ -15,6 +16,7 @@ export function Fenetre({
   sousTitre?: ReactNode;
   onFermer: () => void;
   tiroir?: boolean;
+  large?: boolean;
   children: ReactNode;
   pied?: ReactNode;
 }) {
@@ -29,7 +31,7 @@ export function Fenetre({
     >
       <div
         ref={ref}
-        className={`bv-fenetre ${tiroir ? 'tiroir' : ''}`}
+        className={`bv-fenetre ${tiroir ? 'tiroir' : ''} ${large ? 'large' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={titre}

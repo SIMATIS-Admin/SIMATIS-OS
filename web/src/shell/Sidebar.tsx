@@ -23,14 +23,15 @@ type Props = {
   onMoveFavori: (id: string, cibleId: string, apres: boolean) => void;
 };
 
+// Le Cockpit est épinglé tout en haut du menu, en plus de sa place dans Mon espace.
+const COCKPIT = allItems().find((it) => it.id === 'cockpit')!;
+
 // Own MIME type, so a favourite is never mistaken for a pipeline card.
 const FAV_MIME = 'application/x-simatis-fav';
 // Which sections are folded, kept on this screen between visits.
 const CLE_OUVERTS = 'simatis.nav.ouverts';
 // Rubriques à pastille de notification : l'étoile n'y est pas proposée (elle chevauchait le compteur).
 const SANS_ETOILE = ['agenda', 'cockpit', 'rendez-vous'];
-// Prospection et Bases vivantes s'ouvrent depuis le Radar : lui seul est allumé dans le menu.
-const SOUS_ECRANS_RADAR = ['prospection', 'bases'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
 const memoriser = (cle: string, valeur: string) => {
@@ -79,8 +80,7 @@ export function Sidebar({
     memoriser(CLE_REDUITE, reduite ? '0' : '1');
   };
 
-  const actif = (it: NavItem) =>
-    view === it.id || (it.id === 'radar' && SOUS_ECRANS_RADAR.includes(view));
+  const actif = (it: NavItem) => view === it.id;
   const link = (it: NavItem, inFavoris = false, index = -1) => {
     const fav = favoris.includes(it.id);
     const dragProps = inFavoris
@@ -235,6 +235,7 @@ export function Sidebar({
         </div>
       )}
       <nav className="nav" aria-label="Navigation principale">
+        <div className="nav-group cockpit-fixe">{link(COCKPIT)}</div>
         {favItems.length > 0 && (
           <div className="nav-group favs">
             <span>
@@ -244,11 +245,10 @@ export function Sidebar({
             {favItems.map((it, index) => link(it, true, index))}
           </div>
         )}
+        <div className="nav-espace-titre">Mon espace</div>
         {NAV.map((g) => {
-          const items = g.items.filter(
-            (it) =>
-              allowed(it, current.modules) && !it.masque && !favItems.some((f) => f.id === it.id),
-          );
+          // Un favori est un doublon : il reste à sa place dans Mon espace.
+          const items = g.items.filter((it) => allowed(it, current.modules));
           if (items.length === 0) return null;
           const ouvert = ouverts[g.title] ?? !g.later;
           return (

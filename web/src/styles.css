@@ -414,6 +414,18 @@ a {
   height: 13px;
   fill: currentColor;
 }
+.nav-group.cockpit-fixe {
+  margin-top: 0;
+}
+.nav-espace-titre {
+  margin-top: 16px;
+  padding: 10px 10px 0;
+  border-top: 1px solid #1e4b82;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8fa7c6;
+}
 .nav-group.favs {
   padding-bottom: 12px;
   border-bottom: 1px solid #1e4b82;
@@ -2334,6 +2346,7 @@ textarea.input {
   .side.reduite .brand-name,
   .side.reduite .inst-btn > span:not(.inst-dot),
   .side.reduite .nav-group > span,
+  .side.reduite .nav-espace-titre,
   .side.reduite .later-btn,
   .side.reduite .nav a .lbl,
   .side.reduite .nav .fav,
@@ -5234,6 +5247,9 @@ label.btn.off {
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(12, 37, 63, 0.35);
 }
+.bv-fenetre.large {
+  width: min(1120px, 100%);
+}
 .bv-fenetre.tiroir {
   position: fixed;
   top: 0;
@@ -7028,15 +7044,37 @@ div.pb-ligne {
   margin-top: 10px;
 }
 
-/* Cockpit : l'Inbox puis le brief du jour, séparés par un filet. */
+/* Cockpit : un bandeau Inbox replié, puis la synthèse du jour. */
 .cockpit {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 16px;
 }
-.cockpit-brief {
-  border-top: 1px solid var(--line);
-  padding-top: 24px;
+.cockpit-bandeau {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  font-weight: 600;
+}
+.cockpit-bandeau svg {
+  width: 18px;
+  height: 18px;
+}
+.cockpit-bandeau .btn {
+  margin-left: auto;
+}
+.cockpit-bandeau.vide {
+  padding: 6px 14px;
+  color: var(--ink-2);
+  font-weight: 400;
+  background: transparent;
 }
 
 /* Réponse préparée par la routine, dans le détail d'une entrée de l'Inbox. */

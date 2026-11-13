@@ -88,10 +88,21 @@
   letter-spacing: 0.09em;
   font-size: 12px;
 }
+.brief-date {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-size: 12px;
+  color: var(--ink-2);
+}
 .brief-priorite {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px 24px;
   background: #e0f1eb;
-  border-radius: 20px;
-  padding: 30px 34px;
+  border-radius: 16px;
+  padding: 20px 24px;
 }
 .brief-eyebrow {
   display: flex;
@@ -107,17 +118,16 @@
   height: 18px;
 }
 .brief-priorite h2 {
-  font-size: clamp(23px, 2.5vw, 30px);
-  letter-spacing: -0.03em;
-  margin: 16px 0 10px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
 }
 .brief-priorite p {
   color: #365a50;
   max-width: 660px;
 }
 .brief-priorite .btn {
-  margin-top: 18px;
-  padding: 12px 18px;
+  padding: 10px 16px;
   white-space: normal;
   text-decoration: none;
 }
@@ -138,7 +148,8 @@
   margin: 0;
 }
 .brief-progression {
-  width: min(340px, 45%);
+  grid-column: 1 / -1;
+  width: 100%;
   display: grid;
   gap: 5px;
   font-size: 13px;
@@ -168,10 +179,22 @@
   background: #26816c;
 }
 .brief-reperes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px;
+  margin-top: 14px;
+}
+.brief-reperes .kpi .l {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.brief-reperes .kpi .l svg {
+  width: 15px;
+  height: 15px;
 }
 .brief-reperes .kpi {
-  padding: 18px 20px;
+  padding: 14px 16px;
   box-shadow: none;
 }
 .brief-reperes .kpi .v {
@@ -179,12 +202,12 @@
 }
 .brief-details {
   display: grid;
-  gap: 16px;
-  margin-top: 20px;
+  gap: 10px;
+  margin-top: 14px;
 }
 .brief-historique summary {
   cursor: pointer;
-  padding: 18px 20px;
+  padding: 12px 16px;
   color: var(--ink-2);
   font-weight: 600;
 }
@@ -259,7 +282,8 @@
     grid-template-columns: 1fr;
   }
   .brief-priorite {
-    padding: 22px;
+    grid-template-columns: 1fr;
+    padding: 18px;
   }
   .brief-bonjour {
     margin-top: 8px;
