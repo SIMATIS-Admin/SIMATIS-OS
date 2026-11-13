@@ -7,7 +7,10 @@ const api = vi.hoisted(() => ({
   fetchDiapositivesRestitution: vi.fn(),
   fetchProjetsDiag: vi.fn(),
   purgerPresentationRestitutionDiag: vi.fn(),
+  urlPdfDeckDiag: (slug: string, id: string) => `/pdf/${slug}/${id}`,
 }));
+const pdf = vi.hoisted(() => ({ chargerPdf: vi.fn() }));
+vi.mock('../shell/pdf.js', () => pdf);
 vi.mock('../api.js', () => api);
 
 beforeEach(() => {
@@ -96,5 +99,25 @@ describe('Diaporama d’un support d’ouverture', () => {
       expect(api.purgerPresentationRestitutionDiag).toHaveBeenCalledWith('demo', 'p1'),
     );
     await vi.waitFor(() => expect(window.location.hash).toBe('#/demo/diagnostics/ouvrir/p1'));
+  });
+
+  it('affiche un deck PDF page par page, et ne dessine que la page affichée', async () => {
+    const dessiner = vi.fn(() => ({ promise: Promise.resolve() }));
+    const getPage = vi.fn(() =>
+      Promise.resolve({
+        getViewport: () => ({ width: 1920, height: 1080 }),
+        render: dessiner,
+      }),
+    );
+    pdf.chargerPdf.mockResolvedValue({ numPages: 3, getPage });
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({})) as never;
+    render(<DiaporamaProjet slug="demo" genre="deck" id="p1" />);
+    await vi.waitFor(() => expect(getPage).toHaveBeenCalledTimes(1));
+    expect(pdf.chargerPdf).toHaveBeenCalledWith('/pdf/demo/p1');
+    expect(getPage).toHaveBeenCalledWith(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Slide suivante' }));
+    await vi.waitFor(() => expect(getPage).toHaveBeenCalledWith(2));
+    expect(getPage).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Terminer et supprimer de l’OS' })).toBeTruthy();
   });
 });

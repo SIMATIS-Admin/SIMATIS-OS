@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
   demandeRestitutionDiag: vi.fn(),
   exporterRestitutionDiag: vi.fn(),
   importerDeckRestitutionDiag: vi.fn(),
+  importerPdfDeckDiag: vi.fn(),
   purgerPresentationRestitutionDiag: vi.fn(),
   rendezVousCapitalisationDiag: vi.fn(),
   proposerCapitalisationDiag: vi.fn(),
@@ -100,6 +101,7 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   opportuniteId: null,
   proposition: null,
   aPdfEntretien: false,
+  aPdfDeck: false,
   pdfEntretienNom: null,
   reponsesEntretien: [],
   historiqueReponses: [],
@@ -1206,7 +1208,7 @@ describe('Deck de restitution à l étape 5', () => {
         name: 'Préparer la présentation dans l’OS',
       });
       expect(bouton.disabled).toBe(true);
-      fireEvent.change(screen.getByLabelText(/Lien du deck/), {
+      fireEvent.change(screen.getByLabelText(/lien du deck/), {
         target: { value: 'https://claude.ai/artifact/DeckFictif01#slide-ab12' },
       });
       fireEvent.click(bouton);
@@ -1217,6 +1219,19 @@ describe('Deck de restitution à l étape 5', () => {
           'https://claude.ai/artifact/DeckFictif01#slide-ab12',
         ),
       );
+    });
+
+    it('importe le PDF du deck, puis propose de le présenter', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([deckPret()]);
+      api.importerPdfDeckDiag.mockResolvedValue(deckPret({ aPdfDeck: true }));
+      await ouvrir();
+      const champ = await screen.findByLabelText(/PDF du deck/);
+      const fichier = new File(['%PDF-1.7'], 'deck.pdf', { type: 'application/pdf' });
+      fireEvent.change(champ, { target: { files: [fichier] } });
+      await waitFor(() => expect(api.importerPdfDeckDiag).toHaveBeenCalledTimes(1));
+      expect(api.importerPdfDeckDiag.mock.calls[0]?.slice(0, 2)).toEqual(['simatis', 'p1']);
+      const lien = await screen.findByRole('link', { name: 'Présenter le deck' });
+      expect(lien.getAttribute('href')).toBe('#/simatis/diaporama/deck/p1');
     });
 
     it('supprime la présentation de l’OS quand le deck a été exporté', async () => {

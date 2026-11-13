@@ -1501,6 +1501,8 @@ export type ProjetDiag = {
     | 'entretien'
     | null;
   aPdfEntretien: boolean;
+  // Un PDF de deck est gardé dans l'OS pour la présentation.
+  aPdfDeck: boolean;
   pdfEntretienNom: string | null;
   reponsesEntretien: { section: string; numero: number; reponse: LettreReponse }[];
   historiqueReponses: { question: string; ancienne: string; nouvelle: string; le: string }[];
@@ -1805,6 +1807,19 @@ export const purgerPresentationRestitutionDiag = (slug: string, id: string) =>
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/purger`),
     {},
   );
+// PDF du deck exporté de claude.ai : l'OS l'affiche tel quel pour la présentation.
+export const importerPdfDeckDiag = (
+  slug: string,
+  id: string,
+  pdf: { nom: string; base64: string },
+) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/pdf`),
+    pdf,
+  );
+export const urlPdfDeckDiag = (slug: string, id: string) =>
+  inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/pdf`);
 // Diapositives du dernier export de la restitution, pour les présenter dans l'OS.
 export const fetchDiapositivesRestitution = (slug: string, id: string) =>
   getJson<{ nom: string; diapositives: Diapositive[] }>(

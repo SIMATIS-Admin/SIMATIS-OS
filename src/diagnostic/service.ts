@@ -29,7 +29,7 @@ export class ContactIntrouvable extends Error {
 
 export type ProjetVue = Omit<
   Projet,
-  'rapport' | 'logo' | 'pdfEntretien' | 'rapportVersions' | 'restitutionDiapos'
+  'rapport' | 'logo' | 'pdfEntretien' | 'rapportVersions' | 'restitutionDiapos' | 'restitutionPdf'
 > & {
   profil: Profil | null;
   // Versions du rapport (sans contenu) : chacune se télécharge à part.
@@ -39,6 +39,7 @@ export type ProjetVue = Omit<
   // Un PowerPoint de la restitution a été exporté : il se télécharge à part.
   aPptx: boolean;
   aPdfEntretien: boolean;
+  aPdfDeck: boolean;
 };
 export type ProjetPatch = Partial<
   Pick<
@@ -74,6 +75,7 @@ export const vue = ({
   pdfEntretien,
   rapportVersions,
   restitutionDiapos,
+  restitutionPdf,
   ...projet
 }: Projet): ProjetVue => ({
   ...projet,
@@ -82,6 +84,7 @@ export const vue = ({
   aRapport: rapport !== null,
   aLogo: logo !== null,
   aPptx: restitutionDiapos !== null,
+  aPdfDeck: restitutionPdf !== null,
   aPdfEntretien: pdfEntretien !== null,
 });
 

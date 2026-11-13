@@ -135,6 +135,10 @@ export const diagnosticProjets = pgTable(
     // fait le fichier PowerPoint. Le texte du deck n'est lu qu'à la demande du pilote.
     restitutionDiapos: jsonb('restitution_diapos').$type<Diapositive[]>(),
     restitutionExportLe: timestamp('restitution_export_le', { withTimezone: true }),
+    // PDF du deck exporté de claude.ai : l'OS l'affiche tel quel pour la présentation, puis le
+    // supprime (le deck publié reste l'archive).
+    restitutionPdf: text('restitution_pdf'),
+    restitutionPdfNom: text('restitution_pdf_nom'),
     // Formule d'abonnement et options de la proposition, saisies par le pilote : source unique du
     // deck et du futur devis.
     proposition: jsonb('proposition').$type<Proposition>(),

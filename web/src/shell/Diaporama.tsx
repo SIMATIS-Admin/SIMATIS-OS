@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useModePresentation } from './modePresentation.js';
 import './diaporama.css';
 
-export type Slide = { cle: string; classe?: string; contenu: ReactNode };
+// `contenu` peut être une fonction qui apprend si la slide est affichée (pour ne dessiner qu'alors).
+export type Slide = {
+  cle: string;
+  classe?: string;
+  contenu: ReactNode | ((affichee: boolean) => ReactNode);
+};
 
 // Une idée par slide, des petits ronds pour se repérer, les flèches du clavier pour avancer.
 // Les slides masquées restent dans la page mais sortent de l'arbre d'accessibilité.
@@ -49,7 +54,7 @@ export function Diaporama({
             aria-hidden={i !== courant}
             aria-label={`Slide ${i + 1} sur ${slides.length}`}
           >
-            {s.contenu}
+            {typeof s.contenu === 'function' ? s.contenu(i === courant) : s.contenu}
           </section>
         ))}
       </div>

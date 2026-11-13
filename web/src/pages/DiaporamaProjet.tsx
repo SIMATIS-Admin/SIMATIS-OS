@@ -3,9 +3,12 @@ import {
   fetchDiapositivesRestitution,
   fetchProjetsDiag,
   purgerPresentationRestitutionDiag,
+  urlPdfDeckDiag,
   type Diapositive,
 } from '../api.js';
 import { Diaporama, type Slide } from '../shell/Diaporama.js';
+import { PagePdf } from '../shell/PagePdf.js';
+import { chargerPdf } from '../shell/pdf.js';
 
 // Une ligne de texte de diapositive devient une puce ; les tirets ou puces d'origine s'effacent.
 const nettoyer = (ligne: string) => ligne.replace(/^\s*[-–—•·*]\s+/, '').trim();
@@ -71,7 +74,7 @@ export function DiaporamaProjet({
   id,
 }: {
   slug: string;
-  genre: 'support' | 'restitution';
+  genre: 'support' | 'restitution' | 'deck';
   id: string;
 }) {
   const [etat, setEtat] = useState<
@@ -83,6 +86,14 @@ export function DiaporamaProjet({
   useEffect(() => {
     let annule = false;
     const charger = async () => {
+      if (genre === 'deck') {
+        const doc = await chargerPdf(urlPdfDeckDiag(slug, id));
+        return Array.from({ length: doc.numPages }, (_, i): Slide => ({
+          cle: `page-${i + 1}`,
+          classe: 'pdf',
+          contenu: (affichee) => <PagePdf doc={doc} n={i + 1} actif={affichee} />,
+        }));
+      }
       if (genre === 'restitution') {
         const { nom, diapositives } = await fetchDiapositivesRestitution(slug, id);
         return slidesDepuis(diapositives, nom);
@@ -134,17 +145,17 @@ export function DiaporamaProjet({
     return (
       <div className="empty" role="alert">
         <p>{etat.message}</p>
-        <p>Exportez le deck depuis le diagnostic pour le présenter ici. {retour}</p>
+        <p>Importez le deck depuis le diagnostic pour le présenter ici. {retour}</p>
       </div>
     );
   return (
     <Diaporama
-      nom={genre === 'support' ? 'Support d’ouverture' : 'Restitution'}
+      nom={genre === 'support' ? 'Support d’ouverture' : genre === 'deck' ? 'Deck' : 'Restitution'}
       slides={etat.slides}
       actions={
         <>
           {retour}
-          {genre === 'restitution' && (
+          {genre !== 'support' && (
             <button className="btn sm" onClick={() => void terminer()}>
               Terminer et supprimer de l’OS
             </button>
