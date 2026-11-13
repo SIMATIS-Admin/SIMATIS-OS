@@ -594,6 +594,7 @@ export type AttenteDiag = {
     | 'restitution'
     | 'restitution_export'
     | 'restitution_support'
+    | 'support_envoyer'
     | 'entretien'
     | 'capitalisation_proposer'
     | 'capitalisation_enregistrer'
@@ -1428,8 +1429,8 @@ export const promptExportRestitution = (a: AttenteDiag) =>
 // publié ; c'est l'OS qui les range (convertirDeck), sans rien réécrire.
 export const promptEnvoiSupport = (a: AttenteDiag, dossierDeck: string) =>
   [
-    `Envoie au lecteur de l'OS le deck de restitution du Diagnostic d'Endurance Commerciale du projet « ${a.nom} » (${a.activite}). Tu ne crées ni ne modifies aucun deck : tu ne publies rien.`,
-    `Deck à envoyer : ${a.restitutionLien ?? 'aucun'}.`,
+    `Envoie au lecteur de l'OS le deck ${a.demande === 'support_envoyer' ? "d'introduction (support d'ouverture)" : 'de restitution'} du Diagnostic d'Endurance Commerciale du projet « ${a.nom} » (${a.activite}). Tu ne crées ni ne modifies aucun deck : tu ne publies rien.`,
+    `Deck à envoyer : ${(a.demande === 'support_envoyer' ? a.supportLien : a.restitutionLien) ?? 'aucun'}.`,
     `Récupère tous ses fichiers avec Artifact action read, en les enregistrant dans le dossier ${dossierDeck} (paramètre out_dir) : (1) project/deck.json et project/deck.css ; (2) tous les project/slides/<id>.html, les identifiants étant ceux de la liste « order » de project/deck.json, en une seule lecture (paramètre paths) ; (3) toute image citée par les slides ou la feuille de style : chaque project/ds/… avec paths, chaque /_blob/<identifiant de 32 caractères> avec path égal à cet identifiant.`,
     "Ne modifie, ne résume et ne réécris aucun fichier : l'OS les range tels quels. Lis le deck publié, jamais une copie de mémoire.",
     `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : le nombre de slides récupérées et ce qui n'a pas pu l'être. Puis arrête-toi. Vouvoie le pilote, en français.`,
@@ -1529,7 +1530,7 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
       const rapport = a.demande === 'rapport';
       const restitution = a.demande === 'restitution';
       const exportRestitution = a.demande === 'restitution_export';
-      const envoiSupport = a.demande === 'restitution_support';
+      const envoiSupport = a.demande === 'restitution_support' || a.demande === 'support_envoyer';
       const capitalisation =
         a.demande === 'capitalisation_proposer' || a.demande === 'capitalisation_enregistrer';
       const revue = a.demande === 'revue_preparer';
@@ -1816,7 +1817,10 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
         try {
           await convertirDeck(
             path.join(dossier, 'deck'),
-            path.join(dossierSupportsPoste(), idSupportDe(a.nom)),
+            path.join(
+              dossierSupportsPoste(),
+              idSupportDe(a.nom, a.demande === 'support_envoyer' ? 'introduction' : 'restitution'),
+            ),
           );
         } catch (e) {
           erreur = `Le deck n'a pas pu être rangé dans le lecteur : ${e instanceof Error ? e.message : String(e)}`;

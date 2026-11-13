@@ -27,17 +27,18 @@ export class ContactIntrouvable extends Error {
   }
 }
 
-// Le support de la restitution d'un projet : « restitution- » et le nom du projet, en minuscules.
-export const idSupportDe = (nom: string) =>
-  `restitution-${
-    nom
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 50) || 'deck'
-  }`;
+// Le support d'un projet dans le lecteur : « restitution- » ou « introduction- » et le nom du projet,
+// en minuscules.
+export const idSupportDe = (nom: string, genre: 'restitution' | 'introduction' = 'restitution') => {
+  const slug = nom
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+  return `${genre}-${slug || 'deck'}`;
+};
 
 export type ProjetVue = Omit<
   Projet,
@@ -54,6 +55,8 @@ export type ProjetVue = Omit<
   aPdfDeck: boolean;
   // Nom du support du lecteur où cette restitution s'envoie (dossier de l'espace Supports).
   supportId: string;
+  // Idem pour l'introduction (support d'ouverture, étape 1).
+  supportIntroId: string;
 };
 export type ProjetPatch = Partial<
   Pick<
@@ -100,6 +103,7 @@ export const vue = ({
   aPptx: restitutionDiapos !== null,
   aPdfDeck: restitutionPdf !== null,
   supportId: idSupportDe(projet.nom),
+  supportIntroId: idSupportDe(projet.nom, 'introduction'),
   aPdfEntretien: pdfEntretien !== null,
 });
 

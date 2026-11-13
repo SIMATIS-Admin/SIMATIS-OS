@@ -661,7 +661,14 @@ function Support({
       onErreur(messageErreur(err));
     }
   };
-  const demander = async (action: 'preparer' | 'final' | 'rouvrir') => {
+  // Le deck d'introduction envoyé au lecteur apparaît dans l'espace Supports une fois récupéré.
+  const [introDansLeLecteur, setIntroDansLeLecteur] = useState(false);
+  useEffect(() => {
+    void Promise.resolve(fetchDecksCours(slug))
+      .then((decks) => setIntroDansLeLecteur(decks.some((d) => d.id === projet.supportIntroId)))
+      .catch(() => setIntroDansLeLecteur(false));
+  }, [slug, projet.supportIntroId, projet.statutChat, projet.demande]);
+  const demander = async (action: 'preparer' | 'final' | 'rouvrir' | 'envoyer') => {
     try {
       onChange(await demandeSupportDiag(slug, projet.id, action));
     } catch (err) {
@@ -760,6 +767,16 @@ function Support({
           {!!projet.supportTexte?.length && (
             <a className="btn" href={`#/${slug}/diaporama/support/${projet.id}`}>
               Présenter dans l’OS
+            </a>
+          )}
+          {!!projet.supportLien && statut !== 'preparation' && (
+            <button className="btn" disabled={occupe} onClick={() => void demander('envoyer')}>
+              Envoyer au lecteur de l’OS
+            </button>
+          )}
+          {introDansLeLecteur && (
+            <a className="btn go" href={`#/${slug}/cours/deck/${projet.supportIntroId}`}>
+              Présenter dans le lecteur
             </a>
           )}
           {(statut === 'aucun' || statut === 'pret') && (

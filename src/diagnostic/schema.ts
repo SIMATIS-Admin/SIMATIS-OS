@@ -42,6 +42,8 @@ export const DEMANDES = [
   'restitution_export',
   // Envoi d'un deck claude.ai vers le lecteur de l'OS : Claude en récupère les fichiers.
   'restitution_support',
+  // Envoi du support d'ouverture (étape 1) vers le lecteur de l'OS.
+  'support_envoyer',
   'entretien',
   'capitalisation_proposer',
   'capitalisation_enregistrer',

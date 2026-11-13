@@ -106,6 +106,7 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   aPdfEntretien: false,
   aPdfDeck: false,
   supportId: 'restitution-atelier-fictif-nord',
+  supportIntroId: 'introduction-atelier-fictif-nord',
   pdfEntretienNom: null,
   reponsesEntretien: [],
   historiqueReponses: [],
@@ -483,6 +484,25 @@ describe('Assistant de l étape', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     const lien = await screen.findByRole('link', { name: 'Présenter dans l’OS' });
     expect(lien.getAttribute('href')).toBe('#/simatis/diaporama/support/p1');
+  });
+
+  it('envoie le deck d’introduction au lecteur, puis propose de le présenter', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ supportStatut: 'pret', supportLien: 'https://claude.ai/artifact/DeckFictif01' }),
+    ]);
+    api.demandeSupportDiag.mockResolvedValue(projet({ supportStatut: 'pret' }));
+    api.fetchDecksCours.mockResolvedValue([
+      { id: 'introduction-atelier-fictif-nord', titre: 'Introduction', soustitre: '' },
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Envoyer au lecteur de l’OS' }));
+    await waitFor(() =>
+      expect(api.demandeSupportDiag).toHaveBeenCalledWith('simatis', 'p1', 'envoyer'),
+    );
+    const lien = await screen.findByRole('link', { name: 'Présenter dans le lecteur' });
+    expect(lien.getAttribute('href')).toBe('#/simatis/cours/deck/introduction-atelier-fictif-nord');
+    api.fetchDecksCours.mockResolvedValue([]);
   });
 
   it('un support final n affiche plus le texte des diapositives et peut être rouvert', async () => {
