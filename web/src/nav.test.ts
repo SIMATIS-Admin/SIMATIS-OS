@@ -27,8 +27,8 @@ const inst = (
 });
 
 describe('nav', () => {
-  it('has the Cockpit (Brief and Inbox together) in Piloter la journée, and no À valider', () => {
-    const pilotage = NAV.find((g) => g.title === 'Piloter la journée');
+  it('has the Cockpit (Brief and Inbox together) in Ma journée, and no À valider', () => {
+    const pilotage = NAV.find((g) => g.title === 'Ma journée');
     expect(pilotage?.items.find((i) => i.id === 'cockpit')).toMatchObject({
       label: 'Cockpit',
       icon: 'sun',
@@ -57,9 +57,19 @@ describe('nav', () => {
     expect(vueCanonique('tests-vma')).toBe('diagnostics');
   });
 
-  it('a une entrée Atelier stratégique dans Ma base, bêta, liée au module atelier', () => {
-    const maBase = NAV.find((g) => g.title === 'Ma base');
-    const entree = maBase?.items.find((i) => i.id === 'atelier');
+  it("range Mon espace en rubriques : Détecter (Radar, Recherches, ICP, Campagnes), Vendre, Ma base, Piloter l'activité", () => {
+    const ids = (titre: string) => NAV.find((g) => g.title === titre)?.items.map((i) => i.id);
+    expect(ids('Détecter')).toEqual(['radar', 'bases', 'icp', 'prospection']);
+    expect(ids('Vendre')).toEqual(['pipeline', 'rendez-vous', 'devis', 'diagnostics', 'relais']);
+    expect(ids('Ma base')).toEqual(['entreprises', 'contacts']);
+    expect(ids("Piloter l'activité")).toEqual(['atelier', 'tableau', 'cerveau', 'demarrage']);
+    // Plus aucun écran caché du menu : chaque entrée est visible.
+    expect(allItems().every((i) => !('masque' in i))).toBe(true);
+  });
+
+  it('a une entrée Atelier stratégique dans Piloter l’activité, bêta, liée au module atelier', () => {
+    const piloter = NAV.find((g) => g.title === "Piloter l'activité");
+    const entree = piloter?.items.find((i) => i.id === 'atelier');
     expect(entree).toMatchObject({ label: 'Atelier stratégique', beta: true, module: 'atelier' });
     expect(isBuilt('atelier')).toBe(true);
     expect(allowed(entree!, [])).toBe(false);

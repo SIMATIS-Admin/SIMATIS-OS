@@ -78,31 +78,39 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: /Gestion/ })).toBeNull();
   });
 
-  it('groups the menu along the sales cycle, with the day first', () => {
+  it('groups Mon espace along the sales cycle, with the day first', () => {
     const { container } = renderSidebar(simatis, []);
     const titres = [...container.querySelectorAll('.nav-group > .later-btn')].map((b) =>
       b.textContent?.trim(),
     );
     expect(titres).toEqual([
-      'Piloter la journée',
-      '1 · Détecter',
-      '2 · Vendre',
+      'Ma journée',
+      'Détecter',
+      'Vendre',
       'Ma base',
       "Piloter l'activité",
       'Plus',
     ]);
+    const groupes = [...container.querySelectorAll('.nav-group:not(.cockpit-fixe)')];
     const libelles = (i: number) =>
-      [...(container.querySelectorAll('.nav-group')[i]?.querySelectorAll('.lbl') ?? [])].map(
-        (n) => n.textContent,
-      );
+      [...(groupes[i]?.querySelectorAll('.lbl') ?? [])].map((n) => n.textContent);
     expect(libelles(0)).toEqual(['Cockpit', 'Agenda']);
-    expect(libelles(1)).toEqual(['Radar']);
+    expect(libelles(1)).toEqual(['Radar', 'Recherches', 'ICP', 'Campagnes']);
     expect(libelles(2)).toContain('Pipeline');
     expect(libelles(3)).toEqual(['Entreprises', 'Contacts']);
   });
 
-  it('lights up the Radar while Prospection or Bases vivantes is open, and hides them from the menu', () => {
-    const { container, unmount } = render(
+  it('pins the Cockpit above Mon espace, which also lists it', () => {
+    const { container } = renderSidebar(simatis, []);
+    const nav = container.querySelector('nav')!;
+    const premier = nav.querySelector('a');
+    expect(premier?.textContent).toContain('Cockpit');
+    expect(nav.querySelector('.nav-espace-titre')?.textContent).toBe('Mon espace');
+    expect(screen.getAllByRole('link', { name: /Cockpit/ })).toHaveLength(2);
+  });
+
+  it('shows Recherches and Campagnes as their own entries, lit only on their own screen', () => {
+    const { container } = render(
       <Sidebar
         instances={[simatis, mandat]}
         current={simatis}
@@ -113,19 +121,23 @@ describe('Sidebar', () => {
         onMoveFavori={() => undefined}
       />,
     );
-    expect(screen.queryByRole('link', { name: /Prospection/ })).toBeNull();
-    expect(screen.queryByRole('link', { name: /Bases vivantes/ })).toBeNull();
-    expect(screen.getByRole('link', { name: /Radar/ }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: /Recherches/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Campagnes/ }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(screen.getByRole('link', { name: /Radar/ }).getAttribute('aria-current')).toBeNull();
     expect(container.querySelectorAll('.nav a.on')).toHaveLength(1);
-    unmount();
-    renderSidebar(simatis, ['prospection']);
-    expect(screen.getAllByRole('link', { name: /Prospection/ })).toHaveLength(1);
   });
 
-  it('removes the favourites from their section, so nothing appears twice', () => {
-    renderSidebar(simatis, ['pipeline', 'cockpit']);
-    expect(screen.getAllByText('Cockpit')).toHaveLength(1);
-    expect(screen.getAllByText('Pipeline')).toHaveLength(1);
+  it('keeps a favourite in its section: it appears twice, above and in Mon espace', () => {
+    renderSidebar(simatis, ['pipeline']);
+    expect(screen.getAllByText('Pipeline')).toHaveLength(2);
+    const favs = document.querySelector('.nav-group.favs');
+    expect(favs?.textContent).toContain('Pipeline');
+    const dansEspace = [...document.querySelectorAll('.nav-group:not(.favs) a')].filter((a) =>
+      a.textContent?.includes('Pipeline'),
+    );
+    expect(dansEspace).toHaveLength(1);
   });
 
   it('hides Devis for a mandate, even when it is a favourite', () => {
@@ -201,8 +213,8 @@ describe('Sidebar', () => {
     expect(document.querySelector('.side')?.classList.contains('reduite')).toBe(false);
   });
 
-  it('shows every section without a toggle, and keeps one entry per screen', () => {
-    renderSidebar(simatis, ['pipeline']);
+  it('shows every section without a toggle, with one entry per screen when nothing is a favourite', () => {
+    renderSidebar(simatis, []);
     expect(screen.queryByRole('button', { name: 'Mes espaces' })).toBeNull();
     expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /Pipeline/ })).toHaveLength(1);
@@ -227,7 +239,7 @@ describe('Sidebar', () => {
       />,
     );
     expect(container.querySelector('a button, a [role="button"]')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Descendre Prospection' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Descendre Campagnes' }));
     expect(move).toHaveBeenCalledWith('prospection', 'bases', true);
   });
 

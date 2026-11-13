@@ -6,8 +6,6 @@ export type NavItem = {
   module?: string;
   // Écran en bêta : une pastille s'affiche à côté du nom.
   beta?: boolean;
-  // Écran qui existe mais ne figure pas dans le menu : on l'ouvre depuis un autre écran (Radar).
-  masque?: boolean;
 };
 export type NavGroup = { title: string; later?: boolean; items: NavItem[] };
 
@@ -18,27 +16,26 @@ const item = (id: string, label: string, icon: string, module?: string): NavItem
   module,
 });
 
-// Groupes dans l'ordre du cycle de vente : détecter des suspects, puis vendre aux prospects (spec du 12 novembre 2026).
+// « Mon espace » : l'arborescence complète de l'OS, rangée par rubrique (spec du 13 novembre 2026).
+// Le Cockpit s'y trouve aussi ; le menu l'affiche en plus tout en haut, toujours visible.
 export const NAV: NavGroup[] = [
   {
-    title: 'Piloter la journée',
-    items: [
-      // Brief du jour et Inbox réunis : on agit sur l'Inbox, puis on lit le brief.
-      item('cockpit', 'Cockpit', 'sun'),
-      item('agenda', 'Agenda', 'clock'),
-    ],
+    title: 'Ma journée',
+    items: [item('cockpit', 'Cockpit', 'sun'), item('agenda', 'Agenda', 'clock')],
   },
   {
-    title: '1 · Détecter',
+    title: 'Détecter',
     items: [
       item('radar', 'Radar', 'radar'),
-      // Gardés pour leurs adresses, leurs titres et les favoris ; on y accède depuis le Radar.
-      { ...item('prospection', 'Prospection', 'send'), masque: true },
-      { ...item('bases', 'Bases vivantes', 'db'), masque: true },
+      // Recherches et Campagnes ouvrent les écrans Bases vivantes et Prospection ; l'écran ICP
+      // viendra avec son propre chantier.
+      item('bases', 'Recherches', 'search'),
+      item('icp', 'ICP', 'flag'),
+      item('prospection', 'Campagnes', 'send'),
     ],
   },
   {
-    title: '2 · Vendre',
+    title: 'Vendre',
     items: [
       item('pipeline', 'Pipeline', 'kanban'),
       item('rendez-vous', 'Rendez-vous', 'cal'),
@@ -51,16 +48,13 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Ma base',
-    items: [
-      item('entreprises', 'Entreprises', 'building'),
-      item('contacts', 'Contacts', 'users'),
-      // Atelier de lancement d'un mandat : stratégie, objectifs, ICP, feuille de route (spec du 28 octobre 2026).
-      { ...item('atelier', 'Atelier stratégique', 'map', 'atelier'), beta: true },
-    ],
+    items: [item('entreprises', 'Entreprises', 'building'), item('contacts', 'Contacts', 'users')],
   },
   {
     title: "Piloter l'activité",
     items: [
+      // Atelier de lancement d'un mandat : stratégie, objectifs, ICP, feuille de route (spec du 28 octobre 2026).
+      { ...item('atelier', 'Atelier stratégique', 'map', 'atelier'), beta: true },
       item('tableau', 'Tableau de bord', 'chart'),
       item('cerveau', 'Second cerveau', 'brain', 'cerveau'),
       item('demarrage', 'Démarrage du mandat', 'flag', 'demarrage'),

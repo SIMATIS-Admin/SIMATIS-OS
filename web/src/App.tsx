@@ -214,6 +214,10 @@ export function App() {
             onChange={() => setRecharge((n) => n + 1)}
             ajoutOuvert={ajoutInbox}
             onAjoutFerme={() => setAjoutInbox(false)}
+            onFerme={() => {
+              setAjoutInbox(false);
+              setPasAPasInbox(false);
+            }}
             pasAPas={pasAPasInbox}
             entete={{ gauche: enteteGauche, droite: enteteDroite }}
           />

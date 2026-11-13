@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchBrief, type Brief as BriefData, type Compte } from '../api.js';
+import { fetchBrief, fetchRadar, type Brief as BriefData, type Compte } from '../api.js';
 import { Icon } from '../icons.js';
 import { PanneauProspection } from './Prospection.js';
 import { Tip } from './widgets.js';
@@ -66,6 +66,20 @@ export function Brief({ slug }: { slug: string }) {
   const [data, setData] = useState<BriefData | null>(null);
   const [maintenant, setMaintenant] = useState(() => Date.now());
   const [message, setMessage] = useState<string | null>(null);
+  // Contacts qui ont répondu à la prospection (Radar) ; la tuile disparaît si le Radar ne répond pas.
+  const [reponses, setReponses] = useState<number | null>(null);
+  useEffect(() => {
+    let actif = true;
+    fetchRadar(slug)
+      .then((r) => r.ontRepondu.total)
+      .then(
+        (n) => actif && setReponses(n),
+        () => actif && setReponses(null),
+      );
+    return () => {
+      actif = false;
+    };
+  }, [slug]);
 
   useEffect(() => {
     let actif = true;
@@ -143,40 +157,28 @@ export function Brief({ slug }: { slug: string }) {
 
   return (
     <div className="brief-focus">
-      <header className="brief-bonjour">
-        <p className="brief-date">
-          {new Date(maintenant).toLocaleDateString('fr-FR', {
-            timeZone: 'Europe/Paris',
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-          })}
-        </p>
-        <h2>On commence par l’essentiel.</h2>
-        <p>Une journée claire. Une priorité à la fois.</p>
-      </header>
+      <p className="brief-date">
+        {new Date(maintenant).toLocaleDateString('fr-FR', {
+          timeZone: 'Europe/Paris',
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        })}
+      </p>
       {message && (
         <p role="status" className="brief-erreur">
           Actualisation impossible. Les dernières données restent affichées.
         </p>
       )}
       <section className="brief-priorite" aria-label="Priorité proposée">
-        <h2>{priorite.titre}</h2>
-        <p>{priorite.texte}</p>
+        <div>
+          <h2>{priorite.titre}</h2>
+          <p>{priorite.texte}</p>
+        </div>
         <a className="btn primary" href={priorite.lien}>
           {priorite.action}
           <Icon name="play" />
         </a>
-      </section>
-      <section className="brief-avancee" aria-label="Avancée du jour">
-        <div>
-          <h2>Chaque action compte.</h2>
-          <p>
-            {faites > 0
-              ? `${faites} ${pluriel(faites, 'tâche')} ${pluriel(faites, 'terminée')} aujourd’hui.`
-              : 'Ton prochain pas commence ici.'}
-          </p>
-        </div>
         {total > 0 && (
           <div className="brief-progression">
             <span>
@@ -187,37 +189,14 @@ export function Brief({ slug }: { slug: string }) {
               value={faites}
               max={total}
             />
-            <small>Terminées aujourd’hui + à faire aujourd’hui et en retard</small>
           </div>
         )}
       </section>
-      <div className="grid g3 brief-reperes">
-        <a className={`panel kpi kpi-link ${retard > 0 ? 'alerte' : ''}`} href={taches}>
-          <span className="l">Tâches en retard</span>
-          <span className="v">{retard}</span>
-          <span className="small muted">
-            {data.source === 'hubspot' ? 'Tâches HubSpot' : "Tâches de l'OS"}
-          </span>
-        </a>
-        <a className="panel kpi kpi-link" href={taches}>
-          <span className="l">Tâches du jour</span>
-          <span className="v">{jour.total}</span>
-          <span className="activ-d">
-            <span>
-              <Icon name="send" />
-              <b className="num">{jour.email}</b> {pluriel(jour.email, 'email')}
-            </span>
-            <span>
-              <Icon name="phone" />
-              <b className="num">{jour.appel}</b> {pluriel(jour.appel, 'appel')}
-            </span>
-            <span className="muted">
-              <b className="num">{jour.autre}</b> {pluriel(jour.autre, 'action')}
-            </span>
-          </span>
-        </a>
+      <div className="brief-reperes">
         <a className="panel kpi kpi-link" href={`#/${slug}/agenda`}>
-          <span className="l">Rendez-vous et réunions</span>
+          <span className="l">
+            <Icon name="cal" /> Rendez-vous et réunions
+          </span>
           <span className="v">{data.rdvEtat === 'ok' ? data.rdv.length : '–'}</span>
           <span className="small muted">
             {data.rdvEtat === 'non_configure'
@@ -227,12 +206,40 @@ export function Brief({ slug }: { slug: string }) {
                 : "Aujourd'hui"}
           </span>
         </a>
+        <a className="panel kpi kpi-link" href={taches}>
+          <span className="l">
+            <Icon name="list" /> Tâches du jour
+          </span>
+          <span className="v">{jour.total}</span>
+          <span className="small muted">
+            {jour.email} {pluriel(jour.email, 'email')} · {jour.appel}{' '}
+            {pluriel(jour.appel, 'appel')} · {jour.autre} {pluriel(jour.autre, 'action')}
+          </span>
+        </a>
+        <a className={`panel kpi kpi-link ${retard > 0 ? 'alerte' : ''}`} href={taches}>
+          <span className="l">
+            <Icon name="clock" /> Tâches en retard
+          </span>
+          <span className="v">{retard}</span>
+          <span className="small muted">
+            {data.source === 'hubspot' ? 'Tâches HubSpot' : "Tâches de l'OS"}
+          </span>
+        </a>
+        {reponses !== null && (
+          <a className="panel kpi kpi-link" href={`#/${slug}/radar`}>
+            <span className="l">
+              <Icon name="mail" /> Ont répondu
+            </span>
+            <span className="v">{reponses}</span>
+            <span className="small muted">Prospection</span>
+          </a>
+        )}
       </div>
       <div className="brief-details">
-        <div className="panel">
-          <div className="panel-h">
-            <h2>Rendez-vous et réunions du jour</h2>
-          </div>
+        <details className="panel brief-historique">
+          <summary>
+            Rendez-vous et réunions du jour <Icon name="down" />
+          </summary>
           <div className="panel-b">
             {data.rdvEtat === 'erreur' && (
               <p className="small" style={{ color: 'var(--red)' }}>
@@ -263,7 +270,7 @@ export function Brief({ slug }: { slug: string }) {
               </div>
             )}
           </div>
-        </div>
+        </details>
         <details className="panel brief-historique">
           <summary>
             Mon activité récente <Icon name="down" />
@@ -301,7 +308,7 @@ export function Brief({ slug }: { slug: string }) {
           </div>
         </details>
       </div>
-      <div style={{ marginTop: 18 }}>
+      <div className="brief-details">
         <PanneauProspection slug={slug} />
       </div>
     </div>
