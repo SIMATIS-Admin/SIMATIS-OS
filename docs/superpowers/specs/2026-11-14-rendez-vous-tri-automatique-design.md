@@ -33,7 +33,7 @@ Une colonne `tri` (aucun, auto ou manuel ; migration 0091) distingue le classeme
 
 1. Règles de classement, colonne `tri_auto` (migration), tri en masse et nouveaux onglets.
 2. Tuile du Cockpit et distinction visuelle dans l'Agenda.
-3. Compte rendu Wispr Flow : l'OS propose le rendez-vous correspondant (date, heure, participants), Marc valide d'un clic ; le lien reste attaché au contact, à l'organisation et à l'affaire.
+3. Compte rendu Wispr Flow : l'OS propose le rendez-vous correspondant (date, heure, participants), Marc valide d'un clic ; le lien reste attaché au contact, à l'organisation et à l'affaire. Deux sens, une seule règle de rapprochement (`src/conversion/reunion-rdv.ts`) : dans l'Inbox, l'entrée de la réunion reprend le résumé Wispr Flow dans le compte rendu et présélectionne le rendez-vous (un événement à moins de 3 h ; s'il y en a plusieurs, celui qui partage un invité) ; dans la rubrique Rendez-vous, un rendez-vous passé sans compte rendu affiche « Compte rendu Wispr Flow disponible » avec un bouton qui le reprend. Les deux passent par l'enregistrement existant d'un compte rendu depuis une entrée (même lien au contact, à l'organisation et à l'affaire, entrée traitée).
 
 ## Non-objectifs
 

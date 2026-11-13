@@ -41,4 +41,17 @@ describe('CompteRendu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le compte rendu' }));
     expect(onEnregistrer).toHaveBeenCalledWith({ texte: 'Points abordés : budget corrigé.' });
   });
+
+  it('reprend le résumé Wispr Flow quand rien n’a été préparé, et le dit', () => {
+    const wispr = {
+      id: 's-2',
+      compteRenduPrepare: null,
+      reunion: { resume: 'Résumé fictif de la réunion.' },
+    } as unknown as SujetVue;
+    render(<CompteRendu slug="simatis" s={wispr} onEnregistrer={vi.fn()} />);
+    expect(screen.getByLabelText<HTMLTextAreaElement>('Compte rendu').value).toBe(
+      'Résumé fictif de la réunion.',
+    );
+    expect(screen.getByText(/Résumé repris de Wispr Flow/)).toBeTruthy();
+  });
 });

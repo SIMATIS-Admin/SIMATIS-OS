@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  compteRenduSujet,
   envoyerCompteRendu,
   fetchContacts,
   fetchEntreprises,
@@ -366,6 +367,14 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
       setChoisis(new Set());
       load();
     })().catch((e: unknown) => setError(String(e)));
+  // Le résumé Wispr Flow devient le compte rendu du rendez-vous : même chemin que depuis l'Inbox
+  // (lien au contact, à l'organisation et à l'affaire, entrée traitée).
+  const reprendreWispr = (r: Rdv) =>
+    r.reunionWispr &&
+    void compteRenduSujet(slug, r.reunionWispr.sujetId, {
+      eventId: r.id,
+      texte: r.reunionWispr.resume,
+    }).then(load, (e: unknown) => setError(String(e)));
   const trier = (r: Rdv, statut: StatutRdv) =>
     void trierRdv(slug, r.id, statut).then(load, (e: unknown) => setError(String(e)));
   // The guests' emails suggest a contact: validating it makes the link firm and the block a meeting.
@@ -564,6 +573,18 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
                       <b>{r.titre}</b>
                     </a>
                     {r.opportunite && <div className="small muted">{r.opportunite.titre}</div>}
+                    {r.reunionWispr && !r.compteRendu && statut !== 'ignore' && (
+                      <div className="small">
+                        Compte rendu Wispr Flow disponible ·{' '}
+                        <button
+                          className="lien"
+                          onClick={() => reprendreWispr(r)}
+                          aria-label={`Reprendre le compte rendu Wispr Flow de « ${r.titre} »`}
+                        >
+                          Le reprendre
+                        </button>
+                      </div>
+                    )}
                     {r.triAuto && statut !== 'a_trier' && (
                       <div className="small muted">Classé automatiquement</div>
                     )}

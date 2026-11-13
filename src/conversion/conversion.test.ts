@@ -1,3 +1,4 @@
+import { deposerReunion } from '../inbox/reunions.js';
 import { statutsAgenda } from './classement-rdv.js';
 import type { Evenement } from '../connecteurs/google/google.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -345,6 +346,81 @@ describe('Rendez-vous and Devis', () => {
       "select 1 from rendez_vous where event_id like 'jamais-vu-%'",
     );
     expect(rows).toHaveLength(0);
+  });
+
+  it('propose le compte rendu Wispr Flow d’un rendez-vous passé, et le reprend d’un clic', async () => {
+    const instance = await getInstanceBySlug(t.app.db, 'helioval');
+    if (!instance) throw new Error('no instance');
+    const fetch = (url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url.includes('oauth2')
+              ? { access_token: 'a' }
+              : {
+                  items: [
+                    {
+                      id: 'evt-wispr',
+                      summary: 'Point fictif Wispr',
+                      start: { dateTime: '2026-10-14T12:00:00Z' },
+                      end: { dateTime: '2026-10-14T13:00:00Z' },
+                      attendees: [
+                        { email: 'moi@example.fr', self: true },
+                        { email: 'Qui.Wispr@example.test' },
+                      ],
+                    },
+                  ],
+                },
+          ),
+        ),
+      );
+    const lister = async () =>
+      (
+        await listerRendezVous(
+          t.app.db,
+          instance,
+          { secretsDir, realWrites: false },
+          new Date('2026-10-20T08:00:00Z'),
+          { fetch },
+        )
+      ).rdv.find((r) => r.id === 'evt-wispr');
+    expect((await lister())?.reunionWispr).toBeNull();
+
+    const depot = await withInstance(t.app.db, instance.id, (tx) =>
+      deposerReunion(tx, {
+        wisprId: 'w-evt-wispr',
+        titre: 'Point fictif Wispr',
+        debutAt: new Date('2026-10-14T12:05:00Z'),
+        participants: ['qui.wispr@example.test'],
+        resume: 'Résumé fictif de la réunion Wispr.',
+      }),
+    );
+    const propose = (await lister())?.reunionWispr;
+    expect(propose).toMatchObject({
+      sujetId: depot.sujetId,
+      resume: 'Résumé fictif de la réunion Wispr.',
+    });
+
+    // Une réunion trop éloignée de l'heure du rendez-vous n'est pas proposée.
+    await withInstance(t.app.db, instance.id, (tx) =>
+      deposerReunion(tx, {
+        wisprId: 'w-loin',
+        titre: 'Autre réunion fictive',
+        debutAt: new Date('2026-10-14T20:00:00Z'),
+        participants: [],
+        resume: 'Autre résumé.',
+      }),
+    );
+    expect((await lister())?.reunionWispr?.sujetId).toBe(depot.sujetId);
+
+    const reprise = await send('POST', `/api/i/helioval/sujets/${depot.sujetId}/compte-rendu`, {
+      eventId: 'evt-wispr',
+      texte: 'Résumé fictif de la réunion Wispr.',
+    });
+    expect(reprise.status).toBe(200);
+    const apres = await lister();
+    expect(apres).toMatchObject({ compteRendu: true, statut: 'rdv' });
+    expect(apres?.reunionWispr).toBeNull();
   });
 
   it('sorts a meeting as a RDV or not, links it to several records and keeps its compte rendu', async () => {

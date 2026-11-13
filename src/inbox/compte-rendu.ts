@@ -12,12 +12,11 @@ import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
+import { plusProche } from '../conversion/reunion-rdv.js';
 import { reunionsWispr, sujets } from './schema.js';
 import { marquerTraite, SujetRefuse, type SujetVue } from './service.js';
 
 const JOUR_MS = 86_400_000;
-// Un événement dans cette marge autour de la réunion est « le » rendez-vous attendu.
-const PROCHE_MS = 3 * 3_600_000;
 
 export type CandidatRdv = {
   eventId: string;
@@ -42,7 +41,7 @@ export async function candidatsRendezVous(
       .where(and(eq(sujets.instanceId, currentInstance), eq(sujets.id, sujetId)));
     if (!s) return null;
     const [reunion] = await tx
-      .select({ debutAt: reunionsWispr.debutAt })
+      .select({ debutAt: reunionsWispr.debutAt, participants: reunionsWispr.participants })
       .from(reunionsWispr)
       .where(and(eq(reunionsWispr.instanceId, currentInstance), eq(reunionsWispr.sujetId, s.id)));
     const ref = (reunion?.debutAt ?? s.createdAt).getTime();
@@ -58,11 +57,15 @@ export async function candidatsRendezVous(
         ),
       )
       .orderBy(asc(rendezVous.debut));
-    const proches = lignes.filter(
-      (r) =>
-        r.debut && Math.abs(r.debut.getTime() - ref) <= PROCHE_MS && !r.eventId.startsWith('os:'),
+    // Le rendez-vous attendu : le seul proche, sinon celui qui partage un invité avec la réunion.
+    const unique = plusProche(
+      { debut: new Date(ref), participants: reunion?.participants ?? [] },
+      lignes.flatMap((r) =>
+        r.debut && !r.eventId.startsWith('os:')
+          ? [{ debut: r.debut, participants: r.participants, cible: r.id }]
+          : [],
+      ),
     );
-    const unique = proches.length === 1 ? proches[0]?.id : undefined;
     return lignes
       .map((r) => ({
         eventId: r.eventId,

@@ -1015,6 +1015,8 @@ export type RendezVous = {
   statut: StatutRdv;
   // Classé par l'OS plutôt que par Marc : l'écran le dit et se corrige d'un clic.
   triAuto?: boolean;
+  // Réunion Wispr Flow encore dans l'Inbox, à l'heure de ce rendez-vous passé sans compte rendu.
+  reunionWispr?: { sujetId: string; titre: string; resume: string } | null;
 };
 export type StatutRdv = 'a_trier' | 'rdv' | 'ignore';
 export type RendezVousReponse = {
