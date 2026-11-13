@@ -153,7 +153,59 @@ export type FreinVma = {
   debut?: string[];
   signe?: string;
 };
+// Méthode 3.3 : le résultat en trois questions, préparé par le site (mêmes phrases que la page et le mail).
+export type FreinSyntheseVma = {
+  k: string;
+  n: number;
+  label: string;
+  titre: string;
+  phrase: string;
+  nature: string;
+  enjeu: number | null;
+  hypothese: string;
+  reponse?: string;
+  cible?: string;
+  debut?: string[];
+  signe?: string;
+};
+export type SyntheseVma = {
+  questions: string[];
+  verdict: { cle: string; titre: string; phrase: string; points: string[]; remarques: string[] };
+  vmaLigne: string | null;
+  pratiques: { auMax: number; total: number; titre: string; forces: string[] };
+  freins: FreinSyntheseVma[];
+  autres: FreinSyntheseVma[];
+  gainMensuel: number;
+  texteFreins: string;
+  texteAutres: string | null;
+  noteMontants: string;
+  action: { titre: string; label: string; debut: string[]; signe?: string; sous: string } | null;
+  appel: string;
+  libelles: Record<string, string>;
+};
+// Réponses saisies (méthode 3) : chiffres, chiffres estimés, notes des pratiques, ambition, profil.
+export type ReponsesVma = {
+  periode?: number;
+  profil?: {
+    anciennete?: number | null;
+    effectif?: number | null;
+    vendeurs?: number | string | null;
+    parcours?: string | null;
+  } | null;
+  ambition?: {
+    caActuel?: number;
+    caVise?: number;
+    echeance?: number;
+    partEngageeVisee?: number | null;
+  };
+  chiffres?: Record<string, number | null>;
+  estimes?: Record<string, boolean>;
+  freins?: Record<string, number>;
+  freinsEcartes?: string[];
+  ecartes?: string[];
+};
 export type TestVma = {
+  reponses?: ReponsesVma | null;
   contactId?: string | null;
   opportuniteId?: string | null;
   id: string;
@@ -205,7 +257,8 @@ export type TestVma = {
       ecartPct: number | null;
     };
     composition?: { statut: string; partVisee?: number; cible?: number; partActuelle?: number };
-    alertes?: { code: string }[];
+    alertes?: ({ code: string } & Record<string, unknown>)[];
+    synthese?: SyntheseVma;
     vma: number | null;
     mesurable: boolean;
     statut: string;

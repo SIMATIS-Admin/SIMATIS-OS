@@ -12,6 +12,7 @@ import {
 } from '../api.js';
 import { messageEnvoi } from './diagnostics/envoi.js';
 import { ListeFreinsV3, textesV3 } from './diagnostics/ResultatV3.js';
+import { ResultatSynthese } from './diagnostics/ResultatSynthese.js';
 
 const messageErreur = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -356,6 +357,18 @@ function FicheResultat({ t }: { t: TestVma }) {
   const c = t.calcul;
   if (!r) return null;
   const v3 = r.methode?.startsWith('3') === true && r.caMensuel !== undefined;
+  // Méthode 3.3 : même lecture que le résultat complet (trois questions et préparation de l'échange).
+  if (r.synthese && r.caMensuel)
+    return (
+      <div className="panel">
+        <div className="panel-h">
+          <span>Résultat de {t.entrepriseNom}</span>
+        </div>
+        <div className="panel-b">
+          <ResultatSynthese test={t} />
+        </div>
+      </div>
+    );
   return (
     <div className="panel">
       <div className="panel-h">

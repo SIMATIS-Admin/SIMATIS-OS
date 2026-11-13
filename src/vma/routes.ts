@@ -80,6 +80,8 @@ const vueTest = (t: TestVma) => ({
   resultat: t.ecran,
   calcul: t.calcul,
   parametres: t.parametres,
+  // Réponses saisies par le dirigeant (chiffres, notes, profil) : pour préparer l'échange, jamais renvoyées au site.
+  reponses: t.reponses,
 });
 
 export function registerVmaRoutes(app: FastifyInstance, deps: VmaRoutesDeps): void {
