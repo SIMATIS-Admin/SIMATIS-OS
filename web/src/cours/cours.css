@@ -1,0 +1,299 @@
+/* Lecteur de supports : une slide par écran, bandeau et couleur selon son type. */
+.cours {
+  --marque: var(--navy);
+  --accent: #9ff7e8;
+  --c: var(--marque);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.cours:fullscreen {
+  border-radius: 0;
+  border: 0;
+}
+.cours-scene {
+  position: relative;
+  display: flex;
+  min-height: 420px;
+  overflow: hidden;
+}
+.cours-slide {
+  flex: 1;
+  min-width: 0;
+  padding: clamp(20px, 4vh, 48px) clamp(28px, 5vw, 72px);
+  overflow-y: auto;
+  font-size: clamp(15px, 1.5vw, 24px);
+  border-top: 8px solid var(--c);
+}
+.cours-slide.type-titre {
+  --c: var(--marque);
+  background: var(--marque);
+  border-top: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.cours-slide.type-titre h2,
+.cours-slide.type-titre p,
+.cours-slide.type-titre li,
+.cours-slide.type-titre .cours-module {
+  color: #fff;
+}
+.cours-slide.type-titre .cours-type {
+  color: var(--accent);
+}
+.cours-slide.type-titre h2 {
+  font-size: 2.6em;
+}
+.cours-logo {
+  height: 2.2em;
+  max-width: 40%;
+  object-fit: contain;
+  margin-right: auto;
+}
+.cours-slide .cours-logo {
+  max-height: 2.2em;
+}
+.cours-slide.type-concept {
+  --c: #286e60;
+}
+.cours-slide.type-demo {
+  --c: #2563a8;
+}
+.cours-slide.type-atelier {
+  --c: #b45309;
+}
+.cours-slide.type-recap {
+  --c: #5b3fa8;
+}
+.cours-slide.type-piege {
+  --c: #b42318;
+}
+.cours-bandeau {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 1em;
+  font: 700 0.6em var(--f-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.cours-type {
+  color: var(--c);
+}
+.cours-module {
+  color: var(--ink-3);
+}
+.cours-slide h2 {
+  font-size: 1.9em;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.6em;
+  color: var(--marque);
+  text-wrap: balance;
+}
+.cours-slide h3 {
+  font-size: 1.15em;
+  margin: 0.8em 0 0.3em;
+  color: var(--c);
+}
+.cours-slide p,
+.cours-slide li {
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.cours-slide ul,
+.cours-slide ol {
+  padding-left: 1.3em;
+  margin: 0.4em 0;
+}
+.cours-slide blockquote {
+  margin: 0.8em 0;
+  padding: 0.2em 1em;
+  border-left: 4px solid var(--c);
+  color: var(--ink-2);
+}
+.cours-slide table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+}
+.cours-slide th,
+.cours-slide td {
+  border: 1px solid var(--line);
+  padding: 0.35em 0.8em;
+  text-align: left;
+}
+.cours-slide th {
+  background: var(--bg);
+}
+.cours-slide pre {
+  background: var(--bg);
+  padding: 0.8em 1em;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.8em;
+}
+.cours-slide img {
+  max-width: 100%;
+  max-height: 55vh;
+}
+.cours-colonnes {
+  display: grid;
+  gap: 2em;
+}
+.cours-colonnes.n2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cours-colonnes.n3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.cours-livrable {
+  margin-top: 1.2em;
+  padding: 0.6em 1em;
+  background: var(--bg);
+  border-left: 4px solid var(--c);
+  border-radius: 8px;
+}
+.cours-livrable b {
+  margin-right: 0.6em;
+  font-size: 0.7em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c);
+}
+.cours-notes {
+  width: min(340px, 34%);
+  padding: 20px;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  overflow-y: auto;
+  font-size: 14px;
+}
+.cours-notes p {
+  white-space: pre-line;
+  line-height: 1.5;
+}
+.cours-suivante {
+  margin-top: 1.2em;
+  color: var(--ink-3);
+}
+.cours-aide {
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  padding: 16px 20px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.14);
+  font-size: 14px;
+}
+.cours-aide dl > div {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+}
+.cours-aide dt {
+  font-family: var(--f-num);
+  min-width: 9em;
+  font-weight: 700;
+}
+.cours-aide dd {
+  margin: 0;
+}
+.cours-commande {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+.cours-modules {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+}
+.cours-modules button {
+  border: 1px solid var(--line);
+  background: var(--white);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cours-modules button.on {
+  background: var(--marque);
+  color: var(--white);
+  border-color: var(--marque);
+}
+.cours-liste {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.cours-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--white);
+  color: inherit;
+  text-decoration: none;
+}
+.cours-carte span {
+  color: var(--ink-3);
+}
+.main.presentation .cours {
+  border: 0;
+  border-radius: 0;
+}
+
+/* Slide en HTML libre : le cadre isolé remplit la scène, à l'échelle 16:9. */
+.cours-slide.cours-slide-html {
+  padding: 0;
+  border-top: 0;
+  background: #111;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cours-slide.cours-slide-html {
+  position: relative;
+}
+/* Posé en absolu : la taille vient de la scène, pas du cadre (sinon l'échelle se mord la queue). */
+.cours-html {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cours-html > div {
+  overflow: hidden;
+}
+.cours-html iframe {
+  border: 0;
+  transform-origin: top left;
+  display: block;
+  background: #fff;
+}
+
+/* Le lecteur remplit la zone de contenu, comme les présentations. */
+.app[data-view='cours'] .content {
+  display: flex;
+  padding-bottom: 20px;
+  overflow: hidden;
+}

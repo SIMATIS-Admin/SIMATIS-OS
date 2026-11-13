@@ -58,6 +58,8 @@ const PresentationDiagnostic = lazy(() =>
 const DiaporamaProjet = lazy(() =>
   import('./pages/DiaporamaProjet.js').then((m) => ({ default: m.DiaporamaProjet })),
 );
+const Cours = lazy(() => import('./cours/Cours.js').then((m) => ({ default: m.Cours })));
+const CoursListe = lazy(() => import('./cours/Cours.js').then((m) => ({ default: m.CoursListe })));
 const PresentationSimatis = lazy(() =>
   import('./pages/PresentationSimatis.js').then((m) => ({ default: m.PresentationSimatis })),
 );
@@ -198,13 +200,15 @@ export function App() {
                 : 'Restitution'
             : view === 'presentation-vma'
               ? 'Test VMA'
-              : view === 'presentation-simatis'
-                ? 'SIMATIS'
-                : view === 'feuille-de-route-os'
-                  ? 'Feuille de route de l’OS'
-                  : view === 'gestion'
-                    ? 'Gestion'
-                    : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+              : view === 'cours'
+                ? 'Supports'
+                : view === 'presentation-simatis'
+                  ? 'SIMATIS'
+                  : view === 'feuille-de-route-os'
+                    ? 'Feuille de route de l’OS'
+                    : view === 'gestion'
+                      ? 'Gestion'
+                      : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
@@ -289,6 +293,12 @@ export function App() {
           />
         ) : (
           <p className="empty">Diaporama introuvable.</p>
+        );
+      case 'cours':
+        return route.kind === 'deck' && route.id ? (
+          <Cours key={`${current.slug}-${route.id}`} slug={current.slug} deck={route.id} />
+        ) : (
+          <CoursListe slug={current.slug} />
         );
       case 'presentation-simatis':
         return <PresentationSimatis slug={current.slug} />;

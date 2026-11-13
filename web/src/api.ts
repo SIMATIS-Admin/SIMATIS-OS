@@ -137,6 +137,17 @@ const sendJson = <T>(method: 'PUT' | 'PATCH' | 'POST' | 'DELETE', url: string, p
 
 const inst = (slug: string, path: string) => `/api/i/${encodeURIComponent(slug)}/${path}`;
 
+// Supports : fichiers texte d'un dossier hors du dépôt, lus par le lecteur de l'OS.
+export type DeckCours = { id: string; titre: string; soustitre: string };
+export const fetchDecksCours = (slug: string) => getJson<DeckCours[]>(inst(slug, 'cours'));
+export const urlFichierCours = (slug: string, deck: string, fichier: string) =>
+  inst(slug, `cours/${encodeURIComponent(deck)}/${fichier}`);
+export const fetchTexteCours = async (slug: string, deck: string, fichier: string) => {
+  const r = await fetch(urlFichierCours(slug, deck, fichier));
+  if (!r.ok) throw new Error(`${fichier} : fichier introuvable`);
+  return r.text();
+};
+
 // Test de VMA : invitations envoyées par le site, résultats relevés (voir src/vma).
 export type TestVmaType = 'premier' | 'essai';
 export type TestVmaStatut = 'envoyee' | 'utilisee' | 'revoquee';
