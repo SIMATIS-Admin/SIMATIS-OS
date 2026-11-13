@@ -6,12 +6,14 @@ import { DiaporamaProjet, lignesDe } from './DiaporamaProjet.js';
 const api = vi.hoisted(() => ({
   fetchDiapositivesRestitution: vi.fn(),
   fetchProjetsDiag: vi.fn(),
+  purgerPresentationRestitutionDiag: vi.fn(),
 }));
 vi.mock('../api.js', () => api);
 
 beforeEach(() => {
   api.fetchDiapositivesRestitution.mockReset();
   api.fetchProjetsDiag.mockReset();
+  api.purgerPresentationRestitutionDiag.mockReset();
 });
 afterEach(cleanup);
 
@@ -80,5 +82,19 @@ describe('Diaporama d’un support d’ouverture', () => {
     api.fetchProjetsDiag.mockResolvedValue([{ id: 'p1', nom: 'X', supportTexte: null }]);
     render(<DiaporamaProjet slug="demo" genre="support" id="p1" />);
     expect(await screen.findByText(/pas encore de diapositives/)).toBeTruthy();
+  });
+
+  it('supprime le deck de l’OS une fois présenté, puis revient au diagnostic', async () => {
+    api.fetchDiapositivesRestitution.mockResolvedValue({
+      nom: 'Entreprise Fictive A',
+      diapositives: DIAPOS,
+    });
+    api.purgerPresentationRestitutionDiag.mockResolvedValue({});
+    render(<DiaporamaProjet slug="demo" genre="restitution" id="p1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Terminer et supprimer de l’OS' }));
+    await vi.waitFor(() =>
+      expect(api.purgerPresentationRestitutionDiag).toHaveBeenCalledWith('demo', 'p1'),
+    );
+    await vi.waitFor(() => expect(window.location.hash).toBe('#/demo/diagnostics/ouvrir/p1'));
   });
 });

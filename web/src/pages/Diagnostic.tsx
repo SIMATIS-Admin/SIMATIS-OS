@@ -9,6 +9,8 @@ import {
   rendezVousCapitalisationDiag,
   type RdvCapitalisation,
   exporterRestitutionDiag,
+  importerDeckRestitutionDiag,
+  purgerPresentationRestitutionDiag,
   urlPptxRestitutionDiag,
   viderConversationDiag,
   importerEntretienDiag,
@@ -1599,6 +1601,22 @@ function RestitutionDeck({
     }
   };
   const exportEnCours = projet.demande === 'restitution_export' && projet.statutChat !== 'repos';
+  const [lienImport, setLienImport] = useState('');
+  const importer = async () => {
+    try {
+      onChange(await importerDeckRestitutionDiag(slug, projet.id, lienImport));
+      setLienImport('');
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
+  const purger = async () => {
+    try {
+      onChange(await purgerPresentationRestitutionDiag(slug, projet.id));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const exporter = async () => {
     try {
       onChange(await exporterRestitutionDiag(slug, projet.id));
@@ -1708,6 +1726,11 @@ function RestitutionDeck({
               Présenter dans l’OS
             </a>
           )}
+          {!exportEnCours && projet.aPptx && (
+            <button className="btn" onClick={() => void purger()}>
+              Supprimer la présentation de l’OS
+            </button>
+          )}
           {projet.restitutionLien && (
             <details className="diag-plus">
               <summary className="btn">Plus d’actions</summary>
@@ -1722,6 +1745,28 @@ function RestitutionDeck({
             </details>
           )}
         </div>
+        <details className="diag-plus">
+          <summary className="btn">Présenter un deck déjà construit</summary>
+          <div className="diag-plus-liste">
+            <label className="small muted" htmlFor="lien-deck-import">
+              Lien du deck (artifact claude.ai)
+            </label>
+            <input
+              id="lien-deck-import"
+              type="url"
+              value={lienImport}
+              placeholder="https://claude.ai/artifact/…"
+              onChange={(e) => setLienImport(e.target.value)}
+            />
+            <button
+              className="btn go"
+              disabled={enCours || exportEnCours || lienImport.trim() === ''}
+              onClick={() => void importer()}
+            >
+              Préparer la présentation dans l’OS
+            </button>
+          </div>
+        </details>
         <p className="small muted" style={{ margin: 0 }}>
           Le deck est un brouillon : retouchez-le sur claude.ai, puis exportez-le en PowerPoint
           quand il vous convient (le PowerPoint et la présentation dans l’OS reprennent le texte et

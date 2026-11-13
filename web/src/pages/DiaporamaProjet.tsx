@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { fetchDiapositivesRestitution, fetchProjetsDiag, type Diapositive } from '../api.js';
+import {
+  fetchDiapositivesRestitution,
+  fetchProjetsDiag,
+  purgerPresentationRestitutionDiag,
+  type Diapositive,
+} from '../api.js';
 import { Diaporama, type Slide } from '../shell/Diaporama.js';
 
 // Une ligne de texte de diapositive devient une puce ; les tirets ou puces d'origine s'effacent.
@@ -101,11 +106,24 @@ export function DiaporamaProjet({
     };
   }, [slug, genre, id]);
 
+  const versDiagnostic = `#/${slug}/diagnostics/ouvrir/${encodeURIComponent(id)}`;
   const retour = (
-    <a className="btn sm" href={`#/${slug}/diagnostics/ouvrir/${encodeURIComponent(id)}`}>
+    <a className="btn sm" href={versDiagnostic}>
       ← Retour au diagnostic
     </a>
   );
+  // Une fois présenté, le deck ne reste pas dans l'OS : seul le deck publié sert d'archive.
+  const terminer = async () => {
+    try {
+      await purgerPresentationRestitutionDiag(slug, id);
+      window.location.hash = versDiagnostic;
+    } catch (e) {
+      setEtat({
+        statut: 'erreur',
+        message: e instanceof Error ? e.message : 'Suppression impossible',
+      });
+    }
+  };
   if (etat.statut === 'chargement')
     return (
       <p className="empty" role="status">
@@ -123,7 +141,16 @@ export function DiaporamaProjet({
     <Diaporama
       nom={genre === 'support' ? 'Support d’ouverture' : 'Restitution'}
       slides={etat.slides}
-      actions={retour}
+      actions={
+        <>
+          {retour}
+          {genre === 'restitution' && (
+            <button className="btn sm" onClick={() => void terminer()}>
+              Terminer et supprimer de l’OS
+            </button>
+          )}
+        </>
+      }
     />
   );
 }
