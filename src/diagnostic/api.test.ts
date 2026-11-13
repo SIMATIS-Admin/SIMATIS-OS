@@ -228,6 +228,39 @@ describe('Entretien : API', () => {
     expect(inconnu.statusCode).toBe(404);
   });
 
+  it('import et purge du deck : 400 sur un identifiant ou un lien invalide', async () => {
+    const base = '/api/i/simatis/diagnostic/projets';
+    const id = '00000000-0000-4000-8000-000000000000';
+    const invalide = await app.inject({
+      method: 'POST',
+      url: `${base}/pas-un-uuid/restitution/importer`,
+      payload: { lien: 'https://claude.ai/artifact/DeckFictif01' },
+    });
+    expect(invalide.statusCode).toBe(400);
+    const sansLien = await app.inject({
+      method: 'POST',
+      url: `${base}/${id}/restitution/importer`,
+      payload: {},
+    });
+    expect(sansLien.statusCode).toBe(400);
+    const mauvaisLien = await app.inject({
+      method: 'POST',
+      url: `${base}/${id}/restitution/importer`,
+      payload: { lien: 'https://exemple.test/deck' },
+    });
+    expect(mauvaisLien.statusCode).toBe(400);
+    const purgeInvalide = await app.inject({
+      method: 'POST',
+      url: `${base}/pas-un-uuid/restitution/purger`,
+    });
+    expect(purgeInvalide.statusCode).toBe(400);
+    const purgeInconnue = await app.inject({
+      method: 'POST',
+      url: `${base}/${id}/restitution/purger`,
+    });
+    expect(purgeInconnue.statusCode).toBe(404);
+  });
+
   it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
     const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     const url = '/api/i/simatis/diagnostic/reglages';

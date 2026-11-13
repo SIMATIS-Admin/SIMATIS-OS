@@ -14,6 +14,8 @@ import {
   demanderReglesRestitution,
   diapositivesRestitutionDe,
   enregistrerRestitution,
+  importerDeckRestitution,
+  purgerDiapositivesRestitution,
   marquerDeckFinal,
   pptxRestitutionDe,
   restitutionPrete,
@@ -363,6 +365,44 @@ describe('Deck de restitution', () => {
     it('n a pas de PowerPoint avant un export', async () => {
       const id = await deckPret('Export Fictif E');
       await expect(pptxRestitutionDe(t.app.db, simatis, id)).rejects.toBeInstanceOf(
+        ProjetIntrouvable,
+      );
+    });
+
+    it('importe un deck construit hors de l OS : lien gardé sans fragment, export demandé', async () => {
+      const id = await avecRapport('Import Fictif A');
+      const envoye = await importerDeckRestitution(
+        t.app.db,
+        simatis,
+        id,
+        `  ${LIEN_1}#slide-abc123 `,
+      );
+      expect(envoye).toMatchObject({
+        restitutionLien: LIEN_1,
+        restitutionStatut: 'pret',
+        demande: 'restitution_export',
+      });
+    });
+
+    it('refuse un lien qui n est pas un artifact claude.ai', async () => {
+      const id = await avecRapport('Import Fictif B');
+      await expect(
+        importerDeckRestitution(t.app.db, simatis, id, 'https://exemple.test/deck'),
+      ).rejects.toBeInstanceOf(SupportInvalide);
+      expect((await relire(id)).restitutionLien).toBeNull();
+    });
+
+    it('purge les diapositives après la présentation, le lien du deck reste', async () => {
+      const id = await deckPret('Import Fictif C');
+      await demanderExportRestitution(t.app.db, simatis, id);
+      await demarrerAttente(t.app.db, simatis, id);
+      await enregistrerDiapos(id);
+      await finirAttente(t.app.db, simatis, id);
+      expect((await relire(id)).aPptx).toBe(true);
+      const apres = await purgerDiapositivesRestitution(t.app.db, simatis, id);
+      expect(apres).toMatchObject({ aPptx: false, restitutionExportLe: null });
+      expect(apres.restitutionLien).toBe(LIEN_1);
+      await expect(diapositivesRestitutionDe(t.app.db, simatis, id)).rejects.toBeInstanceOf(
         ProjetIntrouvable,
       );
     });

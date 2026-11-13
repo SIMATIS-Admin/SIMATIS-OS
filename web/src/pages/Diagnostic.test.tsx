@@ -22,6 +22,8 @@ const api = vi.hoisted(() => ({
   demandeRapportDiag: vi.fn(),
   demandeRestitutionDiag: vi.fn(),
   exporterRestitutionDiag: vi.fn(),
+  importerDeckRestitutionDiag: vi.fn(),
+  purgerPresentationRestitutionDiag: vi.fn(),
   rendezVousCapitalisationDiag: vi.fn(),
   proposerCapitalisationDiag: vi.fn(),
   enregistrerCapitalisationDiag: vi.fn(),
@@ -1192,6 +1194,48 @@ describe('Deck de restitution à l étape 5', () => {
         name: 'Exporter en PowerPoint',
       });
       expect(bouton.disabled).toBe(true);
+    });
+
+    it('importe un deck déjà construit à partir de son lien', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([deckPret()]);
+      api.importerDeckRestitutionDiag.mockResolvedValue(
+        deckPret({ demande: 'restitution_export', statutChat: 'attente_claude' }),
+      );
+      await ouvrir();
+      const bouton = await screen.findByRole<HTMLButtonElement>('button', {
+        name: 'Préparer la présentation dans l’OS',
+      });
+      expect(bouton.disabled).toBe(true);
+      fireEvent.change(screen.getByLabelText(/Lien du deck/), {
+        target: { value: 'https://claude.ai/artifact/DeckFictif01#slide-ab12' },
+      });
+      fireEvent.click(bouton);
+      await waitFor(() =>
+        expect(api.importerDeckRestitutionDiag).toHaveBeenCalledWith(
+          'simatis',
+          'p1',
+          'https://claude.ai/artifact/DeckFictif01#slide-ab12',
+        ),
+      );
+    });
+
+    it('supprime la présentation de l’OS quand le deck a été exporté', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([
+        deckPret({ aPptx: true, restitutionExportLe: '2026-10-28T10:30:00.000Z' }),
+      ]);
+      api.purgerPresentationRestitutionDiag.mockResolvedValue(deckPret());
+      await ouvrir();
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Supprimer la présentation de l’OS' }),
+      );
+      await waitFor(() =>
+        expect(api.purgerPresentationRestitutionDiag).toHaveBeenCalledWith('simatis', 'p1'),
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('button', { name: 'Supprimer la présentation de l’OS' }),
+        ).toBeNull(),
+      );
     });
 
     it('n exporte pas tant qu aucun deck n existe', async () => {

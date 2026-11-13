@@ -120,6 +120,61 @@ export function demanderExportRestitution(
   });
 }
 
+// Deck construit hors de l'OS (par Marc, sur claude.ai) : son lien devient le deck du projet, puis
+// Claude en relit les diapositives pour la présentation dans l'OS. Le fragment (#slide-…) du lien
+// copié depuis le navigateur n'est pas gardé.
+export async function importerDeckRestitution(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  lienSaisi: string,
+): Promise<ProjetVue> {
+  verifierEspace(instance);
+  const lien = lienSaisi.trim().replace(/[?#].*$/, '');
+  if (!LIEN_ARTIFACT.test(lien))
+    throw new SupportInvalide('Lien du deck refusé : un lien d’artifact claude.ai est attendu.');
+  await withInstance(db, instance.id, async (tx) => {
+    const [projet] = await tx
+      .select()
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
+    if (!projet) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    if (projet.restitutionStatut === 'en_cours')
+      throw new ChatIndisponible('Le deck de restitution est en cours de création.');
+    await tx
+      .update(diagnosticProjets)
+      .set({
+        restitutionLien: lien,
+        restitutionStatut: 'pret',
+        restitutionLiens: [
+          { lien, le: new Date().toISOString() },
+          ...projet.restitutionLiens.filter((l) => l.lien !== lien),
+        ],
+        updatedAt: new Date(),
+      })
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
+  });
+  return demanderExportRestitution(db, instance, id);
+}
+
+// Une fois la présentation faite, l'OS n'en garde rien : le deck publié reste l'archive.
+export async function purgerDiapositivesRestitution(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<ProjetVue> {
+  verifierEspace(instance);
+  return withInstance(db, instance.id, async (tx) => {
+    const [row] = await tx
+      .update(diagnosticProjets)
+      .set({ restitutionDiapos: null, restitutionExportLe: null, updatedAt: new Date() })
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
+      .returning();
+    if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    return vue(row);
+  });
+}
+
 // Claude rend les diapositives relues dans le deck publié, sur demande d'export seulement.
 export async function enregistrerDiapositivesRestitution(
   tx: Tx,

@@ -45,7 +45,10 @@ import {
   marquerDeckFinal,
   diapositivesRestitutionDe,
   pptxRestitutionDe,
+  importerDeckRestitution,
+  purgerDiapositivesRestitution,
 } from '../diagnostic/restitution.js';
+import { SupportInvalide } from '../diagnostic/support.js';
 import { demanderDossier } from '../diagnostic/dossier-export.js';
 import { demanderExportRevue } from '../diagnostic/revue-export.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
@@ -882,6 +885,36 @@ export function registerApi(
       } catch (error) {
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Deck construit hors de l'OS : son lien est enregistré puis Claude en relit les diapositives.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/importer',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z.object({ lien: z.string().trim().min(1).max(500) }).safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'Lien du deck attendu' });
+      try {
+        return await importerDeckRestitution(db, i, id, corps.data.lien);
+      } catch (error) {
+        if (error instanceof SupportInvalide) return reply.code(400).send({ error: error.message });
+        if (error instanceof ChatIndisponible)
+          return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // Présentation terminée : les diapositives sont supprimées de l'OS, le deck publié reste l'archive.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/purger',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        return await purgerDiapositivesRestitution(db, i, request.params.id);
+      } catch (error) {
         return diagnosticErreur(error, reply);
       }
     }),

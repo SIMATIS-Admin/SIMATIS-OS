@@ -1730,6 +1730,20 @@ export const exporterRestitutionDiag = (slug: string, id: string) =>
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/exporter`),
     {},
   );
+// Deck construit hors de l'OS : son lien est enregistré, Claude en relit les diapositives.
+export const importerDeckRestitutionDiag = (slug: string, id: string, lien: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/importer`),
+    { lien },
+  );
+// Présentation terminée : les diapositives quittent l'OS, le deck publié reste l'archive.
+export const purgerPresentationRestitutionDiag = (slug: string, id: string) =>
+  sendJson<ProjetDiag>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/purger`),
+    {},
+  );
 // Diapositives du dernier export de la restitution, pour les présenter dans l'OS.
 export const fetchDiapositivesRestitution = (slug: string, id: string) =>
   getJson<{ nom: string; diapositives: Diapositive[] }>(
