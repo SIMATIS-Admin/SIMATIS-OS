@@ -261,6 +261,26 @@ describe('Entretien : API', () => {
     expect(purgeInconnue.statusCode).toBe(404);
   });
 
+  it('PDF du deck : 400 sur un identifiant ou un corps invalide, 404 sans projet', async () => {
+    const base = '/api/i/simatis/diagnostic/projets';
+    const id = '00000000-0000-4000-8000-000000000000';
+    const post = (url: string, payload: unknown) =>
+      app.inject({ method: 'POST', url, payload: payload as object });
+    expect((await post(`${base}/pas-un-uuid/restitution/pdf`, {})).statusCode).toBe(400);
+    expect((await post(`${base}/${id}/restitution/pdf`, {})).statusCode).toBe(400);
+    const pasPdf = Buffer.from('texte').toString('base64');
+    expect(
+      (await post(`${base}/${id}/restitution/pdf`, { nom: 'a.pdf', base64: pasPdf })).statusCode,
+    ).toBe(400);
+    const pdf = Buffer.from('%PDF-1.7').toString('base64');
+    expect(
+      (await post(`${base}/${id}/restitution/pdf`, { nom: 'a.pdf', base64: pdf })).statusCode,
+    ).toBe(404);
+    expect(
+      (await app.inject({ method: 'GET', url: `${base}/${id}/restitution/pdf` })).statusCode,
+    ).toBe(404);
+  });
+
   it('réglage Relire les finaux : actif par défaut, modifiable, sans toucher au reste de la config', async () => {
     const avant = (await getInstanceBySlug(t.owner.db, 'simatis'))!;
     const url = '/api/i/simatis/diagnostic/reglages';

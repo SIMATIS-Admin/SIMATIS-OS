@@ -157,6 +157,45 @@ export async function importerDeckRestitution(
   return demanderExportRestitution(db, instance, id);
 }
 
+// PDF du deck exporté de claude.ai : l'OS l'affiche page par page, avec le rendu exact du deck.
+export async function enregistrerPdfDeck(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  pdf: { nom: string; base64: string },
+): Promise<ProjetVue> {
+  verifierEspace(instance);
+  const octets = Buffer.from(pdf.base64, 'base64');
+  if (octets.subarray(0, 5).toString('latin1') !== '%PDF-')
+    throw new SupportInvalide("Ce fichier n'est pas un PDF.");
+  return withInstance(db, instance.id, async (tx) => {
+    const [row] = await tx
+      .update(diagnosticProjets)
+      .set({ restitutionPdf: pdf.base64, restitutionPdfNom: pdf.nom, updatedAt: new Date() })
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
+      .returning();
+    if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+    return vue(row);
+  });
+}
+
+export async function pdfDeckDe(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<{ nom: string; contenu: Buffer }> {
+  verifierEspace(instance);
+  const [row] = await withInstance(db, instance.id, (tx) =>
+    tx
+      .select({ pdf: diagnosticProjets.restitutionPdf, nom: diagnosticProjets.restitutionPdfNom })
+      .from(diagnosticProjets)
+      .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id))),
+  );
+  if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');
+  if (!row.pdf) throw new ProjetIntrouvable("Aucun PDF de deck n'a été importé");
+  return { nom: row.nom ?? 'deck.pdf', contenu: Buffer.from(row.pdf, 'base64') };
+}
+
 // Une fois la présentation faite, l'OS n'en garde rien : le deck publié reste l'archive.
 export async function purgerDiapositivesRestitution(
   db: Executor,
@@ -167,7 +206,13 @@ export async function purgerDiapositivesRestitution(
   return withInstance(db, instance.id, async (tx) => {
     const [row] = await tx
       .update(diagnosticProjets)
-      .set({ restitutionDiapos: null, restitutionExportLe: null, updatedAt: new Date() })
+      .set({
+        restitutionDiapos: null,
+        restitutionExportLe: null,
+        restitutionPdf: null,
+        restitutionPdfNom: null,
+        updatedAt: new Date(),
+      })
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)))
       .returning();
     if (!row) throw new ProjetIntrouvable('Projet introuvable dans cette instance');

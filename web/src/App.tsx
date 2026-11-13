@@ -193,7 +193,9 @@ export function App() {
           : view === 'diaporama'
             ? route.kind === 'support'
               ? 'Support d’ouverture'
-              : 'Restitution'
+              : route.kind === 'deck'
+                ? 'Deck'
+                : 'Restitution'
             : view === 'presentation-vma'
               ? 'Test VMA'
               : view === 'presentation-simatis'
@@ -277,7 +279,8 @@ export function App() {
       case 'presentation-diagnostic':
         return <PresentationDiagnostic slug={current.slug} />;
       case 'diaporama':
-        return route.id && (route.kind === 'support' || route.kind === 'restitution') ? (
+        return route.id &&
+          (route.kind === 'support' || route.kind === 'restitution' || route.kind === 'deck') ? (
           <DiaporamaProjet
             key={`${current.slug}-${route.kind}-${route.id}`}
             slug={current.slug}

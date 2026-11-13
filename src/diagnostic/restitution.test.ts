@@ -13,7 +13,9 @@ import {
   enregistrerDiapositivesRestitution,
   demanderReglesRestitution,
   diapositivesRestitutionDe,
+  enregistrerPdfDeck,
   enregistrerRestitution,
+  pdfDeckDe,
   importerDeckRestitution,
   purgerDiapositivesRestitution,
   marquerDeckFinal,
@@ -405,6 +407,34 @@ describe('Deck de restitution', () => {
       await expect(diapositivesRestitutionDe(t.app.db, simatis, id)).rejects.toBeInstanceOf(
         ProjetIntrouvable,
       );
+    });
+
+    it('garde le PDF du deck, le rend tel quel, et la purge l efface', async () => {
+      const id = await deckPret('Pdf Fictif A');
+      const pdf = Buffer.from('%PDF-1.7\n% fictif\n').toString('base64');
+      const apres = await enregistrerPdfDeck(t.app.db, simatis, id, {
+        nom: 'deck.pdf',
+        base64: pdf,
+      });
+      expect(apres.aPdfDeck).toBe(true);
+      expect(apres).not.toHaveProperty('restitutionPdf');
+      const { nom, contenu } = await pdfDeckDe(t.app.db, simatis, id);
+      expect(nom).toBe('deck.pdf');
+      expect(contenu.toString('base64')).toBe(pdf);
+      const purge = await purgerDiapositivesRestitution(t.app.db, simatis, id);
+      expect(purge.aPdfDeck).toBe(false);
+      await expect(pdfDeckDe(t.app.db, simatis, id)).rejects.toBeInstanceOf(ProjetIntrouvable);
+    });
+
+    it('refuse un fichier qui n est pas un PDF', async () => {
+      const id = await deckPret('Pdf Fictif B');
+      await expect(
+        enregistrerPdfDeck(t.app.db, simatis, id, {
+          nom: 'deck.pdf',
+          base64: Buffer.from('pas un pdf').toString('base64'),
+        }),
+      ).rejects.toBeInstanceOf(SupportInvalide);
+      expect((await relire(id)).aPdfDeck).toBe(false);
     });
 
     it('enregistre les diapositives lues, puis le PowerPoint se télécharge', async () => {

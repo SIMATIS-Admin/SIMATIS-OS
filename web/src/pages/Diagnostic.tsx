@@ -10,6 +10,7 @@ import {
   type RdvCapitalisation,
   exporterRestitutionDiag,
   importerDeckRestitutionDiag,
+  importerPdfDeckDiag,
   purgerPresentationRestitutionDiag,
   urlPptxRestitutionDiag,
   viderConversationDiag,
@@ -1610,6 +1611,16 @@ function RestitutionDeck({
       onErreur(messageErreur(err));
     }
   };
+  const importerPdf = async (fichier: File | undefined) => {
+    if (!fichier) return;
+    if (fichier.size > 25_000_000) return onErreur('PDF trop lourd (25 Mo au plus).');
+    try {
+      const base64 = await lireBase64(fichier);
+      onChange(await importerPdfDeckDiag(slug, projet.id, { nom: fichier.name, base64 }));
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const purger = async () => {
     try {
       onChange(await purgerPresentationRestitutionDiag(slug, projet.id));
@@ -1726,7 +1737,7 @@ function RestitutionDeck({
               Présenter dans l’OS
             </a>
           )}
-          {!exportEnCours && projet.aPptx && (
+          {!exportEnCours && (projet.aPptx || projet.aPdfDeck) && (
             <button className="btn" onClick={() => void purger()}>
               Supprimer la présentation de l’OS
             </button>
@@ -1748,8 +1759,22 @@ function RestitutionDeck({
         <details className="diag-plus">
           <summary className="btn">Présenter un deck déjà construit</summary>
           <div className="diag-plus-liste">
+            <label className="small muted" htmlFor="pdf-deck-import">
+              PDF du deck (Partager › Exporter › PDF sur claude.ai) : rendu identique
+            </label>
+            <input
+              id="pdf-deck-import"
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => void importerPdf(e.target.files?.[0])}
+            />
+            {projet.aPdfDeck && (
+              <a className="btn go" href={`#/${slug}/diaporama/deck/${projet.id}`}>
+                Présenter le deck
+              </a>
+            )}
             <label className="small muted" htmlFor="lien-deck-import">
-              Lien du deck (artifact claude.ai)
+              Ou lien du deck (artifact claude.ai) : texte seul, mise en page simplifiée
             </label>
             <input
               id="lien-deck-import"

@@ -45,7 +45,9 @@ import {
   marquerDeckFinal,
   diapositivesRestitutionDe,
   pptxRestitutionDe,
+  enregistrerPdfDeck,
   importerDeckRestitution,
+  pdfDeckDe,
   purgerDiapositivesRestitution,
 } from '../diagnostic/restitution.js';
 import { SupportInvalide } from '../diagnostic/support.js';
@@ -904,6 +906,39 @@ export function registerApi(
         if (error instanceof SupportInvalide) return reply.code(400).send({ error: error.message });
         if (error instanceof ChatIndisponible)
           return reply.code(409).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  // PDF du deck exporté de claude.ai : affiché tel quel dans la présentation de l'OS.
+  app.post<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/pdf',
+    { bodyLimit: 40_000_000 },
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      const { id } = request.params;
+      if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
+      const corps = z
+        .object({ nom: z.string().trim().min(1).max(200), base64: z.string().min(1) })
+        .safeParse(request.body);
+      if (!corps.success) return reply.code(400).send({ error: 'PDF attendu : nom et contenu' });
+      try {
+        return await enregistrerPdfDeck(db, i, id, corps.data);
+      } catch (error) {
+        if (error instanceof SupportInvalide) return reply.code(400).send({ error: error.message });
+        return diagnosticErreur(error, reply);
+      }
+    }),
+  );
+  app.get<ProjetRoute>(
+    '/api/i/:slug/diagnostic/projets/:id/restitution/pdf',
+    onInstance<ProjetRoute>(async (i, request, reply) => {
+      if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Projet invalide' });
+      try {
+        const { contenu } = await pdfDeckDe(db, i, request.params.id);
+        reply.header('content-type', 'application/pdf');
+        reply.header('cache-control', 'no-store');
+        return reply.send(contenu);
+      } catch (error) {
         return diagnosticErreur(error, reply);
       }
     }),
