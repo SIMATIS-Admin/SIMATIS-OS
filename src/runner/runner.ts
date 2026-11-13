@@ -1,5 +1,7 @@
+import { convertirDeck } from '../cours/import-deck.js';
+import { idSupportDe } from '../diagnostic/service.js';
 import { execFile, spawn } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -591,6 +593,7 @@ export type AttenteDiag = {
     | 'rapport'
     | 'restitution'
     | 'restitution_export'
+    | 'restitution_support'
     | 'entretien'
     | 'capitalisation_proposer'
     | 'capitalisation_enregistrer'
@@ -1421,6 +1424,30 @@ export const promptExportRestitution = (a: AttenteDiag) =>
     `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : le nombre de diapositives exportées, ce qui n'a pas pu l'être (images, schémas), et le rappel que le PowerPoint reprend le deck tel qu'il est maintenant (le pilote relance l'export après une retouche). Puis arrête-toi. Vouvoie le pilote, en français.`,
   ].join('\n');
 
+// Envoi d'un deck claude.ai au lecteur de l'OS : Claude ne fait que récupérer les fichiers du deck
+// publié ; c'est l'OS qui les range (convertirDeck), sans rien réécrire.
+export const promptEnvoiSupport = (a: AttenteDiag, dossierDeck: string) =>
+  [
+    `Envoie au lecteur de l'OS le deck de restitution du Diagnostic d'Endurance Commerciale du projet « ${a.nom} » (${a.activite}). Tu ne crées ni ne modifies aucun deck : tu ne publies rien.`,
+    `Deck à envoyer : ${a.restitutionLien ?? 'aucun'}.`,
+    `Récupère tous ses fichiers avec Artifact action read, en les enregistrant dans le dossier ${dossierDeck} (paramètre out_dir) : (1) project/deck.json et project/deck.css ; (2) tous les project/slides/<id>.html, les identifiants étant ceux de la liste « order » de project/deck.json, en une seule lecture (paramètre paths) ; (3) toute image citée par les slides ou la feuille de style : chaque project/ds/… avec paths, chaque /_blob/<identifiant de 32 caractères> avec path égal à cet identifiant.`,
+    "Ne modifie, ne résume et ne réécris aucun fichier : l'OS les range tels quels. Lis le deck publié, jamais une copie de mémoire.",
+    `Termine toujours par un seul appel à repondre_diagnostic avec projetId ${a.id} : le nombre de slides récupérées et ce qui n'a pas pu l'être. Puis arrête-toi. Vouvoie le pilote, en français.`,
+  ].join('\n');
+
+export const outilsEnvoiSupport = (travail: string[]) =>
+  [
+    'mcp__simatis__repondre_diagnostic',
+    'Artifact',
+    'Glob',
+    'Grep',
+    ...travail.flatMap((d) => [`Read(/${d}/**)`, `Edit(/${d}/**)`]),
+  ].join(',');
+
+// Dossier des supports du lecteur sur ce poste : celui que monte le conteneur (SUPPORTS_HOTE).
+export const dossierSupportsPoste = () =>
+  path.resolve(process.env.SUPPORTS_HOTE?.trim() || 'private/supports');
+
 export const outilsExportRestitution = (travail: string[]) =>
   [
     'mcp__simatis__repondre_diagnostic',
@@ -1502,6 +1529,7 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
       const rapport = a.demande === 'rapport';
       const restitution = a.demande === 'restitution';
       const exportRestitution = a.demande === 'restitution_export';
+      const envoiSupport = a.demande === 'restitution_support';
       const capitalisation =
         a.demande === 'capitalisation_proposer' || a.demande === 'capitalisation_enregistrer';
       const revue = a.demande === 'revue_preparer';
@@ -1535,6 +1563,7 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
         !rapport &&
         !restitution &&
         !exportRestitution &&
+        !envoiSupport &&
         !entretien &&
         !capitalisation &&
         !regles &&
@@ -1671,6 +1700,21 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
           ...(cerveau ? ['--add-dir', cerveau] : []),
         ];
         cwd = dossier;
+      } else if (envoiSupport) {
+        const dossierDeck = path.join(dossier, 'deck');
+        await mkdir(dossierDeck, { recursive: true });
+        args = [
+          '-p',
+          promptEnvoiSupport(a, dossierDeck),
+          ...modele,
+          ...OPTIONS_SUPPORT,
+          '--permission-prompt-tool',
+          'mcp__simatis__autoriser_outil',
+          ...mcp,
+          outilsEnvoiSupport([dossier, brouillonClaude()]),
+        ];
+        cwd = dossier;
+        env = ENV_SUPPORT;
       } else if (exportRestitution) {
         args = [
           '-p',
@@ -1767,6 +1811,17 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
       }
       const code = await lancer(opts.claude, args, cwd, env);
       if (code !== 0) erreur = `Claude s'est arrêté avec le code ${code}. Réécrivez votre message.`;
+      else if (envoiSupport) {
+        // Les fichiers récupérés par Claude deviennent un support du lecteur, rangé par l'OS.
+        try {
+          await convertirDeck(
+            path.join(dossier, 'deck'),
+            path.join(dossierSupportsPoste(), idSupportDe(a.nom)),
+          );
+        } catch (e) {
+          erreur = `Le deck n'a pas pu être rangé dans le lecteur : ${e instanceof Error ? e.message : String(e)}`;
+        }
+      }
     } finally {
       await rm(dossier, { recursive: true, force: true });
       await api(`/api/runner/diagnostic/attentes/${a.id}/fin`, {

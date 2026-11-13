@@ -1,6 +1,12 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchDecksCours, fetchTexteCours, urlFichierCours, type DeckCours } from '../api.js';
+import {
+  fetchDecksCours,
+  fetchTexteCours,
+  supprimerSupportCours,
+  urlFichierCours,
+  type DeckCours,
+} from '../api.js';
 import { useModePresentation } from '../shell/modePresentation.js';
 import { documentSlide, incorporerImages, lireSlideHtml } from './html.js';
 import { Markdown } from './Markdown.js';
@@ -181,6 +187,25 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
     return () => document.removeEventListener('keydown', touche);
   }, [etat.statut, suivante, precedente, aller, m, modules.length, basculer]);
 
+  // Une fois présenté, le support quitte l'OS : le deck publié (ou son PDF) reste l'archive.
+  const terminer = async () => {
+    if (
+      !window.confirm(
+        'Supprimer ce support de l’OS ? Le deck d’origine (claude.ai) ou son PDF reste votre archive.',
+      )
+    )
+      return;
+    try {
+      await supprimerSupportCours(slug, deck);
+      window.location.hash = `#/${slug}/cours`;
+    } catch (e) {
+      setEtat({
+        statut: 'erreur',
+        message: e instanceof Error ? e.message : 'Suppression impossible',
+      });
+    }
+  };
+
   const resoudre = useMemo(() => (src: string) => urlFichierCours(slug, deck, src), [slug, deck]);
 
   if (etat.statut === 'chargement')
@@ -332,6 +357,9 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
           onClick={() => setNotes((v) => !v)}
         >
           Notes
+        </button>
+        <button className="btn sm" type="button" onClick={() => void terminer()}>
+          Terminer et supprimer
         </button>
       </nav>
     </div>

@@ -135,6 +135,23 @@ describe('Supports : API', () => {
       expect((await lire(relatif)).statusCode, relatif).toBe(404);
   });
 
+  it('supprime un support en entier, et refuse un nom invalide ou inconnu', async () => {
+    await mkdir(path.join(dossier, 'a-supprimer'), { recursive: true });
+    await writeFile(path.join(dossier, 'a-supprimer', 'manifest.json'), '{"titre":"x"}');
+    const del = (deck: string) => app.inject({ method: 'DELETE', url: `${base}/${deck}` });
+    expect((await del('a-supprimer')).statusCode).toBe(204);
+    expect((await lire('a-supprimer/manifest.json')).statusCode).toBe(404);
+    expect((await del('a-supprimer')).statusCode).toBe(404);
+    expect((await del('..')).statusCode).toBe(404);
+    expect((await del('Exemple')).statusCode).toBe(404);
+    // Un dossier sans manifest n'est pas un support : on n'y touche pas.
+    await mkdir(path.join(dossier, 'sans-manifest-2'), { recursive: true });
+    expect((await del('sans-manifest-2')).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: base })).json()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'exemple-fictif' })]),
+    );
+  });
+
   it('dit qu aucun dossier n est configuré', async () => {
     delete process.env.SUPPORTS_DIR;
     try {

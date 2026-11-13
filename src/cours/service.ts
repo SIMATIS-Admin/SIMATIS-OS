@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 // Les supports sont des dossiers de fichiers texte, hors du dépôt (confidentiel) :
@@ -106,4 +106,18 @@ export async function lireFichierDeck(
     if (e instanceof SupportIntrouvable) throw e;
     throw new SupportIntrouvable('Fichier introuvable');
   }
+}
+
+// Un support se supprime en entier, une fois la présentation faite. Le nom est validé comme pour la
+// lecture ; sans dossier de supports configuré ou sans ce support, rien n'est supprimé.
+export async function supprimerDeck(deck: string): Promise<void> {
+  const racine = dossierSupports();
+  if (!DECK.test(deck)) throw new SupportIntrouvable('Support introuvable');
+  const dossier = path.join(racine, deck);
+  try {
+    await stat(path.join(dossier, 'manifest.json'));
+  } catch {
+    throw new SupportIntrouvable('Support introuvable');
+  }
+  await rm(dossier, { recursive: true, force: true });
 }
