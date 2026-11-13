@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   depuisDerniereProduction,
   outilsCapitalisation,
@@ -31,6 +31,8 @@ import {
   promptReglesRapport,
   promptReglesRestitution,
   promptReglesSupport,
+  promptEnvoiSupport,
+  outilsEnvoiSupport,
   promptExportRestitution,
   promptExportRevue,
   promptDossierRapport,
@@ -727,6 +729,109 @@ describe('Production par le runner : modifications et deck', () => {
     });
     expect(args.find((x) => x.startsWith('Exporte'))).toBeDefined();
     expect(args.join(' ')).not.toContain(SKILL_RESTITUTION);
+  });
+
+  it("l'envoi au lecteur demande tous les fichiers du deck, sans rien publier ni réécrire", () => {
+    const texte = promptEnvoiSupport(
+      {
+        ...restitution,
+        demande: 'restitution_support',
+        restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
+      },
+      '/travail/deck',
+    );
+    expect(texte).toContain('https://claude.ai/artifact/RestitutionFictive01');
+    expect(texte).toContain('/travail/deck');
+    expect(texte).toContain('out_dir');
+    expect(texte).toContain('project/deck.json');
+    expect(texte).toContain('project/deck.css');
+    expect(texte).toContain('/_blob/');
+    expect(texte).toContain('ne publies rien');
+    expect(texte).toContain(`projetId ${restitution.id}`);
+    expect(texte).not.toContain('quickstart');
+    const outils = outilsEnvoiSupport(['/travail']);
+    expect(outils).toContain('Artifact');
+    expect(outils).not.toContain('enregistrer_restitution');
+    expect(outils).not.toContain('Skill');
+  });
+
+  describe("envoi d'un deck au lecteur, de bout en bout", () => {
+    const miniDeck = async (dossierDeck: string) => {
+      await mkdir(path.join(dossierDeck, 'project', 'slides'), { recursive: true });
+      await writeFile(
+        path.join(dossierDeck, 'project', 'deck.json'),
+        JSON.stringify({ title: 'Deck fictif', order: ['cover'] }),
+      );
+      await writeFile(
+        path.join(dossierDeck, 'project', 'slides', 'cover.html'),
+        '<section id="cover"><h1>Titre fictif</h1></section>',
+      );
+    };
+    const lancerEnvoi = async (preparer: ((dossierDeck: string) => Promise<void>) | null) => {
+      const appels: { url: string; corps: string }[] = [];
+      await tourDiagnostic({
+        base: 'http://os.test',
+        token: 'r',
+        claude: 'claude',
+        fetch: ((url: string, init?: { body?: string }) => {
+          appels.push({ url, corps: init?.body ?? '' });
+          return Promise.resolve(
+            new Response(
+              JSON.stringify(
+                url.endsWith('/attentes')
+                  ? [
+                      {
+                        ...restitution,
+                        nom: 'Entreprise Fictive',
+                        demande: 'restitution_support',
+                        restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
+                      },
+                    ]
+                  : { ok: true },
+              ),
+              { status: 200 },
+            ),
+          );
+        }) as typeof fetch,
+        poste: () => Promise.resolve({ nom: 'poste', claude: '1', skills: [] }),
+        lancer: async (_c, a) => {
+          const prompt = a[a.indexOf('-p') + 1] ?? '';
+          const dossierDeck = /dans le dossier (\S+) \(paramètre out_dir\)/.exec(prompt)?.[1];
+          if (dossierDeck && preparer) await preparer(dossierDeck);
+          return 0;
+        },
+      });
+      return appels;
+    };
+    let supports: string;
+    let avant: string | undefined;
+    beforeEach(async () => {
+      supports = await mkdtemp(path.join(tmpdir(), 'supports-hote-'));
+      avant = process.env.SUPPORTS_HOTE;
+      process.env.SUPPORTS_HOTE = supports;
+    });
+    afterEach(async () => {
+      if (avant === undefined) delete process.env.SUPPORTS_HOTE;
+      else process.env.SUPPORTS_HOTE = avant;
+      await rm(supports, { recursive: true, force: true });
+    });
+
+    it('range le deck récupéré dans le dossier des supports, sous le nom du projet', async () => {
+      const appels = await lancerEnvoi(miniDeck);
+      const manifest = JSON.parse(
+        await readFile(
+          path.join(supports, 'restitution-entreprise-fictive', 'manifest.json'),
+          'utf8',
+        ),
+      ) as { titre: string; format: string };
+      expect(manifest).toMatchObject({ titre: 'Deck fictif', format: 'html' });
+      expect(appels.find((c) => c.url.endsWith('/fin'))?.corps ?? '').not.toContain('erreur');
+    });
+
+    it("signale au pilote un deck que Claude n'a pas pu récupérer", async () => {
+      const appels = await lancerEnvoi(null);
+      expect(appels.find((c) => c.url.endsWith('/fin'))?.corps).toContain("n'a pas pu être rangé");
+    });
   });
 
   it.each(['revue_exporter', 'dossier_exporter'] as const)(

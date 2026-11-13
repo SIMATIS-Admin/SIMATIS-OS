@@ -101,6 +101,25 @@ export function demanderReglesRestitution(
   });
 }
 
+export const DEBUT_MESSAGE_SUPPORT = 'Envoyer le deck de restitution au lecteur';
+
+export function demanderEnvoiSupport(
+  db: Executor,
+  instance: Instance,
+  id: string,
+): Promise<ProjetVue> {
+  return envoyerMessage(db, instance, id, `${DEBUT_MESSAGE_SUPPORT}.`, {
+    type: 'restitution_support',
+    etape: 5,
+    verifier: (projet) => {
+      if (!projet.restitutionLien)
+        throw new ChatIndisponible("Aucun deck de restitution n'est encore enregistré.");
+      if (projet.restitutionStatut === 'en_cours')
+        throw new ChatIndisponible('Le deck de restitution est en cours de création.');
+    },
+  });
+}
+
 export const DEBUT_MESSAGE_EXPORT = 'Exporter le deck de restitution en PowerPoint';
 
 export function demanderExportRestitution(
@@ -128,6 +147,8 @@ export async function importerDeckRestitution(
   instance: Instance,
   id: string,
   lienSaisi: string,
+  // « texte » : diapositives en puces ; « support » : le deck entier, envoyé au lecteur de l'OS.
+  mode: 'texte' | 'support' = 'texte',
 ): Promise<ProjetVue> {
   verifierEspace(instance);
   const lien = lienSaisi.trim().replace(/[?#].*$/, '');
@@ -154,7 +175,9 @@ export async function importerDeckRestitution(
       })
       .where(and(eq(diagnosticProjets.id, id), eq(diagnosticProjets.instanceId, instance.id)));
   });
-  return demanderExportRestitution(db, instance, id);
+  return mode === 'support'
+    ? demanderEnvoiSupport(db, instance, id)
+    : demanderExportRestitution(db, instance, id);
 }
 
 // PDF du deck exporté de claude.ai : l'OS l'affiche page par page, avec le rendu exact du deck.
@@ -311,10 +334,13 @@ export async function autoriserSiRestitution(
   const projet = enCours[0];
   const refus = (message: string): Decision => ({ behavior: 'deny', message });
   // Export PowerPoint : le deck se lit seulement, rien ne s'y publie.
-  if (enCours.length === 1 && projet?.demande === 'restitution_export')
+  if (
+    enCours.length === 1 &&
+    (projet?.demande === 'restitution_export' || projet?.demande === 'restitution_support')
+  )
     return outil === 'Artifact' && input.action === 'read'
       ? { behavior: 'allow', updatedInput: input }
-      : refus("Pendant l'export PowerPoint, seule la lecture du deck est permise.");
+      : refus("Pendant l'export du deck, seule sa lecture est permise.");
   // Capitalisation des règles : le deck final et ses prédécesseurs se lisent, rien ne s'y publie.
   if (enCours.length === 1 && projet?.demande === 'regles_restitution')
     return outil === 'Artifact' && input.action === 'read'

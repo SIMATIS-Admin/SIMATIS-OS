@@ -142,6 +142,10 @@ export type DeckCours = { id: string; titre: string; soustitre: string };
 export const fetchDecksCours = (slug: string) => getJson<DeckCours[]>(inst(slug, 'cours'));
 export const urlFichierCours = (slug: string, deck: string, fichier: string) =>
   inst(slug, `cours/${encodeURIComponent(deck)}/${fichier}`);
+export const supprimerSupportCours = async (slug: string, deck: string) => {
+  const r = await fetch(inst(slug, `cours/${encodeURIComponent(deck)}`), { method: 'DELETE' });
+  if (!r.ok) throw new Error('Suppression impossible');
+};
 export const fetchTexteCours = async (slug: string, deck: string, fichier: string) => {
   const r = await fetch(urlFichierCours(slug, deck, fichier));
   if (!r.ok) throw new Error(`${fichier} : fichier introuvable`);
@@ -1505,6 +1509,7 @@ export type ProjetDiag = {
     | 'rapport'
     | 'restitution'
     | 'restitution_export'
+    | 'restitution_support'
     | 'revue_exporter'
     | 'dossier_exporter'
     | 'capitalisation_proposer'
@@ -1514,6 +1519,8 @@ export type ProjetDiag = {
   aPdfEntretien: boolean;
   // Un PDF de deck est gardé dans l'OS pour la présentation.
   aPdfDeck: boolean;
+  // Nom du support du lecteur où la restitution de ce projet s'envoie.
+  supportId: string;
   pdfEntretienNom: string | null;
   reponsesEntretien: { section: string; numero: number; reponse: LettreReponse }[];
   historiqueReponses: { question: string; ancienne: string; nouvelle: string; le: string }[];
@@ -1805,11 +1812,16 @@ export const exporterRestitutionDiag = (slug: string, id: string) =>
     {},
   );
 // Deck construit hors de l'OS : son lien est enregistré, Claude en relit les diapositives.
-export const importerDeckRestitutionDiag = (slug: string, id: string, lien: string) =>
+export const importerDeckRestitutionDiag = (
+  slug: string,
+  id: string,
+  lien: string,
+  mode: 'texte' | 'support' = 'texte',
+) =>
   sendJson<ProjetDiag>(
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/restitution/importer`),
-    { lien },
+    mode === 'texte' ? { lien } : { lien, mode },
   );
 // Présentation terminée : les diapositives quittent l'OS, le deck publié reste l'archive.
 export const purgerPresentationRestitutionDiag = (slug: string, id: string) =>

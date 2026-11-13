@@ -17,6 +17,7 @@ import {
   enregistrerRestitution,
   pdfDeckDe,
   importerDeckRestitution,
+  DEBUT_MESSAGE_SUPPORT,
   purgerDiapositivesRestitution,
   marquerDeckFinal,
   pptxRestitutionDe,
@@ -384,6 +385,35 @@ describe('Deck de restitution', () => {
         restitutionStatut: 'pret',
         demande: 'restitution_export',
       });
+    });
+
+    it('envoie le deck au lecteur : lien gardé, demande restitution_support', async () => {
+      const id = await avecRapport('Import Fictif Support');
+      const envoye = await importerDeckRestitution(t.app.db, simatis, id, LIEN_1, 'support');
+      expect(envoye).toMatchObject({
+        restitutionLien: LIEN_1,
+        demande: 'restitution_support',
+        supportId: 'restitution-import-fictif-support',
+      });
+      expect(envoye.conversation.at(-1)?.texte).toContain(DEBUT_MESSAGE_SUPPORT);
+    });
+
+    it('pendant l envoi au lecteur, seule la lecture du deck est permise', async () => {
+      const id = await avecRapport('Import Fictif Permis');
+      // La permission ne vaut que s'il n'y a qu'une demande en cours : on termine celles des autres tests.
+      for (const p of await listProjets(t.app.db, simatis))
+        if (p.statutChat === 'en_cours') await finirAttente(t.app.db, simatis, p.id);
+      await importerDeckRestitution(t.app.db, simatis, id, LIEN_1, 'support');
+      await demarrerAttente(t.app.db, simatis, id);
+      const decider = (outil: string, input: Record<string, unknown>) =>
+        withInstance(t.app.db, simatis.id, (tx) => autoriserSiRestitution(tx, outil, input));
+      expect(await decider('Artifact', { action: 'read', url: LIEN_1 })).toMatchObject({
+        behavior: 'allow',
+      });
+      expect(await decider('Artifact', { action: 'publish', url: LIEN_1 })).toMatchObject({
+        behavior: 'deny',
+      });
+      expect(await decider('Bash', {})).toMatchObject({ behavior: 'deny' });
     });
 
     it('refuse un lien qui n est pas un artifact claude.ai', async () => {

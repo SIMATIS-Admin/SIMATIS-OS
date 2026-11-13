@@ -9,6 +9,7 @@ import {
   rendezVousCapitalisationDiag,
   type RdvCapitalisation,
   exporterRestitutionDiag,
+  fetchDecksCours,
   importerDeckRestitutionDiag,
   importerPdfDeckDiag,
   purgerPresentationRestitutionDiag,
@@ -1601,8 +1602,25 @@ function RestitutionDeck({
       onErreur(messageErreur(err));
     }
   };
-  const exportEnCours = projet.demande === 'restitution_export' && projet.statutChat !== 'repos';
+  const exportEnCours =
+    (projet.demande === 'restitution_export' || projet.demande === 'restitution_support') &&
+    projet.statutChat !== 'repos';
   const [lienImport, setLienImport] = useState('');
+  // Le deck envoyé au lecteur apparaît dans l'espace Supports quand Claude a fini de le récupérer.
+  const [dansLeLecteur, setDansLeLecteur] = useState(false);
+  useEffect(() => {
+    void Promise.resolve(fetchDecksCours(slug))
+      .then((decks) => setDansLeLecteur(decks.some((d) => d.id === projet.supportId)))
+      .catch(() => setDansLeLecteur(false));
+  }, [slug, projet.supportId, projet.statutChat, projet.demande]);
+  const envoyerAuLecteur = async () => {
+    try {
+      onChange(await importerDeckRestitutionDiag(slug, projet.id, lienImport, 'support'));
+      setLienImport('');
+    } catch (err) {
+      onErreur(messageErreur(err));
+    }
+  };
   const importer = async () => {
     try {
       onChange(await importerDeckRestitutionDiag(slug, projet.id, lienImport));
@@ -1759,22 +1777,8 @@ function RestitutionDeck({
         <details className="diag-plus">
           <summary className="btn">Présenter un deck déjà construit</summary>
           <div className="diag-plus-liste">
-            <label className="small muted" htmlFor="pdf-deck-import">
-              PDF du deck (Partager › Exporter › PDF sur claude.ai) : rendu identique
-            </label>
-            <input
-              id="pdf-deck-import"
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => void importerPdf(e.target.files?.[0])}
-            />
-            {projet.aPdfDeck && (
-              <a className="btn go" href={`#/${slug}/diaporama/deck/${projet.id}`}>
-                Présenter le deck
-              </a>
-            )}
             <label className="small muted" htmlFor="lien-deck-import">
-              Ou lien du deck (artifact claude.ai) : texte seul, mise en page simplifiée
+              Lien du deck (artifact claude.ai)
             </label>
             <input
               id="lien-deck-import"
@@ -1786,9 +1790,39 @@ function RestitutionDeck({
             <button
               className="btn go"
               disabled={enCours || exportEnCours || lienImport.trim() === ''}
+              onClick={() => void envoyerAuLecteur()}
+            >
+              Envoyer au lecteur de l’OS
+            </button>
+            {dansLeLecteur && (
+              <a className="btn go" href={`#/${slug}/cours/deck/${projet.supportId}`}>
+                Présenter dans le lecteur
+              </a>
+            )}
+            <p className="small muted" style={{ margin: 0 }}>
+              Le lecteur affiche le deck à l’identique. Après la présentation, « Terminer et
+              supprimer » le retire de l’OS ; le deck claude.ai reste l’archive.
+            </p>
+            <label className="small muted" htmlFor="pdf-deck-import">
+              Autre voie : le PDF du deck (Partager › Exporter › PDF sur claude.ai)
+            </label>
+            <input
+              id="pdf-deck-import"
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => void importerPdf(e.target.files?.[0])}
+            />
+            {projet.aPdfDeck && (
+              <a className="btn" href={`#/${slug}/diaporama/deck/${projet.id}`}>
+                Présenter le deck
+              </a>
+            )}
+            <button
+              className="btn"
+              disabled={enCours || exportEnCours || lienImport.trim() === ''}
               onClick={() => void importer()}
             >
-              Préparer la présentation dans l’OS
+              Texte seul, mise en page simplifiée
             </button>
           </div>
         </details>

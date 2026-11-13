@@ -27,6 +27,18 @@ export class ContactIntrouvable extends Error {
   }
 }
 
+// Le support de la restitution d'un projet : « restitution- » et le nom du projet, en minuscules.
+export const idSupportDe = (nom: string) =>
+  `restitution-${
+    nom
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 50) || 'deck'
+  }`;
+
 export type ProjetVue = Omit<
   Projet,
   'rapport' | 'logo' | 'pdfEntretien' | 'rapportVersions' | 'restitutionDiapos' | 'restitutionPdf'
@@ -40,6 +52,8 @@ export type ProjetVue = Omit<
   aPptx: boolean;
   aPdfEntretien: boolean;
   aPdfDeck: boolean;
+  // Nom du support du lecteur où cette restitution s'envoie (dossier de l'espace Supports).
+  supportId: string;
 };
 export type ProjetPatch = Partial<
   Pick<
@@ -85,6 +99,7 @@ export const vue = ({
   aLogo: logo !== null,
   aPptx: restitutionDiapos !== null,
   aPdfDeck: restitutionPdf !== null,
+  supportId: idSupportDe(projet.nom),
   aPdfEntretien: pdfEntretien !== null,
 });
 

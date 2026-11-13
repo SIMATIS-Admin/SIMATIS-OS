@@ -23,6 +23,9 @@ const api = vi.hoisted(() => ({
   demandeRestitutionDiag: vi.fn(),
   exporterRestitutionDiag: vi.fn(),
   importerDeckRestitutionDiag: vi.fn(),
+  fetchDecksCours: vi.fn<() => Promise<{ id: string; titre: string; soustitre: string }[]>>(() =>
+    Promise.resolve([]),
+  ),
   importerPdfDeckDiag: vi.fn(),
   purgerPresentationRestitutionDiag: vi.fn(),
   rendezVousCapitalisationDiag: vi.fn(),
@@ -102,6 +105,7 @@ const projet = (extra: Partial<ProjetDiag> = {}): ProjetDiag => ({
   proposition: null,
   aPdfEntretien: false,
   aPdfDeck: false,
+  supportId: 'restitution-atelier-fictif-nord',
   pdfEntretienNom: null,
   reponsesEntretien: [],
   historiqueReponses: [],
@@ -1198,17 +1202,17 @@ describe('Deck de restitution à l étape 5', () => {
       expect(bouton.disabled).toBe(true);
     });
 
-    it('importe un deck déjà construit à partir de son lien', async () => {
+    it('envoie un deck déjà construit au lecteur à partir de son lien', async () => {
       api.fetchProjetsDiag.mockResolvedValue([deckPret()]);
       api.importerDeckRestitutionDiag.mockResolvedValue(
-        deckPret({ demande: 'restitution_export', statutChat: 'attente_claude' }),
+        deckPret({ demande: 'restitution_support', statutChat: 'attente_claude' }),
       );
       await ouvrir();
       const bouton = await screen.findByRole<HTMLButtonElement>('button', {
-        name: 'Préparer la présentation dans l’OS',
+        name: 'Envoyer au lecteur de l’OS',
       });
       expect(bouton.disabled).toBe(true);
-      fireEvent.change(screen.getByLabelText(/lien du deck/), {
+      fireEvent.change(screen.getByLabelText(/Lien du deck/), {
         target: { value: 'https://claude.ai/artifact/DeckFictif01#slide-ab12' },
       });
       fireEvent.click(bouton);
@@ -1217,6 +1221,39 @@ describe('Deck de restitution à l étape 5', () => {
           'simatis',
           'p1',
           'https://claude.ai/artifact/DeckFictif01#slide-ab12',
+          'support',
+        ),
+      );
+    });
+
+    it('propose de présenter dans le lecteur le deck déjà envoyé', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([deckPret()]);
+      api.fetchDecksCours.mockResolvedValue([
+        { id: 'restitution-atelier-fictif-nord', titre: 'Restitution', soustitre: '' },
+      ]);
+      await ouvrir();
+      const lien = await screen.findByRole('link', { name: 'Présenter dans le lecteur' });
+      expect(lien.getAttribute('href')).toBe(
+        '#/simatis/cours/deck/restitution-atelier-fictif-nord',
+      );
+      api.fetchDecksCours.mockResolvedValue([]);
+    });
+
+    it('importe en texte seul quand on le demande', async () => {
+      api.fetchProjetsDiag.mockResolvedValue([deckPret()]);
+      api.importerDeckRestitutionDiag.mockResolvedValue(
+        deckPret({ demande: 'restitution_export', statutChat: 'attente_claude' }),
+      );
+      await ouvrir();
+      fireEvent.change(await screen.findByLabelText(/Lien du deck/), {
+        target: { value: 'https://claude.ai/artifact/DeckFictif01' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Texte seul, mise en page simplifiée' }));
+      await waitFor(() =>
+        expect(api.importerDeckRestitutionDiag).toHaveBeenCalledWith(
+          'simatis',
+          'p1',
+          'https://claude.ai/artifact/DeckFictif01',
         ),
       );
     });

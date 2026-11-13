@@ -5,6 +5,7 @@ import { Cours, CoursListe } from './Cours.js';
 
 const api = vi.hoisted(() => ({
   fetchDecksCours: vi.fn(),
+  supprimerSupportCours: vi.fn(),
   fetchTexteCours: vi.fn(),
   urlFichierCours: (slug: string, deck: string, f: string) => `/api/i/${slug}/cours/${deck}/${f}`,
 }));
@@ -164,6 +165,28 @@ describe('Lecteur de supports', () => {
     render(<Cours slug="simatis" deck="absent" />);
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByText(/fichier introuvable/)).toBeTruthy();
+  });
+});
+
+describe('Fin de présentation', () => {
+  it('supprime le support après confirmation, puis revient à la liste', async () => {
+    api.supprimerSupportCours.mockReset();
+    api.supprimerSupportCours.mockResolvedValue(undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await ouvrir();
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer et supprimer' }));
+    await waitFor(() =>
+      expect(api.supprimerSupportCours).toHaveBeenCalledWith('simatis', 'exemple-fictif'),
+    );
+    await waitFor(() => expect(location.hash).toBe('#/simatis/cours'));
+  });
+
+  it('ne supprime rien si l’on annule', async () => {
+    api.supprimerSupportCours.mockReset();
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await ouvrir();
+    fireEvent.click(screen.getByRole('button', { name: 'Terminer et supprimer' }));
+    expect(api.supprimerSupportCours).not.toHaveBeenCalled();
   });
 });
 

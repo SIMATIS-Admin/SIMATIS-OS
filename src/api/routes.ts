@@ -51,7 +51,12 @@ import {
   purgerDiapositivesRestitution,
 } from '../diagnostic/restitution.js';
 import { SupportInvalide } from '../diagnostic/support.js';
-import { listerDecks, lireFichierDeck, SupportIntrouvable } from '../cours/service.js';
+import {
+  listerDecks,
+  lireFichierDeck,
+  supprimerDeck,
+  SupportIntrouvable,
+} from '../cours/service.js';
 import { demanderDossier } from '../diagnostic/dossier-export.js';
 import { demanderExportRevue } from '../diagnostic/revue-export.js';
 import { corrigerReponse, importerEntretien } from '../diagnostic/entretien.js';
@@ -906,6 +911,20 @@ export function registerApi(
       }
     }),
   );
+  // Présentation terminée : le support quitte l'OS (le deck claude.ai reste l'archive).
+  app.delete<{ Params: { slug: string; deck: string } }>(
+    '/api/i/:slug/cours/:deck',
+    onInstance<{ Params: { slug: string; deck: string } }>(async (_i, request, reply) => {
+      try {
+        await supprimerDeck(request.params.deck);
+        return reply.code(204).send();
+      } catch (error) {
+        if (error instanceof SupportIntrouvable)
+          return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
   app.get<{ Params: { slug: string; deck: string; '*': string } }>(
     '/api/i/:slug/cours/:deck/*',
     onInstance<{ Params: { slug: string; deck: string; '*': string } }>(
@@ -934,10 +953,15 @@ export function registerApi(
     onInstance<ProjetRoute>(async (i, request, reply) => {
       const { id } = request.params;
       if (!UUID.test(id)) return reply.code(400).send({ error: 'Projet invalide' });
-      const corps = z.object({ lien: z.string().trim().min(1).max(500) }).safeParse(request.body);
+      const corps = z
+        .object({
+          lien: z.string().trim().min(1).max(500),
+          mode: z.enum(['texte', 'support']).optional(),
+        })
+        .safeParse(request.body);
       if (!corps.success) return reply.code(400).send({ error: 'Lien du deck attendu' });
       try {
-        return await importerDeckRestitution(db, i, id, corps.data.lien);
+        return await importerDeckRestitution(db, i, id, corps.data.lien, corps.data.mode);
       } catch (error) {
         if (error instanceof SupportInvalide) return reply.code(400).send({ error: error.message });
         if (error instanceof ChatIndisponible)
