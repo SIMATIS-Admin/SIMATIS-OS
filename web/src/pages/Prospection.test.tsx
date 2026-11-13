@@ -2,6 +2,10 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StatsProspection, VueProspection } from '../api.js';
+vi.mock('./radar/SequenceReglage.js', () => ({
+  SequenceReglage: ({ slug }: { slug: string }) => <p>Séquence de {slug}</p>,
+}));
+
 import { PanneauProspection, Prospection } from './Prospection.js';
 
 const stats = (o: Partial<StatsProspection> = {}): StatsProspection => ({
@@ -45,6 +49,11 @@ afterEach(() => {
 const jauge = () => document.querySelector<HTMLElement>('[role="progressbar"]');
 
 describe('Prospection', () => {
+  it('accueille le réglage de la séquence de relance, venu du Radar', async () => {
+    render(<Prospection slug="simatis" />);
+    expect(await screen.findByText('Séquence de simatis')).toBeTruthy();
+  });
+
   it("affiche le compteur du jour sur l'objectif et la jauge", async () => {
     render(<Prospection slug="simatis" />);
     expect(await screen.findByText('14')).toBeTruthy();

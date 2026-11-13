@@ -579,7 +579,7 @@ type Fenetres =
 export function Bases({ slug, ouvrir }: { slug: string; ouvrir?: string | undefined }) {
   const [etat, setEtat] = useState<EtatBase | null>(null);
   const [apercus, setApercus] = useState<ImportBase[]>([]);
-  // Lien du Radar : « a-enrichir » ouvre directement les fiches sans contact.
+  // Liens du Radar et des Recherches : « a-enrichir » ouvre directement les fiches sans contact.
   const [filtres, setFiltres] = useState<FiltresBaseWeb>(
     ouvrir === 'a-enrichir' ? { zone: 'a_enrichir' } : { tri: 'entreprise' },
   );
@@ -592,7 +592,13 @@ export function Bases({ slug, ouvrir }: { slug: string; ouvrir?: string | undefi
       ? { quoi: 'alerte' }
       : ouvrir === 'routine-recherche'
         ? { quoi: 'routine-recherche' }
-        : null,
+        : ouvrir === 'entreprises'
+          ? { quoi: 'entreprises' }
+          : ouvrir === 'recherche'
+            ? { quoi: 'recherche' }
+            : ouvrir === 'import'
+              ? { quoi: 'import', etape: 1 }
+              : null,
   );
   const [vue, setVue] = useState<'contacts' | 'entreprises'>('contacts');
   const [reponses, setReponses] = useState<{ aValider: ReponseBase[]; aClasser: number }>({
@@ -732,8 +738,11 @@ export function Bases({ slug, ouvrir }: { slug: string; ouvrir?: string | undefi
           Vos contacts, leurs sources et leur historique, prêts pour la prospection.
         </p>
         <div className="bv-entete-liens">
+          <a className="link lien-seul" href={`#/${slug}/recherches`}>
+            Rechercher des suspects
+          </a>
           <a className="link lien-seul" href={`#/${slug}/prospection`}>
-            Ouvrir Prospection
+            Ouvrir les campagnes
           </a>
           <details className="bv-menu">
             <summary className="btn sm">
@@ -790,46 +799,6 @@ export function Bases({ slug, ouvrir }: { slug: string; ouvrir?: string | undefi
             <span className="small muted">fiches à compléter</span>
           </div>
         </div>
-      </div>
-
-      <div className="grid g2 bv-parcours">
-        <section className="panel bv-parcours-recherche" aria-label="Trouver des prospects">
-          <div className="panel-b">
-            <h2>Trouver de nouveaux prospects</h2>
-            <p className="small muted">
-              Définissez votre cible, puis retrouvez les contacts vérifiés et leurs sources avant de
-              les ajouter à la base.
-            </p>
-            <div className="bv-parcours-actions">
-              <button className="btn primary" onClick={() => setFenetre({ quoi: 'recherche' })}>
-                Rechercher de nouveaux prospects
-              </button>
-              <button className="btn" onClick={() => setFenetre({ quoi: 'entreprises' })}>
-                Chercher des entreprises
-              </button>
-              <button
-                className="link small lien-seul"
-                onClick={() => setFenetre({ quoi: 'routine-recherche' })}
-              >
-                Recherche quotidienne
-              </button>
-            </div>
-          </div>
-        </section>
-        <section className="panel bv-parcours-import" aria-label="Importer des contacts">
-          <div className="panel-b">
-            <h2>Importer vos contacts</h2>
-            <p className="small muted">
-              Ajoutez un fichier ou des lignes copiées. Vérifiez les colonnes et les doublons avant
-              l’intégration.
-            </p>
-            <div className="bv-parcours-actions">
-              <button className="btn" onClick={() => setFenetre({ quoi: 'import', etape: 1 })}>
-                + Importer une liste
-              </button>
-            </div>
-          </div>
-        </section>
       </div>
 
       {info && <div className="small muted">{info}</div>}

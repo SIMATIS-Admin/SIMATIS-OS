@@ -27,11 +27,12 @@ export const NAV: NavGroup[] = [
     title: 'Détecter',
     items: [
       item('radar', 'Radar', 'radar'),
-      // Recherches et Campagnes ouvrent les écrans Bases vivantes et Prospection ; l'écran ICP
+      // Campagnes et Base des suspects gardent les écrans Prospection et Bases vivantes ; l'écran ICP
       // viendra avec son propre chantier.
-      item('bases', 'Recherches', 'search'),
+      item('recherches', 'Recherches', 'search'),
       item('icp', 'ICP', 'flag'),
       item('prospection', 'Campagnes', 'send'),
+      item('bases', 'Base des suspects', 'db'),
     ],
   },
   {
@@ -79,6 +80,7 @@ export const NAV: NavGroup[] = [
 export const BUILT = new Set([
   'cockpit',
   'radar',
+  'recherches',
   'pipeline',
   'entreprises',
   'contacts',

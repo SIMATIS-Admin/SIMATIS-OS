@@ -184,19 +184,18 @@ describe('Radar', () => {
     expect(await screen.findByText('Simulation : écriture HubSpot fermée.')).toBeTruthy();
   });
 
-  it('garde les écrans Prospection et Bases vivantes accessibles', async () => {
+  it('ne garde que le suivi : ni recherche ni réglage de séquence, et un lien vers la base', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve(new Response(JSON.stringify(radar)))),
     );
     render(<Radar slug="simatis" />);
     await screen.findByRole('region', { name: 'Contactés' });
-    expect(screen.getByRole('link', { name: 'Trouver des suspects' }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: 'Voir la base' }).getAttribute('href')).toBe(
       '#/simatis/bases',
     );
-    expect(screen.getByRole('link', { name: 'Campagnes et envois' }).getAttribute('href')).toBe(
-      '#/simatis/prospection',
-    );
+    expect(screen.queryByRole('region', { name: 'Chercher selon ma stratégie' })).toBeNull();
+    expect(screen.queryByText(/séquence/i)).toBeNull();
   });
 
   it('offre une action par colonne, qui ouvre le bon écran déjà préparé', async () => {

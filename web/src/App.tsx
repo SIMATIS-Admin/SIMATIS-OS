@@ -29,6 +29,9 @@ const Atelier = lazy(() => import('./pages/Atelier.js').then((m) => ({ default: 
 const Bases = lazy(() => import('./pages/Bases.js').then((m) => ({ default: m.Bases })));
 const Bientot = lazy(() => import('./pages/Bientot.js').then((m) => ({ default: m.Bientot })));
 const Radar = lazy(() => import('./pages/Radar.js').then((m) => ({ default: m.Radar })));
+const Recherches = lazy(() =>
+  import('./pages/Recherches.js').then((m) => ({ default: m.Recherches })),
+);
 const Cockpit = lazy(() => import('./pages/Cockpit.js').then((m) => ({ default: m.Cockpit })));
 const Cerveau = lazy(() => import('./pages/Cerveau.js').then((m) => ({ default: m.Cerveau })));
 const Devis = lazy(() => import('./pages/Devis.js').then((m) => ({ default: m.Devis })));
@@ -224,6 +227,8 @@ export function App() {
         );
       case 'radar':
         return <Radar key={current.slug} slug={current.slug} />;
+      case 'recherches':
+        return <Recherches key={current.slug} slug={current.slug} />;
       case 'pipeline':
         return <Pipeline key={current.slug} slug={current.slug} />;
       case 'routines':

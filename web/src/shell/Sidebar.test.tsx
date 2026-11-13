@@ -95,7 +95,7 @@ describe('Sidebar', () => {
     const libelles = (i: number) =>
       [...(groupes[i]?.querySelectorAll('.lbl') ?? [])].map((n) => n.textContent);
     expect(libelles(0)).toEqual(['Cockpit', 'Agenda']);
-    expect(libelles(1)).toEqual(['Radar', 'Recherches', 'ICP', 'Campagnes']);
+    expect(libelles(1)).toEqual(['Radar', 'Recherches', 'ICP', 'Campagnes', 'Base des suspects']);
     expect(libelles(2)).toContain('Pipeline');
     expect(libelles(3)).toEqual(['Entreprises', 'Contacts']);
   });
@@ -109,7 +109,7 @@ describe('Sidebar', () => {
     expect(screen.getAllByRole('link', { name: /Cockpit/ })).toHaveLength(2);
   });
 
-  it('shows Recherches and Campagnes as their own entries, lit only on their own screen', () => {
+  it('shows Campagnes and the Base des suspects as their own entries, lit only on their own screen', () => {
     const { container } = render(
       <Sidebar
         instances={[simatis, mandat]}
@@ -121,7 +121,7 @@ describe('Sidebar', () => {
         onMoveFavori={() => undefined}
       />,
     );
-    expect(screen.getByRole('link', { name: /Recherches/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Base des suspects/ })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Campagnes/ }).getAttribute('aria-current')).toBe(
       'page',
     );
