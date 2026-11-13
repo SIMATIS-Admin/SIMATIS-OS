@@ -1,3 +1,4 @@
+import { PROCHE_MS } from '../conversion/reunion-rdv.js';
 import { and, eq, gte, isNull, like, lte, ne, notExists, sql } from 'drizzle-orm';
 import { contacts, entreprises, rendezVous } from '../crm/schema.js';
 import type { Tx } from '../db.js';
@@ -21,9 +22,6 @@ export type DepotReunion = {
   // Entrée « compte rendu » déjà dans l'Inbox : la réunion s'y relie au lieu d'en créer une autre.
   sujetExistantId?: string | null;
 };
-
-// Même marge que pour proposer le rendez-vous d'une entrée (compte-rendu.ts).
-const PROCHE_MS = 3 * 3_600_000;
 
 // L'entrée « compte rendu » déjà créée depuis l'agenda pour cette réunion, traitée ou non : même
 // titre, et un rendez-vous de l'OS à l'heure de la réunion. Sans elle, une réunion Wispr Flow

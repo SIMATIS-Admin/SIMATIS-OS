@@ -27,7 +27,8 @@ export function CompteRendu({
   const [candidats, setCandidats] = useState<CandidatRdv[] | null>(null);
   const [choix, setChoix] = useState(NOUVEAU);
   // Le brouillon de la routine remplit le champ : le pilote le relit et le corrige avant d'enregistrer.
-  const [texte, setTexte] = useState(s.compteRenduPrepare?.texte ?? '');
+  // Sans brouillon, le résumé de la réunion Wispr Flow est repris : il suffit de le relire.
+  const [texte, setTexte] = useState(s.compteRenduPrepare?.texte ?? s.reunion?.resume ?? '');
   useEffect(() => {
     let actuel = true;
     fetchCandidatsRdv(slug, s.id).then(
@@ -68,6 +69,11 @@ export function CompteRendu({
       {s.compteRenduPrepare && (
         <div className="small muted">
           Brouillon préparé d’après la réunion : relisez-le et corrigez-le avant d’enregistrer.
+        </div>
+      )}
+      {!s.compteRenduPrepare && s.reunion?.resume && (
+        <div className="small muted">
+          Résumé repris de Wispr Flow : relisez-le avant d’enregistrer.
         </div>
       )}
       <textarea

@@ -35,7 +35,9 @@ import { decaler, estCreneau, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
 import { canWriteReal, propose, PropositionRefusee } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
+import { reunionsWispr, sujets } from '../inbox/schema.js';
 import { classerEvenement } from './classement-rdv.js';
+import { plusProche, PROCHE_MS } from './reunion-rdv.js';
 
 const FUSEAU = 'Europe/Paris';
 
@@ -117,6 +119,7 @@ export async function listerRendezVous(
       [...liste.filter((e) => !estCreneau(e)), ...os].sort(
         (a, b) => a.debut.getTime() - b.debut.getTime(),
       ),
+      maintenant,
     ),
     agendasIgnores: ignores,
   };
@@ -400,12 +403,60 @@ async function liensDe(tx: Tx, rdvIds: string[]) {
   return vide;
 }
 
-async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
+// Réunions Wispr Flow encore à traiter dans l'Inbox qui tombent à l'heure d'un rendez-vous passé
+// sans compte rendu : l'écran propose de les reprendre d'un clic.
+async function reunionsDisponibles(tx: Tx, liste: Evenement[], maintenant: Date) {
+  const passes = liste.filter((e) => e.fin <= maintenant && !e.journee);
+  if (passes.length === 0)
+    return new Map<string, { sujetId: string; titre: string; resume: string }>();
+  const debuts = passes.map((e) => e.debut.getTime());
+  const reunions = await tx
+    .select({
+      sujetId: reunionsWispr.sujetId,
+      titre: reunionsWispr.titre,
+      debutAt: reunionsWispr.debutAt,
+      participants: reunionsWispr.participants,
+      resume: reunionsWispr.resume,
+    })
+    .from(reunionsWispr)
+    .innerJoin(
+      sujets,
+      and(eq(sujets.instanceId, reunionsWispr.instanceId), eq(sujets.id, reunionsWispr.sujetId)),
+    )
+    .where(
+      and(
+        eq(reunionsWispr.instanceId, currentInstance),
+        eq(sujets.statut, 'a_traiter'),
+        gte(reunionsWispr.debutAt, new Date(Math.min(...debuts) - PROCHE_MS)),
+        lte(reunionsWispr.debutAt, new Date(Math.max(...debuts) + PROCHE_MS)),
+      ),
+    );
+  const avecResume = reunions.filter((r) => (r.resume ?? '').trim() !== '');
+  return new Map(
+    passes.flatMap((e) => {
+      const r = plusProche(
+        e,
+        avecResume.map((x) => ({ debut: x.debutAt, participants: x.participants, cible: x })),
+      );
+      return r
+        ? [[e.id, { sujetId: r.sujetId, titre: r.titre, resume: r.resume ?? '' }] as const]
+        : [];
+    }),
+  );
+}
+
+async function relier(
+  db: Executor,
+  instance: Instance,
+  liste: Evenement[],
+  maintenant = new Date(),
+) {
   const emails = [...new Set(liste.flatMap((e) => e.participants))];
   return withInstance(db, instance.id, async (tx) => {
     // Guests are matched on every address of a contact, not only its primary one.
     const parEmail = await contactsParEmails(tx, emails);
     const lignes = await memoriser(tx, liste, new Set(parEmail.keys()));
+    const reunions = await reunionsDisponibles(tx, liste, maintenant);
     const manuels = await liensDe(
       tx,
       lignes.map((l) => l.id),
@@ -494,6 +545,10 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
         lieu: e.lieu,
         statut: (ligne?.statut ?? 'a_trier') as StatutRdv,
         triAuto: ligne?.tri === 'auto',
+        reunionWispr:
+          ligne?.compteRendu == null && !faits.some((f) => f.sourceId === e.id)
+            ? (reunions.get(e.id) ?? null)
+            : null,
         contact: contact
           ? { id: contact.id, nom: contact.nom, entreprise: contact.entreprise }
           : null,

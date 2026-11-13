@@ -32,7 +32,9 @@ const reponse = () => ({
       entreprise: { id: 'e1', nom: 'Société Fictive' },
       compteRendu: true,
     }),
-    bloc('b4', 'Rencontre sans compte rendu', 'rdv'),
+    bloc('b4', 'Rencontre sans compte rendu', 'rdv', {
+      reunionWispr: { sujetId: 's9', titre: 'Réunion fictive', resume: 'Résumé fictif Wispr.' },
+    }),
     bloc('b5', 'Dentiste fictif', 'ignore'),
   ],
 });
@@ -109,6 +111,20 @@ describe('RendezVous list', () => {
       { kind: 'contact', id: 'c1' },
       { kind: 'entreprise', id: 'e1' },
     ]);
+  });
+
+  it('reprend le compte rendu Wispr Flow disponible d’un rendez-vous passé sans compte rendu', async () => {
+    render(<RendezVous slug="simatis" />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Sans compte rendu/ }));
+    const ligne = (await screen.findByText('Rencontre sans compte rendu')).closest('article');
+    if (!ligne) throw new Error('no row');
+    expect(within(ligne).getByText(/Compte rendu Wispr Flow disponible/)).toBeTruthy();
+    fireEvent.click(within(ligne).getByRole('button', { name: /Reprendre le compte rendu Wispr/ }));
+    await waitFor(() => expect(envoi('/sujets/s9/compte-rendu', 'POST')).toHaveLength(1));
+    expect(envoi('/sujets/s9/compte-rendu', 'POST')[0]?.body).toEqual({
+      eventId: 'b4',
+      texte: 'Résumé fictif Wispr.',
+    });
   });
 
   it('validates the contact suggested by the guests: links it, then makes it a meeting', async () => {
