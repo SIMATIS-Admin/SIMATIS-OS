@@ -12,6 +12,7 @@ export const preferences = pgTable('preferences', {
   options: jsonb('options')
     .$type<{
       ensuite?: boolean;
+      moteurIA?: 'claude' | 'codex';
       rechercheManuelle?: RechercheTache;
       rechercheBase?: RoutineRecherche;
       signauxBase?: RoutineAlerte;

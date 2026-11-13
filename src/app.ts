@@ -3,6 +3,7 @@ import { tournerAlertes } from './base-vivante/alerte-signaux.js';
 import { creerClientBodacc } from './signaux/bodacc.js';
 import { tournerRecherche } from './enrichissement/routine.js';
 import { fileCodex } from './enrichissement/codex.js';
+import { getOptions } from './preferences/service.js';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type pg from 'pg';
 import { registerApi } from './api/routes.js';
@@ -81,13 +82,20 @@ export function buildApp({
   if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
   const codex = fileCodex();
+  const moteurIA = () => getOptions(db, 'marc').then((o) => o.moteurIA);
   let timerRecherche: ReturnType<typeof setInterval> | undefined;
   let rechercheEnCours = false;
   app.addHook('onListen', () => {
     timerRecherche = setInterval(() => {
       if (rechercheEnCours) return;
       rechercheEnCours = true;
-      void tournerRecherche(db, codex.client, new Date(), () => lireLimitesIA(limitesIAFile))
+      void tournerRecherche(
+        db,
+        codex.client,
+        new Date(),
+        () => lireLimitesIA(limitesIAFile),
+        moteurIA,
+      )
         .catch((err: unknown) => app.log.error(err, 'Routine de recherche'))
         .finally(() => {
           rechercheEnCours = false;
@@ -153,6 +161,7 @@ export function buildApp({
   registerRunnerApi(app, {
     db,
     codex,
+    moteur: moteurIA,
     drive: { secretsDir, realWrites, ...(googleFetch ? { fetch: googleFetch } : {}) },
   });
   registerCerveauRoutes(app, { db, lienKdrive: partageKdriveUrl, realWrites });

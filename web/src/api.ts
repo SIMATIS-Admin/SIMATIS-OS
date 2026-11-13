@@ -866,7 +866,8 @@ export type TacheSaisie = {
   entrepriseId?: string | null;
   opportuniteId?: string | null;
 };
-export type Options = { ensuite: boolean };
+export type MoteurIA = 'claude' | 'codex';
+export type Options = { ensuite: boolean; moteurIA: MoteurIA };
 export const fetchOptions = () =>
   getJson<{ options: Options }>('/api/preferences').then((r) => r.options);
 export const saveOptions = (options: Partial<Options>) =>

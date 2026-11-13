@@ -1700,8 +1700,9 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
 
 export async function tourCodex(opts: RunnerOptions, binaire: string) {
   const api = clientOs(opts);
-  const { travail } = await api<{
+  const { travail, moteur } = await api<{
     travail: { id: string; demande: import('../enrichissement/client.js').DemandeIA } | null;
+    moteur?: 'claude' | 'codex';
   }>('/api/runner/codex');
   if (!travail) return;
   const dossier = await mkdtemp(path.join(tmpdir(), 'simatis-codex-'));
@@ -1713,6 +1714,40 @@ export async function tourCodex(opts: RunnerOptions, binaire: string) {
     await writeFile(schema, JSON.stringify(travail.demande.schema));
     const env = { ...process.env };
     delete env.OPENAI_API_KEY;
+    const entree =
+      travail.demande.consigne + '\n\nDonnées de recherche :\n' + travail.demande.entree;
+    if (moteur === 'claude') {
+      // Même tâche, autre moteur : Claude ne reçoit que la recherche web, sans MCP ni outil du poste.
+      const sortieClaude = await new Promise<string>((resolve, reject) => {
+        const enfant = execFile(
+          opts.claude,
+          [
+            '-p',
+            '--output-format',
+            'json',
+            '--json-schema',
+            JSON.stringify(travail.demande.schema),
+            '--tools',
+            'WebSearch,WebFetch',
+            '--strict-mcp-config',
+            '--no-session-persistence',
+          ],
+          { cwd: dossier, env, timeout: 540_000, maxBuffer: 20 * 1024 * 1024 },
+          (erreur, stdout) => (erreur ? reject(new Error(erreur.message)) : resolve(stdout)),
+        );
+        enfant.stdin?.on('error', (err: Error) => reject(err));
+        enfant.stdin?.end(entree);
+      });
+      const reponse = JSON.parse(sortieClaude) as {
+        is_error?: boolean;
+        structured_output?: unknown;
+      };
+      if (reponse.is_error || reponse.structured_output == null)
+        throw new Error('Claude sans résultat');
+      resultat = reponse.structured_output;
+      ok = true;
+      return;
+    }
     await new Promise<void>((resolve, reject) => {
       const enfant = execFile(
         binaire,
@@ -1735,14 +1770,12 @@ export async function tourCodex(opts: RunnerOptions, binaire: string) {
         (erreur) => (erreur ? reject(new Error(erreur.message)) : resolve()),
       );
       enfant.stdin?.on('error', (err: Error) => reject(err));
-      enfant.stdin?.end(
-        travail.demande.consigne + '\n\nDonnées de recherche :\n' + travail.demande.entree,
-      );
+      enfant.stdin?.end(entree);
     });
     resultat = JSON.parse(await readFile(sortie, 'utf8')) as unknown;
     ok = true;
   } catch {
-    // La sortie de Codex peut contenir les données de la fiche.
+    // La sortie du moteur peut contenir les données de la fiche.
   } finally {
     await rm(dossier, { recursive: true, force: true });
     await api('/api/runner/codex', { id: travail.id, ok, resultat });

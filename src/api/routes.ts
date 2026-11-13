@@ -2565,7 +2565,10 @@ export function registerApi(
     favoris: await getFavoris(db, UTILISATEUR),
     options: await getOptions(db, UTILISATEUR),
   }));
-  const optionsSchema = z.object({ ensuite: z.boolean() }).partial().strict();
+  const optionsSchema = z
+    .object({ ensuite: z.boolean(), moteurIA: z.enum(['claude', 'codex']) })
+    .partial()
+    .strict();
   app.put<{ Body: unknown }>('/api/preferences/options', async (request, reply) => {
     const parsed = optionsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Options invalides' });

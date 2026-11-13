@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchConsole,
   fetchLimitesIA,
+  fetchOptions,
+  saveOptions,
   type ConsoleOS,
   type FournisseurIA,
   type LigneConsole,
   type LimiteIA,
   type LimitesIA,
+  type MoteurIA,
 } from '../api.js';
 import claudeMark from '../assets/claude-mark.svg';
 import openaiMark from '../assets/openai-mark.svg';
@@ -84,6 +87,41 @@ function MarqueIA({ fournisseur }: { fournisseur: FournisseurIA }) {
     <span className="limite-ia-marque" aria-hidden="true">
       <img src={fournisseur.id === 'claude' ? claudeMark : openaiMark} alt="" />
     </span>
+  );
+}
+
+const MOTEURS: { id: MoteurIA; nom: string; marque: string; classe: 'claude' | 'chatgpt' }[] = [
+  { id: 'claude', nom: 'Claude', marque: claudeMark, classe: 'claude' },
+  { id: 'codex', nom: 'Codex', marque: openaiMark, classe: 'chatgpt' },
+];
+
+// Moteur qui exécute les tâches IA de l'OS : le choisi est allumé, l'autre éteint.
+function CommutateurMoteur({
+  moteur,
+  onChoisir,
+}: {
+  moteur: MoteurIA;
+  onChoisir: (moteur: MoteurIA) => void;
+}) {
+  return (
+    <div className="commutateur-moteur" role="radiogroup" aria-label="Moteur IA">
+      {MOTEURS.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          role="radio"
+          aria-checked={moteur === m.id}
+          aria-label={m.nom}
+          title={`${m.nom} exécute les tâches IA`}
+          className={`commutateur-moteur-option ${m.classe} ${moteur === m.id ? 'actif' : ''}`}
+          onClick={() => moteur !== m.id && onChoisir(m.id)}
+        >
+          <span className="limite-ia-marque" aria-hidden="true">
+            <img src={m.marque} alt="" />
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -227,6 +265,19 @@ export function Console({ slug }: { slug: string }) {
   const [limites, setLimites] = useState<LimitesIA | null>(null);
   const [limitesEnPanne, setLimitesEnPanne] = useState(false);
   const [limitesEnCours, setLimitesEnCours] = useState(false);
+  const [moteur, setMoteur] = useState<MoteurIA>('codex');
+  useEffect(() => {
+    void fetchOptions().then(
+      (o) => setMoteur(o?.moteurIA === 'claude' ? 'claude' : 'codex'),
+      () => undefined,
+    );
+  }, []);
+  // Le choix s'affiche tout de suite ; il revient en arrière si l'OS ne l'a pas enregistré.
+  const choisirMoteur = (choix: MoteurIA) => {
+    const avant = moteur;
+    setMoteur(choix);
+    void saveOptions({ moteurIA: choix }).catch(() => setMoteur(avant));
+  };
   const [maintenant, setMaintenant] = useState(Date.now);
   const connues = useRef<Set<string> | null>(null);
   const [nouvelles, setNouvelles] = useState<Set<string>>(new Set());
@@ -365,6 +416,7 @@ export function Console({ slug }: { slug: string }) {
             <button className="console-lien" onClick={vider} disabled={visibles.length === 0}>
               Vider
             </button>
+            <CommutateurMoteur moteur={moteur} onChoisir={choisirMoteur} />
           </div>
           {fournisseurs.map((fournisseur) => (
             <FournisseurCompact
@@ -381,6 +433,7 @@ export function Console({ slug }: { slug: string }) {
             <button className="console-replier" type="button" onClick={basculer}>
               Replier
             </button>
+            <CommutateurMoteur moteur={moteur} onChoisir={choisirMoteur} />
             <div className="console-corps" ref={corps} role="log" aria-live="polite">
               {visibles.length === 0 && (
                 <div className="console-ligne vide">

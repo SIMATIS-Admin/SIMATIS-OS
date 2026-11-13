@@ -22,6 +22,25 @@ const limites = (
   ],
 });
 
+describe('quotaCodex pour Claude', () => {
+  it('lit le quota de Claude quand il est le moteur choisi, et le dit dans le bilan', () => {
+    const l = limites(50);
+    l.fournisseurs[0] = {
+      id: 'claude',
+      nom: 'Claude',
+      etat: 'ok',
+      plan: 'Max',
+      fenetre5h: { restant: 3, reinitialiseLe: '2026-11-12T11:30:00Z' },
+      hebdomadaire: null,
+    };
+    const q = quotaCodex(l, MAINTENANT, 'claude');
+    expect(q).toMatchObject({ restant: 3, fournisseur: 'claude' });
+    expect(quotaBas(q)).toBe(true);
+    expect(expliquerEchec(new Error('x'), q).bilan).toContain('Quota Claude presque épuisé');
+    expect(quotaCodex(l, MAINTENANT)?.restant).toBe(50);
+  });
+});
+
 describe('quotaCodex', () => {
   it('lit le quota restant de la fenêtre de 5 heures de ChatGPT', () => {
     const q = quotaCodex(limites(12), MAINTENANT);

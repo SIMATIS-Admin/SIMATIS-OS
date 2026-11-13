@@ -7,6 +7,7 @@ import { withInstance } from '../db/context.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { preferences } from '../preferences/schema.js';
 import type { LimitesIA } from '../ia/limites.js';
+import type { MoteurIA } from '../preferences/service.js';
 import { CIBLE } from './cible.js';
 import type { ClientIA } from './client.js';
 import { chercherNouveauxProspects, type ProspectRecherche } from './recherche-nouveaux.js';
@@ -72,6 +73,8 @@ export async function tournerRecherche(
   maintenant = new Date(),
   // Compteur de limites de la console : sert à ne pas lancer Codex quand son quota est presque épuisé.
   limites?: () => Promise<LimitesIA | null>,
+  // Moteur choisi dans la console : c'est son quota qui décide si la recherche part.
+  moteur?: () => Promise<MoteurIA>,
 ) {
   const jour = jourDe(maintenant);
   const heure = new Intl.DateTimeFormat('fr-FR', {
@@ -88,7 +91,11 @@ export async function tournerRecherche(
     const routine = ligne.options.rechercheBase;
     if (!routine?.active || routine.heure > heure || routine.dernierJour === jour) continue;
     // Quota presque épuisé : la journée n'est pas entamée, la recherche attend le renouvellement.
-    const quota = limites ? quotaCodex(await limites().catch(() => null), maintenant) : null;
+    const fournisseur =
+      (await moteur?.().catch(() => 'codex' as const)) === 'claude' ? 'claude' : 'chatgpt';
+    const quota = limites
+      ? quotaCodex(await limites().catch(() => null), maintenant, fournisseur)
+      : null;
     if (quotaBas(quota)) {
       const attente = attenteQuota(quota);
       if (routine.bilan !== attente)
@@ -169,7 +176,9 @@ export async function tournerRecherche(
       };
       bilan = `${creees} fiche(s) ajoutée(s), ${fusionnees} rapprochée(s), sur ${routine.nombre} contacts visés.`;
     } catch (erreur) {
-      const apres = limites ? quotaCodex(await limites().catch(() => null), maintenant) : null;
+      const apres = limites
+        ? quotaCodex(await limites().catch(() => null), maintenant, fournisseur)
+        : null;
       const cause = expliquerEchec(erreur, apres);
       // Quota bas : la journée reste ouverte pour un nouvel essai après le renouvellement.
       rouvrir = cause.quotaBas && essaisAvant + 1 < ESSAIS_PAR_JOUR;
