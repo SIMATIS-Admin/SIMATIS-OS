@@ -35,6 +35,7 @@ import { decaler, estCreneau, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
 import { canWriteReal, propose, PropositionRefusee } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
+import { classerEvenement } from './classement-rdv.js';
 
 const FUSEAU = 'Europe/Paris';
 
@@ -296,10 +297,10 @@ type Ref = { id: string; nom: string };
 
 // Keeps a copy of the calendar blocks (title and times) so each one can be sorted, linked and
 // opened later. The pilot's decision (statut) and links are never touched by the refresh.
-async function memoriser(tx: Tx, liste: Evenement[]) {
+async function memoriser(tx: Tx, liste: Evenement[], emailsConnus: ReadonlySet<string>) {
   if (liste.length === 0) return [];
   const uniques = [...new Map(liste.map((e) => [e.id, e])).values()];
-  return tx
+  const lignes = await tx
     .insert(rendezVous)
     .values(
       uniques.map((e) => ({
@@ -327,8 +328,33 @@ async function memoriser(tx: Tx, liste: Evenement[]) {
       id: rendezVous.id,
       eventId: rendezVous.eventId,
       statut: rendezVous.statut,
+      tri: rendezVous.tri,
       compteRendu: rendezVous.compteRendu,
     });
+  // Classement automatique : seulement ce que Marc n'a pas tranché, et pas un rendez-vous qui a déjà
+  // son compte rendu. Le doute (a_trier) reste à confirmer ; le reste se range seul.
+  const parEvenement = new Map(uniques.map((e) => [e.id, e]));
+  const aClasser = new Map<StatutRdv, string[]>();
+  for (const l of lignes) {
+    const e = parEvenement.get(l.eventId);
+    if (!e || l.tri === 'manuel' || l.compteRendu != null) continue;
+    const statut = classerEvenement(
+      e,
+      e.participants.some((p) => emailsConnus.has(p.toLowerCase())),
+    );
+    if (statut !== l.statut || l.tri !== 'auto') {
+      aClasser.set(statut, [...(aClasser.get(statut) ?? []), l.id]);
+    }
+    l.statut = statut;
+    l.tri = 'auto';
+  }
+  for (const [statut, ids] of aClasser) {
+    await tx
+      .update(rendezVous)
+      .set({ statut, tri: 'auto' })
+      .where(and(eq(rendezVous.instanceId, currentInstance), inArray(rendezVous.id, ids)));
+  }
+  return lignes;
 }
 
 // What a meeting is linked to by hand, by meeting id.
@@ -377,13 +403,13 @@ async function liensDe(tx: Tx, rdvIds: string[]) {
 async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
   const emails = [...new Set(liste.flatMap((e) => e.participants))];
   return withInstance(db, instance.id, async (tx) => {
-    const lignes = await memoriser(tx, liste);
+    // Guests are matched on every address of a contact, not only its primary one.
+    const parEmail = await contactsParEmails(tx, emails);
+    const lignes = await memoriser(tx, liste, new Set(parEmail.keys()));
     const manuels = await liensDe(
       tx,
       lignes.map((l) => l.id),
     );
-    // Guests are matched on every address of a contact, not only its primary one.
-    const parEmail = await contactsParEmails(tx, emails);
     const contactsChoisis = [
       ...new Set(
         [...manuels.contacts.values()]
@@ -467,6 +493,7 @@ async function relier(db: Executor, instance: Instance, liste: Evenement[]) {
         titre: e.titre,
         lieu: e.lieu,
         statut: (ligne?.statut ?? 'a_trier') as StatutRdv,
+        triAuto: ligne?.tri === 'auto',
         contact: contact
           ? { id: contact.id, nom: contact.nom, entreprise: contact.entreprise }
           : null,
@@ -633,7 +660,7 @@ export async function decrireRdv(
     const rdvId = await assurerRdv(tx, eventId);
     await tx
       .update(rendezVous)
-      .set({ statut, updatedAt: new Date() })
+      .set({ statut, tri: 'manuel', updatedAt: new Date() })
       .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.id, rdvId)));
     await logEvent(tx, {
       acteur: 'pilote',
@@ -641,6 +668,33 @@ export async function decrireRdv(
       niveau: 'L1',
     });
     return { ok: true };
+  });
+}
+
+// Le même choix pour plusieurs blocs à la fois (tri en masse). Un identifiant `os:` inconnu fait
+// refuser l'ensemble : rien n'est modifié à moitié.
+export async function decrireRdvEnMasse(
+  db: Executor,
+  instance: Instance,
+  eventIds: string[],
+  statut: StatutRdv,
+) {
+  const uniques = [...new Set(eventIds)];
+  return withInstance(db, instance.id, async (tx) => {
+    const ids: string[] = [];
+    for (const eventId of uniques) ids.push(await assurerRdv(tx, eventId));
+    if (ids.length > 0) {
+      await tx
+        .update(rendezVous)
+        .set({ statut, tri: 'manuel', updatedAt: new Date() })
+        .where(and(eq(rendezVous.instanceId, currentInstance), inArray(rendezVous.id, ids)));
+      await logEvent(tx, {
+        acteur: 'pilote',
+        action: `${ids.length} rendez-vous triés en une fois (${statut === 'rdv' ? 'rendez-vous' : statut === 'ignore' ? 'organisation' : 'à confirmer'})`,
+        niveau: 'L1',
+      });
+    }
+    return { ok: true, n: ids.length };
   });
 }
 

@@ -9,6 +9,7 @@ import {
   lierRendezVous,
   lierRdv,
   trierRdv,
+  trierRdvEnMasse,
   type Preparation,
   type RendezVous as Rdv,
   type RendezVousReponse,
@@ -184,11 +185,11 @@ function LienRdv({ slug, rdv, onDone }: { slug: string; rdv: Rdv; onDone: () => 
 
 type Onglet = 'avenir' | 'a_trier' | 'rdv' | 'sans_cr' | 'ignore';
 const ONGLETS: [Onglet, string][] = [
+  ['a_trier', 'À confirmer'],
   ['avenir', 'À venir'],
-  ['a_trier', 'À trier'],
-  ['rdv', 'Rendez-vous'],
   ['sans_cr', 'Sans compte rendu'],
-  ['ignore', 'Ignorés'],
+  ['rdv', 'Rendez-vous'],
+  ['ignore', 'Organisation'],
 ];
 // A block the pilot has not sorted yet carries no statut in older answers.
 const statutDe = (r: Rdv): StatutRdv => r.statut ?? 'a_trier';
@@ -314,6 +315,8 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
   const [creation, setCreation] = useState(false);
   const [recherche, setRecherche] = useChoixCommercial(`${slug}.rdv.recherche`, '');
   const [apercu, setApercu] = useState<ReferenceCommerciale | null>(null);
+  // Blocs cochés dans « À confirmer », pour les trier d'un coup.
+  const [choisis, setChoisis] = useState<Set<string>>(new Set());
   // The first read picks the tab: the blocks to sort when there are some, else the meetings.
   const premiere = useRef(true);
   const load = useCallback(() => {
@@ -345,6 +348,24 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
       document.getElementById(`rdv-${ouvrir}`)?.scrollIntoView?.({ block: 'start' });
     }
   }, [ouvert, ouvrir]);
+  // Un lot : ceux dont les invités désignent un contact du CRM sont d'abord liés à lui, comme pour
+  // « C'est un RDV » sur une seule ligne.
+  const trierLot = (lot: Rdv[], statut: StatutRdv) =>
+    void (async () => {
+      if (statut === 'rdv') {
+        for (const r of lot.filter((x) => x.contact && !x.lienManuel)) {
+          await lierRdv(slug, r.id, { kind: 'contact', id: r.contact!.id });
+          if (r.entreprise) await lierRdv(slug, r.id, { kind: 'entreprise', id: r.entreprise.id });
+        }
+      }
+      await trierRdvEnMasse(
+        slug,
+        lot.map((r) => r.id),
+        statut,
+      );
+      setChoisis(new Set());
+      load();
+    })().catch((e: unknown) => setError(String(e)));
   const trier = (r: Rdv, statut: StatutRdv) =>
     void trierRdv(slug, r.id, statut).then(load, (e: unknown) => setError(String(e)));
   // The guests' emails suggest a contact: validating it makes the link firm and the block a meeting.
@@ -436,6 +457,47 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
             Connexions.
           </p>
         )}
+        {onglet === 'a_trier' && visibles.length > 0 && (
+          <div className="com-rdv-masse" role="group" aria-label="Trier plusieurs blocs">
+            <label>
+              <input
+                type="checkbox"
+                checked={choisis.size === visibles.length}
+                onChange={(e) =>
+                  setChoisis(e.target.checked ? new Set(visibles.map((r) => r.id)) : new Set())
+                }
+              />{' '}
+              Tout sélectionner
+            </label>
+            <span className="small muted">
+              {choisis.size} sélectionné{choisis.size > 1 ? 's' : ''}
+            </span>
+            <button
+              className="btn go sm"
+              disabled={choisis.size === 0}
+              onClick={() =>
+                trierLot(
+                  visibles.filter((r) => choisis.has(r.id)),
+                  'rdv',
+                )
+              }
+            >
+              Ce sont des rendez-vous
+            </button>
+            <button
+              className="btn sm"
+              disabled={choisis.size === 0}
+              onClick={() =>
+                trierLot(
+                  visibles.filter((r) => choisis.has(r.id)),
+                  'ignore',
+                )
+              }
+            >
+              C’est de l’organisation
+            </button>
+          </div>
+        )}
         <div className="com-rdv-recherche">
           <SearchBox
             value={recherche}
@@ -463,6 +525,19 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
                   className={`com-rdv ${r.id === ouvrir ? 'cible' : ''}`}
                 >
                   <div className="com-rdv-heure">
+                    {onglet === 'a_trier' && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Sélectionner « ${r.titre} »`}
+                        checked={choisis.has(r.id)}
+                        onChange={(e) => {
+                          const suite = new Set(choisis);
+                          if (e.target.checked) suite.add(r.id);
+                          else suite.delete(r.id);
+                          setChoisis(suite);
+                        }}
+                      />
+                    )}
                     <strong>
                       {new Date(r.debut).toLocaleTimeString('fr-FR', {
                         timeZone: 'Europe/Paris',
@@ -489,6 +564,9 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
                       <b>{r.titre}</b>
                     </a>
                     {r.opportunite && <div className="small muted">{r.opportunite.titre}</div>}
+                    {r.triAuto && statut !== 'a_trier' && (
+                      <div className="small muted">Classé automatiquement</div>
+                    )}
                     {r.compteRendu && (
                       <div className="small" style={{ color: 'var(--green)' }}>
                         Compte rendu fait
@@ -542,7 +620,7 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
                   <div className="com-rdv-actions">
                     {statut === 'ignore' ? (
                       <button className="btn sm" onClick={() => trier(r, 'a_trier')}>
-                        Remettre à trier
+                        Remettre à confirmer
                       </button>
                     ) : statut === 'a_trier' ? (
                       <>
@@ -613,9 +691,9 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
         ) : (
           <div className="empty">
             {onglet === 'a_trier'
-              ? 'Rien à trier : tous les blocs de l’agenda ont été classés.'
+              ? 'Rien à confirmer : tous les blocs de l’agenda sont classés.'
               : onglet === 'ignore'
-                ? 'Aucun bloc écarté.'
+                ? 'Aucun bloc d’organisation.'
                 : 'Aucun rendez-vous ici entre la semaine passée et les deux prochaines.'}
           </div>
         )}

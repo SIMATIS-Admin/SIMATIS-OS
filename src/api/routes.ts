@@ -206,6 +206,7 @@ import {
   compterATrier,
   creerRendezVousOs,
   decrireRdv,
+  decrireRdvEnMasse,
   enregistrerCompteRendu,
   getRendezVous,
   listerAgendas,
@@ -1930,6 +1931,25 @@ export function registerApi(
       if (!parsed.success) return reply.code(400).send({ error: 'Statut invalide' });
       try {
         return await decrireRdv(db, i, request.params.id.slice(0, 300), parsed.data.statut);
+      } catch (error) {
+        if (error instanceof RdvIndisponible) return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+  const masseRdvSchema = z
+    .object({
+      ids: z.array(z.string().min(1).max(300)).min(1).max(200),
+      statut: z.enum(['a_trier', 'rdv', 'ignore']),
+    })
+    .strict();
+  app.post<SlugParams>(
+    '/api/i/:slug/rendez-vous/tri',
+    onInstance<SlugParams>(async (i, request, reply) => {
+      const parsed = masseRdvSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Sélection invalide' });
+      try {
+        return await decrireRdvEnMasse(db, i, parsed.data.ids, parsed.data.statut);
       } catch (error) {
         if (error instanceof RdvIndisponible) return reply.code(404).send({ error: error.message });
         throw error;

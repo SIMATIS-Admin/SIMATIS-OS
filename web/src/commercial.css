@@ -640,6 +640,16 @@
   display: grid;
   gap: 3px;
 }
+.com-rdv-masse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.com-rdv-heure input[type='checkbox'] {
+  justify-self: start;
+}
 .com-rdv-heure strong {
   font-size: 22px;
   font-weight: 600;

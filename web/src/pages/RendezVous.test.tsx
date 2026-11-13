@@ -63,7 +63,12 @@ describe('RendezVous list', () => {
     expect(screen.getByText('Point suggéré')).toBeTruthy();
     expect(screen.queryByText('Rencontre liée')).toBeNull();
     expect(screen.queryByText('Dentiste fictif')).toBeNull();
-    for (const t of ['À trier (2)', 'Rendez-vous (2)', 'Sans compte rendu (1)', 'Ignorés (1)']) {
+    for (const t of [
+      'À confirmer (2)',
+      'Rendez-vous (2)',
+      'Sans compte rendu (1)',
+      'Organisation (1)',
+    ]) {
       expect(screen.getByRole('tab', { name: t })).toBeTruthy();
     }
   });
@@ -79,10 +84,31 @@ describe('RendezVous list', () => {
 
   it('puts an ignored block back among those to sort', async () => {
     render(<RendezVous slug="simatis" />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Ignorés (1)' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Remettre à trier' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Organisation (1)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remettre à confirmer' }));
     await waitFor(() => expect(envoi('/rendez-vous/b5', 'PATCH')).toHaveLength(1));
     expect(envoi('/rendez-vous/b5', 'PATCH')[0]?.body).toEqual({ statut: 'a_trier' });
+  });
+
+  it('trie plusieurs blocs à la fois, en liant d’abord le contact suggéré', async () => {
+    render(<RendezVous slug="simatis" />);
+    await screen.findByText('Déjeuner fictif');
+    const lot = screen.getByRole('group', { name: 'Trier plusieurs blocs' });
+    const action = within(lot).getByRole('button', { name: 'Ce sont des rendez-vous' });
+    expect((action as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(lot).getByLabelText('Tout sélectionner'));
+    expect(within(lot).getByText('2 sélectionnés')).toBeTruthy();
+    fireEvent.click(action);
+    await waitFor(() => expect(envoi('/rendez-vous/tri', 'POST')).toHaveLength(1));
+    expect(envoi('/rendez-vous/tri', 'POST')[0]?.body).toEqual({
+      ids: ['b1', 'b2'],
+      statut: 'rdv',
+    });
+    // Le contact suggéré pour « Point suggéré » est lié avant le tri.
+    expect(envoi('/rendez-vous/b2/liens', 'POST').map((c) => c.body)).toEqual([
+      { kind: 'contact', id: 'c1' },
+      { kind: 'entreprise', id: 'e1' },
+    ]);
   });
 
   it('validates the contact suggested by the guests: links it, then makes it a meeting', async () => {
