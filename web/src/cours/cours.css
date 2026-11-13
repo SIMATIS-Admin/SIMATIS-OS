@@ -257,3 +257,30 @@
   border: 0;
   border-radius: 0;
 }
+
+/* Slide en HTML libre : le cadre isolé remplit la scène, à l'échelle 16:9. */
+.cours-slide.cours-slide-html {
+  padding: 0;
+  border-top: 0;
+  background: #111;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cours-html {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cours-html > div {
+  overflow: hidden;
+}
+.cours-html iframe {
+  border: 0;
+  transform-origin: top left;
+  display: block;
+  background: #fff;
+}

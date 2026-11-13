@@ -10,7 +10,14 @@ export type Manifest = {
   logo: string | null;
   couleur: string | null;
   accent: string | null;
+  // « html » : une slide par fichier HTML libre (dossier slides/) et une feuille de style commune,
+  // affichées telles quelles sur un canevas de 1920 × 1080 ; sinon, des modules markdown.
+  format: 'md' | 'html';
+  css: string | null;
+  polices: string[];
+  parties: PartieHtml[];
 };
+export type PartieHtml = { titre: string; duree: number | null; slides: string[] };
 
 export const TYPES_SLIDE = ['titre', 'concept', 'demo', 'atelier', 'recap', 'piege'] as const;
 export type TypeSlide = (typeof TYPES_SLIDE)[number];
@@ -22,6 +29,8 @@ export type SlideCours = {
   // Une entrée par colonne ; une seule pour une slide sans colonnes.
   colonnes: string[];
   notes: string;
+  // Slide en HTML libre : le contenu de la <section>, à afficher dans un cadre isolé.
+  html: string | null;
 };
 
 export type Module = {
@@ -30,6 +39,8 @@ export type Module = {
   objectif: string;
   slides: SlideCours[];
 };
+
+const SLIDE_HTML = /^slides\/[a-z0-9-]+\.html$/;
 
 export function lireManifest(brut: unknown): Manifest {
   const m = (brut ?? {}) as Record<string, unknown>;
@@ -40,7 +51,25 @@ export function lireManifest(brut: unknown): Manifest {
       if (typeof valeur === 'string') generique[cle] = valeur;
   const couleur = (v: unknown) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : null);
   const logo = texte(m.logo);
+  const parties: PartieHtml[] = Array.isArray(m.parties)
+    ? (m.parties as Record<string, unknown>[]).flatMap((p) => {
+        const slides = Array.isArray(p?.slides)
+          ? p.slides.filter((f): f is string => typeof f === 'string' && SLIDE_HTML.test(f))
+          : [];
+        const duree = typeof p?.duree === 'number' && p.duree > 0 ? p.duree : null;
+        return slides.length > 0 ? [{ titre: texte(p?.titre), duree, slides }] : [];
+      })
+    : [];
   return {
+    format: m.format === 'html' ? 'html' : 'md',
+    css: /^[a-z0-9-]+\.css$/.test(texte(m.css)) ? texte(m.css) : null,
+    polices: Array.isArray(m.polices)
+      ? m.polices.filter(
+          (u): u is string =>
+            typeof u === 'string' && /^https:\/\/fonts\.googleapis\.com\/css2\?/.test(u),
+        )
+      : [],
+    parties,
     logo: /^img\/[A-Za-z0-9][A-Za-z0-9._-]*\.(png|jpe?g|webp|svg)$/i.test(logo) ? logo : null,
     couleur: couleur(m.couleur),
     accent: couleur(m.accent),
@@ -109,6 +138,7 @@ function lireSlide(bloc: string): SlideCours | null {
     livrable: attrs.livrable || null,
     colonnes: colonnes.length > 0 ? colonnes : [''],
     notes,
+    html: null,
   };
 }
 

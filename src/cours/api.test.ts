@@ -31,6 +31,33 @@ describe('Supports de formation : API', () => {
     );
     await writeFile(path.join(deck, '01-debut.md'), '## Bonjour\n');
     await writeFile(path.join(deck, '02-cache.md'), '## Hors manifest\n');
+    await mkdir(path.join(deck, 'slides'), { recursive: true });
+    await writeFile(
+      path.join(deck, 'slides', 'une.html'),
+      '<section id="une"><h2>Une</h2></section>',
+    );
+    await writeFile(path.join(deck, 'slides', 'cachee.html'), '<section id="cachee"></section>');
+    await writeFile(path.join(deck, 'deck.css'), 'section { color: #0b2038; }');
+    await mkdir(path.join(dossier, 'exemple-html'), { recursive: true });
+    await mkdir(path.join(dossier, 'exemple-html', 'slides'), { recursive: true });
+    await writeFile(
+      path.join(dossier, 'exemple-html', 'manifest.json'),
+      JSON.stringify({
+        titre: 'Deck HTML fictif',
+        format: 'html',
+        css: 'deck.css',
+        parties: [{ titre: 'Partie', slides: ['slides/une.html'] }],
+      }),
+    );
+    await writeFile(path.join(dossier, 'exemple-html', 'deck.css'), 'section { color: red; }');
+    await writeFile(
+      path.join(dossier, 'exemple-html', 'slides', 'une.html'),
+      '<section id="une"><h2>Une</h2></section>',
+    );
+    await writeFile(
+      path.join(dossier, 'exemple-html', 'slides', 'cachee.html'),
+      '<section></section>',
+    );
     await writeFile(path.join(deck, 'clients', 'client-a.json'), '{"prenom":"Alex"}');
     await writeFile(
       path.join(deck, 'img', 'schema.svg'),
@@ -64,6 +91,7 @@ describe('Supports de formation : API', () => {
     expect(r.statusCode).toBe(200);
     expect(r.json()).toEqual([
       { id: 'exemple-fictif', titre: 'Support fictif', soustitre: 'Pour les tests' },
+      { id: 'exemple-html', titre: 'Deck HTML fictif', soustitre: '' },
     ]);
   });
 
@@ -79,6 +107,17 @@ describe('Supports de formation : API', () => {
     expect((await lire('exemple-fictif/clients/client-a.json')).json()).toEqual({ prenom: 'Alex' });
     const image = await lire('exemple-fictif/img/schema.svg');
     expect(image.headers['content-type']).toBe('image/svg+xml');
+  });
+
+  it('sert en texte les slides HTML et la feuille de style déclarées, pas les autres', async () => {
+    const slide = await lire('exemple-html/slides/une.html');
+    expect(slide.statusCode).toBe(200);
+    expect(slide.headers['content-type']).toBe('text/plain; charset=utf-8');
+    expect(slide.body).toContain('<h2>Une</h2>');
+    expect((await lire('exemple-html/deck.css')).statusCode).toBe(200);
+    expect((await lire('exemple-html/slides/cachee.html')).statusCode).toBe(404);
+    expect((await lire('exemple-html/slides/..%2Fmanifest.html')).statusCode).toBe(404);
+    expect((await lire('exemple-html/autre.css')).statusCode).toBe(404);
   });
 
   it('refuse un module absent du manifest, un nom invalide et toute traversée de chemin', async () => {

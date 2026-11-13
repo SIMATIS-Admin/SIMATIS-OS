@@ -44,7 +44,7 @@ describe('lireManifest', () => {
         generique: { prenom: 'votre interlocuteur', nombre: 3 },
         modules: ['01-a.md', 4, '02-b.md'],
       }),
-    ).toEqual({
+    ).toMatchObject({
       titre: 'Support fictif',
       soustitre: 'Sous-titre',
       generique: { prenom: 'votre interlocuteur' },
@@ -73,6 +73,27 @@ describe('lireManifest', () => {
       generique: {},
       modules: [],
     });
+  });
+});
+
+describe('lireManifest, support en HTML libre', () => {
+  it('lit le format, la feuille de style, les polices et les parties', () => {
+    const m = lireManifest({
+      format: 'html',
+      css: 'deck.css',
+      polices: ['https://fonts.googleapis.com/css2?family=Manrope', 'https://autre.test/x.css'],
+      parties: [
+        { titre: 'Accueil', duree: 4, slides: ['slides/cover.html', '../secret.html', 3] },
+        { titre: 'Vide', slides: [] },
+      ],
+    });
+    expect(m.format).toBe('html');
+    expect(m.css).toBe('deck.css');
+    expect(m.polices).toEqual(['https://fonts.googleapis.com/css2?family=Manrope']);
+    expect(m.parties).toEqual([{ titre: 'Accueil', duree: 4, slides: ['slides/cover.html'] }]);
+  });
+  it('reste en markdown par défaut', () => {
+    expect(lireManifest({ titre: 'x' })).toMatchObject({ format: 'md', css: null, parties: [] });
   });
 });
 

@@ -7,11 +7,18 @@ export class SupportIntrouvable extends Error {}
 
 const DECK = /^[a-z0-9-]+$/;
 const MODULE = /^[a-z0-9-]+\.md$/;
+// Support en HTML libre : une slide par fichier, une feuille de style commune.
+const SLIDE = /^slides\/[a-z0-9-]+\.html$/;
+const FEUILLE = /^[a-z0-9-]+\.css$/;
 const CLIENT = /^clients\/[a-z0-9-]+\.json$/;
 const IMAGE = /^img\/[A-Za-z0-9][A-Za-z0-9._-]*\.(png|jpe?g|gif|webp|svg)$/i;
 
 const TYPES: Record<string, string> = {
   '.md': 'text/plain; charset=utf-8',
+  // Le HTML et le CSS d'un support se lisent comme du texte : le lecteur les affiche dans un cadre
+  // isolé, jamais comme une page de l'OS.
+  '.html': 'text/plain; charset=utf-8',
+  '.css': 'text/plain; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -69,21 +76,24 @@ export async function lireFichierDeck(
 ): Promise<{ contenu: Buffer; type: string; modifie: Date }> {
   const racine = dossierSupports();
   if (!DECK.test(deck)) throw new SupportIntrouvable('Support introuvable');
-  if (
-    relatif !== 'manifest.json' &&
-    !MODULE.test(relatif) &&
-    !CLIENT.test(relatif) &&
-    !IMAGE.test(relatif)
-  )
+  const declare = MODULE.test(relatif) || SLIDE.test(relatif) || FEUILLE.test(relatif);
+  if (relatif !== 'manifest.json' && !declare && !CLIENT.test(relatif) && !IMAGE.test(relatif))
     throw new SupportIntrouvable('Fichier introuvable');
   const dossier = path.join(racine, deck);
   try {
-    if (MODULE.test(relatif)) {
+    if (declare) {
+      // Le manifest est la liste blanche : modules markdown, slides HTML par partie, feuille de style.
       const manifest = (await lireJson(path.join(dossier, 'manifest.json'))) as {
         modules?: unknown;
+        css?: unknown;
+        parties?: unknown;
       };
-      if (!Array.isArray(manifest.modules) || !manifest.modules.includes(relatif))
-        throw new SupportIntrouvable('Module absent du manifest');
+      const permis = new Set<unknown>(Array.isArray(manifest.modules) ? manifest.modules : []);
+      if (typeof manifest.css === 'string') permis.add(manifest.css);
+      if (Array.isArray(manifest.parties))
+        for (const partie of manifest.parties as { slides?: unknown }[])
+          if (Array.isArray(partie?.slides)) for (const f of partie.slides) permis.add(f);
+      if (!permis.has(relatif)) throw new SupportIntrouvable('Fichier absent du manifest');
     }
     const chemin = path.join(dossier, relatif);
     const [contenu, infos] = await Promise.all([readFile(chemin), stat(chemin)]);

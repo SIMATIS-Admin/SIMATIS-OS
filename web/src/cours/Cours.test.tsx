@@ -65,6 +65,13 @@ Droite.
 };
 
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
   api.fetchTexteCours.mockReset();
   api.fetchTexteCours.mockImplementation((_s: string, _d: string, f: string) =>
     f in FICHIERS ? Promise.resolve(FICHIERS[f]) : Promise.reject(new Error(`${f} : introuvable`)),
@@ -157,6 +164,54 @@ describe('Lecteur de supports', () => {
     render(<Cours slug="simatis" deck="absent" />);
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByText(/fichier introuvable/)).toBeTruthy();
+  });
+});
+
+describe('Lecteur, support en HTML libre', () => {
+  const HTML: Record<string, string> = {
+    'manifest.json': JSON.stringify({
+      titre: 'Deck HTML fictif',
+      format: 'html',
+      css: 'deck.css',
+      polices: [],
+      parties: [
+        { titre: 'Accueil', duree: 4, slides: ['slides/une.html', 'slides/deux.html'] },
+        { titre: 'Suite', slides: ['slides/trois.html'] },
+      ],
+    }),
+    'deck.css': 'section { color: #0b2038; }',
+    'slides/une.html': '<section id="une"><h2>Première</h2><aside>Note une.</aside></section>',
+    'slides/deux.html': '<section id="deux"><h2>Deuxième</h2></section>',
+    'slides/trois.html': '<section id="trois"><h2>Troisième</h2></section>',
+  };
+  beforeEach(() => {
+    api.fetchTexteCours.mockImplementation((_s: string, _d: string, f: string) =>
+      f in HTML ? Promise.resolve(HTML[f]) : Promise.reject(new Error(`${f} : introuvable`)),
+    );
+    location.hash = '#/simatis/cours/deck/html-fictif';
+  });
+
+  const cadre = () => document.querySelector('iframe');
+
+  it('affiche chaque slide dans un cadre isolé, sans droits', async () => {
+    render(<Cours slug="simatis" deck="html-fictif" />);
+    await waitFor(() => expect(cadre()).not.toBeNull());
+    expect(cadre()!.getAttribute('sandbox')).toBe('');
+    expect(cadre()!.getAttribute('srcdoc')).toContain('<h2>Première</h2>');
+    expect(cadre()!.getAttribute('srcdoc')).toContain('section { color: #0b2038; }');
+    expect(cadre()!.getAttribute('srcdoc')).not.toContain('Note une.');
+  });
+
+  it('navigue entre les slides et les parties, et affiche les notes', async () => {
+    render(<Cours slug="simatis" deck="html-fictif" />);
+    await waitFor(() => expect(cadre()).not.toBeNull());
+    fireEvent.keyDown(document, { key: 'n' });
+    expect(screen.getByLabelText('Notes du formateur').textContent).toContain('Note une.');
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(cadre()!.getAttribute('srcdoc')).toContain('<h2>Deuxième</h2>');
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(cadre()!.getAttribute('srcdoc')).toContain('<h2>Troisième</h2>');
+    expect(screen.getByText('1 / 1', { exact: false })).toBeTruthy();
   });
 });
 

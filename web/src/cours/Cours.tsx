@@ -2,7 +2,9 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchDecksCours, fetchTexteCours, urlFichierCours, type DeckCours } from '../api.js';
 import { useModePresentation } from '../shell/modePresentation.js';
+import { documentSlide, incorporerImages, lireSlideHtml } from './html.js';
 import { Markdown } from './Markdown.js';
+import { SlideHtml } from './SlideHtml.js';
 import {
   lireManifest,
   lireModule,
@@ -22,7 +24,8 @@ const LIBELLES: Record<TypeSlide, string> = {
   piege: 'Piège',
 };
 
-type Charge = { manifest: Manifest; modules: Module[] };
+// Pour un support en HTML libre, le document de chaque slide est préparé au chargement.
+type Charge = { manifest: Manifest; modules: Module[]; documents: Map<string, string> };
 type Position = { m: number; s: number };
 
 const AIDE: [string, string][] = [
@@ -40,6 +43,17 @@ const lirePosition = (): Position => {
   const q = new URLSearchParams(location.hash.split('?')[1] ?? '');
   const n = (v: string | null) => Math.max(0, Number.parseInt(v ?? '', 10) || 0);
   return { m: n(q.get('m')), s: n(q.get('s')) };
+};
+const imageEnDonnees = async (slug: string, deck: string, chemin: string) => {
+  const r = await fetch(urlFichierCours(slug, deck, chemin));
+  if (!r.ok) throw new Error('image absente');
+  const blob = await r.blob();
+  return new Promise<string>((resolve, reject) => {
+    const lecteur = new FileReader();
+    lecteur.onload = () => resolve(typeof lecteur.result === 'string' ? lecteur.result : '');
+    lecteur.onerror = () => reject(new Error('image illisible'));
+    lecteur.readAsDataURL(blob);
+  });
 };
 const lireClient = () => new URLSearchParams(location.hash.split('?')[1] ?? '').get('client');
 
@@ -68,13 +82,43 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
           // Profil absent : les valeurs génériques du manifest s'appliquent.
         }
       }
+      if (manifest.format === 'html') {
+        const css = manifest.css ? await fetchTexteCours(slug, deck, manifest.css) : '';
+        const documents = new Map<string, string>();
+        const modules: Module[] = await Promise.all(
+          manifest.parties.map(async (partie) => {
+            const slides = await Promise.all(
+              partie.slides.map(async (f) => {
+                const source = await fetchTexteCours(slug, deck, f);
+                const slide = lireSlideHtml(
+                  remplacerVariables(source, profil, manifest.generique),
+                  f,
+                );
+                if (!slide?.html) return null;
+                const html = await incorporerImages(slide.html, (c) =>
+                  imageEnDonnees(slug, deck, c),
+                );
+                documents.set(f, documentSlide(html, css, manifest.polices));
+                return { ...slide, html: f };
+              }),
+            );
+            return {
+              titre: partie.titre,
+              duree: partie.duree,
+              objectif: '',
+              slides: slides.filter((x): x is NonNullable<typeof x> => x !== null),
+            };
+          }),
+        );
+        return { manifest, modules, documents };
+      }
       const sources = await Promise.all(
         manifest.modules.map((f) => fetchTexteCours(slug, deck, f)),
       );
       const modules = sources.map((src) =>
         lireModule(remplacerVariables(src, profil, manifest.generique)),
       );
-      return { manifest, modules };
+      return { manifest, modules, documents: new Map<string, string>() };
     })().then(
       (c) => !annule && setEtat({ statut: 'pret', ...c }),
       (e: unknown) =>
@@ -160,6 +204,8 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   if (!module || !slide) return <p className="empty">Ce support n’a pas encore de slides.</p>;
   const prochaine = slides[s + 1] ?? modules[m + 1]?.slides[0];
 
+  const documents = etat.documents;
+  const enHtml = etat.manifest.format === 'html';
   return (
     <div
       className="cours"
@@ -174,38 +220,47 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
       }
     >
       <div className="cours-scene">
-        <article
-          className={`cours-slide type-${slide.type}`}
-          aria-label={`Slide ${s + 1} sur ${slides.length}`}
-        >
-          <header className="cours-bandeau">
-            {etat.manifest.logo && (
-              <img
-                className="cours-logo"
-                src={resoudre(etat.manifest.logo)}
-                alt={etat.manifest.titre}
-              />
+        {enHtml && slide.html ? (
+          <article
+            className="cours-slide cours-slide-html"
+            aria-label={`Slide ${s + 1} sur ${slides.length}`}
+          >
+            <SlideHtml document={documents.get(slide.html) ?? ''} titre={slide.titre} />
+          </article>
+        ) : (
+          <article
+            className={`cours-slide type-${slide.type}`}
+            aria-label={`Slide ${s + 1} sur ${slides.length}`}
+          >
+            <header className="cours-bandeau">
+              {etat.manifest.logo && (
+                <img
+                  className="cours-logo"
+                  src={resoudre(etat.manifest.logo)}
+                  alt={etat.manifest.titre}
+                />
+              )}
+              <span className="cours-type">{LIBELLES[slide.type]}</span>
+              <span className="cours-module">
+                {module.titre || `Module ${m + 1}`}
+                {module.duree ? ` · ${module.duree} min` : ''}
+              </span>
+            </header>
+            <h2>{slide.titre}</h2>
+            <div className={`cours-colonnes n${slide.colonnes.length}`}>
+              {slide.colonnes.map((c, k) => (
+                <div key={k} className="cours-colonne">
+                  <Markdown source={c} resoudre={resoudre} />
+                </div>
+              ))}
+            </div>
+            {slide.livrable && (
+              <p className="cours-livrable">
+                <b>Livrable</b> {slide.livrable}
+              </p>
             )}
-            <span className="cours-type">{LIBELLES[slide.type]}</span>
-            <span className="cours-module">
-              {module.titre || `Module ${m + 1}`}
-              {module.duree ? ` · ${module.duree} min` : ''}
-            </span>
-          </header>
-          <h2>{slide.titre}</h2>
-          <div className={`cours-colonnes n${slide.colonnes.length}`}>
-            {slide.colonnes.map((c, k) => (
-              <div key={k} className="cours-colonne">
-                <Markdown source={c} resoudre={resoudre} />
-              </div>
-            ))}
-          </div>
-          {slide.livrable && (
-            <p className="cours-livrable">
-              <b>Livrable</b> {slide.livrable}
-            </p>
-          )}
-        </article>
+          </article>
+        )}
         {notes && (
           <aside className="cours-notes" aria-label="Notes du formateur">
             <b>Notes du formateur</b>
