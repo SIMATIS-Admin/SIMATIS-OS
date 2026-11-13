@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { fetchBrief, fetchRadar, type Brief as BriefData, type Compte } from '../api.js';
+import {
+  fetchBrief,
+  fetchCompteurRdv,
+  fetchRadar,
+  type Brief as BriefData,
+  type Compte,
+} from '../api.js';
 import { Icon } from '../icons.js';
 import { PanneauProspection } from './Prospection.js';
 import { Tip } from './widgets.js';
@@ -68,6 +74,18 @@ export function Brief({ slug }: { slug: string }) {
   const [message, setMessage] = useState<string | null>(null);
   // Contacts qui ont répondu à la prospection (Radar) ; la tuile disparaît si le Radar ne répond pas.
   const [reponses, setReponses] = useState<number | null>(null);
+  // Blocs de l'agenda que l'OS n'a pas su classer : la tuile n'existe que s'il y en a.
+  const [aConfirmer, setAConfirmer] = useState(0);
+  useEffect(() => {
+    let actif = true;
+    fetchCompteurRdv(slug).then(
+      (n) => actif && setAConfirmer(Number.isInteger(n) ? n : 0),
+      () => actif && setAConfirmer(0),
+    );
+    return () => {
+      actif = false;
+    };
+  }, [slug]);
   useEffect(() => {
     let actif = true;
     fetchRadar(slug)
@@ -225,6 +243,15 @@ export function Brief({ slug }: { slug: string }) {
             {data.source === 'hubspot' ? 'Tâches HubSpot' : "Tâches de l'OS"}
           </span>
         </a>
+        {aConfirmer > 0 && (
+          <a className="panel kpi kpi-link" href={`#/${slug}/rendez-vous`}>
+            <span className="l">
+              <Icon name="cal" /> À confirmer
+            </span>
+            <span className="v">{aConfirmer}</span>
+            <span className="small muted">Rendez-vous ou organisation ?</span>
+          </a>
+        )}
         {reponses !== null && (
           <a className="panel kpi kpi-link" href={`#/${slug}/radar`}>
             <span className="l">

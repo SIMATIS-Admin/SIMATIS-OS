@@ -1,3 +1,5 @@
+import { statutsAgenda } from './classement-rdv.js';
+import type { Evenement } from '../connecteurs/google/google.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -316,6 +318,33 @@ describe('Rendez-vous and Devis', () => {
     const apres = await lister();
     expect(apres.get('auto-doute')).toMatchObject({ statut: 'rdv', triAuto: false });
     expect(apres.get('auto-serie')).toMatchObject({ statut: 'rdv', triAuto: false });
+
+    // L'Agenda lit ces statuts sans rien écrire : le choix de Marc d'abord, sinon le classement.
+    const bloc = (id: string, extra: Partial<Evenement> = {}): Evenement => ({
+      id,
+      debut: new Date('2026-10-15T12:00:00Z'),
+      fin: new Date('2026-10-15T13:00:00Z'),
+      titre: 'Bloc fictif',
+      lieu: null,
+      participants: ['qui@example.test'],
+      journee: false,
+      agenda: 'primary',
+      couleur: null,
+      lien: null,
+      ...extra,
+    });
+    const statuts = await statutsAgenda(t.app.db, instance, [
+      bloc('auto-serie'),
+      bloc('jamais-vu-serie', { recurrent: true }),
+      bloc('jamais-vu-solo', { participants: [] }),
+    ]);
+    expect(statuts.get('auto-serie')).toBe('rdv');
+    expect(statuts.get('jamais-vu-serie')).toBe('ignore');
+    expect(statuts.get('jamais-vu-solo')).toBe('ignore');
+    const { rows } = await t.owner.pool.query(
+      "select 1 from rendez_vous where event_id like 'jamais-vu-%'",
+    );
+    expect(rows).toHaveLength(0);
   });
 
   it('sorts a meeting as a RDV or not, links it to several records and keeps its compte rendu', async () => {

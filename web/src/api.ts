@@ -841,6 +841,8 @@ export type RdvAgenda = {
   journee: boolean;
   agenda: string;
   couleur: string | null;
+  // Rendez-vous, organisation (ignore) ou à confirmer : l'Agenda atténue l'organisation.
+  statut?: StatutRdv;
 };
 export type SemaineTaches = {
   taches: TacheVue[];

@@ -2708,6 +2708,12 @@ textarea.input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.gr-rdv.gr-orga {
+  opacity: 0.55;
+}
+.gr-rdv.gr-doute {
+  border-left-style: dashed;
+}
 .gr-activite {
   cursor: grab;
 }

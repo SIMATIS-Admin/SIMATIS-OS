@@ -137,7 +137,7 @@ export function Grille({
           return pos ? (
             <a
               key={`${r.agenda}:${r.id}`}
-              className="gr-rdv"
+              className={`gr-rdv ${r.statut === 'ignore' ? 'gr-orga' : r.statut === 'a_trier' ? 'gr-doute' : ''}`}
               style={{ ...pos, ...couleur(couleurRdv(r)) }}
               href={`#/${slug}/rendez-vous/ouvrir/${r.id}`}
               onClick={

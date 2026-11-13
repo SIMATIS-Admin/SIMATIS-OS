@@ -3,7 +3,11 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Brief as BriefData } from '../api.js';
 
-const api = vi.hoisted(() => ({ fetchBrief: vi.fn(), fetchRadar: vi.fn() }));
+const api = vi.hoisted(() => ({
+  fetchBrief: vi.fn(),
+  fetchRadar: vi.fn(),
+  fetchCompteurRdv: vi.fn(),
+}));
 vi.mock('../api.js', () => api);
 vi.mock('./Prospection.js', () => ({ PanneauProspection: () => <p>Prospection du jour</p> }));
 
@@ -30,9 +34,25 @@ describe('Brief', () => {
     vi.resetAllMocks();
   });
 
+  it('affiche la tuile « À confirmer » seulement quand des blocs attendent un tri', async () => {
+    api.fetchBrief.mockResolvedValue(brief(0));
+    api.fetchRadar.mockResolvedValue({ ontRepondu: { total: 0 } });
+    api.fetchCompteurRdv.mockResolvedValue(3);
+    const { unmount } = render(<Brief slug="simatis" />);
+    const tuile = (await screen.findByText('À confirmer')).closest('a')!;
+    expect(tuile.textContent).toContain('3');
+    expect(tuile.getAttribute('href')).toBe('#/simatis/rendez-vous');
+    unmount();
+    api.fetchCompteurRdv.mockResolvedValue(0);
+    render(<Brief slug="simatis" />);
+    expect(await screen.findByText('Tâches du jour')).toBeTruthy();
+    expect(screen.queryByText('À confirmer')).toBeNull();
+  });
+
   it('résume la journée en quatre tuiles, détails repliés', async () => {
     api.fetchBrief.mockResolvedValue(brief(2));
     api.fetchRadar.mockResolvedValue({ ontRepondu: { total: 3 } });
+    api.fetchCompteurRdv.mockResolvedValue(0);
     render(<Brief slug="simatis" />);
     expect(await screen.findByText('Ont répondu')).toBeTruthy();
     const tuile = (nom: string) => screen.getByText(nom).closest('a')!;
@@ -50,6 +70,7 @@ describe('Brief', () => {
   it('garde les autres tuiles quand le Radar ne répond pas', async () => {
     api.fetchBrief.mockResolvedValue(brief(0));
     api.fetchRadar.mockRejectedValue(new Error('hors ligne'));
+    api.fetchCompteurRdv.mockRejectedValue(new Error('hors ligne'));
     render(<Brief slug="simatis" />);
     expect(await screen.findByText('Tâches du jour')).toBeTruthy();
     expect(screen.queryByText('Ont répondu')).toBeNull();
