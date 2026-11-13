@@ -3,6 +3,7 @@ import type { FreinVma, TestVma } from '../../api.js';
 import { fmtEur } from '../TestsVma.js';
 import { exporterResultatPdf } from './exportPdf.js';
 import { CorpsV3 } from './ResultatV3.js';
+import { ResultatSynthese } from './ResultatSynthese.js';
 
 const NB = ' ';
 const pct = (x: number) =>
@@ -66,6 +67,15 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
       )}
     </>
   );
+  // Méthode 3.3 : le résultat en trois questions, et la préparation de l'échange (jamais exportée en PDF).
+  if (e.synthese && e.caMensuel) {
+    return (
+      <div className="stack rc" ref={fiche}>
+        {entete}
+        <ResultatSynthese test={test} />
+      </div>
+    );
+  }
   // Méthode 3.0 : même en-tête, corps propre (CA mensuel en trois catégories, deux conclusions).
   if (e.methode?.startsWith('3') && e.caMensuel) {
     return (

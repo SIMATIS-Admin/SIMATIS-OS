@@ -2,6 +2,7 @@
 // a déjà vu : pas de potentiel, pas de délai, pas de phrase sur la suite. Il part tout seul à la relève (releve.ts).
 
 import {
+  bouton,
   COULEURS,
   ENTETE_TEST_VMA,
   POLICE,
@@ -27,8 +28,41 @@ const pct = (x: number) =>
   `${(x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}${NB}%`;
 const ans = (n: number) => (n < 1 ? `${Math.round(n * 12)} mois` : `${n} ${n < 2 ? 'an' : 'ans'}`);
 
+// Méthode 3.3 : le résultat en trois questions, phrases et montants préparés par le site (mêmes textes partout).
+export type FreinSynthese = {
+  k: string;
+  n: number;
+  label: string;
+  titre: string;
+  phrase: string;
+  // « gain », « perteEvitee » ou « securise ».
+  nature: string;
+  enjeu: number | null;
+  hypothese: string;
+  reponse?: string;
+  cible?: string;
+  debut?: string[];
+  signe?: string;
+};
+export type SyntheseVma = {
+  questions: string[];
+  verdict: { cle: string; titre: string; phrase: string; points: string[]; remarques: string[] };
+  vmaLigne: string | null;
+  pratiques: { auMax: number; total: number; titre: string; forces: string[] };
+  freins: FreinSynthese[];
+  autres: FreinSynthese[];
+  gainMensuel: number;
+  texteFreins: string;
+  texteAutres: string | null;
+  noteMontants: string;
+  action: { titre: string; label: string; debut: string[]; signe?: string; sous: string } | null;
+  appel: string;
+  libelles: Record<string, string>;
+};
+
 // Forme de l'écran dirigeant, telle que la relève la reçoit du site (v0.2 : avec le socle récurrent).
 export type EcranDirigeant = {
+  synthese?: SyntheseVma;
   entreprise: string;
   // Méthode 3.0 : trois catégories de revenus (régulier variable, engagé, ponctuel), flux séparés, deux conclusions.
   methode?: string;
@@ -178,6 +212,7 @@ export function brouillonResultat(p0: { contactNom: string | null; ecran: EcranD
   subject: string;
   html: string;
 } {
+  if (p0.ecran.synthese && p0.ecran.caMensuel) return brouillonResultatSynthese(p0);
   if (p0.ecran.methode?.startsWith('3') && p0.ecran.caMensuel) return brouillonResultatV3(p0);
   const e = p0.ecran;
   const salut = salutation(p0.contactNom);
@@ -437,6 +472,130 @@ ${freins}`,
     {
       entete: ENTETE_TEST_VMA,
       apercu: `${e.niveau.label}. Votre chiffre d’affaires mensuel, votre VMA et les freins à lever en premier.`,
+    },
+  );
+  return { subject: 'Votre résultat au Test de VMA', html };
+}
+
+// Méthode 3.3 : trois questions (où en êtes-vous, qu'est-ce qui vous freine, par où commencer), comme la page du site.
+// Les phrases viennent du site ; le mail ne calcule rien. Signature courte, sans pied nuit.
+const LIEN_ECHANGE = 'https://www.simatis.fr/contact.html?objet=echange';
+const TEINTES = {
+  ambre: '#E0A100',
+  ambreFond: '#FFF6E5',
+  ambreTexte: '#6B4A00',
+  vertFond: '#E6FBF8',
+  vertTexte: '#1F6B5E',
+};
+
+const titreQuestion = (n: number, texte: string) =>
+  `<div style="font:700 12px/1.4 ${POLICE};letter-spacing:2px;text-transform:uppercase;color:${C.teal};">${n} · ${esc(texte)}</div>`;
+
+// Barre en cellules de tableau (lue par toutes les messageries) : une cellule pleine, le reste vide.
+const barre = (partPct: number, couleur: string, hauteur = 8) => {
+  const w = Math.max(0, Math.min(100, Math.round(partPct)));
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${w > 0 ? `<td width="${w}%" style="height:${hauteur}px;background:${couleur};border-radius:${hauteur / 2}px;font-size:0;line-height:0;">&nbsp;</td>` : ''}${w < 100 ? `<td width="${100 - w}%" style="font-size:0;line-height:0;">&nbsp;</td>` : ''}</tr></table>`;
+};
+
+export function montantFrein(f: FreinSynthese): string {
+  if (!(typeof f.enjeu === 'number' && f.enjeu > 0)) return '';
+  if (f.nature === 'securise') return `${euros(f.enjeu)} à sécuriser`;
+  return `+${euros(f.enjeu)}${f.nature === 'perteEvitee' ? ' préservés' : ''}`;
+}
+
+function brouillonResultatSynthese(p0: { contactNom: string | null; ecran: EcranDirigeant }): {
+  subject: string;
+  html: string;
+} {
+  const e = p0.ecran;
+  const s = e.synthese!;
+  const cm = e.caMensuel!;
+  const v = s.verdict;
+  const alerte = v.cle === 'suspendu' || v.cle === 'objectif-bas';
+  const cles =
+    e.parcours === 'lancement'
+      ? (['regulier', 'ponctuel'] as const)
+      : (['engage', 'regulier', 'ponctuel'] as const);
+  const couleurs = { engage: C.marine, regulier: C.teal, ponctuel: C.menthe };
+  const pct0 = (x: number) => (cm.total > 0 ? Math.round((x / cm.total) * 100) : 0);
+
+  // 1. Où en êtes-vous ?
+  const verdict = `<div style="margin-top:12px;padding:16px 18px;background:${alerte ? TEINTES.ambreFond : C.glacier};border-left:4px solid ${alerte ? TEINTES.ambre : C.teal};border-radius:6px;font:15px/1.6 ${POLICE};color:${C.nuit};">
+<div style="font:700 17px/1.4 ${POLICE};color:${alerte ? TEINTES.ambreTexte : C.marine};">${esc(v.titre)}</div>
+${v.phrase ? `<div style="margin-top:6px;">${esc(v.phrase)}</div>` : ''}
+${v.points.length ? `<ul style="margin:8px 0 0;padding-left:18px;">${v.points.map((x) => `<li style="margin:3px 0;">${esc(x)}</li>`).join('')}</ul>` : ''}
+${v.remarques.map((x) => `<div style="margin-top:8px;">${esc(x)}</div>`).join('')}
+</div>`;
+  const segments = cles
+    .filter((k) => cm[k] > 0)
+    .map(
+      (k) =>
+        `<td width="${pct0(cm[k])}%" style="height:22px;background:${couleurs[k]};font-size:0;line-height:0;">&nbsp;</td>`,
+    )
+    .join('');
+  const legende = cles
+    .map(
+      (k) =>
+        `<tr><td width="18" valign="top" style="padding:3px 0;"><div style="width:10px;height:10px;margin-top:5px;background:${couleurs[k]};border-radius:2px;${k === 'ponctuel' ? `border:1px solid ${C.teal};` : ''}"></div></td><td style="padding:3px 0;">${esc(s.libelles[k] ?? k)}${k === 'ponctuel' && s.vmaLigne ? ` <span style="color:${C.roche};">(${esc(s.vmaLigne)})</span>` : ''}</td><td align="right" width="110" style="padding:3px 0;white-space:nowrap;"><strong>${esc(euros(cm[k]))}</strong> · ${pct0(cm[k])}${NB}%</td></tr>`,
+    )
+    .join('');
+  const objectifMensuel = e.objectif?.caMensuel ?? e.allureVisee;
+  const echelle = Math.max(cm.total, objectifMensuel) || 1;
+  const ligneComparee = (libelle: string, valeur: number, couleur: string) =>
+    `<tr><td style="padding:6px 0 0;">${esc(libelle)}</td><td align="right" style="padding:6px 0 0;white-space:nowrap;"><strong>${esc(euros(valeur))}</strong></td></tr><tr><td colspan="2" style="padding:4px 0 0;">${barre((valeur / echelle) * 100, couleur, 12)}</td></tr>`;
+  const q1 = `<tr><td style="padding:26px 32px 0;">${titreQuestion(1, s.questions[0] ?? 'Où en êtes-vous ?')}${verdict}
+<div style="margin-top:20px;font:800 40px/1.1 ${POLICE};color:${C.nuit};">${esc(euros(cm.total))}</div>
+<div style="font:15px/1.4 ${POLICE};color:${C.roche};">de chiffre d’affaires par mois, en moyenne sur ${e.periode ?? 3} mois</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;"><tr>${segments}</tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;font:14px/1.5 ${POLICE};color:${C.nuit};">${legende}</table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;font:14px/1.5 ${POLICE};color:${C.nuit};">${ligneComparee('Aujourd’hui', cm.total, C.marine)}${ligneComparee(`Objectif à ${ans(e.echeance)}`, objectifMensuel, C.trait)}</table>
+</td></tr>`;
+
+  // 2. Qu'est-ce qui vous freine ?
+  const chip = (x: string) =>
+    `<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 10px;background:${TEINTES.vertFond};border-radius:12px;font:13px/1.4 ${POLICE};color:${TEINTES.vertTexte};">✓ ${esc(x)}</span>`;
+  const max = Math.max(1, ...s.freins.map((f) => f.enjeu ?? 0));
+  const frein = (f: FreinSynthese, i: number) =>
+    `<tr><td style="padding:${i ? 14 : 10}px 0 2px;"><strong>${esc(f.label)}</strong></td><td width="140" align="right" style="padding:${i ? 14 : 10}px 0 2px;font-weight:700;color:${C.teal};white-space:nowrap;">${esc(montantFrein(f))}</td></tr>
+<tr><td colspan="2">${barre(f.enjeu && f.enjeu > 0 ? Math.max(4, (f.enjeu / max) * 100) : 0, f.nature === 'securise' ? C.roche : C.teal)}</td></tr>
+<tr><td colspan="2" style="padding:4px 0 0;font:13px/1.5 ${POLICE};color:${C.roche};">${esc(f.hypothese)}</td></tr>`;
+  const q2 = `<tr><td style="padding:34px 32px 0;">${titreQuestion(2, s.questions[1] ?? 'Qu’est-ce qui vous freine ?')}
+<div style="margin-top:10px;font:700 19px/1.4 ${POLICE};color:${C.marine};">${esc(s.pratiques.titre)}</div>
+${s.pratiques.forces.length ? `<div style="margin-top:10px;">${s.pratiques.forces.map(chip).join('')}</div>` : ''}
+<div style="margin-top:12px;font:15px/1.6 ${POLICE};color:${C.nuit};">${esc(s.texteFreins)}</div>
+${s.freins.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;font:15px/1.5 ${POLICE};color:${C.nuit};">${s.freins.map(frein).join('')}</table>` : ''}
+${s.texteAutres ? `<div style="margin-top:10px;font:13px/1.5 ${POLICE};color:${C.roche};">${esc(s.texteAutres)}</div>` : ''}
+${s.gainMensuel > 0 ? `<div style="margin-top:12px;font:13px/1.5 ${POLICE};color:${C.roche};">${esc(s.noteMontants)}</div>` : ''}
+</td></tr>`;
+
+  // 3. Par où commencer ?
+  const a = s.action;
+  const etape = (x: string, i: number) =>
+    `<tr><td valign="top" width="30" style="padding:4px 0;"><div style="width:22px;height:22px;border-radius:11px;background:${C.menthe};color:${C.nuit};font:700 13px/22px ${POLICE};text-align:center;">${i + 1}</div></td><td style="padding:4px 0;">${esc(x)}</td></tr>`;
+  const q3 = `<tr><td style="padding:34px 32px 0;">${titreQuestion(3, s.questions[2] ?? 'Par où commencer ?')}
+${
+  a
+    ? `<div style="margin-top:12px;padding:20px 22px;background:${C.nuit};border-radius:8px;font:15px/1.6 ${POLICE};color:#FFFFFF;">
+<div style="font:700 18px/1.4 ${POLICE};color:${C.menthe};">${esc(a.label)}</div>
+<div style="margin-top:4px;color:#C9D6E8;">${esc(a.sous)}</div>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px;font:15px/1.5 ${POLICE};color:#FFFFFF;">${a.debut.map(etape).join('')}</table>
+</div>`
+    : ''
+}
+<div style="margin-top:22px;font:16px/1.6 ${POLICE};color:${C.nuit};">${esc(s.appel)}</div>
+${bouton('Échanger 15 minutes', LIEN_ECHANGE)}
+</td></tr>`;
+
+  const html = habillerMail(
+    `<tr><td style="padding:26px 32px 6px;">${p(salutation(p0.contactNom), 'margin:0 0 10px;')}${p(`Voici le résultat de ${esc(e.entreprise)} au Test de VMA, en trois questions.`, 'margin:0;')}</td></tr>
+${q1}
+${q2}
+${q3}`,
+    {
+      entete: ENTETE_TEST_VMA,
+      apercu: `${v.titre}. Où vous en êtes, ce qui vous freine, par où commencer.`,
+      signatureCourte: true,
+      piedDiscret: 'Vous recevez ce mail parce que vous avez passé le Test de VMA sur simatis.fr.',
     },
   );
   return { subject: 'Votre résultat au Test de VMA', html };

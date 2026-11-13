@@ -71,6 +71,16 @@ export const signature = (tutoiement = false) =>
 <div style="margin-top:4px;"><a href="mailto:marc.tabouret@simatis.fr" style="color:${C.teal};text-decoration:none;font-weight:600;">marc.tabouret@simatis.fr</a> <span style="color:${C.trait};">|</span> <a href="${SITE}" style="color:${C.teal};text-decoration:none;font-weight:600;">simatis.fr</a></div>
 </td></tr></table></td></tr>`;
 
+// Signature courte (mails d'outil, comme le résultat du Test de VMA) : photo, nom, fonction et site, sans formule.
+export const signatureCourte = () =>
+  `<tr><td style="padding:30px 32px 28px;"><table role="presentation" cellpadding="0" cellspacing="0" style="border-top:1px solid ${C.trait};width:100%;"><tr>
+<td valign="middle" width="64" style="padding:18px 14px 0 0;width:64px;"><img src="${PHOTO_MARC}" alt="Marc Tabouret" width="52" height="52" style="display:block;border:0;width:52px;height:52px;border-radius:26px;"></td>
+<td valign="middle" style="padding:18px 0 0;font:14px/1.5 ${POLICE};color:${C.roche};">
+<div style="font:700 15px/1.4 ${POLICE};color:${C.marine};">Marc Tabouret</div>
+<div>Directeur commercial en mode partagé · SIMATIS</div>
+<div><a href="${SITE}" style="color:${C.teal};text-decoration:none;font-weight:600;">simatis.fr</a></div>
+</td></tr></table></td></tr>`;
+
 // En-tête d'un outil (Test de VMA…) : son logo et son nom, à droite du logo SIMATIS.
 export type EnteteOutil = { logo: string; titre: string };
 // Les mails du Test de VMA portent le logo de l'outil, comme les pages du test sur le site.
@@ -86,22 +96,25 @@ export function habillerMail(
     tutoiement?: boolean;
     entete?: EnteteOutil;
     apercu?: string;
+    // Mails d'outil : signature courte et, à la place du pied nuit, une ligne discrète sous le cadre.
+    signatureCourte?: boolean;
+    piedDiscret?: string;
   } = {},
 ): string {
   const apercu = options.apercu
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:${C.glacier};">${echapper(options.apercu)}</div>`
     : '';
   const outil = options.entete
-    ? `<td align="right" valign="middle" style="padding:0;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td valign="middle" style="padding:0 10px 0 0;font:700 12px/1.3 ${POLICE};letter-spacing:1.5px;text-transform:uppercase;color:${C.teal};text-align:right;">${echapper(options.entete.titre)}</td><td valign="middle"><img src="${echapper(options.entete.logo)}" alt="" width="80" height="67" style="display:block;border:0;width:80px;height:auto;"></td></tr></table></td>`
+    ? `<td align="right" valign="middle" style="padding:0;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td valign="middle" style="padding:0 10px 0 0;font:700 12px/1.3 ${POLICE};letter-spacing:1.5px;text-transform:uppercase;color:${C.teal};text-align:right;white-space:nowrap;">${echapper(options.entete.titre)}</td><td valign="middle"><img src="${echapper(options.entete.logo)}" alt="" width="80" height="67" style="display:block;border:0;width:80px;height:auto;"></td></tr></table></td>`
     : '';
   return `<div style="margin:0;padding:32px 12px;background:${C.glacier};">${apercu}
 <table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid ${C.trait};border-radius:12px;overflow:hidden;border-collapse:separate;">
 <tr><td style="padding:20px 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td valign="middle" style="padding:0;"><a href="${SITE}"><img src="${LOGO}" alt="SIMATIS, conseil et formation" width="140" style="display:block;border:0;width:140px;height:auto;"></a></td>${outil}</tr></table></td></tr>
 <tr><td style="padding:0;font-size:0;line-height:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td width="28%" style="height:4px;background:${C.teal};font-size:0;line-height:0;">&nbsp;</td><td style="height:4px;background:${C.menthe};font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>
 ${lignes}
-${options.signature === false ? '' : signature(options.tutoiement)}
-<tr><td style="background:${C.nuit};padding:18px 32px;font:12px/1.6 ${POLICE};color:#C9D6E8;text-align:center;"><div style="font:700 12px/1.6 ${POLICE};letter-spacing:1.5px;text-transform:uppercase;color:${C.menthe};">SIMATIS</div><div>Direction commerciale en mode partagé · Conseil et formation</div><div><a href="${SITE}" style="color:${C.menthe};text-decoration:none;">simatis.fr</a></div></td></tr>
-</table></div>`;
+${options.signature === false ? '' : options.signatureCourte ? signatureCourte() : signature(options.tutoiement)}
+${options.piedDiscret === undefined ? `<tr><td style="background:${C.nuit};padding:18px 32px;font:12px/1.6 ${POLICE};color:#C9D6E8;text-align:center;"><div style="font:700 12px/1.6 ${POLICE};letter-spacing:1.5px;text-transform:uppercase;color:${C.menthe};">SIMATIS</div><div>Direction commerciale en mode partagé · Conseil et formation</div><div><a href="${SITE}" style="color:${C.menthe};text-decoration:none;">simatis.fr</a></div></td></tr>` : ''}
+</table>${options.piedDiscret ? `<div style="max-width:600px;margin:14px auto 0;font:12px/1.5 ${POLICE};color:${C.roche};text-align:center;">${echapper(options.piedDiscret)}</div>` : ''}</div>`;
 }
 
 // Mail courant : du HTML libre (déjà échappé) dans une seule cellule du gabarit.
