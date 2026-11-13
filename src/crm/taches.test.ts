@@ -483,13 +483,13 @@ describe('Tâches', () => {
       const relues = await app.inject({ method: 'GET', url: '/api/preferences' });
       expect(relues.json()).toMatchObject({ options: { ensuite: false } });
       // Moteur IA : Codex par défaut, Claude sur demande, tout autre nom refusé.
-      expect(relues.json()).toMatchObject({ options: { moteurIA: 'codex' } });
+      expect(relues.json()).toMatchObject({ options: { moteurIA: 'claude' } });
       const moteur = await app.inject({
         method: 'PUT',
         url: '/api/preferences/options',
-        payload: { moteurIA: 'claude' },
+        payload: { moteurIA: 'codex' },
       });
-      expect(moteur.json()).toMatchObject({ options: { moteurIA: 'claude', ensuite: false } });
+      expect(moteur.json()).toMatchObject({ options: { moteurIA: 'codex', ensuite: false } });
       expect(
         (
           await app.inject({

@@ -64,10 +64,16 @@ export function registerRunnerApi(
     return true;
   };
 
+  // Moteur choisi dans la console pour les routines, l'ajout à l'Inbox et les campagnes.
+  app.get('/api/runner/moteur', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    return { moteur: (await moteur?.()) ?? 'claude' };
+  });
+
   if (codex) {
     app.get('/api/runner/codex', async (request, reply) => {
       if (!(await auth(request, reply))) return reply;
-      return { travail: codex.prendre(), moteur: (await moteur?.()) ?? 'codex' };
+      return { travail: codex.prendre(), moteur: (await moteur?.()) ?? 'claude' };
     });
     app.post('/api/runner/codex', async (request, reply) => {
       if (!(await auth(request, reply))) return reply;
