@@ -152,6 +152,30 @@ describe('Supports : API', () => {
     );
   });
 
+  it('supprime aussi le PDF gardé dans le projet quand le support est terminé', async () => {
+    const projets = `/api/i/simatis/diagnostic/projets`;
+    const creation = await app.inject({
+      method: 'POST',
+      url: projets,
+      payload: { nom: 'Nettoyage Fictif', activite: 'services' },
+    });
+    const projet = creation.json<{ id: string; supportId: string }>();
+    const pdf = await app.inject({
+      method: 'POST',
+      url: `${projets}/${projet.id}/restitution/pdf`,
+      payload: { nom: 'deck.pdf', base64: Buffer.from('%PDF-1.7\n').toString('base64') },
+    });
+    expect(pdf.json()).toMatchObject({ aPdfDeck: true });
+    await mkdir(path.join(dossier, projet.supportId), { recursive: true });
+    await writeFile(path.join(dossier, projet.supportId, 'manifest.json'), '{"titre":"x"}');
+    const del = await app.inject({ method: 'DELETE', url: `${base}/${projet.supportId}` });
+    expect(del.statusCode).toBe(204);
+    const liste = (await app.inject({ method: 'GET', url: projets })).json<
+      { id: string; aPdfDeck: boolean }[]
+    >();
+    expect(liste.find((p) => p.id === projet.id)?.aPdfDeck).toBe(false);
+  });
+
   it('dit qu aucun dossier n est configuré', async () => {
     delete process.env.SUPPORTS_DIR;
     try {
