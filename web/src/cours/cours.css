@@ -297,3 +297,35 @@
   padding-bottom: 20px;
   overflow: hidden;
 }
+
+/* Édition : le texte du fichier à droite, la slide reste visible à gauche. */
+.cours-edition {
+  flex: 0 0 min(46%, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--white);
+  border-left: 1px solid var(--line);
+  min-width: 0;
+}
+.cours-edition textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  font:
+    13px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.cours-edition-tete,
+.cours-edition-pied {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
