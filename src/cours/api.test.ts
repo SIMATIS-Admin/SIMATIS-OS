@@ -152,6 +152,46 @@ describe('Supports : API', () => {
     );
   });
 
+  it('modifie un fichier déclaré, avec contrôle de version et sans toucher au reste', async () => {
+    const url = `${base}/exemple-fictif/01-debut.md`;
+    const lu = await app.inject({ method: 'GET', url });
+    const version = lu.headers['x-version'] as string;
+    expect(version).toMatch(/^\d+$/);
+    const ecrit = await app.inject({
+      method: 'PUT',
+      url,
+      payload: { contenu: '## Modifié\n', version },
+    });
+    expect(ecrit.statusCode).toBe(200);
+    const neuve = ecrit.json<{ version: string }>().version;
+    expect((await app.inject({ method: 'GET', url })).body).toBe('## Modifié\n');
+    // Version périmée : refusée, le fichier reste tel quel.
+    const perimee = await app.inject({
+      method: 'PUT',
+      url,
+      payload: { contenu: 'écrasé', version: String(Number(neuve) - 5) },
+    });
+    expect(perimee.statusCode).toBe(409);
+    expect((await app.inject({ method: 'GET', url })).body).toBe('## Modifié\n');
+    // Hors manifest, manifest lui-même, image, traversée : refusés.
+    for (const relatif of [
+      'exemple-fictif/02-cache.md',
+      'exemple-fictif/manifest.json',
+      'exemple-fictif/img/schema.svg',
+      'exemple-fictif/clients/client-a.json',
+      'exemple-fictif/..%2Fsecret.md',
+    ]) {
+      const r = await app.inject({
+        method: 'PUT',
+        url: `${base}/${relatif}`,
+        payload: { contenu: 'x', version: neuve },
+      });
+      expect(r.statusCode, relatif).toBe(404);
+    }
+    const sans = await app.inject({ method: 'PUT', url, payload: { contenu: 'x' } });
+    expect(sans.statusCode).toBe(400);
+  });
+
   it('supprime aussi le PDF gardé dans le projet quand le support est terminé', async () => {
     const projets = `/api/i/simatis/diagnostic/projets`;
     const creation = await app.inject({

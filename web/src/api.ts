@@ -152,6 +152,31 @@ export const fetchTexteCours = async (slug: string, deck: string, fichier: strin
   return r.text();
 };
 
+// Édition d'un fichier du support : la version lue accompagne l'enregistrement, qui échoue
+// (409) si le fichier a changé entre-temps.
+export const lireSourceCours = async (slug: string, deck: string, fichier: string) => {
+  const r = await fetch(urlFichierCours(slug, deck, fichier));
+  if (!r.ok) throw new Error(`${fichier} : fichier introuvable`);
+  return { contenu: await r.text(), version: r.headers.get('x-version') ?? '' };
+};
+export const enregistrerSourceCours = async (
+  slug: string,
+  deck: string,
+  fichier: string,
+  contenu: string,
+  version: string,
+) => {
+  const r = await fetch(urlFichierCours(slug, deck, fichier), {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ contenu, version }),
+  });
+  if (r.status === 409)
+    throw new Error('Ce fichier a changé depuis son ouverture. Fermez l’édition et rouvrez-la.');
+  if (!r.ok) throw new Error('Enregistrement impossible');
+  return ((await r.json()) as { version: string }).version;
+};
+
 // Test de VMA : invitations envoyées par le site, résultats relevés (voir src/vma).
 export type TestVmaType = 'premier' | 'essai';
 export type TestVmaStatut = 'envoyee' | 'utilisee' | 'revoquee';

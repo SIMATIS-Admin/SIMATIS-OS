@@ -1,4 +1,4 @@
-import { readdir, readFile, rm, stat } from 'node:fs/promises';
+import { readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Les supports sont des dossiers de fichiers texte, hors du dépôt (confidentiel) :
@@ -68,6 +68,21 @@ export async function listerDecks(): Promise<ResumeDeck[]> {
   return decks;
 }
 
+// Le manifest est la liste blanche : modules markdown, slides HTML par partie, feuille de style.
+async function verifierDeclare(dossier: string, relatif: string): Promise<void> {
+  const manifest = (await lireJson(path.join(dossier, 'manifest.json'))) as {
+    modules?: unknown;
+    css?: unknown;
+    parties?: unknown;
+  };
+  const permis = new Set<unknown>(Array.isArray(manifest.modules) ? manifest.modules : []);
+  if (typeof manifest.css === 'string') permis.add(manifest.css);
+  if (Array.isArray(manifest.parties))
+    for (const partie of manifest.parties as { slides?: unknown }[])
+      if (Array.isArray(partie?.slides)) for (const f of partie.slides) permis.add(f);
+  if (!permis.has(relatif)) throw new SupportIntrouvable('Fichier absent du manifest');
+}
+
 // Un fichier du deck : le manifest, un module que le manifest déclare, le profil d'un client ou
 // une image. Tout autre nom, dont toute traversée de chemin, est refusé avant d'ouvrir un fichier.
 export async function lireFichierDeck(
@@ -81,20 +96,7 @@ export async function lireFichierDeck(
     throw new SupportIntrouvable('Fichier introuvable');
   const dossier = path.join(racine, deck);
   try {
-    if (declare) {
-      // Le manifest est la liste blanche : modules markdown, slides HTML par partie, feuille de style.
-      const manifest = (await lireJson(path.join(dossier, 'manifest.json'))) as {
-        modules?: unknown;
-        css?: unknown;
-        parties?: unknown;
-      };
-      const permis = new Set<unknown>(Array.isArray(manifest.modules) ? manifest.modules : []);
-      if (typeof manifest.css === 'string') permis.add(manifest.css);
-      if (Array.isArray(manifest.parties))
-        for (const partie of manifest.parties as { slides?: unknown }[])
-          if (Array.isArray(partie?.slides)) for (const f of partie.slides) permis.add(f);
-      if (!permis.has(relatif)) throw new SupportIntrouvable('Fichier absent du manifest');
-    }
+    if (declare) await verifierDeclare(dossier, relatif);
     const chemin = path.join(dossier, relatif);
     const [contenu, infos] = await Promise.all([readFile(chemin), stat(chemin)]);
     return {
@@ -120,4 +122,43 @@ export async function supprimerDeck(deck: string): Promise<void> {
     throw new SupportIntrouvable('Support introuvable');
   }
   await rm(dossier, { recursive: true, force: true });
+}
+
+// Version d'un fichier pour l'édition : sa date de modification, à la milliseconde.
+export const versionDe = (modifie: Date) => String(Math.trunc(modifie.getTime()));
+
+export class ConflitEdition extends Error {}
+export class ContenuInvalide extends Error {}
+
+const TAILLE_MAX = 1_000_000;
+
+// Édition d'un fichier déclaré par le manifest (module, slide, feuille de style) : jamais le manifest
+// lui-même, qui est la liste blanche. Refusée si le fichier a changé depuis sa lecture ; l'écriture
+// passe par un fichier temporaire puis un renommage, pour ne jamais laisser un fichier à moitié écrit.
+export async function ecrireFichierDeck(
+  deck: string,
+  relatif: string,
+  contenu: string,
+  version: string,
+): Promise<string> {
+  const racine = dossierSupports();
+  if (!DECK.test(deck)) throw new SupportIntrouvable('Support introuvable');
+  if (!(MODULE.test(relatif) || SLIDE.test(relatif) || FEUILLE.test(relatif)))
+    throw new SupportIntrouvable('Fichier introuvable');
+  if (Buffer.byteLength(contenu) > TAILLE_MAX) throw new ContenuInvalide('Fichier trop volumineux');
+  const dossier = path.join(racine, deck);
+  const chemin = path.join(dossier, relatif);
+  try {
+    await verifierDeclare(dossier, relatif);
+    const actuel = await stat(chemin);
+    if (versionDe(actuel.mtime) !== version)
+      throw new ConflitEdition('Ce fichier a changé depuis son ouverture');
+  } catch (e) {
+    if (e instanceof SupportIntrouvable || e instanceof ConflitEdition) throw e;
+    throw new SupportIntrouvable('Fichier introuvable');
+  }
+  const temporaire = `${chemin}.${process.pid}.tmp`;
+  await writeFile(temporaire, contenu, 'utf8');
+  await rename(temporaire, chemin);
+  return versionDe((await stat(chemin)).mtime);
 }

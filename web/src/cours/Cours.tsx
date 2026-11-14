@@ -9,6 +9,7 @@ import {
 } from '../api.js';
 import { useModePresentation } from '../shell/modePresentation.js';
 import { documentImpression, documentSlide, incorporerImages, lireSlideHtml } from './html.js';
+import { Editeur } from './Editeur.js';
 import { Markdown } from './Markdown.js';
 import { SlideHtml } from './SlideHtml.js';
 import {
@@ -46,6 +47,7 @@ const AIDE: [string, string][] = [
   ['↑ ↓', 'Module précédent ou suivant'],
   ['1 à 9', 'Aller au module n'],
   ['N', 'Notes du formateur et aperçu de la suivante'],
+  ['E', 'Modifier la slide (Ctrl ou ⌘ + S pour enregistrer)'],
   ['F', 'Plein écran'],
   ['?', 'Cette aide'],
 ];
@@ -67,6 +69,9 @@ const imageEnDonnees = async (slug: string, deck: string, chemin: string) => {
     lecteur.readAsDataURL(blob);
   });
 };
+// Le fichier à modifier : la slide en HTML libre, le module en markdown.
+const enHtmlFichier = (manifest: Manifest, slideHtml: string | null | undefined, m: number) =>
+  manifest.format === 'html' ? slideHtml : manifest.modules[m];
 const lireClient = () => new URLSearchParams(location.hash.split('?')[1] ?? '').get('client');
 
 export function Cours({ slug, deck }: { slug: string; deck: string }) {
@@ -76,6 +81,9 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   const [pos, setPos] = useState<Position>(lirePosition);
   const [notes, setNotes] = useState(false);
   const [aide, setAide] = useState(false);
+  const [edition, setEdition] = useState(false);
+  // Relire le support après un enregistrement, sans quitter la slide.
+  const [rechargement, setRechargement] = useState(0);
   const racine = useRef<HTMLDivElement>(null);
   const { basculer } = useModePresentation();
 
@@ -153,7 +161,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
     return () => {
       annule = true;
     };
-  }, [slug, deck]);
+  }, [slug, deck, rechargement]);
 
   const modules = etat.statut === 'pret' ? etat.modules : [];
   const m = Math.min(pos.m, Math.max(0, modules.length - 1));
@@ -191,6 +199,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
         aller({ m: Number(e.key) - 1, s: 0 });
       else if (e.key === 'n' || e.key === 'N') setNotes((v) => !v);
       else if (e.key === '?') setAide((v) => !v);
+      else if (e.key === 'e' || e.key === 'E') setEdition((v) => !v);
       else if (e.key === 'f' || e.key === 'F') {
         basculer();
         if (document.fullscreenElement) void document.exitFullscreen();
@@ -267,6 +276,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   const prochaine = slides[s + 1] ?? modules[m + 1]?.slides[0];
 
   const documents = etat.documents;
+  const fichierEdite = enHtmlFichier(etat.manifest, slide.html, m);
   const enHtml = etat.manifest.format === 'html';
   return (
     <div
@@ -334,6 +344,15 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
             )}
           </aside>
         )}
+        {edition && fichierEdite && (
+          <Editeur
+            slug={slug}
+            deck={deck}
+            fichier={fichierEdite}
+            onEnregistre={() => setRechargement((n) => n + 1)}
+            onFermer={() => setEdition(false)}
+          />
+        )}
         {aide && (
           <div className="cours-aide" role="dialog" aria-label="Raccourcis">
             <b>Raccourcis</b>
@@ -386,6 +405,14 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
           onClick={suivante}
         >
           →
+        </button>
+        <button
+          className="btn sm"
+          type="button"
+          aria-pressed={edition}
+          onClick={() => setEdition((v) => !v)}
+        >
+          Modifier
         </button>
         <button
           className="btn sm"

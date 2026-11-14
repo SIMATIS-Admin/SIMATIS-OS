@@ -7,6 +7,8 @@ const api = vi.hoisted(() => ({
   fetchDecksCours: vi.fn(),
   supprimerSupportCours: vi.fn(),
   fetchTexteCours: vi.fn(),
+  lireSourceCours: vi.fn(),
+  enregistrerSourceCours: vi.fn(),
   urlFichierCours: (slug: string, deck: string, f: string) => `/api/i/${slug}/cours/${deck}/${f}`,
 }));
 vi.mock('../api.js', () => api);
@@ -145,6 +147,48 @@ describe('Lecteur de supports', () => {
     const notes = screen.getByLabelText('Notes du formateur');
     expect(notes.textContent).toContain('Accueillir, 2 minutes.');
     expect(notes.textContent).toContain('Les trois dimensions');
+  });
+
+  it('modifie la slide : ouvre le fichier du module, enregistre avec sa version, relit le support', async () => {
+    api.lireSourceCours.mockReset();
+    api.enregistrerSourceCours.mockReset();
+    api.lireSourceCours.mockResolvedValue({ contenu: '## Bonjour\n', version: '7' });
+    api.enregistrerSourceCours.mockResolvedValue('8');
+    await ouvrir();
+    const appels = api.fetchTexteCours.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier' }));
+    const zone = await screen.findByLabelText(/Contenu de 01-resultat\.md/);
+    await waitFor(() => expect((zone as HTMLTextAreaElement).value).toBe('## Bonjour\n'));
+    fireEvent.change(zone, { target: { value: '## Salut\n' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() =>
+      expect(api.enregistrerSourceCours).toHaveBeenCalledWith(
+        'simatis',
+        'exemple-fictif',
+        '01-resultat.md',
+        '## Salut\n',
+        '7',
+      ),
+    );
+    await waitFor(() => expect(api.fetchTexteCours.mock.calls.length).toBeGreaterThan(appels));
+    expect(await screen.findByText('Enregistré')).toBeTruthy();
+  });
+
+  it('dit pourquoi un enregistrement échoue, et garde le texte saisi', async () => {
+    api.lireSourceCours.mockReset();
+    api.enregistrerSourceCours.mockReset();
+    api.lireSourceCours.mockResolvedValue({ contenu: 'a', version: '1' });
+    api.enregistrerSourceCours.mockRejectedValue(
+      new Error('Ce fichier a changé depuis son ouverture.'),
+    );
+    await ouvrir();
+    fireEvent.keyDown(document, { key: 'e' });
+    const zone = await screen.findByLabelText<HTMLTextAreaElement>(/Contenu de/);
+    await waitFor(() => expect(zone.value).toBe('a'));
+    fireEvent.change(zone, { target: { value: 'b' } });
+    fireEvent.keyDown(zone, { key: 's', ctrlKey: true });
+    expect(await screen.findByText(/a changé depuis son ouverture/)).toBeTruthy();
+    expect(zone.value).toBe('b');
   });
 
   it('affiche l’aide des raccourcis à la touche ?', async () => {

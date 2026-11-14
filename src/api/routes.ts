@@ -55,6 +55,10 @@ import {
   listerDecks,
   lireFichierDeck,
   supprimerDeck,
+  ecrireFichierDeck,
+  versionDe,
+  ConflitEdition,
+  ContenuInvalide,
   SupportIntrouvable,
 } from '../cours/service.js';
 import { demanderDossier } from '../diagnostic/dossier-export.js';
@@ -931,6 +935,36 @@ export function registerApi(
       }
     }),
   );
+  // Édition d'un module, d'une slide ou de la feuille de style, avec contrôle de version (409).
+  app.put<{ Params: { slug: string; deck: string; '*': string }; Body: unknown }>(
+    '/api/i/:slug/cours/:deck/*',
+    { bodyLimit: 2_000_000 },
+    onInstance<{ Params: { slug: string; deck: string; '*': string }; Body: unknown }>(
+      async (_i, request, reply) => {
+        const corps = z
+          .object({ contenu: z.string(), version: z.string().min(1) })
+          .safeParse(request.body);
+        if (!corps.success) return reply.code(400).send({ error: 'Contenu et version attendus' });
+        try {
+          const version = await ecrireFichierDeck(
+            request.params.deck,
+            request.params['*'],
+            corps.data.contenu,
+            corps.data.version,
+          );
+          return { version };
+        } catch (error) {
+          if (error instanceof SupportIntrouvable)
+            return reply.code(404).send({ error: error.message });
+          if (error instanceof ConflitEdition)
+            return reply.code(409).send({ error: error.message });
+          if (error instanceof ContenuInvalide)
+            return reply.code(400).send({ error: error.message });
+          throw error;
+        }
+      },
+    ),
+  );
   app.get<{ Params: { slug: string; deck: string; '*': string } }>(
     '/api/i/:slug/cours/:deck/*',
     onInstance<{ Params: { slug: string; deck: string; '*': string } }>(
@@ -942,6 +976,7 @@ export function registerApi(
           );
           reply.header('content-type', type);
           reply.header('last-modified', modifie.toUTCString());
+          reply.header('x-version', versionDe(modifie));
           reply.header('cache-control', 'no-cache');
           reply.header('x-content-type-options', 'nosniff');
           return reply.send(contenu);
