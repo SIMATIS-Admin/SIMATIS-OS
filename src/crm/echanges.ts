@@ -188,9 +188,10 @@ export async function lancerLecture(
   deps: ConnexionDeps,
   { force = false, boitesDe = boitesDeInstance, maintenant = new Date() } = {},
 ): Promise<EtatLecture & { lancee: boolean }> {
-  const job = jobs.get(instance.id);
   const derniere = await derniereLecture(db, instance);
   const recente = derniere !== null && maintenant.getTime() - derniere.getTime() < PERIME_MS;
+  // Read after the await: the Pipeline and the Radar opened together must not start two passes.
+  const job = jobs.get(instance.id);
   // A failed pass is not retried on every page load, only on demand.
   if (job?.etat === 'en_cours' || (!force && (recente || job?.etat === 'echec')))
     return { ...(await etatLecture(db, instance)), lancee: false };
