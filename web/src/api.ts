@@ -505,16 +505,20 @@ export type FicheRadar = {
   prochaineRelanceLe: string | null;
 };
 export type ColonneRadar = { total: number; fiches: FicheRadar[] };
+export type AffaireRadar = {
+  id: string;
+  titre: string;
+  entreprise: string | null;
+  contact: string | null;
+};
 export type EtatRadar = {
   aEnrichir: ColonneRadar;
   prets: ColonneRadar;
   contactes: ColonneRadar;
   ontRepondu: ColonneRadar;
-  // Affaires ouvertes sans rendez-vous : personnes déjà approchées, reprises dans « Contactés ».
-  reprise: {
-    total: number;
-    fiches: { id: string; nom: string; entreprise: string | null; fonction: string | null }[];
-  };
+  // Affaires ouvertes sans rendez-vous que la messagerie range au Radar : écrites sans réponse
+  // (« Contactés ») ou qui ont répondu (« Ont répondu »).
+  reprise: Record<'contactes' | 'ontRepondu', { total: number; fiches: AffaireRadar[] }>;
   rdvAccepte: {
     total: number;
     fiches: {
@@ -757,6 +761,9 @@ export type PipelineOpp = {
   joursInactif: number | null;
   // Ouverte sans aucun rendez-vous : une personne encore en prospection, suivie aussi dans le Radar.
   sansRdv: boolean;
+  // Sans rendez-vous et déjà écrite : suivie dans le Radar (sans réponse, ou a répondu), plus au
+  // Pipeline. null : jamais écrite, ou avec un rendez-vous.
+  radar: 'sans_reponse' | 'repondu' | null;
   // Prochain rendez-vous commercial lié à l'affaire, à son contact ou à son entreprise.
   prochainRdv: string | null;
 };
@@ -794,6 +801,18 @@ export type Changement =
   { etape: string } | { clos: 'gagne' | 'perdu'; motif?: string | null } | { rouvrir: true };
 
 export const fetchPipeline = (slug: string) => getJson<Pipeline>(inst(slug, 'pipeline'));
+// Lecture de la messagerie qui range au Radar les affaires sans rendez-vous.
+export type LectureEchanges = {
+  etat: 'en_cours' | 'termine' | 'echec' | 'jamais';
+  derniereLecture: string | null;
+  contacts?: number;
+  erreur?: string;
+  lancee?: boolean;
+};
+export const fetchLectureEchanges = (slug: string) =>
+  getJson<LectureEchanges>(inst(slug, 'pipeline/echanges'));
+export const lancerLectureEchanges = (slug: string, force = false) =>
+  sendJson<LectureEchanges>('POST', inst(slug, 'pipeline/echanges'), { force });
 export const changeOpportunite = (slug: string, id: string, change: Changement) =>
   sendJson<{ opportunite: PipelineOpp; simulation: boolean }>(
     'PATCH',

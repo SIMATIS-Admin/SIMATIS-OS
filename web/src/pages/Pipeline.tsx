@@ -17,6 +17,7 @@ import { Icon } from '../icons.js';
 import { fusionnerDeux, supprimerEnLot } from './listes/lots.js';
 import { Tableau } from './listes/Tableau.js';
 import { Modal } from './Overlay.js';
+import { libelleLecture, useLectureEchanges } from './radar/useLectureEchanges.js';
 import { Tip } from './widgets.js';
 
 // From the mockup (v-conversion.js MOTIFS, CONV_TIP; core.js cat and MATRICE).
@@ -147,9 +148,7 @@ function Card({
         <div className="ttl">{o.titre}</div>
         {o.contact && <div className="pers small muted">{o.contact}</div>}
         {!o.clos && o.prochainRdv && <div className="rdv small">RDV {quandRdv(o.prochainRdv)}</div>}
-        {o.sansRdv && (
-          <div className="sans-rdv small muted">Sans rendez-vous, suivi dans le Radar</div>
-        )}
+        {o.sansRdv && <div className="sans-rdv small muted">Sans rendez-vous, jamais écrite</div>}
         {o.clos === 'perdu' ? (
           <div className="motif">
             Perdue{label(o.etape) !== o.etape ? ` en ${label(o.etape).toLowerCase()}` : ''}
@@ -423,6 +422,7 @@ export function Pipeline({ slug }: { slug: string }) {
     fetchPipeline(slug).then(setData, (e: unknown) => setMessage(String(e)));
   }, [slug]);
   useEffect(load, [load]);
+  const { lecture, relire } = useLectureEchanges(slug, load);
 
   if (!data)
     return (
@@ -450,7 +450,10 @@ export function Pipeline({ slug }: { slug: string }) {
       .normalize('NFD')
       .replace(/\p{Diacritic}/gu, '')
       .toLowerCase();
+  // Affaires sans rendez-vous déjà écrites : suivies dans le Radar, plus ici (HubSpot inchangé).
+  const auRadar = data.opportunites.filter((o) => !o.clos && o.radar);
   const visibles = data.opportunites.filter((o) => {
+    if (!o.clos && o.radar) return false;
     const correspond = normaliser([o.titre, o.entreprise, o.contact].join(' ')).includes(
       normaliser(recherche.trim()),
     );
@@ -689,6 +692,28 @@ export function Pipeline({ slug }: { slug: string }) {
           <div>{message}</div>
         </div>
       )}
+      <p className="small muted pipe-radar">
+        {auRadar.length > 0 ? (
+          <>
+            {auRadar.length} affaire{auRadar.length > 1 ? 's' : ''} sans rendez-vous{' '}
+            {auRadar.length > 1 ? 'sont suivies' : 'est suivie'} dans le Radar (mails sans réponse
+            ou réponse reçue).{' '}
+            <a className="link" href={`#/${slug}/radar`}>
+              Ouvrir le Radar
+            </a>
+            {' · '}
+          </>
+        ) : null}
+        {libelleLecture(lecture)}
+        {lecture && lecture.etat !== 'en_cours' && (
+          <>
+            {' · '}
+            <button className="lien" onClick={() => void relire()}>
+              Relire la messagerie
+            </button>
+          </>
+        )}
+      </p>
       {mode === 'board' ? (
         <>
           <div className="pipe-totaux">

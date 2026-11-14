@@ -176,6 +176,7 @@ import { definirPrincipal, delierFiches, lierFiches, verifierFiche } from '../cr
 import { rechercherDans, rechercherMandats } from '../crm/recherche.js';
 import { peutTransferer, UTILISATEUR_PILOTE } from '../transfert/droits.js';
 import { mailsDeFiche } from '../crm/mails.js';
+import { etatLecture, lancerLecture } from '../crm/echanges.js';
 import { supprimerFiche } from '../crm/suppression.js';
 import {
   ajouterNote,
@@ -915,9 +916,13 @@ export function registerApi(
   // Présentation terminée : le support quitte l'OS (le deck claude.ai reste l'archive).
   app.delete<{ Params: { slug: string; deck: string } }>(
     '/api/i/:slug/cours/:deck',
-    onInstance<{ Params: { slug: string; deck: string } }>(async (_i, request, reply) => {
+    onInstance<{ Params: { slug: string; deck: string } }>(async (i, request, reply) => {
       try {
         await supprimerDeck(request.params.deck);
+        // Le texte et le PDF de la restitution gardés dans le projet partent avec le support.
+        for (const projet of await listProjets(db, i))
+          if (projet.supportId === request.params.deck)
+            await purgerDiapositivesRestitution(db, i, projet.id);
         return reply.code(204).send();
       } catch (error) {
         if (error instanceof SupportIntrouvable)
@@ -1740,6 +1745,20 @@ export function registerApi(
   app.get<SlugParams>(
     '/api/i/:slug/pipeline',
     onInstance((i) => getPipeline(db, i)),
+  );
+
+  // Lecture de la messagerie qui range au Radar les affaires sans rendez-vous. Le Pipeline et le
+  // Radar la demandent à l'ouverture (rien si la dernière est récente) ; « force » la relance.
+  app.get<SlugParams>(
+    '/api/i/:slug/pipeline/echanges',
+    onInstance((i) => etatLecture(db, i)),
+  );
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/pipeline/echanges',
+    onInstance<SlugParams & { Body: unknown }>((i, request) => {
+      const force = (request.body as { force?: unknown } | undefined)?.force === true;
+      return lancerLecture(db, i, connexionDeps, { force });
+    }),
   );
 
   const reglagesPipelineSchema = z

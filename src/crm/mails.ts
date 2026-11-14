@@ -40,7 +40,7 @@ async function adressesDeFiche(db: Database, instance: Instance, kind: Kind, id:
 }
 
 // The instance's mailboxes: the connected one, plus the second one (read only) when Gmail has it.
-async function boitesDeInstance(db: Database, instance: Instance, deps: ConnexionDeps) {
+export async function boitesDeInstance(db: Database, instance: Instance, deps: ConnexionDeps) {
   const [c] = await withInstance(db, instance.id, (tx) =>
     tx
       .select({ fournisseur: connexions.fournisseur, etat: connexions.etat })
