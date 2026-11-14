@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EtatRadar } from '../api.js';
 import { Radar } from './Radar.js';
@@ -37,8 +37,23 @@ const radar: EtatRadar = {
   },
   ontRepondu: { total: 0, fiches: [] },
   reprise: {
-    total: 42,
-    fiches: [{ id: 'x1', nom: 'Jean Fictif', entreprise: 'Fonderie Fictive', fonction: null }],
+    contactes: {
+      total: 42,
+      fiches: [
+        { id: 'x1', titre: 'Audit fictif', entreprise: 'Fonderie Fictive', contact: 'Jean Fictif' },
+      ],
+    },
+    ontRepondu: {
+      total: 1,
+      fiches: [
+        {
+          id: 'x2',
+          titre: 'Mission fictive',
+          entreprise: 'Atelier Fictif',
+          contact: 'Léa Fictive',
+        },
+      ],
+    },
   },
   rdvAccepte: {
     total: 1,
@@ -80,7 +95,7 @@ describe('Radar', () => {
     expect(within(screen.getByRole('region', { name: 'À enrichir' })).getByText('14')).toBeTruthy();
     expect(within(screen.getByRole('region', { name: 'Contactés' })).getByText('105')).toBeTruthy();
     const reponses = screen.getByRole('region', { name: 'Ont répondu' });
-    expect(within(reponses).getByText('Personne à cette étape.')).toBeTruthy();
+    expect(within(reponses).getByText('Léa Fictive')).toBeTruthy();
     expect(
       within(screen.getByRole('region', { name: 'RDV accepté' })).getByText('Alice Fictive'),
     ).toBeTruthy();
@@ -100,19 +115,66 @@ describe('Radar', () => {
     expect(within(prets).queryByRole('link', { name: /Paul Dumont/ })).toBeNull();
   });
 
-  it('reprend dans Contactés les affaires du Pipeline sans rendez-vous, avec un lien vers leur fiche', async () => {
+  it('reprend dans Contactés les affaires du Pipeline écrites sans réponse, avec un lien vers leur fiche', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve(new Response(JSON.stringify(radar)))),
     );
     render(<Radar slug="simatis" />);
     const colonne = await screen.findByRole('region', { name: 'Contactés' });
-    expect(within(colonne).getByText(/dont 42 affaires du Pipeline sans rendez-vous/)).toBeTruthy();
+    expect(
+      within(colonne).getByText(
+        /dont 42 affaires du Pipeline sans rendez-vous écrites sans réponse/,
+      ),
+    ).toBeTruthy();
     const carte = within(colonne).getByRole('link', { name: /Jean Fictif/ });
-    expect(carte.getAttribute('href')).toBe('#/simatis/fiche/contact/x1');
-    expect(within(colonne).getByText('Fonderie Fictive · affaire en cours')).toBeTruthy();
+    expect(carte.getAttribute('href')).toBe('#/simatis/fiche/affaire/x1');
+    expect(within(colonne).getByText('Fonderie Fictive · affaire Audit fictif')).toBeTruthy();
     // Les cartes de la base suivent, sans lien.
     expect(within(colonne).getByText('Anne Leroux')).toBeTruthy();
+  });
+
+  it('reprend dans Ont répondu les affaires du Pipeline dont le contact a répondu', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(radar)))),
+    );
+    render(<Radar slug="simatis" />);
+    const colonne = await screen.findByRole('region', { name: 'Ont répondu' });
+    expect(within(colonne).getByText('1')).toBeTruthy();
+    expect(
+      within(colonne)
+        .getByRole('link', { name: /Léa Fictive/ })
+        .getAttribute('href'),
+    ).toBe('#/simatis/fiche/affaire/x2');
+  });
+
+  it('demande la lecture de la messagerie à l’ouverture, et la relance à la demande', async () => {
+    const appels: { url: string; method?: string; body?: string }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string; body?: string }) => {
+        appels.push({ url, method: init?.method, body: init?.body });
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              url.endsWith('pipeline/echanges')
+                ? { etat: 'termine', derniereLecture: '2026-11-14T08:12:00.000Z' }
+                : radar,
+            ),
+          ),
+        );
+      }),
+    );
+    render(<Radar slug="simatis" />);
+    expect(await screen.findByText(/Messagerie lue le 14 nov\. à 09:12/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Relire la messagerie' }));
+    await waitFor(() =>
+      expect(appels.filter((a) => a.url.endsWith('pipeline/echanges')).map((a) => a.body)).toEqual([
+        JSON.stringify({ force: false }),
+        JSON.stringify({ force: true }),
+      ]),
+    );
   });
 
   it("montre l'ICP d'où vient une fiche, et seulement lui parmi ses étiquettes", async () => {

@@ -25,6 +25,7 @@ const opp = (id: string, etape: string, extra: Record<string, unknown> = {}) => 
   prochaine: null,
   joursInactif: null,
   sansRdv: false,
+  radar: null,
   prochainRdv: null,
   ...extra,
 });
@@ -52,6 +53,8 @@ const pipeline = () => ({
       joursInactif: 5,
     }),
     opp('o3', 'proposition', { clos: 'perdu', motif: 'Budget reporté' }),
+    // Écrite sans réponse : suivie dans le Radar, absente du Pipeline.
+    opp('o5', 'qualification', { sansRdv: true, radar: 'sans_reponse' }),
   ],
 });
 
@@ -59,10 +62,15 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+  if (url.includes('pipeline/echanges'))
+    return json({ etat: 'termine', derniereLecture: '2026-11-14T08:12:00.000Z', lancee: false });
   if (method === 'PATCH') return json({ opportunite: opp('o1', 'proposition'), simulation: false });
   if (method === 'POST') return json(opp('o9', 'qualification'));
   return json(pipeline());
 }
+
+// Un POST autre que la lecture de la messagerie, que l'écran demande à chaque ouverture.
+const estEcriture = (c: Call) => c.method === 'POST' && !c.url.endsWith('pipeline/echanges');
 
 const dataTransfer = (id: string) => ({
   types: ['application/x-simatis-opp'],
@@ -195,12 +203,35 @@ describe('Pipeline screen', () => {
     expect(screen.queryByText('Entreprise o2')).toBeNull();
   });
 
-  it('shows the next meeting of a deal, and flags the deals without any meeting as followed in the Radar', async () => {
+  it('shows the next meeting of a deal, and flags the deals without any meeting never written to', async () => {
     render(<Pipeline slug="simatis" />);
     await screen.findByText('Entreprise o1');
     expect(screen.getByText(/RDV mar\. 17 nov\., 14:00/)).toBeTruthy();
-    // Une seule affaire ouverte sans rendez-vous dans la fixture : o2.
-    expect(screen.getAllByText('Sans rendez-vous, suivi dans le Radar')).toHaveLength(1);
+    // Une seule affaire ouverte sans rendez-vous restée au Pipeline : o2 (o5 est au Radar).
+    expect(screen.getAllByText('Sans rendez-vous, jamais écrite')).toHaveLength(1);
+  });
+
+  it('leaves to the Radar the deals written to without a meeting, and rereads the mailbox on demand', async () => {
+    render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    expect(screen.queryByText('Entreprise o5')).toBeNull();
+    expect(screen.getByText(/1 affaire sans rendez-vous est suivie dans le Radar/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Ouvrir le Radar' }).getAttribute('href')).toBe(
+      '#/simatis/radar',
+    );
+    // L'ouverture demande une lecture (le serveur ne relit que si la dernière est ancienne).
+    expect(calls).toContainEqual({
+      url: '/api/i/simatis/pipeline/echanges',
+      method: 'POST',
+      body: { force: false },
+    });
+    expect(await screen.findByText(/Messagerie lue le 14 nov\. à 09:12/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Relire la messagerie' }));
+    expect(calls).toContainEqual({
+      url: '/api/i/simatis/pipeline/echanges',
+      method: 'POST',
+      body: { force: true },
+    });
   });
 
   it('filters the deals without a meeting', async () => {
@@ -284,8 +315,8 @@ describe('Pipeline screen', () => {
     fireEvent.change(within(modal).getByLabelText('Titre'), { target: { value: 'Audit flotte' } });
     fireEvent.change(within(modal).getByLabelText('Valeur (€)'), { target: { value: '7000' } });
     fireEvent.click(within(modal).getByRole('button', { name: 'Créer' }));
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
-    expect(calls.find((c) => c.method === 'POST')).toMatchObject({
+    await waitFor(() => expect(calls.some(estEcriture)).toBe(true));
+    expect(calls.find(estEcriture)).toMatchObject({
       url: '/api/i/simatis/opportunites',
       body: { titre: 'Audit flotte', montant: 7000, etape: 'qualification' },
     });
@@ -315,7 +346,7 @@ describe('Pipeline screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer la sélection' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
     await waitFor(() =>
-      expect(calls.find((c) => c.method === 'POST')).toMatchObject({
+      expect(calls.find(estEcriture)).toMatchObject({
         url: '/api/i/simatis/fiches/affaire/supprimer',
         body: { ids: ['o2'] },
       }),

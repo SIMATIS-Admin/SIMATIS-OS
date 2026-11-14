@@ -1,7 +1,13 @@
 import Fastify from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
-import { contacts, opportunites, rdvContacts, rendezVous } from '../crm/schema.js';
+import {
+  contactEchangesMail,
+  contacts,
+  opportunites,
+  rdvContacts,
+  rendezVous,
+} from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import { createInstance } from '../instances/service.js';
 import { registerBaseVivanteRoutes } from './routes.js';
@@ -51,22 +57,29 @@ describe('GET /radar', () => {
     );
   });
 
-  it('reprend dans Contactés les affaires ouvertes sans rendez-vous, sans rien écrire', async () => {
+  it('reprend au Radar les affaires sans rendez-vous écrites sans réponse ou qui ont répondu, sans rien écrire', async () => {
     const inst = await createInstance(t.owner.db, { slug: 'radar-rep', nom: 'R', type: 'propre' });
     await withInstance(t.owner.db, inst.id, async (tx) => {
-      const [sansRdv, avecRdv, sansAffaire, close] = await tx
+      const [muet, repond, jamais, avecRdv, close] = await tx
         .insert(contacts)
         .values(
-          ['Sans Rdv', 'Avec Rdv', 'Sans Affaire', 'Affaire Close'].map((nom) => ({
-            instanceId: inst.id,
-            nom,
-          })),
+          ['Muet Fictif', 'Repond Fictif', 'Jamais Ecrit', 'Avec Rdv', 'Affaire Close'].map(
+            (nom) => ({ instanceId: inst.id, nom }),
+          ),
         )
         .returning();
       await tx.insert(opportunites).values([
-        { instanceId: inst.id, titre: 'A', etape: 'x', contactId: sansRdv!.id },
-        { instanceId: inst.id, titre: 'B', etape: 'x', contactId: avecRdv!.id },
-        { instanceId: inst.id, titre: 'C', etape: 'x', contactId: close!.id, clos: 'perdu' },
+        { instanceId: inst.id, titre: 'Muette', etape: 'x', contactId: muet!.id },
+        { instanceId: inst.id, titre: 'Répondue', etape: 'x', contactId: repond!.id },
+        { instanceId: inst.id, titre: 'Jamais', etape: 'x', contactId: jamais!.id },
+        { instanceId: inst.id, titre: 'AvecRdv', etape: 'x', contactId: avecRdv!.id },
+        { instanceId: inst.id, titre: 'Close', etape: 'x', contactId: close!.id, clos: 'perdu' },
+      ]);
+      await tx.insert(contactEchangesMail).values([
+        { instanceId: inst.id, contactId: muet!.id, envoyes: 2, recus: 0 },
+        { instanceId: inst.id, contactId: repond!.id, envoyes: 1, recus: 1 },
+        { instanceId: inst.id, contactId: avecRdv!.id, envoyes: 3, recus: 0 },
+        { instanceId: inst.id, contactId: close!.id, envoyes: 3, recus: 0 },
       ]);
       const [rdv] = await tx
         .insert(rendezVous)
@@ -75,18 +88,16 @@ describe('GET /radar', () => {
       await tx
         .insert(rdvContacts)
         .values({ instanceId: inst.id, rendezVousId: rdv!.id, contactId: avecRdv!.id });
-      void sansAffaire;
     });
     const avant = await t.owner.pool.query('select count(*)::int as n from opportunites');
     const app = Fastify();
     registerBaseVivanteRoutes(app, { db: t.app.db });
     const r = await app.inject({ method: 'GET', url: '/api/i/radar-rep/radar' });
     const corps = r.json<{
-      reprise: { total: number; fiches: { nom: string }[] };
-      rdvAccepte: { total: number };
+      reprise: Record<'contactes' | 'ontRepondu', { total: number; fiches: { titre: string }[] }>;
     }>();
-    expect(corps.reprise).toMatchObject({ total: 1, fiches: [{ nom: 'Sans Rdv' }] });
-    expect(corps.rdvAccepte.total).toBe(1);
+    expect(corps.reprise.contactes).toMatchObject({ total: 1, fiches: [{ titre: 'Muette' }] });
+    expect(corps.reprise.ontRepondu).toMatchObject({ total: 1, fiches: [{ titre: 'Répondue' }] });
     const apres = await t.owner.pool.query('select count(*)::int as n from opportunites');
     expect(apres.rows[0]).toEqual(avant.rows[0]);
   });

@@ -10,6 +10,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
+import { classementAffaire, type Classement } from './echanges.js';
 import { assurerLiensPrincipaux } from './liens.js';
 import { createInCrm, CrmIndisponible, likePattern } from './service.js';
 
@@ -115,6 +116,7 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         prochainRdv: sql<Date | null>`(select min(r.debut) from rendez_vous r
           where ${rdvDeLAffaire} and r.debut >= ${maintenant})`,
         aUnRdv: sql<boolean>`exists (select 1 from rendez_vous r where ${rdvDeLAffaire})`,
+        classement: classementAffaire,
       })
       .from(opportunites)
       .leftJoin(
@@ -156,24 +158,87 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         src.etapes.map((e) => e.id),
       ),
       inactiviteJours: instance.config.inactiviteJours ?? INACTIVITE_DEFAUT,
-      opportunites: opps.map(({ derniereActivite, creeLe, prochainRdv, aUnRdv, ...o }) => {
-        const prochaine = o.clos ? null : (prochaines.get(o.id) ?? null);
-        const depuis = derniereActivite ?? creeLe;
-        return {
-          ...o,
-          derniereActivite: derniereActivite?.toISOString() ?? null,
-          // Ouverte sans rendez-vous : une personne encore en prospection, aussi dans le Radar.
-          sansRdv: !o.clos && !aUnRdv,
-          prochainRdv: o.clos || !prochainRdv ? null : new Date(prochainRdv).toISOString(),
-          prochaine: prochaine
-            ? { echeance: prochaine.toISOString(), enRetard: prochaine < aujourdhui }
-            : null,
-          joursInactif: o.clos
-            ? null
-            : Math.floor((maintenant.getTime() - depuis.getTime()) / JOUR_MS),
-        };
-      }),
+      opportunites: opps.map(
+        ({ derniereActivite, creeLe, prochainRdv, aUnRdv, classement, ...o }) => {
+          const prochaine = o.clos ? null : (prochaines.get(o.id) ?? null);
+          const depuis = derniereActivite ?? creeLe;
+          return {
+            ...o,
+            derniereActivite: derniereActivite?.toISOString() ?? null,
+            // Ouverte sans rendez-vous : une personne encore en prospection, aussi dans le Radar.
+            sansRdv: !o.clos && !aUnRdv,
+            // Sans rendez-vous et déjà écrite : l'affaire est suivie dans le Radar, plus au Pipeline.
+            radar: !o.clos && !aUnRdv ? classement : null,
+            prochainRdv: o.clos || !prochainRdv ? null : new Date(prochainRdv).toISOString(),
+            prochaine: prochaine
+              ? { echeance: prochaine.toISOString(), enRetard: prochaine < aujourdhui }
+              : null,
+            joursInactif: o.clos
+              ? null
+              : Math.floor((maintenant.getTime() - depuis.getTime()) / JOUR_MS),
+          };
+        },
+      ),
     };
+  });
+}
+
+export type AffaireRadar = {
+  id: string;
+  titre: string;
+  entreprise: string | null;
+  contact: string | null;
+};
+export type AffairesAuRadar = Record<
+  'contactes' | 'ontRepondu',
+  { total: number; fiches: AffaireRadar[] }
+>;
+
+// Les affaires ouvertes sans rendez-vous que la messagerie range au Radar : écrites sans réponse
+// (« Contactés »), ou qui ont répondu (« Ont répondu »). Rien n'est écrit, ni ici ni dans le CRM :
+// un rendez-vous pris les rend au Pipeline.
+export async function affairesAuRadar(
+  db: Executor,
+  instanceId: string,
+  limite = 5,
+): Promise<AffairesAuRadar> {
+  return withInstance(db, instanceId, async (tx) => {
+    const lignes = await tx
+      .select({
+        id: opportunites.id,
+        titre: opportunites.titre,
+        entreprise: entreprises.nom,
+        contact: contacts.nom,
+        classement: classementAffaire,
+      })
+      .from(opportunites)
+      .leftJoin(
+        entreprises,
+        and(
+          eq(entreprises.id, opportunites.entrepriseId),
+          eq(entreprises.instanceId, currentInstance),
+        ),
+      )
+      .leftJoin(
+        contacts,
+        and(eq(contacts.id, opportunites.contactId), eq(contacts.instanceId, currentInstance)),
+      )
+      .where(
+        and(
+          eq(opportunites.instanceId, currentInstance),
+          isNull(opportunites.clos),
+          sql`not exists (select 1 from rendez_vous r where ${rdvDeLAffaire})`,
+          sql`${classementAffaire} is not null`,
+        ),
+      )
+      .orderBy(asc(entreprises.nom), asc(opportunites.titre), asc(opportunites.id));
+    const colonne = (c: Classement) => {
+      const fiches = lignes
+        .filter((l) => l.classement === c)
+        .map((l) => ({ id: l.id, titre: l.titre, entreprise: l.entreprise, contact: l.contact }));
+      return { total: fiches.length, fiches: fiches.slice(0, limite) };
+    };
+    return { contactes: colonne('sans_reponse'), ontRepondu: colonne('repondu') };
   });
 }
 

@@ -47,6 +47,7 @@ import {
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
 import { listerSuspectsHorsCrm } from './suspects.js';
 import { etatRadar } from './radar.js';
+import { affairesAuRadar } from '../crm/pipeline.js';
 import { searchContacts } from '../crm/service.js';
 import { exporterWaalaxy } from './waalaxy.js';
 import { ErreurAnnuaire, creerClientAnnuaire, type ClientAnnuaire } from '../annuaire/client.js';
@@ -364,20 +365,11 @@ export function registerBaseVivanteRoutes(
     surInstance(async (instanceId) => {
       const crm = await searchContacts(db, instanceId);
       const prospects = crm.filter((c) => c.statut === 'prospect');
-      // Reprise de l'existant : une affaire ouverte sans rendez-vous est une personne déjà approchée
-      // qui n'a pas encore répondu. Rien n'est écrit : le statut suspect vient des rendez-vous.
-      const reprise = crm.filter((c) => c.statut === 'suspect' && c.oppsOuvertes > 0);
       return {
         ...(await etatRadar(db, instanceId)),
-        reprise: {
-          total: reprise.length,
-          fiches: reprise.slice(0, 5).map((c) => ({
-            id: c.id,
-            nom: c.nom,
-            entreprise: c.entreprise,
-            fonction: c.fonction,
-          })),
-        },
+        // Reprise de l'existant : les affaires ouvertes sans rendez-vous que la messagerie range
+        // au Radar (écrites sans réponse, ou qui ont répondu). Rien n'est écrit.
+        reprise: await affairesAuRadar(db, instanceId),
         rdvAccepte: {
           total: prospects.length,
           fiches: prospects.slice(0, 5).map((c) => ({

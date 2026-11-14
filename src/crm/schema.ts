@@ -352,3 +352,27 @@ export const activites = pgTable(
     instanceIsolation('activites'),
   ],
 );
+
+// What the instance's mailbox says about a contact, read in the background: how many mails were
+// sent to them and received from them (automatic replies and bounces left out). Counts and dates
+// only, never the content. It sorts the open deals without a meeting between the Pipeline and the
+// Radar, with nothing written to the CRM.
+export const contactEchangesMail = pgTable(
+  'contact_echanges_mail',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    contactId: uuid('contact_id')
+      .notNull()
+      .references(() => contacts.id, { onDelete: 'cascade' }),
+    envoyes: integer('envoyes').notNull().default(0),
+    recus: integer('recus').notNull().default(0),
+    dernierEnvoi: timestamp('dernier_envoi', { withTimezone: true }),
+    dernierRecu: timestamp('dernier_recu', { withTimezone: true }),
+    luLe: timestamp('lu_le', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('contact_echanges_mail_contact_idx').on(t.instanceId, t.contactId),
+    instanceIsolation('contact_echanges_mail'),
+  ],
+);

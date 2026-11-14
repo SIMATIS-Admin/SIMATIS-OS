@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { creerAffaireContact, fetchRadar, type EtatRadar } from '../api.js';
+import { creerAffaireContact, fetchRadar, type AffaireRadar, type EtatRadar } from '../api.js';
+import { libelleLecture, useLectureEchanges } from './radar/useLectureEchanges.js';
 
 // `href` : la carte ouvre la fiche (les prospects du CRM en ont une, pas les fiches de la base).
 type Carte = {
@@ -23,6 +24,17 @@ const relance = (iso: string | null) => {
 };
 
 const etiquettesIcp = (tags: string[]) => tags.filter((t) => t.startsWith('icp '));
+
+// Une affaire du Pipeline rangée au Radar par la messagerie : sa carte ouvre la fiche de l'affaire.
+const carteAffaire =
+  (slug: string) =>
+  (a: AffaireRadar): Carte => ({
+    id: a.id,
+    titre: a.contact ?? a.titre,
+    detail: [a.entreprise, `affaire ${a.titre}`].filter(Boolean).join(' · '),
+    href: `#/${slug}/fiche/affaire/${a.id}`,
+  });
+const dontAffaires = (n: number) => `${n} affaire${n > 1 ? 's' : ''} du Pipeline sans rendez-vous`;
 
 const etapes = (slug: string, radar: EtatRadar, creerAffaire: (contactId: string) => void) => [
   {
@@ -61,18 +73,13 @@ const etapes = (slug: string, radar: EtatRadar, creerAffaire: (contactId: string
     id: 'contactes',
     titre: 'Contactés',
     aide:
-      radar.reprise.total > 0
-        ? `Touches envoyées, dont ${radar.reprise.total} affaire${radar.reprise.total > 1 ? 's' : ''} du Pipeline sans rendez-vous`
+      radar.reprise.contactes.total > 0
+        ? `Touches envoyées, dont ${dontAffaires(radar.reprise.contactes.total)} écrites sans réponse`
         : 'Une ou plusieurs touches envoyées',
-    total: radar.contactes.total + radar.reprise.total,
+    total: radar.contactes.total + radar.reprise.contactes.total,
     // Les affaires du Pipeline d'abord : ce sont des personnes déjà approchées, avec une fiche.
     cartes: [
-      ...radar.reprise.fiches.slice(0, 3).map((f): Carte => ({
-        id: f.id,
-        titre: f.nom,
-        detail: f.entreprise ? `${f.entreprise} · affaire en cours` : 'Affaire en cours',
-        href: `#/${slug}/fiche/contact/${f.id}`,
-      })),
+      ...radar.reprise.contactes.fiches.slice(0, 3).map(carteAffaire(slug)),
       ...radar.contactes.fiches.map((f): Carte => ({
         id: f.id,
         titre: f.nom,
@@ -85,14 +92,20 @@ const etapes = (slug: string, radar: EtatRadar, creerAffaire: (contactId: string
   {
     id: 'ont-repondu',
     titre: 'Ont répondu',
-    aide: 'À répondre depuis le Cockpit',
-    total: radar.ontRepondu.total,
-    cartes: radar.ontRepondu.fiches.map((f): Carte => ({
-      id: f.id,
-      titre: f.nom,
-      detail: f.entreprise,
-      icp: etiquettesIcp(f.tags),
-    })),
+    aide:
+      radar.reprise.ontRepondu.total > 0
+        ? `À répondre depuis le Cockpit, dont ${dontAffaires(radar.reprise.ontRepondu.total)}`
+        : 'À répondre depuis le Cockpit',
+    total: radar.ontRepondu.total + radar.reprise.ontRepondu.total,
+    cartes: [
+      ...radar.reprise.ontRepondu.fiches.slice(0, 3).map(carteAffaire(slug)),
+      ...radar.ontRepondu.fiches.map((f): Carte => ({
+        id: f.id,
+        titre: f.nom,
+        detail: f.entreprise,
+        icp: etiquettesIcp(f.tags),
+      })),
+    ].slice(0, 5),
     lien: { href: `#/${slug}/cockpit`, libelle: 'Répondre depuis le Cockpit' },
   },
   {
@@ -140,6 +153,7 @@ export function Radar({ slug }: { slug: string }) {
       (r) => setRadar(r),
       (e: unknown) => setErreur(e instanceof Error ? e.message : String(e)),
     );
+  const { lecture, relire } = useLectureEchanges(slug, () => void recharger());
   useEffect(() => {
     let actif = true;
     fetchRadar(slug).then(
@@ -166,6 +180,19 @@ export function Radar({ slug }: { slug: string }) {
         <a className="link" href={`#/${slug}/bases`}>
           Voir la base
         </a>
+      </p>
+      <p className="small muted">
+        Les affaires du Pipeline sans rendez-vous y sont rangées d’après la messagerie : écrites
+        sans réponse dans « Contactés », avec une réponse dans « Ont répondu ».{' '}
+        {libelleLecture(lecture)}
+        {lecture && lecture.etat !== 'en_cours' && (
+          <>
+            {' · '}
+            <button className="lien" onClick={() => void relire()}>
+              Relire la messagerie
+            </button>
+          </>
+        )}
       </p>
       {info && (
         <p className="small" role="status">
