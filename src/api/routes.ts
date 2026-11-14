@@ -915,9 +915,13 @@ export function registerApi(
   // Présentation terminée : le support quitte l'OS (le deck claude.ai reste l'archive).
   app.delete<{ Params: { slug: string; deck: string } }>(
     '/api/i/:slug/cours/:deck',
-    onInstance<{ Params: { slug: string; deck: string } }>(async (_i, request, reply) => {
+    onInstance<{ Params: { slug: string; deck: string } }>(async (i, request, reply) => {
       try {
         await supprimerDeck(request.params.deck);
+        // Le texte et le PDF de la restitution gardés dans le projet partent avec le support.
+        for (const projet of await listProjets(db, i))
+          if (projet.supportId === request.params.deck)
+            await purgerDiapositivesRestitution(db, i, projet.id);
         return reply.code(204).send();
       } catch (error) {
         if (error instanceof SupportIntrouvable)
