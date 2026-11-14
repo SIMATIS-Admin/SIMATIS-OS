@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { documentSlide, incorporerImages, lireSlideHtml } from './html.js';
+import { documentImpression, documentSlide, incorporerImages, lireSlideHtml } from './html.js';
 
 describe('lireSlideHtml', () => {
   const SOURCE = `<section id="a" class="s"><h2>Un titre</h2><p>Texte</p>
@@ -51,5 +51,29 @@ describe('documentSlide', () => {
   it('ne laisse pas une feuille de style fermer sa balise pour injecter du HTML', () => {
     const d = documentSlide('<section/>', 'a{}</style><script>alert(1)</script>', []);
     expect(d).not.toContain('</style><script>');
+  });
+});
+
+describe('documentImpression', () => {
+  it('met chaque slide sur une page de 1920 x 1080, fonds et couleurs imprimés', () => {
+    const d = documentImpression(
+      ['<section>a</section>', '<section>b</section>'],
+      'section{color:red}',
+      ['https://fonts.googleapis.com/css2?family=Manrope'],
+    );
+    expect(d).toContain('@page{size:1920px 1080px;margin:0}');
+    expect(d).toContain('print-color-adjust:exact');
+    expect(d.match(/class="pg-impr"/g)).toHaveLength(2);
+    expect(d).toContain(
+      '<div class="pg-impr"><section>a</section></div><div class="pg-impr"><section>b</section></div>',
+    );
+    expect(d).toContain('section{color:red}');
+    expect(d).toContain('family=Manrope');
+    expect(d).toContain('h1,h2,h3,p,ul,ol,li{margin:0}');
+  });
+  it('ne laisse pas une feuille de style fermer sa balise', () => {
+    expect(documentImpression(['<section/>'], 'a{}</style><script>x</script>', [])).not.toContain(
+      '</style><script>',
+    );
   });
 });
