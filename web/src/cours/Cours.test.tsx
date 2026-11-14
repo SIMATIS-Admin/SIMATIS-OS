@@ -192,31 +192,22 @@ describe('Lecteur de supports', () => {
     expect(zone.value).toBe('b');
   });
 
-  it('passe en plein écran au bouton et à la touche F, et suit la sortie du navigateur', async () => {
+  it('passe en plein écran au bouton et à la touche F, sans quitter le cadre de l’OS', async () => {
     const basculer = vi.fn();
-    const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+    const requestFullscreen = vi.fn();
     HTMLElement.prototype.requestFullscreen = requestFullscreen;
     try {
-      const { rerender } = render(
+      render(
         <ModePresentationContext.Provider value={{ actif: false, basculer }}>
           <Cours slug="simatis" deck="exemple-fictif" />
         </ModePresentationContext.Provider>,
       );
       await screen.findByRole('heading', { name: /Bonjour/ });
       fireEvent.click(screen.getByRole('button', { name: 'Plein écran' }));
-      expect(basculer).toHaveBeenCalledTimes(1);
-      expect(requestFullscreen).toHaveBeenCalledTimes(1);
       fireEvent.keyDown(document, { key: 'f' });
-      expect(requestFullscreen).toHaveBeenCalledTimes(2);
-      // Le navigateur quitte le plein écran (Échap) alors que le mode présentation est actif.
-      rerender(
-        <ModePresentationContext.Provider value={{ actif: true, basculer }}>
-          <Cours slug="simatis" deck="exemple-fictif" />
-        </ModePresentationContext.Provider>,
-      );
-      basculer.mockClear();
-      fireEvent(document, new Event('fullscreenchange'));
-      expect(basculer).toHaveBeenCalledTimes(1);
+      expect(basculer).toHaveBeenCalledTimes(2);
+      // Le plein écran du navigateur masquerait la colonne de gauche de l'OS.
+      expect(requestFullscreen).not.toHaveBeenCalled();
     } finally {
       delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
     }

@@ -85,6 +85,8 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   // Relire le support après un enregistrement, sans quitter la slide.
   const [rechargement, setRechargement] = useState(0);
   const racine = useRef<HTMLDivElement>(null);
+  // Plein écran = mode présentation de l'OS : barre du haut et console masquées, colonne de gauche
+  // conservée (Échap en sort).
   const { actif, basculer } = useModePresentation();
 
   useEffect(() => {
@@ -168,16 +170,6 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   const slides = modules[m]?.slides ?? [];
   const s = Math.min(pos.s, Math.max(0, slides.length - 1));
 
-  // Plein écran : le navigateur plein écran et le mode présentation de l'OS (sans barre ni console)
-  // vont ensemble ; sans plein écran possible, le mode présentation seul suffit.
-  const pleinEcran = useCallback(() => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-      return;
-    }
-    basculer();
-    if (!actif) void racine.current?.requestFullscreen?.();
-  }, [actif, basculer]);
   const aller = useCallback((suivant: Position) => {
     setPos(suivant);
     const base = location.hash.split('?')[0]!;
@@ -210,23 +202,14 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
       else if (e.key === 'n' || e.key === 'N') setNotes((v) => !v);
       else if (e.key === '?') setAide((v) => !v);
       else if (e.key === 'e' || e.key === 'E') setEdition((v) => !v);
-      else if (e.key === 'f' || e.key === 'F') pleinEcran();
+      else if (e.key === 'f' || e.key === 'F') basculer();
       else if (e.key === 'Escape') setAide(false);
       else return;
       e.preventDefault();
     };
     document.addEventListener('keydown', touche);
     return () => document.removeEventListener('keydown', touche);
-  }, [etat.statut, suivante, precedente, aller, m, modules.length, pleinEcran]);
-
-  // Échap (ou la sortie du navigateur) quitte le plein écran : le cadre de l'OS revient avec lui.
-  useEffect(() => {
-    const synchroniser = () => {
-      if (!document.fullscreenElement && actif) basculer();
-    };
-    document.addEventListener('fullscreenchange', synchroniser);
-    return () => document.removeEventListener('fullscreenchange', synchroniser);
-  }, [actif, basculer]);
+  }, [etat.statut, suivante, precedente, aller, m, modules.length, basculer]);
 
   // Une fois présenté, le support quitte l'OS : le deck publié (ou son PDF) reste l'archive.
   const terminer = async () => {
@@ -422,7 +405,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
         >
           →
         </button>
-        <button className="btn sm" type="button" aria-pressed={actif} onClick={pleinEcran}>
+        <button className="btn sm" type="button" aria-pressed={actif} onClick={basculer}>
           Plein écran
         </button>
         <button
