@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ModePresentationContext } from '../shell/modePresentation.js';
 import { Cours, CoursListe } from './Cours.js';
 
 const api = vi.hoisted(() => ({
@@ -189,6 +190,36 @@ describe('Lecteur de supports', () => {
     fireEvent.keyDown(zone, { key: 's', ctrlKey: true });
     expect(await screen.findByText(/a changé depuis son ouverture/)).toBeTruthy();
     expect(zone.value).toBe('b');
+  });
+
+  it('passe en plein écran au bouton et à la touche F, et suit la sortie du navigateur', async () => {
+    const basculer = vi.fn();
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+    HTMLElement.prototype.requestFullscreen = requestFullscreen;
+    try {
+      const { rerender } = render(
+        <ModePresentationContext.Provider value={{ actif: false, basculer }}>
+          <Cours slug="simatis" deck="exemple-fictif" />
+        </ModePresentationContext.Provider>,
+      );
+      await screen.findByRole('heading', { name: /Bonjour/ });
+      fireEvent.click(screen.getByRole('button', { name: 'Plein écran' }));
+      expect(basculer).toHaveBeenCalledTimes(1);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+      fireEvent.keyDown(document, { key: 'f' });
+      expect(requestFullscreen).toHaveBeenCalledTimes(2);
+      // Le navigateur quitte le plein écran (Échap) alors que le mode présentation est actif.
+      rerender(
+        <ModePresentationContext.Provider value={{ actif: true, basculer }}>
+          <Cours slug="simatis" deck="exemple-fictif" />
+        </ModePresentationContext.Provider>,
+      );
+      basculer.mockClear();
+      fireEvent(document, new Event('fullscreenchange'));
+      expect(basculer).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
+    }
   });
 
   it('affiche l’aide des raccourcis à la touche ?', async () => {
