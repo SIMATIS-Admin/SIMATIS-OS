@@ -228,6 +228,48 @@ async function sessionsCodex(
   return { unites, jauges, anomalies };
 }
 
+// Limites du schéma de l'OS : un seul champ trop long ferait refuser tout le lot, à chaque passage.
+const LIMITES = { id: 200, sujet: 200, branche: 200, titre: 300, cwd: 1000 } as const;
+const borne = (v: string | null, n: number) => (v && v.length > n ? v.slice(0, n) : v);
+
+function borner(s: SessionReleve): SessionReleve {
+  return {
+    ...s,
+    id: s.id.slice(0, LIMITES.id),
+    sujet: s.sujet.slice(0, LIMITES.sujet),
+    branche: borne(s.branche, LIMITES.branche),
+    titre: borne(s.titre, LIMITES.titre),
+    cwd: borne(s.cwd, LIMITES.cwd),
+  };
+}
+
+// Deux fichiers pour une même session (Codex reprise) : une seule unité, cumuls additionnés.
+// Deux lignes de même clé dans un lot feraient échouer l'enregistrement côté OS.
+function fusionner(unites: Unite[]): Unite[] {
+  const parId = new Map<string, Unite>();
+  for (const u of unites) {
+    const session = borner(u.session);
+    const cumuls = u.cumuls.map((c) => ({ ...c, sessionId: session.id }));
+    const deja = parId.get(session.id);
+    if (!deja) {
+      parId.set(session.id, { session, cumuls });
+      continue;
+    }
+    if (session.debut < deja.session.debut) deja.session.debut = session.debut;
+    for (const c of cumuls) {
+      const meme = deja.cumuls.find((d) => d.heure === c.heure && d.modele === c.modele);
+      if (!meme) deja.cumuls.push(c);
+      else {
+        meme.entree += c.entree;
+        meme.sortie += c.sortie;
+        meme.cacheEcriture += c.cacheEcriture;
+        meme.cacheLecture += c.cacheLecture;
+      }
+    }
+  }
+  return [...parId.values()];
+}
+
 function lots(unites: Unite[]): Unite[][] {
   const resultat: Unite[][] = [];
   let lot: Unite[] = [];
@@ -266,7 +308,9 @@ export async function tourConso(
     cumuls: unites.flatMap((u) => u.cumuls),
     jauges,
   });
-  const envois: Releve[] = lots([...claude.unites, ...codex.unites]).map((l) => corps(l, []));
+  const envois: Releve[] = lots(fusionner([...claude.unites, ...codex.unites])).map((l) =>
+    corps(l, []),
+  );
   for (let i = 0; i < codex.jauges.length; i += MAX_PAR_ENVOI)
     envois.push(corps([], codex.jauges.slice(i, i + MAX_PAR_ENVOI)));
   // Même sans rien de neuf, un envoi dit à l'OS que le relevé est vivant.

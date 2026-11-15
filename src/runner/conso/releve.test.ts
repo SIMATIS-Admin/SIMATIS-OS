@@ -137,6 +137,41 @@ describe('tourConso', () => {
   });
 });
 
+describe('robustesse du relevé', () => {
+  it('un titre trop long est tronqué au lieu de bloquer le relevé', async () => {
+    const projet = path.join(dossiers.claude, '-tmp-projet-fictif');
+    const sid = 'eeeeeeee-0000-4000-8000-000000000005';
+    await writeFile(
+      path.join(projet, `${sid}.jsonl`),
+      ligneAssistant(sid, '2026-11-10T15:00:00.000Z', 'msg_long', 'claude-desktop') +
+        '\n' +
+        JSON.stringify({ type: 'custom-title', customTitle: 'T'.repeat(400), sessionId: sid }) +
+        '\n',
+    );
+    const s = fauxServeur();
+    await tourConso(opts(s.fetch), { depuis: new Date(Date.now() - 3_600_000) }, dossiers, sansPr);
+    const session = s.envois.flatMap((e) => e.sessions).find((x) => x.id === `claude:${sid}`);
+    expect(session?.sujet.length).toBeLessThanOrEqual(200);
+    expect(session?.titre?.length).toBeLessThanOrEqual(300);
+  });
+
+  it('une session Codex répartie sur deux fichiers n’est envoyée qu’une fois', async () => {
+    const jour = path.join(dossiers.codex, '2026', '11', '10');
+    await writeFile(
+      path.join(jour, 'rollout-2026-11-10T13-00-00-reprise.jsonl'),
+      await readFile('test/fixtures/conso-ia/codex.jsonl', 'utf8'),
+    );
+    const s = fauxServeur();
+    await tourConso(opts(s.fetch), { depuis: new Date(Date.now() - 3_600_000) }, dossiers, sansPr);
+    const ids = s.envois.flatMap((e) => e.sessions).map((x) => x.id);
+    expect(ids.filter((id) => id.startsWith('chatgpt:'))).toHaveLength(1);
+    const cumuls = s.envois
+      .flatMap((e) => e.cumuls)
+      .filter((c) => c.sessionId.startsWith('chatgpt:'));
+    expect(new Set(cumuls.map((c) => `${c.heure}|${c.modele}`)).size).toBe(cumuls.length);
+  });
+});
+
 describe('classement et sujet', () => {
   it('classe les outils', () => {
     expect(
