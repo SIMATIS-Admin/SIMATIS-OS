@@ -97,27 +97,13 @@ describe('Diagnostics : écran fusionné', () => {
     expect(screen.queryByRole('heading', { name: /Outils/ })).toBeNull();
   });
 
-  it('propose la présentation du diagnostic dans la barre', async () => {
+  it('ouvre les supports (présentations SIMATIS, Diagnostic, Test VMA) depuis la barre', async () => {
     charger([entreprise(1)], [diagPour(1)]);
     render(<Diagnostics slug="demo" />);
-    await screen.findByText('Entreprise Fictive A');
-    const lien = screen.getByRole('link', { name: 'Diagnostic d’endurance commerciale' });
-    expect(lien.getAttribute('href')).toBe('#/demo/presentation-diagnostic');
-  });
-
-  it('ouvre la présentation de SIMATIS depuis la barre d’outils', async () => {
-    charger([entreprise(1)], [diagPour(1)]);
-    render(<Diagnostics slug="demo" />);
-    const lien = await screen.findByRole('link', { name: 'SIMATIS' });
-    expect(lien.getAttribute('href')).toBe('#/demo/presentation-simatis');
-  });
-
-  it('ouvre la présentation du Test VMA depuis la barre d’outils', async () => {
-    charger([entreprise(1)], [diagPour(1)]);
-    render(<Diagnostics slug="demo" />);
-    const lien = await screen.findByRole('link', { name: 'Test VMA' });
-    expect(lien.getAttribute('href')).toBe('#/demo/presentation-vma');
-    expect(screen.queryByRole('button', { name: /module d'essai/ })).toBeNull();
+    const lien = await screen.findByRole('link', { name: 'Supports' });
+    expect(lien.getAttribute('href')).toBe('#/demo/cours');
+    for (const ancien of ['SIMATIS', 'Test VMA', 'Diagnostic d’endurance commerciale'])
+      expect(screen.queryByRole('link', { name: ancien })).toBeNull();
   });
 
   it('donne le nom du diagnostic à l’en-tête quand il est ouvert, puis le rend', async () => {

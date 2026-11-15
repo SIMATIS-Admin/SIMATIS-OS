@@ -121,6 +121,10 @@ const ANCIENNES_VUES = new Map<string, string>([
   ['taches', 'agenda'],
   ['diagnostic', 'diagnostics'],
   ['tests-vma', 'diagnostics'],
+  // Les présentations SIMATIS, Diagnostic et Test VMA sont des supports permanents (15/11/2026).
+  ['presentation-simatis', 'cours'],
+  ['presentation-diagnostic', 'cours'],
+  ['presentation-vma', 'cours'],
 ]);
 export const vueCanonique = (view: string) => ANCIENNES_VUES.get(view) ?? view;
 

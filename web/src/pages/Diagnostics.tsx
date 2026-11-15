@@ -12,9 +12,6 @@ import {
   type TestVma,
 } from '../api.js';
 import { ContactsVma } from './diagnostics/ContactsVma.js';
-import logoDiagnostic from '../assets/diagnostic-endurance.svg';
-import logoSimatis from '../assets/simatis-mark.png';
-import logoVma from '../assets/test-vma.svg';
 import { Icon } from '../icons.js';
 import { ETAPES, ProjetVue } from './Diagnostic.js';
 import { ResultatComplet } from './diagnostics/ResultatComplet.js';
@@ -420,18 +417,10 @@ export function Diagnostics({
             <button className="btn" type="button" onClick={() => setContactsOuverts(true)}>
               Contacts
             </button>
-            {/* Hors du menu latéral : chaque présentation s'ouvre depuis cette barre. */}
-            <a className="btn dg-outil" href={`#/${slug}/presentation-vma`}>
-              <img src={logoVma} alt="" />
-              Test VMA
-            </a>
-            <a className="btn dg-outil" href={`#/${slug}/presentation-diagnostic`}>
-              <img src={logoDiagnostic} alt="" />
-              Diagnostic d’endurance commerciale
-            </a>
-            <a className="btn dg-outil" href={`#/${slug}/presentation-simatis`}>
-              <img src={logoSimatis} alt="" />
-              SIMATIS
+            {/* Les présentations SIMATIS, Diagnostic et Test VMA vivent dans Supports. */}
+            <a className="btn dg-outil" href={`#/${slug}/cours`}>
+              <Icon name="file" />
+              Supports
             </a>
             <div className="dg-menu">
               <button

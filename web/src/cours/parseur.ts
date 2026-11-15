@@ -16,7 +16,13 @@ export type Manifest = {
   css: string | null;
   polices: string[];
   parties: PartieHtml[];
+  // Présentation permanente (SIMATIS, Diagnostic, Test VMA) : jamais supprimée depuis le lecteur.
+  permanent: boolean;
+  // Bouton propre au support dans la barre du lecteur (les slides n'exécutent aucun script).
+  action: ActionSupport | null;
 };
+export const ACTIONS_SUPPORT = ['testeur-vma'] as const;
+export type ActionSupport = (typeof ACTIONS_SUPPORT)[number];
 export type PartieHtml = { titre: string; duree: number | null; slides: string[] };
 
 export const TYPES_SLIDE = ['titre', 'concept', 'demo', 'atelier', 'recap', 'piege'] as const;
@@ -70,6 +76,10 @@ export function lireManifest(brut: unknown): Manifest {
         )
       : [],
     parties,
+    permanent: m.permanent === true,
+    action: (ACTIONS_SUPPORT as readonly unknown[]).includes(m.action)
+      ? (m.action as ActionSupport)
+      : null,
     logo: /^img\/[A-Za-z0-9][A-Za-z0-9._-]*\.(png|jpe?g|webp|svg)$/i.test(logo) ? logo : null,
     couleur: couleur(m.couleur),
     accent: couleur(m.accent),

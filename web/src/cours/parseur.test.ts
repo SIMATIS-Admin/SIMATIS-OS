@@ -66,6 +66,16 @@ describe('lireManifest', () => {
       lireManifest({ logo: '../secret.png', couleur: 'red; background:url(x)', accent: '#12' }),
     ).toMatchObject({ logo: null, couleur: null, accent: null });
   });
+  it('lit une présentation permanente et son action, et ignore une action inconnue', () => {
+    expect(lireManifest({ permanent: true, action: 'testeur-vma' })).toMatchObject({
+      permanent: true,
+      action: 'testeur-vma',
+    });
+    expect(lireManifest({ permanent: 'oui', action: 'javascript:alert(1)' })).toMatchObject({
+      permanent: false,
+      action: null,
+    });
+  });
   it('tient un manifest vide ou invalide', () => {
     expect(lireManifest(null)).toMatchObject({
       titre: 'Support',

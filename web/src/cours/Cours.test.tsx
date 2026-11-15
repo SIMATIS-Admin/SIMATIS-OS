@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   fetchTexteCours: vi.fn(),
   lireSourceCours: vi.fn(),
   enregistrerSourceCours: vi.fn(),
+  ouvrirEspaceTesteurVma: vi.fn(),
   urlFichierCours: (slug: string, deck: string, f: string) => `/api/i/${slug}/cours/${deck}/${f}`,
 }));
 vi.mock('../api.js', () => api);
@@ -256,6 +257,41 @@ describe('Fin de présentation', () => {
   });
 });
 
+describe('Présentation permanente', () => {
+  const PERMANENT: Record<string, string> = {
+    'manifest.json': JSON.stringify({
+      titre: 'Présentation fictive',
+      format: 'html',
+      permanent: true,
+      action: 'testeur-vma',
+      parties: [{ titre: 'A', slides: ['slides/une.html'] }],
+    }),
+    'slides/une.html': '<section id="une"><h2>Première</h2></section>',
+  };
+  beforeEach(() => {
+    api.fetchTexteCours.mockImplementation((_s: string, _d: string, f: string) =>
+      f in PERMANENT ? Promise.resolve(PERMANENT[f]) : Promise.reject(new Error('introuvable')),
+    );
+    location.hash = '#/simatis/cours/deck/presentation-fictive';
+  });
+
+  it('ne propose pas de la supprimer', async () => {
+    render(<Cours slug="simatis" deck="presentation-fictive" />);
+    await screen.findByRole('button', { name: 'Notes' });
+    expect(screen.queryByRole('button', { name: 'Terminer et supprimer' })).toBeNull();
+  });
+
+  it('ouvre le module d’essai du Test VMA dans un nouvel onglet', async () => {
+    const onglet = { location: { href: '' }, close: vi.fn() };
+    vi.spyOn(window, 'open').mockReturnValue(onglet as unknown as Window);
+    api.ouvrirEspaceTesteurVma.mockResolvedValue({ lien: 'https://exemple.test/testeur' });
+    render(<Cours slug="simatis" deck="presentation-fictive" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Module d’essai' }));
+    await waitFor(() => expect(onglet.location.href).toBe('https://exemple.test/testeur'));
+    expect(api.ouvrirEspaceTesteurVma).toHaveBeenCalledWith('simatis');
+  });
+});
+
 describe('Lecteur, support en HTML libre', () => {
   const HTML: Record<string, string> = {
     'manifest.json': JSON.stringify({
@@ -349,11 +385,66 @@ describe('Archive PDF', () => {
 describe('Liste des supports', () => {
   it('propose chaque support, qui ouvre le lecteur', async () => {
     api.fetchDecksCours.mockResolvedValue([
-      { id: 'exemple-fictif', titre: 'Support fictif', soustitre: 'Pour les tests' },
+      {
+        id: 'exemple-fictif',
+        titre: 'Support fictif',
+        soustitre: 'Pour les tests',
+        permanent: false,
+        slides: null,
+        duree: null,
+      },
     ]);
     render(<CoursListe slug="simatis" />);
     const lien = await screen.findByRole('link', { name: /Support fictif/ });
     expect(lien.getAttribute('href')).toBe('#/simatis/cours/deck/exemple-fictif');
+  });
+
+  it('range les présentations permanentes en premier, avec leurs slides et leur durée', async () => {
+    api.fetchDecksCours.mockResolvedValue([
+      {
+        id: 'b-rdv',
+        titre: 'Restitution fictive',
+        soustitre: '',
+        permanent: false,
+        slides: 4,
+        duree: null,
+      },
+      {
+        id: 'a-pres',
+        titre: 'Présentation fictive',
+        soustitre: 'Générique',
+        permanent: true,
+        slides: 9,
+        duree: 15,
+      },
+    ]);
+    render(<CoursListe slug="simatis" />);
+    const titres = await screen.findAllByRole('heading', { level: 2 });
+    expect(titres.map((h) => h.textContent)).toEqual(['Présentations', 'Supports de rendez-vous']);
+    const liens = screen.getAllByRole('link');
+    expect(liens.map((l) => l.getAttribute('href'))).toEqual([
+      '#/simatis/cours/deck/a-pres',
+      '#/simatis/cours/deck/b-rdv',
+    ]);
+    expect(liens[0]!.textContent).toContain('9 slides · 15 min');
+    expect(liens[1]!.textContent).toContain('4 slides');
+  });
+
+  it('n’affiche pas un groupe vide', async () => {
+    api.fetchDecksCours.mockResolvedValue([
+      {
+        id: 'a-pres',
+        titre: 'Présentation fictive',
+        soustitre: '',
+        permanent: true,
+        slides: 1,
+        duree: null,
+      },
+    ]);
+    render(<CoursListe slug="simatis" />);
+    await screen.findByRole('link', { name: /Présentation fictive/ });
+    expect(screen.queryByRole('heading', { name: 'Supports de rendez-vous' })).toBeNull();
+    expect(screen.getByRole('link').textContent).toContain('1 slide');
   });
 
   it('dit quand aucun dossier n’est configuré', async () => {

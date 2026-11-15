@@ -46,7 +46,10 @@ describe('Supports : API', () => {
         titre: 'Deck HTML fictif',
         format: 'html',
         css: 'deck.css',
-        parties: [{ titre: 'Partie', slides: ['slides/une.html'] }],
+        parties: [
+          { titre: 'Partie', duree: 5, slides: ['slides/une.html'] },
+          { titre: 'Suite', duree: 3, slides: ['slides/une.html', 'slides/autre.html'] },
+        ],
       }),
     );
     await writeFile(path.join(dossier, 'exemple-html', 'deck.css'), 'section { color: red; }');
@@ -90,9 +93,49 @@ describe('Supports : API', () => {
     const r = await app.inject({ method: 'GET', url: base });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toEqual([
-      { id: 'exemple-fictif', titre: 'Support fictif', soustitre: 'Pour les tests' },
-      { id: 'exemple-html', titre: 'Deck HTML fictif', soustitre: '' },
+      {
+        id: 'exemple-fictif',
+        titre: 'Support fictif',
+        soustitre: 'Pour les tests',
+        permanent: false,
+        slides: null,
+        duree: null,
+      },
+      {
+        id: 'exemple-html',
+        titre: 'Deck HTML fictif',
+        soustitre: '',
+        permanent: false,
+        slides: 3,
+        duree: 8,
+      },
     ]);
+  });
+
+  it('garde une présentation permanente : listée comme telle, jamais supprimée', async () => {
+    await mkdir(path.join(dossier, 'presentation-fictive'), { recursive: true });
+    await writeFile(
+      path.join(dossier, 'presentation-fictive', 'manifest.json'),
+      JSON.stringify({
+        titre: 'Présentation fictive',
+        format: 'html',
+        permanent: true,
+        parties: [],
+      }),
+    );
+    const liste = (await app.inject({ method: 'GET', url: base })).json<{ id: string }[]>();
+    expect(liste.find((d) => d.id === 'presentation-fictive')).toEqual({
+      id: 'presentation-fictive',
+      titre: 'Présentation fictive',
+      soustitre: '',
+      permanent: true,
+      slides: 0,
+      duree: null,
+    });
+    const del = await app.inject({ method: 'DELETE', url: `${base}/presentation-fictive` });
+    expect(del.statusCode).toBe(409);
+    expect((await lire('presentation-fictive/manifest.json')).statusCode).toBe(200);
+    await rm(path.join(dossier, 'presentation-fictive'), { recursive: true, force: true });
   });
 
   it('sert le manifest, un module déclaré, un profil client et une image', async () => {
