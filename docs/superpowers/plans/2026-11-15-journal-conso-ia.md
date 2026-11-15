@@ -32,7 +32,7 @@
 
 ---
 
-### Tâche 1 : tables et migration
+### Task 1 — tables et migration
 
 **Fichiers :**
 - Créer : `src/ia/conso/schema.ts`, migration générée dans `drizzle/`
@@ -50,7 +50,7 @@
 - [ ] **Étape 2 :** lancer `npm run typecheck`. Attendu : vert.
 - [ ] **Étape 3 :** commit `feat(conso-ia): tables du journal de consommation IA`.
 
-### Tâche 2 : coût équivalent
+### Task 2 — coût équivalent
 
 **Fichiers :** créer `src/ia/conso/cout.ts`, `src/ia/conso/cout.test.ts`
 
@@ -73,7 +73,7 @@ Seuls les **rapports** comptent : le calibrage absorbe l'échelle. Pour chaque f
 - [ ] **Étape 3 :** implémenter.
 - [ ] **Étape 4 :** relancer. Attendu : PASS. Commit `feat(conso-ia): coût équivalent par modèle`.
 
-### Tâche 3 : calibrage (fonctions pures)
+### Task 3 — calibrage (fonctions pures)
 
 **Fichiers :** créer `src/ia/conso/calibrage.ts`, `src/ia/conso/calibrage.test.ts`
 
@@ -105,7 +105,7 @@ Règles :
   - `'estimé sous 20 points'`.
 - [ ] **Étape 2 :** lancer, vérifier FAIL. **Étape 3 :** implémenter. **Étape 4 :** PASS, commit `feat(conso-ia): calibrage des jauges`.
 
-### Tâche 4 : réception côté OS (relevé et lancements)
+### Task 4 — réception côté OS (relevé et lancements)
 
 **Fichiers :** créer `src/ia/conso/service.ts`, `src/ia/conso/service.test.ts` ; modifier `src/routines/runner-api.ts` (deux routes authentifiées comme les autres)
 
@@ -141,7 +141,7 @@ Règles d'`enregistrerReleve` :
   - `'la route refuse sans jeton runner'`.
 - [ ] **Étape 2 :** FAIL. **Étape 3 :** implémenter. **Étape 4 :** PASS, commit `feat(conso-ia): réception du relevé et des lancements`.
 
-### Tâche 5 : historique des jauges du collecteur
+### Task 5 — historique des jauges du collecteur
 
 **Fichiers :** créer `src/ia/conso/jauges.ts`, `src/ia/conso/jauges.test.ts` ; modifier `src/app.ts` (minuteur de 60 s dans `onListen`, sur le modèle de `timerSignaux`, arrêté dans `onClose`)
 
@@ -152,7 +152,7 @@ Règles d'`enregistrerReleve` :
   - `'ignore un fournisseur indisponible'`.
 - [ ] **Étape 2 :** FAIL. **Étape 3 :** implémenter + minuteur (`lireLimitesIA(limitesIAFile)` puis `noterJauges`). **Étape 4 :** PASS, commit `feat(conso-ia): historique des jauges`.
 
-### Tâche 6 : lignes de la console
+### Task 6 — lignes de la console
 
 **Fichiers :**
 - Créer : `src/ia/conso/console.ts`, `src/ia/conso/console.test.ts`
@@ -188,7 +188,7 @@ Règles :
   - `'les lignes conso ne chassent pas les lignes des routines'` : 300 lignes de journal et 50 lignes conso → les 350 sont présentes.
 - [ ] **Étape 2 :** FAIL. **Étape 3 :** implémenter. **Étape 4 :** PASS. Vérifier dans le navigateur (preview, console d'une instance réelle avec des données insérées en base locale) que la ligne tient sur une ligne. Commit `feat(conso-ia): lignes de consommation dans la console`.
 
-### Tâche 7 : archive quotidienne et purge
+### Task 7 — archive quotidienne et purge
 
 **Fichiers :** créer `src/ia/conso/archive.ts`, `src/ia/conso/archive.test.ts` ; modifier `src/app.ts` (minuteur de 10 min)
 
@@ -208,7 +208,7 @@ Règles :
   - `'purge au-delà de 13 mois et de 90 jours'`.
 - [ ] **Étape 2 :** FAIL. **Étape 3 :** implémenter. **Étape 4 :** PASS, commit `feat(conso-ia): archive quotidienne`.
 
-### Tâche 8 : lecture des fichiers de session (exécuteur, fonctions pures)
+### Task 8 — lecture des fichiers de session (exécuteur, fonctions pures)
 
 **Fichiers :** créer `src/runner/conso/lecture.ts`, `src/runner/conso/lecture.test.ts` et les fixtures fictives `test/fixtures/conso-ia/claude-code.jsonl`, `cowork.jsonl`, `codex.jsonl`
 
@@ -243,7 +243,7 @@ Règles :
   - `'Codex : convertit les cumuls en écarts et lit les jauges'`.
 - [ ] **Étape 2 :** FAIL. **Étape 3 :** implémenter. **Étape 4 :** PASS, commit `feat(conso-ia): lecture des fichiers de session`.
 
-### Tâche 9 : le relevé dans l'exécuteur
+### Task 9 — le relevé dans l'exécuteur
 
 **Fichiers :** créer `src/runner/conso/releve.ts`, `src/runner/conso/releve.test.ts` ; modifier `src/runner/runner.ts` (`main` : un tour toutes les 5 min, plus un premier passage au démarrage sur 30 jours)
 
@@ -281,7 +281,7 @@ Règles :
   - `'n'avance pas après un échec d'envoi'`.
 - [ ] **Étape 2 :** FAIL. **Étape 3 :** implémenter et brancher dans `main`. **Étape 4 :** PASS, commit `feat(conso-ia): relevé des sessions dans l'exécuteur`.
 
-### Tâche 10 : déclaration des lancements de l'OS
+### Task 10 — déclaration des lancements de l'OS
 
 **Fichiers :** modifier `src/runner/runner.ts` et `src/runner/runner.test.ts`
 
@@ -308,7 +308,7 @@ Dans `tourCodex`, **retirer `--no-session-persistence`**, pour que la session la
   - `'tourCodex ne passe plus --no-session-persistence'`.
 - [ ] **Étape 2 :** FAIL. **Étape 3 :** implémenter. **Étape 4 :** PASS, `npm run verify`, commit `feat(conso-ia): l'exécuteur déclare ses lancements`.
 
-### Tâche 11 : livraison et essai réel
+### Task 11 — livraison et essai réel
 
 - [ ] **Étape 1 :** PR vers `main`, revue de code, CI verte, merge.
 - [ ] **Étape 2 :** reconstruire l'image depuis `origin/main` (`git archive` → `docker build -t simatis-os-app` → `docker compose up -d --no-build app` → `curl localhost:4300/health`). Vérifier que la migration est appliquée (`\d ia_cumuls`).
