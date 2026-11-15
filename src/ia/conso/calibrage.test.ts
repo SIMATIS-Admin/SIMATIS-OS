@@ -30,6 +30,22 @@ describe('hausseParHeure', () => {
     expect(hausseParHeure(points, [H(10)]).get(H(10).getTime())).toBeNull();
   });
 
+  it('un relevé trop ancien avant l’heure ne mesure pas cette heure', () => {
+    const points: PointJauge[] = [
+      { at: H(6, 0), utilise: 10, reset },
+      { at: H(10, 55), utilise: 30, reset },
+    ];
+    expect(hausseParHeure(points, [H(10)]).get(H(10).getTime())).toBeNull();
+  });
+
+  it('un dernier relevé trop tôt dans l’heure ne la mesure pas', () => {
+    const points: PointJauge[] = [
+      { at: H(9, 55), utilise: 10, reset },
+      { at: H(10, 10), utilise: 12, reset },
+    ];
+    expect(hausseParHeure(points, [H(10)]).get(H(10).getTime())).toBeNull();
+  });
+
   it('sans relevé à un bout, null', () => {
     const points: PointJauge[] = [{ at: H(10, 30), utilise: 30, reset }];
     expect(hausseParHeure(points, [H(10)]).get(H(10).getTime())).toBeNull();

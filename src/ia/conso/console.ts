@@ -1,4 +1,4 @@
-import { and, gte, lte } from 'drizzle-orm';
+import { and, eq, gte, lte } from 'drizzle-orm';
 import type { Executor } from '../../db.js';
 import type { LigneConsole } from '../../console/service.js';
 import {
@@ -127,10 +127,14 @@ export async function lignesHeures(
     };
   });
   // Le « non attribué » ne concerne que Claude : côté ChatGPT, la jauge lue est celle de Codex,
-  // que le relevé voit en entier.
+  // que le relevé voit en entier. Seulement pour les heures que le relevé du Mac a entièrement
+  // couvertes : sinon une session pas encore relevée passerait pour du Chat.
   const c = calibrage.claude;
+  const [releve] = await db.select().from(iaReleve).where(eq(iaReleve.id, 'mac'));
+  const couvertJusqua = releve?.dernierPassage.getTime() ?? 0;
   for (const heure of heuresEntre(depuis, jusqua)) {
     const t = heure.getTime();
+    if (t + HEURE_MS > couvertJusqua) continue;
     const cout = c.couts.get(t) ?? 0;
     const na5 = nonAttribue(c.hausses5.get(t) ?? null, cout, c.l5);
     const naH = nonAttribue(c.haussesH.get(t) ?? null, cout, c.lh);
@@ -199,7 +203,7 @@ export async function lignesConso(db: Executor, maintenant: Date): Promise<Ligne
       texte: texteLigne(l),
     }),
   );
-  const [releve] = await db.select().from(iaReleve);
+  const [releve] = await db.select().from(iaReleve).where(eq(iaReleve.id, 'mac'));
   if (releve) {
     const muetDepuis = releve.dernierPassage.getTime() + RELEVE_MUET_MS;
     if (muetDepuis <= maintenant.getTime())

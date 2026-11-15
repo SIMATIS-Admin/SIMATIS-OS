@@ -118,6 +118,22 @@ describe('lignesConso', () => {
     expect(na?.at).toBe(h(6).toISOString());
   });
 
+  it('pas de non attribué pour une heure que le relevé n’a pas encore couverte', async () => {
+    await session(
+      t,
+      'a',
+      'PR #9',
+      [0, 1, 2, 3, 4, 5, 6].map((i) => [i, 1]),
+    );
+    const points: [Date, number][] = [[h(-1, 55), 0]];
+    for (let i = 0; i <= 6; i++) points.push([h(i, 55), 2 * (i + 1) + (i === 6 ? 5 : 0)]);
+    await jauges(t, points);
+    // Dernier passage du relevé au milieu de l'heure 6 : ses sessions ne sont peut-être pas toutes vues.
+    await t.app.db.update(iaReleve).set({ dernierPassage: h(6, 30) });
+    const lignes = await lignesConso(t.app.db, h(7, 10));
+    expect(lignes.some((l) => l.texte.includes('non attribué'))).toBe(false);
+  });
+
   it('signale un relevé muet depuis 15 minutes', async () => {
     await t.app.db.insert(iaReleve).values({
       id: 'mac',

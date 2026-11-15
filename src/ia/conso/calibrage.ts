@@ -10,31 +10,38 @@ const HEURE_MS = 3_600_000;
 const POINTS_PAR_BLOC = 3;
 const POINTS_FIABLES = 20;
 
-function dernierAvant(points: PointJauge[], limite: number): PointJauge | undefined {
-  let trouve: PointJauge | undefined;
-  for (const p of points) {
-    if (p.at.getTime() <= limite) trouve = p;
-    else break;
-  }
-  return trouve;
-}
-
 const memeReset = (a: Date | null, b: Date | null) =>
   // Le collecteur arrondit parfois l'heure de renouvellement : une minute d'écart reste la même fenêtre.
   (a === null && b === null) ||
   (a !== null && b !== null && Math.abs(a.getTime() - b.getTime()) < 60_000);
 
+// Un relevé n'encadre une heure que s'il en est proche : après une coupure du collecteur, la hausse
+// de plusieurs heures ne doit pas retomber sur une seule.
+const ECART_MAX_MS = 15 * 60_000;
+
 export function hausseParHeure(points: PointJauge[], heures: Date[]): Map<number, number | null> {
   const tries = [...points].sort((a, b) => a.at.getTime() - b.at.getTime());
   const resultat = new Map<number, number | null>();
-  for (const heure of heures) {
-    const debut = dernierAvant(tries, heure.getTime());
-    const fin = dernierAvant(tries, heure.getTime() + HEURE_MS - 1);
+  // Un seul parcours : les heures sont traitées dans l'ordre, l'index des relevés ne recule jamais.
+  const ordre = [...heures].sort((a, b) => a.getTime() - b.getTime());
+  let i = -1;
+  for (const heure of ordre) {
+    const t = heure.getTime();
+    while (i + 1 < tries.length && (tries[i + 1]?.at.getTime() ?? Infinity) <= t) i++;
+    const debut = i >= 0 ? tries[i] : undefined;
+    let j = i;
+    while (j + 1 < tries.length && (tries[j + 1]?.at.getTime() ?? Infinity) <= t + HEURE_MS - 1)
+      j++;
+    const fin = j >= 0 ? tries[j] : undefined;
+    const proches =
+      debut !== undefined &&
+      fin !== undefined &&
+      fin !== debut &&
+      t - debut.at.getTime() <= ECART_MAX_MS &&
+      t + HEURE_MS - fin.at.getTime() <= ECART_MAX_MS;
     const hausse =
-      debut && fin && fin !== debut && memeReset(debut.reset, fin.reset)
-        ? fin.utilise - debut.utilise
-        : null;
-    resultat.set(heure.getTime(), hausse !== null && hausse >= 0 ? hausse : null);
+      proches && memeReset(debut.reset, fin.reset) ? fin.utilise - debut.utilise : null;
+    resultat.set(t, hausse !== null && hausse >= 0 ? hausse : null);
   }
   return resultat;
 }
