@@ -47,6 +47,7 @@ import {
 import { entrerDansCrm, entrerRepondants } from './vers-crm.js';
 import { listerSuspectsHorsCrm } from './suspects.js';
 import { etatRadar } from './radar.js';
+import { contactsAvecDiagnostic } from '../crm/echanges.js';
 import { affairesAuRadar } from '../crm/pipeline.js';
 import { searchContacts } from '../crm/service.js';
 import { exporterWaalaxy } from './waalaxy.js';
@@ -364,7 +365,9 @@ export function registerBaseVivanteRoutes(
     '/api/i/:slug/radar',
     surInstance(async (instanceId) => {
       const crm = await searchContacts(db, instanceId);
-      const prospects = crm.filter((c) => c.statut === 'prospect');
+      // Un contact avec diagnostic est allé plus loin que le Radar, même si ses affaires sont closes.
+      const diagnostics = await contactsAvecDiagnostic(db, instanceId);
+      const prospects = crm.filter((c) => c.statut === 'prospect' && !diagnostics.has(c.id));
       return {
         ...(await etatRadar(db, instanceId)),
         // Reprise de l'existant : les affaires ouvertes sans rendez-vous que la messagerie range

@@ -1,9 +1,11 @@
 import Fastify from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
+import { diagnosticProjets } from '../diagnostic/schema.js';
 import {
   contactEchangesMail,
   contacts,
+  entreprises,
   opportunites,
   rdvContacts,
   rendezVous,
@@ -100,5 +102,48 @@ describe('GET /radar', () => {
     expect(corps.reprise.ontRepondu).toMatchObject({ total: 1, fiches: [{ titre: 'Répondue' }] });
     const apres = await t.owner.pool.query('select count(*)::int as n from opportunites');
     expect(apres.rows[0]).toEqual(avant.rows[0]);
+  });
+
+  it('ne garde pas dans RDV accepté un contact avec diagnostic, même si ses affaires sont closes', async () => {
+    const inst = await createInstance(t.owner.db, { slug: 'radar-diag', nom: 'R', type: 'propre' });
+    await withInstance(t.owner.db, inst.id, async (tx) => {
+      const [societe] = await tx
+        .insert(entreprises)
+        .values({ instanceId: inst.id, nom: 'Atelier Fictif' })
+        .returning();
+      const [avecDiag, sansDiag] = await tx
+        .insert(contacts)
+        .values([
+          { instanceId: inst.id, nom: 'Avec Diag', entrepriseId: societe!.id },
+          { instanceId: inst.id, nom: 'Sans Diag' },
+        ])
+        .returning();
+      await tx.insert(opportunites).values({
+        instanceId: inst.id,
+        titre: 'Perdue',
+        etape: 'x',
+        contactId: avecDiag!.id,
+        clos: 'perdu',
+      });
+      const [rdv] = await tx
+        .insert(rendezVous)
+        .values({ instanceId: inst.id, eventId: 'os:diag', statut: 'rdv' })
+        .returning();
+      await tx.insert(rdvContacts).values([
+        { instanceId: inst.id, rendezVousId: rdv!.id, contactId: avecDiag!.id },
+        { instanceId: inst.id, rendezVousId: rdv!.id, contactId: sansDiag!.id },
+      ]);
+      await tx.insert(diagnosticProjets).values({
+        instanceId: inst.id,
+        nom: 'Diag fictif',
+        activite: 'services',
+        entrepriseId: societe!.id,
+      });
+    });
+    const app = Fastify();
+    registerBaseVivanteRoutes(app, { db: t.app.db });
+    const r = await app.inject({ method: 'GET', url: '/api/i/radar-diag/radar' });
+    const corps = r.json<{ rdvAccepte: { total: number; fiches: { nom: string }[] } }>();
+    expect(corps.rdvAccepte).toMatchObject({ total: 1, fiches: [{ nom: 'Sans Diag' }] });
   });
 });

@@ -10,7 +10,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
-import { classementAffaire, type Classement } from './echanges.js';
+import { classementAffaire, diagnosticDeLAffaire, type Classement } from './echanges.js';
 import { assurerLiensPrincipaux } from './liens.js';
 import { createInCrm, CrmIndisponible, likePattern } from './service.js';
 
@@ -117,6 +117,7 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
           where ${rdvDeLAffaire} and r.debut >= ${maintenant})`,
         aUnRdv: sql<boolean>`exists (select 1 from rendez_vous r where ${rdvDeLAffaire})`,
         classement: classementAffaire,
+        diagnostic: diagnosticDeLAffaire,
       })
       .from(opportunites)
       .leftJoin(
@@ -148,6 +149,22 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
           .groupBy(taches.opportuniteId)
       ).map((r) => [r.opp, r.echeance]),
     );
+    // Un diagnostic réalisé place l'affaire au moins en Qualification, dans l'OS seulement : une
+    // étape plus basse du CRM est affichée en Qualification, sans rien y écrire.
+    const rang = new Map(src.etapes.map((e, k) => [e.id, k]));
+    const qualification = src.etapes.find((e) =>
+      `${e.id} ${e.label}`
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase()
+        .includes('qualif'),
+    )?.id;
+    const etapeVue = (etape: string, diagnostic: boolean) =>
+      diagnostic &&
+      qualification !== undefined &&
+      (rang.get(etape) ?? Infinity) < (rang.get(qualification) ?? -1)
+        ? qualification
+        : etape;
     return {
       source: src.source,
       ecrit: src.ecrit,
@@ -159,15 +176,20 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
       ),
       inactiviteJours: instance.config.inactiviteJours ?? INACTIVITE_DEFAUT,
       opportunites: opps.map(
-        ({ derniereActivite, creeLe, prochainRdv, aUnRdv, classement, ...o }) => {
+        ({ derniereActivite, creeLe, prochainRdv, aUnRdv, classement, diagnostic, ...o }) => {
           const prochaine = o.clos ? null : (prochaines.get(o.id) ?? null);
           const depuis = derniereActivite ?? creeLe;
+          const etape = o.clos ? o.etape : etapeVue(o.etape, diagnostic);
           return {
             ...o,
+            etape,
+            // L'étape du CRM quand l'OS affiche l'affaire plus haut (diagnostic réalisé).
+            etapeCrm: etape === o.etape ? null : o.etape,
+            diagnostic,
             derniereActivite: derniereActivite?.toISOString() ?? null,
-            // Ouverte sans rendez-vous : une personne encore en prospection, aussi dans le Radar.
-            sansRdv: !o.clos && !aUnRdv,
-            // Sans rendez-vous et déjà écrite : l'affaire est suivie dans le Radar, plus au Pipeline.
+            // Ouverte sans rendez-vous ni diagnostic : une personne encore en prospection.
+            sansRdv: !o.clos && !aUnRdv && !diagnostic,
+            // Sans rendez-vous ni diagnostic, et déjà approchée : suivie dans le Radar, plus ici.
             radar: !o.clos && !aUnRdv ? classement : null,
             prochainRdv: o.clos || !prochainRdv ? null : new Date(prochainRdv).toISOString(),
             prochaine: prochaine
