@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -6,6 +6,8 @@ import { argumentsCodex } from './codex-mcp.js';
 import {
   argumentsClaude,
   lancementCodexRoutine,
+  tour,
+  tourCodex,
   tourEchanges,
   PARTAGE_OUTILS_LECTURE,
   WISPR_OUTILS_LECTURE,
@@ -226,5 +228,141 @@ describe('tours du runner avec le moteur choisi', () => {
       lancer: () => Promise.resolve(2),
     });
     expect((fins[0] as { erreur: string }).erreur).toContain("Codex s'est arrêté");
+  });
+});
+
+describe('déclaration des lancements (journal de consommation IA)', () => {
+  const demandeRoutine: Demande = {
+    id: '00000000-0000-4000-8000-0000000000d1',
+    instance: 'fictif',
+    nom: 'Atelier Fictif',
+    routine: 'inbox',
+    libelle: 'Routine fictive',
+    skill: 'skill-fictive',
+    cerveau: false,
+  };
+  const serveur = (moteur: string, statutLancement = 200) => {
+    const lancements: Record<string, unknown>[] = [];
+    const fetch = ((url: string, init?: RequestInit) => {
+      const chemin = url.replace('http://os.test', '');
+      if (chemin === '/api/runner/lancements') {
+        lancements.push(
+          JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<string, unknown>,
+        );
+        return Promise.resolve(Response.json({ id: 'l1' }, { status: statutLancement }));
+      }
+      if (chemin === '/api/runner/moteur') return Promise.resolve(Response.json({ moteur }));
+      if (chemin === '/api/runner/demandes')
+        return Promise.resolve(Response.json([demandeRoutine]));
+      if (chemin.endsWith('/demarrer'))
+        return Promise.resolve(Response.json({ tokenId: 't1', token: 'jeton-fictif' }));
+      return Promise.resolve(Response.json({ ok: true }));
+    }) as unknown as typeof globalThis.fetch;
+    return { lancements, fetch };
+  };
+  const options = (
+    fetch: typeof globalThis.fetch,
+    lances: { commande: string; args: string[] }[],
+  ) => ({
+    base: 'http://os.test',
+    token: 'runner',
+    claude: 'claude-fictif',
+    codex: 'codex-fictif',
+    fetch,
+    poste: () => Promise.resolve({ nom: 'poste-fictif', claude: 'x', skills: ['skill-fictive'] }),
+    lancer: (commande: string, args: string[]) => {
+      lances.push({ commande, args });
+      return Promise.resolve(0);
+    },
+  });
+
+  it('une routine Claude part avec --session-id et est déclarée', async () => {
+    const s = serveur('claude');
+    const lances: { commande: string; args: string[] }[] = [];
+    await tour(options(s.fetch, lances));
+    const args = lances[0]?.args ?? [];
+    const id = args[args.indexOf('--session-id') + 1];
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(s.lancements).toEqual([
+      { moteur: 'claude', sessionId: id, sujet: 'Routine Routine fictive · Atelier Fictif' },
+    ]);
+  });
+
+  it('une routine Codex est déclarée avec son cwd', async () => {
+    const s = serveur('codex');
+    const lances: { commande: string; args: string[] }[] = [];
+    const racine = await mkdtemp(path.join(tmpdir(), 'faux-home-'));
+    const ancien = process.env.HOME;
+    await mkdir(path.join(racine, '.claude', 'skills', 'skill-fictive'), { recursive: true });
+    await writeFile(path.join(racine, '.claude', 'skills', 'skill-fictive', 'SKILL.md'), 'Étapes.');
+    process.env.HOME = racine;
+    try {
+      await tour(options(s.fetch, lances));
+    } finally {
+      process.env.HOME = ancien;
+      await rm(racine, { recursive: true, force: true });
+    }
+    expect(lances[0]?.commande).toBe('codex-fictif');
+    expect(s.lancements[0]).toMatchObject({
+      moteur: 'codex',
+      sujet: 'Routine Routine fictive · Atelier Fictif',
+    });
+    expect(typeof s.lancements[0]?.cwd).toBe('string');
+  });
+
+  it('une panne de la déclaration n’empêche pas la routine', async () => {
+    const s = serveur('claude', 500);
+    const lances: { commande: string; args: string[] }[] = [];
+    await tour(options(s.fetch, lances));
+    expect(lances).toHaveLength(1);
+  });
+
+  it('tourCodex ne passe plus --no-session-persistence et déclare la session', async () => {
+    const dossier = await mkdtemp(path.join(tmpdir(), 'faux-claude-'));
+    const trace = path.join(dossier, 'args.txt');
+    const script = path.join(dossier, 'claude');
+    await writeFile(
+      script,
+      `#!/bin/sh\nprintf '%s\\n' "$@" > '${trace}'\ncat > /dev/null\necho '{"structured_output":{"ok":true}}'\n`,
+      { mode: 0o755 },
+    );
+    const lancements: Record<string, unknown>[] = [];
+    const fetch = ((url: string, init?: RequestInit) => {
+      const chemin = url.replace('http://os.test', '');
+      const corps = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<
+        string,
+        unknown
+      >;
+      if (chemin === '/api/runner/lancements') lancements.push(corps);
+      if (chemin === '/api/runner/codex' && !init?.body)
+        return Promise.resolve(
+          Response.json({
+            moteur: 'claude',
+            travail: {
+              id: '00000000-0000-4000-8000-0000000000c1',
+              demande: {
+                consigne: 'Consigne fictive',
+                entree: 'Entrée fictive',
+                schema: { type: 'object' },
+              },
+            },
+          }),
+        );
+      return Promise.resolve(Response.json({ ok: true }));
+    }) as unknown as typeof globalThis.fetch;
+    try {
+      await tourCodex(
+        { base: 'http://os.test', token: 'runner', claude: script, fetch },
+        'codex-fictif',
+      );
+      const args = (await readFile(trace, 'utf8')).split('\n');
+      expect(args).not.toContain('--no-session-persistence');
+      const id = args[args.indexOf('--session-id') + 1];
+      expect(lancements).toEqual([
+        { moteur: 'claude', sessionId: id, sujet: 'Recherche et enrichissement' },
+      ]);
+    } finally {
+      await rm(dossier, { recursive: true, force: true });
+    }
   });
 });
