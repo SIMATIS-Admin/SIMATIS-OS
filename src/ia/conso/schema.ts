@@ -118,3 +118,9 @@ export const iaArchive = pgTable(
     index('ia_archive_jour_idx').on(t.jour),
   ],
 );
+
+// Journées déjà figées dans l'archive, même vides : l'archive ne repasse jamais sur un jour.
+export const iaArchiveJours = pgTable('ia_archive_jours', {
+  jour: date('jour').primaryKey(),
+  archiveLe: timestamp('archive_le', { withTimezone: true }).notNull().defaultNow(),
+});
