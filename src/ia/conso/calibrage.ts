@@ -80,3 +80,21 @@ export function nonAttribue(hausse: number | null, cout: number, c: Coefficient)
   const reste = hausse - c.k * cout;
   return reste >= 1 ? Math.round(reste * 10) / 10 : 0;
 }
+
+// Sans historique de jauge, une seule lecture suffit à une première estimation : le % déjà
+// utilisé dans la fenêtre en cours, rapporté au coût observé depuis son début (début = heure de
+// renouvellement moins la durée de la fenêtre). La part non observée (le Chat) la gonfle un peu :
+// elle reste marquée « ≈ » jusqu'à ce que l'historique prenne le relais.
+export function coefficientInstantane(
+  point: PointJauge,
+  couts: Map<number, number>,
+  dureeMs: number,
+): Coefficient {
+  if (!point.reset || point.utilise <= 0) return null;
+  const debut = point.reset.getTime() - dureeMs;
+  let cout = 0;
+  for (const [heure, c] of couts)
+    if (heure + HEURE_MS > debut && heure <= point.at.getTime()) cout += c;
+  if (cout <= 0) return null;
+  return { k: point.utilise / cout, points: point.utilise, estime: true };
+}

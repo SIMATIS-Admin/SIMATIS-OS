@@ -71,11 +71,26 @@ describe('lignesConso', () => {
     expect(pr[0]?.texte).toMatch(/^IA-ext · Claude · Code · PR #7 · /);
   });
 
-  it('affiche les jetons tant qu’aucun coefficient n’existe', async () => {
+  it('sans historique, convertit en % depuis la fenêtre en cours', async () => {
+    await session(t, 'a', 'question', [[1, 3]]);
+    // Une seule lecture : 12 % utilisés, fenêtre 5 h ouverte à h(0), semaine ouverte avant.
+    await t.app.db.insert(iaJauges).values({
+      fournisseur: 'claude',
+      at: h(2),
+      source: 'collecteur',
+      utilise5h: 12,
+      utiliseHebdo: 6,
+      reset5h: h(5),
+      resetHebdo: new Date('2026-11-14T00:00:00.000Z'),
+    });
+    const [ligne] = await lignesConso(t.app.db, MAINTENANT);
+    expect(ligne?.texte).toBe('IA-ext · Claude · Code · question · L5 ≈ +12,0 % · LH ≈ +6,0 %');
+  });
+
+  it('jamais de jetons : sans aucune jauge, le % est en attente', async () => {
     await session(t, 'a', 'question', [[1, 3]]);
     const [ligne] = await lignesConso(t.app.db, MAINTENANT);
-    expect(ligne?.texte).toContain('≈ 1,5 M jetons éq.');
-    expect(ligne?.texte).not.toContain('L5');
+    expect(ligne?.texte).toBe('IA-ext · Claude · Code · question · L5 ? % · LH ? %');
   });
 
   it('marque ≈ sous 20 points', async () => {
