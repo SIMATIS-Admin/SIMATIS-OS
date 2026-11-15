@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { coefficient, hausseParHeure, nonAttribue, type PointJauge } from './calibrage.js';
+import {
+  coefficient,
+  coefficientInstantane,
+  hausseParHeure,
+  nonAttribue,
+  type PointJauge,
+} from './calibrage.js';
 
 const H = (h: number, m = 0) => new Date(Date.UTC(2026, 10, 10, h, m));
 const reset = H(20);
@@ -99,5 +105,37 @@ describe('nonAttribue', () => {
     expect(nonAttribue(4.5, 2, c)).toBe(0);
     expect(nonAttribue(null, 2, c)).toBeNull();
     expect(nonAttribue(4, 2, null)).toBeNull();
+  });
+});
+
+describe('coefficientInstantane', () => {
+  it('rapporte le % utilisé au coût consommé depuis le début de la fenêtre', () => {
+    // Fenêtre de 5 h qui se renouvelle à 15 h : elle a commencé à 10 h.
+    const point: PointJauge = { at: H(12, 30), utilise: 12, reset: H(15) };
+    const couts = new Map([
+      [H(9).getTime(), 100], // avant la fenêtre : ignoré
+      [H(10).getTime(), 2],
+      [H(11).getTime(), 3],
+      [H(12).getTime(), 1],
+      [H(13).getTime(), 50], // après le relevé : ignoré
+    ]);
+    expect(coefficientInstantane(point, couts, 5 * 3_600_000)).toEqual({
+      k: 2,
+      points: 12,
+      estime: true,
+    });
+  });
+
+  it('sans % utilisé, sans coût ou sans heure de renouvellement : null', () => {
+    const couts = new Map([[H(11).getTime(), 3]]);
+    expect(
+      coefficientInstantane({ at: H(12), utilise: 0, reset: H(15) }, couts, 5 * 3_600_000),
+    ).toBeNull();
+    expect(
+      coefficientInstantane({ at: H(12), utilise: 5, reset: null }, couts, 5 * 3_600_000),
+    ).toBeNull();
+    expect(
+      coefficientInstantane({ at: H(12), utilise: 5, reset: H(15) }, new Map(), 5 * 3_600_000),
+    ).toBeNull();
   });
 });

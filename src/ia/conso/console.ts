@@ -3,6 +3,7 @@ import type { Executor } from '../../db.js';
 import type { LigneConsole } from '../../console/service.js';
 import {
   coefficient,
+  coefficientInstantane,
   hausseParHeure,
   nonAttribue,
   type Coefficient,
@@ -30,9 +31,8 @@ const CALIBRAGE_MS = 14 * 24 * HEURE_MS;
 const FENETRE_MS = 24 * HEURE_MS;
 const SEUIL_ALERTE_L5 = 10;
 const RELEVE_MUET_MS = 15 * 60_000;
-// Coût d'un million de jetons d'entrée de Sonnet 5.5 : sert à dire « 1,2 M jetons » tant que les
-// jauges n'ont pas encore permis de calibrer.
-const COUT_MILLION_REFERENCE = 2;
+const FENETRE_5H_MS = 5 * HEURE_MS;
+const SEMAINE_MS = 7 * 24 * HEURE_MS;
 
 const debutHeure = (d: Date) => new Date(Math.floor(d.getTime() / HEURE_MS) * HEURE_MS);
 const arrondi = (x: number) => Math.round(x * 10) / 10;
@@ -76,9 +76,25 @@ async function calibrer(
       siens.map((p): PointJauge => ({ at: p.at, utilise: p[cle], reset: p[reset] }));
     const hausses5 = hausseParHeure(serie('utilise5h', 'reset5h'), heures);
     const haussesH = hausseParHeure(serie('utiliseHebdo', 'resetHebdo'), heures);
+    // Sans historique suffisant, la dernière lecture du collecteur donne une première estimation.
+    const dernier = siens
+      .filter((p) => p.source === 'collecteur')
+      .reduce<(typeof siens)[number] | undefined>((a, p) => (!a || p.at > a.at ? p : a), undefined);
+    const instantane = (
+      cle: 'utilise5h' | 'utiliseHebdo',
+      reset: 'reset5h' | 'resetHebdo',
+      duree: number,
+    ) =>
+      dernier
+        ? coefficientInstantane(
+            { at: dernier.at, utilise: dernier[cle], reset: dernier[reset] },
+            couts,
+            duree,
+          )
+        : null;
     return {
-      l5: coefficient(hausses5, couts),
-      lh: coefficient(haussesH, couts),
+      l5: coefficient(hausses5, couts) ?? instantane('utilise5h', 'reset5h', FENETRE_5H_MS),
+      lh: coefficient(haussesH, couts) ?? instantane('utiliseHebdo', 'resetHebdo', SEMAINE_MS),
       hausses5,
       haussesH,
       couts,
@@ -158,17 +174,11 @@ export async function lignesHeures(
 const decimale = (x: number) =>
   x.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
+// Toujours en % des limites, jamais en jetons : « ? » tant qu'aucune lecture de jauge n'existe.
 function quantite(l: LigneHeure): string {
-  const parts: string[] = [];
   const signe = l.estime ? '≈ +' : '+';
-  if (l.l5 !== null) parts.push(`L5 ${signe}${decimale(l.l5)} %`);
-  if (l.lh !== null) parts.push(`LH ${signe}${decimale(l.lh)} %`);
-  if (parts.length > 0) return parts.join(' · ');
-  const jetons = (l.cout / COUT_MILLION_REFERENCE) * 1e6;
-  // Équivalent en jetons d'entrée Sonnet : une lecture de cache compte bien moins qu'un jeton.
-  if (jetons >= 1e6) return `≈ ${decimale(jetons / 1e6)} M jetons éq.`;
-  if (jetons >= 1e3) return `≈ ${Math.round(jetons / 1e3)} k jetons éq.`;
-  return `≈ ${Math.round(jetons)} jetons éq.`;
+  const pourcent = (v: number | null) => (v === null ? '? %' : `${signe}${decimale(v)} %`);
+  return `L5 ${pourcent(l.l5)} · LH ${pourcent(l.lh)}`;
 }
 
 const NOMS: Record<FournisseurConso, string> = { claude: 'Claude', chatgpt: 'ChatGPT' };
