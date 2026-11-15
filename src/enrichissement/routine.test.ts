@@ -3,6 +3,8 @@ import { expect, it, vi } from 'vitest';
 import { preferences } from '../preferences/schema.js';
 import { setupTestApp } from '../../test/database.js';
 import { listerFiches } from '../base-vivante/service.js';
+import { withInstance } from '../db/context.js';
+import { recentEvents } from '../journal/service.js';
 import { createInstance } from '../instances/service.js';
 import { dernieresSessions, ouvrirSessionRecherche } from './sessions.js';
 import {
@@ -69,6 +71,63 @@ it('ajoute les contacts au plus une fois par jour après l’heure de Paris', as
         ajoutees: 12,
       },
     ]);
+  } finally {
+    await t.drop();
+  }
+});
+
+it('clôt la journée quand le moteur ne trouve plus de nouveau contact, et le dit dans la console', async () => {
+  const t = await setupTestApp();
+  try {
+    const instance = await createInstance(t.owner.db, {
+      slug: 'routine-epuisee',
+      nom: 'Test',
+      type: 'propre',
+    });
+    await enregistrerRoutineRecherche(t.app.db, instance.id, {
+      active: true,
+      consignes: 'PME fictives',
+      nombre: 10,
+      heure: '09:00',
+    });
+    // Le moteur repropose toujours la même personne : un seul contact nouveau, puis plus rien.
+    const demander = vi.fn(() =>
+      Promise.resolve({
+        json: {
+          contacts: [
+            {
+              entreprise: 'Atelier Fictif',
+              prenom: 'Alice',
+              nom: 'Martin',
+              fonction: 'Dirigeante',
+              email: null,
+              linkedin: 'https://www.linkedin.com/in/alice-fictive-unique',
+              source: 'https://exemple.test/equipe',
+              qualification: 'Industrie',
+            },
+          ],
+        },
+        jetons: 0,
+      }),
+    );
+    await tournerRecherche(t.app.db, { demander }, new Date('2026-11-03T08:00:00Z'));
+    expect(demander).toHaveBeenCalledTimes(4);
+    expect((await listerFiches(t.app.db, instance.id, { canal: 'linkedin' })).total).toBe(1);
+    const routine = await lireRoutineRecherche(t.app.db, instance.id);
+    expect(routine.bilan).toContain('1 fiche(s) ajoutée(s)');
+    expect(routine.bilan).toContain('élargissez les consignes');
+    expect(routine).toMatchObject({ dernierJour: '2026-11-03' });
+    expect(await dernieresSessions(t.app.db, instance.id)).toMatchObject([
+      { mode: 'automatique', etat: 'terminee', ajoutees: 1 },
+    ]);
+    const journal = await withInstance(t.app.db, instance.id, (tx) => recentEvents(tx));
+    expect(journal.map((e) => e.action)).toContainEqual(
+      expect.stringContaining('élargissez les consignes'),
+    );
+
+    // Le même jour, la routine ne repart pas.
+    await tournerRecherche(t.app.db, { demander }, new Date('2026-11-03T12:00:00Z'));
+    expect(demander).toHaveBeenCalledTimes(4);
   } finally {
     await t.drop();
   }
