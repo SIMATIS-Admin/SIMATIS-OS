@@ -150,14 +150,12 @@ describe('Affaires sans rendez-vous rangées par la messagerie', () => {
         },
       ]);
       void affLinkedin;
-      await tx
-        .insert(diagnosticProjets)
-        .values({
-          instanceId: inst.id,
-          nom: 'Diag fictif',
-          activite: 'services',
-          contactId: diag!.id,
-        });
+      await tx.insert(diagnosticProjets).values({
+        instanceId: inst.id,
+        nom: 'Diag fictif',
+        activite: 'services',
+        contactId: diag!.id,
+      });
       await tx
         .insert(contactEchangesMail)
         .values({ instanceId: inst.id, contactId: diag!.id, envoyes: 3, recus: 0 });
