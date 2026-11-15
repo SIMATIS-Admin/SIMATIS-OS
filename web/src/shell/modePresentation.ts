@@ -12,11 +12,5 @@ export const ModePresentationContext = createContext<ModePresentation>({
 export const useModePresentation = () => useContext(ModePresentationContext);
 
 // Les écrans de présentation : seuls eux peuvent passer en mode présentation.
-export const VUES_PRESENTATION = [
-  'presentation-diagnostic',
-  'presentation-vma',
-  'presentation-simatis',
-  'diaporama',
-  'cours',
-];
+export const VUES_PRESENTATION = ['diaporama', 'cours'];
 export const estVuePresentation = (view: string) => VUES_PRESENTATION.includes(view);

@@ -4,6 +4,8 @@ import path from 'node:path';
 // Les supports sont des dossiers de fichiers texte, hors du dépôt (confidentiel) :
 // SUPPORTS_DIR donne leur dossier. Ce module ne fait que les lire, avec des noms strictement validés.
 export class SupportIntrouvable extends Error {}
+// Présentation permanente (SIMATIS, Diagnostic, Test VMA) : elle reste dans l'OS, jamais supprimée.
+export class SupportProtege extends Error {}
 
 const DECK = /^[a-z0-9-]+$/;
 const MODULE = /^[a-z0-9-]+\.md$/;
@@ -35,7 +37,26 @@ export const dossierSupports = (): string => {
   return dossier;
 };
 
-export type ResumeDeck = { id: string; titre: string; soustitre: string };
+export type ResumeDeck = {
+  id: string;
+  titre: string;
+  soustitre: string;
+  permanent: boolean;
+  // Slides et minutes déclarées par le manifest d'un deck HTML ; inconnues pour un deck markdown.
+  slides: number | null;
+  duree: number | null;
+};
+
+type ManifestBrut = {
+  titre?: unknown;
+  soustitre?: unknown;
+  format?: unknown;
+  permanent?: unknown;
+  parties?: unknown;
+};
+
+const parties = (m: ManifestBrut) =>
+  Array.isArray(m.parties) ? (m.parties as { slides?: unknown; duree?: unknown }[]) : [];
 
 const lireJson = async (chemin: string): Promise<unknown> =>
   JSON.parse(await readFile(chemin, 'utf8')) as unknown;
@@ -52,14 +73,21 @@ export async function listerDecks(): Promise<ResumeDeck[]> {
   for (const id of entrees.sort()) {
     if (!DECK.test(id)) continue;
     try {
-      const m = (await lireJson(path.join(racine, id, 'manifest.json'))) as {
-        titre?: unknown;
-        soustitre?: unknown;
-      };
+      const m = (await lireJson(path.join(racine, id, 'manifest.json'))) as ManifestBrut;
+      const enHtml = m.format === 'html';
+      const minutes = parties(m).reduce(
+        (total, p) => total + (typeof p?.duree === 'number' && p.duree > 0 ? p.duree : 0),
+        0,
+      );
       decks.push({
         id,
         titre: typeof m.titre === 'string' ? m.titre : id,
         soustitre: typeof m.soustitre === 'string' ? m.soustitre : '',
+        permanent: m.permanent === true,
+        slides: enHtml
+          ? parties(m).reduce((n, p) => n + (Array.isArray(p?.slides) ? p.slides.length : 0), 0)
+          : null,
+        duree: minutes > 0 ? minutes : null,
       });
     } catch {
       // Un dossier sans manifest lisible n'est pas un support.
@@ -116,11 +144,14 @@ export async function supprimerDeck(deck: string): Promise<void> {
   const racine = dossierSupports();
   if (!DECK.test(deck)) throw new SupportIntrouvable('Support introuvable');
   const dossier = path.join(racine, deck);
+  let manifest: ManifestBrut;
   try {
-    await stat(path.join(dossier, 'manifest.json'));
+    manifest = (await lireJson(path.join(dossier, 'manifest.json'))) as ManifestBrut;
   } catch {
     throw new SupportIntrouvable('Support introuvable');
   }
+  if (manifest?.permanent === true)
+    throw new SupportProtege('Cette présentation est permanente : elle reste dans l’OS.');
   await rm(dossier, { recursive: true, force: true });
 }
 

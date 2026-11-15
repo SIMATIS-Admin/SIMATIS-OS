@@ -52,20 +52,11 @@ const Parametres = lazy(() =>
 const Portefeuille = lazy(() =>
   import('./pages/Portefeuille.js').then((m) => ({ default: m.Portefeuille })),
 );
-const PresentationDiagnostic = lazy(() =>
-  import('./pages/PresentationDiagnostic.js').then((m) => ({ default: m.PresentationDiagnostic })),
-);
 const DiaporamaProjet = lazy(() =>
   import('./pages/DiaporamaProjet.js').then((m) => ({ default: m.DiaporamaProjet })),
 );
 const Cours = lazy(() => import('./cours/Cours.js').then((m) => ({ default: m.Cours })));
 const CoursListe = lazy(() => import('./cours/Cours.js').then((m) => ({ default: m.CoursListe })));
-const PresentationSimatis = lazy(() =>
-  import('./pages/PresentationSimatis.js').then((m) => ({ default: m.PresentationSimatis })),
-);
-const PresentationVma = lazy(() =>
-  import('./pages/PresentationVma.js').then((m) => ({ default: m.PresentationVma })),
-);
 const Prospection = lazy(() =>
   import('./pages/Prospection.js').then((m) => ({ default: m.Prospection })),
 );
@@ -190,25 +181,19 @@ export function App() {
       ? 'Portefeuille'
       : view === 'fiche'
         ? (TITRES_FICHE[route.kind ?? ''] ?? 'Fiche')
-        : view === 'presentation-diagnostic'
-          ? 'Diagnostic d’endurance commerciale'
-          : view === 'diaporama'
-            ? route.kind === 'support'
-              ? 'Support d’ouverture'
-              : route.kind === 'deck'
-                ? 'Deck'
-                : 'Restitution'
-            : view === 'presentation-vma'
-              ? 'Test VMA'
-              : view === 'cours'
-                ? 'Supports'
-                : view === 'presentation-simatis'
-                  ? 'SIMATIS'
-                  : view === 'feuille-de-route-os'
-                    ? 'Feuille de route de l’OS'
-                    : view === 'gestion'
-                      ? 'Gestion'
-                      : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
+        : view === 'diaporama'
+          ? route.kind === 'support'
+            ? 'Support d’ouverture'
+            : route.kind === 'deck'
+              ? 'Deck'
+              : 'Restitution'
+          : view === 'cours'
+            ? 'Supports'
+            : view === 'feuille-de-route-os'
+              ? 'Feuille de route de l’OS'
+              : view === 'gestion'
+                ? 'Gestion'
+                : (allItems().find((i) => i.id === view)?.label ?? 'Écran inconnu');
 
   const page = () => {
     switch (view) {
@@ -280,8 +265,6 @@ export function App() {
             onTitre={setTitreOutil}
           />
         );
-      case 'presentation-diagnostic':
-        return <PresentationDiagnostic slug={current.slug} />;
       case 'diaporama':
         return route.id &&
           (route.kind === 'support' || route.kind === 'restitution' || route.kind === 'deck') ? (
@@ -300,10 +283,6 @@ export function App() {
         ) : (
           <CoursListe slug={current.slug} />
         );
-      case 'presentation-simatis':
-        return <PresentationSimatis slug={current.slug} />;
-      case 'presentation-vma':
-        return <PresentationVma slug={current.slug} />;
       case 'bases':
         return (
           <Bases

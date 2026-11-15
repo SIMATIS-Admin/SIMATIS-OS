@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchDecksCours,
   fetchTexteCours,
+  ouvrirEspaceTesteurVma,
   supprimerSupportCours,
   urlFichierCours,
   type DeckCours,
@@ -230,6 +231,20 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
     }
   };
 
+  // Module d'essai du Test VMA : l'onglet s'ouvre pendant le clic (après une attente, le navigateur
+  // le bloquerait), puis reçoit le lien de l'espace testeur.
+  const ouvrirTesteur = async () => {
+    const onglet = window.open('', '_blank');
+    try {
+      const { lien } = await ouvrirEspaceTesteurVma(slug);
+      if (onglet) onglet.location.href = lien;
+      else window.location.href = lien;
+    } catch (e) {
+      onglet?.close();
+      window.alert(e instanceof Error ? e.message : 'Espace testeur indisponible');
+    }
+  };
+
   // Archive : le support entier, une slide par page, dans la boîte d'impression du navigateur
   // (« Enregistrer au format PDF »). Le cadre n'exécute aucun script.
   const imprimer = (document_: string) => {
@@ -429,15 +444,32 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
             Imprimer en PDF
           </button>
         )}
-        <button className="btn sm" type="button" onClick={() => void terminer()}>
-          Terminer et supprimer
-        </button>
+        {etat.manifest.action === 'testeur-vma' && (
+          <button className="btn sm" type="button" onClick={() => void ouvrirTesteur()}>
+            Module d’essai
+          </button>
+        )}
+        {!etat.manifest.permanent && (
+          <button className="btn sm" type="button" onClick={() => void terminer()}>
+            Terminer et supprimer
+          </button>
+        )}
       </nav>
     </div>
   );
 }
 
-// Liste des supports du dossier configuré : un clic ouvre le lecteur.
+// Liste des supports du dossier configuré : les présentations permanentes d'abord, puis les supports
+// de rendez-vous (supprimés après la présentation). Une ligne par support ; un clic ouvre le lecteur.
+const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+const details = (d: DeckCours) =>
+  [
+    typeof d.slides === 'number' ? pluriel(d.slides, 'slide') : null,
+    typeof d.duree === 'number' ? `${d.duree} min` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
 export function CoursListe({ slug }: { slug: string }) {
   const [decks, setDecks] = useState<DeckCours[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -454,18 +486,38 @@ export function CoursListe({ slug }: { slug: string }) {
     );
   if (!decks) return <p className="empty">Chargement…</p>;
   if (decks.length === 0) return <p className="empty">Aucun support dans le dossier configuré.</p>;
+  const groupes: [string, DeckCours[]][] = [
+    ['Présentations', decks.filter((d) => d.permanent)],
+    ['Supports de rendez-vous', decks.filter((d) => !d.permanent)],
+  ];
   return (
     <div className="cours-liste">
-      {decks.map((d) => (
-        <a
-          key={d.id}
-          className="cours-carte"
-          href={`#/${slug}/cours/deck/${encodeURIComponent(d.id)}`}
-        >
-          <b>{d.titre}</b>
-          {d.soustitre && <span>{d.soustitre}</span>}
-        </a>
-      ))}
+      {groupes
+        .filter(([, liste]) => liste.length > 0)
+        .map(([titre, liste]) => (
+          <section key={titre} className="cours-groupe" aria-label={titre}>
+            <h2>{titre}</h2>
+            <ul>
+              {liste.map((d) => (
+                <li key={d.id}>
+                  <a
+                    className="cours-ligne"
+                    href={`#/${slug}/cours/deck/${encodeURIComponent(d.id)}`}
+                  >
+                    <span className="cours-ligne-texte">
+                      <b>{d.titre}</b>
+                      {d.soustitre && <span>{d.soustitre}</span>}
+                    </span>
+                    <span className="cours-ligne-details">{details(d)}</span>
+                    <span className="cours-ligne-fleche" aria-hidden="true">
+                      →
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
     </div>
   );
 }

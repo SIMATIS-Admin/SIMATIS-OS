@@ -60,6 +60,7 @@ import {
   ConflitEdition,
   ContenuInvalide,
   SupportIntrouvable,
+  SupportProtege,
 } from '../cours/service.js';
 import { demanderDossier } from '../diagnostic/dossier-export.js';
 import { demanderExportRevue } from '../diagnostic/revue-export.js';
@@ -931,6 +932,7 @@ export function registerApi(
       } catch (error) {
         if (error instanceof SupportIntrouvable)
           return reply.code(404).send({ error: error.message });
+        if (error instanceof SupportProtege) return reply.code(409).send({ error: error.message });
         throw error;
       }
     }),

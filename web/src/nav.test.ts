@@ -55,6 +55,10 @@ describe('nav', () => {
     expect(isBuilt('diagnostics')).toBe(true);
     expect(vueCanonique('diagnostic')).toBe('diagnostics');
     expect(vueCanonique('tests-vma')).toBe('diagnostics');
+    // Les trois présentations sont devenues des supports permanents.
+    expect(vueCanonique('presentation-simatis')).toBe('cours');
+    expect(vueCanonique('presentation-diagnostic')).toBe('cours');
+    expect(vueCanonique('presentation-vma')).toBe('cours');
   });
 
   it("range Mon espace en rubriques : Détecter (Radar, Recherches, ICP, Campagnes, Base des suspects), Vendre, Ma base, Piloter l'activité", () => {
