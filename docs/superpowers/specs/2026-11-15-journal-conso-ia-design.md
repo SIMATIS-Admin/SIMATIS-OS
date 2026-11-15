@@ -33,12 +33,13 @@ Exemple de rendu :
 3. Une ligne « non attribué » par fournisseur et par heure, pour la part de la jauge que rien d'observé n'explique (en pratique : le Chat claude.ai).
 4. Le passé reconstitué au premier lancement : 30 jours, dans la limite de ce que les outils ont gardé sur le disque.
 5. Une dérive saute aux yeux : un sujet qui consomme 10 points de L5 ou plus dans l'heure s'affiche en niveau « À VOIR » *(choix de Claude, seuil réglable dans le code)*.
+6. **Une archive de chaque jour**, pour faire des statistiques plus tard (demande de Marc). La console ne montre que 24 h, mais chaque journée terminée est conservée (voir Conception, 8).
 
 ## Non-objectifs
 
 - Pas de suivi du **chat ChatGPT classique** : il ne laisse rien sur le Mac, et la jauge que l'OS lit est celle de Codex, pas celle du chat.
 - Pas de facturation en euros ni de suivi de la clé API OpenAI (enrichissement payé à l'usage, hors abonnement).
-- Pas d'écran dédié dans cette livraison : la console suffit.
+- Pas d'écran dédié ni d'écran de statistiques dans cette livraison : la console suffit, et l'archive prépare les statistiques à venir.
 - Pas de blocage automatique des routines quand la jauge baisse (cela existe déjà pour la recherche quotidienne et reste à part).
 
 ## Anti-objectifs (échec même si « ça marche »)
@@ -144,9 +145,22 @@ Exemple de rendu :
 - Relevé muet depuis plus de 15 min, ou anomalies de format : une ligne « À VOIR » qui le dit.
 - La console garde sa fenêtre de 24 h. Les lignes de consommation ont leur propre plafond, pour ne pas chasser les lignes des routines du plafond actuel de 300 lignes (`MAX_LIGNES`) *(choix de Claude)*.
 
-### 8. Ce qui reste au constructeur
+### 8. Archive quotidienne
 
-- La forme exacte des tables, des routes et du découpage en livraisons.
+- Les lignes du journal et des routines sont déjà conservées sans limite dans la base (aucune purge de `journal` ni de `executions`) ; la console n'en montre que 24 h. L'archive ne concerne donc que la consommation IA.
+- Chaque nuit, une fois la journée terminée et les données tardives arrivées (vers 1 h du matin, heure de Paris), l'OS fige la journée de la veille dans une table d'archive. Il y écrit une ligne par (heure, origine, fournisseur, outil, sujet), avec :
+  - les jetons par catégorie, le coût équivalent et le modèle principal ;
+  - les L5 et LH estimés avec le coefficient du moment, et l'indication « ≈ » s'il y avait lieu ;
+  - les lignes « non attribué ».
+- Ces valeurs ne bougent plus ensuite : les statistiques portent sur ce qui était connu à la fin de la journée *(choix de Claude)*.
+- L'archive est reprise si un jour manque (Mac éteint, app arrêtée) : la journée est figée au passage suivant.
+- Conservation : 13 mois, pour comparer une année à l'autre sur le même mois *(choix de Claude)*. Les cumuls par session restent 90 jours, comme les relevés de jauge.
+- La base est sauvegardée par le service de sauvegarde existant : l'archive l'est donc aussi.
+- Un export (CSV) et un écran de statistiques viendront plus tard, sur la base de cette archive.
+
+### 9. Ce qui reste au constructeur
+
+- La forme exacte des tables (dont l'archive), des routes et du découpage en livraisons.
 - La méthode de calibrage, dans le cadre du point 5.
 - Le lien entre lancements `codex exec` et fichiers.
 - Le traitement de `--no-session-persistence`.
@@ -156,6 +170,7 @@ Exemple de rendu :
 
 - Tests unitaires de lecture sur des fichiers fictifs aux trois formats (Claude Code, Cowork, Codex) : dédoublonnage, sous-agents, découpage horaire à l'heure de Paris, lignes illisibles.
 - Tests de classement : outil, origine, sujet.
+- Tests de l'archive : la journée est figée une seule fois, une journée manquée est rattrapée, les valeurs ne changent plus quand le coefficient évolue.
 - Tests de calibrage sur une série fictive avec une part « Chat » non observée : le coefficient ne doit pas être gonflé, et le « non attribué » doit apparaître.
 - Essai réel :
   - après déploiement, les sessions Claude Code reconstituées apparaissent avec leur sujet, en jetons d'abord, puis en % une fois le calibrage établi ;
