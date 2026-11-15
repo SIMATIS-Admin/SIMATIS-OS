@@ -16,6 +16,7 @@ import { executer, type Operation, type Partage } from '../cerveau/file.js';
 import { cartePartage } from '../cerveau/partage.js';
 import { configPartage, connecterPartage } from '../cerveau/partage-mcp.js';
 import { consigneCerveau } from './cerveau.js';
+import { tourConso } from './conso/releve.js';
 import { argumentsCodex } from './codex-mcp.js';
 import type { MoteurIA } from '../preferences/service.js';
 import { LOGO_DIAGNOSTIC_SVG } from '../diagnostic/logo-diagnostic.js';
@@ -1985,6 +1986,26 @@ function main() {
   };
   passeEchange();
   setInterval(passeEchange, 5_000);
+
+  // Journal de consommation IA : relevé des sessions du Mac, 30 jours au premier passage.
+  const etatConso = { depuis: new Date(Date.now() - 30 * 24 * 3_600_000) };
+  let occupeConso = false;
+  const passeConso = () => {
+    if (occupeConso) return;
+    occupeConso = true;
+    tourConso(opts, etatConso)
+      .catch((err: unknown) =>
+        console.error(
+          'runner : relevé de consommation IA',
+          err instanceof Error ? err.message : err,
+        ),
+      )
+      .finally(() => {
+        occupeConso = false;
+      });
+  };
+  passeConso();
+  setInterval(passeConso, 5 * 60_000);
 
   // Carte de l'espace partagé : au démarrage, puis toutes les dix minutes.
   const cartePartageRegulierement = () =>

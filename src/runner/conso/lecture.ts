@@ -38,7 +38,10 @@ const date = (v: unknown): Date | null => {
 function lignes(contenu: string): { objets: Objet[]; anomalies: number } {
   const objets: Objet[] = [];
   let anomalies = 0;
-  for (const ligne of contenu.split('\n')) {
+  const morceaux = contenu.split('\n');
+  // Sans fin de ligne, le dernier morceau est en cours d'écriture par l'outil : on l'ignore.
+  if (!contenu.endsWith('\n')) morceaux.pop();
+  for (const ligne of morceaux) {
     if (ligne.trim() === '') continue;
     try {
       const o = objet(JSON.parse(ligne));

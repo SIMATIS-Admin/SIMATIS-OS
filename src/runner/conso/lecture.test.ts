@@ -22,6 +22,10 @@ describe('lireClaude', () => {
     expect(lireClaude(await fixture('claude-code.jsonl')).anomalies).toBe(1);
   });
 
+  it('une dernière ligne en cours d’écriture (sans fin de ligne) n’est pas une anomalie', () => {
+    expect(lireClaude('{"type":"user"}\n{"type":"assist').anomalies).toBe(0);
+  });
+
   it('lit le titre de session', async () => {
     expect(lireClaude(await fixture('claude-code.jsonl')).titre).toBe('Session fictive');
   });
