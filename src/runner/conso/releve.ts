@@ -316,11 +316,15 @@ export async function tourConso(
   // Même sans rien de neuf, un envoi dit à l'OS que le relevé est vivant.
   if (envois.length === 0) envois.push(corps([], []));
   const doFetch = opts.fetch ?? fetch;
-  for (const envoi of envois) {
+  for (const [i, envoi] of envois.entries()) {
+    // Tant que tout n'est pas envoyé, l'OS garde l'ancien passage : l'archive de la nuit ne fige
+    // pas une journée à moitié reçue (premier passage de 30 jours en plusieurs envois).
+    const annonce =
+      i === envois.length - 1 ? envoi : { ...envoi, passage: etat.depuis.toISOString() };
     const res = await doFetch(`${opts.base}/api/runner/conso-ia`, {
       method: 'POST',
       headers: { authorization: `Bearer ${opts.token}`, 'content-type': 'application/json' },
-      body: JSON.stringify(envoi),
+      body: JSON.stringify(annonce),
     });
     if (!res.ok) throw new Error(`/api/runner/conso-ia : ${res.status}`);
   }

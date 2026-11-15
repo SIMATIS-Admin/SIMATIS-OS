@@ -172,6 +172,18 @@ describe('robustesse du relevé', () => {
   });
 });
 
+describe('passage annoncé à l’OS', () => {
+  it('seul le dernier envoi annonce le nouveau passage', async () => {
+    const s = fauxServeur();
+    const depuis = new Date(Date.now() - 3_600_000);
+    await tourConso(opts(s.fetch), { depuis }, dossiers, sansPr);
+    expect(s.envois.length).toBeGreaterThan(1);
+    // Tant que tout n'est pas envoyé, l'OS garde l'ancien passage : l'archive attend la fin.
+    expect(s.envois.slice(0, -1).every((e) => e.passage === depuis.toISOString())).toBe(true);
+    expect(s.envois.at(-1)?.passage).not.toBe(depuis.toISOString());
+  });
+});
+
 describe('classement et sujet', () => {
   it('classe les outils', () => {
     expect(

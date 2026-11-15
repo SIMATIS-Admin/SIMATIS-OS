@@ -4,9 +4,10 @@ import { archiverEtPurger } from './archive.js';
 import { iaArchive, iaCumuls, iaJauges } from './schema.js';
 import { enregistrerReleve } from './service.js';
 
-async function cumul(t: TestApp, id: string, heure: string) {
+// Le relevé du Mac est passé après la fin des journées testées : elles sont complètes.
+async function cumul(t: TestApp, id: string, heure: string, passage = '2026-11-11T03:00:00.000Z') {
   await enregistrerReleve(t.app.db, {
-    passage: heure,
+    passage,
     anomalies: 0,
     sessions: [
       {
@@ -90,6 +91,14 @@ describe('archiverEtPurger', () => {
     await archiverEtPurger(t.app.db, new Date('2026-11-11T02:00:00.000Z'));
     const [ligne] = await t.app.db.select().from(iaArchive);
     expect(ligne?.l5).toBeNull();
+  });
+
+  it('n’archive pas une journée que le relevé n’a pas entièrement couverte', async () => {
+    // Dernier passage du relevé le 9 à 20 h : la fin de la journée n'a pas été relevée.
+    await cumul(t, 'a', '2026-11-09T10:00:00.000Z', '2026-11-09T19:00:00.000Z');
+    const { jours } = await archiverEtPurger(t.app.db, new Date('2026-11-10T02:00:00.000Z'));
+    expect(jours).toEqual([]);
+    expect(await t.app.db.select().from(iaArchive)).toHaveLength(0);
   });
 
   it('n’archive pas avant 1 h du matin', async () => {
