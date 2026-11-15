@@ -27,6 +27,8 @@ import { registerProspectionRoutes } from './prospection/routes.js';
 import { registerTransfertRoutes } from './transfert/routes.js';
 import { registerWeb } from './web.js';
 import { lireLimitesIA } from './ia/limites.js';
+import { noterJauges } from './ia/conso/jauges.js';
+import { archiverEtPurger } from './ia/conso/archive.js';
 import { registerLimitesIARoutes } from './ia/routes.js';
 
 export type AppDeps = {
@@ -107,6 +109,40 @@ export function buildApp({
     clearInterval(timerRecherche);
     return Promise.resolve();
   });
+  // Historique des jauges IA : chaque nouveau relevé du collecteur est conservé.
+  let timerJauges: ReturnType<typeof setInterval> | undefined;
+  app.addHook('onListen', () => {
+    timerJauges = setInterval(() => {
+      void lireLimitesIA(limitesIAFile)
+        .then((limites) => noterJauges(db, limites))
+        .catch((err: unknown) => app.log.error(err, 'Historique des jauges IA'));
+    }, 60_000);
+    return Promise.resolve();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(timerJauges);
+    return Promise.resolve();
+  });
+  // Archive quotidienne de la consommation IA (après 1 h du matin) et purge des vieux relevés.
+  let timerArchiveIA: ReturnType<typeof setInterval> | undefined;
+  let archiveIAEnCours = false;
+  app.addHook('onListen', () => {
+    timerArchiveIA = setInterval(() => {
+      if (archiveIAEnCours) return;
+      archiveIAEnCours = true;
+      void archiverEtPurger(db, new Date())
+        .catch((err: unknown) => app.log.error(err, 'Archive de la consommation IA'))
+        .finally(() => {
+          archiveIAEnCours = false;
+        });
+    }, 10 * 60_000);
+    return Promise.resolve();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(timerArchiveIA);
+    return Promise.resolve();
+  });
+
   // Veille quotidienne du BODACC : les nouvelles annonces sur les entreprises de la base
   // arrivent dans l'Inbox.
   const bodacc = creerClientBodacc();

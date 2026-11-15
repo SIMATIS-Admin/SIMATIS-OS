@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { convertirDeck } from '../cours/import-deck.js';
 import { idSupportDe } from '../diagnostic/service.js';
 import { execFile, spawn } from 'node:child_process';
@@ -16,6 +17,7 @@ import { executer, type Operation, type Partage } from '../cerveau/file.js';
 import { cartePartage } from '../cerveau/partage.js';
 import { configPartage, connecterPartage } from '../cerveau/partage-mcp.js';
 import { consigneCerveau } from './cerveau.js';
+import { tourConso } from './conso/releve.js';
 import { argumentsCodex } from './codex-mcp.js';
 import type { MoteurIA } from '../preferences/service.js';
 import { LOGO_DIAGNOSTIC_SVG } from '../diagnostic/logo-diagnostic.js';
@@ -243,6 +245,32 @@ const clientOs = (opts: RunnerOptions) => {
   };
 };
 
+type ClientOs = ReturnType<typeof clientOs>;
+
+// Journal de consommation IA : chaque lancement est déclaré à l'OS, qui le classera IA-int avec ce
+// sujet. Une panne du journal n'empêche jamais une routine de partir.
+export async function declarer(
+  api: ClientOs,
+  l: { moteur: 'claude' | 'codex'; sessionId?: string; cwd?: string; sujet: string },
+): Promise<void> {
+  await api('/api/runner/lancements', l).catch(() => undefined);
+}
+
+// Claude reçoit un identifiant de session connu d'avance : le relevé du Mac le retrouvera.
+async function lancerClaudeDeclare(
+  api: ClientOs,
+  lancer: NonNullable<RunnerOptions['lancer']>,
+  claude: string,
+  args: string[],
+  sujet: string,
+  cwd?: string,
+  env?: Record<string, string>,
+): Promise<number> {
+  const sessionId = randomUUID();
+  await declarer(api, { moteur: 'claude', sessionId, sujet });
+  return lancer(claude, [...args, '--session-id', sessionId], cwd, env);
+}
+
 // Dépose la carte du second cerveau (titres et liens, jamais le contenu) pour la rubrique de l'OS.
 // Un échec ne doit pas empêcher les routines de partir.
 async function deposerCarte(
@@ -340,12 +368,14 @@ export async function tour(opts: RunnerOptions): Promise<number> {
         { mode: 0o600 },
       );
       let code: number;
+      const sujet = `Routine ${d.libelle} · ${d.nom}`;
       if (moteur === 'codex') {
         const l = await lancementCodexRoutine(d, opts.base, demarre.token, opts.cerveau);
+        await declarer(api, { moteur: 'codex', cwd: l.cwd ?? process.cwd(), sujet });
         code = await lancer(opts.codex ?? CODEX_PAR_DEFAUT, l.args, l.cwd, l.env);
       } else {
         const { args, cwd } = await argumentsClaude(d, config, opts.cerveau);
-        code = await lancer(opts.claude, args, cwd);
+        code = await lancerClaudeDeclare(api, lancer, opts.claude, args, sujet, cwd);
       }
       if (code !== 0) erreur = `${NOM_MOTEUR[moteur]} s'est arrêté avec le code ${code}.`;
     } finally {
@@ -444,9 +474,11 @@ export async function tourEchanges(opts: RunnerOptions): Promise<number> {
               outils: ['mcp__simatis__repondre_ajout'],
             })
           : null;
+      const sujet = `Inbox (échange) · ${e.nom}`;
+      if (l) await declarer(api, { moteur: 'codex', cwd: l.cwd ?? process.cwd(), sujet });
       const code = l
         ? await lancer(opts.codex ?? CODEX_PAR_DEFAUT, l.args, l.cwd, l.env)
-        : await lancer(opts.claude, args);
+        : await lancerClaudeDeclare(api, lancer, opts.claude, args, sujet);
       if (code !== 0)
         erreur = `${NOM_MOTEUR[moteur]} s'est arrêté avec le code ${code}. Réécrivez votre message.`;
     } finally {
@@ -543,17 +575,25 @@ export async function tourCampagnes(opts: RunnerOptions): Promise<number> {
         moteur === 'codex'
           ? argumentsCodex({ base: opts.base, token: demarre.token, consigne, outils })
           : null;
+      const sujet = `Campagne · ${c.nom}`;
+      if (l) await declarer(api, { moteur: 'codex', cwd: l.cwd ?? process.cwd(), sujet });
       const code = l
         ? await lancer(opts.codex ?? CODEX_PAR_DEFAUT, l.args, l.cwd, l.env)
-        : await lancer(opts.claude, [
-            '-p',
-            consigne,
-            '--mcp-config',
-            config,
-            '--strict-mcp-config',
-            '--allowedTools',
-            outils.join(','),
-          ]);
+        : await lancerClaudeDeclare(
+            api,
+            lancer,
+            opts.claude,
+            [
+              '-p',
+              consigne,
+              '--mcp-config',
+              config,
+              '--strict-mcp-config',
+              '--allowedTools',
+              outils.join(','),
+            ],
+            sujet,
+          );
       if (code !== 0)
         erreur = `${NOM_MOTEUR[moteur]} s'est arrêté avec le code ${code}. Relancez la rédaction.`;
     } catch (e) {
@@ -1810,7 +1850,15 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
           : ['-p', promptDiagnostic(a), ...modele, ...mcp, 'mcp__simatis__repondre_diagnostic'];
         if (cerveau) cwd = dossier;
       }
-      const code = await lancer(opts.claude, args, cwd, env);
+      const code = await lancerClaudeDeclare(
+        api,
+        lancer,
+        opts.claude,
+        args,
+        `Diagnostic · ${a.demande} · ${a.nom}`,
+        cwd,
+        env,
+      );
       if (code !== 0) erreur = `Claude s'est arrêté avec le code ${code}. Réécrivez votre message.`;
       else if (envoiSupport) {
         // Les fichiers récupérés par Claude deviennent un support du lecteur, rangé par l'OS.
@@ -1856,7 +1904,10 @@ export async function tourCodex(opts: RunnerOptions, binaire: string) {
     delete env.OPENAI_API_KEY;
     const entree =
       travail.demande.consigne + '\n\nDonnées de recherche :\n' + travail.demande.entree;
+    const sujet = 'Recherche et enrichissement';
     if (moteur === 'claude') {
+      const sessionId = randomUUID();
+      await declarer(api, { moteur: 'claude', sessionId, sujet });
       // Même tâche, autre moteur : Claude ne reçoit que la recherche web, sans MCP ni outil du poste.
       const sortieClaude = await new Promise<string>((resolve, reject) => {
         const enfant = execFile(
@@ -1870,7 +1921,9 @@ export async function tourCodex(opts: RunnerOptions, binaire: string) {
             '--tools',
             'WebSearch,WebFetch',
             '--strict-mcp-config',
-            '--no-session-persistence',
+            // La session laisse un fichier : le relevé de consommation IA la compte.
+            '--session-id',
+            sessionId,
           ],
           { cwd: dossier, env, timeout: 540_000, maxBuffer: 20 * 1024 * 1024 },
           (erreur, stdout) => (erreur ? reject(new Error(erreur.message)) : resolve(stdout)),
@@ -1888,6 +1941,7 @@ export async function tourCodex(opts: RunnerOptions, binaire: string) {
       ok = true;
       return;
     }
+    await declarer(api, { moteur: 'codex', cwd: dossier, sujet });
     await new Promise<void>((resolve, reject) => {
       const enfant = execFile(
         binaire,
@@ -1985,6 +2039,26 @@ function main() {
   };
   passeEchange();
   setInterval(passeEchange, 5_000);
+
+  // Journal de consommation IA : relevé des sessions du Mac, 30 jours au premier passage.
+  const etatConso = { depuis: new Date(Date.now() - 30 * 24 * 3_600_000) };
+  let occupeConso = false;
+  const passeConso = () => {
+    if (occupeConso) return;
+    occupeConso = true;
+    tourConso(opts, etatConso)
+      .catch((err: unknown) =>
+        console.error(
+          'runner : relevé de consommation IA',
+          err instanceof Error ? err.message : err,
+        ),
+      )
+      .finally(() => {
+        occupeConso = false;
+      });
+  };
+  passeConso();
+  setInterval(passeConso, 5 * 60_000);
 
   // Carte de l'espace partagé : au démarrage, puis toutes les dix minutes.
   const cartePartageRegulierement = () =>

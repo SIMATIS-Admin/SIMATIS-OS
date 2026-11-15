@@ -1,6 +1,7 @@
 import { and, eq, gte } from 'drizzle-orm';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
+import { lignesConso } from '../ia/conso/console.js';
 import { journal } from '../journal/schema.js';
 import { executions, type Execution } from '../routines/schema.js';
 
@@ -9,7 +10,7 @@ export type NiveauConsole = 'ok' | 'info' | 'attention' | 'erreur';
 export type LigneConsole = {
   id: string;
   at: string;
-  source: 'journal' | 'routine';
+  source: 'journal' | 'routine' | 'conso';
   acteur: string;
   niveau: NiveauConsole;
   texte: string;
@@ -19,6 +20,8 @@ export type Console = { lignes: LigneConsole[]; enCours: boolean };
 
 export const FENETRE_MS = 24 * 3_600_000;
 const MAX_LIGNES = 300;
+// Lignes de consommation IA : plafond à part, pour ne pas chasser celles des routines.
+const MAX_LIGNES_CONSO = 200;
 // Same threshold as the runner's silence: after it, a request nobody took is worth a warning.
 export const SANS_REPONSE_MS = 2 * 60_000;
 
@@ -96,17 +99,26 @@ export function fusionnerConsole(
   evenements: LigneJournal[],
   runs: Execution[],
   maintenant = new Date(),
+  conso: LigneConsole[] = [],
 ): Console {
-  const lignes = [...evenements.map(enJournal), ...runs.flatMap((x) => enRoutine(x, maintenant))]
-    .sort((a, b) => a.at.localeCompare(b.at))
-    .slice(-MAX_LIGNES);
+  const parDate = (a: LigneConsole, b: LigneConsole) => a.at.localeCompare(b.at);
+  const lignes = [
+    ...[...evenements.map(enJournal), ...runs.flatMap((x) => enRoutine(x, maintenant))]
+      .sort(parDate)
+      .slice(-MAX_LIGNES),
+    ...[...conso].sort(parDate).slice(-MAX_LIGNES_CONSO),
+  ].sort(parDate);
   return {
     lignes,
     enCours: runs.some((x) => x.statut === 'demandee' || x.statut === 'en_cours'),
   };
 }
 
-export async function lireConsole(tx: Executor, maintenant = new Date()): Promise<Console> {
+export async function lireConsole(
+  tx: Executor,
+  maintenant = new Date(),
+  opts: { conso?: boolean } = {},
+): Promise<Console> {
   const depuis = new Date(maintenant.getTime() - FENETRE_MS);
   const evenements = await tx
     .select()
@@ -116,5 +128,10 @@ export async function lireConsole(tx: Executor, maintenant = new Date()): Promis
     .select()
     .from(executions)
     .where(and(eq(executions.instanceId, currentInstance), gte(executions.createdAt, depuis)));
-  return fusionnerConsole(evenements, runs, maintenant);
+  // Le journal de consommation IA ne doit jamais faire tomber la console : en cas de panne, il
+  // se tait. Point de sauvegarde, pour que l'erreur n'invalide pas la transaction de lecture.
+  const conso = opts.conso
+    ? await tx.transaction((sp) => lignesConso(sp, maintenant)).catch(() => [])
+    : [];
+  return fusionnerConsole(evenements, runs, maintenant, conso);
 }

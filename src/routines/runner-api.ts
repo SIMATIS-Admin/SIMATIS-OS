@@ -22,6 +22,12 @@ import {
   finirCampagne,
 } from '../prospection/redaction.js';
 import { prospectionBrouillons } from '../prospection/schema.js';
+import {
+  declarerLancement,
+  enregistrerReleve,
+  lancementSchema,
+  releveSchema,
+} from '../ia/conso/service.js';
 import { ROUTINES } from './params.js';
 import { signalerPoste } from './sante.js';
 import {
@@ -63,6 +69,22 @@ export function registerRunnerApi(
     }
     return true;
   };
+
+  // Journal de consommation IA : relevé des sessions du Mac et lancements de l'exécuteur.
+  app.post('/api/runner/conso-ia', { bodyLimit: 20 * 1024 * 1024 }, async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const corps = releveSchema.safeParse(request.body);
+    if (!corps.success) return reply.code(400).send({ error: 'Relevé de consommation invalide' });
+    await enregistrerReleve(db, corps.data);
+    return { ok: true };
+  });
+  app.post('/api/runner/lancements', async (request, reply) => {
+    if (!(await auth(request, reply))) return reply;
+    const corps = lancementSchema.safeParse(request.body);
+    if (!corps.success) return reply.code(400).send({ error: 'Lancement invalide' });
+    const { debut, ...reste } = corps.data;
+    return declarerLancement(db, { ...reste, debut: debut ?? new Date().toISOString() });
+  });
 
   // Moteur choisi dans la console pour les routines, l'ajout à l'Inbox et les campagnes.
   app.get('/api/runner/moteur', async (request, reply) => {

@@ -61,6 +61,7 @@ describe('tourCampagnes', () => {
       '/api/runner/campagnes',
       '/api/runner/moteur',
       `/api/runner/campagnes/${campagne.id}/demarrer`,
+      '/api/runner/lancements',
       `/api/runner/campagnes/${campagne.id}/fin`,
     ]);
     const a = args[0] ?? [];
