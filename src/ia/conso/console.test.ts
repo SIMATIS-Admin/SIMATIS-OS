@@ -74,7 +74,7 @@ describe('lignesConso', () => {
   it('affiche les jetons tant qu’aucun coefficient n’existe', async () => {
     await session(t, 'a', 'question', [[1, 3]]);
     const [ligne] = await lignesConso(t.app.db, MAINTENANT);
-    expect(ligne?.texte).toContain('1,5 M jetons');
+    expect(ligne?.texte).toContain('≈ 1,5 M jetons éq.');
     expect(ligne?.texte).not.toContain('L5');
   });
 

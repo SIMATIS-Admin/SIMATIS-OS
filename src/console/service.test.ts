@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
@@ -169,6 +170,18 @@ describe('lireConsole', () => {
     );
     expect(avec.lignes.some((l) => l.source === 'conso')).toBe(true);
     await t.app.db.delete(iaReleve);
+  });
+
+  it('une panne du journal de consommation IA ne fait pas tomber la console', async () => {
+    await t.owner.db.execute(sql`alter table ia_releve rename to ia_releve_cache`);
+    try {
+      const { lignes } = await withInstance(t.app.db, a, (tx) =>
+        lireConsole(tx, new Date(), { conso: true }),
+      );
+      expect(lignes.map((l) => l.texte)).toContain('Événement A');
+    } finally {
+      await t.owner.db.execute(sql`alter table ia_releve_cache rename to ia_releve`);
+    }
   });
 
   it('keeps only the last 24 hours', async () => {

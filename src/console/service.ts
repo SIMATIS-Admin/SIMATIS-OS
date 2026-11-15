@@ -128,6 +128,10 @@ export async function lireConsole(
     .select()
     .from(executions)
     .where(and(eq(executions.instanceId, currentInstance), gte(executions.createdAt, depuis)));
-  const conso = opts.conso ? await lignesConso(tx, maintenant) : [];
+  // Le journal de consommation IA ne doit jamais faire tomber la console : en cas de panne, il
+  // se tait. Point de sauvegarde, pour que l'erreur n'invalide pas la transaction de lecture.
+  const conso = opts.conso
+    ? await tx.transaction((sp) => lignesConso(sp, maintenant)).catch(() => [])
+    : [];
   return fusionnerConsole(evenements, runs, maintenant, conso);
 }

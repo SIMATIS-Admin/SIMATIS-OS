@@ -165,9 +165,10 @@ function quantite(l: LigneHeure): string {
   if (l.lh !== null) parts.push(`LH ${signe}${decimale(l.lh)} %`);
   if (parts.length > 0) return parts.join(' · ');
   const jetons = (l.cout / COUT_MILLION_REFERENCE) * 1e6;
-  if (jetons >= 1e6) return `${decimale(jetons / 1e6)} M jetons`;
-  if (jetons >= 1e3) return `${Math.round(jetons / 1e3)} k jetons`;
-  return `${Math.round(jetons)} jetons`;
+  // Équivalent en jetons d'entrée Sonnet : une lecture de cache compte bien moins qu'un jeton.
+  if (jetons >= 1e6) return `≈ ${decimale(jetons / 1e6)} M jetons éq.`;
+  if (jetons >= 1e3) return `≈ ${Math.round(jetons / 1e3)} k jetons éq.`;
+  return `≈ ${Math.round(jetons)} jetons éq.`;
 }
 
 const NOMS: Record<FournisseurConso, string> = { claude: 'Claude', chatgpt: 'ChatGPT' };
