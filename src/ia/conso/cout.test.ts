@@ -30,4 +30,10 @@ describe('coutEquivalent', () => {
     expect(sortie.modeleConnu).toBe(true);
     expect(sortie.cout).toBeGreaterThan(entree.cout);
   });
+
+  it('un modèle GPT plus récent que la grille est reconnu', () => {
+    expect(coutEquivalent('chatgpt', 'gpt-6.1-exemple', { ...rien, entree: 1e6 }).modeleConnu).toBe(
+      true,
+    );
+  });
 });

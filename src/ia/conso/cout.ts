@@ -39,6 +39,8 @@ const GRILLES: Record<FournisseurConso, [string, Prix][]> = {
     ['mini', prix(0.25, 2, 0.025, 1)],
     ['gpt-5', prix(1.25, 10, 0.125, 1)],
     ['codex', prix(1.25, 10, 0.125, 1)],
+    // Modèles plus récents que ce relevé (gpt-6…) : même grille faute de mieux, le calibrage corrige.
+    ['gpt-', prix(1.25, 10, 0.125, 1)],
   ],
 };
 
