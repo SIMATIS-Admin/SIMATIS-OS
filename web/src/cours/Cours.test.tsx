@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ModePresentationContext } from '../shell/modePresentation.js';
 import { Cours, CoursListe } from './Cours.js';
 
 const api = vi.hoisted(() => ({
@@ -189,6 +190,27 @@ describe('Lecteur de supports', () => {
     fireEvent.keyDown(zone, { key: 's', ctrlKey: true });
     expect(await screen.findByText(/a changé depuis son ouverture/)).toBeTruthy();
     expect(zone.value).toBe('b');
+  });
+
+  it('passe en plein écran au bouton et à la touche F, sans quitter le cadre de l’OS', async () => {
+    const basculer = vi.fn();
+    const requestFullscreen = vi.fn();
+    HTMLElement.prototype.requestFullscreen = requestFullscreen;
+    try {
+      render(
+        <ModePresentationContext.Provider value={{ actif: false, basculer }}>
+          <Cours slug="simatis" deck="exemple-fictif" />
+        </ModePresentationContext.Provider>,
+      );
+      await screen.findByRole('heading', { name: /Bonjour/ });
+      fireEvent.click(screen.getByRole('button', { name: 'Plein écran' }));
+      fireEvent.keyDown(document, { key: 'f' });
+      expect(basculer).toHaveBeenCalledTimes(2);
+      // Le plein écran du navigateur masquerait la colonne de gauche de l'OS.
+      expect(requestFullscreen).not.toHaveBeenCalled();
+    } finally {
+      delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
+    }
   });
 
   it('affiche l’aide des raccourcis à la touche ?', async () => {

@@ -85,7 +85,9 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   // Relire le support après un enregistrement, sans quitter la slide.
   const [rechargement, setRechargement] = useState(0);
   const racine = useRef<HTMLDivElement>(null);
-  const { basculer } = useModePresentation();
+  // Plein écran = mode présentation de l'OS : barre du haut et console masquées, colonne de gauche
+  // conservée (Échap en sort).
+  const { actif, basculer } = useModePresentation();
 
   useEffect(() => {
     let annule = false;
@@ -200,11 +202,8 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
       else if (e.key === 'n' || e.key === 'N') setNotes((v) => !v);
       else if (e.key === '?') setAide((v) => !v);
       else if (e.key === 'e' || e.key === 'E') setEdition((v) => !v);
-      else if (e.key === 'f' || e.key === 'F') {
-        basculer();
-        if (document.fullscreenElement) void document.exitFullscreen();
-        else void racine.current?.requestFullscreen?.();
-      } else if (e.key === 'Escape') setAide(false);
+      else if (e.key === 'f' || e.key === 'F') basculer();
+      else if (e.key === 'Escape') setAide(false);
       else return;
       e.preventDefault();
     };
@@ -405,6 +404,9 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
           onClick={suivante}
         >
           →
+        </button>
+        <button className="btn sm" type="button" aria-pressed={actif} onClick={basculer}>
+          Plein écran
         </button>
         <button
           className="btn sm"
