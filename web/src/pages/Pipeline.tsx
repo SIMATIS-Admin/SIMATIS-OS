@@ -148,7 +148,12 @@ function Card({
         <div className="ttl">{o.titre}</div>
         {o.contact && <div className="pers small muted">{o.contact}</div>}
         {!o.clos && o.prochainRdv && <div className="rdv small">RDV {quandRdv(o.prochainRdv)}</div>}
-        {o.sansRdv && <div className="sans-rdv small muted">Sans rendez-vous, jamais écrite</div>}
+        {o.sansRdv && <div className="sans-rdv small muted">Sans rendez-vous, aucune activité</div>}
+        {!o.clos && o.diagnostic && (
+          <div className="sans-rdv small muted">
+            Diagnostic réalisé{o.etapeCrm ? ` (CRM : ${label(o.etapeCrm)})` : ''}
+          </div>
+        )}
         {o.clos === 'perdu' ? (
           <div className="motif">
             Perdue{label(o.etape) !== o.etape ? ` en ${label(o.etape).toLowerCase()}` : ''}
@@ -450,7 +455,7 @@ export function Pipeline({ slug }: { slug: string }) {
       .normalize('NFD')
       .replace(/\p{Diacritic}/gu, '')
       .toLowerCase();
-  // Affaires sans rendez-vous déjà écrites : suivies dans le Radar, plus ici (HubSpot inchangé).
+  // Affaires sans rendez-vous déjà approchées : suivies dans le Radar, plus ici (HubSpot inchangé).
   const auRadar = data.opportunites.filter((o) => !o.clos && o.radar);
   const visibles = data.opportunites.filter((o) => {
     if (!o.clos && o.radar) return false;
@@ -696,8 +701,8 @@ export function Pipeline({ slug }: { slug: string }) {
         {auRadar.length > 0 ? (
           <>
             {auRadar.length} affaire{auRadar.length > 1 ? 's' : ''} sans rendez-vous{' '}
-            {auRadar.length > 1 ? 'sont suivies' : 'est suivie'} dans le Radar (mails sans réponse
-            ou réponse reçue).{' '}
+            {auRadar.length > 1 ? 'sont suivies' : 'est suivie'} dans le Radar (approchées sans
+            réponse ou réponse reçue).{' '}
             <a className="link" href={`#/${slug}/radar`}>
               Ouvrir le Radar
             </a>

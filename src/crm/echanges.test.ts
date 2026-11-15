@@ -1,3 +1,4 @@
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import type { Message } from '../connecteurs/google/google.js';
@@ -5,9 +6,16 @@ import type { Messagerie } from '../connecteurs/messagerie.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { finDeLecture, lancerLecture, lireEchanges, resumerEchanges } from './echanges.js';
+import {
+  contactsAvecDiagnostic,
+  finDeLecture,
+  lancerLecture,
+  lireEchanges,
+  resumerEchanges,
+} from './echanges.js';
 import type { Evenement } from './fiches.js';
 import { ETAPES_NATIVES, getPipeline } from './pipeline.js';
+import { diagnosticProjets } from '../diagnostic/schema.js';
 import {
   contactEchangesMail,
   contactEmails,
@@ -16,6 +24,7 @@ import {
   opportunites,
   rdvContacts,
   rendezVous,
+  taches,
 } from './schema.js';
 
 const deps = { secretsDir: '/inexistant', realWrites: false };
@@ -107,6 +116,51 @@ describe('Affaires sans rendez-vous rangées par la messagerie', () => {
         { instanceId: inst.id, titre: 'Jamais', etape, contactId: ids.jamais },
         { instanceId: inst.id, titre: 'AvecRdv', etape, contactId: ids.avecRdv },
       ]);
+      // Approchés hors messagerie : une tâche faite (message LinkedIn), une tâche encore à faire.
+      const [linkedin, aFaire, diag] = await tx
+        .insert(contacts)
+        .values(['linkedin', 'aFaire', 'diag'].map((nom) => ({ instanceId: inst.id, nom })))
+        .returning();
+      ids.diag = diag!.id;
+      await tx
+        .insert(contactEmails)
+        .values({ instanceId: inst.id, contactId: diag!.id, email: 'diag@fictive.test' });
+      const [affLinkedin, affAFaire] = await tx
+        .insert(opportunites)
+        .values([
+          { instanceId: inst.id, titre: 'LinkedIn', etape, contactId: linkedin!.id },
+          { instanceId: inst.id, titre: 'AFaire', etape, contactId: aFaire!.id },
+          // Diagnostic réalisé : au moins en Qualification, jamais au Radar, même écrite sans réponse.
+          { instanceId: inst.id, titre: 'Diag', etape, contactId: diag!.id },
+        ])
+        .returning();
+      await tx.insert(taches).values([
+        {
+          instanceId: inst.id,
+          titre: 'Message LinkedIn fictif',
+          canal: 'tache',
+          contactId: linkedin!.id,
+          faitAt: new Date('2026-10-02T09:00:00Z'),
+        },
+        {
+          instanceId: inst.id,
+          titre: 'Message LinkedIn fictif',
+          canal: 'tache',
+          opportuniteId: affAFaire!.id,
+        },
+      ]);
+      void affLinkedin;
+      await tx
+        .insert(diagnosticProjets)
+        .values({
+          instanceId: inst.id,
+          nom: 'Diag fictif',
+          activite: 'services',
+          contactId: diag!.id,
+        });
+      await tx
+        .insert(contactEchangesMail)
+        .values({ instanceId: inst.id, contactId: diag!.id, envoyes: 3, recus: 0 });
       const [rdv] = await tx
         .insert(rendezVous)
         .values({ instanceId: inst.id, eventId: 'os:ech', statut: 'rdv' })
@@ -149,7 +203,7 @@ describe('Affaires sans rendez-vous rangées par la messagerie', () => {
   };
   const boitesDe = () => Promise.resolve([boite]);
 
-  it('lit la messagerie des seuls contacts des affaires ouvertes sans rendez-vous', async () => {
+  it('lit la messagerie des seuls contacts des affaires ouvertes sans rendez-vous ni diagnostic', async () => {
     const r = await lireEchanges(t.app.db, inst, deps, boitesDe);
     expect(r).toEqual({ contacts: 4, erreurs: 0 });
     expect(lus.sort()).toEqual(
@@ -167,6 +221,48 @@ describe('Affaires sans rendez-vous rangées par la messagerie', () => {
     expect(radar('Collègue')).toBe('repondu');
     expect(radar('Jamais')).toBeNull();
     expect(radar('AvecRdv')).toBeNull();
+  });
+
+  it('range aussi au Radar une affaire approchée par une tâche faite (LinkedIn…), pas par une tâche à faire', async () => {
+    const pipe = await getPipeline(t.app.db, inst);
+    const radar = (titre: string) => pipe.opportunites.find((o) => o.titre === titre)?.radar;
+    expect(radar('LinkedIn')).toBe('sans_reponse');
+    expect(radar('AFaire')).toBeNull();
+  });
+
+  it('garde au Pipeline, au moins en Qualification, une affaire avec diagnostic', async () => {
+    const pipe = await getPipeline(t.app.db, inst);
+    expect(pipe.opportunites.find((o) => o.titre === 'Diag')).toMatchObject({
+      radar: null,
+      diagnostic: true,
+      sansRdv: false,
+      etape: 'qualification',
+      etapeCrm: ETAPES_NATIVES[0]!.id,
+    });
+    expect(pipe.opportunites.find((o) => o.titre === 'Muette')).toMatchObject({
+      diagnostic: false,
+      etapeCrm: null,
+    });
+  });
+
+  it('ne fait pas reculer une affaire avec diagnostic déjà plus loin que la Qualification', async () => {
+    await withInstance(t.owner.db, inst.id, (tx) =>
+      tx
+        .update(opportunites)
+        .set({ etape: 'proposition' })
+        .where(and(eq(opportunites.instanceId, inst.id), eq(opportunites.titre, 'Diag'))),
+    );
+    const pipe = await getPipeline(t.app.db, inst);
+    expect(pipe.opportunites.find((o) => o.titre === 'Diag')).toMatchObject({
+      etape: 'proposition',
+      etapeCrm: null,
+    });
+  });
+
+  it('reconnaît les contacts avec diagnostic, par eux-mêmes ou par leur entreprise', async () => {
+    const avec = await contactsAvecDiagnostic(t.app.db, inst.id);
+    expect(avec.has(ids.diag!)).toBe(true);
+    expect(avec.has(ids.muet!)).toBe(false);
   });
 
   it('une boîte illisible ne remet pas à zéro ce qu’une lecture précédente a trouvé', async () => {

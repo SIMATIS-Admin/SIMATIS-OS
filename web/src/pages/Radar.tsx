@@ -74,7 +74,7 @@ const etapes = (slug: string, radar: EtatRadar, creerAffaire: (contactId: string
     titre: 'Contactés',
     aide:
       radar.reprise.contactes.total > 0
-        ? `Touches envoyées, dont ${dontAffaires(radar.reprise.contactes.total)} écrites sans réponse`
+        ? `Touches envoyées, dont ${dontAffaires(radar.reprise.contactes.total)} approchées sans réponse`
         : 'Une ou plusieurs touches envoyées',
     total: radar.contactes.total + radar.reprise.contactes.total,
     // Les affaires du Pipeline d'abord : ce sont des personnes déjà approchées, avec une fiche.
@@ -182,9 +182,9 @@ export function Radar({ slug }: { slug: string }) {
         </a>
       </p>
       <p className="small muted">
-        Les affaires du Pipeline sans rendez-vous y sont rangées d’après la messagerie : écrites
-        sans réponse dans « Contactés », avec une réponse dans « Ont répondu ».{' '}
-        {libelleLecture(lecture)}
+        Les affaires du Pipeline sans rendez-vous y sont rangées d’après la messagerie et les tâches
+        faites (LinkedIn compris) : approchées sans réponse dans « Contactés », avec une réponse
+        dans « Ont répondu ». {libelleLecture(lecture)}
         {lecture && lecture.etat !== 'en_cours' && (
           <>
             {' · '}

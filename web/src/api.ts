@@ -786,8 +786,12 @@ export type PipelineOpp = {
   joursInactif: number | null;
   // Ouverte sans aucun rendez-vous : une personne encore en prospection, suivie aussi dans le Radar.
   sansRdv: boolean;
-  // Sans rendez-vous et déjà écrite : suivie dans le Radar (sans réponse, ou a répondu), plus au
-  // Pipeline. null : jamais écrite, ou avec un rendez-vous.
+  // Sans rendez-vous ni diagnostic, et déjà approchée (mail, tâche faite) : suivie dans le Radar
+  // (sans réponse, ou a répondu), plus au Pipeline. null : aucune activité, rendez-vous ou diagnostic.
+  // Diagnostic réalisé : l'affaire est affichée au moins en Qualification ; etapeCrm garde alors
+  // l'étape du CRM quand elle est plus basse.
+  diagnostic: boolean;
+  etapeCrm: string | null;
   radar: 'sans_reponse' | 'repondu' | null;
   // Prochain rendez-vous commercial lié à l'affaire, à son contact ou à son entreprise.
   prochainRdv: string | null;

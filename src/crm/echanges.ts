@@ -11,8 +11,9 @@ import type { Evenement } from './fiches.js';
 import { boitesDeInstance, mailsEchanges } from './mails.js';
 import { contactEchangesMail, contactEmails } from './schema.js';
 
-// Where an open deal without a meeting stands in the mailbox: written to without an answer, or
-// answered. A deal never written to has no ranking and stays in the Pipeline.
+// Where an open deal without a meeting nor diagnostic stands: approached (mail sent, or task done
+// in the CRM) without an answer, or answered by mail. A deal never approached has no ranking and
+// stays in the Pipeline.
 export type Classement = 'sans_reponse' | 'repondu';
 
 export type ResumeEchanges = {
@@ -67,14 +68,33 @@ const contactsDeLAffaire = sql`(
       and c.entreprise_id = "opportunites"."entreprise_id"
 )`;
 
-// Ranking of the deal on the current row, from what the mailbox said of its contacts.
+// True when a diagnostic was made for the deal on the current row, its contacts or its company:
+// the deal went further than prospection (at least Qualification) and never goes to the Radar.
+export const diagnosticDeLAffaire = sql<boolean>`exists (select 1 from diagnostic_projets d
+  where d.instance_id = "opportunites"."instance_id" and (
+    d.opportunite_id = "opportunites"."id"
+    or d.entreprise_id = "opportunites"."entreprise_id"
+    or d.contact_id in ${contactsDeLAffaire}))`;
+
+// A task done in the CRM (LinkedIn message, call, mail…) on the deal, its contacts or its company:
+// an approach the mailbox does not see.
+const tacheFaite = sql`exists (select 1 from taches t
+  where t.instance_id = "opportunites"."instance_id" and t.fait_at is not null and (
+    t.opportunite_id = "opportunites"."id"
+    or t.entreprise_id = "opportunites"."entreprise_id"
+    or t.contact_id in ${contactsDeLAffaire}))`;
+
+// Ranking of the deal on the current row: answered by mail, or approached (mail sent or task done)
+// without an answer. None for a deal with a diagnostic, or never approached.
 export const classementAffaire = sql<Classement | null>`(case
+  when ${diagnosticDeLAffaire} then null
   when exists (select 1 from contact_echanges_mail m
     where m.instance_id = "opportunites"."instance_id" and m.recus > 0
       and m.contact_id in ${contactsDeLAffaire}) then 'repondu'
   when exists (select 1 from contact_echanges_mail m
     where m.instance_id = "opportunites"."instance_id" and m.envoyes > 0
       and m.contact_id in ${contactsDeLAffaire}) then 'sans_reponse'
+  when ${tacheFaite} then 'sans_reponse'
 end)`;
 
 // Contacts of the open deals without a commercial meeting: the only ones the mailbox is read for.
@@ -84,6 +104,7 @@ async function contactsALire(db: Database, instance: Instance): Promise<string[]
       select distinct c.id from opportunites
       join lateral ${contactsDeLAffaire} c(id) on true
       where opportunites.instance_id = ${currentInstance} and opportunites.clos is null
+        and not ${diagnosticDeLAffaire}
         and not exists (select 1 from rendez_vous r
           where r.instance_id = ${currentInstance} and r.statut = 'rdv' and (
             exists (select 1 from rdv_affaires x
@@ -216,4 +237,25 @@ export async function lancerLecture(
   );
   enCours.set(instance.id, fin);
   return { ...(await etatLecture(db, instance)), lancee: true };
+}
+
+// Contacts for whom a diagnostic was made (for them, their company or one of their deals): they
+// went further than the Radar, whatever their deals became.
+export async function contactsAvecDiagnostic(
+  db: Database,
+  instanceId: string,
+): Promise<Set<string>> {
+  return withInstance(db, instanceId, async (tx) => {
+    const { rows } = await tx.execute<{ id: string }>(sql`
+      select c.id from contacts c
+      where c.instance_id = ${currentInstance} and exists (select 1 from diagnostic_projets d
+        where d.instance_id = c.instance_id and (
+          d.contact_id = c.id
+          or d.entreprise_id = c.entreprise_id
+          or exists (select 1 from opportunites o
+            where o.id = d.opportunite_id and o.contact_id = c.id)
+          or exists (select 1 from affaire_contacts x
+            where x.opportunite_id = d.opportunite_id and x.contact_id = c.id)))`);
+    return new Set(rows.map((r) => r.id));
+  });
 }

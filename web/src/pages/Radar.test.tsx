@@ -124,7 +124,7 @@ describe('Radar', () => {
     const colonne = await screen.findByRole('region', { name: 'Contactés' });
     expect(
       within(colonne).getByText(
-        /dont 42 affaires du Pipeline sans rendez-vous écrites sans réponse/,
+        /dont 42 affaires du Pipeline sans rendez-vous approchées sans réponse/,
       ),
     ).toBeTruthy();
     const carte = within(colonne).getByRole('link', { name: /Jean Fictif/ });

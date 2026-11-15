@@ -26,6 +26,8 @@ const opp = (id: string, etape: string, extra: Record<string, unknown> = {}) => 
   joursInactif: null,
   sansRdv: false,
   radar: null,
+  diagnostic: false,
+  etapeCrm: null,
   prochainRdv: null,
   ...extra,
 });
@@ -208,7 +210,7 @@ describe('Pipeline screen', () => {
     await screen.findByText('Entreprise o1');
     expect(screen.getByText(/RDV mar\. 17 nov\., 14:00/)).toBeTruthy();
     // Une seule affaire ouverte sans rendez-vous restée au Pipeline : o2 (o5 est au Radar).
-    expect(screen.getAllByText('Sans rendez-vous, jamais écrite')).toHaveLength(1);
+    expect(screen.getAllByText('Sans rendez-vous, aucune activité')).toHaveLength(1);
   });
 
   it('leaves to the Radar the deals written to without a meeting, and rereads the mailbox on demand', async () => {
