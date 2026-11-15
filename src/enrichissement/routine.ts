@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { creerImports, integrerImport } from '../base-vivante/service.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
+import { logEvent } from '../journal/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { preferences } from '../preferences/schema.js';
 import type { LimitesIA } from '../ia/limites.js';
@@ -131,8 +132,9 @@ export async function tournerRecherche(
     const contacts: ProspectRecherche[] = [];
     let creees = 0;
     let fusionnees = 0;
+    let epuisee = false;
     try {
-      while (creees < routine.nombre) {
+      while (creees < routine.nombre && !epuisee) {
         const recherche = await chercherNouveauxProspects(
           db,
           client,
@@ -141,6 +143,7 @@ export async function tournerRecherche(
           routine.nombre - creees,
         );
         const candidats = recherche.contacts;
+        epuisee = recherche.epuisee;
         const texte = [
           'Entreprise;Prénom;Nom;Fonction;Email;LinkedIn',
           ...candidats.map((c) =>
@@ -154,11 +157,14 @@ export async function tournerRecherche(
           mandat: null,
           collecteLe: jour,
         });
+        const creeesAvant = creees;
         for (const imp of imports) {
           const resultat = await integrerImport(db, instanceId, imp.id);
           creees += resultat.creees;
           fusionnees += resultat.fusionnees;
         }
+        // Des contacts tous rapprochés de fiches existantes : relancer referait la même recherche.
+        if (creees === creeesAvant) epuisee = true;
         await noterContactsRecherches(db, instanceId, candidats);
         contacts.push(...candidats);
       }
@@ -175,6 +181,8 @@ export async function tournerRecherche(
         })),
       };
       bilan = `${creees} fiche(s) ajoutée(s), ${fusionnees} rapprochée(s), sur ${routine.nombre} contacts visés.`;
+      if (creees < routine.nombre)
+        bilan += ' La recherche ne trouve plus de nouveaux contacts : élargissez les consignes.';
     } catch (erreur) {
       const apres = limites
         ? quotaCodex(await limites().catch(() => null), maintenant, fournisseur)
@@ -198,6 +206,9 @@ export async function tournerRecherche(
       bilan = cause.bilan;
     }
     await cloreSessionRecherche(db, instanceId, session, fin);
+    await withInstance(db, instanceId, (tx) =>
+      logEvent(tx, { acteur: 'os', action: `Recherche quotidienne : ${bilan}` }),
+    );
     await db
       .update(preferences)
       .set({

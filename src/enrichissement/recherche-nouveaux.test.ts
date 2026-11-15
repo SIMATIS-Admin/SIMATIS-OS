@@ -54,6 +54,56 @@ it('ne compte pas un contact déjà présent dans la Base vivante et poursuit ju
     );
     expect(resultat.contacts.map((c) => c.nom)).toEqual(['Nouveau 1', 'Nouveau 2']);
     expect(demander).toHaveBeenCalledTimes(2);
+    expect(resultat.epuisee).toBe(false);
+  } finally {
+    await t.drop();
+  }
+});
+
+it('s’arrête après trois passages sans nouveau contact au lieu de tourner sans fin', async () => {
+  const t = await setupTestApp();
+  try {
+    const instance = await createInstance(t.owner.db, {
+      slug: 'recherche-epuisee',
+      nom: 'Recherche épuisée',
+      type: 'propre',
+    });
+    await withInstance(t.app.db, instance.id, (tx) =>
+      integrerFiches(tx, instance.id, [
+        {
+          fiche: normaliserFiche({
+            entreprise: 'Entreprise existante',
+            prenom: 'Alice',
+            nom: 'EXEMPLE',
+            email: 'alice@existante.example',
+            fonction: 'Direction',
+          }).fiche,
+          provenance: 'Test',
+          mandat: null,
+          importId: null,
+          collecteLe: null,
+        },
+      ]),
+    );
+
+    // Le moteur ne propose que des personnes déjà présentes dans la base.
+    const demander = vi.fn(() =>
+      Promise.resolve({
+        json: { contacts: [candidat('Doublon', 'alice@existante.example')] },
+        jetons: 0,
+      }),
+    );
+
+    const resultat = await chercherNouveauxProspects(
+      t.app.db,
+      { demander },
+      instance.id,
+      'Critères fictifs',
+      10,
+    );
+    expect(resultat.contacts).toEqual([]);
+    expect(resultat.epuisee).toBe(true);
+    expect(demander).toHaveBeenCalledTimes(3);
   } finally {
     await t.drop();
   }

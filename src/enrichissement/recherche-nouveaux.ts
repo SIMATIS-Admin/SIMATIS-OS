@@ -26,6 +26,10 @@ const clesDuProspect = (contact: IdentiteProspect) =>
     }).fiche,
   );
 
+// Le moteur peut ne reproposer que des personnes déjà en base : sans ce plafond, la recherche
+// relançait une requête toutes les quinze secondes jusqu'à épuiser le quota de l'abonnement.
+export const PASSAGES_SANS_NOUVEAU_MAX = 3;
+
 const identite = (contact: ProspectRecherche) =>
   `${contact.prenom} ${contact.nom} (${contact.entreprise})`;
 
@@ -74,8 +78,10 @@ export async function chercherNouveauxProspects(
   let contacts = [...precedents];
   const refuses = new Set<string>();
   let passage = 0;
+  let sansNouveau = 0;
 
   while (contacts.length < nombre) {
+    if (sansNouveau >= PASSAGES_SANS_NOUVEAU_MAX) return { contacts, passage, epuisee: true };
     passage++;
     const clesExistantes = await clesDeLaBase(db, instanceId);
     const retenus: ProspectRecherche[] = [];
@@ -94,6 +100,7 @@ export async function chercherNouveauxProspects(
 
     const exclusions = [...new Set([...contacts.map(identite), ...refuses])].slice(-100).join('; ');
     const restant = nombre - contacts.length;
+    const avant = contacts.length;
     const candidats = await chercherProspects(
       client,
       `${consignes}\nL’objectif obligatoire est de trouver ${nombre} personnes absentes de la base. Ne propose aucune des personnes déjà rencontrées lors de cette recherche : ${exclusions || 'aucune'}. Diversifie les entreprises et les sources si un passage ne produit aucun nouveau contact.`,
@@ -109,8 +116,9 @@ export async function chercherNouveauxProspects(
       for (const cle of cles) clesRetenues.add(cle);
       if (contacts.length === nombre) break;
     }
+    sansNouveau = contacts.length > avant ? 0 : sansNouveau + 1;
     await progres?.([...contacts], passage);
   }
 
-  return { contacts, passage };
+  return { contacts, passage, epuisee: false };
 }
