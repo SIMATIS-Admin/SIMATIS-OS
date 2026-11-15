@@ -69,7 +69,7 @@ export type JournalEntry = {
 export type LigneConsole = {
   id: string;
   at: string;
-  source: 'journal' | 'routine';
+  source: 'journal' | 'routine' | 'conso';
   acteur: string;
   niveau: 'ok' | 'info' | 'attention' | 'erreur';
   texte: string;

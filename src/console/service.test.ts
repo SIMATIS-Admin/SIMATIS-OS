@@ -5,6 +5,7 @@ import { instances } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import type { Execution } from '../routines/schema.js';
 import { demanderExecution, demarrerExecution, terminerExecution } from '../routines/service.js';
+import { iaReleve } from '../ia/conso/schema.js';
 import { fusionnerConsole, lireConsole } from './service.js';
 
 const run = (p: Partial<Execution>): Execution => ({
@@ -93,6 +94,28 @@ describe('fusionnerConsole', () => {
     });
     expect(lignes.at(-1)?.source).toBe('routine');
   });
+
+  it('les lignes conso ne chassent pas les lignes des routines', () => {
+    const journal = Array.from({ length: 300 }, (_, i) => ({
+      id: i,
+      instanceId: 'i',
+      at: new Date(Date.UTC(2026, 9, 22, 7, 0, i)),
+      acteur: 'os',
+      action: `Événement ${i}`,
+      niveau: null,
+      details: {},
+    }));
+    const conso = Array.from({ length: 50 }, (_, i) => ({
+      id: `conso:${i}`,
+      at: new Date(Date.UTC(2026, 9, 22, 9, i)).toISOString(),
+      source: 'conso' as const,
+      acteur: 'ia',
+      niveau: 'info' as const,
+      texte: `Conso ${i}`,
+    }));
+    const { lignes } = fusionnerConsole(journal, [], new Date(), conso);
+    expect(lignes).toHaveLength(350);
+  });
 });
 
 describe('lireConsole', () => {
@@ -131,6 +154,21 @@ describe('lireConsole', () => {
     expect(textes).toContain('Fait A');
     expect(textes).not.toContain('Événement B');
     expect(enCours).toBe(false);
+  });
+
+  it('aucune ligne conso sans l’option (instance prospect)', async () => {
+    await t.app.db.insert(iaReleve).values({
+      id: 'mac',
+      dernierPassage: new Date(Date.now() - 60 * 60_000),
+      anomalies: 0,
+    });
+    const sans = await withInstance(t.app.db, a, (tx) => lireConsole(tx));
+    expect(sans.lignes.some((l) => l.source === 'conso')).toBe(false);
+    const avec = await withInstance(t.app.db, a, (tx) =>
+      lireConsole(tx, new Date(), { conso: true }),
+    );
+    expect(avec.lignes.some((l) => l.source === 'conso')).toBe(true);
+    await t.app.db.delete(iaReleve);
   });
 
   it('keeps only the last 24 hours', async () => {

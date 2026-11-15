@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
+import { iaReleve } from '../ia/conso/schema.js';
 import fixtures from '../demo/fixtures.json' with { type: 'json' };
 import { seedDemoIfEmpty } from '../demo/seed.js';
 
@@ -110,6 +111,21 @@ describe('API instances, entreprises, contacts', () => {
     const lignes = (body as unknown as { lignes: { texte: string }[] }).lignes;
     expect(lignes.length).toBeGreaterThan(0);
     expect(lignes.every((l) => !l.texte.includes('Aquaterra'))).toBe(true);
+  });
+
+  it('shows AI usage lines in a real instance, never in a demo (prospect) one', async () => {
+    await t.app.db.insert(iaReleve).values({
+      id: 'mac',
+      dernierPassage: new Date(Date.now() - 60 * 60_000),
+      anomalies: 0,
+    });
+    const conso = async (slug: string) =>
+      (
+        (await get(`/api/i/${slug}/console`)).body as unknown as { lignes: { source: string }[] }
+      ).lignes.some((l) => l.source === 'conso');
+    expect(await conso('helioval')).toBe(true);
+    expect(await conso('demo')).toBe(false);
+    await t.app.db.delete(iaReleve);
   });
 
   it('returns only counters in the portfolio', async () => {

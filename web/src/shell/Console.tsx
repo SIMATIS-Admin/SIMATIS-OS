@@ -23,11 +23,13 @@ const ETIQUETTES: Record<LigneConsole['niveau'], string> = {
 };
 
 const emoji = (l: LigneConsole) =>
-  l.source === 'routine' || l.acteur.startsWith('agent:')
-    ? '🤖'
-    : l.acteur === 'pilote'
-      ? '🙋'
-      : '⚙️';
+  l.source === 'conso'
+    ? '📊'
+    : l.source === 'routine' || l.acteur.startsWith('agent:')
+      ? '🤖'
+      : l.acteur === 'pilote'
+        ? '🙋'
+        : '⚙️';
 
 const heure = (iso: string) =>
   new Date(iso).toLocaleTimeString('fr-FR', {

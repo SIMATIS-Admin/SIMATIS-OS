@@ -1934,7 +1934,10 @@ export function registerApi(
 
   app.get<SlugParams>(
     '/api/i/:slug/console',
-    onInstance((i) => withInstance(db, i.id, (tx) => lireConsole(tx))),
+    // Les lignes de consommation IA portent des noms de mandats : jamais dans une démo.
+    onInstance((i) =>
+      withInstance(db, i.id, (tx) => lireConsole(tx, new Date(), { conso: i.type !== 'prospect' })),
+    ),
   );
 
   app.get<SlugParams>(
