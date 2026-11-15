@@ -34,6 +34,8 @@ const CLE_OUVERTS = 'simatis.nav.ouverts';
 const SANS_ETOILE = ['agenda', 'cockpit', 'rendez-vous'];
 // Narrow icon-only bar, also kept on this screen.
 const CLE_REDUITE = 'simatis.nav.reduite';
+// « Mon espace » replié d'un geste : toutes les rubriques disparaissent, Cockpit et raccourcis restent.
+const CLE_ESPACE = 'simatis.nav.espace-replie';
 const memoriser = (cle: string, valeur: string) => {
   try {
     localStorage.setItem(cle, valeur);
@@ -41,9 +43,9 @@ const memoriser = (cle: string, valeur: string) => {
     // Private window: the choice lasts for this visit only.
   }
 };
-const lireReduite = () => {
+const lireDrapeau = (cle: string) => {
   try {
-    return localStorage.getItem(CLE_REDUITE) === '1';
+    return localStorage.getItem(cle) === '1';
   } catch {
     return false;
   }
@@ -74,10 +76,15 @@ export function Sidebar({
     setOuverts(suivant);
     memoriser(CLE_OUVERTS, JSON.stringify(suivant));
   };
-  const [reduite, setReduite] = useState(lireReduite);
+  const [reduite, setReduite] = useState(() => lireDrapeau(CLE_REDUITE));
   const basculerReduite = () => {
     setReduite(!reduite);
     memoriser(CLE_REDUITE, reduite ? '0' : '1');
+  };
+  const [espaceReplie, setEspaceReplie] = useState(() => lireDrapeau(CLE_ESPACE));
+  const basculerEspace = () => {
+    setEspaceReplie(!espaceReplie);
+    memoriser(CLE_ESPACE, espaceReplie ? '0' : '1');
   };
 
   const actif = (it: NavItem) => view === it.id;
@@ -245,28 +252,40 @@ export function Sidebar({
             {favItems.map((it, index) => link(it, true, index))}
           </div>
         )}
-        <div className="nav-espace-titre">Mon espace</div>
-        {NAV.map((g) => {
-          // Un favori est un doublon : il reste à sa place dans Mon espace.
-          const items = g.items.filter((it) => allowed(it, current.modules));
-          if (items.length === 0) return null;
-          const ouvert = ouverts[g.title] ?? !g.later;
-          return (
-            <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
-              <button
-                className="later-btn"
-                aria-expanded={ouvert}
-                onClick={() => basculer(g.title, ouvert)}
-              >
-                {g.title}
-                <span className={`chev ${ouvert ? 'open' : ''}`}>
-                  <Icon name="down" />
-                </span>
-              </button>
-              {ouvert && items.map((it) => link(it))}
-            </div>
-          );
-        })}
+        <button
+          className="nav-espace-titre"
+          aria-expanded={!espaceReplie}
+          title={espaceReplie ? 'Déplier Mon espace' : 'Replier Mon espace'}
+          onClick={basculerEspace}
+        >
+          <Icon name="grid" />
+          <span className="lbl">Mon espace</span>
+          <span className={`chev ${espaceReplie ? '' : 'open'}`}>
+            <Icon name="down" />
+          </span>
+        </button>
+        {!espaceReplie &&
+          NAV.map((g) => {
+            // Un favori est un doublon : il reste à sa place dans Mon espace.
+            const items = g.items.filter((it) => allowed(it, current.modules));
+            if (items.length === 0) return null;
+            const ouvert = ouverts[g.title] ?? !g.later;
+            return (
+              <div key={g.title} className={`nav-group ${g.later ? 'later' : ''}`}>
+                <button
+                  className="later-btn"
+                  aria-expanded={ouvert}
+                  onClick={() => basculer(g.title, ouvert)}
+                >
+                  {g.title}
+                  <span className={`chev ${ouvert ? 'open' : ''}`}>
+                    <Icon name="down" />
+                  </span>
+                </button>
+                {ouvert && items.map((it) => link(it))}
+              </div>
+            );
+          })}
       </nav>
       {current.type === 'propre' &&
         (current.modules.includes('cerveau') || current.modules.includes('gestion')) && (

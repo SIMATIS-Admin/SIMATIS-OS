@@ -213,9 +213,28 @@ describe('Sidebar', () => {
     expect(document.querySelector('.side')?.classList.contains('reduite')).toBe(false);
   });
 
-  it('shows every section without a toggle, with one entry per screen when nothing is a favourite', () => {
+  it('folds every section into Mon espace in one click, remembers it, and keeps the Cockpit and shortcuts', () => {
+    renderSidebar(simatis, ['contacts']);
+    const bouton = screen.getByRole('button', { name: /Mon espace/ });
+    expect(bouton.getAttribute('aria-expanded')).toBe('true');
+    expect(bouton.querySelector('svg')).toBeTruthy();
+    expect(document.querySelectorAll('.nav-group > .later-btn').length).toBeGreaterThan(0);
+    fireEvent.click(bouton);
+    expect(bouton.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelectorAll('.nav-group > .later-btn')).toHaveLength(0);
+    expect(screen.getByRole('link', { name: /Cockpit/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Pipeline/ })).toBeNull();
+    cleanup();
     renderSidebar(simatis, []);
-    expect(screen.queryByRole('button', { name: 'Mes espaces' })).toBeNull();
+    const replie = screen.getByRole('button', { name: /Mon espace/ });
+    expect(replie.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(replie);
+    expect(screen.getByRole('link', { name: /Pipeline/ })).toBeTruthy();
+  });
+
+  it('shows every section, with one entry per screen when nothing is a favourite', () => {
+    renderSidebar(simatis, []);
     expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /Pipeline/ })).toHaveLength(1);
   });
