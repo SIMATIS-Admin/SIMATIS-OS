@@ -418,13 +418,37 @@ a {
   margin-top: 0;
 }
 .nav-espace-titre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
   margin-top: 16px;
   padding: 10px 10px 0;
+  background: none;
+  border: 0;
   border-top: 1px solid #1e4b82;
+  font: inherit;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #8fa7c6;
+  cursor: pointer;
+}
+.nav-espace-titre:hover {
+  color: #dce8f7;
+}
+.nav-espace-titre svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.nav-espace-titre .chev {
+  display: inline-flex;
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+.nav-espace-titre .chev.open {
+  transform: rotate(180deg);
 }
 .nav-group.favs {
   padding-bottom: 12px;
@@ -2346,7 +2370,8 @@ textarea.input {
   .side.reduite .brand-name,
   .side.reduite .inst-btn > span:not(.inst-dot),
   .side.reduite .nav-group > span,
-  .side.reduite .nav-espace-titre,
+  .side.reduite .nav-espace-titre .lbl,
+  .side.reduite .nav-espace-titre .chev,
   .side.reduite .later-btn,
   .side.reduite .nav a .lbl,
   .side.reduite .nav .fav,
@@ -2379,6 +2404,15 @@ textarea.input {
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid #1e4b82;
+  }
+  /* Narrow bar: only the four squares remain, centred, to fold or unfold Mon espace. */
+  .side.reduite .nav-espace-titre {
+    justify-content: center;
+    padding: 10px 0 0;
+  }
+  .side.reduite .nav-espace-titre svg {
+    width: 18px;
+    height: 18px;
   }
   .side.reduite .nav-group.favs {
     border-top: 0;
