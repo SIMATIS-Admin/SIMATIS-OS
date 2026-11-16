@@ -304,21 +304,21 @@
   border: 0;
   border-radius: 0;
 }
-/* Plein écran : la slide prend toute la place ; la barre de commande ne réapparaît qu'au survol
-   du bas de l'écran (ou au clavier). */
-.main.presentation .cours {
+/* Plein écran : « Masquer la barre » (ou B) donne toute la place à la slide ; la barre ne réapparaît
+   qu'au survol du bas de l'écran. */
+.main.presentation .cours.barre-masquee {
   grid-template-rows: minmax(0, 1fr);
   position: relative;
 }
-.main.presentation .cours-commande {
+.main.presentation .cours.barre-masquee .cours-commande {
   position: absolute;
   inset: auto 0 0 0;
   background: var(--white);
   opacity: 0;
   transition: opacity 0.15s;
 }
-.main.presentation .cours-commande:hover,
-.main.presentation .cours-commande:focus-within {
+.main.presentation .cours.barre-masquee .cours-commande:hover,
+.main.presentation .cours.barre-masquee .cours-commande:focus-within {
   opacity: 1;
 }
 
@@ -348,6 +348,7 @@
 }
 .cours-html iframe {
   border: 0;
+  pointer-events: none;
   transform-origin: top left;
   display: block;
   background: #fff;

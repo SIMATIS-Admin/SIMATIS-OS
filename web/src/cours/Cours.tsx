@@ -50,6 +50,7 @@ const AIDE: [string, string][] = [
   ['N', 'Notes du formateur et aperçu de la suivante'],
   ['E', 'Modifier la slide (Ctrl ou ⌘ + S pour enregistrer)'],
   ['F', 'Plein écran'],
+  ['B', 'Masquer ou afficher la barre du bas (plein écran)'],
   ['?', 'Cette aide'],
 ];
 
@@ -82,6 +83,8 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   const [pos, setPos] = useState<Position>(lirePosition);
   const [notes, setNotes] = useState(false);
   const [aide, setAide] = useState(false);
+  // En plein écran, la barre du bas peut se masquer (elle revient au survol du bas de l'écran).
+  const [barreMasquee, setBarreMasquee] = useState(false);
   const [edition, setEdition] = useState(false);
   // Relire le support après un enregistrement, sans quitter la slide.
   const [rechargement, setRechargement] = useState(0);
@@ -204,6 +207,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
       else if (e.key === '?') setAide((v) => !v);
       else if (e.key === 'e' || e.key === 'E') setEdition((v) => !v);
       else if (e.key === 'f' || e.key === 'F') basculer();
+      else if (e.key === 'b' || e.key === 'B') setBarreMasquee((v) => !v);
       else if (e.key === 'Escape') setAide(false);
       else return;
       e.preventDefault();
@@ -294,7 +298,7 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   const enHtml = etat.manifest.format === 'html';
   return (
     <div
-      className="cours"
+      className={`cours${actif && barreMasquee ? ' barre-masquee' : ''}`}
       ref={racine}
       role="region"
       aria-label={etat.manifest.titre}
@@ -423,6 +427,11 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
         <button className="btn sm" type="button" aria-pressed={actif} onClick={basculer}>
           Plein écran
         </button>
+        {actif && (
+          <button className="btn sm" type="button" onClick={() => setBarreMasquee(true)}>
+            Masquer la barre
+          </button>
+        )}
         <button
           className="btn sm"
           type="button"
