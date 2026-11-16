@@ -4642,7 +4642,7 @@ label.btn.off {
   background: #214462;
   color: #eef8ff;
 }
-/* Commutateur du moteur IA : le moteur choisi est allumé, l'autre est éteint. */
+/* Engagement des IA : une IA engagée est allumée, une IA mise de côté est grisée. */
 .commutateur-moteur {
   display: flex;
   flex: none;
@@ -4653,12 +4653,12 @@ label.btn.off {
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.07);
 }
-.console-journal-ouvert .commutateur-moteur {
-  position: absolute;
-  z-index: 1;
-  top: 7px;
-  right: 82px;
+/* Le bloc du milieu se place au centre de l'espace libre de la barre du haut. */
+.top > .commutateur-moteur {
   margin: 0;
+}
+.top > .barre {
+  flex: 0 1 470px;
 }
 .commutateur-moteur-option {
   display: grid;

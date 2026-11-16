@@ -207,6 +207,34 @@ describe('tours du runner avec le moteur choisi', () => {
     expect(lances).toEqual(['claude-fictif']);
   });
 
+  it("n'ouvre aucune session et signale l'échec quand Claude n'est pas engagé", async () => {
+    const fins: unknown[] = [];
+    const lances: string[] = [];
+    const f = ((url: string, init?: RequestInit) => {
+      const chemin = url.replace('http://os.test', '');
+      if (chemin.endsWith('/fin')) fins.push(JSON.parse(init?.body as string));
+      if (chemin === '/api/runner/moteur')
+        return Promise.resolve(Response.json({ moteur: 'claude', engage: false }));
+      if (chemin.endsWith('/demarrer'))
+        return Promise.resolve(Response.json({ tokenId: 't1', token: 'jeton-fictif' }));
+      if (chemin === '/api/runner/echanges') return Promise.resolve(Response.json([echange]));
+      return Promise.resolve(Response.json({ ok: true }));
+    }) as unknown as typeof fetch;
+    await tourEchanges({
+      base: 'http://os.test',
+      token: 'runner',
+      claude: 'claude-fictif',
+      codex: 'codex-fictif',
+      fetch: f,
+      lancer: (commande) => {
+        lances.push(commande);
+        return Promise.resolve(0);
+      },
+    });
+    expect(lances).toEqual([]);
+    expect((fins[0] as { erreur: string }).erreur).toContain("Claude n'est pas engagé");
+  });
+
   it('nomme Codex dans l’échec quand Codex s’arrête en erreur', async () => {
     const fins: unknown[] = [];
     const f = ((url: string, init?: RequestInit) => {

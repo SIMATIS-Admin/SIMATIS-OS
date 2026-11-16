@@ -29,11 +29,11 @@ export async function setFavoris(
   return unique;
 }
 
-// Moteur qui exécute les tâches IA de l'OS ; Claude par défaut : routines et conversations tournaient dessus.
+// Moteur qui exécute une tâche : fixe par type de tâche (Codex fait les recherches, Claude le reste).
 export type MoteurIA = 'claude' | 'codex';
-export const MOTEURS_IA: readonly MoteurIA[] = ['claude', 'codex'];
-export type Options = { ensuite: boolean; moteurIA: MoteurIA };
-const OPTIONS_DEFAUT: Options = { ensuite: true, moteurIA: 'claude' };
+// Engagement : coupe d'un geste la consommation d'une IA (absence du pilote). Les deux sont engagées par défaut.
+export type Options = { ensuite: boolean; claudeEngage: boolean; chatgptEngage: boolean };
+const OPTIONS_DEFAUT: Options = { ensuite: true, claudeEngage: true, chatgptEngage: true };
 
 export async function getOptions(db: Executor, utilisateur: string): Promise<Options> {
   const [row] = await db

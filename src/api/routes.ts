@@ -2775,7 +2775,7 @@ export function registerApi(
     options: await getOptions(db, UTILISATEUR),
   }));
   const optionsSchema = z
-    .object({ ensuite: z.boolean(), moteurIA: z.enum(['claude', 'codex']) })
+    .object({ ensuite: z.boolean(), claudeEngage: z.boolean(), chatgptEngage: z.boolean() })
     .partial()
     .strict();
   app.put<{ Body: unknown }>('/api/preferences/options', async (request, reply) => {
