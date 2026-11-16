@@ -144,6 +144,38 @@ function FournisseurCompact({
   );
 }
 
+// Bande étroite : seule la marque et les deux pourcentages restent, pour laisser la place au journal.
+function FournisseurEtroit({
+  fournisseur,
+  chargement = false,
+}: {
+  fournisseur: FournisseurIA;
+  chargement?: boolean;
+}) {
+  const ok = fournisseur.etat === 'ok' && fournisseur.fenetre5h && fournisseur.hebdomadaire;
+  return (
+    <section
+      className={`limite-ia-etroite ${fournisseur.id}`}
+      aria-label={`${fournisseur.nom}, limites réduites`}
+      title={
+        ok
+          ? `${fournisseur.nom} : ${Math.round(fournisseur.fenetre5h!.restant)} % sur 5 h, ${Math.round(fournisseur.hebdomadaire!.restant)} % sur la semaine`
+          : fournisseur.nom
+      }
+    >
+      <MarqueIA fournisseur={fournisseur} />
+      {ok ? (
+        <>
+          <span>{Math.round(fournisseur.fenetre5h!.restant)} %</span>
+          <span>{Math.round(fournisseur.hebdomadaire!.restant)} %</span>
+        </>
+      ) : (
+        <span>{chargement ? '…' : '–'}</span>
+      )}
+    </section>
+  );
+}
+
 function Fournisseur({
   fournisseur,
   maintenant,
@@ -222,7 +254,9 @@ const ecrire = (cle: string, valeur: string | null) => {
 export function Console({ slug }: { slug: string }) {
   const cleOuverte = 'console-ouverte';
   const cleCoupe = `console-vide-${slug}`;
+  const cleJauges = 'console-jauges-repliees';
   const [ouverte, setOuverte] = useState(() => lire(cleOuverte) === '1');
+  const [jaugesRepliees, setJaugesRepliees] = useState(() => lire(cleJauges) === '1');
   const [coupe, setCoupe] = useState<string | null>(() => lire(cleCoupe));
   const [donnees, setDonnees] = useState<ConsoleOS | null>(null);
   const [panne, setPanne] = useState(false);
@@ -306,6 +340,10 @@ export function Console({ slug }: { slug: string }) {
     ecrire(cleOuverte, ouverte ? '0' : '1');
     setOuverte(!ouverte);
   };
+  const basculerJauges = () => {
+    ecrire(cleJauges, jaugesRepliees ? '0' : '1');
+    setJaugesRepliees(!jaugesRepliees);
+  };
   const vider = () => {
     const dernier = toutes.at(-1)?.at;
     if (!dernier) return;
@@ -378,10 +416,26 @@ export function Console({ slug }: { slug: string }) {
         </div>
       )}
       {ouverte && (
-        <div className="console-deplie">
+        <div className={`console-deplie ${jaugesRepliees ? 'jauges-repliees' : ''}`}>
           <div className="console-journal-ouvert">
-            <button className="console-replier" type="button" onClick={basculer}>
-              Replier
+            <button
+              className="console-replier"
+              type="button"
+              aria-label="Replier la console"
+              title="Replier la console"
+              onClick={basculer}
+            >
+              ▾
+            </button>
+            <button
+              className="console-jauges-bascule"
+              type="button"
+              aria-label={jaugesRepliees ? 'Déplier les jauges IA' : 'Replier les jauges IA'}
+              title={jaugesRepliees ? 'Déplier les jauges IA' : 'Replier les jauges IA'}
+              aria-expanded={!jaugesRepliees}
+              onClick={basculerJauges}
+            >
+              {jaugesRepliees ? '‹' : '›'}
             </button>
             <div className="console-corps" ref={corps} role="log" aria-live="polite">
               {visibles.length === 0 && (
@@ -413,17 +467,27 @@ export function Console({ slug }: { slug: string }) {
               )}
             </div>
           </div>
-          {fournisseurs.map((fournisseur) => (
-            <Fournisseur
-              key={fournisseur.id}
-              fournisseur={fournisseur}
-              maintenant={maintenant}
-              actualiseLe={fournisseur.id === 'chatgpt' ? limites?.actualiseLe : null}
-              enCours={limitesEnCours}
-              onActualiser={fournisseur.id === 'chatgpt' ? () => void chargerLimites() : undefined}
-              chargement={chargementLimites}
-            />
-          ))}
+          {fournisseurs.map((fournisseur) =>
+            jaugesRepliees ? (
+              <FournisseurEtroit
+                key={fournisseur.id}
+                fournisseur={fournisseur}
+                chargement={chargementLimites}
+              />
+            ) : (
+              <Fournisseur
+                key={fournisseur.id}
+                fournisseur={fournisseur}
+                maintenant={maintenant}
+                actualiseLe={fournisseur.id === 'chatgpt' ? limites?.actualiseLe : null}
+                enCours={limitesEnCours}
+                onActualiser={
+                  fournisseur.id === 'chatgpt' ? () => void chargerLimites() : undefined
+                }
+                chargement={chargementLimites}
+              />
+            ),
+          )}
         </div>
       )}
     </section>

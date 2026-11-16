@@ -117,6 +117,31 @@ describe('Console (journal en lecture seule)', () => {
     );
   });
 
+  it('folds the log back with a small arrow at its top left', async () => {
+    render(<Console slug="simatis" />);
+    await screen.findByText('Test de VMA reçu : ACME non rangé');
+    fireEvent.click(screen.getByLabelText('Déplier la console'));
+    fireEvent.click(screen.getByLabelText('Replier la console'));
+    expect(screen.queryByRole('log')).toBeNull();
+    expect(localStorage.getItem('console-ouverte')).toBe('0');
+  });
+
+  it('squeezes the two gauges to the right to widen the log, and remembers it', async () => {
+    render(<Console slug="simatis" />);
+    await screen.findByText('Test de VMA reçu : ACME non rangé');
+    fireEvent.click(screen.getByLabelText('Déplier la console'));
+    await screen.findByText('72 % restant');
+    fireEvent.click(screen.getByLabelText('Replier les jauges IA'));
+    expect(screen.queryByText('72 % restant')).toBeNull();
+    expect(screen.getByText('72 %')).toBeTruthy();
+    expect(screen.getByText('84 %')).toBeTruthy();
+    expect(screen.getByRole('log')).toBeTruthy();
+    expect(localStorage.getItem('console-jauges-repliees')).toBe('1');
+    fireEvent.click(screen.getByLabelText('Déplier les jauges IA'));
+    expect(screen.getByText('72 % restant')).toBeTruthy();
+    expect(localStorage.getItem('console-jauges-repliees')).toBe('0');
+  });
+
   it('empties the display without losing anything, then shows everything again', async () => {
     render(<Console slug="simatis" />);
     await screen.findByText('Test de VMA reçu : ACME non rangé');
