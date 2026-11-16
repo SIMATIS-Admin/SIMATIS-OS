@@ -23,8 +23,9 @@ type Props = {
   onMoveFavori: (id: string, cibleId: string, apres: boolean) => void;
 };
 
-// Le Cockpit est épinglé tout en haut du menu, en plus de sa place dans Mon espace.
+// Le Cockpit et l'Agenda sont épinglés tout en haut du menu, en plus de leur place dans Mon espace.
 const COCKPIT = allItems().find((it) => it.id === 'cockpit')!;
+const AGENDA = allItems().find((it) => it.id === 'agenda')!;
 
 // Own MIME type, so a favourite is never mistaken for a pipeline card.
 const FAV_MIME = 'application/x-simatis-fav';
@@ -242,7 +243,10 @@ export function Sidebar({
         </div>
       )}
       <nav className="nav" aria-label="Navigation principale">
-        <div className="nav-group cockpit-fixe">{link(COCKPIT)}</div>
+        <div className="nav-group cockpit-fixe">
+          {link(COCKPIT)}
+          {link(AGENDA)}
+        </div>
         {favItems.length > 0 && (
           <div className="nav-group favs">
             <span>

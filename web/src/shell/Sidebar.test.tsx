@@ -100,6 +100,12 @@ describe('Sidebar', () => {
     expect(libelles(3)).toEqual(['Entreprises', 'Contacts']);
   });
 
+  it('pins the Agenda right under the Cockpit, above Mon espace', () => {
+    const { container } = renderSidebar(simatis, []);
+    const fixes = [...container.querySelectorAll('.cockpit-fixe .lbl')].map((n) => n.textContent);
+    expect(fixes).toEqual(['Cockpit', 'Agenda']);
+  });
+
   it('pins the Cockpit above Mon espace, which also lists it', () => {
     const { container } = renderSidebar(simatis, []);
     const nav = container.querySelector('nav')!;
@@ -223,6 +229,7 @@ describe('Sidebar', () => {
     expect(bouton.getAttribute('aria-expanded')).toBe('false');
     expect(document.querySelectorAll('.nav-group > .later-btn')).toHaveLength(0);
     expect(screen.getByRole('link', { name: /Cockpit/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Agenda/ })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Contacts/ })).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Pipeline/ })).toBeNull();
     cleanup();
