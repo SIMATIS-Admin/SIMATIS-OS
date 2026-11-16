@@ -237,42 +237,82 @@
   border-color: var(--marque);
 }
 .cours-liste {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  width: min(100%, 1400px);
+  margin: 30px auto 0;
 }
 .cours-groupe h2 {
-  margin: 0 0 8px;
-  font-family: var(--f-num);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px 8px;
+  font-family: var(--f-title);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.cours-groupe-compte {
+  display: inline-grid;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 8px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mint) 55%, var(--white));
+  color: var(--navy);
+  font: 700 14px/1 var(--f-body);
+  letter-spacing: 0;
 }
 .cours-groupe ul {
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
+  border: 0;
+  border-radius: 14px;
   background: var(--white);
   overflow: hidden;
+  box-shadow: 0 8px 24px rgba(12, 55, 107, 0.08);
 }
 .cours-groupe li + li {
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--line);
 }
 .cours-ligne {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 14px 18px;
+  min-height: 104px;
+  padding: 18px 20px;
   color: inherit;
   text-decoration: none;
+  transition:
+    background 140ms ease-out,
+    color 140ms ease-out;
 }
 .cours-ligne:hover,
 .cours-ligne:focus-visible {
-  background: var(--bg);
+  background: #f8fbfc;
+}
+.cours-ligne-icone {
+  display: grid;
+  flex: 0 0 60px;
+  width: 60px;
+  height: 60px;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mint) 42%, var(--white));
+  color: var(--navy);
+}
+.cours-ligne-icone svg {
+  width: 31px;
+  height: 31px;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .cours-ligne-texte {
   display: flex;
@@ -283,22 +323,100 @@
 }
 .cours-ligne-texte b {
   color: var(--ink);
+  font-size: 16px;
+  line-height: 1.3;
 }
 .cours-ligne-texte span {
-  color: var(--ink-3);
-  font-size: 13px;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.35;
 }
 .cours-ligne-details {
-  font-family: var(--f-num);
-  font-size: 12px;
-  color: var(--ink-2);
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
   white-space: nowrap;
 }
+.cours-ligne-details:empty {
+  display: none;
+}
+.cours-ligne-details > span {
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink-2);
+  font: 600 12px/1.4 var(--f-num);
+  font-feature-settings: 'tnum';
+}
 .cours-ligne-fleche {
-  color: var(--ink-3);
+  display: grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--navy);
+  transition:
+    border-color 140ms ease-out,
+    background 140ms ease-out,
+    transform 140ms ease-out;
+}
+.cours-ligne-fleche svg {
+  width: 19px;
+  height: 19px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .cours-ligne:hover .cours-ligne-fleche {
-  color: var(--navy);
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--mint) 30%, var(--white));
+  transform: translateX(2px);
+}
+@media (max-width: 1250px) {
+  .cours-liste {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 620px) {
+  .cours-liste {
+    margin-top: 20px;
+  }
+  .cours-groupe h2 {
+    margin-left: 0;
+    font-size: 20px;
+  }
+  .cours-ligne {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 44px;
+    min-height: 0;
+    padding: 16px;
+    gap: 12px;
+  }
+  .cours-ligne-icone {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    width: 52px;
+    height: 52px;
+  }
+  .cours-ligne-texte {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .cours-ligne-details {
+    grid-column: 2;
+    grid-row: 2;
+    flex-wrap: wrap;
+    align-self: start;
+  }
+  .cours-ligne-fleche {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    align-self: center;
+  }
 }
 .main.presentation .cours {
   border: 0;

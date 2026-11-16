@@ -435,14 +435,19 @@ describe('Liste des supports', () => {
     ]);
     render(<CoursListe slug="simatis" />);
     const titres = await screen.findAllByRole('heading', { level: 2 });
-    expect(titres.map((h) => h.textContent)).toEqual(['Présentations', 'Supports de rendez-vous']);
+    expect(titres.map((h) => h.getAttribute('aria-label'))).toEqual([
+      'Présentations',
+      'Supports de rendez-vous',
+    ]);
     const liens = screen.getAllByRole('link');
     expect(liens.map((l) => l.getAttribute('href'))).toEqual([
       '#/simatis/cours/deck/a-pres',
       '#/simatis/cours/deck/b-rdv',
     ]);
-    expect(liens[0]!.textContent).toContain('9 slides · 15 min');
+    expect(liens[0]!.textContent).toContain('9 slides');
+    expect(liens[0]!.textContent).toContain('15 min');
     expect(liens[1]!.textContent).toContain('4 slides');
+    expect(liens[1]!.textContent).not.toContain('Générique');
   });
 
   it('n’affiche pas un groupe vide', async () => {

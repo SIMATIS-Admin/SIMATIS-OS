@@ -475,9 +475,60 @@ const details = (d: DeckCours) =>
   [
     typeof d.slides === 'number' ? pluriel(d.slides, 'slide') : null,
     typeof d.duree === 'number' ? `${d.duree} min` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  ].filter((detail): detail is string => detail !== null);
+
+function CoursLigneIcone({ deck }: { deck: DeckCours }) {
+  const identite = `${deck.id} ${deck.titre}`.toLocaleLowerCase('fr');
+  const type = !deck.permanent
+    ? 'document'
+    : identite.includes('vma')
+      ? 'chrono'
+      : identite.includes('simatis')
+        ? 'equipe'
+        : 'presentation';
+
+  return (
+    <span className="cours-ligne-icone" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        {type === 'document' && (
+          <>
+            <path d="M7 3.5h7l4 4V20.5H7z" />
+            <path d="M14 3.5v4h4M9.5 12h5M9.5 15.5h5" />
+          </>
+        )}
+        {type === 'chrono' && (
+          <>
+            <circle cx="12" cy="13" r="7.5" />
+            <path d="M12 8.5V13l2.8 1.8M9.5 2.8h5M12 2.8v2.7" />
+          </>
+        )}
+        {type === 'equipe' && (
+          <>
+            <circle cx="12" cy="8" r="2.7" />
+            <circle cx="5.6" cy="10.2" r="2.1" />
+            <circle cx="18.4" cy="10.2" r="2.1" />
+            <path d="M7.8 19v-2.2a4.2 4.2 0 0 1 8.4 0V19M2.5 18v-1.5a3.1 3.1 0 0 1 3.1-3.1c.8 0 1.5.3 2.1.8M21.5 18v-1.5a3.1 3.1 0 0 0-3.1-3.1c-.8 0-1.5.3-2.1.8" />
+          </>
+        )}
+        {type === 'presentation' && (
+          <>
+            <path d="M4 4.5h16v10H4zM12 14.5v6M8.5 20.5 12 17l3.5 3.5M3 3h18" />
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
+function CoursLigneFleche() {
+  return (
+    <span className="cours-ligne-fleche" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M5 12h13M14 7l5 5-5 5" />
+      </svg>
+    </span>
+  );
+}
 
 export function CoursListe({ slug }: { slug: string }) {
   const [decks, setDecks] = useState<DeckCours[] | null>(null);
@@ -504,8 +555,17 @@ export function CoursListe({ slug }: { slug: string }) {
       {groupes
         .filter(([, liste]) => liste.length > 0)
         .map(([titre, liste]) => (
-          <section key={titre} className="cours-groupe" aria-label={titre}>
-            <h2>{titre}</h2>
+          <section
+            key={titre}
+            className={`cours-groupe ${liste[0]?.permanent ? 'permanent' : 'rendez-vous'}`}
+            aria-label={titre}
+          >
+            <h2 aria-label={titre}>
+              {titre}
+              <span className="cours-groupe-compte" aria-hidden="true">
+                {liste.length}
+              </span>
+            </h2>
             <ul>
               {liste.map((d) => (
                 <li key={d.id}>
@@ -513,14 +573,17 @@ export function CoursListe({ slug }: { slug: string }) {
                     className="cours-ligne"
                     href={`#/${slug}/cours/deck/${encodeURIComponent(d.id)}`}
                   >
+                    <CoursLigneIcone deck={d} />
                     <span className="cours-ligne-texte">
                       <b>{d.titre}</b>
-                      {d.soustitre && <span>{d.soustitre}</span>}
+                      {d.permanent && d.soustitre && <span>{d.soustitre}</span>}
                     </span>
-                    <span className="cours-ligne-details">{details(d)}</span>
-                    <span className="cours-ligne-fleche" aria-hidden="true">
-                      →
+                    <span className="cours-ligne-details">
+                      {details(d).map((detail) => (
+                        <span key={detail}>{detail}</span>
+                      ))}
                     </span>
+                    <CoursLigneFleche />
                   </a>
                 </li>
               ))}
