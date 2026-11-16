@@ -214,6 +214,21 @@ describe('Lecteur de supports', () => {
     }
   });
 
+  it('masque la barre du bas en plein écran, au bouton ou à la touche B', async () => {
+    render(
+      <ModePresentationContext.Provider value={{ actif: true, basculer: vi.fn() }}>
+        <Cours slug="simatis" deck="exemple-fictif" />
+      </ModePresentationContext.Provider>,
+    );
+    await screen.findByRole('heading', { name: /Bonjour/ });
+    const racine = screen.getByRole('region');
+    expect(racine.className).not.toContain('barre-masquee');
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer la barre' }));
+    expect(racine.className).toContain('barre-masquee');
+    fireEvent.keyDown(document, { key: 'b' });
+    expect(racine.className).not.toContain('barre-masquee');
+  });
+
   it('affiche l’aide des raccourcis à la touche ?', async () => {
     await ouvrir();
     fireEvent.keyDown(document, { key: '?' });
