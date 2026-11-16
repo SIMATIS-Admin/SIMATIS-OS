@@ -4530,8 +4530,24 @@ label.btn.off {
 }
 .console-barre {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(230px, 0.58fr) minmax(230px, 0.58fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(230px, 0.58fr) minmax(230px, 0.58fr) 26px;
   height: 44px;
+}
+.console-barre.jauges-repliees {
+  grid-template-columns: minmax(260px, 1fr) 96px 96px 26px;
+}
+.console-jauges-bascule.barre {
+  position: static;
+  width: 26px;
+  height: 44px;
+  border-radius: 0;
+  background: #0b1f3a;
+}
+.console-barre .limite-ia-etroite {
+  flex-direction: row;
+  justify-content: center;
+  height: 44px;
+  padding: 0 6px;
 }
 .console-log-compacte {
   display: flex;
@@ -4714,6 +4730,19 @@ label.btn.off {
   padding: 14px 4px;
   border-left: 1px solid rgba(255, 255, 255, 0.14);
   font: 600 12px var(--f-body);
+}
+.limite-ia-etroite-valeurs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.2;
+}
+.limite-ia-etroite-valeurs i {
+  display: inline-block;
+  width: 1.1em;
+  font-style: normal;
+  font-weight: 700;
+  opacity: 0.6;
 }
 .limite-ia-etroite.claude {
   background: #4c312a;
@@ -5019,7 +5048,10 @@ label.btn.off {
 }
 @media (max-width: 760px) {
   .console-barre {
-    grid-template-columns: minmax(62px, 0.45fr) repeat(2, minmax(120px, 1fr));
+    grid-template-columns: minmax(62px, 0.45fr) repeat(2, minmax(120px, 1fr)) 26px;
+  }
+  .console-barre.jauges-repliees {
+    grid-template-columns: minmax(62px, 0.45fr) repeat(2, minmax(84px, 1fr)) 26px;
   }
   .console-log-compacte {
     padding: 0 8px;
