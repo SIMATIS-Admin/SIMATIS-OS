@@ -390,7 +390,7 @@ export function Console({ slug }: { slug: string }) {
                 ) : derniere ? (
                   <>
                     <span className={`console-badge ${derniere.niveau}`}>
-                      {ETIQUETTES[derniere.niveau]}
+                      {derniere.etiquette ?? ETIQUETTES[derniere.niveau]}
                     </span>
                     {derniere.texte}
                   </>
@@ -472,7 +472,7 @@ export function Console({ slug }: { slug: string }) {
                   className={`console-ligne ${l.niveau} ${nouvelles.has(l.id) ? 'nouvelle' : ''}`}
                 >
                   <span className="console-heure">{heure(l.at)}</span>
-                  <span className="console-badge">{ETIQUETTES[l.niveau]}</span>
+                  <span className="console-badge">{l.etiquette ?? ETIQUETTES[l.niveau]}</span>
                   <span aria-hidden="true">{emoji(l)}</span>
                   <span className="console-texte">{l.texte}</span>
                 </div>

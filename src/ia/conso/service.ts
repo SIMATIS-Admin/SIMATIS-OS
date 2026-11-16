@@ -241,6 +241,7 @@ export async function cumulsEntre(db: Pick<Database, 'select'>, depuis: Date, ju
       outil: iaSessions.outil,
       origine: iaSessions.origine,
       sujet: iaSessions.sujet,
+      sessionId: iaCumuls.sessionId,
     })
     .from(iaCumuls)
     .innerJoin(iaSessions, sql`${iaSessions.id} = ${iaCumuls.sessionId}`)

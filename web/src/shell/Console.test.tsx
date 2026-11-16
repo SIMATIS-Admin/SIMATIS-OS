@@ -85,6 +85,29 @@ describe('Console (journal en lecture seule)', () => {
     expect(journal.textContent).toContain('À VOIR');
   });
 
+  it('shows the IA-ext / IA-int label on consumption lines instead of the level', async () => {
+    reponse = {
+      lignes: [
+        {
+          id: 'conso:claude:a',
+          at: '2026-10-22T08:10:00Z',
+          source: 'conso',
+          acteur: 'ia',
+          niveau: 'attention',
+          etiquette: 'IA-int',
+          texte: 'IA-int · Claude · Code · PR #1 · L5 +11,0 % · LH +2,0 %',
+        },
+      ],
+      enCours: false,
+    };
+    render(<Console slug="simatis" />);
+    await screen.findByText(/PR #1/);
+    fireEvent.click(screen.getByLabelText('Déplier la console'));
+    const journal = screen.getByRole('log');
+    expect(journal.textContent).toContain('IA-int');
+    expect(journal.textContent).not.toContain('À VOIR');
+  });
+
   it('keeps the 5-hour and weekly limits visible when the log is folded', async () => {
     render(<Console slug="simatis" />);
     await screen.findByText('Test de VMA reçu : ACME non rangé');
