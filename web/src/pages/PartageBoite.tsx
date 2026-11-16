@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchCarteCerveau, operationCerveau } from '../api.js';
 import type { CarteCerveau, NoeudCerveau } from '../cerveau.js';
+import { Icon } from '../icons.js';
 import { documents, fils, majuscule, sansEntete, type Fil } from '../partage.js';
 import { CerveauEspace } from './Cerveau.js';
 import { IdeeCerveau, MessagePartage, NoteCerveau } from './NoteCerveau.js';
@@ -284,12 +285,12 @@ export function PartageBoite({ slug }: { slug: string }) {
 
   const titreDe = (chemin: string) => carte.noeuds.find((n) => n.id === chemin)?.titre ?? chemin;
 
-  const nav: [Rubrique, string, number | null][] = [
-    ['echanges', 'Échanges', tous.length],
-    ['a_repondre', 'À répondre', aRepondre.length],
-    ['documents', 'Documents', docs.length],
-    ['fichiers', 'Fichiers', fichiers.length],
-    ['carte', 'Carte', null],
+  const nav: [Rubrique, string, number | null, string][] = [
+    ['echanges', 'Échanges', tous.length, 'mail'],
+    ['a_repondre', 'À répondre', aRepondre.length, 'send'],
+    ['documents', 'Documents', docs.length, 'file'],
+    ['fichiers', 'Fichiers', fichiers.length, 'inbox'],
+    ['carte', 'Carte', null, 'map'],
   ];
 
   return (
@@ -300,11 +301,13 @@ export function PartageBoite({ slug }: { slug: string }) {
     >
       <aside className="pb-nav">
         <form
+          className="pb-recherche"
           onSubmit={(e) => {
             e.preventDefault();
             chercher();
           }}
         >
+          <Icon name="search" />
           <input
             type="search"
             placeholder="Chercher partout…"
@@ -321,14 +324,17 @@ export function PartageBoite({ slug }: { slug: string }) {
             </button>
           )}
         </form>
-        {nav.map(([id, libelle, nb]) => (
+        {nav.map(([id, libelle, nb, icone]) => (
           <button
             key={id}
             className={rubrique === id ? 'pb-rub on' : 'pb-rub'}
             aria-pressed={rubrique === id}
             onClick={() => aller(id)}
           >
-            <span>{libelle}</span>
+            <span className="pb-rub-libelle">
+              <Icon name={icone} />
+              {libelle}
+            </span>
             {nb !== null && <b>{nb}</b>}
           </button>
         ))}
@@ -340,9 +346,11 @@ export function PartageBoite({ slug }: { slug: string }) {
             setNouveau(true);
           }}
         >
+          <Icon name="edit" />
           Nouveau message
         </button>
         <button className="btn" onClick={actualiser} disabled={actualisation}>
+          <Icon name="refresh" />
           {actualisation ? 'Lecture du kDrive…' : 'Actualiser'}
         </button>
         <p className="cerveau-note">
@@ -358,6 +366,16 @@ export function PartageBoite({ slug }: { slug: string }) {
       ) : (
         <>
           <section className="pb-liste" aria-label="Liste">
+            {!resultats && (rubrique === 'echanges' || rubrique === 'a_repondre') && (
+              <div className="pb-liste-entete">
+                <div>
+                  <h2>{rubrique === 'a_repondre' ? 'À répondre' : 'Échanges'}</h2>
+                  <span>
+                    {filsAffiches.length} conversation{filsAffiches.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+              </div>
+            )}
             {resultats ? (
               <>
                 <div className="pb-titre">
@@ -486,9 +504,16 @@ export function PartageBoite({ slug }: { slug: string }) {
                 onEnregistre={recharger}
               />
             ) : (
-              <p className="cerveau-note">
-                Choisissez une conversation ou un document pour le lire ici.
-              </p>
+              <div className="pb-vide">
+                <span className="pb-vide-icone" aria-hidden="true">
+                  <Icon name="mail" />
+                </span>
+                <h2>Sélectionnez un échange</h2>
+                <p>Choisissez une conversation ou un document pour l’afficher ici.</p>
+                <span className="pb-vide-aide">
+                  La lecture et la réponse restent dans cet espace.
+                </span>
+              </div>
             )}
           </section>
         </>

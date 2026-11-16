@@ -171,4 +171,10 @@ describe('PartageBoite', () => {
       within(screen.getByLabelText('Lecture')).getByLabelText('Sujet du message'),
     ).toBeTruthy();
   });
+
+  it('guide la sélection quand aucun échange n’est ouvert', async () => {
+    await ouvrirPartage();
+    expect(screen.getByRole('heading', { name: 'Sélectionnez un échange' })).toBeTruthy();
+    expect(screen.getByText(/Choisissez une conversation ou un document/)).toBeTruthy();
+  });
 });

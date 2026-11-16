@@ -71,7 +71,7 @@ describe('Cerveau', () => {
 
     expect(screen.getByTestId('noeud-brain/clients/acme.md')).toBeTruthy();
     expect(screen.getByLabelText<HTMLInputElement>('Chercher une note').value).toBe('');
-    expect(screen.getByText(/Cliquez sur une note de la carte/)).toBeTruthy();
+    expect(screen.getByText(/Cliquez sur un nœud/)).toBeTruthy();
   });
 
   it('explique quand la carte n’est pas encore arrivée', async () => {
