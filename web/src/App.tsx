@@ -17,6 +17,7 @@ import {
 } from './nav.js';
 import { Barre } from './shell/Barre.js';
 import { Console } from './shell/Console.js';
+import { EngagementIA } from './shell/EngagementIA.js';
 import type { KindFiche } from './api.js';
 import { Contacts } from './pages/Contacts.js';
 import { Entreprises } from './pages/Entreprises.js';
@@ -421,6 +422,7 @@ export function App() {
               )}
               {view === 'cockpit' && <span className="entete-slot" ref={setEnteteDroite} />}
             </div>
+            <EngagementIA />
             {view !== 'portefeuille' && <Barre key={current.slug} slug={current.slug} />}
           </div>
           <div className="content">

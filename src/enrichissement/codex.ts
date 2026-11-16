@@ -43,3 +43,17 @@ export function fileCodex() {
     },
   };
 }
+
+// Codex fait les recherches : sans ChatGPT engagé, la demande échoue tout de suite et l'erreur arrive au journal.
+export function exigerChatgptEngage(client: ClientIA, engage: () => Promise<boolean>): ClientIA {
+  return {
+    async demander(demande) {
+      if (!(await engage()))
+        throw new ErreurIA(
+          'ChatGPT n’est pas engagé : la recherche ne peut pas démarrer. Engagez-le en haut de la fenêtre.',
+          true,
+        );
+      return client.demander(demande);
+    },
+  };
+}

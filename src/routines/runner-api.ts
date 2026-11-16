@@ -2,7 +2,7 @@ import type { fileCodex } from '../enrichissement/codex.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Database } from '../db.js';
-import type { MoteurIA } from '../preferences/service.js';
+import type { Options } from '../preferences/service.js';
 import { withInstance } from '../db/context.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { createToken, resolveToken, revokeToken } from '../mcp/tokens.js';
@@ -50,13 +50,13 @@ export function registerRunnerApi(
     db,
     codex,
     drive,
-    moteur,
+    engagement,
   }: {
     db: Database;
     codex?: ReturnType<typeof fileCodex>;
     drive?: DriveDeps;
-    // Moteur IA choisi par le pilote : le runner l'applique aux tâches de la file.
-    moteur?: () => Promise<MoteurIA>;
+    // Engagement des IA décidé par le pilote : sans Claude engagé, le runner refuse ses tâches.
+    engagement?: () => Promise<Pick<Options, 'claudeEngage' | 'chatgptEngage'>>;
   },
 ): void {
   const auth = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -86,16 +86,16 @@ export function registerRunnerApi(
     return declarerLancement(db, { ...reste, debut: debut ?? new Date().toISOString() });
   });
 
-  // Moteur choisi dans la console pour les routines, l'ajout à l'Inbox et les campagnes.
+  // Routines, ajout à l'Inbox et campagnes tournent toujours sur Claude ; `engage` dit si le pilote l'autorise.
   app.get('/api/runner/moteur', async (request, reply) => {
     if (!(await auth(request, reply))) return reply;
-    return { moteur: (await moteur?.()) ?? 'claude' };
+    return { moteur: 'claude', engage: (await engagement?.())?.claudeEngage ?? true };
   });
 
   if (codex) {
     app.get('/api/runner/codex', async (request, reply) => {
       if (!(await auth(request, reply))) return reply;
-      return { travail: codex.prendre(), moteur: (await moteur?.()) ?? 'claude' };
+      return { travail: codex.prendre(), moteur: 'codex' };
     });
     app.post('/api/runner/codex', async (request, reply) => {
       if (!(await auth(request, reply))) return reply;

@@ -482,20 +482,24 @@ describe('Tâches', () => {
       });
       const relues = await app.inject({ method: 'GET', url: '/api/preferences' });
       expect(relues.json()).toMatchObject({ options: { ensuite: false } });
-      // Moteur IA : Codex par défaut, Claude sur demande, tout autre nom refusé.
-      expect(relues.json()).toMatchObject({ options: { moteurIA: 'claude' } });
-      const moteur = await app.inject({
+      // Engagement des IA : les deux engagées par défaut, chacune coupée indépendamment, valeur non booléenne refusée.
+      expect(relues.json()).toMatchObject({
+        options: { claudeEngage: true, chatgptEngage: true },
+      });
+      const coupe = await app.inject({
         method: 'PUT',
         url: '/api/preferences/options',
-        payload: { moteurIA: 'codex' },
+        payload: { chatgptEngage: false },
       });
-      expect(moteur.json()).toMatchObject({ options: { moteurIA: 'codex', ensuite: false } });
+      expect(coupe.json()).toMatchObject({
+        options: { claudeEngage: true, chatgptEngage: false, ensuite: false },
+      });
       expect(
         (
           await app.inject({
             method: 'PUT',
             url: '/api/preferences/options',
-            payload: { moteurIA: 'gpt' },
+            payload: { claudeEngage: 'non' },
           })
         ).statusCode,
       ).toBe(400);

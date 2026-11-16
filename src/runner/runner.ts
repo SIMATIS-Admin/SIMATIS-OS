@@ -119,13 +119,18 @@ export const prompt = (d: Demande) =>
 const CODEX_PAR_DEFAUT =
   '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
 
-// Moteur choisi dans la console. Sans réponse de l'OS, Claude : c'était le seul moteur de ces tâches.
-async function moteurChoisi(api: ReturnType<typeof clientOs>): Promise<MoteurIA> {
-  return api<{ moteur: MoteurIA }>('/api/runner/moteur').then(
-    (r) => (r.moteur === 'codex' ? 'codex' : 'claude'),
-    () => 'claude',
+// Moteur de ces tâches et engagement décidé par le pilote. Sans réponse de l'OS : Claude, engagé.
+async function moteurChoisi(
+  api: ReturnType<typeof clientOs>,
+): Promise<{ moteur: MoteurIA; engage: boolean }> {
+  return api<{ moteur: MoteurIA; engage?: boolean }>('/api/runner/moteur').then(
+    (r) => ({ moteur: r.moteur === 'codex' ? 'codex' : 'claude', engage: r.engage !== false }),
+    () => ({ moteur: 'claude', engage: true }),
   );
 }
+
+const NON_ENGAGE = (moteur: MoteurIA, suite: string) =>
+  `${moteur === 'codex' ? 'ChatGPT' : 'Claude'} n'est pas engagé : ${suite}`;
 
 const NOM_MOTEUR: Record<MoteurIA, string> = { claude: 'Claude', codex: 'Codex' };
 
@@ -333,13 +338,22 @@ export async function tour(opts: RunnerOptions): Promise<number> {
   await api('/api/runner/presence', poste);
   await deposerCarte(api, opts.cerveau);
   const demandes = await api<Demande[]>('/api/runner/demandes');
-  const moteur = demandes.length > 0 ? await moteurChoisi(api) : 'claude';
+  const { moteur, engage } =
+    demandes.length > 0 ? await moteurChoisi(api) : { moteur: 'claude' as const, engage: true };
   for (const d of demandes) {
     let demarre: { tokenId: string; token: string };
     try {
       demarre = await api(`/api/runner/executions/${d.id}/demarrer`, { instance: d.instance });
     } catch {
       continue; // Started by another runner meanwhile.
+    }
+    if (!engage) {
+      await api(`/api/runner/executions/${d.id}/fin`, {
+        instance: d.instance,
+        tokenId: demarre.tokenId,
+        erreur: NON_ENGAGE(moteur, "la routine n'a pas été lancée."),
+      });
+      continue;
     }
     // Without its skill, Claude would improvise with the instance's tools: the run stops here.
     if (!poste.skills.includes(d.skill)) {
@@ -431,13 +445,22 @@ export async function tourEchanges(opts: RunnerOptions): Promise<number> {
   const api = clientOs(opts);
 
   const echanges = await api<EchangeDemande[]>('/api/runner/echanges');
-  const moteur = echanges.length > 0 ? await moteurChoisi(api) : 'claude';
+  const { moteur, engage } =
+    echanges.length > 0 ? await moteurChoisi(api) : { moteur: 'claude' as const, engage: true };
   for (const e of echanges) {
     let demarre: { tokenId: string; token: string };
     try {
       demarre = await api(`/api/runner/echanges/${e.id}/demarrer`, { instance: e.instance });
     } catch {
       continue; // Taken by another runner, or cancelled meanwhile.
+    }
+    if (!engage) {
+      await api(`/api/runner/echanges/${e.id}/fin`, {
+        instance: e.instance,
+        tokenId: demarre.tokenId,
+        erreur: NON_ENGAGE(moteur, 'réécrivez votre message une fois engagé.'),
+      });
+      continue;
     }
     const dossier = await mkdtemp(path.join(tmpdir(), 'simatis-ajout-'));
     const config = path.join(dossier, 'mcp.json');
@@ -541,13 +564,22 @@ export async function tourCampagnes(opts: RunnerOptions): Promise<number> {
   const api = clientOs(opts);
 
   const campagnes = await api<CampagneDemande[]>('/api/runner/campagnes');
-  const moteur = campagnes.length > 0 ? await moteurChoisi(api) : 'claude';
+  const { moteur, engage } =
+    campagnes.length > 0 ? await moteurChoisi(api) : { moteur: 'claude' as const, engage: true };
   for (const c of campagnes) {
     let demarre: { tokenId: string; token: string };
     try {
       demarre = await api(`/api/runner/campagnes/${c.id}/demarrer`, { instance: c.instance });
     } catch {
       continue; // Prise par un autre exécuteur, ou annulée entre-temps.
+    }
+    if (!engage) {
+      await api(`/api/runner/campagnes/${c.id}/fin`, {
+        instance: c.instance,
+        tokenId: demarre.tokenId,
+        erreur: NON_ENGAGE(moteur, 'relancez la rédaction une fois engagé.'),
+      });
+      continue;
     }
     const dossier = await mkdtemp(path.join(tmpdir(), 'simatis-campagne-'));
     const config = path.join(dossier, 'mcp.json');

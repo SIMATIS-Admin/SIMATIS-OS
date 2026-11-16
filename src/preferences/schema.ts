@@ -12,7 +12,8 @@ export const preferences = pgTable('preferences', {
   options: jsonb('options')
     .$type<{
       ensuite?: boolean;
-      moteurIA?: 'claude' | 'codex';
+      claudeEngage?: boolean;
+      chatgptEngage?: boolean;
       rechercheManuelle?: RechercheTache;
       rechercheBase?: RoutineRecherche;
       signauxBase?: RoutineAlerte;
