@@ -594,6 +594,12 @@ a {
 .main > .demo-band {
   flex: none;
 }
+/* Mode présentation : barre du haut et console masquées. Ici (et non dans diaporama.css) car le
+   lecteur de supports ne charge pas la feuille du diaporama. */
+.main.presentation > .top,
+.main.presentation > .console {
+  display: none;
+}
 .demo-band {
   background: var(--amber-bg);
   color: #6b4a06;
