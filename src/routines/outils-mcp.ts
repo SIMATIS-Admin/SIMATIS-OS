@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lt } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { creneauxLibres, zoned, type CreneauxOptions } from '../connecteurs/google/creneaux.js';
 import { freeBusy } from '../connecteurs/google/google.js';
@@ -10,6 +10,7 @@ import { registerTool, type ToolCtx } from '../mcp/tools.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
 import '../conversion/types-rdv.js';
+import { propositions } from '../propositions/schema.js';
 import { propose } from '../propositions/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { paramsOf, ROUTINES, rythme } from './params.js';
@@ -216,7 +217,7 @@ registerTool({
 registerTool({
   name: 'proposer_brouillon',
   description:
-    "Propose un brouillon d'email (HTML, sans signature) pour une tâche ou un contact. Il attend la validation du pilote dans l'Inbox, puis devient un brouillon dans la boîte mail de l'instance : jamais d'envoi.",
+    "Propose un brouillon d'email (HTML, sans signature) pour une tâche ou un contact, au plus un par adresse et par jour (un second est refusé). Il attend la validation du pilote dans l'Inbox, puis devient un brouillon dans la boîte mail de l'instance : jamais d'envoi.",
   input: z.object({
     tacheId: z.uuid().optional(),
     contactId: z.uuid().optional(),
@@ -243,6 +244,26 @@ registerTool({
           .where(and(eq(contacts.instanceId, currentInstance), eq(contacts.id, contactId)))
       : [];
     if (!contact?.email) throw new Error('Contact sans email : brouillon impossible');
+    // One mail per person and per day, whatever the number of tasks or runs: matching on the
+    // address (not the contact id) also catches two records of the same person.
+    const [dejaPropose] = await ctx.tx
+      .select({ id: propositions.id })
+      .from(propositions)
+      .where(
+        and(
+          eq(propositions.instanceId, currentInstance),
+          eq(propositions.type, 'email.brouillon'),
+          inArray(propositions.statut, ['proposee', 'appliquee']),
+          gte(propositions.createdAt, zoned(jourDe(new Date(), FUSEAU), '00:00', FUSEAU)),
+          sql`lower(${propositions.contenu}->>'to') = lower(${contact.email})`,
+        ),
+      )
+      .limit(1);
+    if (dejaPropose) {
+      throw new Error(
+        `Un brouillon pour ${contact.email} existe déjà aujourd’hui : ne pas en proposer un second, le signaler dans le rapport.`,
+      );
+    }
     return propose(
       ctx.tx,
       { instance: ctx.instance, realWrites: ctx.deps.realWrites, secretsDir: ctx.deps.secretsDir },

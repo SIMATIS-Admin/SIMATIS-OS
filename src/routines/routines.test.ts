@@ -178,6 +178,67 @@ describe('Routines Claude', () => {
     expect(after.rapport?.echec).toEqual([res.text]);
   });
 
+  it('proposer_brouillon : jamais deux brouillons pour la même adresse le même jour', async () => {
+    const demo = await instanceOf('demo');
+    const { rows } = await t.owner.pool.query<{ id: string; email: string }>(
+      `select id, email from contacts c where instance_id = $1 and email is not null
+         and not exists (select 1 from propositions p where p.instance_id = c.instance_id
+           and p.type = 'email.brouillon' and lower(p.contenu->>'to') = lower(c.email))
+       order by email limit 2`,
+      [demo.id],
+    );
+    const [a, b] = rows;
+    if (!a || !b) throw new Error('le jeu de démonstration manque de contacts avec email');
+    // Two contact records sharing one address are the same person.
+    const doublon = await t.owner.pool.query<{ id: string }>(
+      "insert into contacts (instance_id, nom, email) values ($1, 'Doublon fictif', upper($2)) returning id",
+      [demo.id, a.email],
+    );
+    const { token } = await createToken(t.owner.db, {
+      nom: 'test',
+      portee: 'instance',
+      instanceSlug: 'demo',
+    });
+    const client = await connect(token);
+    const proposer = (contactId: string) =>
+      call(client, 'proposer_brouillon', { contactId, objet: 'Relance', corps: '<p>Bonjour,</p>' });
+    const brouillons = async (email: string) =>
+      (
+        await t.owner.pool.query<{ n: number }>(
+          "select count(*)::int as n from propositions where instance_id = $1 and type = 'email.brouillon' and lower(contenu->>'to') = lower($2)",
+          [demo.id, email],
+        )
+      ).rows[0]?.n;
+
+    expect((await proposer(a.id)).isError).toBe(false);
+    const second = await proposer(a.id);
+    expect(second.isError).toBe(true);
+    expect(second.text).toContain('existe déjà aujourd’hui');
+    // Same address on another contact record, in other letter case: still the same person.
+    expect((await proposer(doublon.rows[0]?.id ?? '')).isError).toBe(true);
+    expect(await brouillons(a.email)).toBe(1);
+    // Someone else the same day is not affected.
+    expect((await proposer(b.id)).isError).toBe(false);
+
+    // A draft the pilot discarded or an older one does not block a new proposal.
+    await t.owner.pool.query(
+      "update propositions set statut = 'ecartee' where instance_id = $1 and type = 'email.brouillon' and lower(contenu->>'to') = lower($2)",
+      [demo.id, a.email],
+    );
+    expect((await proposer(a.id)).isError).toBe(false);
+    await t.owner.pool.query(
+      "update propositions set created_at = now() - interval '2 days' where instance_id = $1 and type = 'email.brouillon' and lower(contenu->>'to') = lower($2)",
+      [demo.id, b.email],
+    );
+    expect((await proposer(b.id)).isError).toBe(false);
+
+    // Leave the demo as found: discarded drafts do not block the other tests.
+    await t.owner.pool.query(
+      "update propositions set statut = 'ecartee' where instance_id = $1 and type = 'email.brouillon' and lower(contenu->>'to') = any($2)",
+      [demo.id, [a.email.toLowerCase(), b.email.toLowerCase()]],
+    );
+  });
+
   it('runner: gives Claude a temporary token of the run’s instance only, then revokes it', async () => {
     const demo = await instanceOf('demo');
     // An email follow-up due yesterday, for a contact of the demo.
