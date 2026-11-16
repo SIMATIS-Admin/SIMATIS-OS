@@ -141,7 +141,6 @@ export function App() {
   // Subject by subject mode of the Inbox, switched by the button beside the « + ».
   const [pasAPasInbox, setPasAPasInbox] = useState(false);
   // Header slots of the Inbox: the update button goes left of the title, the mandate filter right of « Pas à pas ».
-  const [enteteGauche, setEnteteGauche] = useState<HTMLSpanElement | null>(null);
   const [enteteDroite, setEnteteDroite] = useState<HTMLSpanElement | null>(null);
   useEffect(() => setPasAPasInbox(false), [route.view, slugCourant]);
   useEffect(() => {
@@ -215,7 +214,7 @@ export function App() {
               setPasAPasInbox(false);
             }}
             pasAPas={pasAPasInbox}
-            entete={{ gauche: enteteGauche, droite: enteteDroite }}
+            entete={{ droite: enteteDroite }}
           />
         );
       case 'radar':
@@ -394,7 +393,6 @@ export function App() {
               >
                 <Icon name="menu" />
               </button>
-              {view === 'cockpit' && <span className="entete-slot" ref={setEnteteGauche} />}
               <h1>
                 {(view === 'diagnostics' || view === 'atelier') && titreOutil ? titreOutil : title}
               </h1>

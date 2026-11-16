@@ -919,7 +919,7 @@ export function Inbox({
   // Subject by subject mode, started by the button beside the « + » of the header.
   pasAPas?: boolean;
   // Slots of the page header, where the update button and the mandate filter are shown.
-  entete?: { gauche: HTMLElement | null; droite: HTMLElement | null };
+  entete?: { droite: HTMLElement | null };
 }) {
   const [filtre, setFiltre] = useState<Filtre>('tout');
   const [list, setList] = useState<SujetVue[] | null>(null);
@@ -1078,11 +1078,9 @@ export function Inbox({
               )
             }
           />
+          {routine && <MiseAJour slug={slug} routine={routine} onFini={fini} />}
         </div>
-        {/* The update button and the mandate filter sit in the page header, beside the title. */}
-        {entete?.gauche &&
-          routine &&
-          createPortal(<MiseAJour slug={slug} routine={routine} onFini={fini} />, entete.gauche)}
+        {/* The mandate filter sits in the page header, beside the title. */}
         {entete?.droite &&
           ensemble &&
           createPortal(

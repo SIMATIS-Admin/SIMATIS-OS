@@ -4,15 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { Inbox } from './Inbox.js';
 
-// The page header lives in the app: this stands in for it, with its two slots.
+// The page header lives in the app: this stands in for it, with its slot.
 function AvecEntete(props: Omit<Parameters<typeof Inbox>[0], 'entete'>) {
-  const [gauche, setGauche] = useState<HTMLElement | null>(null);
   const [droite, setDroite] = useState<HTMLElement | null>(null);
   return (
     <>
-      <span ref={setGauche} />
       <span ref={setDroite} />
-      <Inbox {...props} entete={{ gauche, droite }} />
+      <Inbox {...props} entete={{ droite }} />
     </>
   );
 }
