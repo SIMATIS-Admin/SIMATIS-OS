@@ -422,11 +422,11 @@ a {
   align-items: center;
   gap: 8px;
   width: 100%;
-  margin-top: 16px;
-  padding: 10px 10px 0;
+  margin-top: 12px;
+  padding: 8px 10px;
   background: none;
-  border: 0;
-  border-top: 1px solid #1e4b82;
+  border: 1px solid #1e4b82;
+  border-radius: 6px;
   font: inherit;
   font-size: 11px;
   text-transform: uppercase;
@@ -451,8 +451,7 @@ a {
   transform: rotate(180deg);
 }
 .nav-group.favs {
-  padding-bottom: 12px;
-  border-bottom: 1px solid #1e4b82;
+  padding-bottom: 4px;
 }
 .later-btn {
   display: flex;
@@ -2408,7 +2407,7 @@ textarea.input {
   /* Narrow bar: only the four squares remain, centred, to fold or unfold Mon espace. */
   .side.reduite .nav-espace-titre {
     justify-content: center;
-    padding: 10px 0 0;
+    padding: 8px 0;
   }
   .side.reduite .nav-espace-titre svg {
     width: 18px;
