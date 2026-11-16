@@ -14,6 +14,7 @@ import { iaJauges, iaReleve, type FournisseurConso } from './schema.js';
 import { cumulsEntre } from './service.js';
 
 export type LigneHeure = {
+  sessionId?: string;
   heure: Date;
   origine: 'ext' | 'int' | 'non_attribue';
   fournisseur: FournisseurConso;
@@ -108,13 +109,18 @@ export async function lignesHeures(
   depuis: Date,
   jusqua: Date,
   maintenant: Date,
+  // La console montre une ligne par session de discussion ; l'archive garde le détail par heure.
+  parSession = false,
 ): Promise<LigneHeure[]> {
   const calibrage = await calibrer(db, maintenant);
   const cumuls = await cumulsEntre(db, debutHeure(depuis), jusqua);
   const groupes = new Map<string, LigneHeure>();
   for (const c of cumuls) {
-    const cle = [c.heure.toISOString(), c.origine, c.fournisseur, c.outil, c.sujet].join('|');
+    const cle = parSession
+      ? c.sessionId
+      : [c.heure.toISOString(), c.origine, c.fournisseur, c.outil, c.sujet].join('|');
     const g = groupes.get(cle) ?? {
+      sessionId: c.sessionId,
       heure: c.heure,
       origine: c.origine,
       fournisseur: c.fournisseur,
@@ -131,6 +137,8 @@ export async function lignesHeures(
     g.jetons.cacheEcriture += c.cacheEcriture;
     g.jetons.cacheLecture += c.cacheLecture;
     g.cout += c.cout;
+    // Une session s'affiche à sa dernière activité.
+    if (c.heure > g.heure) g.heure = c.heure;
     groupes.set(cle, g);
   }
   const lignes = [...groupes.values()].map((g) => {
@@ -204,10 +212,13 @@ const heureParis = (d: Date) =>
 
 export async function lignesConso(db: Executor, maintenant: Date): Promise<LigneConsole[]> {
   const depuis = new Date(maintenant.getTime() - FENETRE_MS);
-  const lignes: LigneConsole[] = (await lignesHeures(db, depuis, maintenant, maintenant)).map(
+  const lignes: LigneConsole[] = (await lignesHeures(db, depuis, maintenant, maintenant, true)).map(
     (l) => ({
-      id: `conso:${l.heure.toISOString()}:${l.origine}:${l.fournisseur}:${l.outil}:${l.sujet}`,
+      id: l.sessionId
+        ? `conso:${l.sessionId}`
+        : `conso:${l.heure.toISOString()}:${l.origine}:${l.fournisseur}:${l.outil}:${l.sujet}`,
       at: l.heure.toISOString(),
+      etiquette: l.origine === 'int' ? 'IA-int' : 'IA-ext',
       source: 'conso',
       acteur: 'ia',
       niveau: (l.l5 ?? 0) >= SEUIL_ALERTE_L5 ? 'attention' : 'info',

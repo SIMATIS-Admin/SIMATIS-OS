@@ -14,6 +14,8 @@ export type LigneConsole = {
   acteur: string;
   niveau: NiveauConsole;
   texte: string;
+  // Remplace l'étiquette du niveau (ex. IA-ext) ; la couleur suit toujours le niveau.
+  etiquette?: string;
 };
 
 export type Console = { lignes: LigneConsole[]; enCours: boolean };

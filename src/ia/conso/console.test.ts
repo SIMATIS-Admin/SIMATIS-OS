@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../../test/database.js';
 import { lignesConso } from './console.js';
-import { iaJauges, iaReleve } from './schema.js';
+import { eq } from 'drizzle-orm';
+import { iaJauges, iaReleve, iaSessions } from './schema.js';
 import { enregistrerReleve } from './service.js';
 
 const MAINTENANT = new Date('2026-11-10T18:30:00.000Z');
@@ -61,14 +62,27 @@ describe('lignesConso', () => {
     await t.drop();
   });
 
-  it('cumule par sujet et par heure', async () => {
-    await session(t, 'a', 'PR #7', [[1, 1]]);
+  it('une ligne par session, cumulée sur ses heures', async () => {
+    await session(t, 'a', 'PR #7', [
+      [1, 1],
+      [2, 2],
+    ]);
     await session(t, 'b', 'PR #7', [[1, 2]]);
     const lignes = await lignesConso(t.app.db, MAINTENANT);
     const pr = lignes.filter((l) => l.texte.includes('PR #7'));
-    expect(pr).toHaveLength(1);
-    expect(pr[0]).toMatchObject({ source: 'conso', acteur: 'ia', at: h(1).toISOString() });
-    expect(pr[0]?.texte).toMatch(/^IA-ext · Claude · Code · PR #7 · /);
+    expect(pr).toHaveLength(2);
+    const a = pr.find((l) => l.id === 'conso:claude:a');
+    expect(a).toMatchObject({ source: 'conso', acteur: 'ia', at: h(2).toISOString() });
+    expect(a?.texte).toMatch(/^IA-ext · Claude · Code · PR #7 · /);
+  });
+
+  it('étiquette les lignes IA-ext ou IA-int, jamais Info ni À voir', async () => {
+    await session(t, 'a', 'PR #7', [[1, 1]]);
+    await t.app.db.update(iaSessions).set({ origine: 'int' }).where(eq(iaSessions.id, 'claude:a'));
+    await session(t, 'b', 'PR #8', [[1, 1]]);
+    const lignes = await lignesConso(t.app.db, MAINTENANT);
+    expect(lignes.find((l) => l.id === 'conso:claude:a')?.etiquette).toBe('IA-int');
+    expect(lignes.find((l) => l.id === 'conso:claude:b')?.etiquette).toBe('IA-ext');
   });
 
   it('sans historique, convertit en % depuis la fenêtre en cours', async () => {

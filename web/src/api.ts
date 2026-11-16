@@ -73,6 +73,7 @@ export type LigneConsole = {
   acteur: string;
   niveau: 'ok' | 'info' | 'attention' | 'erreur';
   texte: string;
+  etiquette?: string;
 };
 export type ConsoleOS = { lignes: LigneConsole[]; enCours: boolean };
 
