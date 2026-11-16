@@ -304,6 +304,23 @@
   border: 0;
   border-radius: 0;
 }
+/* Plein écran : la slide prend toute la place ; la barre de commande ne réapparaît qu'au survol
+   du bas de l'écran (ou au clavier). */
+.main.presentation .cours {
+  grid-template-rows: minmax(0, 1fr);
+  position: relative;
+}
+.main.presentation .cours-commande {
+  position: absolute;
+  inset: auto 0 0 0;
+  background: var(--white);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.main.presentation .cours-commande:hover,
+.main.presentation .cours-commande:focus-within {
+  opacity: 1;
+}
 
 /* Slide en HTML libre : le cadre isolé remplit la scène, à l'échelle 16:9. */
 .cours-slide.cours-slide-html {
