@@ -135,10 +135,24 @@ describe('Console (journal en lecture seule)', () => {
     expect(screen.queryByText('72 % restant')).toBeNull();
     expect(screen.getByText('72 %')).toBeTruthy();
     expect(screen.getByText('84 %')).toBeTruthy();
+    expect(screen.getAllByText('5')).toHaveLength(2);
+    expect(screen.getAllByText('H')).toHaveLength(2);
     expect(screen.getByRole('log')).toBeTruthy();
     expect(localStorage.getItem('console-jauges-repliees')).toBe('1');
     fireEvent.click(screen.getByLabelText('Déplier les jauges IA'));
     expect(screen.getByText('72 % restant')).toBeTruthy();
+    expect(localStorage.getItem('console-jauges-repliees')).toBe('0');
+  });
+
+  it('keeps the squeezed gauges when the console is folded down', async () => {
+    localStorage.setItem('console-jauges-repliees', '1');
+    render(<Console slug="simatis" />);
+    await screen.findByText('Test de VMA reçu : ACME non rangé');
+    expect(await screen.findByText('72 %')).toBeTruthy();
+    expect(screen.getAllByText('H')).toHaveLength(2);
+    expect(screen.queryByText('Sem.')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Déplier les jauges IA'));
+    expect(await screen.findAllByText('Sem.')).toHaveLength(2);
     expect(localStorage.getItem('console-jauges-repliees')).toBe('0');
   });
 

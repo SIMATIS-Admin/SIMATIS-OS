@@ -165,10 +165,14 @@ function FournisseurEtroit({
     >
       <MarqueIA fournisseur={fournisseur} />
       {ok ? (
-        <>
-          <span>{Math.round(fournisseur.fenetre5h!.restant)} %</span>
-          <span>{Math.round(fournisseur.hebdomadaire!.restant)} %</span>
-        </>
+        <div className="limite-ia-etroite-valeurs">
+          <span>
+            <i>5</i> {Math.round(fournisseur.fenetre5h!.restant)} %
+          </span>
+          <span>
+            <i>H</i> {Math.round(fournisseur.hebdomadaire!.restant)} %
+          </span>
+        </div>
       ) : (
         <span>{chargement ? '…' : '–'}</span>
       )}
@@ -369,7 +373,7 @@ export function Console({ slug }: { slug: string }) {
   return (
     <section className={`console ${ouverte ? 'ouverte' : ''}`} aria-label="Console de l'OS">
       {!ouverte && (
-        <div className="console-barre">
+        <div className={`console-barre ${jaugesRepliees ? 'jauges-repliees' : ''}`}>
           <div className="console-log-compacte">
             <button
               className="console-titre"
@@ -406,13 +410,31 @@ export function Console({ slug }: { slug: string }) {
               Vider
             </button>
           </div>
-          {fournisseurs.map((fournisseur) => (
-            <FournisseurCompact
-              key={fournisseur.id}
-              fournisseur={fournisseur}
-              chargement={chargementLimites}
-            />
-          ))}
+          {fournisseurs.map((fournisseur) =>
+            jaugesRepliees ? (
+              <FournisseurEtroit
+                key={fournisseur.id}
+                fournisseur={fournisseur}
+                chargement={chargementLimites}
+              />
+            ) : (
+              <FournisseurCompact
+                key={fournisseur.id}
+                fournisseur={fournisseur}
+                chargement={chargementLimites}
+              />
+            ),
+          )}
+          <button
+            className="console-jauges-bascule barre"
+            type="button"
+            aria-label={jaugesRepliees ? 'Déplier les jauges IA' : 'Replier les jauges IA'}
+            title={jaugesRepliees ? 'Déplier les jauges IA' : 'Replier les jauges IA'}
+            aria-expanded={!jaugesRepliees}
+            onClick={basculerJauges}
+          >
+            {jaugesRepliees ? '‹' : '›'}
+          </button>
         </div>
       )}
       {ouverte && (
