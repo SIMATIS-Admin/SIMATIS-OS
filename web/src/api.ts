@@ -1211,24 +1211,13 @@ export type SessionVisio = {
   morceaux: number;
   transcrits: number;
 };
-export const ouvrirSessionVisio = (slug: string, rdvId: string) =>
-  sendJson<{ id: string }>('POST', inst(slug, 'visio/sessions'), { rdvId });
-export const envoyerMorceauVisio = (
+export const supprimerEnregistrement = (slug: string, sessionId: string) =>
+  request<unknown>(inst(slug, `visio/sessions/${sessionId}`), { method: 'DELETE' });
+export const modifierEnregistrement = (
   slug: string,
   sessionId: string,
-  m: { piste: 'moi' | 'autres'; rang: number; debutMs: number; blob: Blob },
-) =>
-  request<unknown>(inst(slug, `visio/sessions/${sessionId}/morceaux/${m.piste}/${m.rang}`), {
-    method: 'PUT',
-    headers: { 'content-type': m.blob.type || 'audio/webm', 'x-debut-ms': String(m.debutMs) },
-    body: m.blob,
-  });
-export const cloreSessionVisio = (slug: string, sessionId: string) =>
-  sendJson<{ statut: SessionVisio['statut'] }>(
-    'POST',
-    inst(slug, `visio/sessions/${sessionId}/fin`),
-    {},
-  );
+  modifs: { transcript?: string; resume?: string },
+) => sendJson<SessionVisio>('PATCH', inst(slug, `visio/sessions/${sessionId}`), modifs);
 export const fetchSessionVisio = (slug: string, sessionId: string) =>
   getJson<SessionVisio>(inst(slug, `visio/sessions/${sessionId}`));
 // Dernière session du rendez-vous, ou null s'il n'en a pas.

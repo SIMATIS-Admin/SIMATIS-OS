@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { rendezVous } from '../crm/schema.js';
+import { sujets } from '../inbox/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import {
@@ -11,6 +12,7 @@ import {
   type Piste,
 } from './schema.js';
 
+export const SOURCE_RDV_LIBRE = 'visio-libre';
 export const INACTIVITE_MAX_MS = 10 * 60_000;
 
 export class SessionIntrouvable extends Error {
@@ -254,6 +256,8 @@ export async function creerRendezVousLibre(tx: Tx, maintenant = new Date()): Pro
       fin: new Date(maintenant.getTime() + 3_600_000),
       participants: [],
       statut: 'rdv',
+      // Marque les rendez-vous créés par un enregistrement libre : supprimés avec lui s'ils restent vides.
+      source: SOURCE_RDV_LIBRE,
     })
     .returning({ id: rendezVous.id });
   if (!ligne) throw new Error('Rendez-vous non créé');
@@ -278,4 +282,62 @@ export async function listerEnregistrements(tx: Tx, limite = 20) {
     .orderBy(desc(enregistrementsVisio.debutAt))
     .limit(limite);
   return lignes.map(({ resume, ...l }) => ({ ...l, aResume: resume !== null }));
+}
+
+// Supprime l'enregistrement (et ses morceaux) et l'entrée d'Inbox de son résumé. Le rendez-vous
+// créé par un enregistrement libre part avec lui, sauf s'il a un compte rendu, des liens ou un
+// autre enregistrement : on ne perd jamais ce que Marc y a ajouté.
+export async function supprimerSession(tx: Tx, id: string): Promise<boolean> {
+  const [s] = await tx
+    .select({ rdv: enregistrementsVisio.rendezVousId })
+    .from(enregistrementsVisio)
+    .where(
+      and(eq(enregistrementsVisio.instanceId, currentInstance), eq(enregistrementsVisio.id, id)),
+    );
+  if (!s) return false;
+  await tx.delete(enregistrementsVisio).where(eq(enregistrementsVisio.id, id));
+  await tx
+    .delete(sujets)
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.source, 'visio'),
+        eq(sujets.sourceId, id),
+      ),
+    );
+  const [r] = await tx
+    .select({ source: rendezVous.source, compteRendu: rendezVous.compteRendu })
+    .from(rendezVous)
+    .where(eq(rendezVous.id, s.rdv));
+  if (r?.source !== SOURCE_RDV_LIBRE || r.compteRendu !== null) return true;
+  const { rows } = await tx.execute<{ n: number }>(sql`
+    select (select count(*) from rdv_contacts where rendez_vous_id = ${s.rdv})
+         + (select count(*) from rdv_entreprises where rendez_vous_id = ${s.rdv})
+         + (select count(*) from rdv_affaires where rendez_vous_id = ${s.rdv})
+         + (select count(*) from enregistrements_visio where rendez_vous_id = ${s.rdv}) as n`);
+  const usages = Number(rows[0]?.n ?? 0);
+  if (usages === 0) await tx.delete(rendezVous).where(eq(rendezVous.id, s.rdv));
+  return true;
+}
+
+// Marc corrige le texte transcrit ou le résumé : un résumé vidé est effacé.
+export async function modifierSession(
+  tx: Tx,
+  id: string,
+  m: { transcript?: string; resume?: string },
+): Promise<boolean> {
+  const resume = m.resume === undefined ? undefined : m.resume.trim() || null;
+  const modifs = {
+    ...(m.transcript === undefined ? {} : { transcript: m.transcript }),
+    ...(resume === undefined ? {} : { resume, resumeAt: resume === null ? null : new Date() }),
+  };
+  if (Object.keys(modifs).length === 0) return (await lireSession(tx, id)) !== null;
+  const rows = await tx
+    .update(enregistrementsVisio)
+    .set(modifs)
+    .where(
+      and(eq(enregistrementsVisio.instanceId, currentInstance), eq(enregistrementsVisio.id, id)),
+    )
+    .returning({ id: enregistrementsVisio.id });
+  return rows.length > 0;
 }

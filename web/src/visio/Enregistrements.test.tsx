@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Enregistrements } from './Enregistrements.js';
 
 let liste: object[];
+let appels: { url: string; method: string }[];
 const ligne = (extra: object) => ({
   id: 's1',
   rdvId: 'os:v1',
@@ -15,12 +16,21 @@ const ligne = (extra: object) => ({
   ...extra,
 });
 
-describe('Enregistrements', () => {
+describe('Enregistrements du cockpit', () => {
   beforeEach(() => {
     liste = [];
+    appels = [];
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => Promise.resolve(new Response(JSON.stringify(liste)))),
+      vi.fn((url: string, init?: { method?: string }) => {
+        appels.push({ url, method: init?.method ?? 'GET' });
+        if (init?.method === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }));
+        return Promise.resolve(new Response(JSON.stringify(liste)));
+      }),
+    );
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
     );
   });
   afterEach(() => {
@@ -28,28 +38,52 @@ describe('Enregistrements', () => {
     vi.unstubAllGlobals();
   });
 
-  it('ne montre rien tant qu’il n’y a aucun enregistrement', async () => {
-    const { container } = render(<Enregistrements slug="simatis" />);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(container.textContent).toBe('');
+  it('n’occupe qu’une barre discrète tant que la fenêtre est fermée', async () => {
+    liste = [ligne({})];
+    render(<Enregistrements slug="simatis" />);
+    expect(await screen.findByRole('button', { name: 'Ouvrir' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('liste les enregistrements avec leur état et un lien vers la fiche', async () => {
+  it('ouvre une fenêtre avec le bouton Enregistrer et la liste', async () => {
     liste = [
       ligne({ id: 'a', statut: 'en_cours', finAt: null }),
       ligne({ id: 'b', titre: 'Enregistrement du 12/10/2026 à 10h00', aResume: true }),
     ];
-    render(<Enregistrements slug="simatis" />);
-    expect(await screen.findByText('En cours')).toBeTruthy();
-    expect(screen.getByText('Résumé prêt')).toBeTruthy();
-    const lien = screen.getByRole('link', { name: /Enregistrement du 12\/10\/2026 à 10h00/ });
-    expect(lien.getAttribute('href')).toBe('#/simatis/fiche/rdv/os%3Av1');
+    const lancer = vi.fn();
+    render(<Enregistrements slug="simatis" onEnregistrer={lancer} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir' }));
+    const fenetre = await screen.findByRole('dialog', { name: 'Enregistrements' });
+    expect(await within(fenetre).findByText('En cours')).toBeTruthy();
+    expect(within(fenetre).getByText('Résumé prêt')).toBeTruthy();
+    fireEvent.click(within(fenetre).getByRole('button', { name: 'Enregistrer' }));
+    expect(lancer).toHaveBeenCalledOnce();
   });
 
-  it('distingue la transcription en cours d’une transcription terminée', async () => {
-    liste = [ligne({ id: 'c', statut: 'clos' }), ligne({ id: 'd', statut: 'transcrit' })];
+  it('dit quand il n’y a encore aucun enregistrement', async () => {
     render(<Enregistrements slug="simatis" />);
-    expect(await screen.findByText('Transcription en cours')).toBeTruthy();
-    expect(screen.getByText('Transcrit')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir' }));
+    expect(await screen.findByText(/Aucun enregistrement pour l’instant/)).toBeTruthy();
+  });
+
+  it('supprime un enregistrement depuis la liste après confirmation', async () => {
+    liste = [ligne({ id: 'x1' })];
+    render(<Enregistrements slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir' }));
+    const fenetre = await screen.findByRole('dialog');
+    fireEvent.click(await within(fenetre).findByRole('button', { name: 'Supprimer' }));
+    await waitFor(() =>
+      expect(
+        appels.some((c) => c.method === 'DELETE' && c.url.endsWith('/visio/sessions/x1')),
+      ).toBe(true),
+    );
+  });
+
+  it('propose le lien vers la fiche du rendez-vous', async () => {
+    liste = [ligne({})];
+    render(<Enregistrements slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir' }));
+    const lien = await screen.findByRole('link', { name: 'Ouvrir la fiche' });
+    expect(lien.getAttribute('href')).toBe('#/simatis/fiche/rdv/os%3Av1');
   });
 });
