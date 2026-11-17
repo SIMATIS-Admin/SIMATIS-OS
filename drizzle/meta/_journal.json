@@ -680,6 +680,13 @@
       "when": 1794912794309,
       "tag": "0096_closed_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1794913074723,
+      "tag": "0097_little_richard_fisk",
+      "breakpoints": true
     }
   ]
 }

@@ -28,6 +28,7 @@ import {
   gestionTvaMois,
 } from '../gestion/schema.js';
 import { echangesAjout, reunionsWispr, sujets } from '../inbox/schema.js';
+import { enregistrementsVisio, morceauxVisio } from '../visio/schema.js';
 import {
   crmPartages,
   invitationsPartenaires,
@@ -89,6 +90,8 @@ export const METIER_TABLES = [
   missions,
   partenaires,
   reunionsWispr,
+  enregistrementsVisio,
+  morceauxVisio,
   sujets,
   connexions,
   executions,
