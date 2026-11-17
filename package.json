@@ -21,7 +21,9 @@
     "dev:web": "vite",
     "admin": "tsx --env-file=.env src/admin/main.ts",
     "ai:limits": "node scripts/collect-ai-limits.cjs",
-    "runner": "tsx --env-file=.env src/runner/runner.ts"
+    "runner": "tsx --env-file=.env src/runner/runner.ts",
+    "visio-mac:test": "sh apps/visio-mac/test.sh",
+    "visio-mac:installer": "sh apps/visio-mac/build.sh --installer"
   },
   "dependencies": {
     "@fastify/static": "^10.1.5",

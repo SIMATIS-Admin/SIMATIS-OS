@@ -118,6 +118,18 @@ describe('Interface d’enregistrement des visios', () => {
     await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
   });
 
+  it('accepte un morceau m4a envoyé par l’appli Mac, hors navigateur', async () => {
+    const id = await ouvrir();
+    const r = await app.inject({
+      method: 'PUT',
+      url: `${base}/sessions/${id}/morceaux/autres/0`,
+      headers: { 'content-type': 'audio/mp4', 'x-debut-ms': '0' },
+      payload: son,
+    });
+    expect(r.statusCode).toBe(204);
+    await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+  });
+
   it('refuse un rendez-vous inconnu, une piste inconnue et un morceau trop gros', async () => {
     const inconnu = await app.inject({
       method: 'POST',
