@@ -9,7 +9,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/VisioMac "$APP/Contents/MacOS/VisioMac"
 # Icône : dessinée par icone.swift, convertie en .icns.
 rm -rf .build/Icone.iconset
-swift icone.swift .build/Icone.iconset >/dev/null
+swift icone.swift .build/Icone.iconset ../../web/src/assets/simatis-mark.png >/dev/null
 iconutil -c icns .build/Icone.iconset -o "$APP/Contents/Resources/Icone.icns"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
