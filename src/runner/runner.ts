@@ -2072,7 +2072,6 @@ function main() {
     tourEchanges(opts)
       .then(() => tourCampagnes(opts))
       .then(() => tourDiagnostic(opts))
-      .then(() => tourTranscriptions(opts))
       .catch((err: unknown) => console.error('runner :', err instanceof Error ? err.message : err))
       .finally(() => {
         occupeEchange = false;
@@ -2080,6 +2079,20 @@ function main() {
   };
   passeEchange();
   setInterval(passeEchange, 5_000);
+
+  // Texte en direct d'une visio enregistrée : passage à part, pour ne pas attendre la fin d'une
+  // tâche Claude longue de la chaîne ci-dessus.
+  let occupeTranscription = false;
+  const passeTranscription = () => {
+    if (occupeTranscription) return;
+    occupeTranscription = true;
+    tourTranscriptions(opts)
+      .catch((err: unknown) => console.error('runner :', err instanceof Error ? err.message : err))
+      .finally(() => {
+        occupeTranscription = false;
+      });
+  };
+  setInterval(passeTranscription, 3_000);
 
   // Journal de consommation IA : relevé des sessions du Mac, 30 jours au premier passage.
   const etatConso = { depuis: new Date(Date.now() - 30 * 24 * 3_600_000) };

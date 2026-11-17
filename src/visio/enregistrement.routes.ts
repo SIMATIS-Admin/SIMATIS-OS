@@ -8,6 +8,7 @@ import { withInstance } from '../db/context.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { logEvent } from '../journal/service.js';
 import {
+  assemblerTranscript,
   clore,
   cloturerAbandonnees,
   finaliser,
@@ -196,7 +197,8 @@ const resume = (s: NonNullable<Awaited<ReturnType<typeof lireSession>>>) => ({
   id: s.id,
   statut: s.statut,
   debutAt: s.debutAt,
-  transcript: s.transcript,
+  // Tant que la session n'est pas finalisée : le texte déjà transcrit, pour l'affichage en direct.
+  transcript: s.transcript ?? (assemblerTranscript(s.morceaux) || null),
   morceaux: s.morceaux.length,
   transcrits: s.morceaux.filter((m) => m.texte !== null).length,
 });
