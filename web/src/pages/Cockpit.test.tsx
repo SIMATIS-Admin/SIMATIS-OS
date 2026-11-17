@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const compteur = vi.hoisted(() => vi.fn());
 vi.mock('../api.js', () => ({ fetchCompteurInbox: compteur }));
 vi.mock('./Inbox.js', () => ({ Inbox: ({ slug }: { slug: string }) => <p>Inbox de {slug}</p> }));
+vi.mock('../visio/Enregistrements.js', () => ({
+  Enregistrements: ({ slug }: { slug: string }) => <p>Enregistrements de {slug}</p>,
+}));
 vi.mock('./Brief.js', () => ({ Brief: ({ slug }: { slug: string }) => <p>Brief de {slug}</p> }));
 
 import { Cockpit } from './Cockpit.js';
@@ -23,6 +26,12 @@ describe('Cockpit', () => {
     );
     expect(await screen.findByText('Inbox : 3 à traiter')).toBeTruthy();
     expect(screen.queryByText('Inbox de simatis')).toBeNull();
+  });
+
+  it('montre les enregistrements de visio dans le cockpit', () => {
+    compteur.mockResolvedValue(0);
+    render(<Cockpit slug="simatis" />);
+    expect(screen.getByText('Enregistrements de simatis')).toBeTruthy();
   });
 
   it("ouvre l'Inbox dans une fenêtre, et la referme en prévenant l'écran", async () => {

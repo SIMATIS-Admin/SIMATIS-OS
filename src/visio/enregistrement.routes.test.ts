@@ -130,6 +130,37 @@ describe('Interface d’enregistrement des visios', () => {
     await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
   });
 
+  it('enregistre sans rendez-vous : l’OS en crée un, sans toucher à Google', async () => {
+    const r = await app.inject({ method: 'POST', url: `${base}/sessions`, payload: {} });
+    expect(r.statusCode).toBe(201);
+    const { id } = r.json<{ id: string }>();
+    const ligne = await t.owner.pool.query<{ event_id: string; titre: string; statut: string }>(
+      `select r.event_id, r.titre, r.statut from enregistrements_visio e
+         join rendez_vous r on r.id = e.rendez_vous_id where e.id = $1`,
+      [id],
+    );
+    expect(ligne.rows[0]?.event_id.startsWith('os:')).toBe(true);
+    expect(ligne.rows[0]?.titre).toMatch(/^Enregistrement du \d{2}\/\d{2}\/\d{4} à \d{2}h\d{2}$/);
+    expect(ligne.rows[0]?.statut).toBe('rdv');
+    await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+  });
+
+  it('liste les enregistrements récents de l’instance, du plus récent au plus ancien', async () => {
+    const a1 = await ouvrir();
+    await app.inject({ method: 'POST', url: `${base}/sessions/${a1}/fin` });
+    const libre = (
+      await app.inject({ method: 'POST', url: `${base}/sessions`, payload: {} })
+    ).json<{ id: string }>().id;
+    const r = await app.inject({ method: 'GET', url: `${base}/enregistrements` });
+    const liste = r.json<{ id: string; rdvId: string; titre: string; statut: string }[]>();
+    expect(liste[0]).toMatchObject({ id: libre, statut: 'en_cours' });
+    expect(liste[0]?.rdvId.startsWith('os:')).toBe(true);
+    expect(liste.map((e) => e.id)).toContain(a1);
+    const autre = await app.inject({ method: 'GET', url: '/api/i/rte-b/visio/enregistrements' });
+    expect(autre.json<{ id: string }[]>().map((e) => e.id)).not.toContain(libre);
+    await app.inject({ method: 'POST', url: `${base}/sessions/${libre}/fin` });
+  });
+
   it('refuse un rendez-vous inconnu, une piste inconnue et un morceau trop gros', async () => {
     const inconnu = await app.inject({
       method: 'POST',

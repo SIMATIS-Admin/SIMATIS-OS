@@ -54,6 +54,19 @@ final class FauxServeur: URLProtocol {
         #expect(String(data: FauxServeur.corps[0], encoding: .utf8) == #"{"rdvId":"os:v1"}"#)
     }
 
+    @Test func ouvreUneSessionLibreSansRendezVous() async throws {
+        let c = client()
+        FauxServeur.reponses = [(201, #"{"id":"s9"}"#)]
+        let id = try await c.ouvrirSession(rendezVousId: nil)
+        #expect(id == "s9")
+        #expect(String(data: FauxServeur.corps[0], encoding: .utf8) == "{}")
+    }
+
+    @Test func adresseDuCockpitDansLOS() {
+        let c = client()
+        #expect(c.adresseCockpit.absoluteString == "http://127.0.0.1:4300/#/simatis/cockpit")
+    }
+
     @Test func envoieUnMorceauAvecSaPisteSonRangEtSonDebut() async throws {
         let c = client()
         FauxServeur.reponses = [(204, "")]

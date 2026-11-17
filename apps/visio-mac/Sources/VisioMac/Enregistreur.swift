@@ -31,7 +31,7 @@ final class Enregistreur: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         init(url: URL) { self.url = url }
     }
 
-    func demarrer(rendezVousId: String) async throws {
+    func demarrer(rendezVousId: String?) async throws {
         try FileManager.default.createDirectory(at: dossier, withIntermediateDirectories: true)
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
             throw OsErreur(statut: 0, message: "Accès au micro refusé (Réglages Système > Confidentialité).")

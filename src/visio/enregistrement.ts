@@ -1,4 +1,6 @@
-import { and, asc, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { rendezVous } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import {
@@ -220,4 +222,60 @@ export async function finaliserCloses(tx: Tx): Promise<number> {
   let n = 0;
   for (const { id } of closes) if (await finaliser(tx, id)) n++;
   return n;
+}
+
+const dateParis = (d: Date) =>
+  new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(d);
+const heureParis = (d: Date) =>
+  new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .format(d)
+    .replace(':', 'h');
+
+// Enregistrement lancé hors agenda : l'OS lui crée un rendez-vous à l'instant, sans copie dans
+// Google (aucune invitation, aucun événement). Marc le rattache ensuite à qui il veut.
+export async function creerRendezVousLibre(tx: Tx, maintenant = new Date()): Promise<string> {
+  const [ligne] = await tx
+    .insert(rendezVous)
+    .values({
+      instanceId: currentInstance,
+      eventId: `os:${randomUUID()}`,
+      titre: `Enregistrement du ${dateParis(maintenant)} à ${heureParis(maintenant)}`,
+      debut: maintenant,
+      fin: new Date(maintenant.getTime() + 3_600_000),
+      participants: [],
+      statut: 'rdv',
+    })
+    .returning({ id: rendezVous.id });
+  if (!ligne) throw new Error('Rendez-vous non créé');
+  return ligne.id;
+}
+
+// Les enregistrements récents de l'instance, avec le rendez-vous auquel ils sont rattachés.
+export async function listerEnregistrements(tx: Tx, limite = 20) {
+  const lignes = await tx
+    .select({
+      id: enregistrementsVisio.id,
+      rdvId: rendezVous.eventId,
+      titre: rendezVous.titre,
+      debutAt: enregistrementsVisio.debutAt,
+      finAt: enregistrementsVisio.finAt,
+      statut: enregistrementsVisio.statut,
+      resume: enregistrementsVisio.resume,
+    })
+    .from(enregistrementsVisio)
+    .innerJoin(rendezVous, eq(rendezVous.id, enregistrementsVisio.rendezVousId))
+    .where(eq(enregistrementsVisio.instanceId, currentInstance))
+    .orderBy(desc(enregistrementsVisio.debutAt))
+    .limit(limite);
+  return lignes.map(({ resume, ...l }) => ({ ...l, aResume: resume !== null }));
 }

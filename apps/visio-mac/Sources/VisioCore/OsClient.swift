@@ -37,15 +37,21 @@ public struct OsClient: Sendable {
         return data
     }
 
+    // Le cockpit de l'OS, où la liste des enregistrements s'affiche.
+    public var adresseCockpit: URL {
+        URL(string: base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/#/\(instance)/cockpit")!
+    }
+
     public func rendezVousProches() async throws -> [RendezVousProche] {
         try decoderRendezVous(try await envoyer(URLRequest(url: url("rendez-vous"))))
     }
 
-    public func ouvrirSession(rendezVousId: String) async throws -> String {
+    // Sans rendez-vous, l'OS en crée un (enregistrement libre).
+    public func ouvrirSession(rendezVousId: String?) async throws -> String {
         var r = URLRequest(url: url("sessions"))
         r.httpMethod = "POST"
         r.setValue("application/json", forHTTPHeaderField: "content-type")
-        r.httpBody = try JSONSerialization.data(withJSONObject: ["rdvId": rendezVousId])
+        r.httpBody = try JSONSerialization.data(withJSONObject: rendezVousId.map { ["rdvId": $0] } ?? [:])
         let data = try await envoyer(r)
         guard let id = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["id"] as? String else {
             throw OsErreur(statut: 0, message: "Réponse de l'OS illisible")

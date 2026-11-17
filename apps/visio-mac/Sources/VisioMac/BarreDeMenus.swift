@@ -55,7 +55,7 @@ final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate, @unch
         } else {
             bouton?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Visio")
             bouton?.contentTintColor = nil
-            bouton?.title = occupe ? " …" : ""
+            bouton?.title = occupe ? " Visio …" : " Visio"
         }
     }
 
@@ -67,9 +67,15 @@ final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate, @unch
             let arret = NSMenuItem(title: "Arrêter l'enregistrement", action: #selector(arreter), keyEquivalent: "")
             arret.target = self
             menu.addItem(arret)
-        } else if proches.isEmpty {
-            menu.addItem(withTitle: "Aucun rendez-vous proche dans l'OS", action: nil, keyEquivalent: "")
         } else {
+            let libre = NSMenuItem(title: "Enregistrer maintenant", action: #selector(demarrerLibre), keyEquivalent: "")
+            libre.target = self
+            menu.addItem(libre)
+            menu.addItem(.separator())
+        }
+        if enCours == nil && proches.isEmpty {
+            menu.addItem(withTitle: "Aucun rendez-vous proche dans l'OS", action: nil, keyEquivalent: "")
+        } else if enCours == nil {
             menu.addItem(withTitle: "Enregistrer pour le rendez-vous :", action: nil, keyEquivalent: "")
             let heure = DateFormatter()
             heure.dateFormat = "HH:mm"
@@ -81,21 +87,38 @@ final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate, @unch
             }
         }
         menu.addItem(.separator())
+        let liste = NSMenuItem(title: "Voir les enregistrements", action: #selector(voirEnregistrements), keyEquivalent: "")
+        liste.target = self
+        menu.addItem(liste)
         let quitter = NSMenuItem(title: "Quitter", action: #selector(quitter), keyEquivalent: "q")
         quitter.target = self
         menu.addItem(quitter)
         actualiser()
     }
 
+    @objc private func demarrerLibre() {
+        lancer(rendezVousId: nil, titre: "Enregistrement libre")
+    }
+
+    @objc private func voirEnregistrements() {
+        NSWorkspace.shared.open(os.adresseCockpit)
+    }
+
     @objc private func demarrer(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String,
-              let rdv = proches.first(where: { $0.id == id }), !occupe else { return }
+              let rdv = proches.first(where: { $0.id == id }) else { return }
+        lancer(rendezVousId: rdv.id, titre: rdv.titre)
+    }
+
+    private func lancer(rendezVousId: String?, titre: String) {
+        guard !occupe, enCours == nil else { return }
+        let rdv = RendezVousProche(id: rendezVousId ?? "", titre: titre, debut: Date(), fin: Date(), lienVisio: nil)
         occupe = true
         message = nil
         rafraichirTitre()
         Task { @MainActor in
             do {
-                try await self.enregistreur.demarrer(rendezVousId: rdv.id)
+                try await self.enregistreur.demarrer(rendezVousId: rendezVousId)
                 self.enCours = rdv
                 self.debut = Date()
             } catch {
