@@ -1,4 +1,4 @@
-import { and, asc, eq, lt } from 'drizzle-orm';
+import { and, asc, eq, lt, sql } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import {
@@ -170,10 +170,17 @@ export async function finaliser(tx: Tx, id: string): Promise<boolean> {
   return true;
 }
 
+// Les morceaux sans leur son : l'écran relit la session toutes les quelques secondes, le son
+// (plusieurs Mo) ne doit pas suivre.
+export type MorceauLu = Pick<
+  MorceauVisio,
+  'id' | 'enregistrementId' | 'piste' | 'rang' | 'debutMs' | 'mime' | 'texte'
+> & { aAudio: boolean };
+
 export async function lireSession(
   tx: Tx,
   id: string,
-): Promise<(EnregistrementVisio & { morceaux: MorceauVisio[] }) | null> {
+): Promise<(EnregistrementVisio & { morceaux: MorceauLu[] }) | null> {
   const [session] = await tx
     .select()
     .from(enregistrementsVisio)
@@ -182,9 +189,35 @@ export async function lireSession(
     );
   if (!session) return null;
   const morceaux = await tx
-    .select()
+    .select({
+      id: morceauxVisio.id,
+      enregistrementId: morceauxVisio.enregistrementId,
+      piste: morceauxVisio.piste,
+      rang: morceauxVisio.rang,
+      debutMs: morceauxVisio.debutMs,
+      mime: morceauxVisio.mime,
+      texte: morceauxVisio.texte,
+      aAudio: sql<boolean>`${morceauxVisio.audio} is not null`,
+    })
     .from(morceauxVisio)
     .where(eq(morceauxVisio.enregistrementId, id))
     .orderBy(asc(morceauxVisio.debutMs), asc(morceauxVisio.rang));
   return { ...session, morceaux };
+}
+
+// Une session close sans morceau (navigateur fermé tout de suite) n'attend aucun texte : personne
+// ne viendra la finaliser, on le fait ici.
+export async function finaliserCloses(tx: Tx): Promise<number> {
+  const closes = await tx
+    .select({ id: enregistrementsVisio.id })
+    .from(enregistrementsVisio)
+    .where(
+      and(
+        eq(enregistrementsVisio.instanceId, currentInstance),
+        eq(enregistrementsVisio.statut, 'clos'),
+      ),
+    );
+  let n = 0;
+  for (const { id } of closes) if (await finaliser(tx, id)) n++;
+  return n;
 }

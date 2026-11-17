@@ -11,6 +11,7 @@ import {
   clore,
   cloturerAbandonnees,
   finaliser,
+  finaliserCloses,
   lireSession,
   ouvrirSession,
   poserTexte,
@@ -214,6 +215,7 @@ export function registerTranscriptionRunnerRoutes(
     for (const instance of await listInstances(db)) {
       const rows = await withInstance(db, instance.id, async (tx) => {
         await cloturerAbandonnees(tx, new Date());
+        await finaliserCloses(tx);
         return tx
           .select({
             enregistrementId: morceauxVisio.enregistrementId,

@@ -9,6 +9,7 @@ import {
   cloturerAbandonnees,
   clore,
   finaliser,
+  finaliserCloses,
   lireSession,
   ouvrirSession,
   poserTexte,
@@ -86,7 +87,7 @@ describe('Sessions d’enregistrement de visio', () => {
     const s = await dansA((tx) => lireSession(tx, id));
     expect(s?.statut).toBe('transcrit');
     expect(s?.transcript).toBe('Moi : Bonjour.\nAutres : Bonjour à vous.');
-    expect(s?.morceaux.every((m) => m.audio === null)).toBe(true);
+    expect(s?.morceaux.every((m) => !m.aAudio)).toBe(true);
   });
 
   it('refuse un morceau reçu après la clôture', async () => {
@@ -104,6 +105,23 @@ describe('Sessions d’enregistrement de visio', () => {
     expect(await dansA((tx) => cloturerAbandonnees(tx, dans5))).toBe(0);
     expect(await dansA((tx) => cloturerAbandonnees(tx, dans11))).toBeGreaterThanOrEqual(1);
     expect((await dansA((tx) => lireSession(tx, id)))?.statut).toBe('clos');
+  });
+
+  it('ne recharge pas le son à chaque lecture de la session', async () => {
+    const { id } = await dansA((tx) => ouvrirSession(tx, rdvA));
+    await dansA((tx) => recevoirMorceau(tx, id, morceau('moi', 0)));
+    const s = await dansA((tx) => lireSession(tx, id));
+    expect(s?.morceaux[0]).toMatchObject({ aAudio: true });
+    expect(s?.morceaux[0]).not.toHaveProperty('audio');
+    await dansA((tx) => clore(tx, id));
+  });
+
+  it('finalise les sessions closes dont rien n’attend plus de texte', async () => {
+    const vide = await dansA((tx) => ouvrirSession(tx, rdvA));
+    await dansA((tx) => clore(tx, vide.id));
+    expect(await dansA((tx) => finaliserCloses(tx))).toBeGreaterThanOrEqual(1);
+    const s = await dansA((tx) => lireSession(tx, vide.id));
+    expect(s).toMatchObject({ statut: 'transcrit', transcript: '' });
   });
 
   it('ne montre pas la session d’une instance à une autre', async () => {
