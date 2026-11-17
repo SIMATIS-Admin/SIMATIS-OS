@@ -25,6 +25,7 @@ import { registerVmaRoutes } from './vma/routes.js';
 import { registerGestionRoutes } from './gestion/routes.js';
 import { registerProspectionRoutes } from './prospection/routes.js';
 import { registerVisioRoutes } from './visio/routes.js';
+import { registerEnregistrementRoutes } from './visio/enregistrement.routes.js';
 import { registerTransfertRoutes } from './transfert/routes.js';
 import { registerWeb } from './web.js';
 import { lireLimitesIA } from './ia/limites.js';
@@ -192,6 +193,7 @@ export function buildApp({
     ...(clientIA ? { client: clientIA } : {}),
   });
   registerGestionRoutes(app, { db });
+  registerEnregistrementRoutes(app, { db });
   registerVisioRoutes(app, { db, secretsDir, realWrites, googleFetch, hote: visioNomHote });
   registerProspectionRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
   registerAtelierRoutes(app, { db });
