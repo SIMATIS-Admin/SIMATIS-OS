@@ -52,11 +52,26 @@ final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate, @unch
             bouton?.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: "Enregistrement en cours")
             bouton?.contentTintColor = .systemRed
             bouton?.title = String(format: " %02d:%02d", s / 60, s % 60)
+            // Visible aussi dans le Dock, au cas où l'icône de la barre de menus est cachée par l'encoche.
+            NSApp.dockTile.badgeLabel = String(format: "%02d:%02d", s / 60, s % 60)
         } else {
             bouton?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Visio")
             bouton?.contentTintColor = nil
             bouton?.title = occupe ? " Visio …" : " Visio"
+            NSApp.dockTile.badgeLabel = nil
         }
+    }
+
+    // Un clic sur l'icône du Dock ouvre le même menu que celle de la barre de menus.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        item.button?.performClick(nil)
+        return false
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let dock = NSMenu()
+        menuNeedsUpdate(dock)
+        return dock
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {

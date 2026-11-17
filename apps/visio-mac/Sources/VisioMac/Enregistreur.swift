@@ -36,7 +36,12 @@ final class Enregistreur: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
             throw OsErreur(statut: 0, message: "Accès au micro refusé (Réglages Système > Confidentialité).")
         }
-        let contenu = try await SCShareableContent.current
+        let contenu: SCShareableContent
+        do {
+            contenu = try await SCShareableContent.current
+        } catch {
+            throw OsErreur(statut: 0, message: "Autorisation « Enregistrement de l'écran et du son du système » refusée ou périmée : quittez l'appli, relancez-la (voir docs/EXPLOITATION.md si le problème persiste).")
+        }
         guard let ecran = contenu.displays.first else {
             throw OsErreur(statut: 0, message: "Aucun écran trouvé pour capter le son.")
         }
@@ -138,16 +143,7 @@ final class Enregistreur: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         }
         do {
             if morceau.fichier == nil {
-                morceau.fichier = try AVAudioFile(
-                    forWriting: morceau.url,
-                    settings: [
-                        AVFormatIDKey: kAudioFormatMPEG4AAC,
-                        AVSampleRateKey: pcm.format.sampleRate,
-                        AVNumberOfChannelsKey: pcm.format.channelCount,
-                        AVEncoderBitRateKey: 64_000,
-                    ],
-                    commonFormat: pcm.format.commonFormat,
-                    interleaved: pcm.format.isInterleaved)
+                morceau.fichier = try ouvrirFichierAAC(url: morceau.url, format: pcm.format)
             }
             try morceau.fichier?.write(from: pcm)
             morceau.ecrit = true
