@@ -24,6 +24,8 @@ const schema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   SECRETS_DIR: z.string().min(1).default('./secrets/instances'),
   REAL_WRITES: z.enum(['off', 'on']).default('off'),
+  // Nom de l'hôte dans le titre des visios (« V - Client x Hôte »), propre au déploiement.
+  VISIO_NOM_HOTE: z.preprocess(vide, z.string().trim().min(1).default('Simatis')),
   BACKUP_STATUS_FILE: z.string().min(1).default('./backup-status/last.json'),
   SITE_CONTACT_URL: z.preprocess(
     vide,
