@@ -75,6 +75,7 @@ export type Config = {
   logLevel: z.infer<typeof schema>['LOG_LEVEL'];
   secretsDir: string;
   realWrites: boolean;
+  visioNomHote: string;
   backupStatusFile: string;
   // Public website whose contact form feeds the Inbox; null when not configured.
   site: { url: string; token: string } | null;
@@ -116,6 +117,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     logLevel: e.LOG_LEVEL,
     secretsDir: e.SECRETS_DIR,
     realWrites: e.REAL_WRITES === 'on',
+    visioNomHote: e.VISIO_NOM_HOTE,
     backupStatusFile: e.BACKUP_STATUS_FILE,
     site: siteUrl && siteToken ? { url: siteUrl, token: siteToken } : null,
     vmaOsToken: e.VMA_OS_TOKEN ?? null,

@@ -40,6 +40,7 @@ const app = buildApp({
   backupStatusFile: config.backupStatusFile,
   lectureRole: lectureRoleOf(config.appDbRole),
   realWrites: config.realWrites,
+  visioNomHote: config.visioNomHote,
   secretsDir: config.secretsDir,
   vma: config.site && config.vmaOsToken ? { url: config.site.url, token: config.vmaOsToken } : null,
   enrichissement: config.enrichissement,

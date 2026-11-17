@@ -24,6 +24,7 @@ import { registerAtelierRoutes } from './atelier/routes.js';
 import { registerVmaRoutes } from './vma/routes.js';
 import { registerGestionRoutes } from './gestion/routes.js';
 import { registerProspectionRoutes } from './prospection/routes.js';
+import { registerVisioRoutes } from './visio/routes.js';
 import { registerTransfertRoutes } from './transfert/routes.js';
 import { registerWeb } from './web.js';
 import { lireLimitesIA } from './ia/limites.js';
@@ -40,6 +41,8 @@ export type AppDeps = {
   backupStatusFile?: string;
   lectureRole?: string;
   realWrites?: boolean;
+  // Nom de l'hôte dans le titre des visios (« V - Client x Hôte »).
+  visioNomHote?: string;
   secretsDir?: string;
   googleFetch?: FetchLike;
   imapServeur?: Pick<CompteImap, 'host' | 'port' | 'secure'>;
@@ -64,6 +67,7 @@ export function buildApp({
   backupStatusFile = './backup-status/last.json',
   lectureRole = 'simatis_app_lecture',
   realWrites = false,
+  visioNomHote = 'Simatis',
   secretsDir = './secrets/instances',
   googleFetch,
   imapServeur,
@@ -188,6 +192,7 @@ export function buildApp({
     ...(clientIA ? { client: clientIA } : {}),
   });
   registerGestionRoutes(app, { db });
+  registerVisioRoutes(app, { db, secretsDir, realWrites, googleFetch, hote: visioNomHote });
   registerProspectionRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
   registerAtelierRoutes(app, { db });
   registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });

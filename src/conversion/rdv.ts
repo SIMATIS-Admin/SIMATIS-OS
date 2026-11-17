@@ -174,6 +174,9 @@ export const rdvOsSchema = z
       .refine((d) => d >= '2000-01-01' && d < '2100-01-01', 'Date hors limites'),
     dureeMinutes: z.number().int().min(5).max(1440).default(60),
     lieu: z.string().trim().max(300).nullish(),
+    // Visio Google Meet et invitations : ne partent que sous le double verrou d'écriture.
+    visio: z.boolean().optional(),
+    invites: z.array(z.string().trim().toLowerCase().pipe(z.email())).max(30).optional(),
   })
   .strict();
 
@@ -203,10 +206,11 @@ export async function creerRendezVousDansTx(
   instance: Instance,
   saisie: z.infer<typeof rdvOsSchema>,
   deps?: ConnexionDeps & GoogleOptions,
-): Promise<{ id: string; ligneId: string; google: CopieAgenda }> {
+): Promise<{ id: string; ligneId: string; google: CopieAgenda; lienVisio: string | null }> {
   const debut = new Date(saisie.debut);
   const fin = new Date(debut.getTime() + saisie.dureeMinutes * 60_000);
   const eventId = `os:${randomUUID()}`;
+  const invites = [...new Set((saisie.invites ?? []).map((e) => e.trim().toLowerCase()))];
   const secrets = deps ? await loadInstanceSecrets(deps.secretsDir, instance.slug) : {};
   const branche =
     !!deps &&
@@ -221,7 +225,7 @@ export async function creerRendezVousDansTx(
       debut,
       fin,
       lieu: saisie.lieu || null,
-      participants: [],
+      participants: invites,
       statut: 'rdv',
     })
     .returning({ id: rendezVous.id });
@@ -232,7 +236,12 @@ export async function creerRendezVousDansTx(
     niveau: 'L1',
     details: { eventId },
   });
-  const resultat = (google: CopieAgenda) => ({ id: eventId, ligneId: ligne.id, google });
+  const resultat = (google: CopieAgenda, lienVisio: string | null = null) => ({
+    id: eventId,
+    ligneId: ligne.id,
+    google,
+    lienVisio,
+  });
   if (!branche || !deps) return resultat('indisponible');
   const ctx: SyncCtx = {
     instance,
@@ -246,10 +255,22 @@ export async function creerRendezVousDansTx(
   try {
     const copie = await creerEvenement(
       ctx,
-      { osId: eventId, titre: saisie.titre, debut, fin, lieu: saisie.lieu },
+      {
+        osId: eventId,
+        titre: saisie.titre,
+        debut,
+        fin,
+        lieu: saisie.lieu,
+        visio: saisie.visio,
+        invites,
+      },
       deps.fetch ? { fetch: deps.fetch } : {},
     );
-    return resultat(copie.simulation ? 'simulation' : 'ok');
+    const lienVisio = copie.evenement?.lienVisio ?? null;
+    if (lienVisio) {
+      await tx.update(rendezVous).set({ lienVisio }).where(eq(rendezVous.id, ligne.id));
+    }
+    return resultat(copie.simulation ? 'simulation' : 'ok', lienVisio);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await logEvent(tx, {
@@ -797,6 +818,7 @@ export async function getRendezVous(
         debut: r.debut,
         fin: r.fin,
         lieu: r.lieu,
+        lienVisio: r.lienVisio,
         statut: r.statut as StatutRdv,
         contacts: (liens.contacts.get(r.id) ?? []).map((c) => ({
           ...c,
