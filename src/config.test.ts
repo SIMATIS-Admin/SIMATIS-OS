@@ -15,6 +15,7 @@ describe('loadConfig', () => {
       logLevel: 'info',
       secretsDir: './secrets/instances',
       realWrites: false,
+      visioNomHote: 'Simatis',
       backupStatusFile: './backup-status/last.json',
       site: null,
       vmaOsToken: null,
@@ -120,6 +121,7 @@ describe('loadConfig', () => {
       appDbRole: 'app_test',
       secretsDir: '/app/secrets/instances',
       realWrites: true,
+      visioNomHote: 'Simatis',
     });
   });
 

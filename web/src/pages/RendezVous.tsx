@@ -17,6 +17,7 @@ import {
   type StatutRdv,
 } from '../api.js';
 import { Fenetre } from './Fenetre.js';
+import { NouvelleVisio } from './NouvelleVisio.js';
 import { EnteteCommercial, useChoixCommercial } from './commercial/commun.js';
 import { ApercuCommercial, type ReferenceCommerciale } from './commercial/Apercu.js';
 import { SearchBox } from './SearchBox.js';
@@ -314,6 +315,7 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
   const [ouvert, setOuvert] = useState<{ id: string; vue: 'prep' | 'cr' | 'lien' } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creation, setCreation] = useState(false);
+  const [visio, setVisio] = useState(false);
   const [recherche, setRecherche] = useChoixCommercial(`${slug}.rdv.recherche`, '');
   const [apercu, setApercu] = useState<ReferenceCommerciale | null>(null);
   // Blocs cochés dans « À confirmer », pour les trier d'un coup.
@@ -403,11 +405,15 @@ export function RendezVous({ slug, ouvrir }: { slug: string; ouvrir?: string }) 
   const creerBloc = (
     <>
       <EnteteCommercial description="Préparez vos échanges, retrouvez les liens et donnez une suite à chaque rendez-vous.">
+        <button className="btn" onClick={() => setVisio(true)}>
+          + Nouvelle visio
+        </button>
         <button className="btn primary" onClick={() => setCreation(true)}>
           + Nouveau rendez-vous
         </button>
       </EnteteCommercial>
       {creation && <NouveauRdv slug={slug} onFermer={() => setCreation(false)} />}
+      {visio && <NouvelleVisio slug={slug} onFermer={() => setVisio(false)} />}
     </>
   );
   if (bandeau && data.rdv.length === 0) {

@@ -525,7 +525,8 @@ const COULEURS_EVENEMENT: Record<string, string> = {
 const CLE_RDV_OS = 'simatisOs';
 
 export type EcritureAgenda = {
-  evenement: { id: string; lien: string | null } | null;
+  // `lienVisio` n'apparaît que si une visio a été demandée.
+  evenement: { id: string; lien: string | null; lienVisio?: string | null } | null;
   simulation: boolean;
 };
 
@@ -533,7 +534,16 @@ export type EcritureAgenda = {
 // without real writes the agenda stays untouched. It only creates; no existing event is touched.
 export async function creerEvenement(
   ctx: SyncCtx,
-  rdv: { osId: string; titre: string; debut: Date; fin: Date; lieu?: string | null },
+  rdv: {
+    osId: string;
+    titre: string;
+    debut: Date;
+    fin: Date;
+    lieu?: string | null;
+    // Lien Google Meet et invitations par l'agenda de Marc.
+    visio?: boolean;
+    invites?: string[];
+  },
   options: GoogleOptions = {},
 ): Promise<EcritureAgenda> {
   if (!ctx.reel) {
@@ -543,23 +553,47 @@ export async function creerEvenement(
     });
     return { evenement: null, simulation: true };
   }
-  const created = await googleApi(ctx, options).request<{ id: string; htmlLink?: string }>(
-    'POST',
-    `${CALENDAR}/calendars/primary/events`,
-    {
-      summary: rdv.titre,
-      ...(rdv.lieu ? { location: rdv.lieu } : {}),
-      start: { dateTime: rdv.debut.toISOString() },
-      end: { dateTime: rdv.fin.toISOString() },
-      extendedProperties: { private: { [CLE_RDV_OS]: rdv.osId } },
-    },
-  );
+  const invites = rdv.invites ?? [];
+  // Les invitations ne partent que si un invité ou une visio est demandé : sinon, requête inchangée.
+  const params = new URLSearchParams();
+  if (rdv.visio) params.set('conferenceDataVersion', '1');
+  if (invites.length > 0) params.set('sendUpdates', 'all');
+  const query = params.size > 0 ? `?${params.toString()}` : '';
+  const created = await googleApi(ctx, options).request<{
+    id: string;
+    htmlLink?: string;
+    hangoutLink?: string;
+  }>('POST', `${CALENDAR}/calendars/primary/events${query}`, {
+    summary: rdv.titre,
+    ...(rdv.lieu ? { location: rdv.lieu } : {}),
+    start: { dateTime: rdv.debut.toISOString() },
+    end: { dateTime: rdv.fin.toISOString() },
+    ...(invites.length > 0 ? { attendees: invites.map((email) => ({ email })) } : {}),
+    ...(rdv.visio
+      ? {
+          conferenceData: {
+            createRequest: {
+              requestId: rdv.osId,
+              conferenceSolutionKey: { type: 'hangoutsMeet' },
+            },
+          },
+        }
+      : {}),
+    extendedProperties: { private: { [CLE_RDV_OS]: rdv.osId } },
+  });
   await logEvent(ctx.tx, {
     acteur: 'os',
     action: `Rendez-vous créé dans Google Agenda : ${rdv.titre}`,
     niveau: 'L1',
   });
-  return { evenement: { id: created.id, lien: created.htmlLink ?? null }, simulation: false };
+  return {
+    evenement: {
+      id: created.id,
+      lien: created.htmlLink ?? null,
+      ...(rdv.visio ? { lienVisio: created.hangoutLink ?? null } : {}),
+    },
+    simulation: false,
+  };
 }
 
 // Meetings between two dates (brief, Rendez-vous screen).

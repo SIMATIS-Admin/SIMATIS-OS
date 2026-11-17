@@ -192,6 +192,7 @@ describe('RendezVous : création dans l’OS', () => {
     render(<RendezVous slug="simatis" />);
     expect(await screen.findByText(/invalid_grant/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Nouveau rendez-vous/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Nouvelle visio/ })).toBeTruthy();
   });
 
   it('offre le bouton aussi sans agenda branché', async () => {

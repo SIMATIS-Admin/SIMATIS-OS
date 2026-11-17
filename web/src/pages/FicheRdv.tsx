@@ -10,6 +10,7 @@ import {
   type StatutRdv,
 } from '../api.js';
 import { Icon } from '../icons.js';
+import { EnregistrementVisio } from '../visio/EnregistrementVisio.js';
 import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { NouveauContact } from './Contacts.js';
 import { NouvelleEntreprise } from './Entreprises.js';
@@ -329,6 +330,11 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
             />
             {rdv.debut && <span>{quand(rdv.debut)}</span>}
             {rdv.lieu && <span>{rdv.lieu}</span>}
+            {rdv.lienVisio && (
+              <a href={rdv.lienVisio} target="_blank" rel="noreferrer">
+                Lien de la visio
+              </a>
+            )}
             {rdv.compteRendu ? (
               <span className="badge green">Compte rendu fait</span>
             ) : rdv.statut === 'ignore' ? (
@@ -367,6 +373,7 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
           [
             ['compte-rendu', 'Compte rendu'],
             ['preparation', 'Préparation'],
+            ['enregistrement', 'Enregistrement'],
             ['liens', 'Liens'],
           ] as const
         ).map(([cle, label]) => (
@@ -412,6 +419,7 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
           />
         </div>
         <div className="fi-droite">
+          {rubrique === 'enregistrement' && <EnregistrementVisio slug={slug} rdvId={id} />}
           {rubrique === 'preparation' && (
             <section className="panel">
               <div className="panel-h">

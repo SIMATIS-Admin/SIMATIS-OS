@@ -1,3 +1,4 @@
+import { outilsDepuisEnv, passerTranscriptions } from './transcription.js';
 import { randomUUID } from 'node:crypto';
 import { convertirDeck } from '../cours/import-deck.js';
 import { idSupportDe } from '../diagnostic/service.js';
@@ -92,7 +93,7 @@ export async function skillsDe(dossier: string): Promise<string[]> {
   return [...new Set([...propres, ...synchronisees.flat()])];
 }
 
-const lancerProcessus = (
+export const lancerProcessus = (
   commande: string,
   args: string[],
   cwd?: string,
@@ -437,6 +438,13 @@ export const promptEchange = (e: EchangeDemande, maintenant = new Date()) =>
   ]
     .filter(Boolean)
     .join('\n');
+
+// Transcription locale des visios enregistrées : ffmpeg et whisper.cpp du poste, sans service payant.
+export async function tourTranscriptions(opts: RunnerOptions): Promise<number> {
+  const lancer =
+    opts.lancer ?? ((commande: string, args: string[]) => lancerProcessus(commande, args));
+  return passerTranscriptions(clientOs(opts), outilsDepuisEnv(process.env), lancer);
+}
 
 // Answers the waiting add conversations, one Claude call each. Separate from tour() so that a
 // conversation never waits behind a routine run.
@@ -2064,6 +2072,7 @@ function main() {
     tourEchanges(opts)
       .then(() => tourCampagnes(opts))
       .then(() => tourDiagnostic(opts))
+      .then(() => tourTranscriptions(opts))
       .catch((err: unknown) => console.error('runner :', err instanceof Error ? err.message : err))
       .finally(() => {
         occupeEchange = false;
