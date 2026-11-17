@@ -56,6 +56,16 @@ Moteur local libre (whisper.cpp ou équivalent) exécuté sur le poste de Marc, 
 
 Le son brut est supprimé après transcription réussie (choix par défaut de cette conception, modifiable par Marc). Le transcript est une donnée métier : base de l'instance, isolation par instance comme le reste, jamais dans git. Exemples et tests : données fictives uniquement, faux moteur de transcription et faux agenda.
 
+### 5 bis. Interface entre la capture et l'OS
+
+La capture (bouton du navigateur aujourd'hui, petite appli à part demain) ne connaît que cette interface de l'OS, jamais ses tables :
+- lister les rendez-vous en cours ou proches, pour que l'appli sache à quel rendez-vous rattacher l'enregistrement, sans « réunion à attribuer » ;
+- ouvrir une session d'enregistrement pour un rendez-vous ;
+- envoyer des morceaux de son, ou directement du texte déjà transcrit (l'appli à part transcrira elle-même) ;
+- clore la session, ce qui lance le résumé et le rattachement à la fiche, au contact et à l'Inbox.
+
+Le bouton du navigateur est le premier client de cette interface, et il doit l'utiliser comme le ferait l'appli : pas de raccourci interne. Un jeton propre à l'appli (révocable, jamais dans git) sera nécessaire à la livraison de l'appli, pas avant. L'avantage visé sur Wispr Flow : l'enregistrement arrive déjà rattaché au bon rendez-vous, avec ses contacts, sans tri manuel.
+
 ### 6. Réutilisation pour le CRM Wasoria
 
 Trois pièces indépendantes : nomenclature, capture audio dans le navigateur, transcription et résumé. Seule la création de l'événement dépend de Google ; chez Wasoria, elle serait remplacée par Outlook et Teams derrière la même interface.
@@ -74,6 +84,7 @@ Trois pièces indépendantes : nomenclature, capture audio dans le navigateur, t
 2. Enregistrement et transcription après arrêt.
 3. Texte en direct pendant la réunion.
 4. Résumé automatique et rattachement à l'Inbox.
+5. Plus tard, hors de cette conception : petite appli à part (barre de menus, son système), second client de la même interface.
 
 ## Laissé au constructeur
 
