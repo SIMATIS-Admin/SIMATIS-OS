@@ -37,6 +37,9 @@ export const enregistrementsVisio = pgTable(
       .notNull()
       .defaultNow(),
     transcript: text('transcript'),
+    // Résumé rédigé par Claude à partir du transcript, à relire par Marc.
+    resume: text('resume'),
+    resumeAt: timestamp('resume_at', { withTimezone: true }),
   },
   (t) => [
     index('enregistrements_visio_rdv_idx').on(t.rendezVousId),

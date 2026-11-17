@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EnregistrementVisio } from './EnregistrementVisio.js';
 
-type Call = { url: string; method: string };
+type Call = { url: string; method: string; body?: unknown };
 let calls: Call[] = [];
 let ordre: string[] = [];
 let derniere: object | null;
@@ -29,9 +29,13 @@ class FauxFlux {
   }
 }
 
-function fakeFetch(url: string, init?: { method?: string }) {
+function fakeFetch(url: string, init?: { method?: string; body?: unknown }) {
   const method = init?.method ?? 'GET';
-  calls.push({ url, method });
+  calls.push({
+    url,
+    method,
+    body: typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
+  });
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
   if (url.endsWith('/visio/sessions') && method === 'POST') return json({ id: 's1' }, 201);
@@ -128,6 +132,34 @@ describe('EnregistrementVisio', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText(/En direct\./)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Arrêter' })).toBeTruthy();
+  });
+
+  it('montre le résumé et en fait le compte rendu du rendez-vous sur demande', async () => {
+    derniere = session({ transcript: 'Moi : Texte.', resume: 'Résumé fictif de la visio.' });
+    render(
+      <EnregistrementVisio
+        slug="simatis"
+        rdvId="os:v1"
+        titre="V - Atelier Fictif x Simatis"
+        intervalleMs={10}
+      />,
+    );
+    expect(await screen.findByText('Résumé fictif de la visio.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Utiliser comme compte rendu' }));
+    expect(await screen.findByText(/Compte rendu enregistré/)).toBeTruthy();
+    const envoi = calls.find((c) => c.url.endsWith('/rendez-vous/os%3Av1/compte-rendu'));
+    expect(envoi?.body).toMatchObject({
+      titre: 'V - Atelier Fictif x Simatis',
+      texte: 'Résumé fictif de la visio.',
+    });
+  });
+
+  it('attend le résumé qui arrive après la transcription', async () => {
+    derniere = session({ transcript: 'Moi : Texte.', resume: null });
+    apresFin = session({ transcript: 'Moi : Texte.', resume: 'Résumé tardif.' });
+    monter();
+    expect(await screen.findByText(/Résumé en préparation/)).toBeTruthy();
+    expect(await screen.findByText('Résumé tardif.')).toBeTruthy();
   });
 
   it('retrouve le transcript d’une session passée au chargement', async () => {

@@ -419,7 +419,9 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
           />
         </div>
         <div className="fi-droite">
-          {rubrique === 'enregistrement' && <EnregistrementVisio slug={slug} rdvId={id} />}
+          {rubrique === 'enregistrement' && (
+            <EnregistrementVisio slug={slug} rdvId={id} titre={rdv.titre || 'Visio'} />
+          )}
           {rubrique === 'preparation' && (
             <section className="panel">
               <div className="panel-h">
