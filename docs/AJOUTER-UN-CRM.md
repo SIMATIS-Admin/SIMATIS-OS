@@ -117,3 +117,13 @@ une réunion (`meetings`) de HubSpot devient une activité de type `note`, `appe
 Les identifiants du CRM (`source`, `source_id`), l'`instance_id`, l'`event_id` Google d'un
 rendez-vous et la liste brute de ses invités. Le profil `crm/1` ne les connaît pas : le kit refuse
 un changement qui les porterait.
+
+## Autre exemple : le CRM compatible (fournisseur `crm-os`)
+
+Un CRM qui parle déjà le modèle de l'OS (mêmes objets, mêmes noms) : le connecteur `src/connecteurs/crm-os/` lit son API d'échange (`/api/echange/*`, profil `crm/1`) et copie le tout dans les tables du CRM de l'OS avec `source = 'crm-os'`.
+
+- Branchement : `connexion:set --slug <slug> --kind crm --fournisseur crm-os`, puis `CRM_OS_URL` (https) et `CRM_OS_TOKEN` dans `secrets/instances/<slug>.env`, puis `connexion:sync`.
+- **Lecture seule pour l'instant** (`sens: 'lecture'`, pas de `write`). Une copie `crm-os` ne se modifie pas dans l'OS (la synchro défairait la modification) : fiche, note, tâche, étape d'une affaire et adresse principale répondent « lecture seule » (`src/crm/source.ts`). Les fiches créées dans l'OS (`natif`), les liens faits dans l'OS et les champs propres à l'OS (facturation, probabilité manuelle, qualification, prochaine étape) ne sont jamais écrasés.
+- Les étapes viennent du CRM compatible et sont relues à chaque synchro (`reglages.etapes`).
+- Pas copiés : les rendez-vous (ils viennent de l'agenda Google). Les fiches supprimées dans le CRM compatible sont signalées au journal, jamais effacées ici.
+- Pour ouvrir l'écriture plus tard : ajouter `write` (les opérations de l'OS vers les routes du CRM compatible, sous le double verrou) et généraliser les chemins d'écriture qui testent aujourd'hui `source === 'hubspot'` (`crm/fiches.ts`, `crm/taches.ts`, `crm/pipeline.ts`, `crm/liens.ts`).

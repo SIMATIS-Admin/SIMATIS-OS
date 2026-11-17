@@ -394,11 +394,13 @@ async function affairesLiees(
 
 // HubSpot's links of a batch of records replace the ones copied from HubSpot; links made in the OS
 // only (source « natif ») stay. The primary is HubSpot's one, else the existing one, else the first.
+// `source` is the tool the links are copied from (HubSpot by default).
 export async function remplacerLiensHubspot(
   tx: Tx,
   ownerKind: 'affaire' | 'contact',
   targetKind: 'contact' | 'entreprise',
   liens: Map<string, { cibles: string[]; principal: string | null }>,
+  source = 'hubspot',
 ): Promise<void> {
   const p = PAIRES.find((x) => x.ownerKind === ownerKind && x.targetKind === targetKind);
   if (!p || liens.size === 0) return;
@@ -422,7 +424,7 @@ export async function remplacerLiensHubspot(
   for (const [ownerId, { cibles, principal }] of liens) {
     const voulus = [...new Set(cibles)];
     const existants = lignes.filter((l) => l.owner === ownerId);
-    const asupprimer = existants.filter((l) => l.source === 'hubspot' && !voulus.includes(l.cible));
+    const asupprimer = existants.filter((l) => l.source === source && !voulus.includes(l.cible));
     for (const l of asupprimer)
       await tx.delete(p.link).where(and(eq(p.instanceId, currentInstance), eq(p.id, l.id)));
     let restants = existants.filter((l) => !asupprimer.includes(l));
@@ -431,18 +433,15 @@ export async function remplacerLiensHubspot(
       if (!deja) {
         await tx.insert(p.link).values({
           instanceId: currentInstance,
-          source: 'hubspot',
+          source,
           [p.ownerKey]: ownerId,
           [p.targetKey]: cible,
         } as never);
-        restants = [
-          ...restants,
-          { id: '', owner: ownerId, cible, source: 'hubspot', principal: false },
-        ];
-      } else if (deja.source !== 'hubspot') {
+        restants = [...restants, { id: '', owner: ownerId, cible, source, principal: false }];
+      } else if (deja.source !== source) {
         await tx
           .update(p.link)
-          .set({ source: 'hubspot' })
+          .set({ source })
           .where(and(eq(p.instanceId, currentInstance), eq(p.id, deja.id)));
       }
     }

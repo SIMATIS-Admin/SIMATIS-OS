@@ -1,6 +1,7 @@
 import { and, asc, eq, ilike, isNotNull, isNull, min, or, sql } from 'drizzle-orm';
 import { zoned } from '../connecteurs/google/creneaux.js';
 import { parseReglages } from '../connecteurs/hubspot/reglages.js';
+import { parseReglages as parseReglagesCrmOs } from '../connecteurs/crm-os/reglages.js';
 import { connexions } from '../connexions/schema.js';
 import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import type { Executor, Tx } from '../db.js';
@@ -12,6 +13,7 @@ import { jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
 import { classementAffaire, diagnosticDeLAffaire, type Classement } from './echanges.js';
 import { assurerLiensPrincipaux } from './liens.js';
+import { copieEnLectureSeule, MESSAGE_LECTURE_SEULE } from './source.js';
 import { createInCrm, CrmIndisponible, likePattern } from './service.js';
 
 // Native pipeline (instances without CRM, demo data): the mockup's stages (data.js ETAPES).
@@ -39,7 +41,7 @@ export function conversionRates(
 }
 
 type Source = {
-  source: 'natif' | 'hubspot';
+  source: 'natif' | 'hubspot' | 'crm-os';
   etapes: { id: string; label: string; probabilite?: number | null }[];
   // HubSpot stages, closed ones included (to close or reopen a deal there).
   hubspot: ReturnType<typeof parseReglages> | null;
@@ -52,6 +54,19 @@ export async function pipelineSource(tx: Tx): Promise<Source> {
     .select()
     .from(connexions)
     .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'crm')));
+  // The compatible CRM is mirrored read-only: its stages, no write.
+  if (crm?.fournisseur === 'crm-os') {
+    const reglages = parseReglagesCrmOs(crm.reglages);
+    return {
+      source: 'crm-os',
+      etapes: reglages.etapes
+        .filter((e) => !e.clos)
+        .map((e) => ({ id: e.id, label: e.label, probabilite: e.probabilite ?? null })),
+      hubspot: null,
+      ecrit: false,
+      derniereSynchro: crm.derniereSynchro,
+    };
+  }
   if (crm?.fournisseur !== 'hubspot') {
     return {
       source: 'natif',
@@ -284,6 +299,7 @@ export async function changeOpportunite(
       .from(opportunites)
       .where(and(eq(opportunites.instanceId, currentInstance), eq(opportunites.id, id)));
     if (!opp) return null;
+    if (copieEnLectureSeule(opp.source)) throw new CrmIndisponible(MESSAGE_LECTURE_SEULE);
     const src = await pipelineSource(tx);
     const label = (stage: string) => src.etapes.find((e) => e.id === stage)?.label ?? stage;
 
