@@ -128,7 +128,7 @@ function fakeGoogle() {
     }
     if (url.includes('/calendars/primary/events') && init.method === 'POST') {
       // Google ne renvoie un lien Meet que si l'événement a demandé une conférence.
-      const demandeMeet = String(init.body).includes('conferenceData');
+      const demandeMeet = typeof init.body === 'string' && init.body.includes('conferenceData');
       return json({
         id: 'ev-os-1',
         htmlLink: 'https://calendar.google.com/event?eid=ev-os-1',
@@ -688,10 +688,15 @@ describe('Gmail and Calendar', () => {
       const url = new URL(appel?.url ?? 'https://invalide.test');
       expect(url.searchParams.get('conferenceDataVersion')).toBe('1');
       expect(url.searchParams.get('sendUpdates')).toBe('all');
-      const corps = JSON.parse(appel?.body ?? '{}');
+      const corps = JSON.parse(appel?.body ?? '{}') as {
+        attendees?: unknown;
+        conferenceData?: {
+          createRequest: { requestId: string; conferenceSolutionKey: { type: string } };
+        };
+      };
       expect(corps.attendees).toEqual([{ email: 'client@exemple.test' }]);
-      expect(corps.conferenceData.createRequest.requestId).toBe('os:visio');
-      expect(corps.conferenceData.createRequest.conferenceSolutionKey.type).toBe('hangoutsMeet');
+      expect(corps.conferenceData?.createRequest.requestId).toBe('os:visio');
+      expect(corps.conferenceData?.createRequest.conferenceSolutionKey.type).toBe('hangoutsMeet');
     });
 
     it('rend le lien de la visio créée', async () => {
@@ -705,7 +710,12 @@ describe('Gmail and Calendar', () => {
       const appel = appelCreation(google);
       expect(appel?.url.includes('conferenceDataVersion')).toBe(false);
       expect(appel?.url.includes('sendUpdates')).toBe(false);
-      const corps = JSON.parse(appel?.body ?? '{}');
+      const corps = JSON.parse(appel?.body ?? '{}') as {
+        attendees?: unknown;
+        conferenceData?: {
+          createRequest: { requestId: string; conferenceSolutionKey: { type: string } };
+        };
+      };
       expect(corps.attendees).toBeUndefined();
       expect(corps.conferenceData).toBeUndefined();
     });
