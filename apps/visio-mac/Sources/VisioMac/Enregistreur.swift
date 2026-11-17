@@ -143,16 +143,7 @@ final class Enregistreur: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         }
         do {
             if morceau.fichier == nil {
-                morceau.fichier = try AVAudioFile(
-                    forWriting: morceau.url,
-                    settings: [
-                        AVFormatIDKey: kAudioFormatMPEG4AAC,
-                        AVSampleRateKey: pcm.format.sampleRate,
-                        AVNumberOfChannelsKey: pcm.format.channelCount,
-                        AVEncoderBitRateKey: 64_000,
-                    ],
-                    commonFormat: pcm.format.commonFormat,
-                    interleaved: pcm.format.isInterleaved)
+                morceau.fichier = try ouvrirFichierAAC(url: morceau.url, format: pcm.format)
             }
             try morceau.fichier?.write(from: pcm)
             morceau.ecrit = true
