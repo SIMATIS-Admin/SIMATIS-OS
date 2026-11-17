@@ -127,7 +127,13 @@ function fakeGoogle() {
       });
     }
     if (url.includes('/calendars/primary/events') && init.method === 'POST') {
-      return json({ id: 'ev-os-1', htmlLink: 'https://calendar.google.com/event?eid=ev-os-1' });
+      // Google ne renvoie un lien Meet que si l'événement a demandé une conférence.
+      const demandeMeet = String(init.body).includes('conferenceData');
+      return json({
+        id: 'ev-os-1',
+        htmlLink: 'https://calendar.google.com/event?eid=ev-os-1',
+        ...(demandeMeet ? { hangoutLink: 'https://meet.google.com/aaa-bbbb-ccc' } : {}),
+      });
     }
     if (url.includes('/events?')) {
       // Two pages: the second one is only reached through nextPageToken.
@@ -653,6 +659,55 @@ describe('Gmail and Calendar', () => {
       start: { dateTime: '2026-10-20T08:00:00.000Z' },
       end: { dateTime: '2026-10-20T09:00:00.000Z' },
       extendedProperties: { private: { simatisOs: 'os:abc' } },
+    });
+  });
+
+  describe('visio Google Meet et invités', () => {
+    const rdv = {
+      osId: 'os:visio',
+      titre: 'V - Atelier Fictif x Simatis',
+      debut: new Date('2026-10-20T08:00:00Z'),
+      fin: new Date('2026-10-20T09:00:00Z'),
+      visio: true,
+      invites: ['client@exemple.test'],
+    };
+    const appelCreation = (google: ReturnType<typeof fakeGoogle>) =>
+      google.calls.find((c) => c.url.includes('/calendars/primary/events'));
+
+    it('ne touche pas à l’agenda en simulation, même avec visio et invités', async () => {
+      const google = fakeGoogle();
+      const res = await ctx(false, (c) => creerEvenement(c, rdv, google));
+      expect(res).toEqual({ evenement: null, simulation: true });
+      expect(appelCreation(google)).toBeUndefined();
+    });
+
+    it('demande le lien Meet et envoie les invitations en réel', async () => {
+      const google = fakeGoogle();
+      await ctx(true, (c) => creerEvenement(c, rdv, google));
+      const appel = appelCreation(google);
+      const url = new URL(appel?.url ?? 'https://invalide.test');
+      expect(url.searchParams.get('conferenceDataVersion')).toBe('1');
+      expect(url.searchParams.get('sendUpdates')).toBe('all');
+      const corps = JSON.parse(appel?.body ?? '{}');
+      expect(corps.attendees).toEqual([{ email: 'client@exemple.test' }]);
+      expect(corps.conferenceData.createRequest.requestId).toBe('os:visio');
+      expect(corps.conferenceData.createRequest.conferenceSolutionKey.type).toBe('hangoutsMeet');
+    });
+
+    it('rend le lien de la visio créée', async () => {
+      const cree = await ctx(true, (c) => creerEvenement(c, rdv, fakeGoogle()));
+      expect(cree.evenement?.lienVisio).toBe('https://meet.google.com/aaa-bbbb-ccc');
+    });
+
+    it('envoie un événement identique à l’ancien sans visio ni invités', async () => {
+      const google = fakeGoogle();
+      await ctx(true, (c) => creerEvenement(c, { ...rdv, visio: false, invites: [] }, google));
+      const appel = appelCreation(google);
+      expect(appel?.url.includes('conferenceDataVersion')).toBe(false);
+      expect(appel?.url.includes('sendUpdates')).toBe(false);
+      const corps = JSON.parse(appel?.body ?? '{}');
+      expect(corps.attendees).toBeUndefined();
+      expect(corps.conferenceData).toBeUndefined();
     });
   });
 
