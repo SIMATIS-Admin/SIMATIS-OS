@@ -42,6 +42,20 @@ public struct OsClient: Sendable {
         URL(string: base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/#/\(instance)/cockpit")!
     }
 
+    public func enregistrements() async throws -> [EnregistrementResume] {
+        try decoderEnregistrements(try await envoyer(URLRequest(url: url("enregistrements"))))
+    }
+
+    public func detail(sessionId: String) async throws -> DetailSession {
+        try JSONDecoder().decode(DetailSession.self, from: try await envoyer(URLRequest(url: url("sessions/\(sessionId)"))))
+    }
+
+    public func supprimer(sessionId: String) async throws {
+        var r = URLRequest(url: url("sessions/\(sessionId)"))
+        r.httpMethod = "DELETE"
+        _ = try await envoyer(r)
+    }
+
     public func rendezVousProches() async throws -> [RendezVousProche] {
         try decoderRendezVous(try await envoyer(URLRequest(url: url("rendez-vous"))))
     }

@@ -62,6 +62,38 @@ final class FauxServeur: URLProtocol {
         #expect(String(data: FauxServeur.corps[0], encoding: .utf8) == "{}")
     }
 
+    @Test func listeLesEnregistrementsDeLOS() async throws {
+        let c = client()
+        FauxServeur.reponses = [(200, """
+        [{"id":"s1","rdvId":"os:v1","titre":"V - Atelier Fictif x Simatis","debutAt":"2026-10-12T08:00:00.000Z",
+          "finAt":null,"statut":"en_cours","aResume":false},
+         {"id":"s2","rdvId":"os:v2","titre":"Enregistrement du 12/10/2026 à 10h00","debutAt":"2026-10-12T10:00:00.000Z",
+          "finAt":"2026-10-12T10:30:00.000Z","statut":"transcrit","aResume":true}]
+        """)]
+        let liste = try await c.enregistrements()
+        #expect(liste.map(\.id) == ["s1", "s2"])
+        #expect(liste[0].finAt == nil)
+        #expect(liste[1].aResume)
+        #expect(FauxServeur.requetes[0].url?.path == "/api/i/simatis/visio/enregistrements")
+    }
+
+    @Test func lisLeDetailDUneSession() async throws {
+        let c = client()
+        FauxServeur.reponses = [(200, #"{"id":"s2","statut":"transcrit","transcript":"Moi : Bonjour.","resume":"Résumé fictif.","morceaux":2,"transcrits":2}"#)]
+        let d = try await c.detail(sessionId: "s2")
+        #expect(d.transcript == "Moi : Bonjour.")
+        #expect(d.resume == "Résumé fictif.")
+        #expect(FauxServeur.requetes[0].url?.path == "/api/i/simatis/visio/sessions/s2")
+    }
+
+    @Test func supprimeUnEnregistrement() async throws {
+        let c = client()
+        FauxServeur.reponses = [(204, "")]
+        try await c.supprimer(sessionId: "s2")
+        #expect(FauxServeur.requetes[0].httpMethod == "DELETE")
+        #expect(FauxServeur.requetes[0].url?.path == "/api/i/simatis/visio/sessions/s2")
+    }
+
     @Test func adresseDuCockpitDansLOS() {
         let c = client()
         #expect(c.adresseCockpit.absoluteString == "http://127.0.0.1:4300/#/simatis/cockpit")

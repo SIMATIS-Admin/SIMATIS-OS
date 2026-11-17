@@ -7,6 +7,7 @@ APP=".build/Visio SIMATIS.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/VisioMac "$APP/Contents/MacOS/VisioMac"
+cp ../../web/src/assets/simatis-mark.png "$APP/Contents/Resources/simatis-mark.png"
 # Icône : dessinée par icone.swift, convertie en .icns.
 rm -rf .build/Icone.iconset
 swift icone.swift .build/Icone.iconset ../../web/src/assets/simatis-mark.png >/dev/null
@@ -24,6 +25,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleShortVersionString</key><string>0.1</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>CFBundleIconFile</key><string>Icone</string>
+  <key>CFBundleURLTypes</key>
+  <array><dict>
+    <key>CFBundleURLName</key><string>os.simatis.visio</string>
+    <key>CFBundleURLSchemes</key><array><string>visio-simatis</string></array>
+  </dict></array>
   <key>NSMicrophoneUsageDescription</key>
   <string>Visio SIMATIS enregistre votre voix pendant une visio, pour la transcrire dans l'OS.</string>
   <key>NSAudioCaptureUsageDescription</key>

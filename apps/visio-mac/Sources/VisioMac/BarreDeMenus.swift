@@ -1,170 +1,119 @@
 import AppKit
+import SwiftUI
 import VisioCore
 
-// L'icône de la barre de menus : liste les rendez-vous proches de l'OS, lance et arrête l'enregistrement.
-final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked Sendable {
+// Le cœur de l'appli : l'icône de la barre de menus, celle du Dock et la fenêtre. Tout l'état est
+// dans `Modele`, partagé avec la fenêtre.
+@MainActor
+final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
-    private var os: OsClient!
-    private var enregistreur: Enregistreur!
-    private var proches: [RendezVousProche] = []
-    private var enCours: RendezVousProche?
-    private var debut: Date?
-    private var message: String?
-    private var occupe = false
+    private let modele = Modele()
+    private var fenetre: NSWindow?
     private var minuteur: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let defauts = UserDefaults.standard
-        let base = URL(string: defauts.string(forKey: "osURL") ?? "http://127.0.0.1:4300")!
-        os = OsClient(base: base, instance: defauts.string(forKey: "instance") ?? "simatis")
-        enregistreur = Enregistreur(os: os)
-        enregistreur.surErreur = { [weak self] texte in
-            DispatchQueue.main.async { self?.message = texte; self?.rafraichirTitre() }
-        }
         menu.delegate = self
         item.menu = menu
         rafraichirTitre()
-        actualiser()
         minuteur = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            self?.rafraichirTitre()
-            if let self, Int(Date().timeIntervalSince1970) % 30 == 0 { self.actualiser() }
+            Task { @MainActor in self?.rafraichirTitre() }
         }
+        montrerFenetre()
     }
 
-    private func actualiser() {
-        guard enCours == nil else { return }
-        Task { @MainActor in
-            do {
-                let liste = try await self.os.rendezVousProches()
-                self.proches = ordonnerPourEnregistrer(liste, maintenant: Date())
-                if self.message?.hasPrefix("L'OS") == true { self.message = nil }
-            } catch {
-                self.message = "L'OS ne répond pas (\(error.localizedDescription))."
-            }
-        }
-    }
-
-    private func rafraichirTitre() {
-        let bouton = item.button
-        if let debut {
-            let s = Int(Date().timeIntervalSince(debut))
-            bouton?.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: "Enregistrement en cours")
-            bouton?.contentTintColor = .systemRed
-            bouton?.title = String(format: " %02d:%02d", s / 60, s % 60)
-            // Visible aussi dans le Dock, au cas où l'icône de la barre de menus est cachée par l'encoche.
-            NSApp.dockTile.badgeLabel = String(format: "%02d:%02d", s / 60, s % 60)
-        } else {
-            bouton?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Visio")
-            bouton?.contentTintColor = nil
-            bouton?.title = occupe ? " Visio …" : " Visio"
-            NSApp.dockTile.badgeLabel = nil
-        }
-    }
-
-    // Un clic sur l'icône du Dock ouvre le même menu que celle de la barre de menus.
+    // Un clic sur l'icône du Dock rouvre la fenêtre.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        item.button?.performClick(nil)
+        montrerFenetre()
         return false
+    }
+
+    // Adresse visio-simatis://enregistrer, depuis le bouton « Enregistrer » de l'OS.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        montrerFenetre()
+        guard urls.contains(where: { $0.host == "enregistrer" }) else { return }
+        let rdv = URLComponents(url: urls[0], resolvingAgainstBaseURL: false)?
+            .queryItems?.first { $0.name == "rdv" }?.value
+        modele.demarrer(rendezVousId: rdv, titre: rdv == nil ? "Enregistrement libre" : "Rendez-vous")
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let dock = NSMenu()
-        menuNeedsUpdate(dock)
+        remplir(dock)
         return dock
     }
 
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        menu.removeAllItems()
-        if let message { menu.addItem(withTitle: message, action: nil, keyEquivalent: "") ; menu.addItem(.separator()) }
-        if let enCours {
-            menu.addItem(withTitle: "En cours : \(enCours.titre)", action: nil, keyEquivalent: "")
-            let arret = NSMenuItem(title: "Arrêter l'enregistrement", action: #selector(arreter), keyEquivalent: "")
-            arret.target = self
-            menu.addItem(arret)
+    private func montrerFenetre() {
+        if fenetre == nil {
+            let vue = NSHostingView(rootView: VueAppli(modele: modele))
+            let f = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 680),
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                             backing: .buffered, defer: false)
+            f.title = "Visio SIMATIS"
+            f.contentView = vue
+            f.isReleasedWhenClosed = false
+            f.center()
+            fenetre = f
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        fenetre?.makeKeyAndOrderFront(nil)
+    }
+
+    private func rafraichirTitre() {
+        let bouton = item.button
+        if let debut = modele.debut {
+            let s = Int(Date().timeIntervalSince(debut))
+            let temps = String(format: "%02d:%02d", s / 60, s % 60)
+            bouton?.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: "Enregistrement en cours")
+            bouton?.contentTintColor = .systemRed
+            bouton?.title = " " + temps
+            // Visible aussi dans le Dock, au cas où l'icône de la barre de menus est cachée par l'encoche.
+            NSApp.dockTile.badgeLabel = temps
         } else {
-            let libre = NSMenuItem(title: "Enregistrer maintenant", action: #selector(demarrerLibre), keyEquivalent: "")
-            libre.target = self
-            menu.addItem(libre)
+            bouton?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Visio")
+            bouton?.contentTintColor = nil
+            bouton?.title = modele.occupe ? " Visio …" : " Visio"
+            NSApp.dockTile.badgeLabel = nil
+        }
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        remplir(menu)
+        Task { await modele.actualiser() }
+    }
+
+    private func remplir(_ menu: NSMenu) {
+        menu.removeAllItems()
+        func ajouter(_ titre: String, _ action: Selector, _ cle: String = "") {
+            let i = NSMenuItem(title: titre, action: action, keyEquivalent: cle)
+            i.target = self
+            menu.addItem(i)
+        }
+        if let message = modele.message {
+            menu.addItem(withTitle: message, action: nil, keyEquivalent: "")
             menu.addItem(.separator())
         }
-        if enCours == nil && proches.isEmpty {
-            menu.addItem(withTitle: "Aucun rendez-vous proche dans l'OS", action: nil, keyEquivalent: "")
-        } else if enCours == nil {
-            menu.addItem(withTitle: "Enregistrer pour le rendez-vous :", action: nil, keyEquivalent: "")
-            let heure = DateFormatter()
-            heure.dateFormat = "HH:mm"
-            for r in proches.prefix(8) {
-                let i = NSMenuItem(title: "\(heure.string(from: r.debut))  \(r.titre)", action: #selector(demarrer(_:)), keyEquivalent: "")
-                i.target = self
-                i.representedObject = r.id
-                menu.addItem(i)
-            }
+        if modele.enregistre {
+            menu.addItem(withTitle: "En cours : \(modele.enCours ?? "")", action: nil, keyEquivalent: "")
+            ajouter("Arrêter l'enregistrement", #selector(arreter))
+        } else {
+            ajouter("Enregistrer maintenant", #selector(demarrerLibre))
         }
         menu.addItem(.separator())
-        let liste = NSMenuItem(title: "Voir les enregistrements", action: #selector(voirEnregistrements), keyEquivalent: "")
-        liste.target = self
-        menu.addItem(liste)
-        let quitter = NSMenuItem(title: "Quitter", action: #selector(quitter), keyEquivalent: "q")
-        quitter.target = self
-        menu.addItem(quitter)
-        actualiser()
+        ajouter("Ouvrir la fenêtre", #selector(ouvrirFenetre))
+        ajouter("Voir les enregistrements dans l'OS", #selector(voirOS))
+        ajouter("Quitter", #selector(quitter), "q")
     }
 
-    @objc private func demarrerLibre() {
-        lancer(rendezVousId: nil, titre: "Enregistrement libre")
-    }
-
-    @objc private func voirEnregistrements() {
-        NSWorkspace.shared.open(os.adresseCockpit)
-    }
-
-    @objc private func demarrer(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String,
-              let rdv = proches.first(where: { $0.id == id }) else { return }
-        lancer(rendezVousId: rdv.id, titre: rdv.titre)
-    }
-
-    private func lancer(rendezVousId: String?, titre: String) {
-        guard !occupe, enCours == nil else { return }
-        let rdv = RendezVousProche(id: rendezVousId ?? "", titre: titre, debut: Date(), fin: Date(), lienVisio: nil)
-        occupe = true
-        message = nil
-        rafraichirTitre()
-        Task { @MainActor in
-            do {
-                try await self.enregistreur.demarrer(rendezVousId: rendezVousId)
-                self.enCours = rdv
-                self.debut = Date()
-            } catch {
-                self.message = (error as? OsErreur)?.message ?? error.localizedDescription
-            }
-            self.occupe = false
-            self.rafraichirTitre()
-        }
-    }
-
-    @objc private func arreter() {
-        occupe = true
-        rafraichirTitre()
-        Task { @MainActor in
-            await self.enregistreur.arreter()
-            self.enCours = nil
-            self.debut = nil
-            self.occupe = false
-            self.rafraichirTitre()
-            self.actualiser()
-        }
-    }
+    @objc private func demarrerLibre() { modele.demarrer(rendezVousId: nil, titre: "Enregistrement libre") }
+    @objc private func arreter() { modele.arreter() }
+    @objc private func ouvrirFenetre() { montrerFenetre() }
+    @objc private func voirOS() { NSWorkspace.shared.open(modele.adresseCockpit) }
 
     @objc private func quitter() {
-        if enCours == nil {
-            NSApplication.shared.terminate(nil)
-            return
-        }
-        Task { @MainActor in
-            await self.enregistreur.arreter()
-            NSApplication.shared.terminate(nil)
-        }
+        guard modele.enregistre else { NSApplication.shared.terminate(nil); return }
+        modele.arreter()
+        // L'envoi du dernier morceau et la clôture sont lancés : on laisse le temps de les finir.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { NSApplication.shared.terminate(nil) }
     }
 }
