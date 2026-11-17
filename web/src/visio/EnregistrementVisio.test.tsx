@@ -122,6 +122,14 @@ describe('EnregistrementVisio', () => {
     expect(await screen.findByText(/Bonjour à vous/)).toBeTruthy();
   });
 
+  it('affiche le texte en direct pendant l’enregistrement', async () => {
+    apresFin = session({ statut: 'en_cours', transcript: 'Moi : En direct.', transcrits: 1 });
+    monter();
+    fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByText(/En direct\./)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Arrêter' })).toBeTruthy();
+  });
+
   it('retrouve le transcript d’une session passée au chargement', async () => {
     derniere = session({ transcript: 'Moi : Déjà là.' });
     monter();

@@ -68,6 +68,17 @@ export function EnregistrementVisio({
     return () => clearInterval(t);
   }, [etat]);
 
+  // Pendant l'enregistrement, le poste transcrit déjà les morceaux reçus : on affiche le texte au fil de l'eau.
+  useEffect(() => {
+    if (etat !== 'enregistrement') return;
+    const t = setInterval(() => {
+      const id = sessionId.current;
+      if (!id) return;
+      fetchSessionVisio(slug, id).then(setSession, () => undefined);
+    }, intervalleMs);
+    return () => clearInterval(t);
+  }, [etat, slug, intervalleMs]);
+
   // Après l'arrêt, le poste transcrit les morceaux : on relit la session jusqu'au transcript.
   useEffect(() => {
     if (etat !== 'transcription' || !session || session.statut === 'transcrit') return;

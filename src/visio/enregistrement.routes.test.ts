@@ -99,6 +99,25 @@ describe('Interface d’enregistrement des visios', () => {
     expect(derniere.json()).toMatchObject({ id, statut: 'transcrit' });
   });
 
+  it('montre en direct le texte déjà transcrit pendant que la session est ouverte', async () => {
+    const id = await ouvrir();
+    await envoyer(id, 'moi', 0);
+    await envoyer(id, 'autres', 0);
+    const r = await exec('POST', `/api/runner/transcriptions/${id}/autres/0`, {
+      instance: 'rte-a',
+      texte: 'Bonjour à vous.',
+    });
+    expect(r.json()).toEqual({ statut: 'en_cours' });
+    const lue = await app.inject({ method: 'GET', url: `${base}/sessions/${id}` });
+    expect(lue.json()).toMatchObject({
+      statut: 'en_cours',
+      transcript: 'Autres : Bonjour à vous.',
+      morceaux: 2,
+      transcrits: 1,
+    });
+    await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+  });
+
   it('refuse un rendez-vous inconnu, une piste inconnue et un morceau trop gros', async () => {
     const inconnu = await app.inject({
       method: 'POST',
