@@ -1,3 +1,4 @@
+import { lancerClaudeTexte, passerResumes } from './resume.js';
 import { outilsDepuisEnv, passerTranscriptions } from './transcription.js';
 import { randomUUID } from 'node:crypto';
 import { convertirDeck } from '../cours/import-deck.js';
@@ -438,6 +439,13 @@ export const promptEchange = (e: EchangeDemande, maintenant = new Date()) =>
   ]
     .filter(Boolean)
     .join('\n');
+
+// Résumé des visios transcrites, sur Claude : seulement si le pilote a engagé Claude.
+export async function tourResumes(opts: RunnerOptions): Promise<number> {
+  const api = clientOs(opts);
+  if (!(await moteurChoisi(api)).engage) return 0;
+  return passerResumes(api, opts.claude, lancerClaudeTexte);
+}
 
 // Transcription locale des visios enregistrées : ffmpeg et whisper.cpp du poste, sans service payant.
 export async function tourTranscriptions(opts: RunnerOptions): Promise<number> {
@@ -2093,6 +2101,18 @@ function main() {
       });
   };
   setInterval(passeTranscription, 3_000);
+
+  let occupeResume = false;
+  const passeResume = () => {
+    if (occupeResume) return;
+    occupeResume = true;
+    tourResumes(opts)
+      .catch((err: unknown) => console.error('runner :', err instanceof Error ? err.message : err))
+      .finally(() => {
+        occupeResume = false;
+      });
+  };
+  setInterval(passeResume, 20_000);
 
   // Journal de consommation IA : relevé des sessions du Mac, 30 jours au premier passage.
   const etatConso = { depuis: new Date(Date.now() - 30 * 24 * 3_600_000) };

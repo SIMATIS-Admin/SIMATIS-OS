@@ -1207,6 +1207,7 @@ export type SessionVisio = {
   statut: 'en_cours' | 'clos' | 'transcrit' | 'erreur';
   debutAt: string;
   transcript: string | null;
+  resume?: string | null;
   morceaux: number;
   transcrits: number;
 };

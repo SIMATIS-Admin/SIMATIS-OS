@@ -199,6 +199,7 @@ const resume = (s: NonNullable<Awaited<ReturnType<typeof lireSession>>>) => ({
   debutAt: s.debutAt,
   // Tant que la session n'est pas finalisée : le texte déjà transcrit, pour l'affichage en direct.
   transcript: s.transcript ?? (assemblerTranscript(s.morceaux) || null),
+  resume: s.resume,
   morceaux: s.morceaux.length,
   transcrits: s.morceaux.filter((m) => m.texte !== null).length,
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   cloreSessionVisio,
+  enregistrerCompteRenduRdv,
   envoyerMorceauVisio,
   fetchDerniereSessionVisio,
   fetchSessionVisio,
@@ -34,10 +35,12 @@ async function obtenirSources(): Promise<{ micro: MediaStream; onglet: MediaStre
 export function EnregistrementVisio({
   slug,
   rdvId,
+  titre = 'Visio',
   intervalleMs = 3000,
 }: {
   slug: string;
   rdvId: string;
+  titre?: string;
   intervalleMs?: number;
 }) {
   const [etat, setEtat] = useState<Etat>('repos');
@@ -45,6 +48,7 @@ export function EnregistrementVisio({
   const [microSeul, setMicroSeul] = useState(false);
   const [secondes, setSecondes] = useState(0);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [crFait, setCrFait] = useState(false);
   const capture = useRef<CaptureVisio | null>(null);
   const sessionId = useRef<string | null>(null);
   const sources = useRef<{ micro: MediaStream; onglet: MediaStream | null } | null>(null);
@@ -94,6 +98,17 @@ export function EnregistrementVisio({
     return () => clearInterval(t);
   }, [etat, session, slug, intervalleMs]);
 
+  // La transcription finie, Claude rédige le résumé : on relit la session jusqu'à son arrivée.
+  const attendResume = session?.statut === 'transcrit' && !!session.transcript && !session.resume;
+  const idSession = session?.id;
+  useEffect(() => {
+    if (!attendResume || !idSession) return;
+    const t = setInterval(() => {
+      fetchSessionVisio(slug, idSession).then(setSession, () => undefined);
+    }, intervalleMs);
+    return () => clearInterval(t);
+  }, [attendResume, idSession, slug, intervalleMs]);
+
   const demarrer = async () => {
     setErreur(null);
     try {
@@ -136,6 +151,17 @@ export function EnregistrementVisio({
     }
   };
 
+  const utiliserCommeCompteRendu = () => {
+    if (!session?.resume) return;
+    enregistrerCompteRenduRdv(slug, { id: rdvId, titre }, session.resume, {
+      proposerTache: true,
+      versCerveau: true,
+    }).then(
+      () => setCrFait(true),
+      (e: unknown) => setErreur(e instanceof Error ? e.message : String(e)),
+    );
+  };
+
   return (
     <section className="panel">
       <div className="panel-h">
@@ -167,6 +193,22 @@ export function EnregistrementVisio({
           </p>
         )}
         {erreur && <p style={{ color: 'var(--red)' }}>{erreur}</p>}
+        {session?.resume && (
+          <>
+            <h3>Résumé</h3>
+            <p className="fi-cr">{session.resume}</p>
+            {crFait ? (
+              <p role="status">Compte rendu enregistré dans le rendez-vous.</p>
+            ) : (
+              <button className="btn go" onClick={utiliserCommeCompteRendu}>
+                Utiliser comme compte rendu
+              </button>
+            )}
+          </>
+        )}
+        {session?.statut === 'transcrit' && !session.resume && session.transcript && (
+          <p className="small muted">Résumé en préparation…</p>
+        )}
         {session?.transcript && <pre className="fi-cr">{session.transcript}</pre>}
         {session?.statut === 'transcrit' && !session.transcript && (
           <p className="muted">Aucune parole transcrite.</p>
