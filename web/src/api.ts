@@ -1239,6 +1239,17 @@ export const fetchDerniereSessionVisio = (slug: string, rdvId: string) =>
       throw e;
     },
   );
+export type EnregistrementListe = {
+  id: string;
+  rdvId: string;
+  titre: string;
+  debutAt: string;
+  finAt: string | null;
+  statut: SessionVisio['statut'];
+  aResume: boolean;
+};
+export const fetchEnregistrements = (slug: string) =>
+  getJson<EnregistrementListe[]>(inst(slug, 'visio/enregistrements'));
 export const fetchPreparation = (slug: string, opportuniteId: string) =>
   getJson<Preparation>(inst(slug, `opportunites/${encodeURIComponent(opportuniteId)}/preparation`));
 export const lierRendezVous = (

@@ -10,6 +10,8 @@ import { logEvent } from '../journal/service.js';
 import {
   assemblerTranscript,
   clore,
+  creerRendezVousLibre,
+  listerEnregistrements,
   cloturerAbandonnees,
   finaliser,
   finaliserCloses,
@@ -83,9 +85,15 @@ export function registerEnregistrementRoutes(app: FastifyInstance, { db }: { db:
     async (request, reply) => {
       const instance = await instanceDe(request.params.slug, reply);
       if (!instance) return reply;
-      const parsed = z.object({ rdvId: z.string().min(1).max(300) }).safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'Rendez-vous manquant' });
+      // Sans rendez-vous : un enregistrement libre, l'OS crée le rendez-vous.
+      const parsed = z
+        .object({ rdvId: z.string().min(1).max(300).optional() })
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Rendez-vous invalide' });
       const session = await withInstance(db, instance.id, async (tx) => {
+        if (parsed.data.rdvId === undefined) {
+          return ouvrirSession(tx, await creerRendezVousLibre(tx));
+        }
         const [r] = await tx
           .select({ id: rendezVous.id })
           .from(rendezVous)
@@ -101,6 +109,12 @@ export function registerEnregistrementRoutes(app: FastifyInstance, { db }: { db:
       return reply.code(201).send(session);
     },
   );
+
+  app.get<{ Params: SlugParams }>('/api/i/:slug/visio/enregistrements', async (request, reply) => {
+    const instance = await instanceDe(request.params.slug, reply);
+    if (!instance) return reply;
+    return withInstance(db, instance.id, (tx) => listerEnregistrements(tx));
+  });
 
   app.put<{ Params: SessionParams & { piste: string; rang: string }; Body: unknown }>(
     '/api/i/:slug/visio/sessions/:id/morceaux/:piste/:rang',
