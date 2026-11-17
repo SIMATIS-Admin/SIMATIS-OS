@@ -25,7 +25,7 @@ private struct RendezVousJSON: Decodable {
     let lienVisio: String?
 }
 
-private func lireDate(_ texte: String?) -> Date? {
+public func lireDateISO(_ texte: String?) -> Date? {
     guard let texte else { return nil }
     let precis = ISO8601DateFormatter()
     precis.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -35,9 +35,9 @@ private func lireDate(_ texte: String?) -> Date? {
 // Les rendez-vous sans date ne se proposent pas : on ne saurait pas les ordonner.
 public func decoderRendezVous(_ data: Data) throws -> [RendezVousProche] {
     try JSONDecoder().decode([RendezVousJSON].self, from: data).compactMap { r in
-        guard let debut = lireDate(r.debut) else { return nil }
+        guard let debut = lireDateISO(r.debut) else { return nil }
         return RendezVousProche(id: r.id, titre: r.titre, debut: debut,
-                                fin: lireDate(r.fin) ?? debut.addingTimeInterval(3_600),
+                                fin: lireDateISO(r.fin) ?? debut.addingTimeInterval(3_600),
                                 lienVisio: r.lienVisio)
     }
 }
