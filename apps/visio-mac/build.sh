@@ -31,14 +31,13 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
-# Signature locale (sans compte développeur) : macOS redemande les autorisations après chaque reconstruction.
-codesign --force --deep --sign - "$APP"
+# Signature locale stable (certificat créé une fois) : macOS garde les autorisations entre reconstructions.
+./signer.sh "$APP"
 if [ "$1" = "--installer" ]; then
   mkdir -p "$HOME/Applications"
   rm -rf "$HOME/Applications/Visio SIMATIS.app"
   cp -R "$APP" "$HOME/Applications/"
   echo "Installée : $HOME/Applications/Visio SIMATIS.app"
-  echo "Si macOS dit « autorisé » mais que l'enregistrement refuse, réinitialisez les autorisations de l'appli (voir docs/EXPLOITATION.md)."
 else
   echo "Construite : $APP"
 fi
