@@ -161,6 +161,107 @@ describe('Interface d’enregistrement des visios', () => {
     await app.inject({ method: 'POST', url: `${base}/sessions/${libre}/fin` });
   });
 
+  describe('suppression et modification', () => {
+    const libre = async () =>
+      (await app.inject({ method: 'POST', url: `${base}/sessions`, payload: {} })).json<{
+        id: string;
+      }>().id;
+    const supprimer = (id: string, slug = 'rte-a') =>
+      app.inject({ method: 'DELETE', url: `/api/i/${slug}/visio/sessions/${id}` });
+    const compte = async (sql: string, args: unknown[]) =>
+      Number((await t.owner.pool.query<{ n: string }>(sql, args)).rows[0]?.n);
+
+    it('supprime un enregistrement libre avec ses morceaux et son rendez-vous', async () => {
+      const id = await libre();
+      await envoyer(id, 'moi', 0);
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      const rdvId = (
+        await t.owner.pool.query<{ rendez_vous_id: string }>(
+          'select rendez_vous_id from enregistrements_visio where id = $1',
+          [id],
+        )
+      ).rows[0]?.rendez_vous_id;
+      expect((await supprimer(id)).statusCode).toBe(204);
+      expect(await compte('select count(*) n from enregistrements_visio where id = $1', [id])).toBe(
+        0,
+      );
+      expect(
+        await compte('select count(*) n from morceaux_visio where enregistrement_id = $1', [id]),
+      ).toBe(0);
+      expect(await compte('select count(*) n from rendez_vous where id = $1', [rdvId])).toBe(0);
+    });
+
+    it('garde le rendez-vous de l’agenda quand on supprime son enregistrement', async () => {
+      const id = await ouvrir();
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      expect((await supprimer(id)).statusCode).toBe(204);
+      expect(
+        await compte("select count(*) n from rendez_vous where event_id = 'os:rte-1'", []),
+      ).toBe(1);
+    });
+
+    it('garde le rendez-vous libre qui a déjà un compte rendu', async () => {
+      const id = await libre();
+      await t.owner.pool.query(
+        `update rendez_vous set compte_rendu = 'Compte rendu fictif'
+           where id = (select rendez_vous_id from enregistrements_visio where id = $1)`,
+        [id],
+      );
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      expect((await supprimer(id)).statusCode).toBe(204);
+      expect(
+        await compte(
+          "select count(*) n from rendez_vous where compte_rendu = 'Compte rendu fictif'",
+          [],
+        ),
+      ).toBe(1);
+    });
+
+    it('ne supprime pas l’enregistrement d’une autre instance', async () => {
+      const id = await libre();
+      expect((await supprimer(id, 'rte-b')).statusCode).toBe(404);
+      expect(await compte('select count(*) n from enregistrements_visio where id = $1', [id])).toBe(
+        1,
+      );
+    });
+
+    it('modifie le transcript et le résumé, et efface un résumé vidé', async () => {
+      const id = await libre();
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      const r = await app.inject({
+        method: 'PATCH',
+        url: `${base}/sessions/${id}`,
+        payload: { transcript: 'Moi : Texte corrigé.', resume: 'Résumé corrigé.' },
+      });
+      expect(r.json()).toMatchObject({
+        transcript: 'Moi : Texte corrigé.',
+        resume: 'Résumé corrigé.',
+      });
+      const vide = await app.inject({
+        method: 'PATCH',
+        url: `${base}/sessions/${id}`,
+        payload: { resume: '  ' },
+      });
+      expect(vide.json()).toMatchObject({ transcript: 'Moi : Texte corrigé.', resume: null });
+    });
+
+    it('refuse une modification invalide ou d’une autre instance', async () => {
+      const id = await libre();
+      const trop = await app.inject({
+        method: 'PATCH',
+        url: `${base}/sessions/${id}`,
+        payload: { resume: 'x'.repeat(10_001) },
+      });
+      expect(trop.statusCode).toBe(400);
+      const autre = await app.inject({
+        method: 'PATCH',
+        url: `/api/i/rte-b/visio/sessions/${id}`,
+        payload: { transcript: 'x' },
+      });
+      expect(autre.statusCode).toBe(404);
+    });
+  });
+
   it('refuse un rendez-vous inconnu, une piste inconnue et un morceau trop gros', async () => {
     const inconnu = await app.inject({
       method: 'POST',

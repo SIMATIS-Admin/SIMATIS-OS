@@ -12,6 +12,8 @@ import {
   clore,
   creerRendezVousLibre,
   listerEnregistrements,
+  modifierSession,
+  supprimerSession,
   cloturerAbandonnees,
   finaliser,
   finaliserCloses,
@@ -21,6 +23,7 @@ import {
   recevoirMorceau,
   SessionCloseErreur,
 } from './enregistrement.js';
+import { RESUME_MAX } from './resume.js';
 import { enregistrementsVisio, morceauxVisio, PISTES } from './schema.js';
 
 // Un morceau d'environ 30 s en webm/opus pèse une centaine de Ko : au-delà, c'est une erreur.
@@ -180,6 +183,41 @@ export function registerEnregistrementRoutes(app: FastifyInstance, { db }: { db:
     if (!session) return reply.code(404).send({ error: 'Session introuvable' });
     return resume(session);
   });
+
+  app.delete<{ Params: SessionParams }>(
+    '/api/i/:slug/visio/sessions/:id',
+    async (request, reply) => {
+      const instance = await instanceDe(request.params.slug, reply);
+      if (!instance) return reply;
+      const fait = await withInstance(db, instance.id, (tx) =>
+        supprimerSession(tx, request.params.id),
+      );
+      return fait ? reply.code(204).send() : reply.code(404).send({ error: 'Session introuvable' });
+    },
+  );
+
+  const modification = z
+    .object({
+      transcript: z.string().max(500_000).optional(),
+      resume: z.string().max(RESUME_MAX).optional(),
+    })
+    .strict();
+  app.patch<{ Params: SessionParams; Body: unknown }>(
+    '/api/i/:slug/visio/sessions/:id',
+    async (request, reply) => {
+      const instance = await instanceDe(request.params.slug, reply);
+      if (!instance) return reply;
+      const parsed = modification.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Modification invalide' });
+      const session = await withInstance(db, instance.id, async (tx) =>
+        (await modifierSession(tx, request.params.id, parsed.data))
+          ? lireSession(tx, request.params.id)
+          : null,
+      );
+      if (!session) return reply.code(404).send({ error: 'Session introuvable' });
+      return resume(session);
+    },
+  );
 
   // Dernière session d'un rendez-vous : la fiche y retrouve le transcript après un rechargement.
   app.get<{ Params: SlugParams & { rdvId: string } }>(

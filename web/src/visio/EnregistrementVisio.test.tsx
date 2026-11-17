@@ -5,29 +5,19 @@ import { EnregistrementVisio } from './EnregistrementVisio.js';
 
 type Call = { url: string; method: string; body?: unknown };
 let calls: Call[] = [];
-let ordre: string[] = [];
 let derniere: object | null;
-let apresFin: object;
+let courante: object;
 
-class FauxRecorder {
-  ondataavailable: ((e: { data: Blob }) => void) | null = null;
-  onstop: (() => void) | null = null;
-  mimeType = 'audio/webm';
-  start() {}
-  stop() {
-    this.ondataavailable?.({ data: new Blob(['son']) });
-    this.onstop?.();
-  }
-}
-class FauxFlux {
-  constructor(public pistes: unknown[] = []) {}
-  getTracks() {
-    return this.pistes;
-  }
-  getAudioTracks() {
-    return this.pistes;
-  }
-}
+const session = (extra: object) => ({
+  id: 's1',
+  statut: 'transcrit',
+  debutAt: '2026-10-12T08:00:00.000Z',
+  transcript: 'Moi : Bonjour.\nAutres : Bonjour à vous.',
+  resume: 'Résumé fictif de la visio.',
+  morceaux: 2,
+  transcrits: 2,
+  ...extra,
+});
 
 function fakeFetch(url: string, init?: { method?: string; body?: unknown }) {
   const method = init?.method ?? 'GET';
@@ -38,114 +28,83 @@ function fakeFetch(url: string, init?: { method?: string; body?: unknown }) {
   });
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status }));
-  if (url.endsWith('/visio/sessions') && method === 'POST') return json({ id: 's1' }, 201);
-  if (url.endsWith('/fin')) return json({ statut: 'clos' });
+  if (method === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }));
+  if (method === 'PATCH') {
+    const corps = JSON.parse(String(init?.body)) as object;
+    courante = { ...courante, ...corps };
+    return json(courante);
+  }
   if (url.endsWith('/rendez-vous/os%3Av1/session')) {
     return derniere ? json(derniere) : json({ error: 'Aucune session' }, 404);
   }
-  if (url.endsWith('/visio/sessions/s1')) return json(apresFin);
+  if (url.endsWith('/visio/sessions/s1')) return json(courante);
   return json({});
 }
 
-const session = (extra: object) => ({
-  id: 's1',
-  statut: 'transcrit',
-  debutAt: '2026-10-12T08:00:00.000Z',
-  transcript: null,
-  morceaux: 2,
-  transcrits: 2,
-  ...extra,
-});
+const monter = (extra: object = {}) =>
+  render(
+    <EnregistrementVisio
+      slug="simatis"
+      rdvId="os:v1"
+      titre="V - Atelier Fictif x Simatis"
+      intervalleMs={10}
+      {...extra}
+    />,
+  );
 
 describe('EnregistrementVisio', () => {
-  let affichage: 'ok' | 'refus' | 'sans-son';
   beforeEach(() => {
     calls = [];
-    ordre = [];
-    derniere = null;
-    affichage = 'ok';
-    apresFin = session({ transcript: 'Moi : Bonjour.\nAutres : Bonjour à vous.' });
+    derniere = session({});
+    courante = session({});
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
-    vi.stubGlobal('MediaRecorder', FauxRecorder);
-    vi.stubGlobal('MediaStream', FauxFlux);
-    vi.stubGlobal('navigator', {
-      mediaDevices: {
-        getUserMedia: vi.fn(() => {
-          ordre.push('micro');
-          return Promise.resolve(new FauxFlux([{ stop: vi.fn() }]));
-        }),
-        getDisplayMedia: vi.fn(() => {
-          ordre.push('onglet');
-          if (affichage === 'refus') return Promise.reject(new Error('refusé'));
-          return Promise.resolve(new FauxFlux(affichage === 'ok' ? [{ stop: vi.fn() }] : []));
-        }),
-      },
-    });
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
   });
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
   });
 
-  const monter = () =>
-    render(<EnregistrementVisio slug="simatis" rdvId="os:v1" intervalleMs={10} />);
-
-  it('ne demande aucun accès avant le clic de l’utilisateur', async () => {
+  it('n’offre aucun bouton d’enregistrement : l’appli Mac enregistre', async () => {
     monter();
-    await screen.findByRole('button', { name: 'Enregistrer' });
-    expect(ordre).toEqual([]);
-    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+    await screen.findByText('Résumé fictif de la visio.');
+    expect(screen.queryByRole('button', { name: /Enregistrer$/ })).toBeNull();
   });
 
-  it('demande le micro puis l’onglet au clic, et ouvre la session', async () => {
+  it('montre le résumé et le texte de la dernière session', async () => {
     monter();
-    fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer' }));
-    await screen.findByRole('button', { name: 'Arrêter' });
-    expect(ordre).toEqual(['micro', 'onglet']);
-    expect(calls.some((c) => c.url.endsWith('/visio/sessions') && c.method === 'POST')).toBe(true);
-    expect(screen.getByText(/Prévenez les participants/)).toBeTruthy();
+    expect(await screen.findByText('Résumé fictif de la visio.')).toBeTruthy();
+    expect(screen.getByText(/Bonjour à vous/)).toBeTruthy();
   });
 
-  it('dit « micro seul » quand le son de l’onglet est refusé ou absent', async () => {
-    affichage = 'refus';
+  it('dit qu’il n’y a rien quand le rendez-vous n’a aucun enregistrement', async () => {
+    derniere = null;
     monter();
-    fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer' }));
-    expect(await screen.findByText(/micro seul/i)).toBeTruthy();
-    cleanup();
-    affichage = 'sans-son';
-    monter();
-    fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer' }));
-    expect(await screen.findByText(/micro seul/i)).toBeTruthy();
-  });
-
-  it('clôt la session à l’arrêt puis affiche le transcript', async () => {
-    monter();
-    fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Arrêter' }));
-    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/s1/fin'))).toBe(true));
-    expect(await screen.findByText(/Bonjour à vous/)).toBeTruthy();
+    expect(await screen.findByText(/Aucun enregistrement/)).toBeTruthy();
   });
 
   it('affiche le texte en direct pendant l’enregistrement', async () => {
-    apresFin = session({ statut: 'en_cours', transcript: 'Moi : En direct.', transcrits: 1 });
+    derniere = session({ statut: 'en_cours', resume: null, transcript: 'Moi : En direct.' });
+    courante = derniere;
     monter();
-    fireEvent.click(await screen.findByRole('button', { name: 'Enregistrer' }));
     expect(await screen.findByText(/En direct\./)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Arrêter' })).toBeTruthy();
+    expect(screen.getByText(/Enregistrement en cours/)).toBeTruthy();
   });
 
-  it('montre le résumé et en fait le compte rendu du rendez-vous sur demande', async () => {
-    derniere = session({ transcript: 'Moi : Texte.', resume: 'Résumé fictif de la visio.' });
-    render(
-      <EnregistrementVisio
-        slug="simatis"
-        rdvId="os:v1"
-        titre="V - Atelier Fictif x Simatis"
-        intervalleMs={10}
-      />,
-    );
-    expect(await screen.findByText('Résumé fictif de la visio.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Utiliser comme compte rendu' }));
+  it('attend le résumé qui arrive après la transcription', async () => {
+    derniere = session({ resume: null });
+    courante = session({ resume: 'Résumé tardif.' });
+    monter();
+    expect(await screen.findByText(/Résumé en préparation/)).toBeTruthy();
+    expect(await screen.findByText('Résumé tardif.')).toBeTruthy();
+  });
+
+  it('en fait le compte rendu du rendez-vous sur demande', async () => {
+    monter();
+    fireEvent.click(await screen.findByRole('button', { name: 'Utiliser comme compte rendu' }));
     expect(await screen.findByText(/Compte rendu enregistré/)).toBeTruthy();
     const envoi = calls.find((c) => c.url.endsWith('/rendez-vous/os%3Av1/compte-rendu'));
     expect(envoi?.body).toMatchObject({
@@ -154,17 +113,34 @@ describe('EnregistrementVisio', () => {
     });
   });
 
-  it('attend le résumé qui arrive après la transcription', async () => {
-    derniere = session({ transcript: 'Moi : Texte.', resume: null });
-    apresFin = session({ transcript: 'Moi : Texte.', resume: 'Résumé tardif.' });
+  it('modifie le résumé et le texte puis enregistre', async () => {
     monter();
-    expect(await screen.findByText(/Résumé en préparation/)).toBeTruthy();
-    expect(await screen.findByText('Résumé tardif.')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier' }));
+    fireEvent.change(screen.getByLabelText('Résumé'), { target: { value: 'Résumé corrigé.' } });
+    fireEvent.change(screen.getByLabelText('Texte'), { target: { value: 'Moi : Texte corrigé.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les modifications' }));
+    expect(await screen.findByText('Résumé corrigé.')).toBeTruthy();
+    const patch = calls.find((c) => c.method === 'PATCH');
+    expect(patch?.body).toEqual({ resume: 'Résumé corrigé.', transcript: 'Moi : Texte corrigé.' });
   });
 
-  it('retrouve le transcript d’une session passée au chargement', async () => {
-    derniere = session({ transcript: 'Moi : Déjà là.' });
+  it('supprime l’enregistrement après confirmation et prévient l’écran', async () => {
+    const onSupprime = vi.fn();
+    monter({ onSupprime });
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' }));
+    await waitFor(() => expect(onSupprime).toHaveBeenCalledOnce());
+    expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/visio/sessions/s1'))).toBe(
+      true,
+    );
+  });
+
+  it('ne supprime rien si Marc annule', async () => {
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => false),
+    );
     monter();
-    expect(await screen.findByText(/Déjà là/)).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer' }));
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
   });
 });

@@ -1,154 +1,97 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  cloreSessionVisio,
   enregistrerCompteRenduRdv,
-  envoyerMorceauVisio,
   fetchDerniereSessionVisio,
   fetchSessionVisio,
-  ouvrirSessionVisio,
+  modifierEnregistrement,
+  supprimerEnregistrement,
   type SessionVisio,
 } from '../api.js';
-import { CaptureVisio } from './capture.js';
 
-type Etat = 'repos' | 'enregistrement' | 'transcription';
+const erreurDe = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-const duree = (s: number) =>
-  `${Math.floor(s / 60)
-    .toString()
-    .padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
-
-// Micro de l'utilisateur, plus le son de l'onglet de la visio s'il est partagé. Rien n'est demandé
-// avant le clic de l'utilisateur.
-async function obtenirSources(): Promise<{ micro: MediaStream; onglet: MediaStream | null }> {
-  const micro = await navigator.mediaDevices.getUserMedia({ audio: true });
-  try {
-    const partage = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    const audio = partage.getAudioTracks();
-    // On ne garde que le son : l'image de l'onglet n'est ni enregistrée ni envoyée.
-    for (const piste of partage.getTracks()) if (!audio.includes(piste)) piste.stop();
-    return { micro, onglet: audio.length > 0 ? new MediaStream(audio) : null };
-  } catch {
-    return { micro, onglet: null };
-  }
-}
-
+// Le dernier enregistrement d'un rendez-vous : texte en direct, résumé, transcript. Marc peut les
+// corriger, les supprimer ou en faire le compte rendu. L'enregistrement lui-même se lance depuis
+// l'appli Mac « Visio SIMATIS ».
 export function EnregistrementVisio({
   slug,
   rdvId,
   titre = 'Visio',
   intervalleMs = 3000,
+  onSupprime,
 }: {
   slug: string;
   rdvId: string;
   titre?: string;
   intervalleMs?: number;
+  onSupprime?: () => void;
 }) {
-  const [etat, setEtat] = useState<Etat>('repos');
   const [session, setSession] = useState<SessionVisio | null>(null);
-  const [microSeul, setMicroSeul] = useState(false);
-  const [secondes, setSecondes] = useState(0);
-  const [erreur, setErreur] = useState<string | null>(null);
+  const [charge, setCharge] = useState(false);
+  const [edition, setEdition] = useState<{ resume: string; transcript: string } | null>(null);
   const [crFait, setCrFait] = useState(false);
-  const capture = useRef<CaptureVisio | null>(null);
-  const sessionId = useRef<string | null>(null);
-  const sources = useRef<{ micro: MediaStream; onglet: MediaStream | null } | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
 
-  const charger = useCallback(() => {
+  useEffect(() => {
     fetchDerniereSessionVisio(slug, rdvId).then(
       (s) => {
         setSession(s);
-        if (s && (s.statut === 'clos' || s.statut === 'en_cours')) setEtat('transcription');
+        setCharge(true);
       },
-      () => undefined,
+      (e: unknown) => {
+        setErreur(erreurDe(e));
+        setCharge(true);
+      },
     );
   }, [slug, rdvId]);
-  useEffect(charger, [charger]);
 
-  // Chronomètre pendant l'enregistrement.
+  // Tant que la session avance (enregistrement, transcription, résumé), on la relit.
+  const id = session?.id;
+  const avance =
+    !!session &&
+    !edition &&
+    (session.statut === 'en_cours' ||
+      session.statut === 'clos' ||
+      (session.statut === 'transcrit' && !!session.transcript && !session.resume));
   useEffect(() => {
-    if (etat !== 'enregistrement') return;
-    const debut = Date.now();
-    const t = setInterval(() => setSecondes(Math.floor((Date.now() - debut) / 1000)), 1000);
-    return () => clearInterval(t);
-  }, [etat]);
-
-  // Pendant l'enregistrement, le poste transcrit déjà les morceaux reçus : on affiche le texte au fil de l'eau.
-  useEffect(() => {
-    if (etat !== 'enregistrement') return;
+    if (!avance || !id) return;
     const t = setInterval(() => {
-      const id = sessionId.current;
-      if (!id) return;
       fetchSessionVisio(slug, id).then(setSession, () => undefined);
     }, intervalleMs);
     return () => clearInterval(t);
-  }, [etat, slug, intervalleMs]);
+  }, [avance, id, slug, intervalleMs]);
 
-  // Après l'arrêt, le poste transcrit les morceaux : on relit la session jusqu'au transcript.
-  useEffect(() => {
-    if (etat !== 'transcription' || !session || session.statut === 'transcrit') return;
-    const t = setInterval(() => {
-      fetchSessionVisio(slug, session.id).then(
-        (s) => {
-          setSession(s);
-          if (s.statut === 'transcrit') setEtat('repos');
-        },
-        () => undefined,
-      );
-    }, intervalleMs);
-    return () => clearInterval(t);
-  }, [etat, session, slug, intervalleMs]);
+  const enregistrer = useCallback(() => {
+    if (!session || !edition) return;
+    modifierEnregistrement(slug, session.id, {
+      resume: edition.resume,
+      transcript: edition.transcript,
+    }).then(
+      (s) => {
+        setSession(s);
+        setEdition(null);
+        setCrFait(false);
+      },
+      (e: unknown) => setErreur(erreurDe(e)),
+    );
+  }, [slug, session, edition]);
 
-  // La transcription finie, Claude rédige le résumé : on relit la session jusqu'à son arrivée.
-  const attendResume = session?.statut === 'transcrit' && !!session.transcript && !session.resume;
-  const idSession = session?.id;
-  useEffect(() => {
-    if (!attendResume || !idSession) return;
-    const t = setInterval(() => {
-      fetchSessionVisio(slug, idSession).then(setSession, () => undefined);
-    }, intervalleMs);
-    return () => clearInterval(t);
-  }, [attendResume, idSession, slug, intervalleMs]);
-
-  const demarrer = async () => {
-    setErreur(null);
-    try {
-      const src = await obtenirSources();
-      const { id } = await ouvrirSessionVisio(slug, rdvId);
-      sources.current = src;
-      sessionId.current = id;
-      setMicroSeul(src.onglet === null);
-      setSecondes(0);
-      const c = new CaptureVisio({
-        onErreur: () =>
-          setErreur('Un morceau n’a pas pu être envoyé : le transcript sera incomplet.'),
-      });
-      c.demarrer(src, (m) => envoyerMorceauVisio(slug, id, m).then(() => undefined));
-      capture.current = c;
-      setEtat('enregistrement');
-    } catch (e) {
-      setErreur(
-        e instanceof Error
-          ? `Enregistrement impossible : ${e.message}`
-          : 'Enregistrement impossible.',
-      );
+  const supprimer = () => {
+    if (!session) return;
+    if (
+      !confirm(
+        'Supprimer cet enregistrement, son texte et son résumé ? Cette action est définitive.',
+      )
+    ) {
+      return;
     }
-  };
-
-  const arreter = async () => {
-    const id = sessionId.current;
-    if (!id) return;
-    setEtat('transcription');
-    try {
-      await capture.current?.arreter();
-      for (const flux of [sources.current?.micro, sources.current?.onglet]) {
-        for (const piste of flux?.getTracks() ?? []) piste.stop();
-      }
-      const { statut } = await cloreSessionVisio(slug, id);
-      setSession(await fetchSessionVisio(slug, id));
-      if (statut === 'transcrit') setEtat('repos');
-    } catch (e) {
-      setErreur(e instanceof Error ? e.message : String(e));
-    }
+    supprimerEnregistrement(slug, session.id).then(
+      () => {
+        setSession(null);
+        onSupprime?.();
+      },
+      (e: unknown) => setErreur(erreurDe(e)),
+    );
   };
 
   const utiliserCommeCompteRendu = () => {
@@ -158,62 +101,104 @@ export function EnregistrementVisio({
       versCerveau: true,
     }).then(
       () => setCrFait(true),
-      (e: unknown) => setErreur(e instanceof Error ? e.message : String(e)),
+      (e: unknown) => setErreur(erreurDe(e)),
     );
   };
 
-  return (
-    <section className="panel">
-      <div className="panel-h">
-        <h2>Enregistrement de la visio</h2>
-      </div>
-      <div className="panel-b stack">
-        {etat === 'repos' && (
-          <button className="btn primary" onClick={() => void demarrer()}>
-            Enregistrer
-          </button>
-        )}
-        {etat === 'enregistrement' && (
-          <>
-            <p role="status">Enregistrement en cours · {duree(secondes)}</p>
-            <p className="small muted">
-              Prévenez les participants que la visio est enregistrée.
-              {microSeul &&
-                ' Le son de l’onglet n’est pas partagé : micro seul, les autres voix ne seront pas transcrites.'}
-            </p>
-            <button className="btn" onClick={() => void arreter()}>
-              Arrêter
-            </button>
-          </>
-        )}
-        {etat === 'transcription' && (
-          <p role="status">
-            Transcription en cours
-            {session ? ` (${session.transcrits} morceaux sur ${session.morceaux})` : ''}…
-          </p>
-        )}
+  if (!charge) return <p className="muted">Chargement…</p>;
+  if (!session) {
+    return (
+      <>
+        <p className="muted">
+          Aucun enregistrement pour ce rendez-vous. Lancez-le depuis l’appli Visio SIMATIS.
+        </p>
         {erreur && <p style={{ color: 'var(--red)' }}>{erreur}</p>}
-        {session?.resume && (
-          <>
-            <h3>Résumé</h3>
-            <p className="fi-cr">{session.resume}</p>
-            {crFait ? (
-              <p role="status">Compte rendu enregistré dans le rendez-vous.</p>
-            ) : (
-              <button className="btn go" onClick={utiliserCommeCompteRendu}>
-                Utiliser comme compte rendu
+      </>
+    );
+  }
+  return (
+    <div className="stack">
+      {session.statut === 'en_cours' && <p role="status">Enregistrement en cours…</p>}
+      {session.statut === 'clos' && (
+        <p role="status">
+          Transcription en cours ({session.transcrits} morceaux sur {session.morceaux})…
+        </p>
+      )}
+      {edition ? (
+        <>
+          <label>
+            Résumé
+            <textarea
+              className="input"
+              rows={6}
+              value={edition.resume}
+              onChange={(e) => setEdition({ ...edition, resume: e.target.value })}
+            />
+          </label>
+          <label>
+            Texte
+            <textarea
+              className="input"
+              rows={12}
+              value={edition.transcript}
+              onChange={(e) => setEdition({ ...edition, transcript: e.target.value })}
+            />
+          </label>
+          <div className="row">
+            <button className="btn primary" onClick={enregistrer}>
+              Enregistrer les modifications
+            </button>
+            <button className="btn" onClick={() => setEdition(null)}>
+              Annuler
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {session.resume && (
+            <>
+              <h3>Résumé</h3>
+              <p className="fi-cr">{session.resume}</p>
+            </>
+          )}
+          {session.statut === 'transcrit' && !session.resume && session.transcript && (
+            <p className="small muted">Résumé en préparation…</p>
+          )}
+          {session.transcript && (
+            <>
+              <h3>Texte</h3>
+              <pre className="fi-cr">{session.transcript}</pre>
+            </>
+          )}
+          {session.statut === 'transcrit' && !session.transcript && (
+            <p className="muted">Aucune parole transcrite.</p>
+          )}
+          <div className="row">
+            {session.resume &&
+              (crFait ? (
+                <span role="status">Compte rendu enregistré dans le rendez-vous.</span>
+              ) : (
+                <button className="btn go" onClick={utiliserCommeCompteRendu}>
+                  Utiliser comme compte rendu
+                </button>
+              ))}
+            {session.statut === 'transcrit' && (
+              <button
+                className="btn"
+                onClick={() =>
+                  setEdition({ resume: session.resume ?? '', transcript: session.transcript ?? '' })
+                }
+              >
+                Modifier
               </button>
             )}
-          </>
-        )}
-        {session?.statut === 'transcrit' && !session.resume && session.transcript && (
-          <p className="small muted">Résumé en préparation…</p>
-        )}
-        {session?.transcript && <pre className="fi-cr">{session.transcript}</pre>}
-        {session?.statut === 'transcrit' && !session.transcript && (
-          <p className="muted">Aucune parole transcrite.</p>
-        )}
-      </div>
-    </section>
+            <button className="btn" onClick={supprimer}>
+              Supprimer
+            </button>
+          </div>
+        </>
+      )}
+      {erreur && <p style={{ color: 'var(--red)' }}>{erreur}</p>}
+    </div>
   );
 }
