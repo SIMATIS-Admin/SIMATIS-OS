@@ -4,11 +4,11 @@ Date : 2026-11-17. Statut : à relire par Marc avant le plan d'implémentation.
 
 ## But
 
-Marc crée une visio, l'enregistre et en obtient la transcription et le résumé sans quitter l'OS. Raison : Wispr Flow est un outil séparé et payant (environ 15 € par mois, autant côté client). F1 du cahier des charges Wasoria demande la même chose : programmer la visio, transcrire et résumer dans le même module, sans API payante.
+Marc crée une visio, l'enregistre et en obtient la transcription et le résumé sans quitter l'OS. Raison : Wispr Flow est un outil séparé et payant (environ 15 € par mois, autant côté client). Le cahier des charges d'un CRM client demande la même chose (F1) : programmer la visio, transcrire et résumer dans le même module, sans API payante.
 
 ## Hors périmètre
 
-- Connecteur Outlook et Teams (Wasoria) : la brique est conçue pour être réutilisée, pas livrée ici.
+- Connecteur Outlook et Teams (autre CRM) : la brique est conçue pour être réutilisée, pas livrée ici.
 - Robot qui rejoint la réunion (payant) et visio hébergée dans l'OS : écartés, voir Approches.
 - Identification des voix au-delà de deux pistes (soi, les autres).
 - Remplacement de la lecture des notes Wispr Flow dans l'Inbox : elle reste telle quelle.
@@ -30,7 +30,7 @@ Un bouton « Nouvelle visio » (écran Rendez-vous) crée un événement Google 
 
 `creerEvenement` ([google.ts:534](../../../src/connecteurs/google/google.ts)) crée déjà l'événement sans invité ni lien : il est étendu, sans changer son comportement quand on n'ajoute ni invité ni visio. La portée Google `calendar.events` déjà demandée couvre invités et Meet ; aucune nouvelle autorisation n'est attendue (à confirmer par un essai réel en dernier).
 
-**Nomenclature** (fonction pure, testable) : `V - <Entreprise> x <Instance> - <Motif>`, motif facultatif ; sans motif, `V - <Entreprise> x <Instance>`. L'entreprise vient de la fiche choisie, l'instance est le nom de l'instance courante (ici SIMATIS), le motif est un texte libre avec quelques suggestions (Restitution, Point d'étape). Le titre reste modifiable avant création. Pour Wasoria, le nom de l'instance et le format seront un réglage, pas du code.
+**Nomenclature** (fonction pure, testable) : `V - <Entreprise> x <Instance> - <Motif>`, motif facultatif ; sans motif, `V - <Entreprise> x <Instance>`. L'entreprise vient de la fiche choisie, l'instance est le nom de l'instance courante (ici SIMATIS), le motif est un texte libre avec quelques suggestions (Restitution, Point d'étape). Le titre reste modifiable avant création. Pour un autre déploiement, le nom de l'hôte et le format seront un réglage, pas du code.
 
 **Garde-fou** : écriture vers un système tiers = dry-run par défaut, double verrou (variable serveur + interrupteur admin). Une invitation envoyée à un client est une écriture réelle : en simulation, rien ne part et l'écran le dit. Aucune invitation sans action explicite de Marc.
 
@@ -66,9 +66,9 @@ La capture (bouton du navigateur aujourd'hui, petite appli à part demain) ne co
 
 Le bouton du navigateur est le premier client de cette interface, et il doit l'utiliser comme le ferait l'appli : pas de raccourci interne. Un jeton propre à l'appli (révocable, jamais dans git) sera nécessaire à la livraison de l'appli, pas avant. L'avantage visé sur Wispr Flow : l'enregistrement arrive déjà rattaché au bon rendez-vous, avec ses contacts, sans tri manuel.
 
-### 6. Réutilisation pour le CRM Wasoria
+### 6. Réutilisation pour un autre CRM
 
-Trois pièces indépendantes : nomenclature, capture audio dans le navigateur, transcription et résumé. Seule la création de l'événement dépend de Google ; chez Wasoria, elle serait remplacée par Outlook et Teams derrière la même interface.
+Trois pièces indépendantes : nomenclature, capture audio dans le navigateur, transcription et résumé. Seule la création de l'événement dépend de Google ; dans un CRM sous Microsoft, elle serait remplacée par Outlook et Teams derrière la même interface.
 
 ## Tests
 
