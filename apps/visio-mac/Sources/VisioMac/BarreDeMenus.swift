@@ -59,6 +59,18 @@ final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate, @unch
         }
     }
 
+    // Un clic sur l'icône du Dock ouvre le même menu que celle de la barre de menus.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        item.button?.performClick(nil)
+        return false
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let dock = NSMenu()
+        menuNeedsUpdate(dock)
+        return dock
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         if let message { menu.addItem(withTitle: message, action: nil, keyEquivalent: "") ; menu.addItem(.separator()) }
