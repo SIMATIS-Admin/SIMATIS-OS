@@ -1201,6 +1201,43 @@ export const creerVisio = (
     invites: string[];
   },
 ) => sendJson<VisioCreee>('POST', inst(slug, 'visios'), saisie);
+// Enregistrement d'une visio : la capture ne parle à l'OS que par ces appels.
+export type SessionVisio = {
+  id: string;
+  statut: 'en_cours' | 'clos' | 'transcrit' | 'erreur';
+  debutAt: string;
+  transcript: string | null;
+  morceaux: number;
+  transcrits: number;
+};
+export const ouvrirSessionVisio = (slug: string, rdvId: string) =>
+  sendJson<{ id: string }>('POST', inst(slug, 'visio/sessions'), { rdvId });
+export const envoyerMorceauVisio = (
+  slug: string,
+  sessionId: string,
+  m: { piste: 'moi' | 'autres'; rang: number; debutMs: number; blob: Blob },
+) =>
+  request<unknown>(inst(slug, `visio/sessions/${sessionId}/morceaux/${m.piste}/${m.rang}`), {
+    method: 'PUT',
+    headers: { 'content-type': m.blob.type || 'audio/webm', 'x-debut-ms': String(m.debutMs) },
+    body: m.blob,
+  });
+export const cloreSessionVisio = (slug: string, sessionId: string) =>
+  sendJson<{ statut: SessionVisio['statut'] }>(
+    'POST',
+    inst(slug, `visio/sessions/${sessionId}/fin`),
+    {},
+  );
+export const fetchSessionVisio = (slug: string, sessionId: string) =>
+  getJson<SessionVisio>(inst(slug, `visio/sessions/${sessionId}`));
+// Dernière session du rendez-vous, ou null s'il n'en a pas.
+export const fetchDerniereSessionVisio = (slug: string, rdvId: string) =>
+  getJson<SessionVisio>(inst(slug, `visio/rendez-vous/${encodeURIComponent(rdvId)}/session`)).catch(
+    (e: unknown) => {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    },
+  );
 export const fetchPreparation = (slug: string, opportuniteId: string) =>
   getJson<Preparation>(inst(slug, `opportunites/${encodeURIComponent(opportuniteId)}/preparation`));
 export const lierRendezVous = (
@@ -1214,6 +1251,7 @@ export type RdvFiche = {
   debut: string | null;
   fin: string | null;
   lieu: string | null;
+  lienVisio?: string | null;
   statut: StatutRdv;
   contacts: { id: string; nom: string; detail: string | null }[];
   entreprises: { id: string; nom: string }[];
