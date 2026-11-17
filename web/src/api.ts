@@ -1183,6 +1183,24 @@ export const creerRdvOs = (
   slug: string,
   saisie: { titre: string; debut: string; dureeMinutes: number; lieu: string | null },
 ) => sendJson<{ id: string }>('POST', inst(slug, 'rendez-vous'), saisie);
+// Visio nommée selon la nomenclature, avec lien Meet et invitations (simulation sans le double verrou).
+export type VisioCreee = {
+  id: string;
+  titre: string;
+  lienVisio: string | null;
+  google: 'ok' | 'simulation' | 'indisponible' | 'erreur';
+};
+export const fetchHoteVisio = () => getJson<{ hote: string }>('/api/visio/hote');
+export const creerVisio = (
+  slug: string,
+  saisie: {
+    entrepriseId: string;
+    motif: string | null;
+    debut: string;
+    dureeMinutes: number;
+    invites: string[];
+  },
+) => sendJson<VisioCreee>('POST', inst(slug, 'visios'), saisie);
 export const fetchPreparation = (slug: string, opportuniteId: string) =>
   getJson<Preparation>(inst(slug, `opportunites/${encodeURIComponent(opportuniteId)}/preparation`));
 export const lierRendezVous = (

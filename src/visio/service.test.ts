@@ -71,7 +71,13 @@ describe('Création d’une visio', () => {
     const f = fabrique(t);
     entreprisePropre = await f.entreprise(reel, 'Atelier  Fictif');
     entrepriseAutre = await f.entreprise(sansGoogle, 'Autre Fictive');
-    app = buildApp({ pool: t.app.pool, db: t.app.db, version: 'test', secretsDir });
+    app = buildApp({
+      pool: t.app.pool,
+      db: t.app.db,
+      version: 'test',
+      secretsDir,
+      visioNomHote: 'Hôte Fictif',
+    });
   });
   afterAll(async () => {
     await app.close();
@@ -138,5 +144,11 @@ describe('Création d’une visio', () => {
       payload: { ...saisie(entreprisePropre), invites: ['pas-une-adresse'] },
     });
     expect(invalide.statusCode).toBe(400);
+  });
+
+  it('donne le nom d’hôte du déploiement pour l’aperçu du titre', async () => {
+    const r = await app.inject({ method: 'GET', url: '/api/visio/hote' });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ hote: 'Hôte Fictif' });
   });
 });

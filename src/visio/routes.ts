@@ -13,6 +13,8 @@ export type VisioRoutesDeps = {
 };
 
 export function registerVisioRoutes(app: FastifyInstance, deps: VisioRoutesDeps): void {
+  // Pour l'aperçu du titre dans le formulaire ; le titre définitif reste construit par le serveur.
+  app.get('/api/visio/hote', () => ({ hote: deps.hote }));
   app.post<{ Params: { slug: string }; Body: unknown }>(
     '/api/i/:slug/visios',
     async (request, reply) => {
