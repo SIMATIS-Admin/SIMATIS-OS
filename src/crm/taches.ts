@@ -13,6 +13,7 @@ import { logEvent } from '../journal/service.js';
 import { rendezVous } from '../pilotage/brief.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
+import { copieEnLectureSeule, MESSAGE_LECTURE_SEULE } from './source.js';
 import { createInCrm, CrmIndisponible } from './service.js';
 import { canalDe, typeActivite, type Canal, type TypeActivite } from './type-tache.js';
 
@@ -345,6 +346,7 @@ export async function updateTache(
       .from(taches)
       .where(and(eq(taches.instanceId, currentInstance), eq(taches.id, id)));
     if (!tache) return null;
+    if (copieEnLectureSeule(tache.source)) throw new CrmIndisponible(MESSAGE_LECTURE_SEULE);
     const titre = patch.titre?.trim();
     await verifierLiens(tx, patch);
     const lien = patch.contactId !== undefined || patch.entrepriseId !== undefined;

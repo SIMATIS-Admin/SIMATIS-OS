@@ -18,6 +18,7 @@ import { prospectionOccurrences } from '../prospection/schema.js';
 import { pipelineSource } from './pipeline.js';
 import { rendezVousDe, type RdvLie } from './rdv-liens.js';
 import { activites, contactEmails, contacts, entreprises, opportunites, taches } from './schema.js';
+import { copieEnLectureSeule, MESSAGE_LECTURE_SEULE } from './source.js';
 import { CrmIndisponible } from './service.js';
 import { listTachesOuvertes, type TacheVue } from './taches.js';
 
@@ -297,7 +298,9 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
     rendezVous: rdvs,
     historique,
     ...(etapes ? { etapes } : {}),
-    ecrit: row.source !== 'hubspot' || reglages?.sens === 'deux_sens',
+    ecrit: copieEnLectureSeule(row.source)
+      ? false
+      : row.source !== 'hubspot' || reglages?.sens === 'deux_sens',
   };
 }
 
@@ -463,6 +466,9 @@ export async function updateFiche(
     const distants = Object.fromEntries(
       Object.entries(champs).filter(([k]) => !CHAMPS_LOCAUX.includes(k as keyof PatchFiche)),
     ) as PatchFiche;
+    if (copieEnLectureSeule(row.source) && Object.keys(distants).length > 0) {
+      throw new CrmIndisponible(MESSAGE_LECTURE_SEULE);
+    }
     const versHubspot = row.source === 'hubspot' && Object.keys(distants).length > 0;
     if (versHubspot) {
       if ((await crm(tx))?.sens !== 'deux_sens') {
@@ -625,6 +631,7 @@ export async function modifierNote(
         ),
       );
     if (!note) return null;
+    if (copieEnLectureSeule(note.source)) throw new CrmIndisponible(MESSAGE_LECTURE_SEULE);
     if (note.source === 'hubspot') {
       if ((await crm(tx))?.sens !== 'deux_sens')
         throw new CrmIndisponible('CRM en lecture seule : modifiez la note dans HubSpot.');

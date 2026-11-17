@@ -6,6 +6,7 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { FicheInvalide } from './fiches.js';
 import { contactEmails, contacts } from './schema.js';
+import { copieEnLectureSeule, MESSAGE_LECTURE_SEULE } from './source.js';
 
 // Addresses of a contact. contacts.email stays the primary one: a trigger keeps the matching
 // contact_emails row primary whatever wrote the column, and the functions below move the primary
@@ -14,6 +15,13 @@ export type EmailContact = { email: string; principal: boolean };
 
 // HubSpot owns the primary address of its contacts: the next sync would put it back.
 const PRINCIPALE_HUBSPOT = 'L’adresse principale d’un contact HubSpot se change dans HubSpot.';
+// Why the primary address of a copied contact cannot be changed here, or null when it can.
+const principaleFigee = (source: string): string | null =>
+  source === 'hubspot'
+    ? PRINCIPALE_HUBSPOT
+    : copieEnLectureSeule(source)
+      ? MESSAGE_LECTURE_SEULE
+      : null;
 const VALIDE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const normaliserEmail = (email: string) => email.trim().toLowerCase();
@@ -67,8 +75,8 @@ export async function ajouterEmail(
     const c = await existe(tx, contactId);
     if (!c) return null;
     const actuelles = await emailsDuContact(tx, contactId);
-    if (actuelles.length === 0 && c.source === 'hubspot')
-      throw new FicheInvalide(PRINCIPALE_HUBSPOT);
+    if (actuelles.length === 0 && principaleFigee(c.source))
+      throw new FicheInvalide(principaleFigee(c.source) as string);
     if (actuelles.some((a) => a.email === email))
       throw new FicheInvalide('Ce contact a déjà cette adresse');
     if (actuelles.length === 0) {
@@ -101,7 +109,7 @@ export async function definirEmailPrincipal(
   return withInstance(db, instance.id, async (tx) => {
     const c = await existe(tx, contactId);
     if (!c) return null;
-    if (c.source === 'hubspot') throw new FicheInvalide(PRINCIPALE_HUBSPOT);
+    if (principaleFigee(c.source)) throw new FicheInvalide(principaleFigee(c.source) as string);
     if (!(await emailsDuContact(tx, contactId)).some((a) => a.email === email))
       throw new FicheInvalide('Adresse inconnue pour ce contact');
     await ecrirePrincipale(tx, contactId, email);
@@ -128,7 +136,8 @@ export async function retirerEmail(
     const actuelles = await emailsDuContact(tx, contactId);
     const cible = actuelles.find((a) => a.email === email);
     if (!cible) throw new FicheInvalide('Adresse inconnue pour ce contact');
-    if (cible.principal && c.source === 'hubspot') throw new FicheInvalide(PRINCIPALE_HUBSPOT);
+    if (cible.principal && principaleFigee(c.source))
+      throw new FicheInvalide(principaleFigee(c.source) as string);
     await tx
       .delete(contactEmails)
       .where(
