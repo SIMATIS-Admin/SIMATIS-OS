@@ -32,6 +32,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   </dict></array>
   <key>NSMicrophoneUsageDescription</key>
   <string>Visio SIMATIS enregistre votre voix pendant une visio, pour la transcrire dans l'OS.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Visio SIMATIS reconnaît la phrase « arrête l'enregistrement » pour arrêter l'enregistrement à la voix.</string>
   <key>NSAudioCaptureUsageDescription</key>
   <string>Visio SIMATIS enregistre le son de la visio pour la transcrire dans l'OS.</string>
 </dict>

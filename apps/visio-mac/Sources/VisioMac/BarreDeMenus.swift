@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 import VisioCore
 
 // Le cœur de l'appli : l'icône de la barre de menus, celle du Dock et la fenêtre. Tout l'état est
 // dans `Modele`, partagé avec la fenêtre.
 @MainActor
-final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
     private let modele = Modele()
@@ -13,6 +14,16 @@ final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var minuteur: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Notifications : « Réunion détectée » avec les boutons Enregistrer et Ignorer.
+        let centre = UNUserNotificationCenter.current()
+        centre.delegate = self
+        centre.setNotificationCategories([
+            UNNotificationCategory(identifier: "REUNION", actions: [
+                UNNotificationAction(identifier: "ENREGISTRER", title: "Enregistrer", options: [.foreground]),
+                UNNotificationAction(identifier: "IGNORER", title: "Ignorer", options: []),
+            ], intentIdentifiers: [])
+        ])
+        centre.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         menu.delegate = self
         item.menu = menu
         rafraichirTitre()
@@ -20,6 +31,19 @@ final class BarreDeMenus: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task { @MainActor in self?.rafraichirTitre() }
         }
         montrerFenetre()
+    }
+
+    // La bannière s'affiche même quand l'appli est au premier plan.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
+        -> UNNotificationPresentationOptions {
+        [.banner, .sound]
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive reponse: UNNotificationResponse) async {
+        guard reponse.notification.request.content.categoryIdentifier == "REUNION",
+              reponse.actionIdentifier != "IGNORER", reponse.actionIdentifier != UNNotificationDismissActionIdentifier
+        else { return }
+        await MainActor.run { modele.demarrerPourLaReunionEnCours() }
     }
 
     // Un clic sur l'icône du Dock rouvre la fenêtre.

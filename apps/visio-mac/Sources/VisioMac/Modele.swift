@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UserNotifications
 import VisioCore
 
 // L'état partagé par la barre de menus et la fenêtre : un seul enregistrement à la fois, la liste
@@ -16,7 +17,10 @@ final class Modele: ObservableObject {
 
     let os: OsClient
     private let enregistreur: Enregistreur
+    private let voix = ArretVocal()
+    private var detecteur = Detecteur()
     private var minuteur: Timer?
+    private var surveillance: Timer?
 
     init() {
         let defauts = UserDefaults.standard
@@ -25,6 +29,18 @@ final class Modele: ObservableObject {
         enregistreur = Enregistreur(os: os)
         enregistreur.surErreur = { [weak self] texte in
             DispatchQueue.main.async { self?.message = texte }
+        }
+        enregistreur.surMicro = { [weak self] tampon in self?.voix.alimenter(tampon) }
+        voix.surCommande = { [weak self] in
+            Task { @MainActor in
+                guard let self, self.enregistre else { return }
+                self.arreter()
+                self.notifier("Enregistrement arrêté", "Commande vocale reconnue.")
+            }
+        }
+        // Détection de réunion : toutes les 2 s, qui utilise le micro ?
+        surveillance = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.surveiller() }
         }
         minuteur = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.actualiser() }
@@ -55,6 +71,7 @@ final class Modele: ObservableObject {
                 try await enregistreur.demarrer(rendezVousId: rendezVousId)
                 enCours = titre
                 debut = Date()
+                voix.demarrer()
             } catch {
                 message = (error as? OsErreur)?.message ?? error.localizedDescription
             }
@@ -67,12 +84,43 @@ final class Modele: ObservableObject {
         guard enregistre, !occupe else { return }
         occupe = true
         Task {
+            voix.arreter()
             await enregistreur.arreter()
             enCours = nil
             debut = nil
             occupe = false
             await actualiser()
         }
+    }
+
+    private func surveiller() {
+        let apps = appsDeReunion(applisUtilisantLeMicro())
+        switch detecteur.echantillon(apps: apps, enregistre: enregistre, maintenant: Date()) {
+        case .proposer:
+            notifier("Réunion détectée", "Voulez-vous l'enregistrer ?", proposition: true)
+        case .arreter:
+            arreter()
+            notifier("Enregistrement arrêté", "La réunion est terminée.")
+        case nil:
+            break
+        }
+    }
+
+    // Le rendez-vous de l'agenda qui a lieu maintenant, sinon un enregistrement libre.
+    func demarrerPourLaReunionEnCours() {
+        let maintenant = Date()
+        let rdv = proches.first { $0.debut <= maintenant && maintenant <= $0.fin }
+        demarrer(rendezVousId: rdv?.id, titre: rdv?.titre ?? "Enregistrement libre")
+    }
+
+    func notifier(_ titre: String, _ texte: String, proposition: Bool = false) {
+        let contenu = UNMutableNotificationContent()
+        contenu.title = titre
+        contenu.body = texte
+        contenu.sound = .default
+        if proposition { contenu.categoryIdentifier = "REUNION" }
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: UUID().uuidString, content: contenu, trigger: nil))
     }
 
     func chargerDetail(_ id: String) {

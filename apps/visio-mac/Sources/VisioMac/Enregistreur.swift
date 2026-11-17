@@ -18,6 +18,8 @@ final class Enregistreur: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     private var expediteur: ExpediteurOrdonne?
     private let dossier = FileManager.default.temporaryDirectory.appendingPathComponent("visio-mac", isDirectory: true)
     var surErreur: (@Sendable (String) -> Void)?
+    // Les buffers du micro, pour l'arrêt à la voix.
+    var surMicro: (@Sendable (AVAudioPCMBuffer) -> Void)?
 
     init(os: OsClient) {
         self.os = os
@@ -134,6 +136,7 @@ final class Enregistreur: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         default: return
         }
         guard tampon.isValid, let pcm = Self.versPCM(tampon) else { return }
+        if piste == .moi { surMicro?(pcm) }
         let morceau: FichierMorceau
         if let existant = fichiers[piste] {
             morceau = existant
