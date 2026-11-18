@@ -801,7 +801,9 @@ export type PipelineOpp = {
   // l'étape du CRM quand elle est plus basse.
   diagnostic: boolean;
   etapeCrm: string | null;
-  radar: 'sans_reponse' | 'repondu' | null;
+  radar: 'a_contacter' | 'sans_reponse' | 'repondu' | null;
+  tentatives?: number;
+  canalRadar?: string | null;
   // Prochain rendez-vous commercial lié à l'affaire, à son contact ou à son entreprise.
   prochainRdv: string | null;
 };

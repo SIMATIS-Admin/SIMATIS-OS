@@ -11,7 +11,12 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
-import { classementAffaire, diagnosticDeLAffaire, type Classement } from './echanges.js';
+import {
+  classementAffaire,
+  diagnosticDeLAffaire,
+  touchesRadar,
+  type Classement,
+} from './echanges.js';
 import { assurerLiensPrincipaux } from './liens.js';
 import { copieEnLectureSeule, MESSAGE_LECTURE_SEULE } from './source.js';
 import { createInCrm, CrmIndisponible, likePattern } from './service.js';
@@ -96,10 +101,11 @@ const JOUR_MS = 86_400_000;
 const rdvDeLAffaire = sql`r.instance_id = ${currentInstance} and r.statut = 'rdv' and (
   exists (select 1 from rdv_affaires x
     where x.rendez_vous_id = r.id and x.opportunite_id = "opportunites"."id")
-  or exists (select 1 from rdv_contacts x
+  or (not exists (select 1 from rdv_affaires x where x.rendez_vous_id = r.id) and (
+  exists (select 1 from rdv_contacts x
     where x.rendez_vous_id = r.id and x.contact_id = "opportunites"."contact_id")
   or exists (select 1 from rdv_entreprises x
-    where x.rendez_vous_id = r.id and x.entreprise_id = "opportunites"."entreprise_id")
+    where x.rendez_vous_id = r.id and x.entreprise_id = "opportunites"."entreprise_id")))
 )`;
 
 export async function getPipeline(db: Executor, instance: Instance, maintenant = new Date()) {
@@ -132,6 +138,17 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
           where ${rdvDeLAffaire} and r.debut >= ${maintenant})`,
         aUnRdv: sql<boolean>`exists (select 1 from rendez_vous r where ${rdvDeLAffaire})`,
         classement: classementAffaire,
+        tentatives: touchesRadar,
+        canalRadar: sql<
+          string | null
+        >`coalesce((select case when lower(t.titre) like '%linkedin%' then 'LinkedIn'
+          when t.canal = 'appel' then 'Téléphone' when t.canal = 'email' then 'E-mail' end
+          from taches t where t.instance_id = ${currentInstance} and t.fait_at is not null
+          and (t.opportunite_id = "opportunites"."id" or (t.opportunite_id is null and t.contact_id = "opportunites"."contact_id"))
+          order by t.fait_at desc, t.id limit 1), (select 'E-mail' from contact_echanges_mail m
+          where m.instance_id = ${currentInstance} and m.envoyes > 0 and
+          (m.contact_id = "opportunites"."contact_id" or exists (select 1 from affaire_contacts ac
+          where ac.opportunite_id = "opportunites"."id" and ac.contact_id = m.contact_id)) limit 1))`,
         diagnostic: diagnosticDeLAffaire,
       })
       .from(opportunites)
@@ -194,7 +211,9 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         ({ derniereActivite, creeLe, prochainRdv, aUnRdv, classement, diagnostic, ...o }) => {
           const prochaine = o.clos ? null : (prochaines.get(o.id) ?? null);
           const depuis = derniereActivite ?? creeLe;
-          const etape = o.clos ? o.etape : etapeVue(o.etape, diagnostic);
+          const etape = o.clos ? o.etape : etapeVue(o.etape, diagnostic || aUnRdv);
+          const avantQualification =
+            (rang.get(o.etape) ?? Infinity) < (rang.get(qualification ?? '') ?? 0);
           return {
             ...o,
             etape,
@@ -205,7 +224,10 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
             // Ouverte sans rendez-vous ni diagnostic : une personne encore en prospection.
             sansRdv: !o.clos && !aUnRdv && !diagnostic,
             // Sans rendez-vous ni diagnostic, et déjà approchée : suivie dans le Radar, plus ici.
-            radar: !o.clos && !aUnRdv ? classement : null,
+            radar:
+              !o.clos && !aUnRdv && !diagnostic
+                ? (classement ?? (avantQualification ? 'a_contacter' : null))
+                : null,
             prochainRdv: o.clos || !prochainRdv ? null : new Date(prochainRdv).toISOString(),
             prochaine: prochaine
               ? { echeance: prochaine.toISOString(), enRetard: prochaine < aujourdhui }

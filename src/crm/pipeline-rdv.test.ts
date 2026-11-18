@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
+import { lierRdv } from '../conversion/rdv.js';
+import { eq } from 'drizzle-orm';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { ETAPES_NATIVES, getPipeline } from './pipeline.js';
@@ -87,6 +89,7 @@ describe('Pipeline : rendez-vous des affaires', () => {
     expect(parEntreprise.id).toBeTruthy();
     const a = await lue('ParAffaire');
     expect(a.sansRdv).toBe(false);
+    expect(a).toMatchObject({ id: parAffaire.id, etape: 'qualification', radar: null });
     // Le plus proche des deux rendez-vous à venir.
     expect(a.prochainRdv).toBe(jour(1).toISOString());
     expect((await lue('ParContact')).prochainRdv).toBe(jour(5).toISOString());
@@ -99,6 +102,31 @@ describe('Pipeline : rendez-vous des affaires', () => {
       .insert(rdvAffaires)
       .values({ instanceId: inst.id, rendezVousId: await rdv(jour(-4)), opportuniteId: o.id });
     expect(await lue('Passé')).toMatchObject({ sansRdv: false, prochainRdv: null });
+  });
+
+  it('respecte le lien explicite quand deux affaires partagent une entreprise', async () => {
+    const [societe] = await t.owner.db
+      .insert(entreprises)
+      .values({ instanceId: inst.id, nom: 'Société de test' })
+      .returning();
+    const premiere = await affaire('Mission A', { entrepriseId: societe!.id });
+    await affaire('Mission B', { entrepriseId: societe!.id });
+    const rendezVousId = await rdv(jour(3));
+    const [reunion] = await t.owner.db
+      .select()
+      .from(rendezVous)
+      .where(eq(rendezVous.id, rendezVousId));
+    await lierRdv(t.app.db, inst, reunion!.eventId, 'affaire', premiere.id);
+    const [enregistree] = await t.owner.db
+      .select()
+      .from(opportunites)
+      .where(eq(opportunites.id, premiere.id));
+    expect(enregistree?.etape).toBe('qualification');
+    await t.owner.db
+      .insert(rdvEntreprises)
+      .values({ instanceId: inst.id, rendezVousId, entrepriseId: societe!.id });
+    expect(await lue('Mission A')).toMatchObject({ radar: null, etape: 'qualification' });
+    expect(await lue('Mission B')).toMatchObject({ radar: 'a_contacter', tentatives: 0 });
   });
 
   it('ignore un créneau écarté, et ne marque jamais une affaire close', async () => {

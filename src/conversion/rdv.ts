@@ -27,6 +27,7 @@ import {
 } from '../crm/schema.js';
 import type { Executor, Tx } from '../db.js';
 import { contactsParEmails } from '../crm/emails.js';
+import { ETAPES_NATIVES, pipelineSource } from '../crm/pipeline.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
@@ -719,6 +720,28 @@ export async function lierRdv(
     } else {
       await verifierCible(tx, kind, id);
       await ajouterLien(tx, rdvId, kind, id);
+      if (kind === 'affaire' && (await pipelineSource(tx)).source === 'natif') {
+        // La liaison et le passage de la même affaire en Qualification sont atomiques.
+        const avantQualification = ETAPES_NATIVES.slice(
+          0,
+          ETAPES_NATIVES.findIndex((e) => e.id === 'qualification'),
+        );
+        await tx
+          .update(opportunites)
+          .set({ etape: 'qualification', updatedAt: new Date() })
+          .where(
+            and(
+              eq(opportunites.instanceId, currentInstance),
+              eq(opportunites.id, id),
+              isNull(opportunites.clos),
+              inArray(
+                opportunites.etape,
+                avantQualification.map((e) => e.id),
+              ),
+              sql`exists (select 1 from rendez_vous r where r.id = ${rdvId} and r.statut = 'rdv')`,
+            ),
+          );
+      }
     }
     await logEvent(tx, { acteur: 'pilote', action: 'Rendez-vous relié', niveau: 'L2' });
     return { ok: true };

@@ -701,12 +701,7 @@ export function Pipeline({ slug }: { slug: string }) {
         {auRadar.length > 0 ? (
           <>
             {auRadar.length} affaire{auRadar.length > 1 ? 's' : ''} sans rendez-vous{' '}
-            {auRadar.length > 1 ? 'sont suivies' : 'est suivie'} dans le Radar (approchées sans
-            réponse ou réponse reçue).{' '}
-            <a className="link" href={`#/${slug}/radar`}>
-              Ouvrir le Radar
-            </a>
-            {' · '}
+            {auRadar.length > 1 ? 'sont suivies' : 'est suivie'} dans le Radar. {' · '}
           </>
         ) : null}
         {libelleLecture(lecture)}
@@ -736,16 +731,31 @@ export function Pipeline({ slug }: { slug: string }) {
             </span>
           </div>
           <div className="board">
-            {data.etapes.flatMap((e, k) => [
-              col(
-                e.id,
-                e.label,
-                ouvertes.filter((o) => o.etape === e.id),
-                '',
-                e.probabilite ?? null,
-              ),
-              arrow(k),
-            ])}
+            <section className="col radar-raccourci">
+              <div className="col-h">
+                <b>
+                  Radar <span>{auRadar.length}</span>
+                </b>
+                <a className="link" href={`#/${slug}/radar`}>
+                  Ouvrir le Radar
+                </a>
+              </div>
+            </section>
+            {data.etapes.flatMap((e, k) =>
+              k < data.etapes.findIndex((s) => s.label.toLowerCase().includes('qualif')) &&
+              !ouvertes.some((o) => o.etape === e.id)
+                ? []
+                : [
+                    col(
+                      e.id,
+                      e.label,
+                      ouvertes.filter((o) => o.etape === e.id),
+                      '',
+                      e.probabilite ?? null,
+                    ),
+                    arrow(k),
+                  ],
+            )}
             {afficherCloses &&
               col(
                 'gagne',
