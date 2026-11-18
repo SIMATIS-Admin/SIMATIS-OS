@@ -217,7 +217,7 @@ describe('Affaires sans rendez-vous rangées par la messagerie', () => {
     const radar = (titre: string) => pipe.opportunites.find((o) => o.titre === titre)?.radar;
     expect(radar('Muette')).toBe('sans_reponse');
     expect(radar('Collègue')).toBe('repondu');
-    expect(radar('Jamais')).toBeNull();
+    expect(radar('Jamais')).toBe('a_contacter');
     expect(radar('AvecRdv')).toBeNull();
   });
 
@@ -225,7 +225,7 @@ describe('Affaires sans rendez-vous rangées par la messagerie', () => {
     const pipe = await getPipeline(t.app.db, inst);
     const radar = (titre: string) => pipe.opportunites.find((o) => o.titre === titre)?.radar;
     expect(radar('LinkedIn')).toBe('sans_reponse');
-    expect(radar('AFaire')).toBeNull();
+    expect(radar('AFaire')).toBe('a_contacter');
   });
 
   it('garde au Pipeline, au moins en Qualification, une affaire avec diagnostic', async () => {

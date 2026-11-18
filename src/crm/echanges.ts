@@ -84,6 +84,19 @@ const tacheFaite = sql`exists (select 1 from taches t
     or t.entreprise_id = "opportunites"."entreprise_id"
     or t.contact_id in ${contactsDeLAffaire}))`;
 
+// Un mail enregistré comme tâche peut aussi être présent dans la messagerie.
+export const touchesRadar = sql<number>`greatest(
+  coalesce((select max(m.envoyes) from contact_echanges_mail m
+    where m.instance_id = "opportunites"."instance_id" and m.contact_id in ${contactsDeLAffaire}), 0),
+  (select count(*) from taches t where t.instance_id = "opportunites"."instance_id"
+    and t.fait_at is not null and t.canal = 'email' and
+    (t.opportunite_id = "opportunites"."id" or (t.opportunite_id is null and t.contact_id in ${contactsDeLAffaire})))
+) + (select count(*) from taches t where t.instance_id = "opportunites"."instance_id"
+  and t.fait_at is not null and t.canal <> 'email' and
+  (t.opportunite_id = "opportunites"."id" or (t.opportunite_id is null and t.contact_id in ${contactsDeLAffaire})))`.mapWith(
+  Number,
+);
+
 // Ranking of the deal on the current row: answered by mail, or approached (mail sent or task done)
 // without an answer. None for a deal with a diagnostic, or never approached.
 export const classementAffaire = sql<Classement | null>`(case

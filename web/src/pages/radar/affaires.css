@@ -1,0 +1,65 @@
+.radar-affaires .radar-carte-lien {
+  display: grid;
+  gap: 3px;
+}
+.passage-qualification {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.radar-affaires-grille .radar-colonne {
+  max-height: 620px;
+  overflow: auto;
+}
+.radar-affaires-grille {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 1fr);
+  align-items: start;
+  gap: 16px;
+  margin: 16px 0;
+}
+.radar-affaires-grille .panel {
+  padding: 16px;
+  text-align: center;
+}
+.radar-affaires-grille svg {
+  width: 100%;
+  max-height: 540px;
+  display: block;
+}
+.radar-affaires-grille text {
+  fill: var(--ink);
+  font-size: 13px;
+}
+.radar-affaires-grille .anneau {
+  fill: none;
+  stroke: var(--line);
+}
+.radar-affaires-grille .point {
+  fill: var(--navy);
+  stroke: var(--white);
+  stroke-width: 2;
+}
+.radar-affaires-grille .balayage {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: radar-affaires-tour 14s linear infinite;
+  pointer-events: none;
+}
+@keyframes radar-affaires-tour {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .radar-affaires-grille .balayage {
+    animation: none;
+  }
+}
+@media (max-width: 760px) {
+  .radar-affaires-grille {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

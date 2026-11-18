@@ -29,7 +29,10 @@ const Agenda = lazy(() => import('./pages/Agenda.js').then((m) => ({ default: m.
 const Atelier = lazy(() => import('./pages/Atelier.js').then((m) => ({ default: m.Atelier })));
 const Bases = lazy(() => import('./pages/Bases.js').then((m) => ({ default: m.Bases })));
 const Bientot = lazy(() => import('./pages/Bientot.js').then((m) => ({ default: m.Bientot })));
-const Radar = lazy(() => import('./pages/Radar.js').then((m) => ({ default: m.Radar })));
+const Radar = lazy(() =>
+  import('./pages/RadarAffaires.js').then((m) => ({ default: m.RadarAffaires })),
+);
+const SuiviProspection = lazy(() => import('./pages/Radar.js').then((m) => ({ default: m.Radar })));
 const Icp = lazy(() => import('./pages/Icp.js').then((m) => ({ default: m.Icp })));
 const Recherches = lazy(() =>
   import('./pages/Recherches.js').then((m) => ({ default: m.Recherches })),
@@ -292,6 +295,8 @@ export function App() {
           />
         );
       case 'prospection':
+        if (route.kind === 'ouvrir' && route.id === 'suivi')
+          return <SuiviProspection slug={current.slug} />;
         return (
           <Prospection
             key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
