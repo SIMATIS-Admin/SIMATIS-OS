@@ -6,7 +6,13 @@ import {
   normaliserTelephone,
   texte,
 } from '../base-vivante/nettoyage.js';
-import { CONFIANCES, MODES_EMAIL, type Suggestion, type TypeEnrichissement } from './schema.js';
+import {
+  CONFIANCE_DE_PREUVE,
+  MODES_EMAIL,
+  type Preuve,
+  type Suggestion,
+  type TypeEnrichissement,
+} from './schema.js';
 
 export type Candidat = Pick<
   Suggestion,
@@ -20,6 +26,7 @@ export type Candidat = Pick<
   | 'sourceUrl'
   | 'confiance'
   | 'modeEmail'
+  | 'preuve'
 >;
 
 export type FicheAEnrichir = {
@@ -55,7 +62,6 @@ export const SCHEMA_REPONSE = {
           'linkedin',
           'telephone',
           'sourceUrl',
-          'confiance',
           'modeEmail',
         ],
         properties: {
@@ -67,7 +73,6 @@ export const SCHEMA_REPONSE = {
           linkedin: nullable,
           telephone: nullable,
           sourceUrl: nullable,
-          confiance: { type: 'string', enum: [...CONFIANCES] },
           modeEmail: { type: ['string', 'null'], enum: [...MODES_EMAIL, null] },
         },
       },
@@ -114,7 +119,6 @@ const reponseSchema = z.object({
       linkedin: z.string().nullish(),
       telephone: z.string().nullable(),
       sourceUrl: z.string().nullable(),
-      confiance: z.enum(CONFIANCES),
       modeEmail: z.enum(MODES_EMAIL).nullable(),
     }),
   ),
@@ -132,7 +136,39 @@ const cle = (c: Candidat) =>
 const remplissage = (c: Candidat) =>
   [c.prenom, c.nom, c.fonction, c.email, c.telephone].filter(Boolean).length;
 
-export function analyserReponse(json: unknown, max: number): Candidat[] {
+// « https://www.atelier-fictif.test/contact » → « atelier-fictif.test ».
+export function domaineDeFiche(domaine: string | null): string | null {
+  const d = (domaine ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z]+:\/\//, '')
+    .replace(/^www\./, '')
+    .split(/[/?#]/)[0];
+  return d && d.includes('.') ? d : null;
+}
+
+// Une preuve se constate (page https citée, mail publié, domaine de la fiche) : le modèle n'en donne pas.
+export function preuveDe(c: {
+  sourcee: boolean;
+  email: string | null;
+  modeEmail: 'trouve' | 'deduit' | null;
+  domaineFiche: string | null;
+}): Preuve {
+  if (!c.sourcee) return c.modeEmail === 'deduit' ? 'deduit' : 'sans_source';
+  if (!c.email) return 'page_sans_mail';
+  if (c.modeEmail === 'deduit') return 'deduit';
+  const domaineMail = c.email.split('@')[1] ?? '';
+  const auDomaine =
+    c.domaineFiche !== null &&
+    (domaineMail === c.domaineFiche || domaineMail.endsWith(`.${c.domaineFiche}`));
+  return auDomaine ? 'page_domaine' : 'page_publiee';
+}
+
+export function analyserReponse(
+  json: unknown,
+  max: number,
+  contexte: { domaine?: string | null } = {},
+): Candidat[] {
   const lu = reponseSchema.safeParse(json);
   if (!lu.success) throw new ErreurAnalyse('Réponse hors schéma');
   const parPersonne = new Map<string, Candidat>();
@@ -141,6 +177,15 @@ export function analyserReponse(json: unknown, max: number): Candidat[] {
     const sourcee = url !== null && url.startsWith('https://') && URL.canParse(url);
     // normaliserEmail garde le dernier morceau d'un texte à espaces : on refuse « a b@x.test ».
     const email = /\s/.test(texte(brut.email) ?? '') ? null : normaliserEmail(brut.email);
+    const modeEmail =
+      !email || emailGenerique(email) ? null : sourcee ? (brut.modeEmail ?? 'trouve') : 'deduit';
+    const emailRetenu = emailGenerique(email) ? null : email;
+    const preuve = preuveDe({
+      sourcee,
+      email: emailRetenu,
+      modeEmail,
+      domaineFiche: domaineDeFiche(contexte.domaine ?? null),
+    });
     const c: Candidat = {
       prenom: texte(brut.prenom),
       nom: texte(brut.nom),
@@ -155,9 +200,9 @@ export function analyserReponse(json: unknown, max: number): Candidat[] {
       // Sans page https derrière, un téléphone n'est pas retenu et un mail reste une simple déduction.
       telephone: sourcee ? normaliserTelephone(brut.telephone) : null,
       sourceUrl: sourcee ? url : null,
-      confiance: sourcee ? brut.confiance : 'basse',
-      modeEmail:
-        !email || emailGenerique(email) ? null : sourcee ? (brut.modeEmail ?? 'trouve') : 'deduit',
+      confiance: CONFIANCE_DE_PREUVE[preuve],
+      modeEmail,
+      preuve,
     };
     if (!c.nom && !c.email && !c.telephone) continue;
     const existant = parPersonne.get(cle(c));

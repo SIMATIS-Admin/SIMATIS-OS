@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { analyserReponse, consigne, entree, ErreurAnalyse } from './analyse.js';
+import {
+  analyserReponse,
+  consigne,
+  domaineDeFiche,
+  entree,
+  ErreurAnalyse,
+  SCHEMA_REPONSE,
+} from './analyse.js';
 
 const contact = (extra: Record<string, unknown> = {}) => ({
   prenom: 'Claire',
@@ -8,7 +15,6 @@ const contact = (extra: Record<string, unknown> = {}) => ({
   email: 'claire.martin@atelier-fictif.test',
   telephone: '04 50 12 34 56',
   sourceUrl: 'https://atelier-fictif.test/equipe',
-  confiance: 'haute',
   modeEmail: 'trouve',
   ...extra,
 });
@@ -122,5 +128,62 @@ describe('analyse de la réponse', () => {
     );
     expect(r).toHaveLength(1);
     expect(r[0]?.email).toBe('claire.martin@atelier-fictif.test');
+  });
+});
+
+describe('preuve constatée par l’OS', () => {
+  it('ne demande plus de confiance au modèle et ignore celle qu’il enverrait', () => {
+    expect(SCHEMA_REPONSE.properties.contacts.items.required).not.toContain('confiance');
+    const [c] = analyserReponse({ contacts: [contact({ confiance: 'haute' })] }, 1);
+    expect(c).toMatchObject({ preuve: 'page_publiee', confiance: 'moyenne' });
+  });
+
+  it('mail publié sur une page citée, au domaine de la fiche : preuve forte', () => {
+    const [c] = analyserReponse({ contacts: [contact()] }, 1, { domaine: 'atelier-fictif.test' });
+    expect(c).toMatchObject({ preuve: 'page_domaine', confiance: 'haute' });
+  });
+
+  it('accepte un sous-domaine et un domaine écrit comme une adresse de site', () => {
+    const [c] = analyserReponse(
+      { contacts: [contact({ email: 'claire@achats.atelier-fictif.test' })] },
+      1,
+      { domaine: 'https://www.atelier-fictif.test/contact' },
+    );
+    expect(c?.preuve).toBe('page_domaine');
+  });
+
+  it('un autre domaine que celui de la fiche n’est pas une preuve forte', () => {
+    const [c] = analyserReponse({ contacts: [contact()] }, 1, { domaine: 'autre-societe.test' });
+    expect(c?.preuve).toBe('page_publiee');
+    const [d] = analyserReponse(
+      { contacts: [contact({ email: 'x@pas-atelier-fictif.test' })] },
+      1,
+      {
+        domaine: 'atelier-fictif.test',
+      },
+    );
+    expect(d?.preuve).toBe('page_publiee');
+  });
+
+  it('page citée sans mail, mail déduit, absence de source', () => {
+    const ctx = { domaine: 'atelier-fictif.test' };
+    const [sansMail] = analyserReponse({ contacts: [contact({ email: null })] }, 1, ctx);
+    expect(sansMail?.preuve).toBe('page_sans_mail');
+    const [deduit] = analyserReponse({ contacts: [contact({ modeEmail: 'deduit' })] }, 1, ctx);
+    expect(deduit).toMatchObject({ preuve: 'deduit', confiance: 'basse' });
+    const [sansSource] = analyserReponse({ contacts: [contact({ sourceUrl: null })] }, 1, ctx);
+    expect(sansSource).toMatchObject({ preuve: 'deduit', confiance: 'basse' });
+    const [rien] = analyserReponse(
+      { contacts: [contact({ sourceUrl: null, email: null })] },
+      1,
+      ctx,
+    );
+    expect(rien).toMatchObject({ preuve: 'sans_source', confiance: 'basse' });
+  });
+
+  it('domaineDeFiche', () => {
+    expect(domaineDeFiche('HTTPS://www.Atelier-Fictif.test/a?b')).toBe('atelier-fictif.test');
+    expect(domaineDeFiche('atelier')).toBeNull();
+    expect(domaineDeFiche(null)).toBeNull();
   });
 });

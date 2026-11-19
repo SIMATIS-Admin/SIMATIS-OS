@@ -1,4 +1,13 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { baseVivante } from '../base-vivante/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
@@ -9,6 +18,31 @@ export const ETATS_LIGNE = ['attente', 'en_cours', 'terminee', 'echec', 'ignoree
 export const ETATS_SUGGESTION = ['a_valider', 'acceptee', 'refusee'] as const;
 export const CONFIANCES = ['haute', 'moyenne', 'basse'] as const;
 export const MODES_EMAIL = ['trouve', 'deduit'] as const;
+// Ce que l'OS a pu constater lui-même sur une suggestion : le modèle ne note jamais sa propre
+// certitude, il se noterait trop bien. « page_domaine » est la seule preuve qui écrit sans validation.
+export const PREUVES = [
+  'page_domaine',
+  'page_publiee',
+  'page_sans_mail',
+  'deduit',
+  'sans_source',
+] as const;
+export type Preuve = (typeof PREUVES)[number];
+export const LIBELLES_PREUVE: Record<Preuve, string> = {
+  page_domaine: 'mail publié sur une page, au domaine de l’entreprise',
+  page_publiee: 'mail publié sur une page citée',
+  page_sans_mail: 'page citée, sans mail publié',
+  deduit: 'mail déduit',
+  sans_source: 'sans source',
+};
+// Niveau dérivé de la preuve, gardé pour les écrans et les notes déjà en base.
+export const CONFIANCE_DE_PREUVE: Record<Preuve, (typeof CONFIANCES)[number]> = {
+  page_domaine: 'haute',
+  page_publiee: 'moyenne',
+  page_sans_mail: 'moyenne',
+  deduit: 'basse',
+  sans_source: 'basse',
+};
 
 // Un lancement d'enrichissement sur un lot de fiches de la base vivante.
 export const enrichissementTaches = pgTable(
@@ -74,6 +108,10 @@ export const enrichissementSuggestions = pgTable(
     sourceUrl: text('source_url'),
     confiance: text('confiance', { enum: CONFIANCES }).notNull(),
     modeEmail: text('mode_email', { enum: MODES_EMAIL }),
+    // Vide pour les suggestions antérieures au calcul de la preuve.
+    preuve: text('preuve', { enum: PREUVES }),
+    // Appliquée sans validation parce que la preuve est forte et que les champs étaient vides.
+    appliqueeAuto: boolean('appliquee_auto').notNull().default(false),
     etat: text('etat', { enum: ETATS_SUGGESTION }).notNull().default('a_valider'),
   },
   (t) => [
