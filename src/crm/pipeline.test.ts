@@ -324,6 +324,44 @@ describe('pipeline API', () => {
       expect((await patch({ probabiliteManuelle: mauvais })).status).toBe(400);
   });
 
+  it('stores a manual Radar stage and a commercial origin locally', async () => {
+    const creee = await req('POST', '/api/i/simatis/opportunites', {
+      titre: 'Origine et Radar',
+      montant: 6000,
+      etape: 'prospection',
+    });
+    const id = (creee.body as { id: string }).id;
+    const patch = (body: unknown) => req('PATCH', `/api/i/simatis/fiches/affaire/${id}`, body);
+
+    const modifiee = await patch({
+      radarEtapeManuelle: 2,
+      origineCommerciale: 'Salon fictif',
+    });
+    expect(modifiee.status).toBe(200);
+    expect(modifiee.body).toMatchObject({
+      fiche: {
+        origine: 'os',
+        origineCommerciale: 'Salon fictif',
+        radarEtapeManuelle: 2,
+      },
+    });
+
+    const pipeline = await req('GET', '/api/i/simatis/pipeline');
+    expect(
+      (
+        pipeline.body.opportunites as {
+          id: string;
+          origineCommerciale: string | null;
+          radarEtapeManuelle: number | null;
+        }[]
+      ).find((o) => o.id === id),
+    ).toMatchObject({ origineCommerciale: 'Salon fictif', radarEtapeManuelle: 2 });
+
+    for (const mauvais of [-1, 4, 1.5])
+      expect((await patch({ radarEtapeManuelle: mauvais })).status).toBe(400);
+    expect((await patch({ radarEtapeManuelle: null })).status).toBe(200);
+  });
+
   it('creates a spot deal by default and a recurring one with its commitment, and patches it', async () => {
     const spot = await req('POST', '/api/i/simatis/opportunites', {
       titre: 'Mission ponctuelle',

@@ -135,6 +135,7 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         entreprise: entreprises.nom,
         contact: contacts.nom,
         origineCommerciale: opportunites.origine,
+        radarEtapeManuelle: opportunites.radarEtapeManuelle,
         // Rendez-vous commerciaux liés à l'affaire, à son contact ou à son entreprise.
         prochainRdv: sql<Date | null>`(select min(r.debut) from rendez_vous r
           where ${rdvDeLAffaire} and r.debut >= ${maintenant})`,

@@ -805,6 +805,7 @@ export type PipelineOpp = {
   tentatives?: number;
   canalRadar?: string | null;
   origineCommerciale?: string | null;
+  radarEtapeManuelle: number | null;
   // Prochain rendez-vous commercial lié à l'affaire, à son contact ou à son entreprise.
   prochainRdv: string | null;
 };

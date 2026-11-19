@@ -93,6 +93,9 @@ export const opportunites = pgTable(
     proprietaire: text('proprietaire'),
     // Where the deal came from (fair, network…); `source` is the tool the record was copied from.
     origine: text('origine'),
+    // Manual placement inside the Radar (0-3). Null keeps the automatic placement derived from
+    // outreach attempts and replies. OS-only: this is never written back to the CRM.
+    radarEtapeManuelle: integer('radar_etape_manuelle'),
     qualification: jsonb('qualification').$type<Qualification>(),
     potentiel: text('potentiel'),
     faisabilite: text('faisabilite'),

@@ -44,6 +44,7 @@ type Champ = {
 const CHAMPS: Record<KindFiche, Champ[]> = {
   affaire: [
     { cle: 'titre', label: 'Titre' },
+    { cle: 'origineCommerciale', label: 'Origine commerciale' },
     { cle: 'montant', label: 'Valeur', type: 'number', affiche: (v) => (v ? eur(Number(v)) : '') },
     {
       cle: 'echeance',
@@ -398,6 +399,9 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
     return types.length === 0 || types.includes(e.type);
   });
   const etapeCourante = data.etapes?.find((e) => e.id === f.etape);
+  const rangEtape = data.etapes?.findIndex((e) => e.id === f.etape) ?? -1;
+  const universAffaire =
+    kind === 'affaire' ? (rangEtape >= 0 && rangEtape < 2 ? 'Radar' : 'Pipeline') : null;
 
   return (
     <section className="commercial-fiche" data-rubrique={rubrique}>
@@ -428,6 +432,11 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
                 <Icon name="users" />
                 {data.liens.contact.nom}
               </a>
+            )}
+            {universAffaire && (
+              <span className={`badge ${universAffaire === 'Radar' ? 'green' : 'blue'}`}>
+                {universAffaire}
+              </span>
             )}
             <span className={`badge ${hubspot ? 'blue' : ''}`}>{hubspot ? 'HubSpot' : 'OS'}</span>
             <PastilleInstance

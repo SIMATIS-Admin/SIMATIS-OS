@@ -455,10 +455,14 @@ export function Pipeline({ slug }: { slug: string }) {
       .normalize('NFD')
       .replace(/\p{Diacritic}/gu, '')
       .toLowerCase();
-  // Affaires sans rendez-vous déjà approchées : suivies dans le Radar, plus ici (HubSpot inchangé).
-  const auRadar = data.opportunites.filter((o) => !o.clos && o.radar);
+  // Les deux premières étapes appartiennent au Radar. Le Pipeline commence à l'étape 2.
+  const rangEtape = new Map(data.etapes.map((etape, index) => [etape.id, index]));
+  const limiteRadar = Math.min(2, data.etapes.length);
+  const estAuRadar = (o: PipelineOpp) =>
+    !o.clos && (rangEtape.get(o.etape) ?? Infinity) < limiteRadar;
+  const auRadar = data.opportunites.filter(estAuRadar);
   const visibles = data.opportunites.filter((o) => {
-    if (!o.clos && o.radar) return false;
+    if (estAuRadar(o)) return false;
     const correspond = normaliser([o.titre, o.entreprise, o.contact].join(' ')).includes(
       normaliser(recherche.trim()),
     );
@@ -734,28 +738,26 @@ export function Pipeline({ slug }: { slug: string }) {
             <section className="col radar-raccourci">
               <div className="col-h">
                 <b>
-                  Radar <span>{auRadar.length}</span>
+                  1 — Radar <span>{auRadar.length}</span>
                 </b>
                 <a className="link" href={`#/${slug}/radar`}>
                   Ouvrir le Radar
                 </a>
               </div>
             </section>
-            {data.etapes.flatMap((e, k) =>
-              k < data.etapes.findIndex((s) => s.label.toLowerCase().includes('qualif')) &&
-              !ouvertes.some((o) => o.etape === e.id)
-                ? []
-                : [
-                    col(
-                      e.id,
-                      e.label,
-                      ouvertes.filter((o) => o.etape === e.id),
-                      '',
-                      e.probabilite ?? null,
-                    ),
-                    arrow(k),
-                  ],
-            )}
+            {data.etapes.slice(limiteRadar).flatMap((e, offset) => {
+              const k = offset + limiteRadar;
+              return [
+                col(
+                  e.id,
+                  e.label,
+                  ouvertes.filter((o) => o.etape === e.id),
+                  '',
+                  e.probabilite ?? null,
+                ),
+                arrow(k),
+              ];
+            })}
             {afficherCloses &&
               col(
                 'gagne',

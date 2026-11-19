@@ -46,6 +46,12 @@
   gap: 7px;
   min-height: 40px;
 }
+.ra-toolbar .seg button.on,
+.ra-toolbar .seg button[aria-pressed='true'] {
+  background: #125a70;
+  color: var(--white);
+  box-shadow: 0 1px 3px #12253f24;
+}
 .ra-toolbar svg,
 .ra-footer svg,
 .ra-search svg,
@@ -370,6 +376,9 @@
   font-size: 12px;
   color: var(--ink-2);
 }
+.ra-identite .ra-origine {
+  color: #52677d;
+}
 .ra-touches {
   font-size: 17px;
   color: var(--ink);
@@ -438,6 +447,16 @@
   overflow-wrap: anywhere;
   font-weight: 500;
 }
+.ra-deplacer {
+  display: grid;
+  gap: 5px;
+  margin: 16px 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.ra-deplacer .input {
+  width: 100%;
+}
 .ra-resume > .btn {
   text-decoration: none;
   width: 100%;
@@ -488,6 +507,11 @@
   padding: 13px 10px;
   min-height: 300px;
 }
+.ra-colonne.depot {
+  background: #e1f3ee;
+  outline: 2px solid var(--teal);
+  outline-offset: -2px;
+}
 .ra-colonne > header {
   display: flex;
   justify-content: space-between;
@@ -501,12 +525,6 @@
 .ra-colonne > header > span {
   font-size: 12px;
   color: var(--ink-2);
-}
-.ra-colonne > p {
-  font-size: 12px;
-  color: var(--ink-2);
-  padding: 4px 3px 13px;
-  margin: 0;
 }
 .ra-colonne .ra-affaire {
   border: 1px solid var(--line);

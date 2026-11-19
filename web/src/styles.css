@@ -1604,6 +1604,16 @@ textarea.input {
 .col.drop {
   background: #ddf3ee;
 }
+.col.radar-raccourci {
+  background: #e1e7ec;
+  color: var(--ink-2);
+}
+.col.radar-raccourci .col-h {
+  gap: 8px;
+}
+.col.radar-raccourci .link {
+  min-height: 32px;
+}
 .col-h {
   display: flex;
   flex-direction: column;
