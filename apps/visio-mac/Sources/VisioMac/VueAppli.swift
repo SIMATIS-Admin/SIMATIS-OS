@@ -6,11 +6,17 @@ private let marine = Color(red: 0.06, green: 0.16, blue: 0.32)
 private let rouge = Color(red: 0.89, green: 0.16, blue: 0.20)
 
 // La fenêtre de l'appli : le bouton d'enregistrement, les enregistrements et leur texte.
+@MainActor
+final class EtatVue: ObservableObject {
+    @Published var rendezVousChoisi = ""
+    @Published var ouverts: Set<String> = []
+    @Published var aSupprimer: EnregistrementResume?
+}
+
 struct VueAppli: View {
     @ObservedObject var modele: Modele
-    @State private var rendezVousChoisi = ""
-    @State private var ouverts: Set<String> = []
-    @State private var aSupprimer: EnregistrementResume?
+    // Objet observable plutôt que @State : la chaîne d'outils sans Xcode n'a pas le plugin de macro.
+    @StateObject private var etat = EtatVue()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,15 +36,15 @@ struct VueAppli: View {
         }
         .frame(minWidth: 460, minHeight: 560)
         .confirmationDialog(
-            "Supprimer « \(aSupprimer?.titre ?? "") » ?",
-            isPresented: Binding(get: { aSupprimer != nil }, set: { if !$0 { aSupprimer = nil } }),
+            "Supprimer « \(etat.aSupprimer?.titre ?? "") » ?",
+            isPresented: Binding(get: { etat.aSupprimer != nil }, set: { if !$0 { etat.aSupprimer = nil } }),
             titleVisibility: .visible
         ) {
             Button("Supprimer", role: .destructive) {
-                if let e = aSupprimer { modele.supprimer(e) }
-                aSupprimer = nil
+                if let e = etat.aSupprimer { modele.supprimer(e) }
+                etat.aSupprimer = nil
             }
-            Button("Annuler", role: .cancel) { aSupprimer = nil }
+            Button("Annuler", role: .cancel) { etat.aSupprimer = nil }
         } message: {
             Text("Son texte et son résumé seront perdus.")
         }
@@ -90,14 +96,14 @@ struct VueAppli: View {
                 }
                 .controlSize(.large).buttonStyle(.borderedProminent).tint(marine).disabled(modele.occupe)
             } else {
-                Picker("Pour le rendez-vous", selection: $rendezVousChoisi) {
+                Picker("Pour le rendez-vous", selection: $etat.rendezVousChoisi) {
                     Text("Enregistrement libre").tag("")
                     ForEach(modele.proches.prefix(8), id: \.id) { r in
                         Text("\(heure(r.debut))  \(r.titre)").tag(r.id)
                     }
                 }
                 Button {
-                    let rdv = modele.proches.first { $0.id == rendezVousChoisi }
+                    let rdv = modele.proches.first { $0.id == etat.rendezVousChoisi }
                     modele.demarrer(rendezVousId: rdv?.id, titre: rdv?.titre ?? "Enregistrement libre")
                 } label: {
                     Label("Enregistrer", systemImage: "record.circle").frame(maxWidth: .infinity)
@@ -123,10 +129,10 @@ struct VueAppli: View {
                             Text("\(jour(e.debutAt)) · \(e.etat)").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button(ouverts.contains(e.id) ? "Masquer" : "Voir") { basculer(e) }
-                        Button("Supprimer", role: .destructive) { aSupprimer = e }
+                        Button(etat.ouverts.contains(e.id) ? "Masquer" : "Voir") { basculer(e) }
+                        Button("Supprimer", role: .destructive) { etat.aSupprimer = e }
                     }
-                    if ouverts.contains(e.id) { detail(e) }
+                    if etat.ouverts.contains(e.id) { detail(e) }
                 }
                 .padding(12)
                 .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
@@ -154,8 +160,8 @@ struct VueAppli: View {
     }
 
     private func basculer(_ e: EnregistrementResume) {
-        if ouverts.contains(e.id) { ouverts.remove(e.id) } else {
-            ouverts.insert(e.id)
+        if etat.ouverts.contains(e.id) { etat.ouverts.remove(e.id) } else {
+            etat.ouverts.insert(e.id)
             modele.chargerDetail(e.id)
         }
     }
