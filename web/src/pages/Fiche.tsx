@@ -4,6 +4,7 @@ import {
   changeOpportunite,
   createTache,
   creerMandatDepuisAffaire,
+  fetchDevis,
   fetchFiche,
   fetchMailsFiche,
   fetchInstances,
@@ -330,8 +331,27 @@ type Carte = {
   lignes: LigneLien[];
 };
 
-export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: string }) {
+export function Fiche({
+  slug,
+  kind,
+  id,
+  devis = false,
+}: {
+  slug: string;
+  kind: KindFiche;
+  id: string;
+  // Le module Devis n'existe que dans l'instance propre : sans lui, aucun bouton.
+  devis?: boolean;
+}) {
   const [data, setData] = useState<FicheDetail | null>(null);
+  const [devisId, setDevisId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!devis || kind !== 'affaire') return;
+    fetchDevis(slug).then(
+      (l) => setDevisId(l.find((d) => d.opportuniteId === id)?.id ?? null),
+      () => setDevisId(null),
+    );
+  }, [slug, kind, id, devis]);
   const [message, setMessage] = useState<string | null>(null);
   const [onglet, setOnglet] = useState<'note' | 'activite'>('note');
   const [note, setNote] = useState('');
@@ -453,6 +473,18 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
           <Icon name="cal" />
           Nouvelle activité
         </button>
+        {devis && kind === 'affaire' && !f.clos && (
+          <button
+            className="btn"
+            onClick={() =>
+              (location.hash = devisId
+                ? `#/${slug}/devis/ouvrir/${devisId}`
+                : `#/${slug}/devis/affaire/${id}`)
+            }
+          >
+            {devisId ? 'Ouvrir le devis' : 'Préparer un devis'}
+          </button>
+        )}
         <ActionsFiche
           slug={slug}
           kind={kind}
