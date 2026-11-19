@@ -13,10 +13,16 @@ export function DevisAffaire({
   onChoisir: (opportuniteId: string) => void;
 }) {
   const [opps, setOpps] = useState<PipelineOpp[] | null>(null);
+  const [noms, setNoms] = useState<Record<string, string>>({});
   const [q, setQ] = useState('');
   useEffect(() => {
     fetchPipeline(slug).then(
-      (p) => setOpps(p.opportunites.filter((o) => !o.clos)),
+      (p) => {
+        setNoms(Object.fromEntries(p.etapes.map((e) => [e.id, e.label])));
+        // Une affaire encore au Radar (deux premières étapes) n'a pas de devis : elle n'est pas proposée.
+        const pipeline = new Set(p.etapes.slice(2).map((e) => e.id));
+        setOpps(p.opportunites.filter((o) => !o.clos && pipeline.has(o.etape)));
+      },
       () => setOpps([]),
     );
   }, [slug]);
@@ -47,7 +53,7 @@ export function DevisAffaire({
                 </td>
                 <td>
                   <span className={`badge ${o.etape === 'proposition' ? 'blue' : 'navy'}`}>
-                    {o.etape}
+                    {noms[o.etape] ?? o.etape}
                   </span>
                 </td>
                 <td className="r num">

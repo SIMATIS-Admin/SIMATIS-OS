@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { contacts, entreprises, opportunites } from '../crm/schema.js';
+import { pipelineSource } from '../crm/pipeline.js';
 import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
@@ -125,7 +126,12 @@ export async function creerDepuisAffaire(db: Executor, instance: Instance, oppor
       .select()
       .from(opportunites)
       .where(and(eq(opportunites.instanceId, currentInstance), eq(opportunites.id, opportuniteId)));
-    if (!opp) throw new DevisRefuse('Opportunité introuvable dans cette instance');
+    if (!opp) throw new DevisRefuse('Affaire introuvable dans cette instance');
+    const source = await pipelineSource(tx);
+    const rang = source.etapes.findIndex((etape) => etape.id === opp.etape);
+    if (opp.clos || rang < 2) {
+      throw new DevisRefuse('Le devis doit être rattaché à une affaire ouverte du Pipeline');
+    }
     const existants = await tx
       .select()
       .from(devis)

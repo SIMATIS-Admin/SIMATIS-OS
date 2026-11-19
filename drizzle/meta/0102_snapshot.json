@@ -1,5 +1,5 @@
 {
-  "id": "9452c098-506b-42d0-820f-478363f88e5c",
+  "id": "e81da6d0-47b2-4ede-a9ea-c7fc60273dbc",
   "prevId": "00836936-8950-4753-bf13-013cd0716a61",
   "version": "7",
   "dialect": "postgresql",
@@ -2219,103 +2219,6 @@
           "notNull": true,
           "default": "'brouillon'"
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "titre": {
-          "name": "titre",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "contexte": {
-          "name": "contexte",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "objectifs": {
-          "name": "objectifs",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "inclus": {
-          "name": "inclus",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "exclu": {
-          "name": "exclu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "livrables": {
-          "name": "livrables",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "duree": {
-          "name": "duree",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "debut": {
-          "name": "debut",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "remise_pct": {
-          "name": "remise_pct",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "acompte_pct": {
-          "name": "acompte_pct",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "frais": {
-          "name": "frais",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'refactures'"
-        },
-        "validite_jours": {
-          "name": "validite_jours",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 30
-        },
-        "clauses": {
-          "name": "clauses",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
         "lignes": {
           "name": "lignes",
           "type": "jsonb",
@@ -3942,6 +3845,19 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "radar_canal_manuel": {
+          "name": "radar_canal_manuel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "radar_etapes_dates": {
+          "name": "radar_etapes_dates",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "qualification": {
           "name": "qualification",

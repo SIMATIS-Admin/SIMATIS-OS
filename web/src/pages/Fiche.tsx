@@ -335,23 +335,22 @@ export function Fiche({
   slug,
   kind,
   id,
-  devis = false,
+  devisAutorise = false,
 }: {
   slug: string;
   kind: KindFiche;
   id: string;
-  // Le module Devis n'existe que dans l'instance propre : sans lui, aucun bouton.
-  devis?: boolean;
+  devisAutorise?: boolean;
 }) {
   const [data, setData] = useState<FicheDetail | null>(null);
   const [devisId, setDevisId] = useState<string | null>(null);
   useEffect(() => {
-    if (!devis || kind !== 'affaire') return;
+    if (!devisAutorise || kind !== 'affaire') return;
     fetchDevis(slug).then(
       (l) => setDevisId(l.find((d) => d.opportuniteId === id)?.id ?? null),
       () => setDevisId(null),
     );
-  }, [slug, kind, id, devis]);
+  }, [slug, kind, id, devisAutorise]);
   const [message, setMessage] = useState<string | null>(null);
   const [onglet, setOnglet] = useState<'note' | 'activite'>('note');
   const [note, setNote] = useState('');
@@ -473,7 +472,7 @@ export function Fiche({
           <Icon name="cal" />
           Nouvelle activité
         </button>
-        {devis && kind === 'affaire' && !f.clos && (
+        {devisAutorise && kind === 'affaire' && universAffaire === 'Pipeline' && !f.clos && (
           <button
             className="btn"
             onClick={() =>

@@ -335,6 +335,7 @@ describe('pipeline API', () => {
 
     const modifiee = await patch({
       radarEtapeManuelle: 2,
+      radarCanalManuel: 'LinkedIn',
       origineCommerciale: 'Salon fictif',
     });
     expect(modifiee.status).toBe(200);
@@ -343,23 +344,32 @@ describe('pipeline API', () => {
         origine: 'os',
         origineCommerciale: 'Salon fictif',
         radarEtapeManuelle: 2,
+        radarCanalManuel: 'LinkedIn',
       },
     });
 
     const pipeline = await req('GET', '/api/i/simatis/pipeline');
-    expect(
-      (
-        pipeline.body.opportunites as {
-          id: string;
-          origineCommerciale: string | null;
-          radarEtapeManuelle: number | null;
-        }[]
-      ).find((o) => o.id === id),
-    ).toMatchObject({ origineCommerciale: 'Salon fictif', radarEtapeManuelle: 2 });
+    const dansPipeline = (
+      pipeline.body.opportunites as {
+        id: string;
+        origineCommerciale: string | null;
+        radarEtapeManuelle: number | null;
+        radarEtapesDates: Record<string, string>;
+        canalRadar: string | null;
+      }[]
+    ).find((o) => o.id === id);
+    expect(dansPipeline).toMatchObject({
+      origineCommerciale: 'Salon fictif',
+      radarEtapeManuelle: 2,
+      canalRadar: 'LinkedIn',
+    });
+    expect(typeof dansPipeline?.radarEtapesDates['0']).toBe('string');
+    expect(typeof dansPipeline?.radarEtapesDates['2']).toBe('string');
 
     for (const mauvais of [-1, 4, 1.5])
       expect((await patch({ radarEtapeManuelle: mauvais })).status).toBe(400);
     expect((await patch({ radarEtapeManuelle: null })).status).toBe(200);
+    expect((await patch({ radarCanalManuel: 'Pigeon voyageur' })).status).toBe(400);
   });
 
   it('creates a spot deal by default and a recurring one with its commitment, and patches it', async () => {

@@ -1276,6 +1276,7 @@ export function registerApi(
       titre: texteCourt.min(1),
       origineCommerciale: texteCourt.nullable(),
       radarEtapeManuelle: z.number().int().min(0).max(3).nullable(),
+      radarCanalManuel: z.enum(['Téléphone', 'LinkedIn', 'E-mail', 'À préciser']).nullable(),
       nom: texteCourt.min(1),
       montant: z.number().int().min(0).nullable(),
       modeFacturation: z.enum(['spot', 'recurrent']),

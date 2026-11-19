@@ -136,15 +136,15 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         contact: contacts.nom,
         origineCommerciale: opportunites.origine,
         radarEtapeManuelle: opportunites.radarEtapeManuelle,
+        radarEtapesDates: opportunites.radarEtapesDates,
         // Rendez-vous commerciaux liés à l'affaire, à son contact ou à son entreprise.
         prochainRdv: sql<Date | null>`(select min(r.debut) from rendez_vous r
           where ${rdvDeLAffaire} and r.debut >= ${maintenant})`,
         aUnRdv: sql<boolean>`exists (select 1 from rendez_vous r where ${rdvDeLAffaire})`,
         classement: classementAffaire,
         tentatives: touchesRadar,
-        canalRadar: sql<
-          string | null
-        >`coalesce((select case when lower(t.titre) like '%linkedin%' then 'LinkedIn'
+        canalRadar: sql<string | null>`coalesce(${opportunites.radarCanalManuel},
+          (select case when lower(t.titre) like '%linkedin%' then 'LinkedIn'
           when t.canal = 'appel' then 'Téléphone' when t.canal = 'email' then 'E-mail' end
           from taches t where t.instance_id = ${currentInstance} and t.fait_at is not null
           and (t.opportunite_id = "opportunites"."id" or (t.opportunite_id is null and t.contact_id = "opportunites"."contact_id"))
@@ -246,6 +246,7 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
             // L'étape du CRM quand l'OS affiche l'affaire plus haut (diagnostic réalisé).
             etapeCrm: etape === o.etape ? null : o.etape,
             diagnostic,
+            creeLe: creeLe.toISOString(),
             derniereActivite: derniereActivite?.toISOString() ?? null,
             // Ouverte sans rendez-vous ni diagnostic : une personne encore en prospection.
             sansRdv: !o.clos && !aUnRdv && !diagnostic,

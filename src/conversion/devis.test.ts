@@ -24,7 +24,7 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
     await seedDemoIfEmpty(t.owner.db);
     simatis = (await getInstanceBySlug(t.app.db, 'simatis'))!;
     const { rows } = await t.owner.pool.query<{ id: string }>(
-      'select id from opportunites where instance_id = $1 and clos is null order by titre limit 4',
+      "select id from opportunites where instance_id = $1 and clos is null and etape in ('qualification', 'proposition', 'negociation') order by titre limit 4",
       [simatis.id],
     );
     affaires = rows.map((r) => r.id);
@@ -42,6 +42,18 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
   afterAll(async () => {
     await t.drop();
   });
+
+  // An open affair with no quote yet, moved into the Pipeline (a Radar affair gets no quote).
+  const affaireLibre = async () => {
+    const { rows } = await t.owner.pool.query<{ id: string }>(
+      'select id from opportunites where instance_id = $1 and clos is null and id not in (select opportunite_id from devis) limit 1',
+      [simatis.id],
+    );
+    await t.owner.pool.query("update opportunites set etape = 'qualification' where id = $1", [
+      rows[0]!.id,
+    ]);
+    return rows[0]!.id;
+  };
 
   const contenuDe = async (id: string) => {
     const d = await lireDevis(t.app.db, simatis, id);
@@ -158,10 +170,7 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
   });
 
   it('refuse de valider avec un titre ou un libellé de ligne vide, mais enregistre le brouillon', async () => {
-    const { rows } = await t.owner.pool.query<{ id: string }>(
-      'select id from opportunites where instance_id = $1 and clos is null and id <> all($2) limit 1',
-      [simatis.id, affaires],
-    );
+    const rows = [{ id: await affaireLibre() }];
     const { devis } = await creerDepuisAffaire(t.app.db, simatis, rows[0]!.id);
     const base = await contenuDe(devis.id);
     const vide = {
@@ -175,10 +184,7 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
   });
 
   it('deux créations simultanées pour la même affaire donnent un seul devis', async () => {
-    const { rows } = await t.owner.pool.query<{ id: string }>(
-      'select id from opportunites where instance_id = $1 and clos is null and id not in (select opportunite_id from devis) limit 1',
-      [simatis.id],
-    );
+    const rows = [{ id: await affaireLibre() }];
     const [a, b] = await Promise.all([
       creerDepuisAffaire(t.app.db, simatis, rows[0]!.id),
       creerDepuisAffaire(t.app.db, simatis, rows[0]!.id),

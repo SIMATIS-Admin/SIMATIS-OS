@@ -34,7 +34,7 @@ describe('Rendez-vous and Devis', () => {
   };
   const oppOf = async (slug: string) => {
     const { rows } = await t.owner.pool.query<{ id: string; contact_id: string }>(
-      "select o.id, o.contact_id from opportunites o join instances i on i.id = o.instance_id where i.slug = $1 and o.clos is null and o.etape in ('detection', 'prospection', 'qualification') and o.contact_id is not null order by o.titre limit 1",
+      "select o.id, o.contact_id from opportunites o join instances i on i.id = o.instance_id where i.slug = $1 and o.clos is null and o.etape in ('qualification', 'proposition', 'negociation') and o.contact_id is not null order by o.titre limit 1",
       [slug],
     );
     if (!rows[0]) throw new Error('no open deal');
@@ -115,6 +115,16 @@ describe('Rendez-vous and Devis', () => {
       'Une prestation fictive',
     );
     expect((await send('PUT', `/api/i/simatis/devis/${id}`, { titre: '' })).status).toBe(400);
+  });
+
+  it('refuses to prepare a quote from a Radar affair', async () => {
+    const { rows } = await t.owner.pool.query<{ id: string }>(
+      "select o.id from opportunites o join instances i on i.id = o.instance_id where i.slug = 'simatis' and o.clos is null and o.etape in ('detection', 'prospection') limit 1",
+    );
+    if (!rows[0]) throw new Error('no Radar affair');
+    const response = await send('POST', '/api/i/simatis/devis', { opportuniteId: rows[0].id });
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/Pipeline/);
   });
 
   it('sends a quote only once the pilot validates the L2 proposal', async () => {

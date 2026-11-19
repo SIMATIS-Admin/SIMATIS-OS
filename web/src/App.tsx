@@ -362,7 +362,7 @@ export function App() {
             slug={current.slug}
             kind={route.kind as KindFiche}
             id={route.id}
-            devis={current.type === 'propre' && current.modules.includes('devis')}
+            devisAutorise={current.modules.includes('devis')}
           />
         ) : (
           <Bientot view={view} />

@@ -44,7 +44,22 @@ const valide = {
   statut: 'valide',
   lignes: [{ libelle: 'Diagnostic', unite: 'forfait', quantite: 1, prixUnitaire: 5100 }],
 };
+const etapes = [
+  { id: 'detection', label: 'Détection' },
+  { id: 'prospection', label: 'Prospection' },
+  { id: 'qualification', label: 'Qualification' },
+  { id: 'proposition', label: 'Proposition' },
+];
 const opps = [
+  {
+    id: 'radar-1',
+    titre: 'Premier contact',
+    etape: 'prospection',
+    clos: null,
+    entreprise: 'Radar SA',
+    montant: null,
+    modeFacturation: 'spot',
+  },
   {
     id: 'o2',
     titre: 'Accompagnement',
@@ -72,7 +87,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
-  if (url.endsWith('/pipeline')) return json({ opportunites: opps });
+  if (url.endsWith('/pipeline')) return json({ etapes, opportunites: opps });
   if (url.endsWith('/devis') && method === 'GET') return json([detail]);
   if (url.endsWith('/devis') && method === 'POST') return json({ ...detail, existant });
   if (url.endsWith('/devis/d1') && method === 'GET') return json(detail);
@@ -114,6 +129,14 @@ describe('écran Devis', () => {
     await waitFor(() =>
       expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ opportuniteId: 'o2' }),
     );
+  });
+
+  it('ne propose pas les affaires encore au Radar', async () => {
+    render(<Devis slug="simatis" />);
+    fireEvent.click(await screen.findByText('+ Nouveau devis'));
+    await screen.findAllByRole('button', { name: /Préparer le devis/ });
+    expect(screen.queryByText('Radar SA')).toBeNull();
+    expect(screen.getByText('Proposition')).toBeTruthy();
   });
 
   it('saisir un prix met l’aperçu à jour sans réseau, puis enregistre le brouillon', async () => {

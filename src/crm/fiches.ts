@@ -378,6 +378,7 @@ export type PatchFiche = {
   titre?: string;
   origineCommerciale?: string | null;
   radarEtapeManuelle?: number | null;
+  radarCanalManuel?: 'Téléphone' | 'LinkedIn' | 'E-mail' | 'À préciser' | null;
   montant?: number | null;
   modeFacturation?: 'spot' | 'recurrent';
   dureeEngagementMois?: number;
@@ -402,6 +403,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
     'titre',
     'origineCommerciale',
     'radarEtapeManuelle',
+    'radarCanalManuel',
     'montant',
     'modeFacturation',
     'dureeEngagementMois',
@@ -421,6 +423,7 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
 const CHAMPS_LOCAUX: (keyof PatchFiche)[] = [
   'origineCommerciale',
   'radarEtapeManuelle',
+  'radarCanalManuel',
   'probabiliteManuelle',
   'signatureEstimee',
   'modeFacturation',
@@ -538,13 +541,26 @@ export async function updateFiche(
           ),
         );
     if (kind === 'affaire') {
-      const { origineCommerciale, ...autres } = champs;
+      const { origineCommerciale, radarEtapeManuelle, ...autres } = champs;
+      const affaire = row as typeof opportunites.$inferSelect;
+      const maintenant = new Date();
+      const radarEtapesDates =
+        radarEtapeManuelle !== undefined && radarEtapeManuelle !== null
+          ? {
+              ...affaire.radarEtapesDates,
+              0: affaire.radarEtapesDates['0'] ?? affaire.createdAt.toISOString(),
+              [radarEtapeManuelle]:
+                affaire.radarEtapesDates[String(radarEtapeManuelle)] ?? maintenant.toISOString(),
+            }
+          : undefined;
       await tx
         .update(opportunites)
         .set({
           ...autres,
+          ...(radarEtapeManuelle !== undefined ? { radarEtapeManuelle } : {}),
+          ...(radarEtapesDates ? { radarEtapesDates } : {}),
           ...(origineCommerciale !== undefined ? { origine: origineCommerciale } : {}),
-          updatedAt: new Date(),
+          updatedAt: maintenant,
         })
         .where(and(eq(opportunites.instanceId, currentInstance), eq(opportunites.id, id)));
     } else {
