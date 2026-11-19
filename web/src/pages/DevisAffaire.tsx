@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { fetchPipeline, type PipelineOpp } from '../api.js';
+import {
+  fetchParametresDevis,
+  fetchPipeline,
+  type ParametresDevis,
+  type PipelineOpp,
+} from '../api.js';
 import { eur } from '../crm.js';
 
 // Un devis part toujours d'une affaire du pipeline : le client, l'interlocuteur et l'intitulé en sont repris.
@@ -10,11 +15,13 @@ export function DevisAffaire({
 }: {
   slug: string;
   avecDevis: Set<string>;
-  onChoisir: (opportuniteId: string) => void;
+  onChoisir: (opportuniteId: string, modeleId?: string) => void;
 }) {
   const [opps, setOpps] = useState<PipelineOpp[] | null>(null);
   const [noms, setNoms] = useState<Record<string, string>>({});
   const [q, setQ] = useState('');
+  const [modeles, setModeles] = useState<ParametresDevis['modeles']>([]);
+  const [modeleId, setModeleId] = useState('');
   useEffect(() => {
     fetchPipeline(slug).then(
       (p) => {
@@ -24,6 +31,10 @@ export function DevisAffaire({
         setOpps(p.opportunites.filter((o) => !o.clos && pipeline.has(o.etape)));
       },
       () => setOpps([]),
+    );
+    fetchParametresDevis(slug).then(
+      (p) => setModeles(p.modeles),
+      () => setModeles([]),
     );
   }, [slug]);
   if (!opps) return <div className="empty">Chargement des affaires…</div>;
@@ -35,6 +46,24 @@ export function DevisAffaire({
       <p style={{ margin: '0 0 10px' }}>
         <b>Pour quelle affaire ?</b> Le reste est repris de l’affaire.
       </p>
+      {modeles.length > 0 && (
+        <label className="field" style={{ marginBottom: 12 }}>
+          <span>Modèle de mission</span>
+          <select
+            className="input"
+            aria-label="Modèle de mission"
+            value={modeleId}
+            onChange={(e) => setModeleId(e.target.value)}
+          >
+            <option value="">Sans modèle</option>
+            {modeles.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nom}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <input
         className="input"
         style={{ marginBottom: 12 }}
@@ -64,7 +93,7 @@ export function DevisAffaire({
                 <td className="r">
                   <button
                     className={`btn sm ${avecDevis.has(o.id) ? '' : 'primary'}`}
-                    onClick={() => onChoisir(o.id)}
+                    onClick={() => onChoisir(o.id, modeleId || undefined)}
                   >
                     {avecDevis.has(o.id) ? 'Ouvrir le devis' : 'Préparer le devis'}
                   </button>

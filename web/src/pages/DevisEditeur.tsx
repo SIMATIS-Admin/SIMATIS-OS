@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import {
   enregistrerDevis,
   fetchDevisDetail,
+  fetchParametresDevis,
   nouvelleVersionDevis,
   transmettreDevis,
   validerDevis,
   type ContenuDevis,
   type DevisDetail,
   type LigneDevis,
+  type ParametresDevis,
 } from '../api.js';
 import { calculer, problemesAvantEnvoi } from '../devis.js';
 import { Icon } from '../icons.js';
@@ -62,6 +64,7 @@ export function DevisEditeur({
   const [c, setC] = useState<ContenuDevis | null>(null);
   const [etape, setEtape] = useState<Etape>(etapeInitiale);
   const [message, setMessage] = useState<string | null>(null);
+  const [clausesBib, setClausesBib] = useState<ParametresDevis['clauses']>([]);
   const sale = useRef(false);
   const dernier = useRef<ContenuDevis | null>(null);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,6 +78,13 @@ export function DevisEditeur({
       (e: unknown) => setMessage(String(e)),
     );
   }, [slug, id]);
+
+  useEffect(() => {
+    fetchParametresDevis(slug).then(
+      (p) => setClausesBib(p.clauses),
+      () => setClausesBib([]),
+    );
+  }, [slug]);
 
   const brouillon = d?.statut === 'brouillon';
   dernier.current = c;
@@ -112,7 +122,7 @@ export function DevisEditeur({
   const majClause = (k: number, patch: Partial<ContenuDevis['clauses'][number]>) =>
     maj({ clauses: c.clauses.map((x, i) => (i === k ? { ...x, ...patch } : x)) });
   const err = (e: unknown) => setMessage(e instanceof Error ? e.message : String(e));
-  const totaux = calculer(c);
+  const totaux = calculer(c, d.tvaPct);
   const problemes = problemesAvantEnvoi(c);
   const bloque = totaux.prixManquant || !c.inclus.trim();
   const off = !brouillon;
@@ -397,7 +407,7 @@ export function DevisEditeur({
                 <span className="num">{eur2(totaux.ht)}</span>
               </div>
               <div>
-                <span>TVA 20 %</span>
+                <span>TVA {d.tvaPct} %</span>
                 <span className="num">{eur2(totaux.tva)}</span>
               </div>
               <div className="ttc">
@@ -411,8 +421,8 @@ export function DevisEditeur({
         {etape === 'conditions' && (
           <>
             <p className="small muted">
-              Un nouveau devis reprend les conditions du dernier devis. Cochez, modifiez ou ajoutez
-              les clauses de celui-ci. La bibliothèque de clauses viendra dans les Paramètres.
+              Les clauses viennent de la bibliothèque (Paramètres, onglet Devis). Cochez, modifiez
+              ou ajoutez celles de ce devis : le texte est copié, la bibliothèque n’est pas touchée.
             </p>
             <div className="panel">
               <div className="panel-b">
@@ -455,6 +465,30 @@ export function DevisEditeur({
                 {!c.clauses.length && <div className="empty">Aucune clause pour l’instant.</div>}
               </div>
             </div>
+            {!off && clausesBib.length > 0 && (
+              <label className="field" style={{ marginTop: 8 }}>
+                <span>Insérer une clause de la bibliothèque</span>
+                <select
+                  className="input"
+                  aria-label="Insérer une clause de la bibliothèque"
+                  value=""
+                  onChange={(e) => {
+                    const b = clausesBib.find((x) => x.id === e.target.value);
+                    if (b)
+                      maj({
+                        clauses: [...c.clauses, { titre: b.titre, texte: b.texte, active: true }],
+                      });
+                  }}
+                >
+                  <option value="">Choisir une clause…</option>
+                  {clausesBib.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.titre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {!off && (
               <button
                 className="btn sm"
@@ -549,6 +583,8 @@ export function DevisEditeur({
           client={d.entreprise}
           contact={d.contact}
           date={d.createdAt}
+          tvaPct={d.tvaPct}
+          mentions={d.mentions}
         />
       </div>
     </div>

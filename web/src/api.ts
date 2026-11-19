@@ -1368,13 +1368,63 @@ export type DevisDetail = ContenuDevis & {
   entreprise: string | null;
   contact: string | null;
   totaux: TotauxDevis;
+  tvaPct: number;
+  mentions: string;
 };
 export type DevisItem = DevisDetail & { versions: number };
 export const fetchDevis = (slug: string) => getJson<DevisItem[]>(inst(slug, 'devis'));
 export const fetchDevisDetail = (slug: string, id: string) =>
   getJson<DevisDetail>(inst(slug, `devis/${encodeURIComponent(id)}`));
-export const creerDevis = (slug: string, opportuniteId: string) =>
-  sendJson<DevisDetail & { existant: boolean }>('POST', inst(slug, 'devis'), { opportuniteId });
+export const creerDevis = (slug: string, opportuniteId: string, modeleId?: string) =>
+  sendJson<DevisDetail & { existant: boolean }>('POST', inst(slug, 'devis'), {
+    opportuniteId,
+    ...(modeleId ? { modeleId } : {}),
+  });
+
+export type ReglagesDevis = {
+  numerotation: string;
+  mentions: string;
+  tvaPct: number;
+  validiteJours: number;
+  acomptePct: number;
+};
+export type ClauseBibliotheque = {
+  titre: string;
+  texte: string;
+  parDefaut: boolean;
+  ordre: number;
+};
+export type ModeleMission = {
+  nom: string;
+  contexte: string;
+  objectifs: string;
+  inclus: string;
+  exclu: string;
+  livrables: string;
+  duree: string;
+  lignes: { libelle: string; unite: LigneDevis['unite']; quantite: number }[];
+};
+export type ParametresDevis = {
+  reglages: ReglagesDevis;
+  clauses: (ClauseBibliotheque & { id: string })[];
+  modeles: (ModeleMission & { id: string })[];
+};
+const paramsDevis = (slug: string, suite = '') => inst(slug, `devis/parametres${suite}`);
+export const fetchParametresDevis = (slug: string) => getJson<ParametresDevis>(paramsDevis(slug));
+export const saveReglagesDevis = (slug: string, r: ReglagesDevis) =>
+  sendJson<ReglagesDevis>('PUT', paramsDevis(slug, '/reglages'), r);
+export const creerClauseDevis = (slug: string, c: ClauseBibliotheque) =>
+  sendJson<{ id: string }>('POST', paramsDevis(slug, '/clauses'), c);
+export const modifierClauseDevis = (slug: string, id: string, c: ClauseBibliotheque) =>
+  sendJson<{ id: string }>('PUT', paramsDevis(slug, `/clauses/${encodeURIComponent(id)}`), c);
+export const supprimerClauseDevis = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', paramsDevis(slug, `/clauses/${encodeURIComponent(id)}`), {});
+export const creerModeleDevis = (slug: string, m: ModeleMission) =>
+  sendJson<{ id: string }>('POST', paramsDevis(slug, '/modeles'), m);
+export const modifierModeleDevis = (slug: string, id: string, m: ModeleMission) =>
+  sendJson<{ id: string }>('PUT', paramsDevis(slug, `/modeles/${encodeURIComponent(id)}`), m);
+export const supprimerModeleDevis = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', paramsDevis(slug, `/modeles/${encodeURIComponent(id)}`), {});
 export const enregistrerDevis = (slug: string, id: string, contenu: ContenuDevis) =>
   sendJson<{ id: string }>('PUT', inst(slug, `devis/${encodeURIComponent(id)}`), contenu);
 export const validerDevis = (slug: string, id: string) =>
