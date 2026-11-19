@@ -1,27 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Devis } from './Devis.js';
 import { RendezVous } from './RendezVous.js';
 
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 
-const devis = {
-  id: 'd1',
-  numero: 'DEV-2026-001',
-  statut: 'brouillon',
-  lignes: [
-    { libelle: 'Diagnostic', quantite: 1, prixUnitaire: 4500 },
-    { libelle: 'Restitution et plan de suivi', quantite: 1, prixUnitaire: null },
-  ],
-  envoyeLe: null,
-  validite: null,
-  opportunite: 'Diagnostic commercial',
-  entreprise: 'Fonderie Vallière',
-  total: 4500,
-  prixManquant: true,
-};
 const rdv = {
   etat: 'ok',
   rdv: [
@@ -45,31 +29,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
-  if (url.endsWith('/pipeline'))
-    return json({
-      etapes: [
-        { id: 'detection', label: 'Détection' },
-        { id: 'prospection', label: 'Prospection' },
-        { id: 'qualification', label: 'Qualification' },
-      ],
-      opportunites: [
-        {
-          id: 'radar-1',
-          titre: 'Premier contact',
-          entreprise: 'Radar SA',
-          etape: 'prospection',
-          clos: null,
-        },
-        {
-          id: 'o1',
-          titre: 'Diagnostic commercial',
-          entreprise: 'Fonderie Vallière',
-          etape: 'qualification',
-          clos: null,
-        },
-      ],
-    });
-  if (url.endsWith('/devis')) return json([devis]);
+  if (url.endsWith('/pipeline')) return json({ opportunites: [] });
   if (url.endsWith('/rendez-vous')) return json(rdv);
   if (url.includes('/entreprises?q=')) return json([{ id: 'e2', nom: 'Fonderie Vallière' }]);
   if (url.endsWith('/lien')) return json({ ok: true });
@@ -91,45 +51,6 @@ describe('conversion screens', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
-  });
-
-  it('devis: cannot validate while a price is missing, saves a price', async () => {
-    render(<Devis slug="simatis" />);
-    fireEvent.click(await screen.findByText('DEV-2026-001'));
-    expect(screen.getByText<HTMLButtonElement>('Valider le devis').disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText('Prix unitaire : Restitution et plan de suivi'), {
-      target: { value: '1500' },
-    });
-    expect(screen.getByText<HTMLButtonElement>('Valider le devis').disabled).toBe(false);
-    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
-    expect(calls.find((c) => c.method === 'PATCH')?.body).toMatchObject({
-      lignes: [{ prixUnitaire: 4500 }, { prixUnitaire: 1500 }],
-    });
-  });
-
-  it('devis: creates an ergonomic draft from a Pipeline affair, never from Radar', async () => {
-    render(<Devis slug="simatis" />);
-    fireEvent.click(await screen.findByRole('button', { name: /Nouveau devis/ }));
-    expect(screen.queryByText('Radar SA')).toBeNull();
-    fireEvent.change(screen.getByPlaceholderText('Entreprise ou nom de l’affaire'), {
-      target: { value: 'fonderie' },
-    });
-    fireEvent.click(screen.getByRole('option', { name: /Fonderie Vallière/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Créer le brouillon' }));
-    await waitFor(() =>
-      expect(calls).toContainEqual({
-        url: '/api/i/simatis/devis',
-        method: 'POST',
-        body: { opportuniteId: 'o1' },
-      }),
-    );
-  });
-
-  it('devis: preselects the Pipeline affair when opened from its record', async () => {
-    render(<Devis slug="simatis" ouvrir="o1" />);
-    const affaire = await screen.findByRole('option', { name: /Fonderie Vallière/ });
-    expect(affaire.getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByText('Devis pour')).toBeTruthy();
   });
 
   it('rendez-vous: shows what to dig into, and sends a compte rendu', async () => {

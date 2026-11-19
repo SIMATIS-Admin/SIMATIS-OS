@@ -109,6 +109,9 @@ const contact = () => ({
   ecrit: true,
 });
 
+let devisFiche: unknown[] = [];
+let etapeAffaire: string | null = null;
+
 function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
@@ -119,6 +122,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
       personnes: [{ id: 'c2', nom: 'Agathe Vallière (doublon)', entreprise: null }],
       organisations: [],
     });
+  if (url.endsWith('/devis')) return json(devisFiche);
   if (url.endsWith('/transfert/droit')) return json({ autorise: droitTransfert });
   if (url.endsWith('/mails')) return json(mailsFiche);
   if (url.includes('/emails')) return json({ emails: [] });
@@ -135,6 +139,10 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
     return json({ ...affaire(), mandat });
   if (url.includes('/opportunites/')) return json({ opportunite: {}, simulation: false });
   if (url.includes('/preferences')) return json({ favoris: [], options: { ensuite: true } });
+  if (etapeAffaire) {
+    const a = affaire();
+    return json({ ...a, fiche: { ...a.fiche, etape: etapeAffaire } });
+  }
   return json(affaire());
 }
 
@@ -484,5 +492,49 @@ describe('Fiche page', () => {
     };
     render(<Fiche slug="simatis" kind="contact" id="c1" />);
     expect(await screen.findByText('Aucune messagerie connectée à cette instance.')).toBeTruthy();
+  });
+});
+
+describe('Fiche page : devis de l’affaire', () => {
+  beforeEach(() => {
+    calls = [];
+    mandat = undefined;
+    droitTransfert = false;
+    devisFiche = [];
+    etapeAffaire = null;
+    mailsFiche = { mails: [], adresses: 0 };
+    vi.stubGlobal('fetch', vi.fn(fakeFetch));
+    location.hash = '';
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('propose « Préparer un devis » quand le module devis est actif', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" devisAutorise />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Préparer un devis' }));
+    expect(location.hash).toBe('#/simatis/devis/affaire/o1');
+  });
+
+  it('propose « Ouvrir le devis » quand l’affaire en a déjà un', async () => {
+    devisFiche = [{ id: 'd1', opportuniteId: 'o1' }];
+    render(<Fiche slug="simatis" kind="affaire" id="o1" devisAutorise />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir le devis' }));
+    expect(location.hash).toBe('#/simatis/devis/ouvrir/d1');
+  });
+
+  it('n’affiche aucun bouton pour une affaire encore au Radar', async () => {
+    etapeAffaire = 'cible';
+    render(<Fiche slug="simatis" kind="affaire" id="o1" devisAutorise />);
+    await screen.findAllByText('Structuration commerciale');
+    expect(screen.queryByRole('button', { name: /devis/i })).toBeNull();
+  });
+
+  it('n’affiche aucun bouton sans le module devis', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    await screen.findAllByText('Structuration commerciale');
+    expect(screen.queryByRole('button', { name: /devis/i })).toBeNull();
+    expect(calls.some((c) => c.url.endsWith('/devis'))).toBe(false);
   });
 });

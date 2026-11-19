@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette : section Devis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- La vraie feuille de style de l'application : mêmes couleurs, polices, boutons, badges. -->
+<link rel="stylesheet" href="../web/src/styles.css">
+<style>
+  .d-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .d-kpis .panel-b .v { font: 600 24px var(--f-num); display: block; }
+  .d-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .d-table th { text-align: left; font-weight: 600; color: var(--ink-3); padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .d-table td { padding: 12px 14px; border-bottom: 1px solid var(--line-2); }
+  .d-table tr.clic { cursor: pointer; }
+  .d-table tr.clic:hover { background: var(--line-2); }
+  .d-table .r { text-align: right; }
+  .d-edit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .d-etapes { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .d-etapes .chip { font-size: 15px; padding: 5px 13px; cursor: pointer; }
+  .d-bloc { margin-bottom: 16px; }
+  .d-bloc label, .d-bloc .lbl { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .d-bloc .aide { font-size: 13px; color: var(--ink-3); margin: -2px 0 6px; }
+  .d-bloc input[type=text], .d-bloc input[type=number], .d-bloc input[type=date], .d-bloc select, .d-bloc textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-s); background: #fff; }
+  .d-bloc textarea { min-height: 84px; resize: vertical; }
+  .d-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .d-ia { padding: 10px 14px; background: var(--line-2); border-radius: var(--r-s); font-size: 14px; margin-bottom: 14px; }
+  .d-ia b { color: var(--navy-3); }
+  .d-lignes { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .d-lignes th { text-align: left; font-weight: 600; color: var(--ink-3); padding: 4px 6px; }
+  .d-lignes td { padding: 4px 3px; vertical-align: middle; }
+  .d-lignes input, .d-lignes select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-s); }
+  .d-lignes input.vide { border-color: #C98A12; background: #FFF4DC; }
+  .d-total { margin-top: 12px; margin-left: auto; width: 290px; font-size: 15px; }
+  .d-total div { display: flex; justify-content: space-between; padding: 4px 0; }
+  .d-total .ttc { font-weight: 700; font-size: 17px; border-top: 2px solid var(--ink); margin-top: 4px; padding-top: 8px; }
+  .d-clause { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line-2); }
+  .d-clause:last-child { border-bottom: 0; }
+  .d-clause > div { flex: 1; }
+  .d-clause b { display: block; font-size: 15px; }
+  .d-clause textarea { margin-top: 6px; min-height: 60px; font-size: 14px; }
+  .d-garde { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 12px 0 0; margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  /* Aperçu : une page A4 réduite, ce que le client recevra en PDF. */
+  .d-prev-cadre { position: sticky; top: 14px; }
+  .d-page { background: #fff; border: 1px solid var(--line); box-shadow: 0 6px 22px rgba(12, 55, 107, .12); padding: 34px 38px; font-size: 12.5px; line-height: 1.5; color: #1b2a40; max-height: 82vh; overflow: auto; }
+  .d-page h1 { font-size: 20px; margin: 0 0 2px; }
+  .d-page h2 { font-size: 13.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--navy-3); margin: 18px 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 3px; }
+  .d-page .entete { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  .d-page .logo { font: 800 16px var(--f-title, inherit); color: var(--navy); }
+  .d-page .logo span { font-weight: 500; color: var(--teal); }
+  .d-page table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .d-page th { text-align: left; background: var(--line-2); padding: 5px 7px; font-size: 12px; }
+  .d-page td { padding: 5px 7px; border-bottom: 1px solid var(--line-2); }
+  .d-page .r { text-align: right; white-space: nowrap; }
+  .d-page ul { margin: 4px 0 4px 18px; padding: 0; }
+  .d-page .hors { color: #8a3b2a; }
+  .d-page .cgv { font-size: 11px; color: #3b4a60; }
+  .d-page .cgv p { margin: 0 0 5px; }
+  .d-page .signature { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
+  .d-page .signature div { border: 1px dashed var(--line); padding: 8px 10px; min-height: 70px; }
+  .d-page .vide { background: #FFF4DC; padding: 0 4px; border-radius: 3px; color: #8a5a00; }
+  .d-vide { text-align: center; padding: 30px; color: var(--ink-3); }
+  @media (max-width: 1100px) { .d-edit { grid-template-columns: 1fr; } .d-prev-cadre { position: static; } }
+  @media (max-width: 760px) { .content { padding: 0 16px 48px; } .d-duo { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <img class="brand-mark" src="../web/src/assets/simatis-mark.png" alt="SIMATIS">
+      <div class="brand-name">SIMATIS <span>OS</span></div>
+    </div>
+    <button class="inst-btn" type="button">
+      <span class="inst-dot" style="background:#41A594"></span>
+      <span><b>SIMATIS</b><small>Mon activité</small></span>
+    </button>
+    <nav class="nav">
+      <div class="nav-group"><span>Convertir</span>
+        <a href="#"><span class="lbl">Pipeline</span></a>
+        <a href="#"><span class="lbl">Rendez-vous</span></a>
+        <a href="#liste" class="on" id="lien-devis"><span class="lbl">Devis</span></a>
+      </div>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="demo-band"><b>Maquette</b> Données fictives, au 20/11/2026 (date fictive). Rien n'est enregistré ni envoyé. Clauses et prix : exemples, pas ceux de SIMATIS.</div>
+    <div class="top">
+      <div><h1 id="titre">Devis</h1></div>
+      <div id="actions-haut" style="display:flex;gap:8px;align-items:center"></div>
+    </div>
+    <div class="content" id="page"></div>
+  </main>
+</div>
+
+<script>
+/* ---------- Données fictives ---------- */
+const TVA = 20;
+const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(n);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const nl = (s) => esc(s).replace(/\n/g, '<br>');
+
+// Modèle de conditions de vente : clauses cochables et modifiables, validées une fois pour toutes par Marc.
+const CLAUSES = [
+  { id: 'objet', t: 'Objet et acceptation', on: true, x: "Le présent devis fixe la mission, le prix et le calendrier. Il vaut commande lorsqu'il est retourné daté et signé, précédé de la mention « Bon pour accord »." },
+  { id: 'validite', t: 'Durée de validité', on: true, x: "Le devis est valable 30 jours à compter de sa date d'émission. Passé ce délai, les prix et le calendrier peuvent être révisés." },
+  { id: 'paiement', t: 'Facturation et paiement', on: true, x: "Facture à 30 jours date de facture, par virement. Tout retard entraîne des pénalités au taux de trois fois le taux d'intérêt légal et une indemnité forfaitaire de recouvrement de 40 €." },
+  { id: 'acompte', t: 'Acompte', on: true, x: "Un acompte, indiqué au chapitre Prix, est exigible à la commande. Il conditionne le démarrage de la mission." },
+  { id: 'frais', t: 'Frais et déplacements', on: true, x: "Les frais de déplacement, hébergement et restauration sont refacturés au réel, sur justificatifs, sauf mention contraire au chapitre Prix." },
+  { id: 'annulation', t: 'Report et annulation', on: true, x: "Un rendez-vous reporté moins de 48 h à l'avance est dû. En cas de résiliation, les prestations réalisées sont facturées." },
+  { id: 'confid', t: 'Confidentialité', on: true, x: "Chaque partie garde confidentielles les informations échangées pendant la mission et après son terme." },
+  { id: 'pi', t: 'Propriété intellectuelle', on: true, x: "Les livrables sont cédés au client pour son usage interne. Les méthodes, grilles et outils de SIMATIS restent sa propriété." },
+  { id: 'resp', t: 'Responsabilité', on: false, x: "SIMATIS est tenue d'une obligation de moyens. Sa responsabilité est plafonnée au montant des honoraires perçus pour la mission." },
+  { id: 'droit', t: 'Droit applicable et litiges', on: true, x: "Droit français. À défaut d'accord amiable, les tribunaux du siège de SIMATIS sont seuls compétents." },
+];
+const clausesPar = () => CLAUSES.map((c) => ({ ...c }));
+
+// Modèles de mission : l'OS pré-remplit le périmètre ; les prix restent vides (le pilote les fixe toujours).
+const MODELES = {
+  diagnostic: {
+    nom: "Diagnostic d'Endurance Commerciale",
+    contexte: "L'entreprise souhaite faire le point sur l'efficacité de son organisation commerciale avant de fixer ses objectifs de l'an prochain.",
+    objectifs: "Mesurer le niveau d'endurance commerciale de l'équipe.\nIdentifier les trois freins prioritaires.\nDécider d'un plan d'action chiffré.",
+    inclus: "Entretiens avec le dirigeant et deux commerciaux\nQuestionnaire d'endurance et analyse\nRapport écrit et restitution de 60 minutes",
+    hors: "Recrutement de commerciaux\nRefonte de l'offre ou des tarifs\nAccompagnement après la restitution",
+    livrables: "Rapport de diagnostic (Word)\nSupport de restitution\nPlan d'action commercial à 90 jours",
+    lignes: [{ l: 'Diagnostic : cadrage et entretiens', u: 'forfait', q: 1, pu: null }, { l: 'Analyse et rapport', u: 'forfait', q: 1, pu: null }, { l: 'Restitution', u: 'forfait', q: 1, pu: null }],
+  },
+  accompagnement: {
+    nom: 'Accompagnement mensuel (direction commerciale à temps partagé)',
+    contexte: "L'entreprise n'a pas de directeur commercial à temps plein et veut structurer son pilotage commercial.",
+    objectifs: "Piloter le pipeline et les relances chaque semaine.\nAtteindre l'objectif de chiffre d'affaires fixé en début de mission.",
+    inclus: "Point hebdomadaire d'une heure\nRevue mensuelle du pipeline\nAppui à la rédaction des propositions",
+    hors: "Prospection réalisée à la place des commerciaux\nOutils et licences logicielles",
+    livrables: "Tableau de bord mensuel\nCompte rendu de chaque revue",
+    lignes: [{ l: 'Accompagnement mensuel', u: 'mois', q: 6, pu: null }],
+  },
+  vide: { nom: 'Devis vierge', contexte: '', objectifs: '', inclus: '', hors: '', livrables: '', lignes: [{ l: '', u: 'forfait', q: 1, pu: null }] },
+};
+
+const DEVIS = [
+  { id: 'd1', numero: 'DEV-2026-014', client: 'Exemple Industrie', contact: 'Camille Exemple', titre: "Diagnostic d'Endurance Commerciale", modele: 'diagnostic', statut: 'envoye', date: '2026-11-04', validite: 30,
+    contexte: MODELES.diagnostic.contexte, objectifs: MODELES.diagnostic.objectifs, inclus: MODELES.diagnostic.inclus, hors: MODELES.diagnostic.hors, livrables: MODELES.diagnostic.livrables,
+    debut: '2027-01-11', duree: '6 semaines', remise: 0, acompte: 30, frais: 'refactures',
+    lignes: [{ l: 'Diagnostic : cadrage et entretiens', u: 'forfait', q: 1, pu: 1800 }, { l: 'Analyse et rapport', u: 'forfait', q: 1, pu: 2400 }, { l: 'Restitution', u: 'forfait', q: 1, pu: 900 }], clauses: clausesPar() },
+  { id: 'd2', numero: 'DEV-2026-015', client: 'Démo Mécanique', contact: 'Alex Démo', titre: 'Accompagnement mensuel', modele: 'accompagnement', statut: 'brouillon', date: '2026-11-18', validite: 30,
+    contexte: MODELES.accompagnement.contexte, objectifs: MODELES.accompagnement.objectifs, inclus: MODELES.accompagnement.inclus, hors: MODELES.accompagnement.hors, livrables: MODELES.accompagnement.livrables,
+    debut: '2027-02-01', duree: '6 mois', remise: 0, acompte: 0, frais: 'inclus',
+    lignes: [{ l: 'Accompagnement mensuel', u: 'mois', q: 6, pu: null }], clauses: clausesPar() },
+  { id: 'd3', numero: 'DEV-2026-012', client: 'Fictif & Fils', contact: 'Sam Fictif', titre: 'Test de VMA et restitution', modele: 'vide', statut: 'accepte', date: '2026-10-09', validite: 30,
+    contexte: 'Mesurer le niveau de départ de deux commerciaux.', objectifs: 'Obtenir un profil par commercial.', inclus: 'Deux tests\nUne restitution de 30 minutes', hors: 'Plan de formation', livrables: 'Fiche profil par commercial',
+    debut: '2026-10-20', duree: '2 semaines', remise: 10, acompte: 0, frais: 'inclus',
+    lignes: [{ l: 'Test de VMA', u: 'personne', q: 2, pu: 450 }, { l: 'Restitution', u: 'forfait', q: 1, pu: 300 }], clauses: clausesPar() },
+  { id: 'd4', numero: 'DEV-2026-010', client: 'Modèle Plastiques', contact: 'Robin Modèle', titre: "Diagnostic d'Endurance Commerciale", modele: 'diagnostic', statut: 'refuse', date: '2026-09-15', validite: 30,
+    contexte: MODELES.diagnostic.contexte, objectifs: MODELES.diagnostic.objectifs, inclus: MODELES.diagnostic.inclus, hors: MODELES.diagnostic.hors, livrables: MODELES.diagnostic.livrables,
+    debut: '2026-10-05', duree: '6 semaines', remise: 0, acompte: 30, frais: 'refactures',
+    lignes: [{ l: 'Diagnostic complet', u: 'forfait', q: 1, pu: 5100 }], clauses: clausesPar() },
+];
+const STATUTS = { brouillon: ['Brouillon', 'amber'], valide: ['Validé', 'blue'], envoye: ['Envoyé', 'navy'], accepte: ['Accepté', 'green'], refuse: ['Refusé', 'red'] };
+
+/* ---------- Calculs ---------- */
+const calc = (d) => {
+  const brut = d.lignes.reduce((a, l) => a + (l.pu ?? 0) * l.q, 0);
+  const remise = brut * (d.remise / 100);
+  const ht = brut - remise;
+  const tva = ht * (TVA / 100);
+  const ttc = ht + tva;
+  return { brut, remise, ht, tva, ttc, acompte: ttc * (d.acompte / 100), manquant: d.lignes.some((l) => l.pu === null) };
+};
+const echeance = (d) => { const x = new Date(d.date); x.setDate(x.getDate() + Number(d.validite)); return x.toLocaleDateString('fr-FR'); };
+const dateFr = (s) => new Date(s).toLocaleDateString('fr-FR');
+
+/* ---------- Écrans ---------- */
+let courant = null;
+let etape = 'mission';
+const $ = (s) => document.querySelector(s);
+
+function liste() {
+  courant = null;
+  $('#titre').textContent = 'Devis';
+  $('#actions-haut').innerHTML = '<button class="btn primary" id="nouveau" type="button">+ Nouveau devis</button>';
+  $('#nouveau').onclick = () => nouveau();
+  const envoyes = DEVIS.filter((d) => d.statut === 'envoye');
+  const encours = envoyes.reduce((a, d) => a + calc(d).ht, 0);
+  const gagnes = DEVIS.filter((d) => d.statut === 'accepte').reduce((a, d) => a + calc(d).ht, 0);
+  const clos = DEVIS.filter((d) => ['accepte', 'refuse'].includes(d.statut));
+  const taux = clos.length ? Math.round((clos.filter((d) => d.statut === 'accepte').length / clos.length) * 100) : 0;
+  $('#page').innerHTML = `
+    <div class="d-kpis">
+      <div class="panel"><div class="panel-b"><span class="muted small">En attente de réponse</span><span class="v">${fmt(encours)}</span><span class="muted small">${envoyes.length} devis envoyé(s) · HT</span></div></div>
+      <div class="panel"><div class="panel-b"><span class="muted small">Acceptés (HT)</span><span class="v">${fmt(gagnes)}</span><span class="muted small">ce trimestre</span></div></div>
+      <div class="panel"><div class="panel-b"><span class="muted small">Taux d'acceptation</span><span class="v">${taux} %</span><span class="muted small">sur ${clos.length} devis clos</span></div></div>
+      <div class="panel"><div class="panel-b"><span class="muted small">Prix à fixer</span><span class="v">${DEVIS.filter((d) => calc(d).manquant).length}</span><span class="muted small">brouillon(s) incomplet(s)</span></div></div>
+    </div>
+    <div class="panel">
+      <table class="d-table">
+        <thead><tr><th>N°</th><th>Client</th><th>Mission</th><th>Date</th><th>Statut</th><th class="r">Montant HT</th></tr></thead>
+        <tbody>${DEVIS.map((d) => { const c = calc(d); const [lib, col] = STATUTS[d.statut]; return `
+          <tr class="clic" data-id="${d.id}"><td class="num">${esc(d.numero)}</td><td><b>${esc(d.client)}</b><div class="muted small">${esc(d.contact)}</div></td><td>${esc(d.titre)}</td><td>${dateFr(d.date)}</td>
+          <td><span class="badge ${col}">${lib}</span>${d.statut === 'envoye' ? `<div class="muted small">valable jusqu'au ${echeance(d)}</div>` : ''}</td>
+          <td class="r num">${c.manquant ? '<span class="badge amber">prix à fixer</span>' : fmt(c.ht)}</td></tr>`; }).join('')}</tbody>
+      </table>
+    </div>
+    <p class="muted small" style="margin-top:12px">Un devis naît d'une opportunité du pipeline (« Préparer un devis ») ou d'ici, avec un modèle de mission. L'OS pré-remplit le périmètre ; vous fixez toujours les prix.</p>`;
+  document.querySelectorAll('tr.clic').forEach((tr) => (tr.onclick = () => ouvrir(tr.dataset.id)));
+}
+
+// Affaires du pipeline (fictives) : un devis naît toujours d'une affaire.
+const AFFAIRES = [
+  { id: 'a1', client: 'Exemple Industrie', contact: 'Camille Exemple', titre: "Diagnostic d'Endurance Commerciale", etape: 'Proposition', montant: 5100, mode: 'spot', modele: 'diagnostic', devis: false },
+  { id: 'a2', client: 'Démo Mécanique', contact: 'Alex Démo', titre: 'Accompagnement mensuel', etape: 'Qualification', montant: 900, mode: 'récurrent', modele: 'accompagnement', duree: 6, devis: true },
+  { id: 'a3', client: 'Test Logistique', contact: 'Sacha Test', titre: 'Test de VMA, équipe commerciale', etape: 'Qualification', montant: 1200, mode: 'spot', modele: 'vide', devis: false },
+];
+
+function nouveau(q = '') {
+  $('#titre').textContent = 'Nouveau devis';
+  $('#actions-haut').innerHTML = '<button class="btn" id="retour" type="button">Annuler</button>';
+  $('#retour').onclick = liste;
+  const res = AFFAIRES.filter((a) => (a.client + a.titre).toLowerCase().includes(q.toLowerCase()));
+  $('#page').innerHTML = `
+    <p style="margin:0 0 10px"><b>Pour quelle affaire ?</b> Un devis part toujours d'une affaire du pipeline : le reste est repris pour vous.</p>
+    <div class="d-bloc"><input type="text" id="rech" placeholder="Rechercher une affaire ou un client" value="${esc(q)}"></div>
+    <div class="panel"><table class="d-table"><tbody>${res.map((a) => `
+      <tr class="clic" data-a="${a.id}"><td><b>${esc(a.client)}</b><div class="muted small">${esc(a.titre)}</div></td><td><span class="badge ${a.etape === 'Proposition' ? 'blue' : 'navy'}">${a.etape}</span></td>
+      <td class="r num">${fmt(a.montant)}${a.mode === 'récurrent' ? ' / mois' : ''}</td>
+      <td class="r">${a.devis ? '<span class="badge amber">devis existant</span>' : '<button class="btn primary sm" type="button">Préparer le devis</button>'}</td></tr>`).join('') || '<tr><td class="d-vide">Aucune affaire trouvée</td></tr>'}</tbody></table></div>
+    <div class="panel" style="margin-top:14px"><div class="panel-b">
+      <div class="muted small" style="margin-bottom:6px">Autre entrée, à l'arrivée d'une affaire en étape « Proposition » dans le pipeline :</div>
+      <div class="d-ia" style="margin:0;display:flex;gap:12px;align-items:center;justify-content:space-between"><span><b>Exemple Industrie</b> passe en Proposition. Préparer le devis maintenant ?</span><span><button class="btn primary sm" type="button" data-a="a1">Préparer le devis</button> <button class="btn ghost sm" type="button" data-toast="Rappel conservé sur l'affaire">Plus tard</button></span></div>
+    </div></div>`;
+  $('#rech').oninput = (e) => { nouveau(e.target.value); const r = $('#rech'); r.focus(); r.setSelectionRange(r.value.length, r.value.length); };
+  document.querySelectorAll('[data-a]').forEach((b) => (b.onclick = (ev) => {
+    ev.stopPropagation();
+    const a = AFFAIRES.find((x) => x.id === b.dataset.a);
+    if (a.devis) return ouvrir('d2');
+    const m = MODELES[a.modele];
+    const d = { id: 'n' + Date.now(), numero: 'DEV-2026-016', client: a.client, contact: a.contact, titre: a.titre, modele: a.modele, statut: 'brouillon', date: '2026-11-20', validite: 30,
+      contexte: m.contexte, objectifs: m.objectifs, inclus: m.inclus, hors: m.hors, livrables: m.livrables, debut: '', duree: a.duree ? a.duree + ' mois' : '', remise: 0, acompte: 0, frais: 'refactures',
+      lignes: [{ l: a.titre, u: a.mode === 'récurrent' ? 'mois' : 'forfait', q: a.duree || 1, pu: null, propose: a.montant }], clauses: clausesPar() };
+    DEVIS.unshift(d);
+    ouvrir(d.id, 'prix');
+  }));
+  document.querySelectorAll('[data-toast]').forEach((b) => (b.onclick = () => toast(b.dataset.toast)));
+}
+
+function ouvrir(id, e) {
+  courant = DEVIS.find((d) => d.id === id);
+  if (e) etape = e;
+  const d = courant;
+  const fige = d.statut !== 'brouillon';
+  $('#titre').innerHTML = `${esc(d.numero)} <span class="badge ${STATUTS[d.statut][1]}" style="vertical-align:middle">${STATUTS[d.statut][0]}</span>`;
+  $('#actions-haut').innerHTML = '<button class="btn" id="retour" type="button">← Tous les devis</button>';
+  $('#retour').onclick = liste;
+  const onglets = [['mission', '1. Mission'], ['prix', '2. Prix'], ['conditions', '3. Conditions de vente'], ['envoi', '4. Envoi']];
+  $('#page').innerHTML = `
+    ${fige ? `<div class="d-ia"><b>Devis ${STATUTS[d.statut][0].toLowerCase()} :</b> verrouillé. Pour le modifier, dupliquez-le en nouvelle version.</div>` : ''}
+    <div class="d-edit">
+      <div>
+        <div class="d-etapes">${onglets.map(([k, l]) => `<button class="chip ${etape === k ? 'on' : ''}" data-e="${k}" type="button">${l}</button>`).join('')}</div>
+        <div id="form"></div>
+      </div>
+      <div class="d-prev-cadre"><div class="muted small" style="margin-bottom:6px">Aperçu : ce que recevra le client (PDF)</div><div class="d-page" id="apercu"></div></div>
+    </div>`;
+  document.querySelectorAll('[data-e]').forEach((b) => (b.onclick = () => ouvrir(id, b.dataset.e)));
+  formulaire(fige);
+  apercu();
+}
+
+const champ = (cle, lib, aide, type = 'textarea', fige) => `<div class="d-bloc"><label>${lib}</label>${aide ? `<div class="aide">${aide}</div>` : ''}
+  ${type === 'textarea' ? `<textarea data-k="${cle}" ${fige ? 'disabled' : ''}>${esc(courant[cle])}</textarea>` : `<input type="${type}" data-k="${cle}" value="${esc(courant[cle])}" ${fige ? 'disabled' : ''}>`}</div>`;
+
+function formulaire(fige) {
+  const d = courant;
+  let h = '';
+  if (etape === 'mission') {
+    h = `<div class="d-ia"><b>L'OS a préparé</b> ce périmètre à partir du modèle « ${esc(MODELES[d.modele].nom)} » et de la fiche de l'opportunité. Relisez, ajustez.</div>
+      <div class="d-duo">${champ('client', 'Client', '', 'text', fige)}${champ('contact', 'Interlocuteur', '', 'text', fige)}</div>
+      ${champ('titre', 'Intitulé de la mission', '', 'text', fige)}
+      ${champ('contexte', 'Contexte', 'Pourquoi le client fait appel à vous, en deux ou trois phrases.', 'textarea', fige)}
+      ${champ('objectifs', 'Objectifs', 'Une ligne par objectif.', 'textarea', fige)}
+      ${champ('inclus', 'Ce qui est inclus (périmètre)', 'Une ligne par prestation.', 'textarea', fige)}
+      ${champ('hors', 'Ce qui est exclu', 'Évite les malentendus : ce que le prix ne couvre pas.', 'textarea', fige)}
+      ${champ('livrables', 'Livrables', '', 'textarea', fige)}
+      <div class="d-duo">${champ('debut', 'Début souhaité', '', 'date', fige)}${champ('duree', 'Durée', 'Ex. 6 semaines', 'text', fige)}</div>`;
+  } else if (etape === 'prix') {
+    const c = calc(d);
+    h = `<div class="d-ia"><b>Les prix sont à vous.</b> L'OS ne propose ni tarif ni remise : les cases orange attendent votre prix.</div>
+      <table class="d-lignes"><thead><tr><th>Prestation</th><th style="width:96px">Unité</th><th style="width:58px">Qté</th><th style="width:104px">Prix unit. HT</th><th style="width:24px"></th></tr></thead>
+      <tbody>${d.lignes.map((l, i) => `<tr>
+        <td><input data-l="${i}" data-f="l" value="${esc(l.l)}" ${fige ? 'disabled' : ''}></td>
+        <td><select data-l="${i}" data-f="u" ${fige ? 'disabled' : ''}>${['forfait', 'jour', 'mois', 'personne', 'heure'].map((u) => `<option ${u === l.u ? 'selected' : ''}>${u}</option>`).join('')}</select></td>
+        <td><input type="number" min="1" data-l="${i}" data-f="q" value="${l.q}" ${fige ? 'disabled' : ''}></td>
+        <td><input type="number" min="0" data-l="${i}" data-f="pu" class="${l.pu === null ? 'vide' : ''}" placeholder="${l.propose ? 'affaire : ' + l.propose : 'à fixer'}" value="${l.pu ?? ''}" ${fige ? 'disabled' : ''}>${l.propose && l.pu === null ? `<button class="btn ghost sm" type="button" data-prop="${i}">Reprendre ${fmt(l.propose)}</button>` : ''}</td>
+        <td>${fige || d.lignes.length < 2 ? '' : `<button class="btn ghost sm" data-del="${i}" type="button" title="Retirer">×</button>`}</td></tr>`).join('')}</tbody></table>
+      ${fige ? '' : '<button class="btn sm" id="ajout-ligne" type="button" style="margin-top:8px">+ Ajouter une ligne</button>'}
+      <div class="d-duo" style="margin-top:18px">
+        <div class="d-bloc"><label>Remise commerciale (%)</label><input type="number" min="0" max="100" data-k="remise" value="${d.remise}" ${fige ? 'disabled' : ''}></div>
+        <div class="d-bloc"><label>Acompte à la commande (%)</label><input type="number" min="0" max="100" data-k="acompte" value="${d.acompte}" ${fige ? 'disabled' : ''}></div>
+      </div>
+      <div class="d-duo">
+        <div class="d-bloc"><label>Frais de déplacement</label><select data-k="frais" ${fige ? 'disabled' : ''}><option value="refactures" ${d.frais === 'refactures' ? 'selected' : ''}>Refacturés au réel</option><option value="inclus" ${d.frais === 'inclus' ? 'selected' : ''}>Inclus dans le prix</option></select></div>
+        <div class="d-bloc"><label>Validité du devis (jours)</label><input type="number" min="1" data-k="validite" value="${d.validite}" ${fige ? 'disabled' : ''}></div>
+      </div>
+      <div class="d-total" id="totaux"></div>`;
+  } else if (etape === 'conditions') {
+    h = `<div class="d-ia"><b>Modèle de conditions de vente</b> validé une fois pour toutes. Cochez les clauses de ce devis ; modifiez le texte au besoin (la modification ne vaut que pour ce devis).</div>
+      <div class="panel"><div class="panel-b">${d.clauses.map((c, i) => `<div class="d-clause"><input type="checkbox" data-c="${i}" ${c.on ? 'checked' : ''} ${fige ? 'disabled' : ''}><div><b>${esc(c.t)}</b><textarea data-cx="${i}" ${fige ? 'disabled' : ''}>${esc(c.x)}</textarea></div></div>`).join('')}</div></div>`;
+  } else {
+    const c = calc(d);
+    const pb = [];
+    if (c.manquant) pb.push('Un ou plusieurs prix restent à fixer (onglet Prix).');
+    if (!d.inclus.trim()) pb.push('Le périmètre « inclus » est vide.');
+    if (!d.hors.trim()) pb.push('Aucune exclusion indiquée : à confirmer.');
+    h = `<div class="panel"><div class="panel-b">
+      <h3 style="margin-bottom:10px">Avant l'envoi</h3>
+      ${pb.length ? `<ul style="margin:0 0 12px 18px">${pb.map((p) => `<li>${p}</li>`).join('')}</ul>` : '<p><span class="badge green">Prêt</span> Tous les contrôles sont passés.</p>'}
+      <div class="d-duo"><div><div class="muted small">Montant HT</div><b class="num">${c.manquant ? '—' : fmt(c.ht)}</b></div><div><div class="muted small">Valable jusqu'au</div><b>${echeance(d)}</b></div></div>
+      <hr style="border:0;border-top:1px solid var(--line-2);margin:14px 0">
+      <div class="d-bloc"><label>Mail d'accompagnement (brouillon Gmail, sans signature)</label><textarea disabled style="min-height:110px">Bonjour ${esc(d.contact.split(' ')[0])},\n\nComme convenu, voici le devis pour « ${esc(d.titre)} ». Il reste valable jusqu'au ${echeance(d)}.\n\nJe vous propose un point de 20 minutes pour le passer en revue ensemble si vous le souhaitez.</textarea></div>
+      <p class="muted small">Étapes : 1) vous validez le devis (il se verrouille) ; 2) le PDF est généré ; 3) un brouillon Gmail est créé avec le PDF ; 4) vous relisez et envoyez. L'OS n'envoie jamais seul. Une tâche de relance est créée à J+10.</p>
+    </div></div>`;
+  }
+  const garde = fige ? '<button class="btn" type="button" data-toast="Nouvelle version dupliquée">Dupliquer en nouvelle version</button><button class="btn" type="button" data-toast="PDF téléchargé">Télécharger le PDF</button>'
+    : `<button class="btn" type="button" data-toast="Brouillon enregistré">Enregistrer le brouillon</button>
+       <button class="btn primary" type="button" id="valider" ${calc(d).manquant ? 'disabled title="Fixez tous les prix"' : ''}>Valider le devis</button>
+       <button class="btn go" type="button" data-toast="PDF généré et brouillon Gmail créé (simulé)" ${d.statut === 'valide' ? '' : 'disabled'}>Créer le brouillon d'envoi</button>`;
+  $('#form').innerHTML = h + `<div class="d-garde">${garde}</div>`;
+  branche();
+  totaux();
+}
+
+function totaux() {
+  const el = $('#totaux');
+  if (!el) return;
+  const c = calc(courant);
+  el.innerHTML = `<div><span>Total HT avant remise</span><span class="num">${fmt(c.brut)}</span></div>
+    ${courant.remise ? `<div><span>Remise ${courant.remise} %</span><span class="num">− ${fmt(c.remise)}</span></div>` : ''}
+    <div><span>Total HT</span><span class="num">${fmt(c.ht)}</span></div><div><span>TVA ${TVA} %</span><span class="num">${fmt(c.tva)}</span></div>
+    <div class="ttc"><span>Total TTC</span><span class="num">${fmt(c.ttc)}</span></div>
+    ${courant.acompte ? `<div class="muted small"><span>Acompte ${courant.acompte} % à la commande</span><span class="num">${fmt(c.acompte)}</span></div>` : ''}`;
+}
+
+function branche() {
+  const d = courant;
+  document.querySelectorAll('[data-k]').forEach((i) => (i.oninput = () => { d[i.dataset.k] = ['remise', 'acompte', 'validite'].includes(i.dataset.k) ? Number(i.value) || 0 : i.value; totaux(); apercu(); }));
+  document.querySelectorAll('[data-l]').forEach((i) => (i.oninput = () => {
+    const l = d.lignes[Number(i.dataset.l)];
+    const f = i.dataset.f;
+    if (f === 'pu') { l.pu = i.value === '' ? null : Number(i.value); i.classList.toggle('vide', l.pu === null); }
+    else if (f === 'q') l.q = Math.max(1, Number(i.value) || 1);
+    else l[f] = i.value;
+    totaux(); apercu();
+  }));
+  document.querySelectorAll('[data-prop]').forEach((b) => (b.onclick = () => { const l = d.lignes[Number(b.dataset.prop)]; l.pu = l.propose; ouvrir(d.id, 'prix'); }));
+  document.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => { d.lignes.splice(Number(b.dataset.del), 1); ouvrir(d.id); }));
+  const aj = $('#ajout-ligne');
+  if (aj) aj.onclick = () => { d.lignes.push({ l: '', u: 'forfait', q: 1, pu: null }); ouvrir(d.id); };
+  document.querySelectorAll('[data-c]').forEach((i) => (i.onchange = () => { d.clauses[Number(i.dataset.c)].on = i.checked; apercu(); }));
+  document.querySelectorAll('[data-cx]').forEach((i) => (i.oninput = () => { d.clauses[Number(i.dataset.cx)].x = i.value; apercu(); }));
+  document.querySelectorAll('[data-toast]').forEach((b) => (b.onclick = () => toast(b.dataset.toast)));
+  const v = $('#valider');
+  if (v) v.onclick = () => { d.statut = 'valide'; toast('Devis validé et verrouillé'); ouvrir(d.id, 'envoi'); };
+}
+
+function apercu() {
+  const d = courant;
+  const c = calc(d);
+  const liste = (s) => `<ul>${s.split('\n').filter(Boolean).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  const prix = (n) => (n === null ? '<span class="vide">à fixer</span>' : fmt(n));
+  $('#apercu').innerHTML = `
+    <div class="entete"><div><div class="logo">SIMATIS <span>OS</span></div><div>Direction commerciale à temps partagé<br>Adresse et SIRET de SIMATIS (fictifs)</div></div>
+      <div style="text-align:right"><b>DEVIS ${esc(d.numero)}</b><br>Émis le ${dateFr(d.date)}<br>Valable jusqu'au ${echeance(d)}</div></div>
+    <div><b>${esc(d.client)}</b><br>À l'attention de ${esc(d.contact)}</div>
+    <h1 style="margin-top:14px">${esc(d.titre)}</h1>
+    <h2>Contexte et objectifs</h2><p>${nl(d.contexte)}</p>${liste(d.objectifs)}
+    <h2>Périmètre de la mission</h2><b>Inclus</b>${liste(d.inclus)}<b class="hors">Exclu</b>${d.hors.trim() ? liste(d.hors) : '<p class="vide">non précisé</p>'}
+    <h2>Livrables</h2>${liste(d.livrables)}
+    <h2>Calendrier</h2><p>Début : ${d.debut ? dateFr(d.debut) : '<span class="vide">à préciser</span>'} · Durée : ${esc(d.duree) || '<span class="vide">à préciser</span>'}</p>
+    <h2>Prix</h2>
+    <table><thead><tr><th>Prestation</th><th class="r">Qté</th><th class="r">PU HT</th><th class="r">Total HT</th></tr></thead><tbody>
+      ${d.lignes.map((l) => `<tr><td>${esc(l.l) || '<span class="vide">…</span>'}</td><td class="r">${l.q} ${esc(l.u)}</td><td class="r">${prix(l.pu)}</td><td class="r">${l.pu === null ? '' : fmt(l.pu * l.q)}</td></tr>`).join('')}
+    </tbody></table>
+    <table style="width:55%;margin-left:auto"><tbody>
+      ${d.remise ? `<tr><td>Remise ${d.remise} %</td><td class="r">− ${fmt(c.remise)}</td></tr>` : ''}
+      <tr><td>Total HT</td><td class="r">${fmt(c.ht)}</td></tr><tr><td>TVA ${TVA} %</td><td class="r">${fmt(c.tva)}</td></tr><tr><td><b>Total TTC</b></td><td class="r"><b>${fmt(c.ttc)}</b></td></tr>
+      ${d.acompte ? `<tr><td>Acompte ${d.acompte} % à la commande</td><td class="r">${fmt(c.acompte)}</td></tr>` : ''}</tbody></table>
+    <p>Frais de déplacement : ${d.frais === 'inclus' ? 'inclus dans le prix.' : 'refacturés au réel, sur justificatifs.'}</p>
+    <h2>Conditions de vente</h2><div class="cgv">${d.clauses.filter((x) => x.on).map((x, i) => `<p><b>${i + 1}. ${esc(x.t)}.</b> ${esc(x.x)}</p>`).join('')}</div>
+    <div class="signature"><div><b>Pour SIMATIS</b><br>Marc (nom fictif)<br>Date et signature</div><div><b>Pour ${esc(d.client)}</b><br>Date, signature et mention « Bon pour accord »</div></div>`;
+}
+
+function toast(t) {
+  const n = document.createElement('div');
+  n.textContent = t;
+  n.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#12253F;color:#fff;padding:10px 18px;border-radius:8px;z-index:99;font-size:15px';
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 2200);
+}
+
+liste();
+</script>
+</body>
+</html>

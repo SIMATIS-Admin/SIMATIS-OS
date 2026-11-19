@@ -4,6 +4,7 @@ import {
   changeOpportunite,
   createTache,
   creerMandatDepuisAffaire,
+  fetchDevis,
   fetchFiche,
   fetchMailsFiche,
   fetchInstances,
@@ -342,6 +343,14 @@ export function Fiche({
   devisAutorise?: boolean;
 }) {
   const [data, setData] = useState<FicheDetail | null>(null);
+  const [devisId, setDevisId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!devisAutorise || kind !== 'affaire') return;
+    fetchDevis(slug).then(
+      (l) => setDevisId(l.find((d) => d.opportuniteId === id)?.id ?? null),
+      () => setDevisId(null),
+    );
+  }, [slug, kind, id, devisAutorise]);
   const [message, setMessage] = useState<string | null>(null);
   const [onglet, setOnglet] = useState<'note' | 'activite'>('note');
   const [note, setNote] = useState('');
@@ -464,10 +473,16 @@ export function Fiche({
           Nouvelle activité
         </button>
         {devisAutorise && kind === 'affaire' && universAffaire === 'Pipeline' && !f.clos && (
-          <a className="btn" href={`#/${slug}/devis/affaire/${encodeURIComponent(id)}`}>
-            <Icon name="file" />
-            Créer un devis
-          </a>
+          <button
+            className="btn"
+            onClick={() =>
+              (location.hash = devisId
+                ? `#/${slug}/devis/ouvrir/${devisId}`
+                : `#/${slug}/devis/affaire/${id}`)
+            }
+          >
+            {devisId ? 'Ouvrir le devis' : 'Préparer un devis'}
+          </button>
         )}
         <ActionsFiche
           slug={slug}

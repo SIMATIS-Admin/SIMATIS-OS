@@ -207,15 +207,17 @@ import {
   RoutineInconnue,
 } from '../routines/service.js';
 import {
+  creerDepuisAffaire,
   DevisRefuse,
   demanderTransmission,
   devisActif,
-  lignesSchema,
   listerDevis,
-  modifierLignes,
-  preparerDevis,
+  lireDevis,
+  modifierContenu,
+  nouvelleVersion,
   validerDevis,
 } from '../conversion/devis.js';
+import { contenuSchema } from '../conversion/devis-contenu.js';
 import {
   compteRenduSchema,
   compterATrier,
@@ -2190,19 +2192,29 @@ export function registerApi(
     '/api/i/:slug/devis',
     surDevis((i) => listerDevis(db, i)),
   );
+  app.get<DevisRoute>(
+    '/api/i/:slug/devis/:id',
+    surDevis<DevisRoute>((i, request) => lireDevis(db, i, request.params.id)),
+  );
   app.post<SlugParams & { Body: unknown }>(
     '/api/i/:slug/devis',
-    surDevis<SlugParams & { Body: unknown }>((i, request) =>
-      preparerDevis(db, i, z.object({ opportuniteId: z.uuid() }).parse(request.body).opportuniteId),
-    ),
+    surDevis<SlugParams & { Body: unknown }>(async (i, request) => {
+      const { opportuniteId } = z.object({ opportuniteId: z.uuid() }).parse(request.body);
+      const { devis, existant } = await creerDepuisAffaire(db, i, opportuniteId);
+      return { ...devis, existant };
+    }),
   );
-  app.patch<DevisRoute>(
+  app.put<DevisRoute>(
     '/api/i/:slug/devis/:id',
     surDevis<DevisRoute>((i, request) => {
-      const parsed = z.object({ lignes: lignesSchema }).safeParse(request.body);
-      if (!parsed.success) throw new DevisRefuse('Lignes invalides');
-      return modifierLignes(db, i, request.params.id, parsed.data.lignes);
+      const parsed = contenuSchema.safeParse(request.body);
+      if (!parsed.success) throw new DevisRefuse('Contenu du devis invalide');
+      return modifierContenu(db, i, request.params.id, parsed.data);
     }),
+  );
+  app.post<DevisRoute>(
+    '/api/i/:slug/devis/:id/version',
+    surDevis<DevisRoute>((i, request) => nouvelleVersion(db, i, request.params.id)),
   );
   app.post<DevisRoute>(
     '/api/i/:slug/devis/:id/valider',

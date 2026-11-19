@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+import { calculer, problemesAvantEnvoi, type ContenuDevis } from './devis.js';
+
+const ligne = (quantite: number, prixUnitaire: number | null) => ({
+  libelle: 'Prestation fictive',
+  unite: 'forfait' as const,
+  quantite,
+  prixUnitaire,
+});
+
+const complet: ContenuDevis = {
+  titre: 'Mission fictive',
+  contexte: '',
+  objectifs: '',
+  inclus: 'Une prestation',
+  exclu: 'Un hors périmètre',
+  livrables: '',
+  debut: null,
+  duree: '',
+  lignes: [ligne(1, 1000)],
+  remisePct: 0,
+  acomptePct: 0,
+  frais: 'refactures',
+  validiteJours: 30,
+  clauses: [],
+};
+
+// Mêmes cas que src/conversion/devis-contenu.test.ts : le serveur et l'interface ne partagent
+// pas de code, ce test les garde d'accord.
+describe('calculer', () => {
+  it('applique la remise puis la TVA, et calcule l’acompte sur le TTC', () => {
+    expect(
+      calculer({ lignes: [ligne(1, 1800), ligne(2, 450)], remisePct: 10, acomptePct: 30 }),
+    ).toEqual({
+      brut: 2700,
+      remise: 270,
+      ht: 2430,
+      tva: 486,
+      ttc: 2916,
+      acompte: 874.8,
+      prixManquant: false,
+    });
+  });
+
+  it('signale un prix manquant et le compte pour zéro', () => {
+    const r = calculer({ lignes: [ligne(1, 1000), ligne(1, null)], remisePct: 0, acomptePct: 0 });
+    expect(r.prixManquant).toBe(true);
+    expect(r.brut).toBe(1000);
+  });
+
+  it('reste à zéro avec une remise de 100 % ou sans ligne', () => {
+    expect(calculer({ lignes: [ligne(1, 500)], remisePct: 100, acomptePct: 50 })).toMatchObject({
+      ht: 0,
+      ttc: 0,
+      acompte: 0,
+    });
+    expect(calculer({ lignes: [], remisePct: 0, acomptePct: 0 })).toMatchObject({
+      brut: 0,
+      ttc: 0,
+      prixManquant: false,
+    });
+  });
+});
+
+describe('problemesAvantEnvoi', () => {
+  it('liste ce qui manque et ne dit rien d’un devis complet', () => {
+    const vide = { ...complet, inclus: '', exclu: '', lignes: [ligne(1, null)] };
+    expect(problemesAvantEnvoi(vide)).toEqual([
+      'Un ou plusieurs prix restent à fixer.',
+      'Le périmètre inclus est vide.',
+      'Aucune exclusion indiquée : à confirmer.',
+    ]);
+    expect(problemesAvantEnvoi(complet)).toEqual([]);
+  });
+});

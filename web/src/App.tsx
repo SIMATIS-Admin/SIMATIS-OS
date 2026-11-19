@@ -255,11 +255,14 @@ export function App() {
           />
         );
       case 'devis':
+        // `#/<slug>/devis/ouvrir/<devis>` ouvre un devis ; `#/<slug>/devis/affaire/<affaire>` prépare
+        // (ou rouvre) celui d'une affaire.
         return (
           <Devis
             key={`${current.slug}-${route.kind ?? ''}-${route.id ?? ''}`}
             slug={current.slug}
-            ouvrir={route.kind === 'affaire' ? route.id : undefined}
+            ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+            affaire={route.kind === 'affaire' ? route.id : undefined}
           />
         );
       case 'diagnostics':

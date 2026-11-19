@@ -1323,26 +1323,64 @@ export const envoyerCompteRendu = (slug: string, rdv: RendezVous, texte: string)
     },
   );
 
-export type LigneDevis = { libelle: string; quantite: number; prixUnitaire: number | null };
-export type DevisItem = {
-  id: string;
-  numero: string;
-  statut: 'brouillon' | 'valide' | 'transmis';
+export type LigneDevis = {
+  libelle: string;
+  unite: 'forfait' | 'jour' | 'mois' | 'personne' | 'heure';
+  quantite: number;
+  prixUnitaire: number | null;
+  prixPropose?: number | null;
+};
+export type Clause = { titre: string; texte: string; active: boolean };
+export type ContenuDevis = {
+  titre: string;
+  contexte: string;
+  objectifs: string;
+  inclus: string;
+  exclu: string;
+  livrables: string;
+  debut: string | null;
+  duree: string;
   lignes: LigneDevis[];
-  envoyeLe: string | null;
-  validite: string | null;
-  opportunite: string;
-  entreprise: string | null;
-  total: number;
+  remisePct: number;
+  acomptePct: number;
+  frais: 'refactures' | 'inclus';
+  validiteJours: number;
+  clauses: Clause[];
+};
+export type TotauxDevis = {
+  brut: number;
+  remise: number;
+  ht: number;
+  tva: number;
+  ttc: number;
+  acompte: number;
   prixManquant: boolean;
 };
+export type DevisDetail = ContenuDevis & {
+  id: string;
+  opportuniteId: string;
+  numero: string;
+  version: number;
+  statut: 'brouillon' | 'valide' | 'transmis';
+  createdAt: string;
+  envoyeLe: string | null;
+  opportunite: string;
+  entreprise: string | null;
+  contact: string | null;
+  totaux: TotauxDevis;
+};
+export type DevisItem = DevisDetail & { versions: number };
 export const fetchDevis = (slug: string) => getJson<DevisItem[]>(inst(slug, 'devis'));
-export const preparerDevis = (slug: string, opportuniteId: string) =>
-  sendJson<{ id: string }>('POST', inst(slug, 'devis'), { opportuniteId });
-export const saveLignesDevis = (slug: string, id: string, lignes: LigneDevis[]) =>
-  sendJson<{ id: string }>('PATCH', inst(slug, `devis/${encodeURIComponent(id)}`), { lignes });
+export const fetchDevisDetail = (slug: string, id: string) =>
+  getJson<DevisDetail>(inst(slug, `devis/${encodeURIComponent(id)}`));
+export const creerDevis = (slug: string, opportuniteId: string) =>
+  sendJson<DevisDetail & { existant: boolean }>('POST', inst(slug, 'devis'), { opportuniteId });
+export const enregistrerDevis = (slug: string, id: string, contenu: ContenuDevis) =>
+  sendJson<{ id: string }>('PUT', inst(slug, `devis/${encodeURIComponent(id)}`), contenu);
 export const validerDevis = (slug: string, id: string) =>
   sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/valider`), {});
+export const nouvelleVersionDevis = (slug: string, id: string) =>
+  sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/version`), {});
 export const transmettreDevis = (slug: string, id: string) =>
   sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/transmettre`), {});
 
