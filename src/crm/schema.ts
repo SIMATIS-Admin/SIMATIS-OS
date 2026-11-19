@@ -96,6 +96,15 @@ export const opportunites = pgTable(
     // Manual placement inside the Radar (0-3). Null keeps the automatic placement derived from
     // outreach attempts and replies. OS-only: this is never written back to the CRM.
     radarEtapeManuelle: integer('radar_etape_manuelle'),
+    // Manual channel shown in the Radar. Null keeps the channel inferred from the latest activity.
+    radarCanalManuel: text('radar_canal_manuel', {
+      enum: ['Téléphone', 'LinkedIn', 'E-mail', 'À préciser'],
+    }),
+    // First observed entry into each Radar step (0-3), used for conversion-time indicators.
+    radarEtapesDates: jsonb('radar_etapes_dates')
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
     qualification: jsonb('qualification').$type<Qualification>(),
     potentiel: text('potentiel'),
     faisabilite: text('faisabilite'),

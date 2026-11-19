@@ -255,7 +255,13 @@ export function App() {
           />
         );
       case 'devis':
-        return <Devis key={current.slug} slug={current.slug} />;
+        return (
+          <Devis
+            key={`${current.slug}-${route.kind ?? ''}-${route.id ?? ''}`}
+            slug={current.slug}
+            ouvrir={route.kind === 'affaire' ? route.id : undefined}
+          />
+        );
       case 'diagnostics':
         return (
           <Diagnostics
@@ -353,6 +359,7 @@ export function App() {
             slug={current.slug}
             kind={route.kind as KindFiche}
             id={route.id}
+            devisAutorise={current.modules.includes('devis')}
           />
         ) : (
           <Bientot view={view} />

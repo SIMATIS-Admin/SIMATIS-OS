@@ -22,6 +22,10 @@
 .ra-workspace {
   order: 4;
 }
+.ra-pipe,
+.ra-tableau {
+  order: 4;
+}
 .ra-rattacher {
   order: 5;
 }
@@ -345,19 +349,26 @@
 }
 .ra-affaire {
   width: 100%;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 15px 17px;
   border: 0;
   border-bottom: 1px solid var(--line-2);
   background: var(--white);
   color: var(--ink);
   text-align: left;
+}
+.ra-affaire-ouvrir {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 17px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
 }
-.ra-affaire:hover,
-.ra-affaire.selectionnee {
+.ra-affaire:hover .ra-affaire-ouvrir,
+.ra-affaire.selectionnee .ra-affaire-ouvrir {
   background: #eff8f6;
 }
 .ra-identite {
@@ -389,6 +400,27 @@
   display: block;
   font-size: 11px;
   color: var(--ink-2);
+}
+.ra-canal-carte {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--line-2);
+  padding: 8px 10px;
+  color: var(--ink-2);
+  font-size: 11px;
+}
+.ra-canal-carte select {
+  min-width: 0;
+  max-width: 130px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--ink);
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12px;
 }
 .ra-resume {
   padding: 18px 20px 20px;
@@ -457,6 +489,17 @@
 .ra-deplacer .input {
   width: 100%;
 }
+.ra-edition {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+.ra-edition label {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
 .ra-resume > .btn {
   text-decoration: none;
   width: 100%;
@@ -477,28 +520,77 @@
   width: 100%;
 }
 .ra-board {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-.ra-mode-pipe {
-  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.85fr);
-}
-.ra-mode-pipe .ra-board {
   display: flex;
   overflow-x: auto;
-  gap: 12px;
-  padding-bottom: 12px;
+  gap: 0;
+  padding: 2px 2px 14px;
   align-items: stretch;
   height: clamp(400px, calc(100dvh - 320px), 660px);
 }
-.ra-mode-pipe .ra-colonne {
-  flex: 1 0 210px;
-  min-width: 210px;
+.ra-pipe {
+  min-width: 0;
+}
+.ra-pipe-entete {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.ra-pipe-entete strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+.ra-pipe .ra-colonne {
+  flex: 1 0 250px;
+  min-width: 250px;
   overflow-y: auto;
 }
-.ra-mode-pipe .ra-aside {
-  max-width: 500px;
+.ra-conversion {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 76px;
+  align-self: flex-start;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  margin-top: 14px;
+  color: var(--ink-2);
+  cursor: help;
+  font-variant-numeric: tabular-nums;
+}
+.ra-conversion strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+.ra-conversion > span[aria-hidden='true'] {
+  color: var(--teal);
+  font-size: 19px;
+  line-height: 1;
+}
+.ra-conversion small {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.ra-conversion-detail {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  display: none;
+  width: 230px;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--navy-2);
+  color: var(--white);
+  box-shadow: 0 7px 22px #12253f30;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.ra-conversion:hover .ra-conversion-detail,
+.ra-conversion:focus-visible .ra-conversion-detail {
+  display: block;
 }
 .ra-colonne {
   border: 1px solid var(--line);
@@ -530,6 +622,9 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   margin-bottom: 8px;
+  overflow: hidden;
+}
+.ra-colonne .ra-affaire-ouvrir {
   padding: 13px 10px;
 }
 .ra-vide-colonne {
@@ -625,6 +720,82 @@
   font-size: 13px;
   color: var(--ink-2);
 }
+.ra-tableau {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+}
+.ra-actions-masse {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #f5f8fa;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.ra-actions-masse label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+  color: var(--ink);
+}
+.ra-actions-masse .input {
+  width: auto;
+  min-width: 140px;
+}
+.ra-tableau-defilement {
+  overflow: auto;
+}
+.ra-tableau table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ra-tableau th,
+.ra-tableau td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-2);
+  text-align: left;
+  vertical-align: middle;
+}
+.ra-tableau th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f5f8fa;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ra-tableau tbody tr:hover {
+  background: #f7fbfa;
+}
+.ra-tableau td > a {
+  display: grid;
+  gap: 3px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.ra-tableau td > a span {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.ra-tableau td .input {
+  width: 100%;
+  min-width: 130px;
+  padding: 8px 9px;
+}
+.ra-tableau .ra-col-check {
+  width: 42px;
+  padding-right: 4px;
+  text-align: center;
+}
 .ra-footer {
   display: flex;
   align-items: center;
@@ -655,18 +826,9 @@
   .ra-workspace {
     grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr);
   }
-  .ra-mode-pipe {
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr);
-  }
-  .ra-board {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 @media (max-width: 760px) {
   .ra-workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .ra-mode-pipe {
     grid-template-columns: minmax(0, 1fr);
   }
   .ra-search {
@@ -693,11 +855,19 @@
   .ra-liste > div {
     max-height: 300px;
   }
+  .ra-actions-masse {
+    flex-wrap: wrap;
+  }
+  .ra-actions-masse label {
+    flex-basis: 100%;
+  }
+  .ra-pipe-entete {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
 }
 @media (max-width: 440px) {
-  .ra-board {
-    grid-template-columns: 1fr;
-  }
   .ra-canal {
     font-size: 15px;
   }

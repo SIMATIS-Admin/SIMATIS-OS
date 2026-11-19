@@ -24,6 +24,12 @@ it('présente les mêmes affaires et les mêmes liens dans les deux vues', async
                       tentatives: 3,
                       radar: 'sans_reponse',
                       radarEtapeManuelle: null,
+                      radarEtapesDates: {
+                        0: '2026-11-01T09:00:00Z',
+                        1: '2026-11-03T09:00:00Z',
+                        2: '2026-11-06T09:00:00Z',
+                      },
+                      creeLe: '2026-11-01T09:00:00Z',
                       canalRadar: 'Téléphone',
                       origineCommerciale: 'LinkedIn',
                     },
@@ -76,18 +82,18 @@ it('présente les mêmes affaires et les mêmes liens dans les deux vues', async
   fireEvent.click(screen.getByRole('button', { name: 'Vue pipe' }));
   expect(screen.getByRole('button', { name: 'Vue pipe' }).classList.contains('on')).toBe(true);
   expect(screen.getByRole('region', { name: 'Ont répondu' })).toBeTruthy();
-  const affaire = screen.getByRole('button', { name: /Mission fictive/ });
-  fireEvent.click(affaire);
-  expect(screen.getByRole('link', { name: 'Ouvrir la fiche affaire' }).getAttribute('href')).toBe(
-    '#/demo/fiche/affaire/a?depuis=radar',
-  );
-  fireEvent.change(screen.getByLabelText('Déplacer Mission fictive'), {
-    target: { value: '1' },
+  expect(screen.queryByText('Parcourir les affaires')).toBeNull();
+  expect(screen.getByLabelText(/À contacter vers Contactées : 100 %/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Canal de Mission fictive'), {
+    target: { value: 'LinkedIn' },
   });
   await waitFor(() =>
     expect(fetch).toHaveBeenCalledWith(
       '/api/i/demo/fiches/affaire/a',
-      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ radarEtapeManuelle: 1 }) }),
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ radarCanalManuel: 'LinkedIn' }),
+      }),
     ),
   );
   const donnees = new Map<string, string>();
@@ -114,6 +120,43 @@ it('présente les mêmes affaires et les mêmes liens dans les deux vues', async
     expect(fetch).toHaveBeenCalledWith(
       '/api/i/demo/fiches/affaire/a',
       expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ radarEtapeManuelle: 3 }) }),
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Vue liste' }));
+  expect(screen.getByRole('button', { name: 'Vue liste' }).classList.contains('on')).toBe(true);
+  fireEvent.change(screen.getByLabelText('Étape Radar de Mission fictive'), {
+    target: { value: '1' },
+  });
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/i/demo/fiches/affaire/a',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ radarEtapeManuelle: 1 }) }),
+    ),
+  );
+  const origine = screen.getByLabelText('Origine commerciale de Mission fictive');
+  fireEvent.change(origine, { target: { value: 'Salon fictif' } });
+  fireEvent.blur(origine);
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/i/demo/fiches/affaire/a',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ origineCommerciale: 'Salon fictif' }),
+      }),
+    ),
+  );
+  fireEvent.click(screen.getByLabelText('Sélectionner Mission fictive'));
+  fireEvent.change(screen.getByLabelText('Canal à appliquer aux affaires sélectionnées'), {
+    target: { value: 'E-mail' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Appliquer' }));
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/i/demo/fiches/affaire/a',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ radarCanalManuel: 'E-mail' }),
+      }),
     ),
   );
   expect(screen.queryByText('Mission qualifiée')).toBeNull();
