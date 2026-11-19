@@ -1,7 +1,8 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type DragEvent } from 'react';
 import {
   fetchPipeline,
   fetchRendezVous,
+  patchFiche,
   type RendezVous,
   type Pipeline,
   type PipelineOpp,
@@ -13,10 +14,22 @@ import './radar/affaires.css';
 
 const canaux = ['Téléphone', 'LinkedIn', 'E-mail', 'À préciser'];
 const etapes = ['À contacter', 'Contactées', 'À relancer', 'Ont répondu'];
+const RADAR_MIME = 'application/x-simatis-radar-affaire';
 const touches = (o: PipelineOpp) => o.tentatives ?? 0;
 const compte = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 const etape = (o: PipelineOpp) =>
-  o.radar === 'repondu' ? 3 : touches(o) >= 3 ? 2 : touches(o) > 0 ? 1 : 0;
+  Number.isInteger(o.radarEtapeManuelle) &&
+  o.radarEtapeManuelle !== null &&
+  o.radarEtapeManuelle >= 0 &&
+  o.radarEtapeManuelle <= 3
+    ? o.radarEtapeManuelle
+    : o.radar === 'repondu'
+      ? 3
+      : touches(o) >= 3
+        ? 2
+        : touches(o) > 0
+          ? 1
+          : 0;
 const canal = (o: PipelineOpp) =>
   canaux.includes(o.canalRadar ?? '') ? o.canalRadar! : 'À préciser';
 const normaliser = (s: string) =>
@@ -45,6 +58,8 @@ export function RadarAffaires({ slug }: { slug: string }) {
   const [filtre, setFiltre] = useState('');
   const [selection, setSelection] = useState<string | null>(null);
   const [survol, setSurvol] = useState<string | null>(null);
+  const [surColonne, setSurColonne] = useState<number | null>(null);
+  const [message, setMessage] = useState('');
   const [revision, actualiser] = useState(0);
   const clip = useId().replace(/:/g, '');
   const { lecture, relire } = useLectureEchanges(slug, () => actualiser((n) => n + 1));
@@ -84,7 +99,9 @@ export function RadarAffaires({ slug }: { slug: string }) {
         )}
       </div>
     );
-  const toutes = data.opportunites.filter((o) => !o.clos && o.radar);
+  const limiteRadar = Math.min(2, data.etapes.length);
+  const etapesRadar = new Set(data.etapes.slice(0, limiteRadar).map((e) => e.id));
+  const toutes = data.opportunites.filter((o) => !o.clos && etapesRadar.has(o.etape));
   const correspond = (s: string) => normaliser(s).includes(normaliser(recherche.trim()));
   const affaires = toutes.filter(
     (o) =>
@@ -93,15 +110,45 @@ export function RadarAffaires({ slug }: { slug: string }) {
   );
   const active = affaires.find((o) => o.id === (survol ?? selection));
   const selectionnee = affaires.find((o) => o.id === selection);
-  const lien = (o: PipelineOpp) => `#/${slug}/fiche/affaire/${o.id}`;
+  const lien = (o: PipelineOpp) => `#/${slug}/fiche/affaire/${o.id}?depuis=radar`;
   const base = (data.contactsARattacher ?? []).filter((c) =>
     correspond(c.entreprise + ' ' + c.nom),
   );
-  const carte = (o: PipelineOpp) => (
+  const deplacer = (id: string, destination: number) => {
+    const affaire = data.opportunites.find((o) => o.id === id);
+    if (!affaire || etape(affaire) === destination) return;
+    setMessage('');
+    setData((courant) =>
+      courant
+        ? {
+            ...courant,
+            opportunites: courant.opportunites.map((o) =>
+              o.id === id ? { ...o, radarEtapeManuelle: destination } : o,
+            ),
+          }
+        : courant,
+    );
+    void patchFiche(slug, 'affaire', id, { radarEtapeManuelle: destination }).then(
+      () => actualiser((n) => n + 1),
+      (e: unknown) => {
+        setMessage(e instanceof Error ? e.message : String(e));
+        actualiser((n) => n + 1);
+      },
+    );
+  };
+  const deposer = (destination: number) => (e: DragEvent) => {
+    e.preventDefault();
+    setSurColonne(null);
+    const id = e.dataTransfer.getData(RADAR_MIME);
+    if (id) deplacer(id, destination);
+  };
+  const carte = (o: PipelineOpp, deplacable = false) => (
     <button
       type="button"
       key={o.id}
       className={`ra-affaire ${active?.id === o.id ? 'selectionnee' : ''}`}
+      draggable={deplacable}
+      onDragStart={(e) => e.dataTransfer.setData(RADAR_MIME, o.id)}
       onClick={() => setSelection(o.id)}
       onMouseEnter={() => setSurvol(o.id)}
       onMouseLeave={() => setSurvol(null)}
@@ -111,6 +158,7 @@ export function RadarAffaires({ slug }: { slug: string }) {
         <strong>{o.entreprise || o.titre}</strong>
         <span>{o.entreprise ? o.titre : o.contact}</span>
         <small>{o.contact}</small>
+        <small className="ra-origine">Origine · {o.origineCommerciale || 'À renseigner'}</small>
       </span>
       <span className="ra-touches">
         {touches(o)}
@@ -168,7 +216,7 @@ export function RadarAffaires({ slug }: { slug: string }) {
           </button>
         ))}
       </div>
-      {erreur && <p role="alert">{erreur}</p>}
+      {(erreur || message) && <p role="alert">{erreur || message}</p>}
       <div className={`ra-workspace ${pipe ? 'ra-mode-pipe' : ''}`}>
         <div className="ra-primary">
           {pipe ? (
@@ -176,22 +224,23 @@ export function RadarAffaires({ slug }: { slug: string }) {
               {etapes.map((e, i) => {
                 const liste = affaires.filter((o) => etape(o) === i);
                 return (
-                  <section className="ra-colonne" key={e} aria-label={e}>
+                  <section
+                    className={`ra-colonne ${surColonne === i ? 'depot' : ''}`}
+                    key={e}
+                    aria-label={e}
+                    onDragOver={(event) => {
+                      if (!event.dataTransfer.types.includes(RADAR_MIME)) return;
+                      event.preventDefault();
+                      setSurColonne(i);
+                    }}
+                    onDragLeave={() => setSurColonne(null)}
+                    onDrop={deposer(i)}
+                  >
                     <header>
                       <h2>{e}</h2>
                       <span>{liste.length}</span>
                     </header>
-                    <p>
-                      {
-                        [
-                          'Aucune tentative',
-                          '1 à 2 tentatives',
-                          '3 tentatives et plus',
-                          'Réponse reçue',
-                        ][i]
-                      }
-                    </p>
-                    {liste.map(carte)}
+                    {liste.map((o) => carte(o, true))}
                     {!liste.length && <div className="ra-vide-colonne">Aucune affaire</div>}
                   </section>
                 );
@@ -202,7 +251,6 @@ export function RadarAffaires({ slug }: { slug: string }) {
               <header>
                 <div>
                   <h2>{compte(affaires.length, 'affaire')} au radar</h2>
-                  <p>Les tentatives rapprochent les affaires du centre.</p>
                 </div>
               </header>
               <div className="ra-plot" onMouseLeave={() => setSurvol(null)}>
@@ -377,6 +425,21 @@ export function RadarAffaires({ slug }: { slug: string }) {
                   <dd>{selectionnee.prochaineEtape || 'À planifier'}</dd>
                 </div>
               </dl>
+              <label className="ra-deplacer">
+                <span>Étape Radar</span>
+                <select
+                  className="input"
+                  aria-label={`Déplacer ${selectionnee.titre}`}
+                  value={etape(selectionnee)}
+                  onChange={(event) => deplacer(selectionnee.id, Number(event.target.value))}
+                >
+                  {etapes.map((nom, index) => (
+                    <option key={nom} value={index}>
+                      {nom}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <a className="btn primary" href={lien(selectionnee)}>
                 <Icon name="file" />
                 Ouvrir la fiche affaire
@@ -408,7 +471,7 @@ export function RadarAffaires({ slug }: { slug: string }) {
                 <span>{affaires.length}</span>
               </header>
               <div>
-                {affaires.map(carte)}
+                {affaires.map((o) => carte(o))}
                 {!affaires.length && <p className="ra-empty">Aucune affaire ne correspond.</p>}
               </div>
             </section>

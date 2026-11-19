@@ -37,10 +37,12 @@ const pipeline = () => ({
   ecrit: !lectureSeule,
   derniereSynchro: lectureSeule ? new Date().toISOString() : null,
   etapes: [
+    { id: 'cible', label: 'Cible', probabilite: 0 },
+    { id: 'lead', label: 'Lead identifié', probabilite: 10 },
     { id: 'qualification', label: 'Qualification', probabilite: 20 },
     { id: 'proposition', label: 'Proposition', probabilite: 50 },
   ],
-  conversions: [83, null],
+  conversions: [null, null, 83, null],
   inactiviteJours: 14,
   opportunites: [
     opp('o1', 'qualification', {
@@ -56,7 +58,7 @@ const pipeline = () => ({
     }),
     opp('o3', 'proposition', { clos: 'perdu', motif: 'Budget reporté' }),
     // Écrite sans réponse : suivie dans le Radar, absente du Pipeline.
-    opp('o5', 'qualification', { sansRdv: true, radar: 'sans_reponse' }),
+    opp('o5', 'lead', { sansRdv: true, radar: 'sans_reponse' }),
   ],
 });
 

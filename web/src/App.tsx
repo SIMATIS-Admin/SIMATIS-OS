@@ -75,7 +75,13 @@ const DEFAULT_VIEW = 'cockpit';
 
 // Same URL scheme as the mockup: #/<instance>/<screen>.
 // `#/<slug>/<view>`, or `#/<slug>/fiche/<kind>/<id>` for a detail page.
-function readHash(): { slug: string | null; view: string; kind?: string; id?: string } {
+function readHash(): {
+  slug: string | null;
+  view: string;
+  kind?: string;
+  id?: string;
+  depuis?: string;
+} {
   const m = /^#\/([\w-]+)\/([\w-]+)(?:\/([\w-]+)\/([^/?#]+))?/.exec(location.hash);
   if (!m) return { slug: null, view: DEFAULT_VIEW };
   const view = vueCanonique(m[2] ?? DEFAULT_VIEW);
@@ -87,7 +93,8 @@ function readHash(): { slug: string | null; view: string; kind?: string; id?: st
   } catch {
     // Left as written.
   }
-  return { slug: m[1] ?? null, view, kind: m[3], id };
+  const depuis = new URLSearchParams(location.hash.split('?')[1] ?? '').get('depuis') ?? undefined;
+  return { slug: m[1] ?? null, view, kind: m[3], id, depuis };
 }
 const KINDS_FICHE = ['affaire', 'contact', 'entreprise'];
 const TITRES_FICHE: Record<string, string> = {
@@ -367,7 +374,7 @@ export function App() {
             ? ({
                 contact: 'contacts',
                 entreprise: 'entreprises',
-                affaire: 'pipeline',
+                affaire: route.depuis === 'radar' ? 'radar' : 'pipeline',
                 rdv: 'rendez-vous',
               }[route.kind ?? ''] ?? view)
             : estVuePresentation(view)

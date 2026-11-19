@@ -1,0 +1,1 @@
+ALTER TABLE "opportunites" ADD COLUMN "radar_etape_manuelle" integer;

@@ -23,6 +23,7 @@ const affaire = () => ({
     etape: 'qualifiedtobuy',
     clos: null,
     origine: 'hubspot',
+    origineCommerciale: 'Réseau professionnel',
     qualification: null,
   },
   liens: {
@@ -74,7 +75,8 @@ const affaire = () => ({
     },
   ],
   etapes: [
-    { id: 'appointmentscheduled', label: 'Rendez-vous planifié', probabilite: 20, jours: 11 },
+    { id: 'cible', label: 'Cible', probabilite: 5, jours: 2 },
+    { id: 'lead', label: 'Lead identifié', probabilite: 10, jours: 9 },
     { id: 'qualifiedtobuy', label: 'Qualifié', probabilite: 40, jours: 13 },
     { id: 'presentationscheduled', label: 'Proposition', probabilite: 60, jours: null },
   ],
@@ -181,7 +183,8 @@ describe('Fiche page', () => {
     render(<Fiche slug="simatis" kind="affaire" id="o1" />);
     expect(await screen.findByRole('heading', { name: 'Structuration commerciale' })).toBeTruthy();
     expect(calls[0]?.url).toBe('/api/i/simatis/fiches/affaire/o1');
-    expect(screen.getByText('11 j')).toBeTruthy();
+    expect(screen.getByText('2 j')).toBeTruthy();
+    expect(screen.getByText('9 j')).toBeTruthy();
     expect(screen.getByText('13 j')).toBeTruthy();
     for (const a of screen.getAllByRole('link', { name: 'Fonderie Vallière' })) {
       expect(a.getAttribute('href')).toBe('#/simatis/fiche/entreprise/e1');
@@ -269,6 +272,17 @@ describe('Fiche page', () => {
     fireEvent.keyDown(champ, { key: 'Enter' });
     await waitFor(() => expect(patch('/fiches/affaire/o1')).toBeTruthy());
     expect(patch('/fiches/affaire/o1')?.body).toEqual({ montant: 18000 });
+  });
+
+  it('shows the Pipeline universe and edits the commercial origin', async () => {
+    render(<Fiche slug="simatis" kind="affaire" id="o1" />);
+    expect(await screen.findByText('Pipeline')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier Origine commerciale' }));
+    const champ = screen.getByLabelText('Origine commerciale');
+    fireEvent.change(champ, { target: { value: 'Salon fictif' } });
+    fireEvent.keyDown(champ, { key: 'Enter' });
+    await waitFor(() => expect(patch('/fiches/affaire/o1')).toBeTruthy());
+    expect(patch('/fiches/affaire/o1')?.body).toEqual({ origineCommerciale: 'Salon fictif' });
   });
 
   it('shows the stage probability, and sets then clears a manual one', async () => {

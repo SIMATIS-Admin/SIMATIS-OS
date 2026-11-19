@@ -230,7 +230,13 @@ async function lire(tx: Tx, kind: Kind, id: string, maintenant: Date): Promise<F
     ),
   ];
 
-  const fiche = { ...row, origine: origine(row.source) } as Fiche['fiche'];
+  const fiche = {
+    ...row,
+    ...(kind === 'affaire'
+      ? { origineCommerciale: (row as typeof opportunites.$inferSelect).origine }
+      : {}),
+    origine: origine(row.source),
+  } as Fiche['fiche'];
   const liens: Fiche['liens'] = {};
   let etapes: Fiche['etapes'];
   if (kind === 'affaire') {
@@ -370,6 +376,8 @@ export async function getFiche(
 
 export type PatchFiche = {
   titre?: string;
+  origineCommerciale?: string | null;
+  radarEtapeManuelle?: number | null;
   montant?: number | null;
   modeFacturation?: 'spot' | 'recurrent';
   dureeEngagementMois?: number;
@@ -392,6 +400,8 @@ export type PatchFiche = {
 const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
   affaire: [
     'titre',
+    'origineCommerciale',
+    'radarEtapeManuelle',
     'montant',
     'modeFacturation',
     'dureeEngagementMois',
@@ -409,6 +419,8 @@ const CHAMPS: Record<Kind, (keyof PatchFiche)[]> = {
 // Billing terms and the manual probability exist only in the OS: they are never sent to HubSpot,
 // and stay editable when the CRM is read-only.
 const CHAMPS_LOCAUX: (keyof PatchFiche)[] = [
+  'origineCommerciale',
+  'radarEtapeManuelle',
   'probabiliteManuelle',
   'signatureEstimee',
   'modeFacturation',
@@ -525,10 +537,22 @@ export async function updateFiche(
             sql`${contactEmails.email} <> ${normaliserEmail(champs.email ?? '')}`,
           ),
         );
-    await tx
-      .update(t)
-      .set({ ...champs, updatedAt: new Date() })
-      .where(and(eq(t.instanceId, currentInstance), eq(t.id, id)));
+    if (kind === 'affaire') {
+      const { origineCommerciale, ...autres } = champs;
+      await tx
+        .update(opportunites)
+        .set({
+          ...autres,
+          ...(origineCommerciale !== undefined ? { origine: origineCommerciale } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(opportunites.instanceId, currentInstance), eq(opportunites.id, id)));
+    } else {
+      await tx
+        .update(t)
+        .set({ ...champs, updatedAt: new Date() })
+        .where(and(eq(t.instanceId, currentInstance), eq(t.id, id)));
+    }
     // The link table follows the primary link just set in the single-link column.
     if (kind !== 'entreprise' && ('contactId' in champs || 'entrepriseId' in champs))
       await assurerLiensPrincipaux(tx, kind, id, { retirerSiVide: true });

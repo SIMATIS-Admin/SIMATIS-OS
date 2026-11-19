@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { RadarAffaires } from './RadarAffaires.js';
 
@@ -20,12 +20,19 @@ it('présente les mêmes affaires et les mêmes liens dans les deux vues', async
                     {
                       id: 'a',
                       titre: 'Mission fictive',
+                      etape: 'lead',
                       tentatives: 3,
                       radar: 'sans_reponse',
+                      radarEtapeManuelle: null,
                       canalRadar: 'Téléphone',
                       origineCommerciale: 'LinkedIn',
                     },
-                    { id: 'b', titre: 'Mission qualifiée', radar: null },
+                    { id: 'b', titre: 'Mission qualifiée', etape: 'qualification', radar: null },
+                  ],
+                  etapes: [
+                    { id: 'cible', label: 'Cible' },
+                    { id: 'lead', label: 'Lead identifié' },
+                    { id: 'qualification', label: 'Qualification' },
                   ],
                   contactsARattacher: [
                     {
@@ -64,13 +71,50 @@ it('présente les mêmes affaires et les mêmes liens dans les deux vues', async
   fireEvent.click(point);
   fireEvent.mouseLeave(point.closest('.ra-plot')!);
   expect(screen.getByRole('link', { name: 'Ouvrir la fiche affaire' }).getAttribute('href')).toBe(
-    '#/demo/fiche/affaire/a',
+    '#/demo/fiche/affaire/a?depuis=radar',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Vue pipe' }));
+  expect(screen.getByRole('button', { name: 'Vue pipe' }).classList.contains('on')).toBe(true);
   expect(screen.getByRole('region', { name: 'Ont répondu' })).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: /Mission fictive/ }));
+  const affaire = screen.getByRole('button', { name: /Mission fictive/ });
+  fireEvent.click(affaire);
   expect(screen.getByRole('link', { name: 'Ouvrir la fiche affaire' }).getAttribute('href')).toBe(
-    '#/demo/fiche/affaire/a',
+    '#/demo/fiche/affaire/a?depuis=radar',
+  );
+  fireEvent.change(screen.getByLabelText('Déplacer Mission fictive'), {
+    target: { value: '1' },
+  });
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/i/demo/fiches/affaire/a',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ radarEtapeManuelle: 1 }) }),
+    ),
+  );
+  const donnees = new Map<string, string>();
+  const transfert = {
+    types: [] as string[],
+    setData(type: string, valeur: string) {
+      donnees.set(type, valeur);
+      this.types = [...donnees.keys()];
+    },
+    getData(type: string) {
+      return donnees.get(type) ?? '';
+    },
+  };
+  fireEvent.dragStart(screen.getByRole('button', { name: /Mission fictive/ }), {
+    dataTransfer: transfert,
+  });
+  fireEvent.dragOver(screen.getByRole('region', { name: 'Ont répondu' }), {
+    dataTransfer: transfert,
+  });
+  fireEvent.drop(screen.getByRole('region', { name: 'Ont répondu' }), {
+    dataTransfer: transfert,
+  });
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/i/demo/fiches/affaire/a',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ radarEtapeManuelle: 3 }) }),
+    ),
   );
   expect(screen.queryByText('Mission qualifiée')).toBeNull();
   fireEvent.change(screen.getByRole('searchbox', { name: 'Rechercher dans le Radar' }), {
