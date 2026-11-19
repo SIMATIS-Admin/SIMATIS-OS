@@ -261,7 +261,9 @@ registerPropositionType({
     const current = await charger(tx, c.devisId);
     if (current.statut !== 'valide') throw new DevisRefuse('Le devis doit être validé avant envoi');
     const envoye = new Date();
-    const validite = new Date(envoye.getTime() + current.validiteJours * 864e5).toISOString().slice(0, 10);
+    const validite = new Date(envoye.getTime() + current.validiteJours * 864e5)
+      .toISOString()
+      .slice(0, 10);
     await tx
       .update(devis)
       .set({ statut: 'transmis', envoyeLe: envoye, validite, updatedAt: envoye })

@@ -77,7 +77,6 @@ describe('Rendez-vous and Devis', () => {
     expect(tooSoon.body.error).toMatch(/prix/);
 
     const lu = (await send('GET', `/api/i/simatis/devis/${id}`)).body;
-    const { id: _id, ...contenuBrut } = lu;
     const champs = [
       'titre',
       'contexte',
@@ -94,7 +93,7 @@ describe('Rendez-vous and Devis', () => {
       'validiteJours',
       'clauses',
     ];
-    const contenu = Object.fromEntries(champs.map((c) => [c, contenuBrut[c]]));
+    const contenu = Object.fromEntries(champs.map((c) => [c, lu[c]]));
     const lignes = (lu.lignes as Row[]).map((l) => ({ ...l, prixUnitaire: 4500 }));
     const saved = await send('PUT', `/api/i/simatis/devis/${id}`, {
       ...contenu,
