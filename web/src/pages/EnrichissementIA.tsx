@@ -11,6 +11,15 @@ import {
 import { Fenetre } from './Fenetre.js';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+// Même libellés que le serveur (src/enrichissement/schema.ts) : le serveur calcule la preuve, l'écran l'affiche.
+const LIBELLES_PREUVE = {
+  page_domaine: 'mail publié sur une page, au domaine de l’entreprise',
+  page_publiee: 'mail publié sur une page citée',
+  page_sans_mail: 'page citée, sans mail publié',
+  deduit: 'mail déduit',
+  sans_source: 'sans source',
+} as const;
+
 export function LancerEnrichissement({
   slug,
   ficheIds,
@@ -100,6 +109,7 @@ export function SuggestionsEnrichissement({
   const [tache, setTache] = useState<TacheEnrichissement | null>(null);
   const [lignes, setLignes] = useState<LigneEnrichissement[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestionEnrichissement[] | null>(null);
+  const [auto, setAuto] = useState<SuggestionEnrichissement[]>([]);
   const [gardees, setGardees] = useState<Set<string>>(new Set());
   const [occupe, setOccupe] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,10 +127,10 @@ export function SuggestionsEnrichissement({
           minuteur = setTimeout(() => void lire(), 2000);
           return;
         }
-        const liste = (await suggestionsEnrichissement(slug, tacheId)).filter(
-          (s) => s.etat === 'a_valider',
-        );
+        const toutes = await suggestionsEnrichissement(slug, tacheId);
+        const liste = toutes.filter((s) => s.etat === 'a_valider');
         if (!actif) return;
+        setAuto(toutes.filter((s) => s.appliqueeAuto));
         setSuggestions(liste);
         // Un mail simplement déduit n'est jamais coché d'office.
         setGardees(new Set(liste.filter((s) => s.modeEmail !== 'deduit').map((s) => s.id)));
@@ -191,6 +201,22 @@ export function SuggestionsEnrichissement({
       {suggestions && suggestions.length === 0 && tache?.etat === 'terminee' && (
         <p className="muted">Aucun contact trouvé pour ce lot.</p>
       )}
+      {auto.length > 0 && (
+        <section>
+          <h3 className="bv-sous-titre">Appliquées automatiquement ({auto.length})</h3>
+          <p className="small muted">
+            Mail publié sur une page au domaine de l’entreprise, pour un contact déjà connu : seuls
+            les champs vides ont été complétés.
+          </p>
+          <ul className="small">
+            {auto.map((s) => (
+              <li key={s.id}>
+                {s.entreprise} : {nomDe(s)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {[...parEntreprise].map(([entreprise, liste]) => (
         <section key={entreprise} className="bv-sugg-groupe">
           <h3 className="bv-sous-titre">{entreprise}</h3>
@@ -245,7 +271,11 @@ export function SuggestionsEnrichissement({
                   ) : (
                     <span className="muted"> · sans source</span>
                   )}
-                  <span className="muted"> · confiance {s.confiance}</span>
+                  <span className="muted">
+                    {' · '}
+                    {s.preuve ? LIBELLES_PREUVE[s.preuve] : `confiance ${s.confiance}`}
+                  </span>
+                  {s.appliqueeAuto && <span className="muted"> · appliquée automatiquement</span>}
                 </div>
               </li>
             ))}

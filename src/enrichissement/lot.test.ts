@@ -2,6 +2,9 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { insererFiche } from '../../test/fiche-base.js';
+import { integrerFiches } from '../base-vivante/integration.js';
+import { normaliserFiche } from '../base-vivante/nettoyage.js';
+import { baseVivante } from '../base-vivante/schema.js';
 import { withInstance } from '../db/context.js';
 import { createInstance } from '../instances/service.js';
 import { ErreurIA, type ClientIA, type DemandeIA, type ReponseIA } from './client.js';
@@ -23,7 +26,6 @@ const contact = (nom: string) => ({
   email: `claire@${nom.toLowerCase()}.test`,
   telephone: null,
   sourceUrl: `https://${nom.toLowerCase()}.test/equipe`,
-  confiance: 'haute',
   modeEmail: 'trouve',
 });
 const entrepriseDe = (d: DemandeIA) => /Entreprise : (.*)/.exec(d.entree)?.[1] ?? '';
@@ -86,6 +88,25 @@ describe('traitement d’un lot d’enrichissement', () => {
       provenance: 'test',
       ...extra,
     });
+  // Une fiche passée par l'intégration porte ses clés de rapprochement, comme en production.
+  const ficheIntegree = async (extra: { email?: string } = {}) => {
+    const { fiche } = normaliserFiche({
+      entreprise: 'Atelier Fictif',
+      prenom: 'Claire',
+      nom: 'AtelierFictif',
+      ...extra,
+    });
+    const [r] = await withInstance(t.owner.db, instanceId, (tx) =>
+      integrerFiches(tx, instanceId, [
+        { fiche, provenance: 'test', mandat: null, importId: null, collecteLe: null },
+      ]),
+    );
+    await t.owner.pool.query('update base_vivante set domaine = $1 where id = $2', [
+      'atelierfictif.test',
+      r!.id,
+    ]);
+    return r!.id;
+  };
   const params = (ficheIds: string[], extra = {}) => ({
     type: 'contacts' as const,
     profil: ['Responsable achats'],
@@ -111,6 +132,49 @@ describe('traitement d’un lot d’enrichissement', () => {
     const sugg = await suggestions();
     expect(sugg).toHaveLength(3);
     expect(sugg[0]).toMatchObject({ tacheId: tache.id, etat: 'a_valider', modeEmail: 'trouve' });
+  });
+
+  it('preuve forte sur un contact connu au champ vide : appliquée sans validation, tracée', async () => {
+    const id = await ficheIntegree();
+    const { lignes } = await lancer(params([id], { type: 'completer' }));
+    expect(lignes[0]?.etat).toBe('terminee');
+    const [s] = await suggestions();
+    expect(s).toMatchObject({ etat: 'acceptee', appliqueeAuto: true, preuve: 'page_domaine' });
+    const [f] = await t.owner.db.select().from(baseVivante).where(eq(baseVivante.id, id));
+    expect(f?.email).toBe('claire@atelierfictif.test');
+    expect(JSON.stringify(f?.notesOrigine)).toMatch(/automatiquement/);
+  });
+
+  it('conflit avec un mail déjà en base : la suggestion reste à valider', async () => {
+    const id = await ficheIntegree({ email: 'ancien@atelierfictif.test' });
+    await lancer(params([id], { type: 'completer' }));
+    const [s] = await suggestions();
+    expect(s).toMatchObject({ etat: 'a_valider', appliqueeAuto: false, preuve: 'page_domaine' });
+    const [f] = await t.owner.db.select().from(baseVivante).where(eq(baseVivante.id, id));
+    expect(f?.email).toBe('ancien@atelierfictif.test');
+  });
+
+  it('si le rapprochement créerait une seconde fiche : annulé, la suggestion reste à valider', async () => {
+    const id = await fiche('Atelier Fictif', {
+      domaine: 'atelierfictif.test',
+      prenom: 'Claire',
+      nom: 'AtelierFictif',
+    });
+    await lancer(params([id], { type: 'completer' }));
+    const [s] = await suggestions();
+    expect(s).toMatchObject({ etat: 'a_valider', appliqueeAuto: false });
+    const tous = await t.owner.db
+      .select()
+      .from(baseVivante)
+      .where(eq(baseVivante.instanceId, instanceId));
+    expect(tous).toHaveLength(1);
+  });
+
+  it('fiche sans contact (domaine connu) : jamais d’écriture automatique', async () => {
+    const id = await fiche('Atelier Fictif', { domaine: 'atelierfictif.test' });
+    await lancer(params([id]));
+    const [s] = await suggestions();
+    expect(s).toMatchObject({ etat: 'a_valider', appliqueeAuto: false, preuve: 'page_domaine' });
   });
 
   it('une réponse hors schéma met cette fiche en échec, les autres terminent', async () => {

@@ -1,7 +1,7 @@
 import { and, eq, or, sql } from 'drizzle-orm';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
-import { enrichissementSuggestions } from '../enrichissement/schema.js';
+import { enrichissementSuggestions, LIBELLES_PREUVE } from '../enrichissement/schema.js';
 import { ajouterNoteOrigine } from './integration.js';
 import { clesDoublon, normaliserFiche } from './nettoyage.js';
 import { baseVivante, type NoteOrigine } from './schema.js';
@@ -78,7 +78,7 @@ export async function lireOrigine(db: Database, instanceId: string, id: string) 
         notes.push({
           date: s.createdAt.toISOString(),
           origine: 'Enrichissement Codex',
-          texte: `${[s.prenom, s.nom, s.fonction].filter(Boolean).join(' · ')}. Confiance : ${s.confiance}.`,
+          texte: `${[s.prenom, s.nom, s.fonction].filter(Boolean).join(' · ')}. Preuve : ${s.preuve ? LIBELLES_PREUVE[s.preuve] : `confiance ${s.confiance}`}.`,
           source: s.sourceUrl,
         });
     return { provenance: f.provenance, collecteLe: f.collecteLe, notes };

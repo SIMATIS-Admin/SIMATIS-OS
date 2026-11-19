@@ -4,6 +4,7 @@ import { withInstance } from '../db/context.js';
 import type { Executor } from '../db.js';
 import { listInstances } from '../instances/service.js';
 import { analyserReponse, consigne, entree, SCHEMA_REPONSE } from './analyse.js';
+import { ecritureAutomatique } from './auto.js';
 import { ErreurIA, type ClientIA } from './client.js';
 import {
   enrichissementLignes,
@@ -13,6 +14,7 @@ import {
   type Tache,
   type TypeEnrichissement,
 } from './schema.js';
+import { appliquerSuggestion } from './validation.js';
 
 export type ParamsLot = {
   type: TypeEnrichissement;
@@ -187,14 +189,24 @@ async function traiter(
         schema: SCHEMA_REPONSE,
       });
       jetons += reponse.jetons;
-      const candidats = analyserReponse(reponse.json, tache.maxParEntreprise);
-      await withInstance(db, instanceId, async (tx) => {
-        if (candidats.length > 0)
-          await tx
-            .insert(enrichissementSuggestions)
-            .values(
-              candidats.map((c) => ({ ...c, instanceId, tacheId: tache.id, ficheId: l.ficheId })),
-            );
+      const candidats = analyserReponse(reponse.json, tache.maxParEntreprise, {
+        domaine: fiche.domaine,
+      });
+      const creees = await withInstance(db, instanceId, async (tx) => {
+        const inserees =
+          candidats.length > 0
+            ? await tx
+                .insert(enrichissementSuggestions)
+                .values(
+                  candidats.map((c) => ({
+                    ...c,
+                    instanceId,
+                    tacheId: tache.id,
+                    ficheId: l.ficheId,
+                  })),
+                )
+                .returning()
+            : [];
         await tx
           .update(enrichissementTaches)
           .set({ jetons, updatedAt: new Date() })
@@ -203,7 +215,23 @@ async function traiter(
           .update(enrichissementLignes)
           .set({ etat: 'terminee', raison: null, updatedAt: new Date() })
           .where(eq(enrichissementLignes.id, l.id));
+        return inserees;
       });
+      // Hors de la transaction des suggestions : un échec d'écriture laisse la suggestion à valider.
+      for (const s of creees) {
+        try {
+          await withInstance(db, instanceId, async (tx) => {
+            const [actuelle] = await tx
+              .select()
+              .from(baseVivante)
+              .where(eq(baseVivante.id, l.ficheId));
+            if (actuelle && ecritureAutomatique(actuelle, s))
+              await appliquerSuggestion(tx, instanceId, s, true);
+          });
+        } catch {
+          // la suggestion reste « à valider »
+        }
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Erreur inconnue';
       if (e instanceof ErreurIA && e.fatale) fatale = message;

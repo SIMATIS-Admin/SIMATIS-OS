@@ -3496,6 +3496,8 @@ export type SuggestionEnrichissement = {
   sourceUrl: string | null;
   confiance: 'haute' | 'moyenne' | 'basse';
   modeEmail: 'trouve' | 'deduit' | null;
+  preuve?: 'page_domaine' | 'page_publiee' | 'page_sans_mail' | 'deduit' | 'sans_source' | null;
+  appliqueeAuto?: boolean;
   etat: 'a_valider' | 'acceptee' | 'refusee';
 };
 export type LancementEnrichissement = {

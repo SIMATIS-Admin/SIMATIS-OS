@@ -7,8 +7,8 @@ import {
   ajouterNoteOrigine,
 } from '../base-vivante/integration.js';
 import { withInstance } from '../db/context.js';
-import type { Executor } from '../db.js';
-import { enrichissementSuggestions, type Suggestion } from './schema.js';
+import type { Executor, Tx } from '../db.js';
+import { enrichissementSuggestions, LIBELLES_PREUVE, type Suggestion } from './schema.js';
 
 export type SuggestionAffichee = Suggestion & {
   entreprise: string;
@@ -40,6 +40,43 @@ export async function suggestionsDeLaTache(
   }));
 }
 
+// Écrit une suggestion dans la fiche : même chemin pour la validation de Marc et pour l'écriture
+// automatique, afin que la note d'origine et le rapprochement des doublons restent identiques.
+export async function appliquerSuggestion(
+  tx: Tx,
+  instanceId: string,
+  s: Suggestion,
+  auto: boolean,
+): Promise<{ creee: boolean }> {
+  const adresseEntreprise = s.emailEntreprise ?? (emailGenerique(s.email) ? s.email : null);
+  const r = await appliquerContact(tx, instanceId, s.ficheId, {
+    prenom: s.prenom ?? undefined,
+    nom: s.nom ?? undefined,
+    email: emailGenerique(s.email) ? undefined : (s.email ?? undefined),
+    linkedin: s.linkedin ?? undefined,
+    telephone: s.telephone ?? undefined,
+    fonction: s.fonction ?? undefined,
+  });
+  // Une écriture automatique complète la fiche existante : si le rapprochement échoue et crée un
+  // doublon, on annule tout (la suggestion reste à valider) plutôt que de multiplier les fiches.
+  if (auto && r.creee) throw new Error('Rapprochement impossible : écriture automatique annulée');
+  const preuve = s.preuve ? LIBELLES_PREUVE[s.preuve] : `confiance ${s.confiance}`;
+  await ajouterNoteOrigine(tx, instanceId, r.id, {
+    date: new Date().toISOString(),
+    origine: 'Enrichissement Codex',
+    texte: `${auto ? 'Contact complété automatiquement' : 'Contact vérifié'} : ${[s.prenom, s.nom, s.fonction].filter(Boolean).join(' · ')}. Preuve : ${preuve}. Email : ${s.modeEmail === 'deduit' ? 'déduit, à vérifier' : 'publié ou non renseigné'}.`,
+    source: s.sourceUrl,
+  });
+  if (adresseEntreprise) {
+    await enregistrerEmailEntreprise(tx, instanceId, r.id, adresseEntreprise);
+  }
+  await tx
+    .update(enrichissementSuggestions)
+    .set({ etat: 'acceptee', appliqueeAuto: auto, updatedAt: new Date() })
+    .where(eq(enrichissementSuggestions.id, s.id));
+  return { creee: r.creee };
+}
+
 // Seules les suggestions cochées entrent dans la base ; chacune est appliquée dans sa propre
 // transaction, une fiche en difficulté ne bloque pas les autres.
 export async function valider(
@@ -69,32 +106,11 @@ export async function valider(
 
   for (const s of await aTraiter(accepter)) {
     try {
-      await withInstance(db, instanceId, async (tx) => {
-        const adresseEntreprise = s.emailEntreprise ?? (emailGenerique(s.email) ? s.email : null);
-        const r = await appliquerContact(tx, instanceId, s.ficheId, {
-          prenom: s.prenom ?? undefined,
-          nom: s.nom ?? undefined,
-          email: emailGenerique(s.email) ? undefined : (s.email ?? undefined),
-          linkedin: s.linkedin ?? undefined,
-          telephone: s.telephone ?? undefined,
-          fonction: s.fonction ?? undefined,
-        });
-        await ajouterNoteOrigine(tx, instanceId, r.id, {
-          date: new Date().toISOString(),
-          origine: 'Enrichissement Codex',
-          texte: `Contact vérifié : ${[s.prenom, s.nom, s.fonction].filter(Boolean).join(' · ')}. Confiance : ${s.confiance}. Email : ${s.modeEmail === 'deduit' ? 'déduit, à vérifier' : 'publié ou non renseigné'}.`,
-          source: s.sourceUrl,
-        });
-        if (adresseEntreprise) {
-          await enregistrerEmailEntreprise(tx, instanceId, r.id, adresseEntreprise);
-        }
-        await tx
-          .update(enrichissementSuggestions)
-          .set({ etat: 'acceptee', updatedAt: new Date() })
-          .where(eq(enrichissementSuggestions.id, s.id));
-        bilan.appliquees++;
-        if (r.creee) bilan.creees++;
-      });
+      const r = await withInstance(db, instanceId, (tx) =>
+        appliquerSuggestion(tx, instanceId, s, false),
+      );
+      bilan.appliquees++;
+      if (r.creee) bilan.creees++;
     } catch {
       bilan.echecs++;
     }
