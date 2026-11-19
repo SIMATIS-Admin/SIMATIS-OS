@@ -9,12 +9,14 @@ import { devisClauses, devisModeles, devisReglages, type LigneModele } from './s
 
 const COMPTEUR = /\{(N+)\}/;
 
-// `{AAAA}` is the year, `{NNN}` the counter padded to as many digits as there are N.
-export const formatNumeroValide = (format: string) =>
-  format.length > 0 &&
-  format.length <= 40 &&
-  /^[\w\-/. {}]+$/.test(format) &&
-  COMPTEUR.test(format);
+// `{AAAA}` is the year, `{NNN}` the counter padded to as many digits as there are N. One of each,
+// and never a number that reads as a version (« …-V2 »): versions are told apart by that suffix.
+export const formatNumeroValide = (format: string) => {
+  if (format.length === 0 || format.length > 40 || !/^[\w\-. {}]+$/.test(format)) return false;
+  if ((format.match(/\{AAAA\}/g) ?? []).length > 1) return false;
+  if ((format.match(/\{N+\}/g) ?? []).length !== 1) return false;
+  return !/-V\d+$/i.test(formaterNumero(format, 2026, 1));
+};
 
 export const formaterNumero = (format: string, annee: number, compteur: number) =>
   format

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculer, problemesAvantEnvoi, type ContenuDevis } from './devis.js';
+import { calculer, formatNumeroValide, problemesAvantEnvoi, type ContenuDevis } from './devis.js';
 
 const ligne = (quantite: number, prixUnitaire: number | null) => ({
   libelle: 'Prestation fictive',
@@ -71,5 +71,15 @@ describe('problemesAvantEnvoi', () => {
       'Aucune exclusion indiquée : à confirmer.',
     ]);
     expect(problemesAvantEnvoi(complet)).toEqual([]);
+  });
+});
+
+describe('formatNumeroValide', () => {
+  it('suit la même règle que le serveur', () => {
+    expect(formatNumeroValide('DEV-{AAAA}-{NNN}')).toBe(true);
+    expect(formatNumeroValide('DEV-{AAAA}')).toBe(false);
+    expect(formatNumeroValide('DEV-V{NNN}')).toBe(false);
+    expect(formatNumeroValide('{AAAA}-{AAAA}-{NNN}')).toBe(false);
+    expect(formatNumeroValide('{AAAA}/{NNN}')).toBe(false);
   });
 });

@@ -37,12 +37,49 @@ const eur = (n: number) => {
   const [entier = '0', dec = '00'] = n.toFixed(2).split('.');
   return `${entier.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')},${dec} €`;
 };
-const jour = (d: Date) =>
-  `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+// A date-only value (« 2027-01-11 ») is read as written; an instant is shown as Paris time, like
+// the on-screen preview, so a quote made at 00:30 is not dated the day before.
+const jour = (d: Date, fuseau = 'UTC') =>
+  new Intl.DateTimeFormat('fr-FR', {
+    timeZone: fuseau,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(d);
+const jourParis = (d: Date) => jour(d, 'Europe/Paris');
+// The base PDF font reads Windows-1252 only: anything else would print as garbage.
+const WINANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+export const nettoyerTexte = (s: string) =>
+  Array.from(
+    s
+      .replace(/[\u202f\u00a0\u2009]/g, ' ')
+      .replace(/→/g, '->')
+      .replace(/←/g, '<-')
+      .replace(/≥/g, '>=')
+      .replace(/≤/g, '<='),
+  )
+    .filter((c) => c === '\n' || (c >= ' ' && c.codePointAt(0)! <= 0xff) || WINANSI_EXTRA.has(c))
+    .join('');
 const lignesDe = (s: string) => s.split('\n').filter((x) => x.trim());
 
 // The same blocks, in the same order, as the on-screen preview (web/src/pages/DevisApercu.tsx).
-export function genererPdfDevis(d: DevisPourPdf): Promise<Buffer> {
+export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
+  const n = nettoyerTexte;
+  const d: DevisPourPdf = {
+    ...brut,
+    entreprise: brut.entreprise === null ? null : n(brut.entreprise),
+    contact: brut.contact === null ? null : n(brut.contact),
+    titre: n(brut.titre),
+    contexte: n(brut.contexte),
+    objectifs: n(brut.objectifs),
+    inclus: n(brut.inclus),
+    exclu: n(brut.exclu),
+    livrables: n(brut.livrables),
+    duree: n(brut.duree),
+    mentions: n(brut.mentions),
+    lignes: brut.lignes.map((l) => ({ ...l, libelle: n(l.libelle) })),
+    clauses: brut.clauses.map((c) => ({ ...c, titre: n(c.titre), texte: n(c.texte) })),
+  };
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
@@ -97,8 +134,8 @@ export function genererPdfDevis(d: DevisPourPdf): Promise<Buffer> {
       .font('Helvetica')
       .fontSize(9)
       .fillColor(GRIS)
-      .text(`Émis le ${jour(d.createdAt)}`, { width: 220, align: 'right' })
-      .text(`Valable jusqu’au ${jour(echeance)}`, { width: 220, align: 'right' });
+      .text(`Émis le ${jourParis(d.createdAt)}`, { width: 220, align: 'right' })
+      .text(`Valable jusqu’au ${jourParis(echeance)}`, { width: 220, align: 'right' });
     doc.y = Math.max(yFin, doc.y) + 14;
     doc.x = MARGE;
 
@@ -138,21 +175,40 @@ export function genererPdfDevis(d: DevisPourPdf): Promise<Buffer> {
     // Prix
     titreSection('Prix');
     const colonnes = [MARGE, MARGE + 270, MARGE + 340, MARGE + 420];
-    const ligneTableau = (cellules: string[], gras = false) => {
-      place(22);
+    const enTete = () => {
       const y = doc.y;
-      doc.font(gras ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#1B2A40');
+      doc.text('Prestation', colonnes[0], y, { width: 260 });
+      doc.text('Qté', colonnes[1], y, { width: 65, align: 'right' });
+      doc.text('PU HT', colonnes[2], y, { width: 75, align: 'right' });
+      doc.text('Total HT', colonnes[3], y, {
+        width: MARGE + largeur - colonnes[3]!,
+        align: 'right',
+      });
+      doc.y = y + 16;
+    };
+    const ligneTableau = (cellules: string[]) => {
+      doc.font('Helvetica').fontSize(9);
+      // The row is measured first: a long label must move to the next page whole, never split
+      // from its price columns.
+      const h = Math.max(doc.heightOfString(cellules[0] ?? '', { width: 260 }), 12);
+      if (doc.y + h + 4 > BAS_DE_PAGE) {
+        doc.addPage();
+        enTete();
+        doc.font('Helvetica').fontSize(9);
+      }
+      const y = doc.y;
       doc.text(cellules[0] ?? '', colonnes[0], y, { width: 260 });
-      const bas = doc.y;
       doc.text(cellules[1] ?? '', colonnes[1], y, { width: 65, align: 'right' });
       doc.text(cellules[2] ?? '', colonnes[2], y, { width: 75, align: 'right' });
       doc.text(cellules[3] ?? '', colonnes[3], y, {
         width: MARGE + largeur - colonnes[3]!,
         align: 'right',
       });
-      doc.y = Math.max(bas, doc.y) + 4;
+      doc.y = y + h + 4;
     };
-    ligneTableau(['Prestation', 'Qté', 'PU HT', 'Total HT'], true);
+    place(40);
+    enTete();
     for (const l of d.lignes)
       ligneTableau([
         l.libelle || '…',
@@ -193,7 +249,10 @@ export function genererPdfDevis(d: DevisPourPdf): Promise<Buffer> {
         place(30);
         doc
           .font('Helvetica-Bold')
-          .text(`${i + 1}. ${c.titre}. `, MARGE, undefined, { width: largeur, continued: true })
+          .text(`${i + 1}. ${c.titre.replace(/[.\s]+$/, '')}. `, MARGE, undefined, {
+            width: largeur,
+            continued: true,
+          })
           .font('Helvetica')
           .text(c.texte);
         doc.moveDown(0.3);

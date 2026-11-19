@@ -1,7 +1,7 @@
 import { getDocumentProxy } from 'unpdf';
 import { describe, expect, it } from 'vitest';
 import { itemsDuPdf } from '../diagnostic/lecture-pdf.js';
-import { genererPdfDevis, type DevisPourPdf } from './devis-pdf.js';
+import { genererPdfDevis, nettoyerTexte, type DevisPourPdf } from './devis-pdf.js';
 
 const base: DevisPourPdf = {
   numero: 'DEV-2026-001',
@@ -85,5 +85,66 @@ describe('genererPdfDevis', () => {
     const pdf = await getDocumentProxy(new Uint8Array(buf));
     expect(pdf.numPages).toBeGreaterThan(1);
     expect(await texte({ ...base, lignes })).toContain('Ligne numéro 60');
+  });
+});
+
+describe('nettoyerTexte', () => {
+  it('garde le français et l’euro, remplace les flèches et espaces fines, retire le reste', () => {
+    expect(nettoyerTexte('Été à Paris : « 1\u202f200 € »')).toBe('Été à Paris : « 1 200 € »');
+    expect(nettoyerTexte('a → b ≥ c')).toBe('a -> b >= c');
+    expect(nettoyerTexte('ok ✓ 😀 fin')).toBe('ok   fin');
+  });
+});
+
+describe('genererPdfDevis, mise en page', () => {
+  it('ne casse pas le tableau quand un long libellé tombe en bas de page', async () => {
+    const lignes = [
+      ...Array.from({ length: 13 }, (_, i) => ({
+        libelle: `Ligne ${i + 1}`,
+        unite: 'forfait' as const,
+        quantite: 1,
+        prixUnitaire: 100,
+      })),
+      {
+        libelle: 'LONGLIBELLE ' + 'mot '.repeat(135),
+        unite: 'forfait' as const,
+        quantite: 1,
+        prixUnitaire: 777,
+      },
+    ];
+    const items = await itemsDuPdf(new Uint8Array(await genererPdfDevis({ ...base, lignes })));
+    const debut = items.find((i) => i.texte.startsWith('LONGLIBELLE'))!;
+    const prix = items.find((i) => i.texte === '777,00 €')!;
+    expect(prix.page).toBe(debut.page);
+    expect(Math.abs(prix.y - debut.y)).toBeLessThan(3);
+  });
+
+  it('répète l’en-tête du tableau sur chaque page', async () => {
+    const lignes = Array.from({ length: 60 }, (_, i) => ({
+      libelle: `Ligne ${i + 1}`,
+      unite: 'forfait' as const,
+      quantite: 1,
+      prixUnitaire: 100,
+    }));
+    const items = await itemsDuPdf(new Uint8Array(await genererPdfDevis({ ...base, lignes })));
+    const pagesAvecLignes = new Set(
+      items.filter((i) => /^Ligne \d+$/.test(i.texte)).map((i) => i.page),
+    );
+    const pagesAvecEntete = new Set(
+      items.filter((i) => i.texte === 'Prestation').map((i) => i.page),
+    );
+    expect(pagesAvecLignes.size).toBeGreaterThan(1);
+    for (const p of pagesAvecLignes) expect(pagesAvecEntete.has(p)).toBe(true);
+  });
+
+  it('date le devis à l’heure de Paris et ne double pas le point d’un titre de clause', async () => {
+    const t = await texte({
+      ...base,
+      createdAt: new Date('2026-11-19T23:30:00Z'),
+      clauses: [{ titre: 'Paiement.', texte: 'À 30 jours.', active: true }],
+    });
+    expect(t).toContain('Émis le 20/11/2026');
+    expect(t).not.toContain('Paiement. .');
+    expect(t).toContain('1. Paiement.');
   });
 });

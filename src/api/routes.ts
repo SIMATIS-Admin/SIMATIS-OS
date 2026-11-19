@@ -2289,6 +2289,8 @@ export function registerApi(
       });
       return reply
         .header('content-type', 'application/pdf')
+        .header('cache-control', 'private, no-store')
+        .header('x-content-type-options', 'nosniff')
         .header('content-disposition', `inline; filename="devis-${d.numero}.pdf"`)
         .send(pdf);
     }),

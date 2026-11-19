@@ -28,6 +28,14 @@ describe('formaterNumero', () => {
     expect(formatNumeroValide('DEV <{NNN}>')).toBe(false);
     expect(formatNumeroValide('A'.repeat(41) + '{NNN}')).toBe(false);
   });
+
+  it('refuse un format dont le numéro ressemble à une version (-V2) ou qui répète un jeton', () => {
+    expect(formatNumeroValide('DEV-V{NNN}')).toBe(false);
+    expect(formatNumeroValide('{AAAA}-V{N}')).toBe(false);
+    expect(formatNumeroValide('{AAAA}-{AAAA}-{NNN}')).toBe(false);
+    expect(formatNumeroValide('{NNN}-{NN}')).toBe(false);
+    expect(formatNumeroValide('{AAAA}/{NNN}')).toBe(false);
+  });
 });
 
 describe('Paramètres du devis', () => {

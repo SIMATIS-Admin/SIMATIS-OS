@@ -175,6 +175,8 @@ describe('Rendez-vous and Devis', () => {
     expect(pdf.statusCode).toBe(200);
     expect(pdf.headers['content-type']).toBe('application/pdf');
     expect(pdf.headers['content-disposition']).toMatch(/devis-.*\.pdf/);
+    expect(pdf.headers['cache-control']).toBe('private, no-store');
+    expect(pdf.headers['x-content-type-options']).toBe('nosniff');
     expect(pdf.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
     expect(
       (await app.inject({ method: 'GET', url: `/api/i/simatis/devis/${crypto.randomUUID()}/pdf` }))
