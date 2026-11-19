@@ -94,11 +94,17 @@ export async function skillsDe(dossier: string): Promise<string[]> {
   return [...new Set([...propres, ...synchronisees.flat()])];
 }
 
+// Une IA figée garderait l'exécution ouverte et bloquerait les demandes suivantes : passé ce délai,
+// le processus est arrêté. Le serveur ferme de son côté les exécutions ouvertes depuis 3 heures.
+export const DELAI_LANCEMENT_MS = 2 * 3_600_000;
+export const CODE_DELAI = 124;
+
 export const lancerProcessus = (
   commande: string,
   args: string[],
   cwd?: string,
   env?: Record<string, string>,
+  delaiMs = DELAI_LANCEMENT_MS,
 ) =>
   new Promise<number>((resolve) => {
     const child = spawn(commande, args, {
@@ -106,8 +112,21 @@ export const lancerProcessus = (
       ...(cwd ? { cwd } : {}),
       ...(env ? { env: { ...process.env, ...env } } : {}),
     });
-    child.on('error', () => resolve(127));
-    child.on('exit', (code) => resolve(code ?? 1));
+    let delaiDepasse = false;
+    const minuteur = setTimeout(() => {
+      delaiDepasse = true;
+      child.kill('SIGTERM');
+      // Un processus qui ignore SIGTERM est arrêté de force.
+      setTimeout(() => child.kill('SIGKILL'), 10_000).unref();
+    }, delaiMs);
+    child.on('error', () => {
+      clearTimeout(minuteur);
+      resolve(127);
+    });
+    child.on('exit', (code) => {
+      clearTimeout(minuteur);
+      resolve(delaiDepasse ? CODE_DELAI : (code ?? 1));
+    });
   });
 
 export const prompt = (d: Demande) =>
@@ -393,7 +412,9 @@ export async function tour(opts: RunnerOptions): Promise<number> {
         const { args, cwd } = await argumentsClaude(d, config, opts.cerveau);
         code = await lancerClaudeDeclare(api, lancer, opts.claude, args, sujet, cwd);
       }
-      if (code !== 0) erreur = `${NOM_MOTEUR[moteur]} s'est arrêté avec le code ${code}.`;
+      if (code === CODE_DELAI)
+        erreur = `${NOM_MOTEUR[moteur]} a été arrêté : la routine dépassait ${DELAI_LANCEMENT_MS / 3_600_000} heures.`;
+      else if (code !== 0) erreur = `${NOM_MOTEUR[moteur]} s'est arrêté avec le code ${code}.`;
     } finally {
       await rm(dossier, { recursive: true, force: true });
       // Revokes the token; a run left open without a report is marked failed.

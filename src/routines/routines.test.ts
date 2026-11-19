@@ -3,7 +3,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
@@ -17,6 +17,7 @@ import { executions } from './schema.js';
 import { heurePrevue, planifier } from './planification.js';
 import {
   DejaEnCours,
+  DELAI_EXECUTION_MS,
   DELAI_PRISE_MS,
   demanderExecution,
   echouerExecution,
@@ -526,6 +527,36 @@ describe('Routines Claude', () => {
     const abandonnee = await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, id));
     expect(abandonnee.statut).toBe('echouee');
     expect(abandonnee.rapport?.echec[0]).toMatch(/exécuteur/);
+    expect((await api('POST', '/api/i/demo/routines/inbox/executions')).statusCode).toBe(200);
+  });
+
+  it('closes a run left open for more than 3 hours, so the routine can be asked again', async () => {
+    const demo = await instanceOf('demo');
+    const id = await withInstance(t.app.db, demo.id, async (tx) => {
+      const ouvertes = await tx
+        .select({ id: executions.id })
+        .from(executions)
+        .where(inArray(executions.statut, ['demandee', 'en_cours']));
+      for (const e of ouvertes) await echouerExecution(tx, e.id, 'nettoyage du test', 'test');
+      const e = await demanderExecution(tx, 'inbox', 'planification');
+      await tx
+        .update(executions)
+        .set({ statut: 'en_cours', debut: new Date() })
+        .where(eq(executions.id, e.id));
+      return e.id;
+    });
+    const debut = (await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, id))).debut;
+    if (!debut) throw new Error('no start');
+
+    await planifier(t.app.db, new Date(debut.getTime() + DELAI_EXECUTION_MS - 60_000));
+    expect((await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, id))).statut).toBe(
+      'en_cours',
+    );
+
+    await planifier(t.app.db, new Date(debut.getTime() + DELAI_EXECUTION_MS + 60_000));
+    const fermee = await withInstance(t.app.db, demo.id, (tx) => getExecution(tx, id));
+    expect(fermee.statut).toBe('echouee');
+    expect(fermee.rapport?.echec[0]).toMatch(/3 heures/);
     expect((await api('POST', '/api/i/demo/routines/inbox/executions')).statusCode).toBe(200);
   });
 });
