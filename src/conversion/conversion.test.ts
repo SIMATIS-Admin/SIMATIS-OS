@@ -65,29 +65,57 @@ describe('Rendez-vous and Devis', () => {
     const opp = await oppOf('simatis');
     const created = await send('POST', '/api/i/simatis/devis', { opportuniteId: opp.id });
     expect(created.status).toBe(200);
+    expect(created.body.existant).toBe(false);
     const id = created.body.id as string;
-    expect(created.body.lignes).toEqual([
-      expect.objectContaining({ prixUnitaire: null }),
-      expect.objectContaining({ prixUnitaire: null }),
-    ]);
+    expect(created.body.lignes).toEqual([expect.objectContaining({ prixUnitaire: null })]);
+
+    const again = await send('POST', '/api/i/simatis/devis', { opportuniteId: opp.id });
+    expect(again.body).toMatchObject({ id, existant: true });
 
     const tooSoon = await send('POST', `/api/i/simatis/devis/${id}/valider`);
     expect(tooSoon.status).toBe(400);
     expect(tooSoon.body.error).toMatch(/prix/);
 
-    const lignes = (created.body.lignes as Row[]).map((l, k) => ({
-      ...l,
-      prixUnitaire: k === 0 ? 4500 : null,
-    }));
-    await send('PATCH', `/api/i/simatis/devis/${id}`, { lignes });
-    expect((await send('POST', `/api/i/simatis/devis/${id}/valider`)).status).toBe(400);
-
-    lignes[1] = { ...lignes[1], prixUnitaire: 1500 };
-    await send('PATCH', `/api/i/simatis/devis/${id}`, { lignes });
+    const lu = (await send('GET', `/api/i/simatis/devis/${id}`)).body;
+    const { id: _id, ...contenuBrut } = lu;
+    const champs = [
+      'titre',
+      'contexte',
+      'objectifs',
+      'inclus',
+      'exclu',
+      'livrables',
+      'debut',
+      'duree',
+      'lignes',
+      'remisePct',
+      'acomptePct',
+      'frais',
+      'validiteJours',
+      'clauses',
+    ];
+    const contenu = Object.fromEntries(champs.map((c) => [c, contenuBrut[c]]));
+    const lignes = (lu.lignes as Row[]).map((l) => ({ ...l, prixUnitaire: 4500 }));
+    const saved = await send('PUT', `/api/i/simatis/devis/${id}`, {
+      ...contenu,
+      inclus: 'Une prestation fictive',
+      lignes,
+    });
+    expect(saved.status).toBe(200);
     expect((await send('POST', `/api/i/simatis/devis/${id}/valider`)).status).toBe(200);
     const list = await send('GET', '/api/i/simatis/devis');
-    expect(list.body[0]).toMatchObject({ statut: 'valide', total: 6000, prixManquant: false });
-    expect((await send('PATCH', `/api/i/simatis/devis/${id}`, { lignes })).status).toBe(400);
+    expect(list.body[0]).toMatchObject({ statut: 'valide' });
+    expect((list.body[0] as Row).totaux).toMatchObject({ ht: 4500, prixManquant: false });
+    const refused = await send('PUT', `/api/i/simatis/devis/${id}`, {
+      ...contenu,
+      inclus: 'Autre',
+      lignes,
+    });
+    expect(refused.status).toBe(400);
+    expect((await send('GET', `/api/i/simatis/devis/${id}`)).body.inclus).toBe(
+      'Une prestation fictive',
+    );
+    expect((await send('PUT', `/api/i/simatis/devis/${id}`, { titre: '' })).status).toBe(400);
   });
 
   it('sends a quote only once the pilot validates the L2 proposal', async () => {
@@ -115,6 +143,19 @@ describe('Rendez-vous and Devis', () => {
       'select etape from opportunites where id = (select opportunite_id from devis limit 1)',
     );
     expect(rows[0]?.etape).toBe('proposition');
+  });
+
+  it('creates a new version of a validated quote and rejects unknown ids', async () => {
+    const [devis] = (await send('GET', '/api/i/simatis/devis')).body;
+    const v2 = await send('POST', `/api/i/simatis/devis/${devis?.id as string}/version`);
+    expect(v2.status).toBe(200);
+    expect(v2.body).toMatchObject({ version: 2, statut: 'brouillon' });
+    const inconnu = await send('GET', `/api/i/simatis/devis/${crypto.randomUUID()}`);
+    expect(inconnu.status).toBe(400);
+    expect(inconnu.body.error).toMatch(/introuvable/);
+    expect(
+      (await send('POST', `/api/i/helioval/devis/${devis?.id as string}/version`)).status,
+    ).toBe(404);
   });
 
   it('links agenda meetings to contacts and deals, and turns a compte rendu into a task proposal', async () => {
