@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, like } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { contacts, entreprises, opportunites } from '../crm/schema.js';
 import type { Executor, Tx } from '../db.js';
@@ -20,7 +20,13 @@ export const devisActif = (instance: Instance) =>
 const suffixeVersion = /-V\d+$/;
 const baseNumero = (numero: string) => numero.replace(suffixeVersion, '');
 
+// Numbers and versions are derived from what already exists: two writers at once would draw the
+// same one, so creations of one instance take turns.
+const verrouiller = (tx: Tx, instanceId: string) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${instanceId}))`);
+
 async function charger(tx: Tx, id: string): Promise<Devis> {
+  if (!z.uuid().safeParse(id).success) throw new DevisRefuse('Devis introuvable');
   const [row] = await tx
     .select()
     .from(devis)
@@ -114,6 +120,7 @@ export async function lireDevis(db: Executor, instance: Instance, id: string) {
 // amount is only offered as a suggestion (`prixPropose`).
 export async function creerDepuisAffaire(db: Executor, instance: Instance, opportuniteId: string) {
   return withInstance(db, instance.id, async (tx) => {
+    await verrouiller(tx, instance.id);
     const [opp] = await tx
       .select()
       .from(opportunites)
@@ -181,9 +188,11 @@ export async function modifierContenu(
     const [row] = await tx
       .update(devis)
       .set({ ...contenu, updatedAt: new Date() })
-      .where(eq(devis.id, id))
+      .where(and(eq(devis.id, id), eq(devis.statut, 'brouillon')))
       .returning();
-    return row ?? current;
+    // Validated in between by another request: the draft is no longer ours to write.
+    if (!row) throw new DevisRefuse('Devis déjà validé : non modifiable');
+    return row;
   });
 }
 
@@ -193,24 +202,31 @@ export async function validerDevis(db: Executor, instance: Instance, id: string)
     if (current.statut !== 'brouillon') throw new DevisRefuse('Devis déjà validé');
     if (calculer(current).prixManquant) throw new DevisRefuse("Fixez tous les prix d'abord");
     if (!current.inclus.trim()) throw new DevisRefuse('Précisez le périmètre inclus');
+    if (!current.titre.trim()) throw new DevisRefuse('Donnez un intitulé à la mission');
+    if (current.lignes.some((l) => !l.libelle.trim()))
+      throw new DevisRefuse('Chaque ligne de prix doit avoir un libellé');
     const [row] = await tx
       .update(devis)
       .set({ statut: 'valide', updatedAt: new Date() })
-      .where(eq(devis.id, id))
+      .where(and(eq(devis.id, id), eq(devis.statut, 'brouillon')))
       .returning();
+    if (!row) throw new DevisRefuse('Devis déjà validé');
     await logEvent(tx, {
       acteur: 'pilote',
       action: `Devis validé et prix fixés : ${current.numero}`,
       niveau: 'L1',
     });
-    return row ?? current;
+    return row;
   });
 }
 
 // A validated quote never changes: a new version is a fresh draft copied from the latest one.
 export async function nouvelleVersion(db: Executor, instance: Instance, id: string) {
   return withInstance(db, instance.id, async (tx) => {
+    await verrouiller(tx, instance.id);
     const source = await charger(tx, id);
+    if (source.statut === 'brouillon')
+      throw new DevisRefuse('Ce devis est encore un brouillon : modifiez-le directement');
     const [derniere] = await versionsDe(tx, source.numero);
     if (derniere?.id !== source.id)
       throw new DevisRefuse('Une version plus récente existe déjà : ouvrez-la');

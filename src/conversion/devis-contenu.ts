@@ -3,7 +3,8 @@ import { z } from 'zod';
 const texte = (max: number) => z.string().max(max);
 
 export const ligneSchema = z.object({
-  libelle: z.string().trim().min(1).max(300),
+  // A draft may hold a line or clause not yet named: naming is checked when the quote is validated.
+  libelle: z.string().trim().max(300),
   // Lines saved before units existed carry none: they read as a flat fee.
   unite: z.enum(['forfait', 'jour', 'mois', 'personne', 'heure']).default('forfait'),
   quantite: z.number().int().min(1).max(10_000),
@@ -12,13 +13,13 @@ export const ligneSchema = z.object({
 });
 
 export const clauseSchema = z.object({
-  titre: z.string().trim().min(1).max(200),
+  titre: z.string().trim().max(200),
   texte: texte(4000),
   active: z.boolean(),
 });
 
 export const contenuSchema = z.object({
-  titre: z.string().trim().min(1).max(300),
+  titre: z.string().trim().max(300),
   contexte: texte(4000),
   objectifs: texte(4000),
   inclus: texte(4000),

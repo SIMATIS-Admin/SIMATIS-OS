@@ -63,6 +63,8 @@ export function DevisEditeur({
   const [etape, setEtape] = useState<Etape>(etapeInitiale);
   const [message, setMessage] = useState<string | null>(null);
   const sale = useRef(false);
+  const dernier = useRef<ContenuDevis | null>(null);
+  const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchDevisDetail(slug, id).then(
@@ -75,6 +77,17 @@ export function DevisEditeur({
   }, [slug, id]);
 
   const brouillon = d?.statut === 'brouillon';
+  dernier.current = c;
+  // Quitter l'éditeur avec une saisie en attente l'enregistre d'abord : rien ne se perd.
+  useEffect(
+    () => () => {
+      if (sale.current && dernier.current) {
+        sale.current = false;
+        void enregistrerDevis(slug, id, dernier.current).catch(() => undefined);
+      }
+    },
+    [slug, id],
+  );
   useEffect(() => {
     if (!c || !brouillon || !sale.current) return;
     const t = setTimeout(() => {
@@ -84,6 +97,7 @@ export function DevisEditeur({
         (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
       );
     }, DELAI_ENREGISTREMENT);
+    minuteur.current = t;
     return () => clearTimeout(t);
   }, [c, brouillon, slug, id]);
 
@@ -104,6 +118,8 @@ export function DevisEditeur({
   const off = !brouillon;
 
   const valider = async () => {
+    // L'enregistrement automatique ne doit pas courir avec la validation.
+    if (minuteur.current) clearTimeout(minuteur.current);
     try {
       await enregistrerDevis(slug, id, c);
       sale.current = false;

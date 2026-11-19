@@ -168,4 +168,34 @@ describe('écran Devis', () => {
     expect(await screen.findByLabelText('Intitulé de la mission')).toBeTruthy();
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ opportuniteId: 'o1' });
   });
+
+  it('« Tous les devis » ramène à la liste même après une ouverture depuis une affaire', async () => {
+    render(<Devis slug="simatis" affaire="o1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Tous les devis/ }));
+    expect(await screen.findByText('+ Nouveau devis')).toBeTruthy();
+  });
+
+  it('quitter l’éditeur tout de suite enregistre quand même la saisie', async () => {
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Prix/ }));
+    fireEvent.change(screen.getByLabelText('Prix unitaire : Diagnostic'), {
+      target: { value: '1000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Tous les devis/ }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(calls.find((c) => c.method === 'PUT')?.body).toMatchObject({
+      lignes: [{ prixUnitaire: 1000 }],
+    });
+  });
+
+  it('valider n’attend pas l’enregistrement automatique : un seul PUT avant la validation', async () => {
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Prix/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Reprendre 5\s100/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Envoi/ }));
+    fireEvent.click(screen.getByText('Valider le devis'));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/valider'))).toBe(true));
+    await new Promise((r) => setTimeout(r, 1200));
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+  });
 });

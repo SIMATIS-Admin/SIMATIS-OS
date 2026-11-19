@@ -22,6 +22,8 @@ export function Devis({
     ouvrir ? { ecran: 'editeur', id: ouvrir } : { ecran: 'liste' },
   );
   const [erreur, setErreur] = useState<string | null>(null);
+  // Vrai seulement le temps de créer (ou retrouver) le devis de l'affaire : après, le retour à la liste reste possible.
+  const [prepare, setPrepare] = useState(Boolean(affaire));
 
   const charger = useCallback(() => {
     fetchDevis(slug).then(setListe, (e: unknown) => setErreur(String(e)));
@@ -31,8 +33,14 @@ export function Devis({
   const depuisAffaire = useCallback(
     (opportuniteId: string) =>
       creerDevis(slug, opportuniteId).then(
-        (d) => setVue({ ecran: 'editeur', id: d.id, prix: !d.existant }),
-        (e: unknown) => setErreur(e instanceof Error ? e.message : String(e)),
+        (d) => {
+          setPrepare(false);
+          setVue({ ecran: 'editeur', id: d.id, prix: !d.existant });
+        },
+        (e: unknown) => {
+          setPrepare(false);
+          setErreur(e instanceof Error ? e.message : String(e));
+        },
       ),
     [slug],
   );
@@ -60,7 +68,7 @@ export function Devis({
         />
       </>
     );
-  if (affaire && vue.ecran === 'liste')
+  if (prepare && vue.ecran === 'liste')
     return (
       <div className="empty" role="status">
         Préparation du devis…

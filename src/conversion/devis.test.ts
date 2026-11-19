@@ -143,6 +143,7 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
     const v2 = await nouvelleVersion(t.app.db, simatis, valide.id);
     expect(v2).toMatchObject({ version: 2, statut: 'brouillon', numero: `${valide.numero}-V2` });
     await expect(nouvelleVersion(t.app.db, simatis, valide.id)).rejects.toBeInstanceOf(DevisRefuse);
+    await validerDevis(t.app.db, simatis, v2.id);
     const v3 = await nouvelleVersion(t.app.db, simatis, v2.id);
     expect(v3.numero).toBe(`${valide.numero}-V3`);
     expect((await lireDevis(t.app.db, simatis, valide.id)).statut).toBe('valide');
@@ -154,5 +155,54 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
     expect(chaine).toHaveLength(1);
     expect(chaine[0]).toMatchObject({ version: 3, versions: 3 });
     expect(chaine[0]?.totaux.prixManquant).toBe(false);
+  });
+
+  it('refuse de valider avec un titre ou un libellé de ligne vide, mais enregistre le brouillon', async () => {
+    const { rows } = await t.owner.pool.query<{ id: string }>(
+      'select id from opportunites where instance_id = $1 and clos is null and id <> all($2) limit 1',
+      [simatis.id, affaires],
+    );
+    const { devis } = await creerDepuisAffaire(t.app.db, simatis, rows[0]!.id);
+    const base = await contenuDe(devis.id);
+    const vide = {
+      ...base,
+      titre: '',
+      inclus: 'Une prestation',
+      lignes: base.lignes.map((l) => ({ ...l, libelle: '', prixUnitaire: 100 })),
+    };
+    await modifierContenu(t.app.db, simatis, devis.id, vide);
+    await expect(validerDevis(t.app.db, simatis, devis.id)).rejects.toThrow(/intitulé|libellé/);
+  });
+
+  it('deux créations simultanées pour la même affaire donnent un seul devis', async () => {
+    const { rows } = await t.owner.pool.query<{ id: string }>(
+      'select id from opportunites where instance_id = $1 and clos is null and id not in (select opportunite_id from devis) limit 1',
+      [simatis.id],
+    );
+    const [a, b] = await Promise.all([
+      creerDepuisAffaire(t.app.db, simatis, rows[0]!.id),
+      creerDepuisAffaire(t.app.db, simatis, rows[0]!.id),
+    ]);
+    expect(a.devis.id).toBe(b.devis.id);
+    expect([a.existant, b.existant].sort()).toEqual([false, true]);
+  });
+
+  it('deux nouvelles versions simultanées : une seule passe', async () => {
+    const derniere = (await listerDevis(t.app.db, simatis)).find((d) => d.numero.includes('-V'))!;
+    const valide = await validerDevis(t.app.db, simatis, derniere.id);
+    const r = await Promise.allSettled([
+      nouvelleVersion(t.app.db, simatis, valide.id),
+      nouvelleVersion(t.app.db, simatis, valide.id),
+    ]);
+    expect(r.map((x) => x.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect((r.find((x) => x.status === 'rejected') as PromiseRejectedResult).reason).toBeInstanceOf(
+      DevisRefuse,
+    );
+  });
+
+  it('refuse une nouvelle version d’un brouillon et un identifiant qui n’est pas un UUID', async () => {
+    const brouillon = (await listerDevis(t.app.db, simatis)).find((d) => d.statut === 'brouillon')!;
+    await expect(nouvelleVersion(t.app.db, simatis, brouillon.id)).rejects.toThrow(/brouillon/);
+    await expect(lireDevis(t.app.db, simatis, 'abc')).rejects.toBeInstanceOf(DevisRefuse);
   });
 });
