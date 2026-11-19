@@ -1222,6 +1222,8 @@ export type SessionVisio = {
   resume?: string | null;
   morceaux: number;
   transcrits: number;
+  // Présent quand la réponse vient d'un rattachement : l'identifiant du nouveau rendez-vous.
+  rdvId?: string;
 };
 export const supprimerEnregistrement = (slug: string, sessionId: string) =>
   request<unknown>(inst(slug, `visio/sessions/${sessionId}`), { method: 'DELETE' });
@@ -1230,6 +1232,12 @@ export const modifierEnregistrement = (
   sessionId: string,
   modifs: { transcript?: string; resume?: string },
 ) => sendJson<SessionVisio>('PATCH', inst(slug, `visio/sessions/${sessionId}`), modifs);
+// Rattache l'enregistrement à un autre rendez-vous (le libre d'origine, resté vide, disparaît).
+export const rattacherEnregistrement = (slug: string, sessionId: string, rdvId: string) =>
+  sendJson<SessionVisio>('PATCH', inst(slug, `visio/sessions/${sessionId}`), { rdvId });
+// Garde le transcript de l'enregistrement dans son rendez-vous.
+export const garderTranscriptDansRdv = (slug: string, sessionId: string) =>
+  sendJson<{ ok: true }>('POST', inst(slug, `visio/sessions/${sessionId}/transcript-rdv`), {});
 export const fetchSessionVisio = (slug: string, sessionId: string) =>
   getJson<SessionVisio>(inst(slug, `visio/sessions/${sessionId}`));
 // Dernière session du rendez-vous, ou null s'il n'en a pas.
@@ -1271,6 +1279,7 @@ export type RdvFiche = {
   affaires: { id: string; nom: string }[];
   participants: { email: string; contact: { id: string; nom: string } | null }[];
   compteRendu: { texte: string; at: string | null } | null;
+  transcript: { texte: string; at: string | null } | null;
 };
 export const fetchRdv = (slug: string, id: string) =>
   getJson<RdvFiche>(inst(slug, `rendez-vous/${encodeURIComponent(id)}`));

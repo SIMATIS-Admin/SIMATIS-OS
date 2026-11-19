@@ -447,6 +447,16 @@ export function FicheRdv({ slug, id }: { slug: string; id: string }) {
               onDone={load}
               onMessage={setMessage}
             />
+            {rdv.transcript && (
+              <section className="panel" aria-label="Transcript du rendez-vous">
+                <div className="panel-h">
+                  <h2>Transcript</h2>
+                </div>
+                <div className="panel-b">
+                  <pre className="fi-cr">{rdv.transcript.texte}</pre>
+                </div>
+              </section>
+            )}
           </div>
         </div>
       </div>

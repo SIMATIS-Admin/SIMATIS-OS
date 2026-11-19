@@ -55,6 +55,17 @@ struct VueAppli: View {
                 Text("Enregistrer et transcrire une visio").font(.caption).foregroundStyle(.white.opacity(0.7))
             }
             Spacer()
+            // Le chronomètre reste dans l'en-tête, visible sans faire défiler la fenêtre.
+            if modele.enregistre, let debut = modele.debut {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    let s = max(0, Int(ctx.date.timeIntervalSince(debut)))
+                    HStack(spacing: 6) {
+                        Circle().fill(rouge).frame(width: 10, height: 10)
+                        Text(String(format: "%02d:%02d", s / 60, s % 60))
+                            .font(.title3.monospacedDigit().bold()).foregroundStyle(.white)
+                    }
+                }
+            }
             Button("Ouvrir l'OS") { NSWorkspace.shared.open(modele.adresseCockpit) }
                 .buttonStyle(.bordered).tint(.white)
         }

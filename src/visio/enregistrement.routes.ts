@@ -17,9 +17,11 @@ import {
   cloturerAbandonnees,
   finaliser,
   finaliserCloses,
+  garderTranscriptDansRdv,
   lireSession,
   ouvrirSession,
   poserTexte,
+  rattacherSession,
   recevoirMorceau,
   SessionCloseErreur,
 } from './enregistrement.js';
@@ -200,6 +202,8 @@ export function registerEnregistrementRoutes(app: FastifyInstance, { db }: { db:
     .object({
       transcript: z.string().max(500_000).optional(),
       resume: z.string().max(RESUME_MAX).optional(),
+      // Identifiant (eventId) du rendez-vous auquel rattacher l'enregistrement.
+      rdvId: z.string().min(1).max(300).optional(),
     })
     .strict();
   app.patch<{ Params: SessionParams; Body: unknown }>(
@@ -209,13 +213,36 @@ export function registerEnregistrementRoutes(app: FastifyInstance, { db }: { db:
       if (!instance) return reply;
       const parsed = modification.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Modification invalide' });
+      const { rdvId, ...modifs } = parsed.data;
+      const rattache = await withInstance(db, instance.id, async (tx) => {
+        if (rdvId === undefined) return undefined;
+        return rattacherSession(tx, request.params.id, rdvId);
+      });
+      if (rattache === null) {
+        return reply.code(404).send({ error: 'Session ou rendez-vous introuvable' });
+      }
       const session = await withInstance(db, instance.id, async (tx) =>
-        (await modifierSession(tx, request.params.id, parsed.data))
+        (await modifierSession(tx, request.params.id, modifs))
           ? lireSession(tx, request.params.id)
           : null,
       );
       if (!session) return reply.code(404).send({ error: 'Session introuvable' });
-      return resume(session);
+      return { ...resume(session), ...(rattache ? { rdvId: rattache.rdvId } : {}) };
+    },
+  );
+
+  // Marc garde le transcript dans le rendez-vous de l'enregistrement.
+  app.post<{ Params: SessionParams }>(
+    '/api/i/:slug/visio/sessions/:id/transcript-rdv',
+    async (request, reply) => {
+      const instance = await instanceDe(request.params.slug, reply);
+      if (!instance) return reply;
+      const fait = await withInstance(db, instance.id, (tx) =>
+        garderTranscriptDansRdv(tx, request.params.id),
+      );
+      return fait
+        ? { ok: true }
+        : reply.code(404).send({ error: 'Session introuvable ou sans transcript' });
     },
   );
 

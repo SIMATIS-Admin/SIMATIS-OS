@@ -10,6 +10,7 @@ describe('Interface d’enregistrement des visios', () => {
   let t: TestApp;
   let app: ReturnType<typeof buildApp>;
   let a: Instance;
+  let b: Instance;
   let runner: string;
   const son = Buffer.from('son-fictif');
   const maintenant = () => new Date();
@@ -24,7 +25,7 @@ describe('Interface d’enregistrement des visios', () => {
   beforeAll(async () => {
     t = await setupTestApp();
     a = await createInstance(t.owner.db, { slug: 'rte-a', nom: 'A', type: 'mandat' });
-    await createInstance(t.owner.db, { slug: 'rte-b', nom: 'B', type: 'mandat' });
+    b = await createInstance(t.owner.db, { slug: 'rte-b', nom: 'B', type: 'mandat' });
     const debut = new Date(maintenant().getTime() - 10 * 60_000);
     const fin = new Date(maintenant().getTime() + 50 * 60_000);
     await fabrique(t).insere(a, 'rendez_vous', 'event_id, titre, debut, fin, statut', [
@@ -259,6 +260,125 @@ describe('Interface d’enregistrement des visios', () => {
         payload: { transcript: 'x' },
       });
       expect(autre.statusCode).toBe(404);
+    });
+  });
+
+  describe('rattachement et transcript du rendez-vous', () => {
+    const libre = async () =>
+      (await app.inject({ method: 'POST', url: `${base}/sessions`, payload: {} })).json<{
+        id: string;
+      }>().id;
+    const compte = async (sql: string, args: unknown[]) =>
+      Number((await t.owner.pool.query<{ n: string }>(sql, args)).rows[0]?.n);
+    const rdvDe = async (id: string) =>
+      (
+        await t.owner.pool.query<{ event_id: string }>(
+          `select r.event_id from enregistrements_visio e
+             join rendez_vous r on r.id = e.rendez_vous_id where e.id = $1`,
+          [id],
+        )
+      ).rows[0]?.event_id;
+
+    it('rattache l’enregistrement à un rendez-vous existant et supprime le libre resté vide', async () => {
+      const id = await libre();
+      const ancien = await rdvDe(id);
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      const r = await app.inject({
+        method: 'PATCH',
+        url: `${base}/sessions/${id}`,
+        payload: { rdvId: 'os:rte-1' },
+      });
+      expect(r.statusCode).toBe(200);
+      expect(r.json()).toMatchObject({ id, rdvId: 'os:rte-1' });
+      expect(await rdvDe(id)).toBe('os:rte-1');
+      expect(await compte('select count(*) n from rendez_vous where event_id = $1', [ancien])).toBe(
+        0,
+      );
+    });
+
+    it('garde l’ancien rendez-vous libre s’il porte déjà un compte rendu', async () => {
+      const id = await libre();
+      const ancien = await rdvDe(id);
+      await t.owner.pool.query(
+        "update rendez_vous set compte_rendu = 'Compte rendu fictif' where event_id = $1",
+        [ancien],
+      );
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      await app.inject({
+        method: 'PATCH',
+        url: `${base}/sessions/${id}`,
+        payload: { rdvId: 'os:rte-1' },
+      });
+      expect(await compte('select count(*) n from rendez_vous where event_id = $1', [ancien])).toBe(
+        1,
+      );
+    });
+
+    it('refuse un rendez-vous inconnu et ne touche pas à la session', async () => {
+      const id = await libre();
+      const avant = await rdvDe(id);
+      const r = await app.inject({
+        method: 'PATCH',
+        url: `${base}/sessions/${id}`,
+        payload: { rdvId: 'os:absent' },
+      });
+      expect(r.statusCode).toBe(404);
+      expect(await rdvDe(id)).toBe(avant);
+    });
+
+    it('ne rattache pas à un rendez-vous d’une autre instance', async () => {
+      await fabrique(t).insere(b, 'rendez_vous', 'event_id, titre, statut', [
+        'os:rte-b-1',
+        'Autre instance',
+        'rdv',
+      ]);
+      const id = await libre();
+      const r = await app.inject({
+        method: 'PATCH',
+        url: `${base}/sessions/${id}`,
+        payload: { rdvId: 'os:rte-b-1' },
+      });
+      expect(r.statusCode).toBe(404);
+    });
+
+    it('garde le transcript dans le rendez-vous, et le rend avec sa fiche', async () => {
+      const id = await libre();
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      await app.inject({
+        method: 'PATCH',
+        url: `${base}/sessions/${id}`,
+        payload: { transcript: 'Moi : Texte à garder.' },
+      });
+      const r = await app.inject({
+        method: 'POST',
+        url: `${base}/sessions/${id}/transcript-rdv`,
+      });
+      expect(r.statusCode).toBe(200);
+      const ligne = await t.owner.pool.query<{ transcript: string; transcript_at: Date }>(
+        `select r.transcript, r.transcript_at from enregistrements_visio e
+           join rendez_vous r on r.id = e.rendez_vous_id where e.id = $1`,
+        [id],
+      );
+      expect(ligne.rows[0]?.transcript).toBe('Moi : Texte à garder.');
+      expect(ligne.rows[0]?.transcript_at).toBeInstanceOf(Date);
+      // Un rendez-vous libre qui garde un transcript n'est plus supprimé avec son enregistrement.
+      const ev = await rdvDe(id);
+      await app.inject({ method: 'DELETE', url: `${base}/sessions/${id}` });
+      expect(await compte('select count(*) n from rendez_vous where event_id = $1', [ev])).toBe(1);
+    });
+
+    it('refuse de garder un transcript vide ou d’une session inconnue', async () => {
+      const id = await libre();
+      const vide = await app.inject({
+        method: 'POST',
+        url: `${base}/sessions/${id}/transcript-rdv`,
+      });
+      expect(vide.statusCode).toBe(404);
+      const inconnue = await app.inject({
+        method: 'POST',
+        url: `${base}/sessions/00000000-0000-4000-8000-000000000000/transcript-rdv`,
+      });
+      expect(inconnue.statusCode).toBe(404);
     });
   });
 

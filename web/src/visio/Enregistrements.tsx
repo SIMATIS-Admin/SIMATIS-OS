@@ -168,6 +168,10 @@ export function Enregistrements({
                           setDetail(null);
                           lire();
                         }}
+                        onRattache={() => {
+                          setDetail(null);
+                          lire();
+                        }}
                       />
                     </div>
                   )}

@@ -273,6 +273,9 @@ export const rendezVous = pgTable(
     tri: text('tri').notNull().default('aucun'),
     compteRendu: text('compte_rendu'),
     compteRenduAt: timestamp('compte_rendu_at', { withTimezone: true }),
+    // Transcript d'un enregistrement, gardé dans le rendez-vous à la demande de Marc.
+    transcript: text('transcript'),
+    transcriptAt: timestamp('transcript_at', { withTimezone: true }),
   },
   (t) => [
     uniqueIndex('rendez_vous_event_idx').on(t.instanceId, t.eventId),

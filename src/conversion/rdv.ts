@@ -854,6 +854,7 @@ export async function getRendezVous(
           contact: connus.find((c) => c.id === parEmail.get(email.toLowerCase())) ?? null,
         })),
         compteRendu: r.compteRendu ? { texte: r.compteRendu, at: r.compteRenduAt } : null,
+        transcript: r.transcript ? { texte: r.transcript, at: r.transcriptAt } : null,
       };
     });
   const trouve = await lire();

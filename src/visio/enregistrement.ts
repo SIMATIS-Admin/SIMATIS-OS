@@ -305,18 +305,67 @@ export async function supprimerSession(tx: Tx, id: string): Promise<boolean> {
         eq(sujets.sourceId, id),
       ),
     );
+  await supprimerRdvLibreVide(tx, s.rdv);
+  return true;
+}
+
+// Un rendez-vous créé par un enregistrement libre disparaît avec lui, tant que rien d'autre ne s'y
+// est accroché (compte rendu, fiches liées, autre enregistrement).
+async function supprimerRdvLibreVide(tx: Tx, rdvId: string): Promise<void> {
   const [r] = await tx
-    .select({ source: rendezVous.source, compteRendu: rendezVous.compteRendu })
+    .select({
+      source: rendezVous.source,
+      compteRendu: rendezVous.compteRendu,
+      transcript: rendezVous.transcript,
+    })
     .from(rendezVous)
-    .where(eq(rendezVous.id, s.rdv));
-  if (r?.source !== SOURCE_RDV_LIBRE || r.compteRendu !== null) return true;
+    .where(eq(rendezVous.id, rdvId));
+  if (r?.source !== SOURCE_RDV_LIBRE || r.compteRendu !== null || r.transcript !== null) return;
   const { rows } = await tx.execute<{ n: number }>(sql`
-    select (select count(*) from rdv_contacts where rendez_vous_id = ${s.rdv})
-         + (select count(*) from rdv_entreprises where rendez_vous_id = ${s.rdv})
-         + (select count(*) from rdv_affaires where rendez_vous_id = ${s.rdv})
-         + (select count(*) from enregistrements_visio where rendez_vous_id = ${s.rdv}) as n`);
+    select (select count(*) from rdv_contacts where rendez_vous_id = ${rdvId})
+         + (select count(*) from rdv_entreprises where rendez_vous_id = ${rdvId})
+         + (select count(*) from rdv_affaires where rendez_vous_id = ${rdvId})
+         + (select count(*) from enregistrements_visio where rendez_vous_id = ${rdvId}) as n`);
   const usages = Number(rows[0]?.n ?? 0);
-  if (usages === 0) await tx.delete(rendezVous).where(eq(rendezVous.id, s.rdv));
+  if (usages === 0) await tx.delete(rendezVous).where(eq(rendezVous.id, rdvId));
+}
+
+// Marc rattache l'enregistrement à un autre rendez-vous (existant ou créé pour l'occasion) : le
+// rendez-vous libre d'origine, resté vide, est supprimé. Renvoie null si l'un des deux manque.
+export async function rattacherSession(
+  tx: Tx,
+  id: string,
+  rdvEventId: string,
+): Promise<{ rdvId: string } | null> {
+  const [s] = await tx
+    .select({ rdv: enregistrementsVisio.rendezVousId })
+    .from(enregistrementsVisio)
+    .where(
+      and(eq(enregistrementsVisio.instanceId, currentInstance), eq(enregistrementsVisio.id, id)),
+    );
+  const [cible] = await tx
+    .select({ id: rendezVous.id })
+    .from(rendezVous)
+    .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.eventId, rdvEventId)));
+  if (!s || !cible) return null;
+  if (s.rdv === cible.id) return { rdvId: rdvEventId };
+  await tx
+    .update(enregistrementsVisio)
+    .set({ rendezVousId: cible.id })
+    .where(eq(enregistrementsVisio.id, id));
+  await supprimerRdvLibreVide(tx, s.rdv);
+  return { rdvId: rdvEventId };
+}
+
+// Le transcript de la session est copié dans son rendez-vous (qui n'en garde qu'un, le dernier).
+export async function garderTranscriptDansRdv(tx: Tx, id: string): Promise<boolean> {
+  const s = await lireSession(tx, id);
+  const texte = s?.transcript ?? (s ? assemblerTranscript(s.morceaux) : '');
+  if (!s || !texte.trim()) return false;
+  await tx
+    .update(rendezVous)
+    .set({ transcript: texte, transcriptAt: new Date() })
+    .where(eq(rendezVous.id, s.rendezVousId));
   return true;
 }
 
