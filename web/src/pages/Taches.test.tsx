@@ -51,7 +51,12 @@ const semaine = () => ({
       dureeMinutes: 60,
     }),
   ],
-  enRetard: [tache('t4', 'Relancer Fonderie', { echeance: '2026-10-08T08:00:00.000Z' })],
+  enRetard: [
+    tache('t4', 'Relancer Fonderie', {
+      echeance: '2026-10-08T08:00:00.000Z',
+      notes: 'Pourquoi : revue dans 14 jours, délai habituel de relance, sans réponse à ce jour.',
+    }),
+  ],
   sansEcheance: [tache('t5', 'Trier les cartes de visite')],
   rdv: [
     {
@@ -146,6 +151,7 @@ describe('Tâches screen', () => {
       'Point mensuel',
       'Trier les cartes de visite',
     ]);
+    expect(screen.getByText(/^Pourquoi : revue dans 14 jours/)).toBeTruthy();
     const ligne = screen.getByText('Appeler Romain Arpin').closest('tr') as HTMLElement;
     expect(within(ligne).getByText('Appel')).toBeTruthy();
     expect(within(ligne).getByText('HubSpot')).toBeTruthy();
