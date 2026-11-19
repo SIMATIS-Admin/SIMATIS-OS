@@ -804,11 +804,20 @@ export type PipelineOpp = {
   radar: 'a_contacter' | 'sans_reponse' | 'repondu' | null;
   tentatives?: number;
   canalRadar?: string | null;
+  origineCommerciale?: string | null;
   // Prochain rendez-vous commercial lié à l'affaire, à son contact ou à son entreprise.
   prochainRdv: string | null;
 };
 
 export type Pipeline = {
+  contactsARattacher?: {
+    id: string;
+    entreprise: string;
+    nom: string;
+    linkedin: string | null;
+    provenance: string;
+    statut: string;
+  }[];
   source: 'natif' | 'hubspot';
   ecrit: boolean;
   derniereSynchro: string | null;

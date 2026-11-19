@@ -3,6 +3,13 @@ import { setupTestApp, type TestApp } from '../../test/database.js';
 import { withInstance } from '../db/context.js';
 import { lierRdv } from '../conversion/rdv.js';
 import { eq } from 'drizzle-orm';
+import {
+  integrerFiches,
+  lierCrm,
+  majConformite,
+  majHistorique,
+} from '../base-vivante/integration.js';
+import { normaliserFiche } from '../base-vivante/nettoyage.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
 import { ETAPES_NATIVES, getPipeline } from './pipeline.js';
@@ -33,6 +40,53 @@ describe('Pipeline : rendez-vous des affaires', () => {
   });
 
   const etape = ETAPES_NATIVES[0]!.id;
+  it('retrouve les réponses de la base sans fiche CRM avec leur provenance déclarée', async () => {
+    const cible = await createInstance(t.owner.db, {
+      slug: 'radar-base',
+      nom: 'Test',
+      type: 'propre',
+    });
+    const autre = await createInstance(t.owner.db, {
+      slug: 'radar-autre',
+      nom: 'Autre',
+      type: 'propre',
+    });
+    const creerBase = (instanceId: string, entreprise: string, email?: string) =>
+      withInstance(t.owner.db, instanceId, async (tx) => {
+        const [fiche] = await integrerFiches(tx, instanceId, [
+          {
+            fiche: normaliserFiche({ entreprise, nom: 'Contact fictif', email }).fiche,
+            provenance: 'Recherche',
+            mandat: null,
+            importId: null,
+            collecteLe: null,
+          },
+        ]);
+        await majHistorique(tx, instanceId, fiche!.id, { resultat: 'repondu' });
+        return fiche!.id;
+      });
+    await creerBase(cible.id, 'Atelier Fictif');
+    const liee = await creerBase(cible.id, 'Liée');
+    await creerBase(cible.id, 'Même email', 'RELIE@exemple.test');
+    const opposee = await creerBase(cible.id, 'Opposée');
+    await creerBase(autre.id, 'Autre instance');
+    await withInstance(t.owner.db, cible.id, async (tx) => {
+      const [contact] = await tx
+        .insert(contacts)
+        .values({ instanceId: cible.id, nom: 'Contact relié', email: 'relie@exemple.test' })
+        .returning();
+      await lierCrm(tx, cible.id, liee, { crmMandat: 'Test', crmContactId: contact!.id });
+      await majConformite(tx, cible.id, opposee, { opposition: true });
+    });
+    const resultat = await getPipeline(t.app.db, cible);
+    expect(resultat.contactsARattacher).toHaveLength(1);
+    expect(resultat.contactsARattacher[0]).toMatchObject({
+      entreprise: 'Atelier Fictif',
+      provenance: 'Recherche',
+    });
+    const o = await affaire('Provenance fictive', { origine: 'Réseau professionnel' });
+    expect(await lue(o.titre)).toMatchObject({ origineCommerciale: 'Réseau professionnel' });
+  });
   const affaire = (titre: string, extra: Partial<typeof opportunites.$inferInsert> = {}) =>
     withInstance(t.owner.db, inst.id, async (tx) => {
       const [o] = await tx
