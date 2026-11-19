@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   index,
   integer,
@@ -66,3 +67,53 @@ export const devis = pgTable(
 );
 
 export type Devis = typeof devis.$inferSelect;
+
+// The pilot's own quote settings and libraries: they live in the database, never in the code.
+export const devisReglages = pgTable(
+  'devis_reglages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    numerotation: text('numerotation').notNull().default('DEV-{AAAA}-{NNN}'),
+    mentions: text('mentions').notNull().default(''),
+    tvaPct: integer('tva_pct').notNull().default(20),
+    validiteJours: integer('validite_jours').notNull().default(30),
+    acomptePct: integer('acompte_pct').notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('devis_reglages_instance_idx').on(t.instanceId),
+    instanceIsolation('devis_reglages'),
+  ],
+);
+
+export const devisClauses = pgTable(
+  'devis_clauses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    titre: text('titre').notNull(),
+    texte: text('texte').notNull().default(''),
+    parDefaut: boolean('par_defaut').notNull().default(false),
+    ordre: integer('ordre').notNull().default(0),
+  },
+  (t) => [index('devis_clauses_instance_idx').on(t.instanceId), instanceIsolation('devis_clauses')],
+);
+
+// A mission model never carries a price: lines hold a label, a unit and a quantity only.
+export type LigneModele = { libelle: string; unite: UniteDevis; quantite: number };
+export const devisModeles = pgTable(
+  'devis_modeles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    nom: text('nom').notNull(),
+    contexte: text('contexte').notNull().default(''),
+    objectifs: text('objectifs').notNull().default(''),
+    inclus: text('inclus').notNull().default(''),
+    exclu: text('exclu').notNull().default(''),
+    livrables: text('livrables').notNull().default(''),
+    duree: text('duree').notNull().default(''),
+    lignes: jsonb('lignes').$type<LigneModele[]>().notNull().default([]),
+  },
+  (t) => [index('devis_modeles_instance_idx').on(t.instanceId), instanceIsolation('devis_modeles')],
+);

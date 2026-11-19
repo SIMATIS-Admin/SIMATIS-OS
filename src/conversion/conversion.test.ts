@@ -167,6 +167,58 @@ describe('Rendez-vous and Devis', () => {
     ).toBe(404);
   });
 
+  it('serves the quote settings and libraries, only for the own instance', async () => {
+    expect((await send('GET', '/api/i/helioval/devis/parametres')).status).toBe(404);
+    const vide = await send('GET', '/api/i/simatis/devis/parametres');
+    expect(vide.status).toBe(200);
+    expect(vide.body.reglages).toMatchObject({ tvaPct: 20, numerotation: 'DEV-{AAAA}-{NNN}' });
+
+    const mauvais = await send('PUT', '/api/i/simatis/devis/parametres/reglages', {
+      numerotation: 'SANS-COMPTEUR',
+      mentions: '',
+      tvaPct: 20,
+      validiteJours: 30,
+      acomptePct: 0,
+    });
+    expect(mauvais.status).toBe(400);
+
+    const clause = await send('POST', '/api/i/simatis/devis/parametres/clauses', {
+      titre: 'Paiement',
+      texte: 'À 30 jours.',
+      parDefaut: true,
+      ordre: 1,
+    });
+    expect(clause.status).toBe(200);
+    const modif = await send(
+      'PUT',
+      `/api/i/simatis/devis/parametres/clauses/${clause.body.id as string}`,
+      { titre: 'Paiement', texte: 'À 45 jours.', parDefaut: true, ordre: 1 },
+    );
+    expect(modif.body.texte).toBe('À 45 jours.');
+    const modele = await send('POST', '/api/i/simatis/devis/parametres/modeles', {
+      nom: 'Modèle fictif',
+      contexte: '',
+      objectifs: '',
+      inclus: 'Une prestation',
+      exclu: '',
+      livrables: '',
+      duree: '',
+      lignes: [{ libelle: 'Phase', unite: 'jour', quantite: 2 }],
+    });
+    expect(modele.status).toBe(200);
+    const lu = await send('GET', '/api/i/simatis/devis/parametres');
+    expect((lu.body.clauses as Row[]).length).toBe(1);
+    expect((lu.body.modeles as Row[]).length).toBe(1);
+    expect(
+      (await send('DELETE', `/api/i/simatis/devis/parametres/modeles/${modele.body.id as string}`))
+        .status,
+    ).toBe(200);
+    expect(
+      (await send('DELETE', `/api/i/simatis/devis/parametres/clauses/${clause.body.id as string}`))
+        .status,
+    ).toBe(200);
+  });
+
   it('links agenda meetings to contacts and deals, and turns a compte rendu into a task proposal', async () => {
     const { rows } = await t.owner.pool.query<{ email: string; id: string }>(
       "select c.email, c.id from contacts c join instances i on i.id = c.instance_id join opportunites o on o.contact_id = c.id and o.clos is null where i.slug = 'helioval' limit 1",

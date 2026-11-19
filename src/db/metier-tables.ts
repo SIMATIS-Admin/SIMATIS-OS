@@ -1,5 +1,5 @@
 import { connexions } from '../connexions/schema.js';
-import { devis } from '../conversion/schema.js';
+import { devis, devisClauses, devisModeles, devisReglages } from '../conversion/schema.js';
 import { executions, routines } from '../routines/schema.js';
 import { activites, contacts, entreprises, opportunites, taches } from '../crm/schema.js';
 import { autonomie, propositions } from '../propositions/schema.js';
@@ -97,6 +97,9 @@ export const METIER_TABLES = [
   executions,
   routines,
   devis,
+  devisReglages,
+  devisClauses,
+  devisModeles,
   propositions,
   autonomie,
   prospectionBrouillons,
