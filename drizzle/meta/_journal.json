@@ -715,6 +715,13 @@
       "when": 1795098954395,
       "tag": "0101_bitter_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1795124471759,
+      "tag": "0102_wet_mimic",
+      "breakpoints": true
     }
   ]
 }
