@@ -13,6 +13,8 @@ import { dernieresExecutions, listerRoutines } from './service.js';
 
 // A runner polls every 30 s: beyond two minutes without news, it is considered stopped.
 const PRESENCE_MS = 2 * 60_000;
+// Les routines les plus longues durent un peu moins de 1 h 30 : au-delà de 2 h, une exécution ouverte est suspecte.
+const OUVERTE_SUSPECTE_MS = 2 * 3_600_000;
 const FUSEAU = 'Europe/Paris';
 
 export type Etat = 'ok' | 'attention' | 'manque';
@@ -150,7 +152,21 @@ export async function santeRoutines(db: Executor, instance: Instance, maintenant
                 ? `Prochaine exécution : ${quand.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: FUSEAU })}.`
                 : `${rythme(r.cle, r.params)}.`,
             };
-        const controles = [executeur, claude, skill, ...connexionsCtl, planif];
+        const ouverte = dernieres.find((d) => d.cle === r.cle)?.derniere ?? null;
+        const suspecte: Controle[] =
+          ouverte?.statut === 'en_cours' &&
+          ouverte.debut &&
+          maintenant.getTime() - ouverte.debut.getTime() > OUVERTE_SUSPECTE_MS
+            ? [
+                {
+                  id: 'execution',
+                  libelle: 'Exécution en cours depuis longtemps',
+                  etat: 'attention',
+                  detail: `Ouverte depuis ${depuis(ouverte.debut, maintenant)} : si l'exécuteur a été arrêté, elle sera fermée automatiquement au bout de 3 heures, puis la routine pourra être relancée.`,
+                },
+              ]
+            : [];
+        const controles = [executeur, claude, skill, ...connexionsCtl, planif, ...suspecte];
         const feu: Etat = controles.some((c) => c.etat === 'manque')
           ? 'manque'
           : controles.some((c) => c.etat === 'attention')

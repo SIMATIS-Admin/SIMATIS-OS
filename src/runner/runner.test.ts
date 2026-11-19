@@ -4,6 +4,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { argumentsCodex } from './codex-mcp.js';
 import {
+  CODE_DELAI,
+  lancerProcessus,
   argumentsClaude,
   lancementCodexRoutine,
   tour,
@@ -392,5 +394,46 @@ describe('déclaration des lancements (journal de consommation IA)', () => {
     } finally {
       await rm(dossier, { recursive: true, force: true });
     }
+  });
+});
+
+describe('délai maximal d’un lancement', () => {
+  it('une routine arrêtée au délai est clôturée avec un motif explicite', async () => {
+    const corps: Record<string, unknown>[] = [];
+    const fetchEnregistre = ((url: string, init?: RequestInit) => {
+      const chemin = url.replace('http://os.test', '');
+      if (chemin === '/api/runner/demandes')
+        return Promise.resolve(Response.json([demande('relance-quotidienne')]));
+      if (chemin === '/api/runner/moteur')
+        return Promise.resolve(Response.json({ moteur: 'claude' }));
+      if (chemin.endsWith('/demarrer'))
+        return Promise.resolve(Response.json({ tokenId: 't1', token: 'jeton-fictif' }));
+      if (chemin.endsWith('/fin'))
+        corps.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+      return Promise.resolve(Response.json({ ok: true }));
+    }) as unknown as typeof fetch;
+    await tour({
+      base: 'http://os.test',
+      token: 'runner',
+      claude: 'claude-fictif',
+      fetch: fetchEnregistre,
+      poste: () =>
+        Promise.resolve({ nom: 'poste', claude: '2.1', skills: ['relance-quotidienne'] }),
+      lancer: () => Promise.resolve(CODE_DELAI),
+    });
+    expect(corps).toHaveLength(1);
+    expect(String(corps[0]?.erreur)).toMatch(/dépassait 2 heures/);
+  });
+
+  it('arrête un processus figé et rend le code de délai', async () => {
+    const debut = Date.now();
+    const code = await lancerProcessus('sleep', ['30'], undefined, undefined, 200);
+    expect(code).toBe(CODE_DELAI);
+    expect(Date.now() - debut).toBeLessThan(5_000);
+  });
+
+  it('un processus qui finit à temps garde son code', async () => {
+    expect(await lancerProcessus('sh', ['-c', 'exit 3'], undefined, undefined, 5_000)).toBe(3);
+    expect(await lancerProcessus('true', [], undefined, undefined, 5_000)).toBe(0);
   });
 });

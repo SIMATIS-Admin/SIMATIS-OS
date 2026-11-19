@@ -224,3 +224,24 @@ export async function abandonnerNonPrises(tx: Tx, maintenant = new Date()): Prom
   for (const { id } of perimees) await echouerExecution(tx, id, MOTIF_NON_PRISE, 'planification');
   return perimees.length;
 }
+
+// A run started but never closed (runner killed, computer off mid-run) would also lock its routine
+// for good. The runner stops a run after 2 hours; past 3 hours without a report the server closes it.
+export const DELAI_EXECUTION_MS = 3 * 3_600_000;
+export const MOTIF_PERIMEE =
+  "Abandonnée : exécution ouverte depuis plus de 3 heures sans rapport (exécuteur arrêté ou lancement figé). Vérifiez l'exécuteur, puis relancez.";
+
+export async function abandonnerEnCoursPerimees(tx: Tx, maintenant = new Date()): Promise<number> {
+  const perimees = await tx
+    .select({ id: executions.id })
+    .from(executions)
+    .where(
+      and(
+        eq(executions.instanceId, currentInstance),
+        eq(executions.statut, 'en_cours'),
+        lt(executions.debut, new Date(maintenant.getTime() - DELAI_EXECUTION_MS)),
+      ),
+    );
+  for (const { id } of perimees) await echouerExecution(tx, id, MOTIF_PERIMEE, 'planification');
+  return perimees.length;
+}

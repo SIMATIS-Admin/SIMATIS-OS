@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
@@ -9,6 +10,7 @@ import { createToken } from '../mcp/tokens.js';
 import { tour } from '../runner/runner.js';
 import { planifier } from './planification.js';
 import { santeRoutines, signalerPoste } from './sante.js';
+import { executions } from './schema.js';
 import { demanderExecution, terminerExecution } from './service.js';
 
 type Sante = Awaited<ReturnType<typeof santeRoutines>>;
@@ -145,5 +147,29 @@ describe('routine health check', () => {
       [a.id],
     );
     expect(again.rows[0]?.n).toBe(1);
+  });
+
+  it('flags a run left open for more than two hours', async () => {
+    const a = await getInstanceBySlug(t.app.db, 'mandat-a');
+    if (!a) throw new Error('no instance');
+    const id = await withInstance(t.app.db, a.id, async (tx) => {
+      const e = await demanderExecution(tx, 'hebdo', 'test');
+      await tx
+        .update(executions)
+        .set({ statut: 'en_cours', debut: new Date(Date.now() - 30 * 60_000) })
+        .where(eq(executions.id, e.id));
+      return e.id;
+    });
+    expect(etat(await santeRoutines(t.app.db, a), 'hebdo', 'execution')).toBeUndefined();
+
+    await withInstance(t.app.db, a.id, (tx) =>
+      tx
+        .update(executions)
+        .set({ debut: new Date(Date.now() - 150 * 60_000) })
+        .where(eq(executions.id, id)),
+    );
+    const s = await santeRoutines(t.app.db, a);
+    expect(etat(s, 'hebdo', 'execution')).toBe('attention');
+    expect(routine(s, 'hebdo').feu).not.toBe('ok');
   });
 });
