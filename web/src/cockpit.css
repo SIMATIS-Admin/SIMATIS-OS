@@ -68,7 +68,7 @@
   color: #b5cbe2;
 }
 .brief-focus {
-  max-width: 1080px;
+  max-width: 1180px;
   margin: 0 auto;
 }
 .brief-bonjour {
@@ -89,10 +89,11 @@
   font-size: 12px;
 }
 .brief-date {
-  margin: 0 0 10px;
+  margin: 8px 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
   font-size: 12px;
+  font-weight: 600;
   color: var(--ink-2);
 }
 .brief-priorite {
@@ -100,9 +101,9 @@
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px 24px;
-  background: #e0f1eb;
+  background: #e5f3ef;
   border-radius: 16px;
-  padding: 20px 24px;
+  padding: 24px 28px;
 }
 .brief-eyebrow {
   display: flex;
@@ -118,13 +119,14 @@
   height: 18px;
 }
 .brief-priorite h2 {
-  font-size: 20px;
+  font-size: clamp(20px, 2vw, 24px);
   letter-spacing: -0.02em;
-  margin: 0 0 6px;
+  margin: 0 0 8px;
 }
 .brief-priorite p {
   color: #365a50;
   max-width: 660px;
+  margin: 0;
 }
 .brief-priorite .btn {
   padding: 10px 16px;
@@ -180,9 +182,9 @@
 }
 .brief-reperes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 .brief-reperes .kpi .l {
   display: flex;
@@ -190,25 +192,38 @@
   gap: 6px;
 }
 .brief-reperes .kpi .l svg {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
+  color: var(--teal);
 }
 .brief-reperes .kpi {
-  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 132px;
+  padding: 18px;
   box-shadow: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.brief-reperes .kpi:hover {
+  border-color: #9fc9c2;
+  background: var(--surface-hover);
 }
 .brief-reperes .kpi .v {
-  font-size: 25px;
+  margin-top: auto;
+  font-size: 28px;
+  line-height: 1.1;
 }
 .brief-details {
   display: grid;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 12px;
+  margin-top: 16px;
 }
 .brief-historique summary {
   cursor: pointer;
-  padding: 12px 16px;
-  color: var(--ink-2);
+  padding: 15px 18px;
+  color: var(--ink);
   font-weight: 600;
 }
 .brief-historique summary svg {
@@ -299,11 +314,6 @@
 .vq:has(.inbox-sereine) {
   grid-template-columns: minmax(0, 1fr);
 }
-@media (min-width: 700px) {
-  .brief-reperes {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
 @media (max-width: 540px) {
   .top {
     flex-direction: column;
@@ -311,6 +321,7 @@
     gap: 12px;
   }
   .top .barre {
+    flex: none;
     width: 100%;
   }
   .top .barre-recherche {

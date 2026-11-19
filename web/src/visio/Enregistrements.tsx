@@ -69,78 +69,107 @@ export function Enregistrements({
   return (
     <>
       <section className="cockpit-bandeau vide" aria-label="Enregistrements">
-        <Icon name="clock" />
-        <span>
-          {actifs > 0
-            ? `Enregistrements : ${actifs} en cours`
-            : liste.length > 0
-              ? `Enregistrements : ${liste.length} récents`
-              : 'Enregistrements'}
+        <span className="cockpit-bandeau-icone">
+          <Icon name="pulse" />
+        </span>
+        <span className="cockpit-bandeau-texte">
+          <strong>Enregistrements</strong>
+          <span>
+            {actifs > 0
+              ? `${actifs} en cours`
+              : liste.length > 0
+                ? `${liste.length} récents`
+                : 'Aucun récemment'}
+          </span>
         </span>
         <button className="btn sm" onClick={() => setOuvert(true)}>
           Ouvrir
         </button>
       </section>
       {ouvert && (
-        <Fenetre titre="Enregistrements" large onFermer={() => setOuvert(false)}>
-          <div className="stack">
-            <button className="btn primary" onClick={onEnregistrer}>
-              Enregistrer
-            </button>
-            <p className="small muted">
-              Ouvre l’appli Visio SIMATIS, qui enregistre le micro et le son du Mac.
-            </p>
-            {erreur && <p style={{ color: 'var(--red)' }}>{erreur}</p>}
-            {liste.length === 0 && <p className="muted">Aucun enregistrement pour l’instant.</p>}
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }} className="stack">
+        <Fenetre
+          titre="Enregistrements"
+          sousTitre="Retrouvez vos réunions enregistrées et leurs transcriptions."
+          large
+          onFermer={() => setOuvert(false)}
+        >
+          <div className="enregistrements-fenetre">
+            <div className="enregistrements-lancement">
+              <span className="enregistrements-lancement-icone">
+                <Icon name="pulse" />
+              </span>
+              <div>
+                <strong>Démarrer un nouvel enregistrement</strong>
+                <p>Visio SIMATIS enregistrera le micro et le son du Mac.</p>
+              </div>
+              <button className="btn primary" onClick={onEnregistrer}>
+                <Icon name="play" />
+                Enregistrer
+              </button>
+            </div>
+            {erreur && (
+              <p className="enregistrements-erreur" role="alert">
+                {erreur}
+              </p>
+            )}
+            {liste.length === 0 && (
+              <div className="enregistrements-vide">
+                <Icon name="clock" />
+                <strong>Aucun enregistrement pour l’instant</strong>
+                <span>Les prochaines réunions enregistrées apparaîtront ici.</span>
+              </div>
+            )}
+            <ul className="enregistrements-liste">
               {liste.map((e) => (
-                <li
-                  key={e.id}
-                  className="stack"
-                  style={{ borderTop: '1px solid var(--line, #e5e7eb)', paddingTop: 8 }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <div>
+                <li key={e.id} className="enregistrement-item">
+                  <div className="enregistrement-resume">
+                    <span className="enregistrement-icone">
+                      <Icon name="clock" />
+                    </span>
+                    <div className="enregistrement-identite">
                       <strong>{e.titre}</strong>
-                      <div className="small muted">
-                        {quand(e.debutAt)} · <span className="badge">{etat(e)}</span>
+                      <div className="enregistrement-meta">
+                        <span>{quand(e.debutAt)}</span>
+                        <span
+                          className={`enregistrement-etat ${e.statut === 'erreur' ? 'erreur' : ''} ${e.aResume ? 'pret' : ''}`}
+                        >
+                          {etat(e)}
+                        </span>
                       </div>
                     </div>
-                    <div className="row">
+                    <div className="enregistrement-actions">
                       <button
                         className="btn sm"
                         onClick={() => setDetail(detail === e.id ? null : e.id)}
                       >
+                        <Icon name={detail === e.id ? 'down' : 'file'} />
                         {detail === e.id ? 'Masquer' : 'Voir'}
                       </button>
                       <a
                         className="btn sm"
                         href={`#/${slug}/fiche/rdv/${encodeURIComponent(e.rdvId)}`}
                       >
+                        <Icon name="cal" />
                         Ouvrir la fiche
                       </a>
-                      <button className="btn sm" onClick={() => supprimer(e)}>
+                      <button className="btn sm danger" onClick={() => supprimer(e)}>
+                        <Icon name="trash" />
                         Supprimer
                       </button>
                     </div>
                   </div>
                   {detail === e.id && (
-                    <EnregistrementVisio
-                      slug={slug}
-                      rdvId={e.rdvId}
-                      titre={e.titre}
-                      onSupprime={() => {
-                        setDetail(null);
-                        lire();
-                      }}
-                    />
+                    <div className="enregistrement-detail">
+                      <EnregistrementVisio
+                        slug={slug}
+                        rdvId={e.rdvId}
+                        titre={e.titre}
+                        onSupprime={() => {
+                          setDetail(null);
+                          lire();
+                        }}
+                      />
+                    </div>
                   )}
                 </li>
               ))}

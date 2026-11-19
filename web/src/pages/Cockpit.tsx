@@ -36,20 +36,27 @@ export function Cockpit({ onFerme, ...props }: Props) {
 
   return (
     <div className="cockpit">
-      <section className={`cockpit-bandeau ${aTraiter === 0 ? 'vide' : ''}`} aria-label="Inbox">
-        <Icon name={aTraiter === 0 ? 'check' : 'inbox'} />
-        <span>
-          {aTraiter === null
-            ? 'Inbox'
-            : aTraiter === 0
-              ? 'Inbox : rien à traiter'
-              : `Inbox : ${aTraiter} à traiter`}
-        </span>
-        <button className="btn sm" onClick={() => setOuvert(true)}>
-          Ouvrir
-        </button>
-      </section>
-      <Enregistrements slug={slug} />
+      <div className="cockpit-raccourcis">
+        <section className={`cockpit-bandeau ${aTraiter === 0 ? 'vide' : ''}`} aria-label="Inbox">
+          <span className="cockpit-bandeau-icone">
+            <Icon name={aTraiter === 0 ? 'check' : 'inbox'} />
+          </span>
+          <span className="cockpit-bandeau-texte">
+            <strong>Inbox</strong>
+            <span>
+              {aTraiter === null
+                ? 'Chargement en cours'
+                : aTraiter === 0
+                  ? 'Inbox : rien à traiter'
+                  : `Inbox : ${aTraiter} à traiter`}
+            </span>
+          </span>
+          <button className="btn sm" onClick={() => setOuvert(true)}>
+            Ouvrir
+          </button>
+        </section>
+        <Enregistrements slug={slug} />
+      </div>
       <section className="cockpit-brief" aria-label="Brief du jour">
         <Brief slug={slug} />
       </section>
