@@ -16,7 +16,7 @@ import {
   lireCampagne,
   reglageParDefaut,
 } from './campagnes.js';
-import { finaliserCampagne, modifierBrouillon, suiviDates } from './finalisation.js';
+import { finaliserCampagne, modifierBrouillon, raisonSuivi, suiviDates } from './finalisation.js';
 import { creerCampagneFroid } from './froid.js';
 import { demanderReformulation, demarrerCampagne, deposerBrouillons } from './redaction.js';
 import { prospectionOccurrences, prospectionSuiviFroid, type ReglageCampagne } from './schema.js';
@@ -34,6 +34,32 @@ registerConnector({
     ecrits.push(op);
     return Promise.resolve({ simulation: false, id: `draft-${ecrits.length}` });
   },
+});
+
+describe('raisonSuivi', () => {
+  const base = {
+    aujourdhui: '2026-11-02',
+    jour: '2026-11-16',
+    type: 'delai' as const,
+    reponse: false,
+    froid: false,
+    touche: 1,
+    touchesMax: 4,
+  };
+  it('dit le délai et la cause', () => {
+    expect(raisonSuivi(base)).toBe(
+      'Pourquoi : revue dans 14 jours, délai habituel de relance, sans réponse à ce jour.',
+    );
+    expect(raisonSuivi({ ...base, froid: true })).toContain(
+      'touche 2 sur 4 de la séquence à froid',
+    );
+    expect(raisonSuivi({ ...base, type: 'citee', jour: '2026-11-03' })).toBe(
+      'Pourquoi : revue dans 1 jour, date citée dans le mail envoyé.',
+    );
+    expect(raisonSuivi({ ...base, reponse: true })).toBe(
+      'Pourquoi : le contact a répondu, suite à donner.',
+    );
+  });
 });
 
 describe('suiviDates', () => {
@@ -259,6 +285,7 @@ describe('Relecture et finalisation d’une campagne', () => {
     expect(titres).not.toContain('RELANCE de prospection (MAIL) : Farid');
     const emmaSuivi = suivis.find((s) => s.titre === 'RELANCE de prospection (MAIL) : Emma')!;
     expect(emmaSuivi.echeance?.toISOString().slice(0, 10)).toBe('2099-01-15');
+    expect(emmaSuivi.notes).toMatch(/^Pourquoi : revue dans \d+ jours?, /);
     expect(denis).toBeDefined();
 
     const faites = await t.owner.db

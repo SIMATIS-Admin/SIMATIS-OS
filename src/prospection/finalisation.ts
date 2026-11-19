@@ -54,6 +54,30 @@ const PLAGES_SUIVI: Record<'courte' | 'longue', [number, number]> = {
   longue: [30, 60],
 };
 
+// Pourquoi ce suivi revient à cette date : écrit dans la tâche, pour que Marc le lise sans deviner.
+export function raisonSuivi(c: {
+  jour: string;
+  aujourdhui: string;
+  type: 'delai' | 'citee' | 'clos';
+  reponse: boolean;
+  froid: boolean;
+  touche: number;
+  touchesMax: number;
+}): string {
+  if (c.reponse) return 'Pourquoi : le contact a répondu, suite à donner.';
+  const jours = Math.max(
+    0,
+    Math.round(
+      (Date.parse(`${c.jour}T12:00:00Z`) - Date.parse(`${c.aujourdhui}T12:00:00Z`)) / 864e5,
+    ),
+  );
+  const delai = `Pourquoi : revue dans ${jours} jour${jours > 1 ? 's' : ''}`;
+  if (c.type === 'citee') return `${delai}, date citée dans le mail envoyé.`;
+  return c.froid
+    ? `${delai}, touche ${c.touche + 1} sur ${c.touchesMax} de la séquence à froid, sans réponse à ce jour.`
+    : `${delai}, délai habituel de relance, sans réponse à ce jour.`;
+}
+
 const dateValide = (date: string | null | undefined): date is string =>
   !!date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= jourDe(new Date());
 
@@ -353,6 +377,15 @@ export async function finaliserCampagne(
           type: 'email' as const,
           echeance: zoned(jour, '09:00', FUSEAU).toISOString(),
           contactId: b.contactId,
+          notes: raisonSuivi({
+            jour,
+            aujourdhui: jourDe(new Date()),
+            type: b.suiviType === 'citee' && b.suiviDate ? 'citee' : 'delai',
+            reponse: !!reponse,
+            froid: !!froid,
+            touche: b.touche,
+            touchesMax: r.touchesMax,
+          }),
         };
         let dansLeCrm = true;
         try {

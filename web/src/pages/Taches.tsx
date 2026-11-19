@@ -233,6 +233,9 @@ function Liste({
                       onChange={() => onFait(t)}
                     />{' '}
                     <b>{t.titre}</b>
+                    {t.notes?.startsWith('Pourquoi : ') && !t.fait ? (
+                      <div className="muted small">{t.notes}</div>
+                    ) : null}
                   </>
                 ),
               },
