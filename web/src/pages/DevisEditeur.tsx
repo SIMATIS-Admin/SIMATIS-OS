@@ -548,6 +548,14 @@ export function DevisEditeur({
                     Demander l’envoi
                   </button>
                 )}
+                <a
+                  className="btn"
+                  href={`/api/i/${slug}/devis/${encodeURIComponent(id)}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Télécharger le PDF
+                </a>
                 {d.statut !== 'brouillon' && (
                   <button
                     className="btn"

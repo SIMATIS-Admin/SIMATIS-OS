@@ -28,6 +28,7 @@
   "dependencies": {
     "@fastify/static": "^10.1.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@types/pdfkit": "^0.17.7",
     "dompurify": "^3.4.17",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.5",
@@ -36,6 +37,7 @@
     "leaflet": "^1.9.4",
     "os-agents-relay": "github:ChristopheHvd/os-agents-relay#6663723f06556bc6bb2912413d023e760f1c9c08",
     "pdfjs-dist": "^6.5.438",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.1",
     "pptxgenjs": "^4.0.1",
     "react": "^19.3.0",

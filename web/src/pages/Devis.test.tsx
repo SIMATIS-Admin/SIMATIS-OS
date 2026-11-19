@@ -283,4 +283,12 @@ describe('écran Devis', () => {
     expect(await screen.findByText(/Société fictive, 1 rue fictive/)).toBeTruthy();
     expect(screen.getAllByText(/TVA 10 %/).length).toBeGreaterThan(0);
   });
+
+  it('propose le PDF du devis à l’étape Envoi', async () => {
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Envoi/ }));
+    const lien = screen.getByRole('link', { name: /Télécharger le PDF/ });
+    expect(lien.getAttribute('href')).toBe('/api/i/simatis/devis/d1/pdf');
+    expect(lien.getAttribute('target')).toBe('_blank');
+  });
 });

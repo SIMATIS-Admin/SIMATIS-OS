@@ -231,6 +231,7 @@ import {
   supprimerModele,
 } from '../conversion/devis-parametres.js';
 import { contenuSchema } from '../conversion/devis-contenu.js';
+import { genererPdfDevis } from '../conversion/devis-pdf.js';
 import {
   compteRenduSchema,
   compterATrier,
@@ -2184,13 +2185,13 @@ export function registerApi(
 
   // Devis: SIMATIS's own instance only (module devis); anywhere else the screen does not exist.
   const surDevis = <R extends SlugParams>(
-    handler: (i: Instance, request: FastifyRequest<R>) => Promise<unknown>,
+    handler: (i: Instance, request: FastifyRequest<R>, reply: FastifyReply) => Promise<unknown>,
   ) =>
     onInstance<R>(async (i, request, reply) => {
       if (!devisActif(i))
         return reply.code(404).send({ error: 'Pas de devis dans cette instance' });
       try {
-        return await handler(i, request);
+        return await handler(i, request, reply);
       } catch (error) {
         if (error instanceof DevisRefuse) return reply.code(400).send({ error: error.message });
         if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
@@ -2275,6 +2276,21 @@ export function registerApi(
       const parsed = contenuSchema.safeParse(request.body);
       if (!parsed.success) throw new DevisRefuse('Contenu du devis invalide');
       return modifierContenu(db, i, request.params.id, parsed.data);
+    }),
+  );
+  app.get<DevisRoute>(
+    '/api/i/:slug/devis/:id/pdf',
+    surDevis<DevisRoute>(async (i, request, reply) => {
+      const d = await lireDevis(db, i, request.params.id);
+      const pdf = await genererPdfDevis({
+        ...d,
+        createdAt: d.createdAt,
+        entreprise: d.entreprise,
+      });
+      return reply
+        .header('content-type', 'application/pdf')
+        .header('content-disposition', `inline; filename="devis-${d.numero}.pdf"`)
+        .send(pdf);
     }),
   );
   app.post<DevisRoute>(
