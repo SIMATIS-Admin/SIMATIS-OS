@@ -581,7 +581,11 @@ export function Bases({ slug, ouvrir }: { slug: string; ouvrir?: string | undefi
   const [apercus, setApercus] = useState<ImportBase[]>([]);
   // Liens du Radar et des Recherches : « a-enrichir » ouvre directement les fiches sans contact.
   const [filtres, setFiltres] = useState<FiltresBaseWeb>(
-    ouvrir === 'a-enrichir' ? { zone: 'a_enrichir' } : { tri: 'entreprise' },
+    ouvrir === 'a-enrichir'
+      ? { zone: 'a_enrichir' }
+      : ouvrir?.startsWith('rechercher-')
+        ? { q: ouvrir.slice('rechercher-'.length), tri: 'entreprise' }
+        : { tri: 'entreprise' },
   );
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);

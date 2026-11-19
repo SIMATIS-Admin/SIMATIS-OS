@@ -20,6 +20,7 @@ import {
 import { assurerLiensPrincipaux } from './liens.js';
 import { copieEnLectureSeule, MESSAGE_LECTURE_SEULE } from './source.js';
 import { createInCrm, CrmIndisponible, likePattern } from './service.js';
+import { baseVivante } from '../base-vivante/schema.js';
 
 // Native pipeline (instances without CRM, demo data): the mockup's stages (data.js ETAPES).
 export const ETAPES_NATIVES = [
@@ -133,6 +134,7 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
         creeLe: opportunites.createdAt,
         entreprise: entreprises.nom,
         contact: contacts.nom,
+        origineCommerciale: opportunites.origine,
         // Rendez-vous commerciaux liés à l'affaire, à son contact ou à son entreprise.
         prochainRdv: sql<Date | null>`(select min(r.debut) from rendez_vous r
           where ${rdvDeLAffaire} and r.debut >= ${maintenant})`,
@@ -197,8 +199,31 @@ export async function getPipeline(db: Executor, instance: Instance, maintenant =
       (rang.get(etape) ?? Infinity) < (rang.get(qualification) ?? -1)
         ? qualification
         : etape;
+    const contactsARattacher = await tx
+      .select({
+        id: baseVivante.id,
+        entreprise: baseVivante.entreprise,
+        nom: sql<string>`trim(concat_ws(' ', ${baseVivante.prenom}, ${baseVivante.nom}))`,
+        linkedin: baseVivante.linkedin,
+        provenance: baseVivante.provenance,
+        statut: baseVivante.statutProspection,
+      })
+      .from(baseVivante)
+      .where(
+        and(
+          eq(baseVivante.instanceId, currentInstance),
+          isNull(baseVivante.crmContactId),
+          eq(baseVivante.opposition, false),
+          isNull(baseVivante.exclusion),
+          eq(baseVivante.statutProspection, 'a_repondu'),
+          sql`not exists (select 1 from contacts c where c.instance_id = ${currentInstance}
+        and nullif(trim(c.email), '') is not null and lower(trim(c.email)) = lower(trim(${baseVivante.email})))`,
+        ),
+      )
+      .orderBy(asc(baseVivante.entreprise), asc(baseVivante.id));
     return {
       source: src.source,
+      contactsARattacher,
       ecrit: src.ecrit,
       derniereSynchro: src.derniereSynchro,
       etapes: src.etapes,
