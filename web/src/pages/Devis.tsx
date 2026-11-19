@@ -12,6 +12,7 @@ import {
 } from '../api.js';
 import { eur } from '../crm.js';
 import { Icon } from '../icons.js';
+import './devis.css';
 
 const STATUT: Record<DevisItem['statut'], [string, string]> = {
   brouillon: ['Brouillon', 'amber'],
@@ -153,10 +154,14 @@ function Editeur({ slug, d, onChange }: { slug: string; d: DevisItem; onChange: 
   );
 }
 
-export function Devis({ slug }: { slug: string }) {
+export function Devis({ slug, ouvrir }: { slug: string; ouvrir?: string }) {
   const [list, setList] = useState<DevisItem[] | null>(null);
   const [opps, setOpps] = useState<PipelineOpp[]>([]);
+  const [nomsEtapes, setNomsEtapes] = useState<Record<string, string>>({});
   const [choix, setChoix] = useState('');
+  const [recherche, setRecherche] = useState('');
+  const [creationOuverte, setCreationOuverte] = useState(Boolean(ouvrir));
+  const [creationEnCours, setCreationEnCours] = useState(false);
   const [selection, setSelection] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
@@ -165,10 +170,19 @@ export function Devis({ slug }: { slug: string }) {
   useEffect(() => {
     load();
     fetchPipeline(slug).then(
-      (p) => setOpps(p.opportunites.filter((o) => !o.clos)),
+      (p) => {
+        setNomsEtapes(Object.fromEntries(p.etapes.map((etape) => [etape.id, etape.label])));
+        const etapesPipeline = new Set(p.etapes.slice(2).map((e) => e.id));
+        const affaires = p.opportunites.filter((o) => !o.clos && etapesPipeline.has(o.etape));
+        setOpps(affaires);
+        if (ouvrir && affaires.some((o) => o.id === ouvrir)) {
+          setChoix(ouvrir);
+          setCreationOuverte(true);
+        }
+      },
       () => setOpps([]),
     );
-  }, [slug, load]);
+  }, [slug, ouvrir, load]);
 
   if (error) return <div className="empty">{error}</div>;
   if (!list)
@@ -178,18 +192,113 @@ export function Devis({ slug }: { slug: string }) {
       </div>
     );
   const courant = list.find((d) => d.id === selection);
-  const nouveau = () =>
+  const affaire = opps.find((o) => o.id === choix);
+  const visibles = opps.filter((o) =>
+    `${o.entreprise ?? ''} ${o.titre}`
+      .toLocaleLowerCase('fr')
+      .includes(recherche.trim().toLocaleLowerCase('fr')),
+  );
+  const nouveau = () => {
+    setCreationEnCours(true);
     preparerDevis(slug, choix).then(
       (d) => {
         setSelection(d.id);
+        setCreationOuverte(false);
+        setChoix('');
+        setRecherche('');
+        setCreationEnCours(false);
         load();
       },
-      (e: unknown) => setError(String(e)),
+      (e: unknown) => {
+        setCreationEnCours(false);
+        setError(e instanceof Error ? e.message : String(e));
+      },
     );
+  };
 
   return (
     <>
-      <div className="panel">
+      <div className="devis-heading">
+        <div>
+          <p className="devis-eyebrow">Pipeline commercial</p>
+          <h1>Devis</h1>
+          <p>Chaque devis est rattaché à une affaire du Pipeline.</p>
+        </div>
+        <button className="btn primary" onClick={() => setCreationOuverte((v) => !v)}>
+          <Icon name={creationOuverte ? 'x' : 'file'} />
+          {creationOuverte ? 'Fermer' : 'Nouveau devis'}
+        </button>
+      </div>
+      {creationOuverte && (
+        <section className="panel devis-create" aria-labelledby="devis-create-title">
+          <div className="panel-h">
+            <div>
+              <h2 id="devis-create-title">Choisir l’affaire</h2>
+              <p className="small muted">
+                Seules les affaires ouvertes du Pipeline sont proposées.
+              </p>
+            </div>
+          </div>
+          <div className="panel-b">
+            <label className="devis-search">
+              <span>Rechercher une affaire</span>
+              <div>
+                <Icon name="search" />
+                <input
+                  className="input"
+                  autoFocus={!ouvrir}
+                  value={recherche}
+                  placeholder="Entreprise ou nom de l’affaire"
+                  onChange={(e) => setRecherche(e.target.value)}
+                />
+              </div>
+            </label>
+            <div className="devis-affaires" role="listbox" aria-label="Affaires du Pipeline">
+              {visibles.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="option"
+                  aria-selected={choix === o.id}
+                  className={`devis-affaire ${choix === o.id ? 'selected' : ''}`}
+                  onClick={() => setChoix(o.id)}
+                >
+                  <span className="devis-affaire-check" aria-hidden="true">
+                    {choix === o.id ? '✓' : ''}
+                  </span>
+                  <span>
+                    <b>{o.entreprise ?? 'Sans entreprise'}</b>
+                    <small>{o.titre}</small>
+                  </span>
+                  <span className="badge">{nomsEtapes[o.etape] ?? o.etape}</span>
+                </button>
+              ))}
+              {!visibles.length && (
+                <p className="empty">Aucune affaire ouverte du Pipeline ne correspond.</p>
+              )}
+            </div>
+            <div className="devis-create-footer">
+              <p>
+                {affaire ? (
+                  <>
+                    Devis pour <b>{affaire.entreprise ?? affaire.titre}</b>
+                  </>
+                ) : (
+                  'Sélectionnez une affaire pour continuer.'
+                )}
+              </p>
+              <button
+                className="btn primary"
+                disabled={!choix || creationEnCours}
+                onClick={() => void nouveau()}
+              >
+                {creationEnCours ? 'Préparation…' : 'Créer le brouillon'}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+      <div className="panel devis-list">
         {list.length ? (
           <table className="tbl">
             <thead>
@@ -219,29 +328,8 @@ export function Devis({ slug }: { slug: string }) {
             </tbody>
           </table>
         ) : (
-          <div className="empty">Aucun devis. Préparez-en un à partir d'une opportunité.</div>
+          <div className="empty">Aucun devis. Créez-en un depuis une affaire du Pipeline.</div>
         )}
-      </div>
-      <div className="panel" style={{ marginTop: 18 }}>
-        <div className="panel-b" style={{ display: 'flex', gap: 8 }}>
-          <select
-            className="input"
-            aria-label="Opportunité"
-            value={choix}
-            onChange={(e) => setChoix(e.target.value)}
-          >
-            <option value="">Choisir une opportunité ouverte…</option>
-            {opps.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.entreprise ? `${o.entreprise} : ` : ''}
-                {o.titre}
-              </option>
-            ))}
-          </select>
-          <button className="btn primary" disabled={!choix} onClick={() => void nouveau()}>
-            Préparer un devis
-          </button>
-        </div>
       </div>
       {courant && <Editeur slug={slug} d={courant} onChange={load} />}
     </>

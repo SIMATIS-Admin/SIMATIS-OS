@@ -330,7 +330,17 @@ type Carte = {
   lignes: LigneLien[];
 };
 
-export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: string }) {
+export function Fiche({
+  slug,
+  kind,
+  id,
+  devisAutorise = false,
+}: {
+  slug: string;
+  kind: KindFiche;
+  id: string;
+  devisAutorise?: boolean;
+}) {
   const [data, setData] = useState<FicheDetail | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [onglet, setOnglet] = useState<'note' | 'activite'>('note');
@@ -453,6 +463,12 @@ export function Fiche({ slug, kind, id }: { slug: string; kind: KindFiche; id: s
           <Icon name="cal" />
           Nouvelle activité
         </button>
+        {devisAutorise && kind === 'affaire' && universAffaire === 'Pipeline' && !f.clos && (
+          <a className="btn" href={`#/${slug}/devis/affaire/${encodeURIComponent(id)}`}>
+            <Icon name="file" />
+            Créer un devis
+          </a>
+        )}
         <ActionsFiche
           slug={slug}
           kind={kind}

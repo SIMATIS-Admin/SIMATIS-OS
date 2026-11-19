@@ -1,0 +1,178 @@
+.devis-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.devis-heading h1,
+.devis-heading p {
+  margin: 0;
+}
+
+.devis-heading h1 {
+  margin-top: 2px;
+}
+
+.devis-heading > div > p:last-child {
+  margin-top: 5px;
+  color: var(--ink-2);
+}
+
+.devis-eyebrow {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.devis-create {
+  margin-bottom: 18px;
+  border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
+  box-shadow: 0 14px 36px rgba(18, 52, 77, 0.08);
+}
+
+.devis-create .panel-h h2,
+.devis-create .panel-h p {
+  margin: 0;
+}
+
+.devis-create .panel-h p {
+  margin-top: 3px;
+}
+
+.devis-search {
+  display: grid;
+  gap: 7px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.devis-search > div {
+  position: relative;
+}
+
+.devis-search svg {
+  position: absolute;
+  z-index: 1;
+  left: 12px;
+  top: 50%;
+  width: 17px;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+}
+
+.devis-search .input {
+  width: 100%;
+  padding-left: 38px;
+}
+
+.devis-affaires {
+  display: grid;
+  gap: 8px;
+  max-height: 310px;
+  margin-top: 12px;
+  overflow: auto;
+}
+
+.devis-affaire {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.devis-affaire:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  background: color-mix(in srgb, var(--blue) 4%, white);
+}
+
+.devis-affaire.selected {
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 8%, white);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 15%, transparent);
+}
+
+.devis-affaire-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.devis-affaire.selected .devis-affaire-check {
+  border-color: var(--blue);
+  background: var(--blue);
+}
+
+.devis-affaire b,
+.devis-affaire small {
+  display: block;
+}
+
+.devis-affaire small {
+  margin-top: 3px;
+  color: var(--ink-3);
+}
+
+.devis-create-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px -18px -18px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line-2);
+  background: #fbfcfd;
+}
+
+.devis-create-footer p {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.devis-list {
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .devis-heading,
+  .devis-create-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .devis-heading .btn,
+  .devis-create-footer .btn {
+    justify-content: center;
+  }
+
+  .devis-affaire {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .devis-affaire > .badge {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .devis-list {
+    overflow-x: auto;
+  }
+}
