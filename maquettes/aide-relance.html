@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette : aide à la relance (Cockpit)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- La vraie feuille de style de l'application : mêmes couleurs, polices, boutons, badges. -->
+<link rel="stylesheet" href="../web/src/styles.css">
+<style>
+  .ar-contexte { border: 1px dashed var(--line); border-radius: var(--r-s); padding: 10px 14px; color: var(--ink-3); font-size: 14px; margin-bottom: 16px; }
+  .ar-tete { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; justify-content: space-between; }
+  .ar-tete h2 { margin: 0; font-size: 20px; }
+  .ar-choix { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .ar-choix .chip { cursor: pointer; font-size: 15px; padding: 5px 14px; }
+  .ar-sous { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .ar-filtres { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ar-filtres .chip { cursor: pointer; font-size: 14px; }
+  .ar-barre { height: 6px; background: var(--line-2); border-radius: 3px; margin-top: 12px; overflow: hidden; }
+  .ar-barre i { display: block; height: 100%; background: var(--teal); transition: width .25s; }
+  .ar-liste { margin-top: 16px; }
+  .ar-row { display: grid; grid-template-columns: 30px 74px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--line-2); cursor: pointer; }
+  .ar-row:last-child { border-bottom: 0; }
+  .ar-row:hover { background: var(--line-2); }
+  .ar-rang { font: 600 15px var(--f-num); color: var(--ink-3); text-align: center; }
+  .ar-nom { font-weight: 600; font-size: 16px; }
+  .ar-nom small { font-weight: 400; color: var(--ink-3); font-size: 14px; margin-left: 4px; }
+  .ar-raisons { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: 3px; font-size: 14px; color: var(--ink-3); }
+  .ar-meta { text-align: right; font-size: 14px; color: var(--ink-3); white-space: nowrap; }
+  .ar-meta b { color: var(--ink); }
+  .ar-reste { padding: 12px 16px; text-align: center; color: var(--ink-3); font-size: 14px; border-top: 1px solid var(--line-2); }
+  .ar-vide { padding: 36px; text-align: center; color: var(--ink-3); }
+  .ar-fond { position: fixed; inset: 0; background: rgba(12, 37, 63, .35); z-index: 40; }
+  .ar-volet { position: fixed; top: 0; right: 0; bottom: 0; width: min(580px, 100%); background: #fff; z-index: 50; box-shadow: -10px 0 30px rgba(12, 55, 107, .2); overflow: auto; display: flex; flex-direction: column; }
+  .ar-volet-h { padding: 18px 22px 12px; border-bottom: 1px solid var(--line); }
+  .ar-volet-h h3 { margin: 0 0 2px; font-size: 19px; }
+  .ar-volet-c { padding: 18px 22px; flex: 1; }
+  .ar-volet-f { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 12px 22px; display: flex; flex-direction: column; gap: 10px; }
+  .ar-pied-l { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ar-fermer { float: right; }
+  .ar-bloc { margin-bottom: 16px; }
+  .ar-bloc label, .ar-bloc .lbl { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .ar-bloc input[type=text], .ar-bloc select, .ar-bloc textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-s); background: #fff; }
+  .ar-bloc textarea { min-height: 230px; resize: vertical; line-height: 1.5; }
+  .ar-bloc ul { margin: 4px 0 0 18px; padding: 0; }
+  .ar-note { padding: 10px 14px; background: var(--line-2); border-radius: var(--r-s); font-size: 14px; margin-bottom: 14px; }
+  .ar-note b { color: var(--navy-3); }
+  .ar-creneaux { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ar-creneaux .chip { cursor: pointer; }
+  .ar-fiche dt { font-weight: 600; font-size: 14px; margin-top: 12px; }
+  .ar-fiche dd { margin: 2px 0 0; }
+  .ar-suite label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-s); margin-bottom: 8px; cursor: pointer; }
+  .ar-suite label:has(input:checked) { border-color: var(--teal); background: #F1FAF8; }
+  @media (max-width: 760px) {
+    .content { padding: 0 16px 48px; }
+    .ar-row { grid-template-columns: 24px minmax(0, 1fr); }
+    .ar-row > :nth-child(2) { display: none; }
+    .ar-meta, .ar-row .btn { grid-column: 2; text-align: left; justify-self: start; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <img class="brand-mark" src="../web/src/assets/simatis-mark.png" alt="SIMATIS">
+      <div class="brand-name">SIMATIS <span>OS</span></div>
+    </div>
+    <button class="inst-btn" type="button">
+      <span class="inst-dot" style="background:#41A594"></span>
+      <span><b>SIMATIS</b><small>Mon activité</small></span>
+    </button>
+    <nav class="nav">
+      <div class="nav-group"><span>Piloter</span>
+        <a href="#" class="on"><span class="lbl">Cockpit</span></a>
+        <a href="#"><span class="lbl">Agenda</span></a>
+      </div>
+      <div class="nav-group"><span>Détecter</span>
+        <a href="#"><span class="lbl">Radar</span></a>
+      </div>
+      <div class="nav-group"><span>Convertir</span>
+        <a href="#"><span class="lbl">Pipeline</span></a>
+        <a href="#"><span class="lbl">Tâches</span></a>
+      </div>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="demo-band"><b>Maquette</b> Données fictives, au 20/11/2026 (date fictive). Rien n'est enregistré ni envoyé : les brouillons Gmail et les créneaux sont simulés.</div>
+    <div class="top"><div><h1>Cockpit</h1></div></div>
+    <div class="content">
+      <div class="ar-contexte">Brief du jour et Inbox : inchangés, au-dessus. Le bloc ci-dessous s'ajoute au Cockpit.</div>
+      <section class="panel" aria-label="À faire maintenant">
+        <div class="panel-b">
+          <div class="ar-tete">
+            <div><h2>À faire maintenant</h2><span class="muted small" id="sous-titre"></span></div>
+            <div class="ar-choix" id="choix" role="group" aria-label="Nombre d'actions"></div>
+          </div>
+          <div class="ar-barre"><i id="barre"></i></div>
+          <div class="ar-sous">
+            <div class="ar-filtres" id="filtres"></div>
+            <span class="muted small" id="compteur"></span>
+          </div>
+        </div>
+        <div class="ar-liste" id="liste"></div>
+      </section>
+    </div>
+  </main>
+</div>
+<div id="volet-zone"></div>
+
+<script>
+/* ---------- Données fictives ---------- */
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = (s) => document.querySelector(s);
+const ETAPES = ['Premier contact', 'Qualification', 'Diagnostic', 'Proposition', 'Négociation'];
+const SOURCES = { retard: ['En retard', 'red'], dormante: ['Sans activité', 'amber'], radar: ['Radar', 'green'] };
+const ORDRE = { retard: 0, dormante: 1, radar: 2 };
+const SLOTS = ['mardi 24 novembre à 10 h', 'mercredi 25 novembre à 14 h', 'jeudi 26 novembre à 9 h 30', 'vendredi 27 novembre à 11 h', 'lundi 30 novembre à 16 h', 'mardi 1er décembre à 10 h 30'];
+
+// raisons : une entrée par source (une entreprise n'apparaît qu'une fois, avec toutes ses raisons).
+// angle : décide du texte du mail ; jours : retard ou inactivité ; recence : âge du signal Radar (jours).
+const ACTIONS = [
+  { id: 1, ent: 'Exemple Industrie', contact: 'Camille Exemple', poste: 'Directrice générale', canal: 'mail', etape: 3, montant: 5100, angle: 'devis', objet: 'Votre devis du 4 novembre',
+    raisons: [{ s: 'retard', j: 6, t: 'Relance du devis, tâche prévue le 14/11' }, { s: 'dormante', j: 16, t: 'Aucune activité sur l\'affaire depuis 16 jours' }],
+    dernier: 'Devis envoyé le 04/11 ; aucune réponse. Dernier échange : rendez-vous du 28/10, intérêt marqué pour le Diagnostic.' },
+  { id: 2, ent: 'Démo Mécanique', contact: 'Alex Démo', poste: 'Directeur commercial', canal: 'appel', etape: 1, montant: 0, angle: 'qualif',
+    raisons: [{ s: 'retard', j: 3, t: 'Appel de qualification reporté deux fois' }],
+    dernier: 'Mail du 12/11 resté sans réponse. Il avait répondu « pas avant la fin du mois » le 05/11.',
+    objectif: 'Savoir si le sujet est toujours d\'actualité et fixer un premier rendez-vous de 30 minutes.',
+    ouverture: 'Bonjour Alex, c\'est Marc de SIMATIS. Je vous appelle comme convenu pour la fin du mois : avez-vous deux minutes ?',
+    questions: ['Où en est l\'organisation de l\'équipe commerciale aujourd\'hui ?', 'Qui d\'autre faut-il associer à la discussion ?'] },
+  { id: 3, ent: 'Fictif & Fils', contact: 'Sam Fictif', poste: 'Gérant', canal: 'mail', etape: 2, montant: 3600, angle: 'suite',
+    raisons: [{ s: 'retard', j: 2, t: 'Relance après le Test de VMA' }], objet: 'Suite du Test de VMA',
+    dernier: 'Test de VMA réalisé le 10/11 avec deux commerciaux ; restitution à planifier.' },
+  { id: 4, ent: 'Modèle Plastiques', contact: 'Robin Modèle', poste: 'Responsable des ventes', canal: 'mail', etape: 0, montant: 0, angle: 'froid', objet: 'Un point sur votre organisation commerciale',
+    raisons: [{ s: 'retard', j: 9, t: 'Première relance du mail de prospection' }],
+    dernier: 'Mail de prospection envoyé le 05/11. Pas de réponse.' },
+  { id: 5, ent: 'Atelier Témoin', contact: 'Lou Témoin', poste: 'Directrice', canal: 'appel', etape: 1, montant: 0, angle: 'qualif',
+    raisons: [{ s: 'retard', j: 1, t: 'Appel prévu hier' }],
+    dernier: 'A répondu au mail du 10/11 : « rappelez-moi la semaine prochaine ».',
+    objectif: 'Reprendre le fil de sa réponse et proposer un rendez-vous.',
+    ouverture: 'Bonjour Lou, Marc de SIMATIS. Vous m\'aviez proposé de vous rappeler cette semaine : je tombe bien ?',
+    questions: ['Quel est le moment le plus tendu de votre année commerciale ?', 'Comment suivez-vous vos relances aujourd\'hui ?'] },
+  { id: 6, ent: 'Usine Échantillon', contact: 'Jean Échantillon', poste: 'Directeur général', canal: 'mail', etape: 4, montant: 14000, angle: 'neg', objet: 'Où en est votre réflexion ?',
+    raisons: [{ s: 'dormante', j: 18, t: 'Affaire en Négociation, aucune activité depuis 18 jours' }],
+    dernier: 'Dernier échange le 02/11 : il devait en parler à son associé.' },
+  { id: 7, ent: 'Cabinet Hypothèse', contact: 'Noa Hypothèse', poste: 'Associée', canal: 'mail', etape: 3, montant: 7800, angle: 'devis', objet: 'Votre devis du 8 novembre',
+    raisons: [{ s: 'dormante', j: 12, t: 'Devis envoyé, aucune activité depuis 12 jours' }],
+    dernier: 'Devis envoyé le 08/11 ; lu deux fois selon le suivi du mail.' },
+  { id: 8, ent: 'Maison Prototype', contact: 'Eli Prototype', poste: 'Directeur', canal: 'appel', etape: 1, montant: 2400, angle: 'qualif',
+    raisons: [{ s: 'dormante', j: 21, t: 'Affaire en Qualification, aucune activité depuis 21 jours' }],
+    dernier: 'Premier rendez-vous le 30/10 ; promesse de revenir avec la liste des participants.',
+    objectif: 'Obtenir la liste des participants et caler la date du Diagnostic.',
+    ouverture: 'Bonjour Eli, Marc de SIMATIS. Je reprends contact après notre rendez-vous du 30 octobre, avez-vous un instant ?',
+    questions: ['Qui participera au Diagnostic ?', 'Quelle échéance vous fixez-vous pour décider ?'] },
+  { id: 9, ent: 'Groupe Illustration', contact: 'Ariane Illustration', poste: 'Responsable commerciale', canal: 'mail', etape: 0, montant: 0, angle: 'froid', objet: 'Un point sur votre organisation commerciale',
+    raisons: [{ s: 'dormante', j: 15, t: 'Premier contact, aucune activité depuis 15 jours' }],
+    dernier: 'Échange LinkedIn le 05/11, a accepté la mise en relation.' },
+  { id: 10, ent: 'Société Simulée', contact: 'Max Simulé', poste: 'Directeur général', canal: 'appel', etape: 4, montant: 9200, angle: 'neg', objet: '',
+    raisons: [{ s: 'dormante', j: 10, t: 'Affaire en Négociation, aucune activité depuis 10 jours' }],
+    dernier: 'Il a demandé une remise le 10/11 ; réponse donnée par mail, restée sans suite.',
+    objectif: 'Lever le dernier point bloquant et obtenir une décision.',
+    ouverture: 'Bonjour Max, Marc de SIMATIS. Je voulais savoir si ma réponse du 10 novembre vous convenait.',
+    questions: ['Qu\'est-ce qui reste à régler de votre côté ?', 'Quand pouvez-vous arrêter votre décision ?'] },
+  { id: 11, ent: 'Atelier Maquette', contact: 'Sacha Maquette', poste: 'Directrice des opérations', canal: 'mail', etape: 0, montant: 0, angle: 'signal', objet: 'Votre recrutement commercial',
+    raisons: [{ s: 'radar', j: 2, t: 'Annonce d\'un poste de directeur commercial il y a 2 jours' }], signal: 'la publication de votre poste de directeur commercial',
+    dernier: 'Aucun échange jusqu\'ici.' },
+  { id: 12, ent: 'Industries Factices', contact: 'Charlie Factice', poste: 'Président', canal: 'mail', etape: 0, montant: 0, angle: 'signal', objet: 'Votre offre d\'emploi commercial',
+    raisons: [{ s: 'radar', j: 3, t: 'Offre d\'emploi de commercial publiée il y a 3 jours' }], signal: 'votre offre d\'emploi de commercial',
+    dernier: 'Aucun échange jusqu\'ici.' },
+  { id: 13, ent: 'Pièces Imaginaires', contact: 'Dana Imaginaire', poste: 'Directrice générale', canal: 'mail', etape: 0, montant: 0, angle: 'signal', objet: 'Votre levée de fonds',
+    raisons: [{ s: 'radar', j: 5, t: 'Levée de fonds annoncée il y a 5 jours' }], signal: 'l\'annonce de votre levée de fonds',
+    dernier: 'Aucun échange jusqu\'ici.' },
+  { id: 14, ent: 'Forge Exemplaire', contact: 'Ivan Exemplaire', poste: 'Directeur commercial', canal: 'appel', etape: 0, montant: 0, angle: 'signal',
+    raisons: [{ s: 'radar', j: 1, t: 'Trois visites de la page Diagnostic hier' }],
+    dernier: 'Mail de prospection envoyé le 29/10, sans réponse.',
+    objectif: 'Profiter de son intérêt pour proposer un échange de 20 minutes.',
+    ouverture: 'Bonjour Ivan, Marc de SIMATIS. Je vous avais écrit fin octobre sur le pilotage commercial : avez-vous un instant ?',
+    questions: ['Qu\'est-ce qui vous a amené à regarder le Diagnostic ?', 'Quel résultat attendez-vous pour l\'an prochain ?'] },
+  { id: 15, ent: 'Bureau d\'Étude Démo', contact: 'Zoé Démo', poste: 'Directrice associée', canal: 'mail', etape: 0, montant: 0, angle: 'signal', objet: 'Votre prise de parole',
+    raisons: [{ s: 'radar', j: 6, t: 'Intervention en conférence repérée il y a 6 jours' }], signal: 'votre intervention en conférence',
+    dernier: 'Aucun échange jusqu\'ici.' },
+  { id: 16, ent: 'Textiles Fictifs', contact: 'Lucas Fictif', poste: 'Gérant', canal: 'mail', etape: 0, montant: 0, angle: 'signal', objet: 'Votre nouvel atelier',
+    raisons: [{ s: 'radar', j: 8, t: 'Ouverture d\'un second site annoncée il y a 8 jours' }], signal: 'l\'ouverture de votre second site',
+    dernier: 'Aucun échange jusqu\'ici.' },
+];
+
+/* ---------- Textes préparés (la routine du matin les rédige d'avance) ---------- */
+const prenom = (a) => a.contact.split(' ')[0];
+const ANGLES = {
+  devis: (a) => `Je me permets de revenir vers vous au sujet du devis que je vous ai envoyé${a.id === 1 ? ' le 4 novembre' : ' récemment'}. Avez-vous pu le parcourir ? Si une partie du périmètre ou du calendrier mérite d'être ajustée, je préfère le savoir tout de suite.`,
+  suite: () => 'Pour donner suite au Test de VMA de vos deux commerciaux, je vous propose un point de 30 minutes pour vous restituer les résultats et voir ce qu\'on peut en tirer.',
+  neg: () => 'Je reviens vers vous pour savoir où en est votre réflexion. S\'il reste un point à éclaircir, je peux vous répondre rapidement.',
+  froid: () => 'Je me permets de vous relancer sur mon message du 5 novembre : je propose aux dirigeants un point de 20 minutes sur leur organisation commerciale, sans engagement.',
+  signal: (a) => `J'ai vu ${a.signal || 'votre actualité'} et cela m'a donné envie de vous écrire. J'accompagne des entreprises comme la vôtre sur leur pilotage commercial, et je vous propose un échange de 20 minutes pour voir si cela peut vous être utile.`,
+  qualif: () => 'Je reviens vers vous pour fixer un premier point de 30 minutes.',
+};
+const corps = (a) => `Bonjour ${prenom(a)},\n\n${ANGLES[a.angle](a)}\n\nVoici trois créneaux qui pourraient convenir :\n[[creneaux]]\n\nSi aucun ne vous va, dites-moi ce qui vous arrangerait.`;
+const resoudre = (a) => a.corps.replace('[[creneaux]]', a.sel.length ? a.sel.sort((x, y) => x - y).map((i) => `- ${SLOTS[i]}`).join('\n') : '- (aucun créneau choisi)');
+
+ACTIONS.forEach((a, i) => {
+  a.sel = [i % 6, (i + 2) % 6, (i + 4) % 6];
+  a.corps = a.canal === 'mail' ? corps(a) : '';
+  a.objet = a.objet || '';
+  a.edite = false;
+  a.groupe = Math.min(...a.raisons.map((r) => ORDRE[r.s]));
+  a.principale = a.raisons.find((r) => ORDRE[r.s] === a.groupe);
+});
+
+// Priorité : retard (le plus ancien d'abord), puis affaire dormante la plus avancée, puis signal Radar le plus récent.
+const trier = (x, y) => x.groupe - y.groupe
+  || (x.groupe === 0 ? y.principale.j - x.principale.j : x.groupe === 1 ? y.etape - x.etape || y.principale.j - x.principale.j : x.principale.j - y.principale.j);
+const FILE = [...ACTIONS].sort(trier);
+
+/* ---------- État ---------- */
+let nb = 10; // 5, 10, 15 ou 'tout'
+try { const v = localStorage.getItem('aideRelanceNb'); if (v) nb = v === 'tout' ? 'tout' : Number(v) || 10; } catch (e) { /* stockage indisponible : valeur par défaut */ }
+let filtre = 'tout';
+const sortis = new Map(); // id -> 'fait' | 'plus-tard' | 'ecarte'
+let ouvertId = null;
+
+const restantes = () => FILE.filter((a) => !sortis.has(a.id));
+const nbFaites = () => [...sortis.values()].filter((v) => v === 'fait').length;
+
+/* ---------- Écran ---------- */
+function rendre() {
+  const reste = restantes();
+  const filtrees = reste.filter((a) => filtre === 'tout' || a.raisons.some((r) => r.s === filtre));
+  const visibles = nb === 'tout' ? filtrees : filtrees.slice(0, nb);
+  const attente = filtrees.length - visibles.length;
+
+  $('#sous-titre').textContent = `Vendredi 20 novembre · ${reste.length} action(s) possible(s) au total`;
+  $('#choix').innerHTML = '<span class="muted small" style="margin-right:4px">Je peux en faire :</span>'
+    + [5, 10, 15, 'tout'].map((n) => `<button type="button" class="chip ${nb === n ? 'on' : ''}" data-nb="${n}">${n === 'tout' ? 'Tout' : n}</button>`).join('');
+  const comptes = { tout: reste.length };
+  Object.keys(SOURCES).forEach((s) => (comptes[s] = reste.filter((a) => a.raisons.some((r) => r.s === s)).length));
+  $('#filtres').innerHTML = [['tout', 'Toutes les sources']].concat(Object.entries(SOURCES).map(([k, v]) => [k, v[0]]))
+    .map(([k, l]) => `<button type="button" class="chip ${filtre === k ? 'on' : ''}" data-f="${k}">${l} (${comptes[k]})</button>`).join('');
+  const f = nbFaites();
+  const cible = Math.max(f + visibles.length, 1);
+  $('#compteur').textContent = `${f} faite(s) aujourd'hui`;
+  $('#barre').style.width = `${Math.round((f / cible) * 100)}%`;
+
+  $('#liste').innerHTML = visibles.length
+    ? visibles.map((a, i) => ligne(a, i + 1)).join('') + (attente > 0 ? `<div class="ar-reste">+ ${attente} autre(s) en attente. Augmentez le nombre ci-dessus quand vous avez plus de temps.</div>` : '')
+    : `<div class="ar-vide"><b>Rien d'autre à proposer pour l'instant.</b><br>${reste.length === 0 ? 'Bravo, la liste est vide.' : 'Aucune action pour cette source.'}</div>`;
+
+  document.querySelectorAll('[data-nb]').forEach((b) => (b.onclick = () => {
+    nb = b.dataset.nb === 'tout' ? 'tout' : Number(b.dataset.nb);
+    try { localStorage.setItem('aideRelanceNb', String(nb)); } catch (e) { /* sans conséquence */ }
+    rendre();
+  }));
+  document.querySelectorAll('[data-f]').forEach((b) => (b.onclick = () => { filtre = b.dataset.f; rendre(); }));
+  document.querySelectorAll('.ar-row').forEach((r) => (r.onclick = () => ouvrir(Number(r.dataset.id))));
+}
+
+function ligne(a, rang) {
+  const badges = a.raisons.map((r) => `<span class="badge ${SOURCES[r.s][1]}">${SOURCES[r.s][0]}${r.s === 'radar' ? '' : ` · ${r.j} j`}</span>`).join('');
+  const texte = a.raisons.map((r) => r.t).join(' · ');
+  return `<div class="ar-row" data-id="${a.id}" tabindex="0">
+    <span class="ar-rang">${rang}</span>
+    <span class="badge ${a.canal === 'mail' ? 'blue' : 'amber'}">${a.canal === 'mail' ? 'Mail' : 'Appel'}</span>
+    <div><div class="ar-nom">${esc(a.ent)}<small>${esc(a.contact)}</small></div><div class="ar-raisons">${badges}<span>${esc(texte)}</span></div></div>
+    <div class="ar-meta"><b>${ETAPES[a.etape]}</b>${a.montant ? `<br>${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(a.montant)}` : ''}</div>
+    <button class="btn sm primary" type="button">Ouvrir</button></div>`;
+}
+
+/* ---------- Volet d'action ---------- */
+function ouvrir(id) {
+  ouvertId = id;
+  const a = ACTIONS.find((x) => x.id === id);
+  const mail = a.canal === 'mail';
+  $('#volet-zone').innerHTML = `<div class="ar-fond" id="fond"></div>
+    <aside class="ar-volet" role="dialog" aria-label="${esc(a.ent)}">
+      <div class="ar-volet-h"><button class="btn sm ghost ar-fermer" type="button" id="fermer">Fermer</button>
+        <h3>${esc(a.ent)}</h3><div class="muted small">${esc(a.contact)} · ${esc(a.poste)} · ${ETAPES[a.etape]}</div></div>
+      <div class="ar-volet-c" id="volet-c">
+        <div class="ar-note"><b>Pourquoi cette action</b><ul>${a.raisons.map((r) => `<li>${esc(r.t)}</li>`).join('')}</ul><div style="margin-top:6px">${esc(a.dernier)}</div></div>
+        ${mail ? vueMail(a) : vueAppel(a)}
+      </div>
+      <div class="ar-volet-f" id="volet-f">
+        <div class="ar-pied-l">
+          ${mail ? '<button class="btn" type="button" id="brouillon">Créer le brouillon Gmail</button>' : ''}
+          <button class="btn primary" type="button" id="fait">${mail ? 'Mail envoyé' : 'Appel passé'}</button>
+        </div>
+        <div class="ar-pied-l">
+          <span class="muted small">Reporter :</span>
+          <button class="btn sm ghost" type="button" data-rep="demain">Demain</button>
+          <button class="btn sm ghost" type="button" data-rep="+3 jours">+3 jours</button>
+          <button class="btn sm ghost" type="button" data-rep="lundi">Lundi</button>
+          <button class="btn sm ghost danger" type="button" id="ecarter" style="margin-left:auto">Pas pertinent</button>
+        </div>
+      </div></aside>`;
+  $('#fond').onclick = fermer;
+  $('#fermer').onclick = fermer;
+  $('#fait').onclick = () => suite(a);
+  document.querySelectorAll('[data-rep]').forEach((b) => (b.onclick = () => sortir(a, 'plus-tard', `Reportée à ${b.dataset.rep}`)));
+  $('#ecarter').onclick = () => sortir(a, 'ecarte', 'Écartée : l\'OS ne la reproposera pas');
+  if (mail) brancheMail(a);
+}
+
+function vueMail(a) {
+  return `<div class="ar-bloc"><label for="objet">Objet</label><input type="text" id="objet" value="${esc(a.objet)}"></div>
+    <div class="ar-bloc"><label for="corps">Mail préparé (modifiable, signature ajoutée par Gmail)</label><textarea id="corps">${esc(resoudre(a))}</textarea></div>
+    <div class="ar-bloc"><span class="lbl">Créneaux libres proposés (trois recommandés)</span><div class="ar-creneaux" id="creneaux"></div></div>`;
+}
+
+function brancheMail(a) {
+  const dessiner = () => ($('#creneaux').innerHTML = SLOTS.map((s, i) => `<button type="button" class="chip ${a.sel.includes(i) ? 'on' : ''}" data-s="${i}">${s}</button>`).join(''));
+  const lier = () => document.querySelectorAll('[data-s]').forEach((b) => (b.onclick = () => {
+    const i = Number(b.dataset.s);
+    a.sel = a.sel.includes(i) ? a.sel.filter((x) => x !== i) : [...a.sel, i];
+    if (!a.edite) $('#corps').value = resoudre(a);
+    dessiner(); lier();
+  }));
+  dessiner(); lier();
+  $('#corps').oninput = () => (a.edite = true);
+  $('#objet').oninput = (e) => (a.objet = e.target.value);
+  $('#brouillon').onclick = () => toast('Brouillon Gmail créé (simulé). Relisez-le dans Gmail avant d\'envoyer.');
+}
+
+function vueAppel(a) {
+  return `<dl class="ar-fiche">
+      <dt>Objectif de l'appel</dt><dd>${esc(a.objectif)}</dd>
+      <dt>Pour ouvrir</dt><dd>« ${esc(a.ouverture)} »</dd>
+      <dt>Deux questions</dt><dd><ul style="margin:2px 0 0 18px;padding:0">${a.questions.map((q) => `<li>${esc(q)}</li>`).join('')}</ul></dd>
+    </dl>
+    <div class="ar-bloc" style="margin-top:16px"><label for="resultat">Résultat de l'appel</label>
+      <select id="resultat"><option value="joint">Joint, échange fait</option><option value="absent">Pas de réponse</option><option value="message">Message laissé</option><option value="rappel">Rappel demandé</option></select></div>`;
+}
+
+/* ---------- Après l'action : suite proposée ---------- */
+function suite(a) {
+  const res = a.canal === 'appel' ? $('#resultat').value : 'mail';
+  const options = {
+    mail: [['Relancer par téléphone dans 5 jours', true], ['Relancer par mail dans 7 jours, avec un autre angle', false], ['Aucune suite', false]],
+    joint: [['Envoyer un mail récapitulatif demain', true], ['Planifier un rendez-vous', false], ['Aucune suite', false]],
+    absent: [['Rappeler dans 2 jours', true], ['Envoyer un mail dans 2 jours', false], ['Aucune suite', false]],
+    message: [['Rappeler dans 3 jours', true], ['Envoyer un mail dans 2 jours', false], ['Aucune suite', false]],
+    rappel: [['Rappeler à la date demandée (à saisir)', true], ['Aucune suite', false]],
+  }[res];
+  $('#volet-c').innerHTML = `<div class="ar-note"><b>Fait.</b> ${a.canal === 'mail' ? 'Le mail est parti' : 'L\'appel est noté'} pour ${esc(a.ent)}. L'OS propose la suite à planifier.</div>
+    <div class="ar-suite">${options.map(([t, on], i) => `<label><input type="radio" name="suite" value="${esc(t)}" ${on ? 'checked' : ''}><span>${esc(t)}</span></label>`).join('')}</div>`;
+  $('#volet-f').innerHTML = '<button class="btn primary" type="button" id="valide">Créer la tâche et continuer</button>';
+  $('#valide').onclick = () => {
+    const choix = document.querySelector('input[name=suite]:checked').value;
+    sortir(a, 'fait', choix === 'Aucune suite' ? 'Action terminée, aucune tâche créée' : `Tâche créée (simulée) : ${choix}`);
+  };
+}
+
+function sortir(a, etat, message) {
+  sortis.set(a.id, etat);
+  fermer();
+  toast(message);
+}
+
+function fermer() { ouvertId = null; $('#volet-zone').innerHTML = ''; rendre(); }
+
+function toast(t) {
+  const n = document.createElement('div');
+  n.textContent = t;
+  n.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#12253F;color:#fff;padding:10px 18px;border-radius:8px;z-index:99;font-size:15px;max-width:90vw';
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 2600);
+}
+
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ouvertId !== null) fermer(); });
+rendre();
+</script>
+</body>
+</html>
