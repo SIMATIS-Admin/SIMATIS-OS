@@ -88,6 +88,8 @@ afterEach(cleanup);
 const ouvrir = async () => {
   render(<Cours slug="simatis" deck="exemple-fictif" />);
   await screen.findByRole('heading', { name: /Bonjour/ });
+  // Vide les effets : l'écouteur clavier de Cours.tsx doit être branché avant les touches simulées.
+  await act(async () => {});
 };
 
 describe('Lecteur de supports', () => {
