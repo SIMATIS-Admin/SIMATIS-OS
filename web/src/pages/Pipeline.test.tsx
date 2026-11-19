@@ -6,6 +6,7 @@ import { Pipeline } from './Pipeline.js';
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
 let lectureSeule = false;
+let devisExistants: { id: string; opportuniteId: string }[] = [];
 
 const opp = (id: string, etape: string, extra: Record<string, unknown> = {}) => ({
   id,
@@ -68,6 +69,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
   if (url.includes('pipeline/echanges'))
     return json({ etat: 'termine', derniereLecture: '2026-11-14T08:12:00.000Z', lancee: false });
+  if (url.endsWith('/devis')) return json(devisExistants);
   if (method === 'PATCH') return json({ opportunite: opp('o1', 'proposition'), simulation: false });
   if (method === 'POST') return json(opp('o9', 'qualification'));
   return json(pipeline());
@@ -86,6 +88,7 @@ describe('Pipeline screen', () => {
   beforeEach(() => {
     calls = [];
     lectureSeule = false;
+    devisExistants = [];
     vi.stubGlobal('fetch', vi.fn(fakeFetch));
   });
   afterEach(() => {
@@ -355,5 +358,61 @@ describe('Pipeline screen', () => {
         body: { ids: ['o2'] },
       }),
     );
+  });
+});
+
+describe('Pipeline : devis', () => {
+  beforeEach(() => {
+    calls = [];
+    lectureSeule = false;
+    devisExistants = [];
+    vi.stubGlobal('fetch', vi.fn(fakeFetch));
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('propose « Devis » sur chaque carte quand le module est actif', async () => {
+    render(<Pipeline slug="simatis" devisAutorise />);
+    await screen.findByText('Entreprise o1');
+    const lien = screen.getByRole('link', { name: 'Préparer un devis pour Affaire o1' });
+    expect(lien.getAttribute('href')).toBe('#/simatis/devis/affaire/o1');
+  });
+
+  it('n’en propose aucun sans le module devis', async () => {
+    render(<Pipeline slug="simatis" />);
+    await screen.findByText('Entreprise o1');
+    expect(screen.queryByRole('link', { name: /Préparer un devis pour/ })).toBeNull();
+  });
+
+  it('invite à préparer le devis quand une affaire passe en Proposition', async () => {
+    render(<Pipeline slug="simatis" devisAutorise />);
+    await screen.findByText('Entreprise o1');
+    fireEvent.change(screen.getByLabelText('Déplacer Affaire o1'), {
+      target: { value: 'proposition' },
+    });
+    expect(await screen.findByText(/passe en Proposition/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Préparer le devis' }).getAttribute('href')).toBe(
+      '#/simatis/devis/affaire/o1',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Plus tard' }));
+    expect(screen.queryByText(/passe en Proposition/)).toBeNull();
+  });
+
+  it('n’invite pas si l’affaire a déjà un devis, ni pour une autre étape', async () => {
+    devisExistants = [{ id: 'd1', opportuniteId: 'o1' }];
+    render(<Pipeline slug="simatis" devisAutorise />);
+    await screen.findByText('Entreprise o1');
+    fireEvent.change(screen.getByLabelText('Déplacer Affaire o1'), {
+      target: { value: 'proposition' },
+    });
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    fireEvent.change(screen.getByLabelText('Déplacer Affaire o2'), {
+      target: { value: 'qualification' },
+    });
+    await waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText(/passe en Proposition/)).toBeNull();
   });
 });
