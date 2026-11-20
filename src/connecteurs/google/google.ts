@@ -99,11 +99,14 @@ const encodeHeader = (value: string) =>
 
 // Image incorporée au message (signature) : elle s'affiche dans le corps par `<img src="cid:…">`.
 export type ImageIntegree = { cid: string; typeMime: string; base64: string };
+// Fichier joint (le PDF d'un devis, par exemple), en base64.
+export type PieceJointe = { nom: string; typeMime: string; base64: string };
 export type BrouillonMessage = {
   to: string;
   subject: string;
   html: string;
   images?: ImageIntegree[];
+  pieces?: PieceJointe[];
 };
 
 const TYPES_IMAGE = ['image/png', 'image/jpeg'];
@@ -124,10 +127,26 @@ function partieImage({ cid, typeMime, base64 }: ImageIntegree): string[] {
   ];
 }
 
+function partiePiece({ nom, typeMime, base64 }: PieceJointe): string[] {
+  // Le nom finit dans un en-tête : pas de guillemet ni de saut de ligne.
+  if (typeMime !== 'application/pdf')
+    throw new Error(`Type de pièce non pris en charge : ${typeMime}`);
+  if (!/^[A-Za-z0-9._ -]{1,100}$/.test(nom)) throw new Error('Nom de pièce jointe invalide');
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw new Error('Pièce jointe illisible');
+  return [
+    `Content-Type: ${typeMime}; name="${nom}"`,
+    'Content-Transfer-Encoding: base64',
+    `Content-Disposition: attachment; filename="${nom}"`,
+    '',
+    ...(base64.match(/.{1,76}/g) ?? []),
+  ];
+}
+
 // The raw message, with any extra header lines (From, Date…) a mailbox other than Gmail needs.
 // Sans image : une seule partie HTML. Avec images : multipart/related (HTML puis une partie par image).
+// Avec pièces jointes : le tout dans un multipart/mixed, les pièces après le corps.
 export function mimeBrut(
-  { to, subject, html, images = [] }: BrouillonMessage,
+  { to, subject, html, images = [], pieces = [] }: BrouillonMessage,
   entetes: string[] = [],
 ) {
   const entete = [
@@ -142,28 +161,36 @@ export function mimeBrut(
     Buffer.from(sansSignature(html))
       .toString('base64')
       .match(/.{1,76}/g) ?? [];
-  if (images.length === 0) {
-    return [
-      ...entete,
-      'Content-Type: text/html; charset="UTF-8"',
-      'Content-Transfer-Encoding: base64',
-      '',
-      ...corps,
-    ].join('\r\n');
-  }
-  const frontiere = `simatis-${randomUUID()}`;
-  return [
-    ...entete,
-    `Content-Type: multipart/related; boundary="${frontiere}"`,
-    '',
-    `--${frontiere}`,
+  const partieHtml = [
     'Content-Type: text/html; charset="UTF-8"',
     'Content-Transfer-Encoding: base64',
     '',
     ...corps,
-    ...images.flatMap((image) => [`--${frontiere}`, ...partieImage(image)]),
-    `--${frontiere}--`,
-  ].join('\r\n');
+  ];
+  let contenu = partieHtml;
+  if (images.length > 0) {
+    const frontiere = `simatis-${randomUUID()}`;
+    contenu = [
+      `Content-Type: multipart/related; boundary="${frontiere}"`,
+      '',
+      `--${frontiere}`,
+      ...partieHtml,
+      ...images.flatMap((image) => [`--${frontiere}`, ...partieImage(image)]),
+      `--${frontiere}--`,
+    ];
+  }
+  if (pieces.length > 0) {
+    const frontiere = `simatis-${randomUUID()}`;
+    contenu = [
+      `Content-Type: multipart/mixed; boundary="${frontiere}"`,
+      '',
+      `--${frontiere}`,
+      ...contenu,
+      ...pieces.flatMap((piece) => [`--${frontiere}`, ...partiePiece(piece)]),
+      `--${frontiere}--`,
+    ];
+  }
+  return [...entete, ...contenu].join('\r\n');
 }
 
 export const mimeMessage = (draft: BrouillonMessage) =>
