@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EtatBase, ImportBase } from '../api.js';
 import { Bases } from './Bases.js';
@@ -279,6 +279,8 @@ describe('base vivante : import en trois temps', () => {
   it('se ferme avec Échap', async () => {
     render(<Bases slug="simatis" ouvrir="import" />);
     await screen.findByRole('dialog', { name: 'Importer une liste' });
+    // Vide les effets : l'écouteur d'Échap doit être branché avant la touche simulée.
+    await act(async () => {});
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
   });

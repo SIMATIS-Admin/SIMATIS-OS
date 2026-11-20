@@ -11,6 +11,7 @@ import { Icon } from '../icons.js';
 import { libelleType, type InstanceSummary } from '../nav.js';
 import { Connexions } from './parametres/Connexions.js';
 import { Partenaires } from './parametres/Partenaires.js';
+import { DevisParametres } from './parametres/DevisParametres.js';
 import { ProspectionReglages } from './parametres/ProspectionReglages.js';
 import { RoutinesParametres } from './parametres/Routines.js';
 import { Tip } from './widgets.js';
@@ -165,7 +166,7 @@ export function Parametres({ slug, onRenamed }: Props) {
   const [nom, setNom] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [tab, setTab] = useState<
-    'instance' | 'connexions' | 'partenaires' | 'routines' | 'prospection'
+    'instance' | 'connexions' | 'partenaires' | 'routines' | 'prospection' | 'devis'
   >(location.hash.includes('google=') ? 'connexions' : 'instance');
 
   useEffect(() => {
@@ -212,6 +213,11 @@ export function Parametres({ slug, onRenamed }: Props) {
         <button className={tab === 'prospection' ? 'on' : ''} onClick={() => setTab('prospection')}>
           Prospection
         </button>
+        {fiche.type === 'propre' && fiche.modules.includes('devis') && (
+          <button className={tab === 'devis' ? 'on' : ''} onClick={() => setTab('devis')}>
+            Devis
+          </button>
+        )}
       </div>
       <div className="alert blue" style={{ marginBottom: 18 }}>
         <Icon name="lock" />
@@ -228,6 +234,8 @@ export function Parametres({ slug, onRenamed }: Props) {
         <RoutinesParametres slug={slug} onConnexions={() => setTab('connexions')} />
       ) : tab === 'prospection' ? (
         <ProspectionReglages slug={slug} />
+      ) : tab === 'devis' ? (
+        <DevisParametres slug={slug} />
       ) : (
         <div className="grid g2">
           <div className="panel">

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModePresentationContext } from '../shell/modePresentation.js';
 import { Cours, CoursListe } from './Cours.js';
@@ -88,6 +88,8 @@ afterEach(cleanup);
 const ouvrir = async () => {
   render(<Cours slug="simatis" deck="exemple-fictif" />);
   await screen.findByRole('heading', { name: /Bonjour/ });
+  // Vide les effets : l'écouteur clavier de Cours.tsx doit être branché avant les touches simulées.
+  await act(async () => {});
 };
 
 describe('Lecteur de supports', () => {

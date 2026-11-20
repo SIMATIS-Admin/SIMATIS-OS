@@ -63,3 +63,16 @@ describe('Paramètres, phase of a mandate', () => {
     expect(screen.queryByRole('button', { name: 'Closing' })).toBeNull();
   });
 });
+
+describe('Paramètres, onglet Devis', () => {
+  it('apparaît seulement pour l’activité propre qui a le module devis', async () => {
+    fiche = { ...fiche, type: 'propre', phase: null, modules: ['devis'] };
+    render(<Parametres slug="simatis" onRenamed={() => undefined} />);
+    expect(await screen.findByRole('button', { name: 'Devis' })).toBeTruthy();
+    cleanup();
+    fiche = { ...fiche, modules: [] };
+    render(<Parametres slug="simatis" onRenamed={() => undefined} />);
+    await screen.findAllByText('Activité');
+    expect(screen.queryByRole('button', { name: 'Devis' })).toBeNull();
+  });
+});

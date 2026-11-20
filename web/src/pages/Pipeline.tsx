@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type DragEvent } from 'react';
 import {
   changeOpportunite,
+  fetchDevis,
   createOpportunite,
   fetchContacts,
   fetchEntreprises,
@@ -113,6 +114,7 @@ function Card({
   onOpen,
   destinations,
   onMove,
+  lienDevis,
 }: {
   o: PipelineOpp;
   draggable: boolean;
@@ -121,6 +123,8 @@ function Card({
   onOpen: () => void;
   destinations: { id: string; label: string }[];
   onMove?: (destination: string) => void;
+  // Raccourci vers le devis de l'affaire, seulement quand le module devis est actif.
+  lienDevis?: string;
 }) {
   const inactive = !o.clos && (o.joursInactif ?? 0) > seuil;
   return (
@@ -172,6 +176,15 @@ function Card({
           </span>
         </div>
       </button>
+      {lienDevis && !o.clos && (
+        <a
+          className="btn ghost sm"
+          href={lienDevis}
+          aria-label={`Préparer un devis pour ${o.titre}`}
+        >
+          Devis
+        </a>
+      )}
       {onMove && !o.clos && (
         <label className="card-move">
           <span>Déplacer</span>
@@ -412,7 +425,13 @@ function Recherche({
   );
 }
 
-export function Pipeline({ slug }: { slug: string }) {
+export function Pipeline({
+  slug,
+  devisAutorise = false,
+}: {
+  slug: string;
+  devisAutorise?: boolean;
+}) {
   const [data, setData] = useState<PipelineData | null>(null);
   const [mode, setMode] = useState<'board' | 'liste' | 'matrice'>('board');
   const [cloture, setCloture] = useState<{ id: string; r: 'gagne' | 'perdu' } | null>(null);
@@ -422,6 +441,8 @@ export function Pipeline({ slug }: { slug: string }) {
   const [afficherCloses, setAfficherCloses] = useState(false);
   const [over, setOver] = useState<string | null>(null);
   const [nouvelle, setNouvelle] = useState<string | null>(null);
+  // Affaire qui vient de passer en Proposition : on propose de préparer son devis.
+  const [invite, setInvite] = useState<{ id: string; nom: string } | null>(null);
 
   const load = useCallback(() => {
     fetchPipeline(slug).then(setData, (e: unknown) => setMessage(String(e)));
@@ -446,8 +467,12 @@ export function Pipeline({ slug }: { slug: string }) {
             : null,
         );
         load();
+        return true;
       },
-      (e: unknown) => setMessage(e instanceof Error ? e.message : String(e)),
+      (e: unknown) => {
+        setMessage(e instanceof Error ? e.message : String(e));
+        return false;
+      },
     );
   const find = (id: string) => data.opportunites.find((o) => o.id === id);
   const normaliser = (v: string) =>
@@ -490,7 +515,17 @@ export function Pipeline({ slug }: { slug: string }) {
       return;
     }
     if (o.etape === cible && !o.clos) return;
-    void change(id, { etape: cible });
+    void change(id, { etape: cible }).then((ok) => ok && proposerDevis(o, cible));
+  };
+  const proposerDevis = (o: PipelineOpp, cible: string) => {
+    if (!devisAutorise || !/proposition/i.test(label(cible))) return;
+    fetchDevis(slug).then(
+      (devis) => {
+        if (!devis.some((d) => d.opportuniteId === o.id))
+          setInvite({ id: o.id, nom: o.entreprise ?? o.titre });
+      },
+      () => undefined,
+    );
   };
   const drop = (cible: string) => (e: DragEvent) => {
     e.preventDefault();
@@ -557,6 +592,7 @@ export function Pipeline({ slug }: { slug: string }) {
           onOpen={() => ouvrir(o.id)}
           destinations={destinations}
           onMove={data.ecrit ? (destination) => move(o.id, destination) : undefined}
+          lienDevis={devisAutorise ? `#/${slug}/devis/affaire/${o.id}` : undefined}
         />
       ))}
       {os.length === 0 && (
@@ -694,6 +730,22 @@ export function Pipeline({ slug }: { slug: string }) {
             Synchronisation HubSpot en lecture seule : les cartes ne se déplacent pas. Passez le
             sens sur « Dans les deux sens » dans <a href={`#/${slug}/parametres`}>Paramètres</a>.
           </span>
+        </div>
+      )}
+      {invite && (
+        <div
+          className="alert blue"
+          style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}
+        >
+          <div style={{ flex: 1 }}>
+            <b>{invite.nom}</b> passe en Proposition. Préparer le devis maintenant ?
+          </div>
+          <a className="btn primary sm" href={`#/${slug}/devis/affaire/${invite.id}`}>
+            Préparer le devis
+          </a>
+          <button className="btn ghost sm" onClick={() => setInvite(null)}>
+            Plus tard
+          </button>
         </div>
       )}
       {message && (

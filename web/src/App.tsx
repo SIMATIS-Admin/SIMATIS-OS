@@ -240,7 +240,13 @@ export function App() {
       case 'icp':
         return <Icp key={current.slug} slug={current.slug} nom={current.nom} />;
       case 'pipeline':
-        return <Pipeline key={current.slug} slug={current.slug} />;
+        return (
+          <Pipeline
+            key={current.slug}
+            slug={current.slug}
+            devisAutorise={current.modules.includes('devis')}
+          />
+        );
       case 'routines':
         return <Routines key={current.slug} slug={current.slug} />;
       case 'agenda':

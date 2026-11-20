@@ -24,14 +24,18 @@ export function DevisApercu({
   client,
   contact,
   date,
+  tvaPct,
+  mentions,
 }: {
   contenu: ContenuDevis;
   numero: string;
   client: string | null;
   contact: string | null;
   date: string;
+  tvaPct: number;
+  mentions: string;
 }) {
-  const t = calculer(c);
+  const t = calculer(c, tvaPct);
   const echeance = new Date(new Date(date).getTime() + c.validiteJours * 864e5);
   const clauses = c.clauses.filter((x) => x.active);
   return (
@@ -42,6 +46,7 @@ export function DevisApercu({
             SIMATIS <span>OS</span>
           </div>
           <div>Direction commerciale à temps partagé</div>
+          {mentions && <div style={{ whiteSpace: 'pre-line' }}>{mentions}</div>}
         </div>
         <div style={{ textAlign: 'right' }}>
           <b>DEVIS {numero}</b>
@@ -135,7 +140,7 @@ export function DevisApercu({
             <td className="r">{eur2(t.ht)}</td>
           </tr>
           <tr>
-            <td>TVA 20 %</td>
+            <td>TVA {tvaPct} %</td>
             <td className="r">{eur2(t.tva)}</td>
           </tr>
           <tr>

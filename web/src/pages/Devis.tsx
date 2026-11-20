@@ -31,8 +31,8 @@ export function Devis({
   useEffect(charger, [charger, vue.ecran]);
 
   const depuisAffaire = useCallback(
-    (opportuniteId: string) =>
-      creerDevis(slug, opportuniteId).then(
+    (opportuniteId: string, modeleId?: string) =>
+      creerDevis(slug, opportuniteId, modeleId).then(
         (d) => {
           setPrepare(false);
           setVue({ ecran: 'editeur', id: d.id, prix: !d.existant });
@@ -93,7 +93,7 @@ export function Devis({
         <DevisAffaire
           slug={slug}
           avecDevis={new Set(liste.map((d) => d.opportuniteId))}
-          onChoisir={(id) => void depuisAffaire(id)}
+          onChoisir={(id, modeleId) => void depuisAffaire(id, modeleId)}
         />
       </>
     );

@@ -217,7 +217,21 @@ import {
   nouvelleVersion,
   validerDevis,
 } from '../conversion/devis.js';
+import {
+  clauseBibliothequeSchema,
+  creerClause,
+  creerModele,
+  enregistrerReglages,
+  lireParametres,
+  modeleSchema,
+  modifierClause,
+  modifierModele,
+  reglagesDevisSchema,
+  supprimerClause,
+  supprimerModele,
+} from '../conversion/devis-parametres.js';
 import { contenuSchema } from '../conversion/devis-contenu.js';
+import { genererPdfDevis } from '../conversion/devis-pdf.js';
 import {
   compteRenduSchema,
   compterATrier,
@@ -2171,13 +2185,13 @@ export function registerApi(
 
   // Devis: SIMATIS's own instance only (module devis); anywhere else the screen does not exist.
   const surDevis = <R extends SlugParams>(
-    handler: (i: Instance, request: FastifyRequest<R>) => Promise<unknown>,
+    handler: (i: Instance, request: FastifyRequest<R>, reply: FastifyReply) => Promise<unknown>,
   ) =>
     onInstance<R>(async (i, request, reply) => {
       if (!devisActif(i))
         return reply.code(404).send({ error: 'Pas de devis dans cette instance' });
       try {
-        return await handler(i, request);
+        return await handler(i, request, reply);
       } catch (error) {
         if (error instanceof DevisRefuse) return reply.code(400).send({ error: error.message });
         if (error instanceof z.ZodError) return reply.code(400).send({ error: 'Demande invalide' });
@@ -2192,6 +2206,56 @@ export function registerApi(
     '/api/i/:slug/devis',
     surDevis((i) => listerDevis(db, i)),
   );
+  // Settings and libraries: static paths, declared before « :id » so they are never read as an id.
+  type ParamRoute = { Params: { slug: string; id: string }; Body: unknown };
+  app.get<SlugParams>(
+    '/api/i/:slug/devis/parametres',
+    surDevis((i) => lireParametres(db, i)),
+  );
+  app.put<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/devis/parametres/reglages',
+    surDevis<SlugParams & { Body: unknown }>((i, request) =>
+      enregistrerReglages(db, i, reglagesDevisSchema.parse(request.body)),
+    ),
+  );
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/devis/parametres/clauses',
+    surDevis<SlugParams & { Body: unknown }>((i, request) =>
+      creerClause(db, i, clauseBibliothequeSchema.parse(request.body)),
+    ),
+  );
+  app.put<ParamRoute>(
+    '/api/i/:slug/devis/parametres/clauses/:id',
+    surDevis<ParamRoute>((i, request) =>
+      modifierClause(db, i, request.params.id, clauseBibliothequeSchema.parse(request.body)),
+    ),
+  );
+  app.delete<ParamRoute>(
+    '/api/i/:slug/devis/parametres/clauses/:id',
+    surDevis<ParamRoute>(async (i, request) => {
+      await supprimerClause(db, i, request.params.id);
+      return { ok: true };
+    }),
+  );
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/devis/parametres/modeles',
+    surDevis<SlugParams & { Body: unknown }>((i, request) =>
+      creerModele(db, i, modeleSchema.parse(request.body)),
+    ),
+  );
+  app.put<ParamRoute>(
+    '/api/i/:slug/devis/parametres/modeles/:id',
+    surDevis<ParamRoute>((i, request) =>
+      modifierModele(db, i, request.params.id, modeleSchema.parse(request.body)),
+    ),
+  );
+  app.delete<ParamRoute>(
+    '/api/i/:slug/devis/parametres/modeles/:id',
+    surDevis<ParamRoute>(async (i, request) => {
+      await supprimerModele(db, i, request.params.id);
+      return { ok: true };
+    }),
+  );
   app.get<DevisRoute>(
     '/api/i/:slug/devis/:id',
     surDevis<DevisRoute>((i, request) => lireDevis(db, i, request.params.id)),
@@ -2199,8 +2263,10 @@ export function registerApi(
   app.post<SlugParams & { Body: unknown }>(
     '/api/i/:slug/devis',
     surDevis<SlugParams & { Body: unknown }>(async (i, request) => {
-      const { opportuniteId } = z.object({ opportuniteId: z.uuid() }).parse(request.body);
-      const { devis, existant } = await creerDepuisAffaire(db, i, opportuniteId);
+      const { opportuniteId, modeleId } = z
+        .object({ opportuniteId: z.uuid(), modeleId: z.uuid().optional() })
+        .parse(request.body);
+      const { devis, existant } = await creerDepuisAffaire(db, i, opportuniteId, modeleId);
       return { ...devis, existant };
     }),
   );
@@ -2210,6 +2276,23 @@ export function registerApi(
       const parsed = contenuSchema.safeParse(request.body);
       if (!parsed.success) throw new DevisRefuse('Contenu du devis invalide');
       return modifierContenu(db, i, request.params.id, parsed.data);
+    }),
+  );
+  app.get<DevisRoute>(
+    '/api/i/:slug/devis/:id/pdf',
+    surDevis<DevisRoute>(async (i, request, reply) => {
+      const d = await lireDevis(db, i, request.params.id);
+      const pdf = await genererPdfDevis({
+        ...d,
+        createdAt: d.createdAt,
+        entreprise: d.entreprise,
+      });
+      return reply
+        .header('content-type', 'application/pdf')
+        .header('cache-control', 'private, no-store')
+        .header('x-content-type-options', 'nosniff')
+        .header('content-disposition', `inline; filename="devis-${d.numero}.pdf"`)
+        .send(pdf);
     }),
   );
   app.post<DevisRoute>(

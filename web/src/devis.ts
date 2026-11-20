@@ -32,3 +32,18 @@ export function problemesAvantEnvoi(c: ContenuDevis): string[] {
   if (!c.exclu.trim()) p.push('Aucune exclusion indiquée : à confirmer.');
   return p;
 }
+
+const COMPTEUR = /\{(N+)\}/;
+
+// Same rule as src/conversion/devis-parametres.ts, to warn before sending.
+export const formatNumeroValide = (format: string) => {
+  if (format.length === 0 || format.length > 40 || !/^[\w\-. {}]+$/.test(format)) return false;
+  if ((format.match(/\{AAAA\}/g) ?? []).length > 1) return false;
+  if ((format.match(/\{N+\}/g) ?? []).length !== 1) return false;
+  return !/-V\d+$/i.test(exempleNumero(format, 2026, 1));
+};
+
+export const exempleNumero = (format: string, annee: number, compteur = 7) =>
+  format
+    .replace('{AAAA}', String(annee))
+    .replace(COMPTEUR, (_, n: string) => String(compteur).padStart(n.length, '0'));

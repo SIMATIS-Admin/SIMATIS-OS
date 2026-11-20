@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export class DevisRefuse extends Error {}
+
 const texte = (max: number) => z.string().max(max);
 
 export const ligneSchema = z.object({

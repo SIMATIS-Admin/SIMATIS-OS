@@ -87,11 +87,11 @@ Reste :
 
 ### M5 — Convertir
 
-Livré : Pipeline (miroir HubSpot, conversions, Gagnées/Perdues), Entreprises, Contacts, Agenda, Rendez-vous, Devis (instance SIMATIS seulement : mission, prix, conditions de vente, versions, création depuis l'affaire).
+Livré : Pipeline (miroir HubSpot, conversions, Gagnées/Perdues), Entreprises, Contacts, Agenda, Rendez-vous, Devis (instance SIMATIS seulement : mission, prix, conditions de vente, versions, création depuis l'affaire, Paramètres du devis : réglages, clauses, modèles de mission, numérotation ; PDF ; raccourcis du Pipeline).
 
 Reste :
 
-- **Devis, livraisons B et C** : B = Paramètres du devis (modèles de mission, bibliothèque de clauses, numérotation, mentions) et PDF, avec l'action rapide sur la carte du pipeline et la proposition au passage en « Proposition » ; C = brouillon Gmail avec le PDF, relance à J+10, suivi accepté ou refusé qui met l'affaire à jour. Conception : `docs/superpowers/specs/2026-11-19-devis-design.md`.
+- **Devis, livraison C** : brouillon Gmail avec le PDF, relance à J+10, suivi accepté ou refusé qui met l'affaire à jour. Conception : `docs/superpowers/specs/2026-11-19-devis-design.md`.
 - **Relais internes** (points mensuels avec les experts du mandat) : écran non construit.
 - **Transfert entre instances, livraison 2b** : filtre « Tous les mandats » dans les listes (Contacts, Entreprises, Pipeline, Tâches, Rendez-vous), sans mélanger statistiques et montants entre mandats. Demande sa propre spécification.
 - **Rôle de base dédié** (BYPASSRLS, droits limités) à la place de la connexion propriétaire du transfert, avant tout accès multi-utilisateurs.

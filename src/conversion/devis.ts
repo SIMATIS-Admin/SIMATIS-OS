@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { contacts, entreprises, opportunites } from '../crm/schema.js';
 import { pipelineSource } from '../crm/pipeline.js';
@@ -9,10 +9,11 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { registerPropositionType } from '../propositions/registry.js';
 import { propose, type PropositionCtx } from '../propositions/service.js';
-import { calculer, type ContenuDevis } from './devis-contenu.js';
-import { devis, type Devis } from './schema.js';
+import { calculer, DevisRefuse, type ContenuDevis } from './devis-contenu.js';
+import { formaterNumero, REGLAGES_PAR_DEFAUT, type Reglages } from './devis-parametres.js';
+import { devis, devisClauses, devisModeles, devisReglages, type Devis } from './schema.js';
 
-export class DevisRefuse extends Error {}
+export { DevisRefuse };
 
 // Quotes are SIMATIS's own offer: only the "propre" instance with the devis module has them.
 export const devisActif = (instance: Instance) =>
@@ -25,6 +26,22 @@ const baseNumero = (numero: string) => numero.replace(suffixeVersion, '');
 // same one, so creations of one instance take turns.
 const verrouiller = (tx: Tx, instanceId: string) =>
   tx.execute(sql`select pg_advisory_xact_lock(hashtext(${instanceId}))`);
+
+const reglagesDe = async (tx: Tx): Promise<Reglages> => {
+  const [r] = await tx
+    .select()
+    .from(devisReglages)
+    .where(eq(devisReglages.instanceId, currentInstance));
+  return r
+    ? {
+        numerotation: r.numerotation,
+        mentions: r.mentions,
+        tvaPct: r.tvaPct,
+        validiteJours: r.validiteJours,
+        acomptePct: r.acomptePct,
+      }
+    : REGLAGES_PAR_DEFAUT;
+};
 
 async function charger(tx: Tx, id: string): Promise<Devis> {
   if (!z.uuid().safeParse(id).success) throw new DevisRefuse('Devis introuvable');
@@ -47,6 +64,7 @@ async function versionsDe(tx: Tx, numero: string): Promise<Devis[]> {
 }
 
 const enrichir = async (tx: Tx, rows: Devis[]) => {
+  const reglages = await reglagesDe(tx);
   const liens = await tx
     .select({
       id: opportunites.id,
@@ -78,7 +96,9 @@ const enrichir = async (tx: Tx, rows: Devis[]) => {
     opportunite: parId.get(r.opportuniteId)?.opportunite ?? '',
     entreprise: parId.get(r.opportuniteId)?.entreprise ?? null,
     contact: parId.get(r.opportuniteId)?.contact ?? null,
-    totaux: calculer(r),
+    totaux: calculer(r, reglages.tvaPct),
+    tvaPct: reglages.tvaPct,
+    mentions: reglages.mentions,
   }));
 };
 
@@ -119,7 +139,12 @@ export async function lireDevis(db: Executor, instance: Instance, id: string) {
 
 // The OS prepares the quote from the deal; every price is left for the pilot to set. The deal's
 // amount is only offered as a suggestion (`prixPropose`).
-export async function creerDepuisAffaire(db: Executor, instance: Instance, opportuniteId: string) {
+export async function creerDepuisAffaire(
+  db: Executor,
+  instance: Instance,
+  opportuniteId: string,
+  modeleId?: string,
+) {
   return withInstance(db, instance.id, async (tx) => {
     await verrouiller(tx, instance.id);
     const [opp] = await tx
@@ -139,20 +164,55 @@ export async function creerDepuisAffaire(db: Executor, instance: Instance, oppor
     const dernier = existants.sort((a, b) => b.version - a.version)[0];
     if (dernier) return { devis: dernier, existant: true };
 
+    const reglages = await reglagesDe(tx);
+    const bibliotheque = await tx
+      .select()
+      .from(devisClauses)
+      .where(and(eq(devisClauses.instanceId, currentInstance), eq(devisClauses.parDefaut, true)))
+      .orderBy(asc(devisClauses.ordre), asc(devisClauses.createdAt));
+    // Without a library, a new quote starts from the last quote's conditions.
     const [recent] = await tx
       .select({ clauses: devis.clauses })
       .from(devis)
       .where(eq(devis.instanceId, currentInstance))
       .orderBy(desc(devis.createdAt))
       .limit(1);
+    const clauses = bibliotheque.length
+      ? bibliotheque.map((c) => ({ titre: c.titre, texte: c.texte, active: true }))
+      : (recent?.clauses ?? []);
+    let modele: typeof devisModeles.$inferSelect | undefined;
+    if (modeleId) {
+      [modele] = await tx
+        .select()
+        .from(devisModeles)
+        .where(and(eq(devisModeles.instanceId, currentInstance), eq(devisModeles.id, modeleId)));
+      if (!modele) throw new DevisRefuse('Modèle de mission introuvable');
+    }
     const premieres = await tx
       .select({ id: devis.id })
       .from(devis)
       .where(and(eq(devis.instanceId, currentInstance), eq(devis.version, 1)));
-    const n = premieres.length;
-    const prefixe = instance.type === 'prospect' ? 'DEMO' : `DEV-${new Date().getFullYear()}`;
-    const numero = `${prefixe}-${String(n + 1).padStart(3, '0')}`;
+    const numero =
+      instance.type === 'prospect'
+        ? `DEMO-${String(premieres.length + 1).padStart(3, '0')}`
+        : formaterNumero(reglages.numerotation, new Date().getFullYear(), premieres.length + 1);
     const recurrente = opp.modeFacturation === 'recurrent';
+    const lignes = modele?.lignes.length
+      ? modele.lignes.map((l) => ({
+          ...l,
+          prixUnitaire: null,
+          // One line can carry the deal's amount as a suggestion; several lines cannot share it.
+          prixPropose: modele.lignes.length === 1 ? (opp.montant ?? null) : null,
+        }))
+      : [
+          {
+            libelle: opp.titre,
+            unite: recurrente ? ('mois' as const) : ('forfait' as const),
+            quantite: recurrente ? opp.dureeEngagementMois : 1,
+            prixUnitaire: null,
+            prixPropose: opp.montant ?? null,
+          },
+        ];
     const [row] = await tx
       .insert(devis)
       .values({
@@ -160,16 +220,16 @@ export async function creerDepuisAffaire(db: Executor, instance: Instance, oppor
         opportuniteId,
         numero,
         titre: opp.titre,
-        clauses: recent?.clauses ?? [],
-        lignes: [
-          {
-            libelle: opp.titre,
-            unite: recurrente ? 'mois' : 'forfait',
-            quantite: recurrente ? opp.dureeEngagementMois : 1,
-            prixUnitaire: null,
-            prixPropose: opp.montant ?? null,
-          },
-        ],
+        contexte: modele?.contexte ?? '',
+        objectifs: modele?.objectifs ?? '',
+        inclus: modele?.inclus ?? '',
+        exclu: modele?.exclu ?? '',
+        livrables: modele?.livrables ?? '',
+        duree: modele?.duree ?? '',
+        validiteJours: reglages.validiteJours,
+        acomptePct: reglages.acomptePct,
+        clauses,
+        lignes,
       })
       .returning();
     if (!row) throw new Error('Devis non créé');

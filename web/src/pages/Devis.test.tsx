@@ -38,6 +38,8 @@ const brouillon = {
   ],
   totaux: { brut: 0, remise: 0, ht: 0, tva: 0, ttc: 0, acompte: 0, prixManquant: true },
   versions: 1,
+  tvaPct: 20,
+  mentions: '',
 };
 const valide = {
   ...brouillon,
@@ -80,6 +82,37 @@ const opps = [
   },
 ];
 
+const parametres = {
+  reglages: {
+    numerotation: 'DEV-{AAAA}-{NNN}',
+    mentions: '',
+    tvaPct: 20,
+    validiteJours: 30,
+    acomptePct: 0,
+  },
+  clauses: [
+    {
+      id: 'c1',
+      titre: 'Confidentialité',
+      texte: 'Gardée confidentielle.',
+      parDefaut: false,
+      ordre: 1,
+    },
+  ],
+  modeles: [
+    {
+      id: 'm1',
+      nom: 'Modèle fictif',
+      contexte: '',
+      objectifs: '',
+      inclus: 'Prestation',
+      exclu: '',
+      livrables: '',
+      duree: '',
+      lignes: [],
+    },
+  ],
+};
 let detail: Record<string, unknown> = brouillon;
 let existant = false;
 
@@ -87,6 +120,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   const method = init?.method ?? 'GET';
   calls.push({ url, method, body: init?.body ? (JSON.parse(init.body) as unknown) : undefined });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+  if (url.endsWith('/devis/parametres')) return json(parametres);
   if (url.endsWith('/pipeline')) return json({ etapes, opportunites: opps });
   if (url.endsWith('/devis') && method === 'GET') return json([detail]);
   if (url.endsWith('/devis') && method === 'POST') return json({ ...detail, existant });
@@ -220,5 +254,41 @@ describe('écran Devis', () => {
     await waitFor(() => expect(calls.some((c) => c.url.endsWith('/valider'))).toBe(true));
     await new Promise((r) => setTimeout(r, 1200));
     expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+  });
+
+  it('le choix d’un modèle de mission est envoyé à la création', async () => {
+    render(<Devis slug="simatis" />);
+    fireEvent.click(await screen.findByText('+ Nouveau devis'));
+    fireEvent.change(await screen.findByLabelText('Modèle de mission'), {
+      target: { value: 'm1' },
+    });
+    fireEvent.click((await screen.findAllByRole('button', { name: /Préparer le devis/ }))[0]!);
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ modeleId: 'm1' }),
+    );
+  });
+
+  it('insère une clause de la bibliothèque, copiée dans le devis', async () => {
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Conditions/ }));
+    fireEvent.change(await screen.findByLabelText('Insérer une clause de la bibliothèque'), {
+      target: { value: 'c1' },
+    });
+    expect(screen.getByDisplayValue('Gardée confidentielle.')).toBeTruthy();
+  });
+
+  it('l’aperçu montre les mentions de l’émetteur et la TVA réglée', async () => {
+    detail = { ...brouillon, tvaPct: 10, mentions: 'Société fictive, 1 rue fictive' };
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    expect(await screen.findByText(/Société fictive, 1 rue fictive/)).toBeTruthy();
+    expect(screen.getAllByText(/TVA 10 %/).length).toBeGreaterThan(0);
+  });
+
+  it('propose le PDF du devis à l’étape Envoi', async () => {
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Envoi/ }));
+    const lien = screen.getByRole('link', { name: /Télécharger le PDF/ });
+    expect(lien.getAttribute('href')).toBe('/api/i/simatis/devis/d1/pdf');
+    expect(lien.getAttribute('target')).toBe('_blank');
   });
 });
