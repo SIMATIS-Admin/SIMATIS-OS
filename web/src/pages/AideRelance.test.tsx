@@ -12,6 +12,9 @@ const api = vi.hoisted(() => ({
   masquerRelanceLot: vi.fn(),
   fetchBrouillonsPrepares: vi.fn(),
   decider: vi.fn(),
+  fetchProspection: vi.fn(),
+  fetchMailsFiche: vi.fn(),
+  envoyerMailRelanceProspection: vi.fn(),
 }));
 vi.mock('../api.js', () => api);
 
@@ -67,6 +70,14 @@ describe('AideRelance', () => {
     api.masquerRelance.mockResolvedValue({});
     api.masquerRelanceLot.mockResolvedValue({});
     api.fetchBrouillonsPrepares.mockResolvedValue([]);
+    api.fetchProspection.mockResolvedValue({
+      signatures: [
+        { id: 's0', nom: 'Courte', defaut: false, typeMime: 'image/png' },
+        { id: 's1', nom: 'Marc', defaut: true, typeMime: 'image/png' },
+      ],
+    });
+    api.fetchMailsFiche.mockResolvedValue({ mails: [], adresses: 1 });
+    api.envoyerMailRelanceProspection.mockResolvedValue({ simulation: false });
   });
   afterEach(() => {
     cleanup();
@@ -117,18 +128,15 @@ describe('AideRelance', () => {
     expect(screen.getAllByRole('button', { name: /Ouvrir/ })).toHaveLength(1);
   });
 
-  it('ouvre le mail préparé au prénom seul, puis crée la suite et clôt la tâche', async () => {
+  it('ouvre le mail préparé au prénom seul, puis « Mail envoyé » crée la suite et clôt la tâche', async () => {
     render(<AideRelance slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
     const corps = await screen.findByLabelText<HTMLTextAreaElement>(/Mail préparé/);
     expect(corps.value.startsWith('Bonjour Dana,')).toBe(true);
     expect(screen.getByRole('link', { name: /Ouvrir dans ma messagerie/ })).toBeTruthy();
 
+    // Déjà envoyé de son côté : l'action est close et la première suite planifiée, sans écran de choix.
     fireEvent.click(screen.getByRole('button', { name: 'Mail envoyé' }));
-    fireEvent.click(
-      await screen.findByRole('radio', { name: /Relancer par téléphone dans 5 jours/ }),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Valider et continuer' }));
 
     await waitFor(() =>
       expect(api.updateTache).toHaveBeenCalledWith('simatis', 't1', { fait: true }),
@@ -250,7 +258,6 @@ describe('AideRelance', () => {
     render(<AideRelance slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Mail envoyé' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Valider et continuer' }));
     await waitFor(() =>
       expect(api.updateTache).toHaveBeenCalledWith('mandat-b', 't1', { fait: true }),
     );
@@ -281,17 +288,152 @@ describe('AideRelance', () => {
     api.decider.mockResolvedValue({ statut: 'appliquee', resultat: { simulation: true } });
     render(<AideRelance slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
-    const texte = await screen.findByLabelText<HTMLTextAreaElement>(/Mail préparé \(à modifier/);
+    const texte = await screen.findByLabelText<HTMLTextAreaElement>(/Mail préparé par la routine/);
     expect(texte.value).toContain('Bonjour Dana,');
     expect(texte.value).toContain('créneaux : mardi, jeudi.');
     expect(api.decider).not.toHaveBeenCalled();
 
+    api.envoyerMailRelanceProspection.mockResolvedValue({ simulation: true });
     fireEvent.click(screen.getByRole('button', { name: 'Créer le brouillon Gmail' }));
-    await waitFor(() => expect(api.decider).toHaveBeenCalledWith('simatis', 'p1', 'valider'));
+    await waitFor(() =>
+      expect(api.envoyerMailRelanceProspection).toHaveBeenCalledWith(
+        'simatis',
+        expect.objectContaining({ mode: 'brouillon', objet: 'Objet préparé', signatureId: 's1' }),
+      ),
+    );
     expect(await screen.findByText(/Brouillon simulé/)).toBeTruthy();
-    expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Créer le brouillon Gmail' }).disabled,
-    ).toBe(true);
+    // Rien n'a été écrit : la proposition de la routine reste à sa place.
+    expect(api.decider).not.toHaveBeenCalled();
+  });
+
+  describe('envoi direct depuis la séquence', () => {
+    const lancer = async () => {
+      render(<AideRelance slug="simatis" />);
+      await screen.findByText('Retard Fictif');
+      fireEvent.click(screen.getByRole('button', { name: 'Lancer la séquence' }));
+      return screen.findByRole('dialog');
+    };
+
+    it("montre la jauge d'avancement et la fait progresser", async () => {
+      let volet = await lancer();
+      const jauge = () => within(volet).getByRole('progressbar');
+      expect(jauge().getAttribute('aria-valuenow')).toBe('0');
+      expect(jauge().getAttribute('aria-valuemax')).toBe('10');
+      fireEvent.click(within(volet).getByRole('button', { name: 'Passer' }));
+      volet = await screen.findByRole('dialog');
+      expect(within(volet).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('1');
+    });
+
+    it("sépare l'action et la situation, avec le dernier mail envoyé et la réponse reçue", async () => {
+      api.fetchMailsFiche.mockResolvedValue({
+        adresses: 1,
+        mails: [
+          {
+            id: 'm1',
+            type: 'email',
+            titre: null,
+            texte: null,
+            at: '2026-11-10T09:00:00Z',
+            origine: 'os',
+            mail: {
+              fil: 'fil-1',
+              objet: 'Notre échange',
+              de: 'moi',
+              a: 'dana',
+              sens: 'envoye',
+              reponse: false,
+              corps: 'Texte du mail envoyé',
+            },
+          },
+          {
+            id: 'm2',
+            type: 'email',
+            titre: null,
+            texte: null,
+            at: '2026-11-12T09:00:00Z',
+            origine: 'os',
+            mail: {
+              fil: 'fil-1',
+              objet: 'Re: Notre échange',
+              de: 'dana',
+              a: 'moi',
+              sens: 'recu',
+              reponse: true,
+              corps: 'Texte de la réponse',
+            },
+          },
+        ],
+      });
+      const volet = await lancer();
+      expect(within(volet).getByLabelText("L'action")).toBeTruthy();
+      const situation = within(volet).getByLabelText('Situation et historique');
+      expect(await within(situation).findByText('Texte de la réponse')).toBeTruthy();
+      expect(within(situation).getByText(/Votre dernier mail/)).toBeTruthy();
+      expect(api.fetchMailsFiche).toHaveBeenCalledWith('simatis', 'contact', 'c1');
+    });
+
+    it('explique ce que fait « Pas pertinent »', async () => {
+      const volet = await lancer();
+      expect(
+        within(volet).getByRole('button', { name: 'Pas pertinent' }).getAttribute('title'),
+      ).toMatch(/pour toujours.*CRM ne sont pas modifiés/);
+    });
+
+    it("envoie le mail avec la signature par défaut, clôt l'action et passe à la suivante", async () => {
+      api.fetchMailsFiche.mockResolvedValue({
+        adresses: 1,
+        mails: [
+          {
+            id: 'm1',
+            type: 'email',
+            titre: null,
+            texte: null,
+            at: '2026-11-10T09:00:00Z',
+            origine: 'os',
+            mail: { fil: 'fil-1', objet: 'x', de: null, a: null, sens: 'envoye', reponse: false },
+          },
+        ],
+      });
+      const volet = await lancer();
+      await within(volet).findByText(/Notre échange|1 mail/);
+      expect(
+        within(volet).getByRole<HTMLSelectElement>('combobox', { name: 'Signature' }).value,
+      ).toBe('s1');
+      fireEvent.click(within(volet).getByRole('button', { name: /Envoyer le mail/ }));
+      await waitFor(() =>
+        expect(api.envoyerMailRelanceProspection).toHaveBeenCalledWith(
+          'simatis',
+          expect.objectContaining({
+            mode: 'envoi',
+            to: 'dana@exemple.test',
+            signatureId: 's1',
+            threadId: 'fil-1',
+          }),
+        ),
+      );
+      await waitFor(() =>
+        expect(api.updateTache).toHaveBeenCalledWith('simatis', 't1', { fait: true }),
+      );
+      expect(api.createTache).toHaveBeenCalledWith(
+        'simatis',
+        expect.objectContaining({ type: 'appel', hubspot: false }),
+      );
+      expect(await screen.findByText(/Action 2 sur/)).toBeTruthy();
+    });
+
+    it('ne clôture rien quand l’envoi est simulé ou échoue', async () => {
+      api.envoyerMailRelanceProspection.mockResolvedValueOnce({ simulation: true });
+      const volet = await lancer();
+      fireEvent.click(within(volet).getByRole('button', { name: /Envoyer le mail/ }));
+      expect(await within(volet).findByText(/Envoi simulé/)).toBeTruthy();
+      expect(api.updateTache).not.toHaveBeenCalled();
+
+      api.envoyerMailRelanceProspection.mockRejectedValueOnce(new Error('refusé'));
+      fireEvent.click(within(volet).getByRole('button', { name: /Envoyer le mail/ }));
+      expect(await within(volet).findByText(/L’envoi a échoué/)).toBeTruthy();
+      expect(api.updateTache).not.toHaveBeenCalled();
+      expect(within(volet).getByText(/Action 1 sur/)).toBeTruthy();
+    });
   });
 
   describe('nettoyage des tâches périmées', () => {

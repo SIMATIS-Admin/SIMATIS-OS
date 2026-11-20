@@ -20,6 +20,7 @@ import {
   lireCampagne,
   tachesRelance,
 } from './campagnes.js';
+import { envoyerMailRelance } from './envoi-relance.js';
 import { finaliserCampagne, modifierBrouillon } from './finalisation.js';
 import {
   compterFroid,
@@ -96,6 +97,14 @@ const reformulationLotSchema = reformulationSchema.extend({
   ids: z.array(z.uuid()).min(1).max(500).optional(),
 });
 const finalisationSchema = z.object({ mode: z.enum(['brouillons', 'envoi']).optional() });
+const mailRelanceSchema = z.object({
+  to: z.string().max(320),
+  objet: z.string().max(300),
+  corps: z.string().max(50_000),
+  signatureId: z.uuid().nullable(),
+  threadId: z.string().max(200).optional(),
+  mode: z.enum(['brouillon', 'envoi']),
+});
 const brouillonSchema = z.object({
   objet: z.string().max(300).optional(),
   corps: z.string().max(50_000).optional(),
@@ -404,6 +413,28 @@ export function registerProspectionRoutes(app: FastifyInstance, deps: Prospectio
         return await finaliserCampagne(db, instance, request.params.id, connexionDeps, {
           envoi: corps.data.mode === 'envoi',
         });
+      } catch (e) {
+        return erreur(e, reply);
+      }
+    },
+  );
+
+  // Un mail d'une action de la séquence « À faire maintenant », avec la signature choisie.
+  app.post<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/prospection/mail-relance',
+    async (request, reply) => {
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      const p = mailRelanceSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, p.error.issues[0]?.message);
+      try {
+        const { threadId, ...reste } = p.data;
+        return await envoyerMailRelance(
+          db,
+          instance,
+          { ...reste, ...(threadId ? { threadId } : {}) },
+          connexionDeps,
+        );
       } catch (e) {
         return erreur(e, reply);
       }

@@ -8662,6 +8662,100 @@ button.recherche-carte:hover,
   font-size: 14px;
 }
 
+/* Séquence : jauge d'avancement, deux blocs (l'action, la situation) et envoi du mail. */
+.aide-jauge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.aide-jauge-barre {
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+.aide-jauge-barre > span {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+  transition: width 0.25s ease;
+}
+.aide-jauge-texte {
+  font-size: 13px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.aide-blocs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.aide-blocs .aide-note {
+  margin-bottom: 0;
+}
+.aide-sous-titre {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.aide-histo p {
+  margin: 4px 0 0;
+}
+.aide-mail {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+}
+.aide-mail summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.aide-mail pre {
+  max-height: 180px;
+  margin: 8px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.aide-dest {
+  margin: 0 0 8px;
+}
+.aide-envoyer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+.aide-envoyer select {
+  max-width: 200px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: #fff;
+}
+.aide-envoyer .btn {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.aide-deja {
+  margin-left: auto;
+}
+@media (max-width: 760px) {
+  .aide-blocs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .aide-envoyer {
+    margin-left: 0;
+  }
+}
+
 /* Cockpit : une seule colonne centrée, la date en tête, le bloc d'actions repliable. */
 .cockpit-date {
   max-width: 1180px;
