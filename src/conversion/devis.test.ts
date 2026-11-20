@@ -284,4 +284,40 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
       conditionsParticulieres: 'Condition fictive.',
     });
   });
+
+  it('reprend la formule et les prestations de la proposition du diagnostic de l’affaire', async () => {
+    const id = (
+      await t.owner.pool.query<{ id: string }>(
+        "insert into opportunites (instance_id, titre, etape) values ($1, 'Affaire fictive', 'qualification') returning id",
+        [simatis.id],
+      )
+    ).rows[0]!.id;
+    const proposition = {
+      formule: {
+        libelle: 'Formule fictive',
+        mensualite: 2500,
+        engagementMois: 12,
+        tacite: true,
+        prestations: ['Prestation fictive A', 'Prestation fictive B'],
+      },
+      options: [],
+    };
+    await t.owner.pool.query(
+      "insert into diagnostic_projets (instance_id, nom, activite, contexte, proposition, opportunite_id) values ($1, 'Diagnostic fictif', 'services', 'Contexte fictif du diagnostic', $2, $3)",
+      [simatis.id, JSON.stringify(proposition), id],
+    );
+    const { devis } = await creerDepuisAffaire(t.app.db, simatis, id);
+    expect(devis.inclus).toBe('- Prestation fictive A\n- Prestation fictive B');
+    expect(devis.contexte).toBe('Contexte fictif du diagnostic');
+    expect(devis.modePrix).toBe('abonnement');
+    expect(devis.lignes).toEqual([
+      expect.objectContaining({
+        libelle: 'Formule fictive',
+        unite: 'mois',
+        quantite: 12,
+        prixUnitaire: null,
+        prixPropose: 2500,
+      }),
+    ]);
+  });
 });
