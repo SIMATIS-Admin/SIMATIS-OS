@@ -130,4 +130,19 @@ describe('Cockpit', () => {
       /PipelineÀ surveiller1affaire ouverte1 inactive1 action en retard/,
     );
   });
+
+  it("met la date du jour tout en haut, avant l'Inbox", async () => {
+    api.fetchCompteurInbox.mockResolvedValue(0);
+    render(<Cockpit slug="simatis" />);
+    const date = new Date().toLocaleDateString('fr-FR', {
+      timeZone: 'Europe/Paris',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+    const titre = screen.getByRole('heading', { name: date });
+    const inbox = await screen.findByText('Inbox : rien à traiter');
+    expect(titre.compareDocumentPosition(inbox) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Aide à la relance de simatis')).toBeTruthy();
+  });
 });

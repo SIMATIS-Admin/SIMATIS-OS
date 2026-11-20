@@ -61,11 +61,11 @@ describe('pilot screens', () => {
     expect(container.querySelectorAll('.vq-filter')).toHaveLength(0);
   });
 
-  it('brief: prioritizes overdue tasks and uses real completed counts', async () => {
+  it('brief: overdue tasks no longer get their own message, but still count in the progress', async () => {
     render(<Brief slug="simatis" />);
     const priority = await screen.findByRole('region', { name: 'Priorité proposée' });
-    expect(within(priority).getByText('Reprendre le fil.')).toBeTruthy();
-    expect(within(priority).getByRole('link').getAttribute('href')).toBe('#/simatis/taches');
+    // Les tâches en retard sont proposées une par une par « À faire maintenant » du Cockpit.
+    expect(within(priority).queryByText('Reprendre le fil.')).toBeNull();
     expect(screen.getByRole('progressbar').getAttribute('max')).toBe('10');
     expect(screen.getByRole('progressbar').getAttribute('value')).toBe('0');
     expect(calls.every((c) => c.method === 'GET')).toBe(true);

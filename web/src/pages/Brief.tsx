@@ -143,46 +143,31 @@ export function Brief({ slug }: { slug: string }) {
       : undefined;
   const faites = data.realisees.aujourdhui.total;
   const total = faites + jour.total + retard;
-  const priorite =
-    retard > 0
+  // Les tâches en retard ne sont plus un message à part : le bloc « À faire maintenant » du Cockpit
+  // les propose une par une, en séquence.
+  const priorite = prochain
+    ? {
+        titre: 'Un rendez-vous bien préparé.',
+        texte: `${heure(prochain.debut)} · ${prochain.titre}`,
+        action: 'Ouvrir mon agenda',
+        lien: `#/${slug}/agenda`,
+      }
+    : jour.total > 0
       ? {
-          titre: 'Reprendre le fil.',
-          texte: `${retard} ${pluriel(retard, 'tâche')} en retard. Choisis la prochaine action à faire avancer.`,
-          action: 'Voir mes actions',
+          titre: 'Une action, puis la suivante.',
+          texte: `${jour.total} ${pluriel(jour.total, 'tâche')} à faire aujourd’hui. Commence par celle qui compte le plus.`,
+          action: 'Choisir ma prochaine action',
           lien: taches,
         }
-      : prochain
-        ? {
-            titre: 'Un rendez-vous bien préparé.',
-            texte: `${heure(prochain.debut)} · ${prochain.titre}`,
-            action: 'Ouvrir mon agenda',
-            lien: `#/${slug}/agenda`,
-          }
-        : jour.total > 0
-          ? {
-              titre: 'Une action, puis la suivante.',
-              texte: `${jour.total} ${pluriel(jour.total, 'tâche')} à faire aujourd’hui. Commence par celle qui compte le plus.`,
-              action: 'Choisir ma prochaine action',
-              lien: taches,
-            }
-          : {
-              titre: 'De la place pour avancer.',
-              texte:
-                'Aucune tâche prévue aujourd’hui. Le plus utile : faire avancer la prospection.',
-              action: 'Prospecter',
-              lien: `#/${slug}/prospection`,
-            };
+      : {
+          titre: 'De la place pour avancer.',
+          texte: 'Aucune tâche prévue aujourd’hui. Le plus utile : faire avancer la prospection.',
+          action: 'Prospecter',
+          lien: `#/${slug}/prospection`,
+        };
 
   return (
     <div className="brief-focus">
-      <p className="brief-date">
-        {new Date(maintenant).toLocaleDateString('fr-FR', {
-          timeZone: 'Europe/Paris',
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-        })}
-      </p>
       {message && (
         <p role="status" className="brief-erreur">
           Actualisation impossible. Les dernières données restent affichées.

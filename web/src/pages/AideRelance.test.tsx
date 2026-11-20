@@ -48,6 +48,8 @@ const tacheRetard = {
 describe('AideRelance', () => {
   beforeEach(() => {
     localStorage.clear();
+    // Le bloc est replié par défaut : les essais de la liste le déplient d'avance.
+    localStorage.setItem('aideRelance:deploye', 'true');
     api.fetchPipeline.mockResolvedValue({
       etapes: [
         { id: 'detection', label: 'Détection' },
@@ -89,6 +91,23 @@ describe('AideRelance', () => {
     expect(screen.getAllByRole('button', { name: /Ouvrir/ })).toHaveLength(13);
   });
 
+  it('est replié par défaut sur une ligne, se déplie et retient son état', async () => {
+    localStorage.clear();
+    render(<AideRelance slug="simatis" />);
+    await screen.findByText(/13 action\(s\) possible\(s\)/);
+    expect(screen.queryByRole('button', { name: /Retard Fictif/ })).toBeNull();
+    const bascule = screen.getByRole('button', { name: /À faire maintenant/ });
+    expect(bascule.getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.click(bascule);
+    expect(await screen.findByRole('button', { name: /Retard Fictif/ })).toBeTruthy();
+    expect(localStorage.getItem('aideRelance:deploye')).toBe('true');
+
+    cleanup();
+    render(<AideRelance slug="simatis" />);
+    expect(await screen.findByRole('button', { name: /Retard Fictif/ })).toBeTruthy();
+  });
+
   it('filtre par source', async () => {
     render(<AideRelance slug="simatis" />);
     await screen.findByText('Retard Fictif');
@@ -123,7 +142,7 @@ describe('AideRelance', () => {
       }),
     );
     await waitFor(() => expect(screen.queryByRole('button', { name: /Retard Fictif/ })).toBeNull());
-    expect(screen.getByText("1 faite(s) aujourd'hui")).toBeTruthy();
+    expect(screen.getByText(/1 faite\(s\) aujourd'hui/)).toBeTruthy();
   });
 
   it('écarte une action pour de bon, côté serveur, et ne la repropose plus', async () => {
@@ -140,6 +159,100 @@ describe('AideRelance', () => {
     render(<AideRelance slug="simatis" />);
     await screen.findByText(/Société fictive 12/);
     expect(screen.queryByText('Retard Fictif')).toBeNull();
+  });
+
+  it('lance une séquence dans la limite choisie et passe les actions une par une', async () => {
+    render(<AideRelance slug="simatis" />);
+    await screen.findByText('Retard Fictif');
+    fireEvent.click(screen.getByRole('button', { name: '5' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lancer la séquence' }));
+
+    let volet = await screen.findByRole('dialog');
+    expect(within(volet).getByText(/Action 1 sur 5/)).toBeTruthy();
+
+    // Passer ne cache rien et ne clôt aucune tâche : on voit l'action suivante.
+    fireEvent.click(within(volet).getByRole('button', { name: 'Passer' }));
+    volet = await screen.findByRole('dialog');
+    expect(within(volet).getByText(/Action 2 sur 5/)).toBeTruthy();
+    expect(api.masquerRelance).not.toHaveBeenCalled();
+    expect(api.updateTache).not.toHaveBeenCalled();
+
+    // Reporter cache l'action côté serveur puis passe à la suivante.
+    fireEvent.click(within(volet).getByRole('button', { name: 'Demain' }));
+    volet = await screen.findByRole('dialog');
+    expect(within(volet).getByText(/Action 3 sur 5/)).toBeTruthy();
+    expect(api.masquerRelance).toHaveBeenCalledTimes(1);
+
+    // Le reste est passé : bilan de fin.
+    for (let i = 0; i < 3; i++)
+      fireEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', { name: 'Passer' }),
+      );
+    expect(await screen.findByText('Séquence terminée')).toBeTruthy();
+    expect(screen.getByText(/5 action\(s\) passées en revue/)).toBeTruthy();
+  });
+
+  it("n'offre pas de séquence quand il n'y a rien à faire", async () => {
+    api.fetchPipeline.mockResolvedValue({ etapes: [], inactiviteJours: 14, opportunites: [] });
+    api.fetchTaches.mockResolvedValue({ enRetard: [] });
+    render(<AideRelance slug="simatis" />);
+    await screen.findByText(/La liste est vide/);
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Lancer la séquence' }).disabled,
+    ).toBe(true);
+  });
+
+  it("filtre par mandat comme dans l'Agenda et retient les mandats décochés", async () => {
+    api.fetchTaches.mockResolvedValue({
+      enRetard: [
+        { ...tacheRetard, instance: { slug: 'simatis', nom: 'SIMATIS', couleur: null } },
+        {
+          ...tacheRetard,
+          id: 't9',
+          entreprise: { id: 'e9', nom: 'Autre Mandat Fictif' },
+          instance: { slug: 'mandat-b', nom: 'Mandat B', couleur: null },
+        },
+      ],
+      instances: [
+        { slug: 'simatis', nom: 'SIMATIS', couleur: null },
+        { slug: 'mandat-b', nom: 'Mandat B', couleur: null },
+      ],
+    });
+    render(<AideRelance slug="simatis" />);
+    expect(await screen.findByText('Autre Mandat Fictif')).toBeTruthy();
+    expect(screen.getByText('Retard Fictif')).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText('Mandat B'));
+    await waitFor(() => expect(screen.queryByText('Autre Mandat Fictif')).toBeNull());
+    expect(screen.getByText('Retard Fictif')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('aideRelance.instances-masquees') ?? '[]')).toEqual([
+      'mandat-b',
+    ]);
+
+    cleanup();
+    render(<AideRelance slug="simatis" />);
+    await screen.findByText('Retard Fictif');
+    expect(screen.queryByText('Autre Mandat Fictif')).toBeNull();
+  });
+
+  it("écrit dans le mandat de l'action quand elle vient d'un autre mandat", async () => {
+    api.fetchTaches.mockResolvedValue({
+      enRetard: [
+        { ...tacheRetard, instance: { slug: 'mandat-b', nom: 'Mandat B', couleur: null } },
+      ],
+      instances: [
+        { slug: 'simatis', nom: 'SIMATIS', couleur: null },
+        { slug: 'mandat-b', nom: 'Mandat B', couleur: null },
+      ],
+    });
+    render(<AideRelance slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mail envoyé' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Valider et continuer' }));
+    await waitFor(() =>
+      expect(api.updateTache).toHaveBeenCalledWith('mandat-b', 't1', { fait: true }),
+    );
+    expect(api.createTache).toHaveBeenCalledWith('mandat-b', expect.anything());
   });
 
   it('affiche la file même si les reports ou les brouillons préparés sont indisponibles', async () => {

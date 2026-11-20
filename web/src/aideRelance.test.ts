@@ -5,6 +5,7 @@ import {
   brouillonPour,
   htmlEnTexte,
   construireFile,
+  dansMandats,
   ficheAppel,
   POUR_TOUJOURS,
   prenomDe,
@@ -304,5 +305,47 @@ describe('brouillons préparés par la routine', () => {
     );
     expect(texte).toBe('Bonjour Dana,\n\nA & B\nLigne deux');
     expect(texte).not.toMatch(/[<>]/);
+  });
+});
+
+describe('mandats', () => {
+  const dansAutre = tache({
+    id: 'tm',
+    entreprise: { id: 'e', nom: 'Même Nom' },
+    instance: { slug: 'mandat-b', nom: 'Mandat B', couleur: null },
+  });
+  const dansCourant = tache({
+    id: 'tc',
+    entreprise: { id: 'f', nom: 'Même Nom' },
+    instance: { slug: 'simatis', nom: 'SIMATIS', couleur: null },
+  });
+
+  it('ne mélange pas deux mandats qui ont une entreprise du même nom', () => {
+    const file = construireFile({
+      maintenant,
+      pipeline: pipeline([]),
+      enRetard: [dansAutre, dansCourant],
+      slugCourant: 'simatis',
+    });
+    expect(file).toHaveLength(2);
+    expect(file.map((a) => a.mandat).sort()).toEqual(['mandat-b', 'simatis']);
+    // L'espace courant garde la clé simple (les reports déjà faits restent valables).
+    expect(file.find((a) => a.mandat === 'simatis')?.id).toBe('ent:meme nom');
+    expect(file.find((a) => a.mandat === 'mandat-b')?.id).toBe('mandat-b|ent:meme nom');
+    expect(file.find((a) => a.mandat === 'mandat-b')?.instance?.slug).toBe('mandat-b');
+    expect(file.find((a) => a.mandat === 'simatis')?.instance).toBeNull();
+  });
+
+  it('retire les actions des mandats décochés', () => {
+    const file = construireFile({
+      maintenant,
+      pipeline: pipeline([opp({ id: 'x', entreprise: 'Dormante', joursInactif: 30 })]),
+      enRetard: [dansAutre],
+      slugCourant: 'simatis',
+    });
+    expect(file.filter((a) => dansMandats(a, ['mandat-b'])).map((a) => a.entreprise)).toEqual([
+      'Dormante',
+    ]);
+    expect(file.filter((a) => dansMandats(a, [])).length).toBe(2);
   });
 });

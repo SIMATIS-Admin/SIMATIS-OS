@@ -38,6 +38,14 @@ export function Cockpit({ onFerme, ...props }: Props) {
 
   return (
     <div className="cockpit">
+      <h2 className="cockpit-date">
+        {new Date().toLocaleDateString('fr-FR', {
+          timeZone: 'Europe/Paris',
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        })}
+      </h2>
       <div className="cockpit-raccourcis">
         <section className={`cockpit-bandeau ${aTraiter === 0 ? 'vide' : ''}`} aria-label="Inbox">
           <span className="cockpit-bandeau-icone">
