@@ -34,6 +34,7 @@ const api = vi.hoisted(() => ({
   urlPptxRestitutionDiag: (slug: string, id: string) =>
     `/api/i/${slug}/diagnostic/projets/${id}/restitution/pptx`,
   importerEntretienDiag: vi.fn(),
+  lancerPassationDiag: vi.fn(),
   importerRapportDiag: vi.fn(),
   envoyerRapportDriveDiag: vi.fn(),
   marquerRapportFinal: vi.fn(),
@@ -879,6 +880,57 @@ describe('Rapport : envoi sur Drive', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
     await screen.findByRole('link', { name: 'Ouvrir dans Google Docs' });
     expect(screen.queryByRole('button', { name: 'Envoyer sur Drive' })).toBeNull();
+  });
+});
+
+describe('Passation sur le site', () => {
+  it('« Lancer le diagnostic » ouvre le lien du site dans un nouvel onglet', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2, etapeMax: 2 })]);
+    api.lancerPassationDiag.mockResolvedValue({
+      lien: 'https://site.test/diagnostic-endurance?t=abc&d=p1',
+      expireLe: '2026-11-21T00:00:00.000Z',
+    });
+    const onglet = { location: { href: '' }, close: vi.fn() };
+    const ouvrir = vi.spyOn(window, 'open').mockReturnValue(onglet as unknown as Window);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Lancer le diagnostic' }));
+    await waitFor(() => expect(api.lancerPassationDiag).toHaveBeenCalledWith('simatis', 'p1'));
+    await waitFor(() =>
+      expect(onglet.location.href).toBe('https://site.test/diagnostic-endurance?t=abc&d=p1'),
+    );
+    ouvrir.mockRestore();
+  });
+
+  it('ferme l’onglet et affiche l’erreur quand le site refuse', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2, etapeMax: 2 })]);
+    api.lancerPassationDiag.mockRejectedValue(new Error('Site non configuré (VMA_OS_TOKEN)'));
+    const onglet = { location: { href: '' }, close: vi.fn() };
+    const ouvrir = vi.spyOn(window, 'open').mockReturnValue(onglet as unknown as Window);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Lancer le diagnostic' }));
+    await waitFor(() => expect(onglet.close).toHaveBeenCalled());
+    expect(await screen.findByText(/Site non configuré/)).toBeTruthy();
+    ouvrir.mockRestore();
+  });
+
+  it('montre la passation reçue : date, durée et commentaires', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 2,
+        etapeMax: 2,
+        passation: {
+          recueLe: '2026-11-26T15:30:00.000Z',
+          tempsMs: 5_040_000,
+          reponses: { 'R1#1': 'A' },
+          commentaires: { 'R1#1': 'Fictif', 'R1#2': 'Fictif' },
+        },
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    expect(await screen.findByText(/1 h 24 · 2 commentaire\(s\)/)).toBeTruthy();
   });
 });
 

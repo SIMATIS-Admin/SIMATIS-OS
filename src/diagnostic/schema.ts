@@ -18,6 +18,13 @@ import type { ReponseQuestion } from './score.js';
 
 // Conversation avec l'assistant Claude d'une étape : le chat vit sur claude.ai, l'OS garde son
 // lien, le modèle et l'effort choisis pour le retrouver.
+export type Passation = {
+  recueLe: string;
+  tempsMs: number;
+  reponses: Record<string, string>;
+  commentaires: Record<string, string>;
+};
+
 export const STATUTS_CHAT = ['repos', 'attente_claude', 'en_cours'] as const;
 export type MessageDiag = {
   etape: number;
@@ -161,6 +168,9 @@ export const diagnosticProjets = pgTable(
     pdfEntretien: text('pdf_entretien'),
     pdfEntretienNom: text('pdf_entretien_nom'),
     reponsesEntretien: jsonb('reponses_entretien').$type<ReponseQuestion[]>().notNull().default([]),
+    // Passation sur le site : les 57 réponses (rubrique#numéro → lettre A à E), les commentaires et le temps
+    // passé. `reponsesEntretien` n'en garde que les questions de la grille, seules acceptées par le calcul.
+    passation: jsonb('passation').$type<Passation>(),
     // Corrections des réponses, avec l'ancienne et la nouvelle valeur (question = rubrique#numéro).
     historiqueReponses: jsonb('historique_reponses')
       .$type<{ question: string; ancienne: string; nouvelle: string; le: string }[]>()

@@ -743,6 +743,13 @@
       "when": 1795155347054,
       "tag": "0105_vma_duree",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1795171182775,
+      "tag": "0106_diagnostic_passation",
+      "breakpoints": true
     }
   ]
 }

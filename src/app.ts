@@ -21,6 +21,7 @@ import { registerPartenairesRoutes } from './partenaires/routes.js';
 import { registerCerveauRoutes } from './cerveau/routes.js';
 import { registerRunnerApi } from './routines/runner-api.js';
 import { registerAtelierRoutes } from './atelier/routes.js';
+import { registerPassationRoutes } from './diagnostic/passation-routes.js';
 import { registerVmaRoutes } from './vma/routes.js';
 import { registerGestionRoutes } from './gestion/routes.js';
 import { registerProspectionRoutes } from './prospection/routes.js';
@@ -88,6 +89,7 @@ export function buildApp({
   registerBaseVivanteRoutes(app, { db, secretsDir, realWrites, googleFetch });
   if (transfertDb) registerTransfertRoutes(app, { db, transfertDb });
   registerVmaRoutes(app, { db, connexionDeps: { secretsDir, realWrites }, vma });
+  registerPassationRoutes(app, { db, vma });
   const codex = fileCodex();
   const engagement = () => getOptions(db, 'marc');
   const codexEngage = exigerChatgptEngage(
