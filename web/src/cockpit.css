@@ -335,7 +335,7 @@
 
 /* Cockpit unifié : les données font la hiérarchie, les surfaces restent discrètes. */
 .cockpit {
-  gap: 20px;
+  gap: 18px;
 }
 .cockpit-intro,
 .cockpit-raccourcis,
@@ -365,13 +365,13 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   border-radius: 14px;
   background: var(--white);
 }
 .cockpit-raccourcis .cockpit-bandeau {
-  min-height: 48px;
-  padding: 8px 14px;
+  min-height: 46px;
+  padding: 7px 14px;
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -386,6 +386,10 @@
   background: transparent;
   color: var(--teal);
 }
+.cockpit-raccourcis .cockpit-bandeau.vide .cockpit-bandeau-icone {
+  background: transparent;
+  color: var(--teal);
+}
 .cockpit-raccourcis .cockpit-bandeau-icone svg {
   width: 16px;
   height: 16px;
@@ -394,6 +398,9 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
+}
+.cockpit-raccourcis .cockpit-bandeau-texte strong {
+  font-weight: 600;
 }
 .cockpit-raccourcis .cockpit-bandeau .btn {
   padding: 5px 8px;
@@ -414,22 +421,15 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
-  padding: 18px 20px;
-  border: 1px solid var(--line);
+  padding: 17px 20px;
+  border: 1px solid var(--line-2);
   border-radius: 14px;
   background: var(--white);
-}
-.brief-priorite h2 {
-  margin: 0 0 4px;
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0;
 }
 .brief-priorite p {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(18px, 2vw, 22px);
+  font-size: clamp(18px, 2vw, 21px);
   font-weight: 500;
   line-height: 1.3;
 }
@@ -443,8 +443,8 @@
   white-space: nowrap;
 }
 .brief-reperes-titre {
-  margin: 22px 0 4px;
-  font-size: 17px;
+  margin: 20px 0 3px;
+  font-size: 16px;
   font-weight: 600;
 }
 .brief-reperes {
@@ -459,7 +459,7 @@
   justify-items: center;
   gap: 2px;
   min-width: 0;
-  padding: 14px 10px 16px;
+  padding: 12px 10px 15px;
   color: var(--ink);
   text-align: center;
   text-decoration: none;
@@ -473,7 +473,7 @@
   background: var(--surface-subtle);
 }
 .brief-repere .v {
-  font: 600 26px/1.1 var(--f-num);
+  font: 600 25px/1.1 var(--f-num);
   letter-spacing: -0.02em;
 }
 .brief-repere .l {
@@ -485,8 +485,8 @@
 }
 .brief-intermede {
   display: grid;
-  gap: 20px;
-  margin-top: 20px;
+  gap: 18px;
+  margin-top: 18px;
 }
 
 .cockpit-commercial {
@@ -494,22 +494,22 @@
   gap: 8px;
 }
 .cockpit-commercial-entete h2 {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
 }
 .cockpit-commercial-entete > span {
   display: none;
 }
 .cockpit-commercial-surface {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   border-radius: 14px;
   box-shadow: none;
 }
 .cockpit-commercial-indicateur {
   grid-template-columns: minmax(82px, 0.35fr) minmax(0, 1fr) 16px;
-  gap: 18px;
-  min-height: 112px;
-  padding: 16px 20px;
+  gap: 16px;
+  min-height: 94px;
+  padding: 13px 18px;
 }
 .cockpit-commercial-indicateur:hover {
   background: var(--surface-subtle);
@@ -528,8 +528,8 @@
 .cockpit-commercial-details > div {
   display: flex;
   flex-direction: column-reverse;
-  gap: 3px;
-  padding-inline: 16px;
+  gap: 2px;
+  padding-inline: 13px;
 }
 .cockpit-commercial-details > div + div {
   border-left: 1px solid var(--line-2);
@@ -542,7 +542,7 @@
 .cockpit-commercial-details dd {
   margin: 0;
   color: var(--ink);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 600;
 }
 .cockpit-commercial-details dd.attention {
@@ -552,7 +552,7 @@
 .aide-relance {
   max-width: none;
   margin: 0;
-  border-color: var(--line);
+  border-color: var(--line-2);
   border-radius: 14px;
   box-shadow: none;
 }
@@ -609,10 +609,10 @@
   margin-top: 8px;
 }
 .brief-intermede + .brief-details {
-  margin-top: 20px;
+  margin-top: 18px;
 }
 .brief-historique {
-  border-color: var(--line);
+  border-color: var(--line-2);
   border-radius: 12px;
   box-shadow: none;
 }
@@ -620,6 +620,11 @@
   padding: 13px 16px;
   font-size: 14px;
   font-weight: 600;
+  transition: background 150ms ease;
+}
+.brief-historique summary:hover,
+.brief-historique summary:focus-visible {
+  background: var(--surface-subtle);
 }
 .brief-historique summary svg {
   color: var(--ink-3);

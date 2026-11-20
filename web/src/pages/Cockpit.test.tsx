@@ -46,7 +46,7 @@ describe('Cockpit', () => {
     expect(screen.getByRole('region', { name: 'Brief du jour' }).textContent).toContain(
       'Brief de simatis',
     );
-    expect(await screen.findByText('Inbox : 3 à traiter')).toBeTruthy();
+    expect(await screen.findByText('3 à traiter')).toBeTruthy();
     expect(screen.queryByText('Inbox de simatis')).toBeNull();
   });
 
@@ -72,7 +72,7 @@ describe('Cockpit', () => {
     api.fetchCompteurInbox.mockResolvedValue(0);
     render(<Cockpit slug="simatis" />);
     const bandeau = await screen.findByRole('region', { name: 'Inbox' });
-    await waitFor(() => expect(bandeau.textContent).toContain('rien à traiter'));
+    await waitFor(() => expect(bandeau.textContent).toContain('Rien à traiter'));
     expect(bandeau.classList.contains('vide')).toBe(true);
   });
 
@@ -147,7 +147,7 @@ describe('Cockpit', () => {
       month: 'long',
     });
     const titre = screen.getByRole('heading', { name: date });
-    const inbox = await screen.findByText('Inbox : rien à traiter');
+    const inbox = await screen.findByText('Rien à traiter');
     expect(titre.compareDocumentPosition(inbox) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('Aide à la relance de simatis')).toBeTruthy();
   });
