@@ -1880,6 +1880,9 @@ export const importerEntretienDiag = (
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/entretien`),
     pdf,
   );
+// Console « Mes diagnostics » du site, sans projet : lien de session de 12 h.
+export const ouvrirConsoleDiagnostic = (slug: string) =>
+  sendJson<{ lien: string; expireLe: string }>('POST', inst(slug, 'diagnostic/console'), {});
 // « Lancer le diagnostic » : prépare la fiche sur le site et rend le lien de la console.
 export const lancerPassationDiag = (slug: string, id: string) =>
   sendJson<{ lien: string; expireLe: string }>(

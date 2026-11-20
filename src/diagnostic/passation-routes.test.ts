@@ -99,6 +99,22 @@ describe('route « Lancer le diagnostic »', () => {
     siteRepond = 201;
   });
 
+  it('ouvre la console sans projet : lien du site, 503 sans configuration, 502 si le site refuse', async () => {
+    const url = `/api/i/${slug}/diagnostic/console`;
+    const r = await route().inject({ method: 'POST', url });
+    expect(r.statusCode).toBe(200);
+    expect(r.json<{ lien: string }>().lien).toContain('/diagnostic-endurance?t=');
+    expect(envoyes.at(-1)?.corps).toEqual({});
+    expect((await route(null).inject({ method: 'POST', url })).statusCode).toBe(503);
+    expect(
+      (await route().inject({ method: 'POST', url: '/api/i/inconnue/diagnostic/console' }))
+        .statusCode,
+    ).toBe(404);
+    siteRepond = 401;
+    expect((await route().inject({ method: 'POST', url })).statusCode).toBe(502);
+    siteRepond = 201;
+  });
+
   async function instanceDe() {
     const { getInstanceBySlug } = await import('../instances/service.js');
     return (await getInstanceBySlug(t.app.db, slug))!;

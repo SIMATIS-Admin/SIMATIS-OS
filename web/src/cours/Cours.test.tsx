@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   lireSourceCours: vi.fn(),
   enregistrerSourceCours: vi.fn(),
   ouvrirEspaceTesteurVma: vi.fn(),
+  ouvrirConsoleDiagnostic: vi.fn(),
   urlFichierCours: (slug: string, deck: string, f: string) => `/api/i/${slug}/cours/${deck}/${f}`,
 }));
 vi.mock('../api.js', () => api);
@@ -306,6 +307,37 @@ describe('Présentation permanente', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Module d’essai' }));
     await waitFor(() => expect(onglet.location.href).toBe('https://exemple.test/testeur'));
     expect(api.ouvrirEspaceTesteurVma).toHaveBeenCalledWith('simatis');
+  });
+});
+
+describe('Lecteur, présentation du diagnostic', () => {
+  const DIAG: Record<string, string> = {
+    'manifest.json': JSON.stringify({
+      titre: 'Présentation fictive',
+      format: 'html',
+      permanent: true,
+      action: 'console-diagnostic',
+      parties: [{ titre: 'A', slides: ['slides/une.html'] }],
+    }),
+    'slides/une.html': '<section id="une"><h2>Première</h2></section>',
+  };
+  beforeEach(() => {
+    api.fetchTexteCours.mockImplementation((_s: string, _d: string, f: string) =>
+      f in DIAG ? Promise.resolve(DIAG[f]) : Promise.reject(new Error('introuvable')),
+    );
+    location.hash = '#/simatis/cours/deck/presentation-fictive';
+  });
+
+  it('ouvre la console du diagnostic dans un nouvel onglet, sans module d’essai VMA', async () => {
+    const onglet = { location: { href: '' }, close: vi.fn() };
+    vi.spyOn(window, 'open').mockReturnValue(onglet as unknown as Window);
+    api.ouvrirConsoleDiagnostic.mockResolvedValue({ lien: 'https://exemple.test/console' });
+    render(<Cours slug="simatis" deck="presentation-fictive" />);
+    expect(await screen.findByRole('button', { name: 'Console du diagnostic' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Module d’essai' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Console du diagnostic' }));
+    await waitFor(() => expect(onglet.location.href).toBe('https://exemple.test/console'));
+    expect(api.ouvrirConsoleDiagnostic).toHaveBeenCalledWith('simatis');
   });
 });
 

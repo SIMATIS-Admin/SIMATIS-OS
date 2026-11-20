@@ -79,6 +79,18 @@ export async function preparerPassation(
   return { lien, expireLe };
 }
 
+// Console seule, sans projet : le site rend un lien de session de 12 h vers « Mes diagnostics ».
+export async function ouvrirConsole(deps: SiteDeps): Promise<{ lien: string; expireLe: string }> {
+  const res = await (deps.fetch ?? fetch)(`${base(deps.url)}/api/diagnostic/preparer`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${deps.token}`, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  if (!res.ok) throw new PassationImpossible(`Site : console refusée (${res.status})`);
+  const { lien, expireLe } = (await res.json()) as { lien: string; expireLe: string };
+  return { lien, expireLe };
+}
+
 // Fiche reprise du projet : rien à ressaisir sur le site.
 export async function ouvrirPassation(
   db: Executor,

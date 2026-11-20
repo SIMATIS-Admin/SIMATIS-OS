@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchDecksCours,
   fetchTexteCours,
+  ouvrirConsoleDiagnostic,
   ouvrirEspaceTesteurVma,
   supprimerSupportCours,
   urlFichierCours,
@@ -249,6 +250,19 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
     }
   };
 
+  // Console du diagnostic : même principe que le module d'essai du Test VMA.
+  const ouvrirConsole = async () => {
+    const onglet = window.open('', '_blank');
+    try {
+      const { lien } = await ouvrirConsoleDiagnostic(slug);
+      if (onglet) onglet.location.href = lien;
+      else window.location.href = lien;
+    } catch (e) {
+      onglet?.close();
+      window.alert(e instanceof Error ? e.message : 'Console du diagnostic indisponible');
+    }
+  };
+
   // Archive : le support entier, une slide par page, dans la boîte d'impression du navigateur
   // (« Enregistrer au format PDF »). Le cadre n'exécute aucun script.
   const imprimer = (document_: string) => {
@@ -456,6 +470,11 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
         {etat.manifest.action === 'testeur-vma' && (
           <button className="btn sm" type="button" onClick={() => void ouvrirTesteur()}>
             Module d’essai
+          </button>
+        )}
+        {etat.manifest.action === 'console-diagnostic' && (
+          <button className="btn sm" type="button" onClick={() => void ouvrirConsole()}>
+            Console du diagnostic
           </button>
         )}
         {!etat.manifest.permanent && (
