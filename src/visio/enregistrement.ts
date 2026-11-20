@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lt, lte, ne, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { rendezVous } from '../crm/schema.js';
 import { proposerResumeAuSujet } from '../inbox/sujet-rdv.js';
@@ -265,12 +265,40 @@ export async function creerRendezVousLibre(tx: Tx, maintenant = new Date()): Pro
   return ligne.id;
 }
 
+// Un enregistrement lancé hors agenda qui démarre peu avant ou pendant un rendez-vous de l'agenda
+// en est très probablement l'enregistrement : la liste le suggère, Marc fusionne d'un clic.
+const AVANT_RDV_MS = 30 * 60_000;
+
+// Le seul rendez-vous de l'agenda (ni libre ni écarté) pendant lequel l'enregistrement a démarré.
+// À deux ou plus, on ne devine pas.
+async function rdvProbable(tx: Tx, debutAt: Date, rdvLibreId: string) {
+  const candidats = await tx
+    .select({ eventId: rendezVous.eventId, titre: rendezVous.titre, debut: rendezVous.debut })
+    .from(rendezVous)
+    .where(
+      and(
+        eq(rendezVous.instanceId, currentInstance),
+        ne(rendezVous.id, rdvLibreId),
+        ne(rendezVous.statut, 'ignore'),
+        ne(rendezVous.source, SOURCE_RDV_LIBRE),
+        lte(rendezVous.debut, new Date(debutAt.getTime() + AVANT_RDV_MS)),
+        gte(rendezVous.fin, debutAt),
+      ),
+    );
+  const [seul] = candidats;
+  return candidats.length === 1 && seul
+    ? { rdvId: seul.eventId, titre: seul.titre, debut: seul.debut }
+    : null;
+}
+
 // Les enregistrements récents de l'instance, avec le rendez-vous auquel ils sont rattachés.
 export async function listerEnregistrements(tx: Tx, limite = 20) {
   const lignes = await tx
     .select({
       id: enregistrementsVisio.id,
       rdvId: rendezVous.eventId,
+      rdvInterne: rendezVous.id,
+      rdvSource: rendezVous.source,
       titre: rendezVous.titre,
       debutAt: enregistrementsVisio.debutAt,
       finAt: enregistrementsVisio.finAt,
@@ -282,7 +310,14 @@ export async function listerEnregistrements(tx: Tx, limite = 20) {
     .where(eq(enregistrementsVisio.instanceId, currentInstance))
     .orderBy(desc(enregistrementsVisio.debutAt))
     .limit(limite);
-  return lignes.map(({ resume, ...l }) => ({ ...l, aResume: resume !== null }));
+  return Promise.all(
+    lignes.map(async ({ resume, rdvInterne, rdvSource, ...l }) => ({
+      ...l,
+      aResume: resume !== null,
+      suggestion:
+        rdvSource === SOURCE_RDV_LIBRE ? await rdvProbable(tx, l.debutAt, rdvInterne) : null,
+    })),
+  );
 }
 
 // Supprime l'enregistrement (et ses morceaux) et l'entrée d'Inbox de son résumé. Le rendez-vous

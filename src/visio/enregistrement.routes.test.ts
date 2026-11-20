@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { fabrique } from '../../test/transfert.js';
 import { buildApp } from '../app.js';
@@ -160,6 +160,63 @@ describe('Interface d’enregistrement des visios', () => {
     const autre = await app.inject({ method: 'GET', url: '/api/i/rte-b/visio/enregistrements' });
     expect(autre.json<{ id: string }[]>().map((e) => e.id)).not.toContain(libre);
     await app.inject({ method: 'POST', url: `${base}/sessions/${libre}/fin` });
+  });
+
+  describe('suggestion de fusion', () => {
+    // Le rendez-vous du jeu d'essai tombe lui aussi à cette heure : on l'écarte le temps de ces cas.
+    beforeEach(() =>
+      t.owner.pool.query("update rendez_vous set statut = 'ignore' where event_id = 'os:rte-1'"),
+    );
+    afterEach(() =>
+      t.owner.pool.query("update rendez_vous set statut = 'rdv' where event_id = 'os:rte-1'"),
+    );
+    const libre = async () =>
+      (await app.inject({ method: 'POST', url: `${base}/sessions`, payload: {} })).json<{
+        id: string;
+      }>().id;
+    const reunion = (eventId: string, titre: string, debutMin: number, finMin: number) =>
+      t.owner.pool.query(
+        `insert into rendez_vous (instance_id, event_id, titre, statut, source, debut, fin)
+         select id, $1, $2, 'rdv', 'natif', now() + ($3 || ' minutes')::interval, now() + ($4 || ' minutes')::interval
+         from instances where slug = 'rte-a'`,
+        [eventId, titre, debutMin, finMin],
+      );
+    const suggestionDe = async (id: string) =>
+      (await app.inject({ method: 'GET', url: `${base}/enregistrements` }))
+        .json<{ id: string; suggestion: { rdvId: string; titre: string } | null }[]>()
+        .find((e) => e.id === id)?.suggestion;
+
+    it('suggère l’unique rendez-vous de l’agenda pendant lequel un enregistrement libre démarre, puis plus rien une fois fusionné', async () => {
+      await reunion('sug-1', 'Réunion fictive à fusionner', -10, 50);
+      const id = await libre();
+      expect(await suggestionDe(id)).toMatchObject({
+        rdvId: 'sug-1',
+        titre: 'Réunion fictive à fusionner',
+      });
+      await t.owner.pool.query(
+        "update enregistrements_visio set statut = 'transcrit', transcript = 'Moi : Texte.' where id = $1",
+        [id],
+      );
+      await app.inject({
+        method: 'POST',
+        url: `${base}/sessions/${id}/fusion`,
+        payload: { rdvId: 'sug-1' },
+      });
+      expect(await suggestionDe(id)).toBeUndefined();
+      await t.owner.pool.query("delete from rendez_vous where event_id like 'sug-%'");
+    });
+
+    it('ne devine pas avec deux rendez-vous en même temps, ni avec un rendez-vous lointain', async () => {
+      await reunion('sug-2', 'Premier fictif', -10, 50);
+      await reunion('sug-3', 'Second fictif', -5, 55);
+      const id = await libre();
+      expect(await suggestionDe(id)).toBeNull();
+      await t.owner.pool.query("delete from rendez_vous where event_id like 'sug-%'");
+      await reunion('sug-4', 'Lointain fictif', 180, 240);
+      expect(await suggestionDe(id)).toBeNull();
+      await t.owner.pool.query("delete from rendez_vous where event_id like 'sug-%'");
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+    });
   });
 
   describe('suppression et modification', () => {

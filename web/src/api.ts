@@ -1277,6 +1277,8 @@ export type EnregistrementListe = {
   finAt: string | null;
   statut: SessionVisio['statut'];
   aResume: boolean;
+  // Enregistrement libre tombé pendant un seul rendez-vous de l'agenda : la fusion est suggérée.
+  suggestion?: { rdvId: string; titre: string; debut: string | null } | null;
 };
 export const fetchEnregistrements = (slug: string) =>
   getJson<EnregistrementListe[]>(inst(slug, 'visio/enregistrements'));

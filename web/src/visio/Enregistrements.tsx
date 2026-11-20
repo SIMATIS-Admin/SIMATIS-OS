@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchEnregistrements, supprimerEnregistrement, type EnregistrementListe } from '../api.js';
+import {
+  fetchEnregistrements,
+  fusionnerEnregistrement,
+  supprimerEnregistrement,
+  type EnregistrementListe,
+} from '../api.js';
 import { Icon } from '../icons.js';
 import { Fenetre } from '../pages/Fenetre.js';
 import { EnregistrementVisio } from './EnregistrementVisio.js';
@@ -57,6 +62,25 @@ export function Enregistrements({
   const supprimer = (e: EnregistrementListe) => {
     if (!confirm(`Supprimer « ${e.titre} » ? Son texte et son résumé seront perdus.`)) return;
     supprimerEnregistrement(slug, e.id).then(
+      () => {
+        setDetail(null);
+        lire();
+      },
+      (err: unknown) => setErreur(err instanceof Error ? err.message : String(err)),
+    );
+  };
+
+  const fusionner = (e: EnregistrementListe) => {
+    const cible = e.suggestion;
+    if (!cible) return;
+    if (
+      !confirm(
+        `Fusionner avec « ${cible.titre} » ? Le transcript et le résumé y sont repris, puis l’enregistrement disparaît de la liste.`,
+      )
+    ) {
+      return;
+    }
+    fusionnerEnregistrement(slug, e.id, cible.rdvId).then(
       () => {
         setDetail(null);
         lire();
@@ -158,6 +182,20 @@ export function Enregistrements({
                       </button>
                     </div>
                   </div>
+                  {e.suggestion && (
+                    <div className="enregistrement-suggestion">
+                      <span>
+                        Probablement la réunion <strong>{e.suggestion.titre}</strong>
+                      </span>
+                      {e.statut === 'transcrit' ? (
+                        <button className="btn sm go" onClick={() => fusionner(e)}>
+                          Fusionner
+                        </button>
+                      ) : (
+                        <span className="muted">Fusion possible une fois transcrit</span>
+                      )}
+                    </div>
+                  )}
                   {detail === e.id && (
                     <div className="enregistrement-detail">
                       <EnregistrementVisio
