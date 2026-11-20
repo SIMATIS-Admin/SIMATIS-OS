@@ -72,6 +72,8 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
       frais: d.frais,
       validiteJours: d.validiteJours,
       clauses: d.clauses,
+      adresse: d.adresse,
+      attention: d.attention,
     };
   };
 
@@ -210,5 +212,26 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
     const brouillon = (await listerDevis(t.app.db, simatis)).find((d) => d.statut === 'brouillon')!;
     await expect(nouvelleVersion(t.app.db, simatis, brouillon.id)).rejects.toThrow(/brouillon/);
     await expect(lireDevis(t.app.db, simatis, 'abc')).rejects.toBeInstanceOf(DevisRefuse);
+  });
+
+  it('garde l’adresse et l’attention saisies, et la version suivante les reprend', async () => {
+    const { devis } = await creerDepuisAffaire(t.app.db, simatis, await affaireLibre());
+    const avant = await contenuDe(devis.id);
+    expect(avant.adresse).toBe('');
+    expect(avant.attention).toBe('');
+    await modifierContenu(t.app.db, simatis, devis.id, {
+      ...avant,
+      adresse: '12 rue Fictive\n71200 Ville Fictive',
+      attention: 'Alex Fictif',
+      lignes: avant.lignes.map((l) => ({ ...l, prixUnitaire: 100 })),
+      inclus: 'Une prestation',
+    });
+    const lu = await lireDevis(t.app.db, simatis, devis.id);
+    expect(lu.adresse).toBe('12 rue Fictive\n71200 Ville Fictive');
+    // Saisi, « à l’attention de » prend la place du contact de l’affaire.
+    expect(lu.contact).toBe('Alex Fictif');
+    await validerDevis(t.app.db, simatis, devis.id);
+    const v2 = await nouvelleVersion(t.app.db, simatis, devis.id);
+    expect(v2).toMatchObject({ adresse: lu.adresse, attention: 'Alex Fictif' });
   });
 });

@@ -71,6 +71,16 @@ describe('contenuSchema', () => {
     expect(r.lignes[0]?.unite).toBe('forfait');
   });
 
+  it('lit l’adresse et l’attention du destinataire, vides sur un contenu ancien', () => {
+    const ancien = contenuSchema.parse(base);
+    expect(ancien.adresse).toBe('');
+    expect(ancien.attention).toBe('');
+    const r = contenuSchema.parse({ ...base, adresse: '1 rue Fictive', attention: '  Camille  ' });
+    expect(r).toMatchObject({ adresse: '1 rue Fictive', attention: 'Camille' });
+    expect(contenuSchema.safeParse({ ...base, adresse: 'x'.repeat(501) }).success).toBe(false);
+    expect(contenuSchema.safeParse({ ...base, attention: 'x'.repeat(201) }).success).toBe(false);
+  });
+
   it('refuse une remise de 101 % et une liste de lignes vide', () => {
     expect(contenuSchema.safeParse({ ...base, remisePct: 101 }).success).toBe(false);
     expect(contenuSchema.safeParse({ ...base, lignes: [] }).success).toBe(false);

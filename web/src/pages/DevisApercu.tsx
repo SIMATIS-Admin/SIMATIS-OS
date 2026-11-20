@@ -1,4 +1,5 @@
 import type { ContenuDevis } from '../api.js';
+import logo from '../assets/simatis-logo.png';
 import { calculer } from '../devis.js';
 
 const eur2 = (n: number) =>
@@ -23,6 +24,7 @@ export function DevisApercu({
   numero,
   client,
   contact,
+  adresse,
   date,
   tvaPct,
   mentions,
@@ -31,6 +33,7 @@ export function DevisApercu({
   numero: string;
   client: string | null;
   contact: string | null;
+  adresse: string;
   date: string;
   tvaPct: number;
   mentions: string;
@@ -41,13 +44,7 @@ export function DevisApercu({
   return (
     <div className="d-page" aria-label="Aperçu du devis">
       <div className="entete">
-        <div>
-          <div className="logo">
-            SIMATIS <span>OS</span>
-          </div>
-          <div>Direction commerciale à temps partagé</div>
-          {mentions && <div style={{ whiteSpace: 'pre-line' }}>{mentions}</div>}
-        </div>
+        <img className="logo-img" src={logo} alt="SIMATIS" />
         <div style={{ textAlign: 'right' }}>
           <b>DEVIS {numero}</b>
           <br />
@@ -58,6 +55,7 @@ export function DevisApercu({
       </div>
       <div>
         <b>{client ?? '—'}</b>
+        {adresse.trim() && <div style={{ whiteSpace: 'pre-line' }}>{adresse.trim()}</div>}
         {contact && (
           <>
             <br />À l’attention de {contact}
@@ -190,6 +188,7 @@ export function DevisApercu({
           Date, signature et mention « Bon pour accord »
         </div>
       </div>
+      {mentions.trim() && <div className="pied">{mentions.trim()}</div>}
     </div>
   );
 }

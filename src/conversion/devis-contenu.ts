@@ -22,6 +22,9 @@ export const clauseSchema = z.object({
 
 export const contenuSchema = z.object({
   titre: z.string().trim().max(300),
+  // Older drafts carry no recipient block: it reads as empty.
+  adresse: texte(500).default(''),
+  attention: z.string().trim().max(200).default(''),
   contexte: texte(4000),
   objectifs: texte(4000),
   inclus: texte(4000),

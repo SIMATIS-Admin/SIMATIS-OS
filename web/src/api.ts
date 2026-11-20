@@ -1345,6 +1345,8 @@ export type LigneDevis = {
 export type Clause = { titre: string; texte: string; active: boolean };
 export type ContenuDevis = {
   titre: string;
+  adresse: string;
+  attention: string;
   contexte: string;
   objectifs: string;
   inclus: string;

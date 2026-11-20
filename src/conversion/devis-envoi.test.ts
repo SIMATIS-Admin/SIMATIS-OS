@@ -93,6 +93,8 @@ describe('Devis : envoi (brouillon Gmail avec PDF, relance) et issue (accepté, 
     const d = await lireDevis(t.app.db, simatis, devis.id);
     await modifierContenu(t.app.db, simatis, devis.id, {
       titre: 'Mission fictive',
+      adresse: d.adresse,
+      attention: d.attention,
       contexte: d.contexte,
       objectifs: d.objectifs,
       inclus: 'Une prestation fictive',

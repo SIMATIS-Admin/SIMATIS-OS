@@ -8387,14 +8387,19 @@ button.recherche-carte:hover,
   gap: 16px;
   margin-bottom: 14px;
 }
-.d-page .logo {
-  font-weight: 800;
-  font-size: 16px;
-  color: var(--navy);
+.d-page .logo-img {
+  display: block;
+  width: 150px;
+  height: auto;
 }
-.d-page .logo span {
-  font-weight: 500;
-  color: var(--teal);
+.d-page .pied {
+  margin-top: 22px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  line-height: 1.45;
+  color: #4a5b72;
+  white-space: pre-line;
 }
 .d-page table {
   width: 100%;

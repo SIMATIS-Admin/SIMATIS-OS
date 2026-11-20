@@ -83,7 +83,9 @@ function Reglages({
           </p>
         )}
         <label className="field">
-          <span>Mentions de l’émetteur (raison sociale, adresse, SIRET, TVA…)</span>
+          <span>
+            Pied de page des devis : mentions légales (raison sociale, adresse, SIRET, TVA…)
+          </span>
           <textarea
             className="input"
             rows={3}
