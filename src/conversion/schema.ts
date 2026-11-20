@@ -36,7 +36,7 @@ export const devis = pgTable(
       .notNull()
       .references(() => opportunites.id),
     numero: text('numero').notNull(),
-    statut: text('statut', { enum: ['brouillon', 'valide', 'transmis'] })
+    statut: text('statut', { enum: ['brouillon', 'valide', 'transmis', 'accepte', 'refuse'] })
       .notNull()
       .default('brouillon'),
     version: integer('version').notNull().default(1),
