@@ -5,6 +5,7 @@ import {
   fetchDerniereSessionVisio,
   fetchRendezVous,
   fetchSessionVisio,
+  fusionnerEnregistrement,
   garderTranscriptDansRdv,
   modifierEnregistrement,
   rattacherEnregistrement,
@@ -31,11 +32,13 @@ function Rattacher({
   slug,
   rdvId,
   sessionId,
+  peutFusionner,
   onRattache,
 }: {
   slug: string;
   rdvId: string;
   sessionId: string;
+  peutFusionner: boolean;
   onRattache: (rdvId: string) => void;
 }) {
   const [ouvert, setOuvert] = useState(false);
@@ -67,6 +70,24 @@ function Rattacher({
     setBusy(true);
     setErreur(null);
     rattacherEnregistrement(slug, sessionId, cible).then(
+      () => onRattache(cible),
+      (e: unknown) => {
+        setBusy(false);
+        setErreur(erreurDe(e));
+      },
+    );
+  };
+  const fusionner = (cible: string) => {
+    if (
+      !confirm(
+        'Fusionner avec ce rendez-vous ? Le transcript et le résumé y sont repris, puis l’enregistrement disparaît de la liste.',
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setErreur(null);
+    fusionnerEnregistrement(slug, sessionId, cible).then(
       () => onRattache(cible),
       (e: unknown) => {
         setBusy(false);
@@ -136,6 +157,11 @@ function Rattacher({
             >
               Rattacher
             </button>
+            {peutFusionner && (
+              <button className="btn" disabled={!choix || busy} onClick={() => fusionner(choix)}>
+                Fusionner (l’enregistrement disparaît)
+              </button>
+            )}
             <button className="btn" onClick={() => setNouveau(true)}>
               Créer un rendez-vous
             </button>
@@ -411,6 +437,7 @@ export function EnregistrementVisio({
             slug={slug}
             rdvId={rdvId}
             sessionId={session.id}
+            peutFusionner={session.statut === 'transcrit'}
             onRattache={apresRattachement}
           />
         </>

@@ -397,6 +397,73 @@ describe('Interface d’enregistrement des visios', () => {
       ).toBe('Résumé fictif');
     });
 
+    describe('fusion : l’enregistrement disparaît', () => {
+      const transcrite = async (resume: string | null) => {
+        const id = await libre();
+        await t.owner.pool.query(
+          "update enregistrements_visio set statut = 'transcrit', transcript = 'Moi : Texte fictif.', resume = $2 where id = $1",
+          [id, resume],
+        );
+        return id;
+      };
+      const fusion = (id: string, rdvId: string) =>
+        app.inject({ method: 'POST', url: `${base}/sessions/${id}/fusion`, payload: { rdvId } });
+      const nettoyer = () =>
+        t.owner.pool.query(
+          "update rendez_vous set compte_rendu = null, transcript = null where event_id = 'os:rte-1'",
+        );
+
+      it('reprend le transcript et le résumé dans le rendez-vous, puis supprime l’enregistrement', async () => {
+        await nettoyer();
+        const id = await transcrite('Résumé fictif.');
+        const ancien = await rdvDe(id);
+        const r = await fusion(id, 'os:rte-1');
+        expect(r.statusCode).toBe(200);
+        expect(r.json()).toEqual({ rdvId: 'os:rte-1', compteRendu: 'repris' });
+        expect(await ligne('os:rte-1')).toEqual({
+          compte_rendu: 'Résumé fictif.',
+          transcript: 'Moi : Texte fictif.',
+        });
+        expect(
+          await compte('select count(*) n from enregistrements_visio where id = $1', [id]),
+        ).toBe(0);
+        expect(
+          await compte('select count(*) n from rendez_vous where event_id = $1', [ancien]),
+        ).toBe(0);
+        await nettoyer();
+      });
+
+      it('garde le compte rendu existant et ajoute le transcript à la suite de l’ancien', async () => {
+        await t.owner.pool.query(
+          "update rendez_vous set compte_rendu = 'Déjà écrit', transcript = 'Ancien texte' where event_id = 'os:rte-1'",
+        );
+        const id = await transcrite('Résumé fictif.');
+        const r = await fusion(id, 'os:rte-1');
+        expect(r.json()).toMatchObject({ compteRendu: 'conserve' });
+        const apres = await ligne('os:rte-1');
+        expect(apres?.compte_rendu).toBe('Déjà écrit');
+        expect(apres?.transcript).toMatch(
+          /^Ancien texte\n\n— Enregistrement du .* —\nMoi : Texte fictif\.$/,
+        );
+        expect(
+          await compte('select count(*) n from enregistrements_visio where id = $1', [id]),
+        ).toBe(0);
+        await nettoyer();
+      });
+
+      it('refuse un enregistrement pas encore transcrit, un rendez-vous inconnu, et ne supprime rien', async () => {
+        const id = await libre();
+        expect((await fusion(id, 'os:rte-1')).statusCode).toBe(409);
+        const prete = await transcrite(null);
+        expect((await fusion(prete, 'os:absent')).statusCode).toBe(404);
+        expect(
+          await compte('select count(*) n from enregistrements_visio where id = any($1)', [
+            [id, prete],
+          ]),
+        ).toBe(2);
+      });
+    });
+
     it('refuse un rendez-vous inconnu et ne touche pas à la session', async () => {
       const id = await libre();
       const avant = await rdvDe(id);
