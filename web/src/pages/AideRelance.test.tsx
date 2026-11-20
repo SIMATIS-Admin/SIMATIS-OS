@@ -372,6 +372,15 @@ describe('AideRelance', () => {
       expect(api.fetchMailsFiche).toHaveBeenCalledWith('simatis', 'contact', 'c1');
     });
 
+    it("dit pourquoi l'envoi n'est pas proposé quand il n'y a pas d'adresse", async () => {
+      api.fetchTaches.mockResolvedValue({
+        enRetard: [{ ...tacheRetard, contact: { id: 'c1', nom: 'Dana Imaginaire', email: null } }],
+      });
+      const volet = await lancer();
+      expect(within(volet).queryByRole('button', { name: /Envoyer le mail/ })).toBeNull();
+      expect(within(volet).getByText(/Aucune adresse mail pour ce contact/)).toBeTruthy();
+    });
+
     it('explique ce que fait « Pas pertinent »', async () => {
       const volet = await lancer();
       expect(

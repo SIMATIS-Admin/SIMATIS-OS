@@ -246,6 +246,13 @@ export function VoletAction({
           </button>
         ) : (
           <div className="aide-pied">
+            {mail && !action.email && (
+              <p className="muted small" role="note">
+                {action.contactId
+                  ? "Aucune adresse mail pour ce contact : ajoutez-la sur sa fiche pour pouvoir envoyer d'ici."
+                  : "Cette action n'est liée à aucun contact : rattachez-la à un contact pour pouvoir envoyer d'ici."}
+              </p>
+            )}
             {mail ? (
               <div className="aide-pied-ligne aide-envoi">
                 <button className="btn" type="button" onClick={() => void copier()}>

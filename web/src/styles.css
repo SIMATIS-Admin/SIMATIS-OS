@@ -8662,6 +8662,21 @@ button.recherche-carte:hover,
   font-size: 14px;
 }
 
+/* Séquence : le pied (envoi, reports) reste visible, seul le corps défile. */
+.bv-fenetre.large:has(.aide-pied) {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 12vh);
+}
+.bv-fenetre.large:has(.aide-pied) .bv-fenetre-corps {
+  min-height: 0;
+  overflow-y: auto;
+}
+.bv-fenetre.large:has(.aide-pied) .bv-fenetre-pied {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
 /* Séquence : jauge d'avancement, deux blocs (l'action, la situation) et envoi du mail. */
 .aide-jauge {
   display: flex;
