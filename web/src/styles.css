@@ -8654,3 +8654,10 @@ button.recherche-carte:hover,
     text-align: left;
   }
 }
+.aide-prepare {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  background: #f1faf8;
+  border-radius: var(--r-s);
+  font-size: 14px;
+}

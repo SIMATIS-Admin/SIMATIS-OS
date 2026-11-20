@@ -19,6 +19,8 @@ export const preferences = pgTable('preferences', {
       signauxBase?: RoutineAlerte;
       brouillons?: RoutineBrouillons;
       sequence?: SequenceFroid;
+      // Aide à la relance : action → instant jusqu'auquel elle reste cachée.
+      aideRelance?: Record<string, number>;
     }>()
     .notNull()
     .default({}),

@@ -1,4 +1,4 @@
-import type { Pipeline, PipelineOpp, TacheVue } from './api.js';
+import type { Pipeline, PipelineOpp, PropositionItem, TacheVue } from './api.js';
 import { etapeRadar } from './radar.js';
 
 // L'aide à la relance : réunit en une file courte ce que Marc peut faire tout de suite, à partir de
@@ -31,6 +31,7 @@ export type Masquees = Record<string, number>;
 export const POUR_TOUJOURS = 8.64e15;
 
 const JOUR = 86_400_000;
+export const RETARD_ANCIEN = 30;
 const normaliser = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
 const cleDe = (entreprise: string | null, secours: string) =>
@@ -106,7 +107,9 @@ export function construireFile({
     a.entrepriseId ??= t.entreprise?.id ?? null;
     a.opportuniteId ??= t.opportunite?.id ?? null;
     if (t.canal === 'appel') a.canal = 'appel';
-    poser(a, [0, -jours]);
+    // Une tâche en retard depuis plus d'un mois est probablement périmée : elle passe après les
+    // affaires sans activité et les signaux du Radar, plus frais.
+    poser(a, jours > RETARD_ANCIEN ? [2.5, -jours] : [0, -jours]);
   }
 
   const etapesRadar = new Set(pipeline.etapes.slice(0, 2).map((e) => e.id));
@@ -250,4 +253,46 @@ export function suitesProposees(canal: 'mail' | 'appel', resultat?: string): Sui
     { libelle: 'Envoyer un mail dans 2 jours', canal: 'email', jours: 2 },
     aucune,
   ];
+}
+
+// ---- Brouillons préparés par la routine ----------------------------------------------------------
+
+const ENTITES: Record<string, string> = {
+  '&nbsp;': ' ',
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+};
+// Texte lisible d'un mail HTML : l'aperçu n'insère jamais de HTML dans la page.
+export function htmlEnTexte(html: string): string {
+  return html
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n\n')
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (e) => ENTITES[e] ?? e)
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Le brouillon que la routine a déjà préparé pour cette action : par tâche liée, sinon par contact.
+export function brouillonPour(
+  action: ActionRelance,
+  propositions: PropositionItem[],
+): PropositionItem | null {
+  const brouillons = propositions.filter(
+    (p) => p.type === 'email.brouillon' && p.statut === 'proposee',
+  );
+  const tache = brouillons.find((p) => {
+    const id = p.contenu.tacheId;
+    return typeof id === 'string' && action.tacheIds.includes(id);
+  });
+  if (tache) return tache;
+  return (
+    brouillons.find((p) => action.contactId !== null && p.contenu.contactId === action.contactId) ??
+    null
+  );
 }

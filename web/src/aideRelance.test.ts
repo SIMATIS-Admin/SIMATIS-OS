@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { PipelineOpp, TacheVue } from './api.js';
+import type { PipelineOpp, PropositionItem, TacheVue } from './api.js';
 import {
   angleDe,
+  brouillonPour,
+  htmlEnTexte,
   construireFile,
   ficheAppel,
   POUR_TOUJOURS,
@@ -243,5 +245,64 @@ describe('textes préparés', () => {
     expect(suitesProposees('appel', 'joint')[0]?.canal).toBe('email');
     expect(suitesProposees('appel', 'absent')[0]?.libelle).toBe('Rappeler dans 2 jours');
     expect(suitesProposees('mail').at(-1)?.canal).toBeNull();
+  });
+});
+
+describe('tri des tâches anciennes', () => {
+  it('place une tâche en retard depuis plus de 30 jours après les affaires sans activité et le Radar', () => {
+    const file = construireFile({
+      maintenant,
+      pipeline: pipeline([
+        opp({ id: 'd', entreprise: 'Dormante', etape: 'proposition', joursInactif: 20 }),
+        opp({ id: 'r', entreprise: 'Radar', etape: 'detection', radar: 'repondu' }),
+      ]),
+      enRetard: [
+        tache({
+          id: 't1',
+          entreprise: { id: 'e1', nom: 'Périmée' },
+          echeance: '2026-08-01T08:00:00Z',
+        }),
+        tache({
+          id: 't2',
+          entreprise: { id: 'e2', nom: 'Récente' },
+          echeance: '2026-11-15T08:00:00Z',
+        }),
+      ],
+    });
+    expect(file.map((a) => a.entreprise)).toEqual(['Récente', 'Dormante', 'Radar', 'Périmée']);
+  });
+});
+
+describe('brouillons préparés par la routine', () => {
+  const proposition = (contenu: Record<string, unknown>, statut = 'proposee'): PropositionItem =>
+    ({ id: 'p', type: 'email.brouillon', statut, contenu }) as unknown as PropositionItem;
+  const action = construireFile({
+    maintenant,
+    pipeline: pipeline([]),
+    enRetard: [
+      tache({
+        id: 't1',
+        contact: { id: 'c1', nom: 'Camille Exemple' },
+        entreprise: { id: 'e', nom: 'Fictive' },
+      }),
+    ],
+  })[0]!;
+
+  it('retrouve le brouillon par tâche liée, sinon par contact, et ignore les traités', () => {
+    expect(brouillonPour(action, [proposition({ tacheId: 't1' })])).not.toBeNull();
+    expect(brouillonPour(action, [proposition({ contactId: 'c1' })])).not.toBeNull();
+    expect(brouillonPour(action, [proposition({ contactId: 'autre', tacheId: 'x' })])).toBeNull();
+    expect(brouillonPour(action, [proposition({ tacheId: 't1' }, 'appliquee')])).toBeNull();
+    expect(
+      brouillonPour(action, [{ ...proposition({ tacheId: 't1' }), type: 'crm.tache' }]),
+    ).toBeNull();
+  });
+
+  it('transforme le HTML en texte lisible sans jamais en garder de balise', () => {
+    const texte = htmlEnTexte(
+      '<style>p{color:red}</style><p>Bonjour&nbsp;Dana,</p><p>A &amp; B<br>Ligne <b>deux</b></p><script>alert(1)</script>',
+    );
+    expect(texte).toBe('Bonjour Dana,\n\nA & B\nLigne deux');
+    expect(texte).not.toMatch(/[<>]/);
   });
 });

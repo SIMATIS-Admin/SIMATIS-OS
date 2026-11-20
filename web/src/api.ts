@@ -1016,6 +1016,14 @@ export const saveOptions = (options: Partial<Options>) =>
   sendJson<{ options: Options }>('PUT', '/api/preferences/options', options);
 export const fetchTaches = (slug: string, du: string, au: string) =>
   getJson<SemaineTaches>(inst(slug, `taches?du=${du}&au=${au}`));
+// Aide à la relance : actions reportées ou écartées (retenues côté serveur) et brouillons de mail
+// préparés par la routine, qui attendent la validation de Marc.
+export const fetchMasqueesRelance = (slug: string) =>
+  getJson<Record<string, number>>(inst(slug, 'aide-relance/masquees'));
+export const masquerRelance = (slug: string, id: string, jusqua: number) =>
+  sendJson<Record<string, number>>('PUT', inst(slug, 'aide-relance/masquees'), { id, jusqua });
+export const fetchBrouillonsPrepares = (slug: string) =>
+  getJson<PropositionItem[]>(inst(slug, 'propositions?filtre=brouillon'));
 export const fetchCompteurRdv = (slug: string) =>
   getJson<{ n: number }>(inst(slug, 'rendez-vous/compteur')).then((r) => r.n);
 export const fetchCompteurTaches = (slug: string) =>

@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   createTache,
+  decider,
+  fetchBrouillonsPrepares,
+  fetchMasqueesRelance,
   fetchPipeline,
   fetchTaches,
+  masquerRelance,
   updateTache,
   type Pipeline,
+  type PropositionItem,
   type TacheVue,
 } from '../api.js';
 import {
+  brouillonPour,
   construireFile,
   ficheAppel,
+  htmlEnTexte,
   POUR_TOUJOURS,
   redigerMail,
   suitesProposees,
@@ -63,17 +70,25 @@ export function AideRelance({ slug }: { slug: string }) {
     return CHOIX.includes(v) ? v : 10;
   });
   const [filtre, setFiltre] = useState<'tout' | SourceAction>('tout');
-  const [masquees, setMasquees] = useState<Masquees>(() =>
-    lire(`aideRelance:masquees:${slug}`, {}),
-  );
+  const [masquees, setMasquees] = useState<Masquees>({});
+  const [brouillons, setBrouillons] = useState<PropositionItem[]>([]);
   const [faites, setFaites] = useState(0);
   const [ouverte, setOuverte] = useState<ActionRelance | null>(null);
 
   const charger = useCallback(() => {
     const jour = jourIso(new Date());
-    Promise.all([fetchPipeline(slug), fetchTaches(slug, jour, jour)]).then(
-      ([pipeline, semaine]) => {
+    // Les reports et les brouillons préparés enrichissent la file : leur absence ne la bloque pas.
+    Promise.all([
+      fetchPipeline(slug),
+      fetchTaches(slug, jour, jour),
+      fetchMasqueesRelance(slug).catch(() => ({})),
+      fetchBrouillonsPrepares(slug).catch(() => []),
+    ]).then(
+      ([pipeline, semaine, reports, prepares]) => {
         setDonnees({ pipeline, enRetard: semaine.enRetard });
+        // Les reports faits pendant la lecture priment : le serveur peut ne pas les avoir encore.
+        setMasquees((deja) => ({ ...reports, ...deja }));
+        setBrouillons(prepares);
         setErreur(false);
       },
       () => setErreur(true),
@@ -84,7 +99,8 @@ export function AideRelance({ slug }: { slug: string }) {
   const masquer = (id: string, jusqua: number) => {
     const suivantes = { ...masquees, [id]: jusqua };
     setMasquees(suivantes);
-    ecrire(`aideRelance:masquees:${slug}`, suivantes);
+    // Retenu côté serveur ; en cas d'échec on relit l'état réel plutôt que de mentir à l'écran.
+    masquerRelance(slug, id, jusqua).catch(charger);
   };
   const choisir = (n: Nombre) => {
     setNb(n);
@@ -216,6 +232,7 @@ export function AideRelance({ slug }: { slug: string }) {
         <VoletAction
           slug={slug}
           action={ouverte}
+          prepare={brouillonPour(ouverte, brouillons)}
           onFermer={() => setOuverte(null)}
           onMasquer={(jours, pourToujours) => {
             masquer(ouverte.id, pourToujours ? POUR_TOUJOURS : dansJours(jours).getTime());
@@ -236,12 +253,15 @@ export function AideRelance({ slug }: { slug: string }) {
 function VoletAction({
   slug,
   action,
+  prepare,
   onFermer,
   onMasquer,
   onFait,
 }: {
   slug: string;
   action: ActionRelance;
+  // Brouillon déjà rédigé par la routine (créneaux libres compris), en attente de validation.
+  prepare: PropositionItem | null;
   onFermer: () => void;
   onMasquer: (jours: number, pourToujours: boolean) => void;
   onFait: (jours: number) => void;
@@ -256,10 +276,43 @@ function VoletAction({
   const [choix, setChoix] = useState(0);
   const [message, setMessage] = useState('');
   const [enCours, setEnCours] = useState(false);
+  const [cree, setCree] = useState(false);
+  const objetPrepare = typeof prepare?.contenu.objet === 'string' ? prepare.contenu.objet : '';
+  const textePrepare = useMemo(
+    () => (typeof prepare?.contenu.corps === 'string' ? htmlEnTexte(prepare.contenu.corps) : ''),
+    [prepare],
+  );
+
+  // Texte offert à la copie et à la messagerie : celui de la routine quand il existe.
+  const objetFinal = prepare ? objetPrepare : objet;
+  const corpsFinal = prepare ? textePrepare : corps;
+
+  // Valider le brouillon préparé le dépose dans la boîte mail (ou le simule tant que l'écriture
+  // réelle est fermée) : il n'est jamais envoyé, Marc le relit et l'envoie lui-même.
+  const creerBrouillon = async () => {
+    if (!prepare) return;
+    setEnCours(true);
+    try {
+      const r = await decider(slug, prepare.id, 'valider');
+      const simule = (r.resultat as { simulation?: boolean } | null)?.simulation;
+      if (r.statut === 'echec') setMessage("La création du brouillon a échoué : voir l'Inbox.");
+      else {
+        setCree(true);
+        setMessage(
+          simule
+            ? 'Brouillon simulé : l’écriture réelle dans la messagerie est fermée.'
+            : 'Brouillon créé dans votre messagerie : relisez-le et envoyez-le.',
+        );
+      }
+    } catch {
+      setMessage('La création du brouillon a échoué. Réessayez.');
+    }
+    setEnCours(false);
+  };
 
   const copier = async () => {
     try {
-      await navigator.clipboard.writeText(`${objet}\n\n${corps}`);
+      await navigator.clipboard.writeText(`${objetFinal}\n\n${corpsFinal}`);
       setMessage('Mail copié : collez-le dans votre messagerie.');
     } catch {
       setMessage('Copie impossible : sélectionnez le texte à la main.');
@@ -309,15 +362,25 @@ function VoletAction({
         ) : (
           <div className="aide-pied">
             <div className="aide-pied-ligne">
+              {mail && prepare && (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => void creerBrouillon()}
+                  disabled={enCours || cree}
+                >
+                  Créer le brouillon Gmail
+                </button>
+              )}
               {mail && (
                 <>
                   <button className="btn" type="button" onClick={() => void copier()}>
-                    Copier le mail
+                    {prepare ? 'Copier le texte préparé' : 'Copier le mail'}
                   </button>
                   {action.email && (
                     <a
                       className="btn"
-                      href={`mailto:${action.email}?subject=${encodeURIComponent(objet)}&body=${encodeURIComponent(corps)}`}
+                      href={`mailto:${action.email}?subject=${encodeURIComponent(objetFinal)}&body=${encodeURIComponent(corpsFinal)}`}
                     >
                       Ouvrir dans ma messagerie
                     </a>
@@ -381,6 +444,21 @@ function VoletAction({
             </label>
           ))}
         </div>
+      ) : mail && prepare ? (
+        <>
+          <p className="aide-prepare">
+            Brouillon rédigé par la routine, avec vos créneaux libres. Il n'est envoyé que si vous
+            l'envoyez vous-même depuis votre messagerie.
+          </p>
+          <div className="aide-champ">
+            <label htmlFor="aide-objet-prepare">Objet</label>
+            <input id="aide-objet-prepare" type="text" value={objetPrepare} readOnly />
+          </div>
+          <div className="aide-champ">
+            <label htmlFor="aide-corps-prepare">Mail préparé (à modifier dans l'Inbox)</label>
+            <textarea id="aide-corps-prepare" value={textePrepare} readOnly />
+          </div>
+        </>
       ) : mail ? (
         <>
           <div className="aide-champ">

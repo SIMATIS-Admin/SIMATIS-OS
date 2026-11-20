@@ -166,6 +166,7 @@ import { MESSAGERIES, messagerieDe } from '../connecteurs/messagerie.js';
 import { loadInstanceSecrets, type CompteImap } from '../secrets.js';
 import { siteWebActif, siteWebService, SiteWebIndisponible } from '../site/analytics.js';
 import { getFavoris, getOptions, setFavoris, setOptions } from '../preferences/service.js';
+import { lireMasquees, masquerAction, schemaMasque } from '../pilotage/aide-relance.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
 import {
   compterAFaire,
@@ -1560,6 +1561,21 @@ export function registerApi(
     onInstance<ListeRoute>((i, request) => {
       const filtre = FILTRES.includes(request.query.filtre ?? '') ? request.query.filtre : 'tout';
       return listPropositions(db, i, filtre as Filtre);
+    }),
+  );
+
+  // Aide à la relance : les actions que Marc a reportées ou écartées, retenues côté serveur.
+  app.get<SlugParams>(
+    '/api/i/:slug/aide-relance/masquees',
+    onInstance(async (i) => lireMasquees(db, i.id)),
+  );
+  type MasqueRoute = SlugParams & { Body: unknown };
+  app.put<MasqueRoute>(
+    '/api/i/:slug/aide-relance/masquees',
+    onInstance<MasqueRoute>(async (i, request, reply) => {
+      const parsed = schemaMasque.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Report invalide' });
+      return masquerAction(db, i.id, parsed.data.id, parsed.data.jusqua);
     }),
   );
 
