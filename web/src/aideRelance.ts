@@ -28,6 +28,8 @@ export type ActionRelance = {
   mandat: string | null;
   tacheIds: string[];
   derniereActivite: string | null;
+  // Rien d'autre qu'une tâche en retard depuis plus de 30 jours : probablement périmée.
+  ancienne: boolean;
   tri: number[];
 };
 
@@ -98,6 +100,7 @@ export function construireFile({
     mandat,
     tacheIds: [],
     derniereActivite: null,
+    ancienne: false,
     tri: [3],
   });
   const poser = (a: ActionRelance, tri: number[]) => {
@@ -176,6 +179,9 @@ export function construireFile({
       );
     }
   }
+
+  for (const a of parCle.values())
+    a.ancienne = a.raisons.every((r) => r.source === 'retard' && (r.jours ?? 0) > RETARD_ANCIEN);
 
   return [...parCle.values()]
     .filter((a) => (masquees[a.id] ?? 0) <= maintenant.getTime())

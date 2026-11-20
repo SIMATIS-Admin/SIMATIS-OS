@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
+import { contacts, entreprises, opportunites, taches } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import { createInstance, getInstanceBySlug } from '../instances/service.js';
@@ -112,6 +113,82 @@ describe('Routines Claude', () => {
       { canal: string }[]
     >();
     expect(tout.some((x) => x.canal === 'appel')).toBe(true);
+  });
+
+  it("affaires_a_relancer : les affaires sans activité avec un contact joignable, sans celles qu'une tâche échue couvre", async () => {
+    const i = await createInstance(t.owner.db, {
+      slug: 'relance-outil',
+      nom: 'Outil',
+      type: 'mandat',
+    });
+    const ancienne = new Date(Date.now() - 40 * 86_400_000);
+    const creer = (nom: string, email: string | null, derniere: Date | null) =>
+      withInstance(t.owner.db, i.id, async (tx) => {
+        const [e] = await tx.insert(entreprises).values({ instanceId: i.id, nom }).returning();
+        const [c] = await tx
+          .insert(contacts)
+          .values({ instanceId: i.id, nom: `Contact ${nom}`, email, entrepriseId: e?.id })
+          .returning();
+        const [o] = await tx
+          .insert(opportunites)
+          .values({
+            instanceId: i.id,
+            titre: `Affaire ${nom}`,
+            etape: 'qualification',
+            entrepriseId: e?.id,
+            contactId: c?.id,
+            derniereActivite: derniere,
+          })
+          .returning();
+        return { contactId: c?.id ?? '', opportuniteId: o?.id ?? '' };
+      });
+    const dormante = await creer('Dormante Fictive', 'dormante@exemple.test', ancienne);
+    await creer('Sans Email Fictive', null, ancienne);
+    await creer('Récente Fictive', 'recente@exemple.test', new Date());
+    const couverte = await creer('Couverte Fictive', 'couverte@exemple.test', ancienne);
+    await withInstance(t.owner.db, i.id, (tx) =>
+      tx.insert(taches).values({
+        instanceId: i.id,
+        titre: 'Relancer',
+        canal: 'email',
+        contactId: couverte.contactId,
+        opportuniteId: couverte.opportuniteId,
+        echeance: new Date(Date.now() - 86_400_000),
+      }),
+    );
+
+    const { token } = await createToken(t.owner.db, {
+      nom: 'test',
+      portee: 'instance',
+      instanceSlug: 'relance-outil',
+    });
+    const client = await connect(token);
+    const affaires = (await call(client, 'affaires_a_relancer')).json<
+      {
+        entreprise: string;
+        email: string;
+        contactId: string;
+        raison: string;
+        joursInactif: number;
+      }[]
+    >();
+    expect(affaires.map((a) => a.entreprise)).toEqual(['Dormante Fictive']);
+    expect(affaires[0]).toMatchObject({
+      email: 'dormante@exemple.test',
+      contactId: dormante.contactId,
+      raison: 'sans_activite',
+    });
+    expect(affaires[0]?.joursInactif).toBeGreaterThanOrEqual(40);
+
+    // Un seuil plus haut écarte la dormante ; un seuil plus bas ajoute la récente.
+    const haut = (await call(client, 'affaires_a_relancer', { joursInactifMin: 90 })).json<
+      unknown[]
+    >();
+    expect(haut).toEqual([]);
+    const limite = (
+      await call(client, 'affaires_a_relancer', { joursInactifMin: 1, limite: 1 })
+    ).json<unknown[]>();
+    expect(limite).toHaveLength(1);
   });
 
   it('proposer_rendez_vous : une proposition à valider, aucun rendez-vous créé tant que le pilote ne valide pas', async () => {

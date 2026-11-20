@@ -99,7 +99,7 @@ const JOUR_MS = 86_400_000;
 
 // Vrai pour un rendez-vous commercial lié à l'affaire de la ligne en cours (« opportunites »), à son
 // contact ou à son entreprise. Un créneau écarté n'en est pas un.
-const rdvDeLAffaire = sql`r.instance_id = ${currentInstance} and r.statut = 'rdv' and (
+export const rdvDeLAffaire = sql`r.instance_id = ${currentInstance} and r.statut = 'rdv' and (
   exists (select 1 from rdv_affaires x
     where x.rendez_vous_id = r.id and x.opportunite_id = "opportunites"."id")
   or (not exists (select 1 from rdv_affaires x where x.rendez_vous_id = r.id) and (

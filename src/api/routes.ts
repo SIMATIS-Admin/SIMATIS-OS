@@ -166,7 +166,13 @@ import { MESSAGERIES, messagerieDe } from '../connecteurs/messagerie.js';
 import { loadInstanceSecrets, type CompteImap } from '../secrets.js';
 import { siteWebActif, siteWebService, SiteWebIndisponible } from '../site/analytics.js';
 import { getFavoris, getOptions, setFavoris, setOptions } from '../preferences/service.js';
-import { lireMasquees, masquerAction, schemaMasque } from '../pilotage/aide-relance.js';
+import {
+  lireMasquees,
+  masquerAction,
+  masquerActions,
+  schemaMasque,
+  schemaMasqueLot,
+} from '../pilotage/aide-relance.js';
 import { getBrief, marquerFait } from '../pilotage/brief.js';
 import {
   compterAFaire,
@@ -1576,6 +1582,15 @@ export function registerApi(
       const parsed = schemaMasque.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'Report invalide' });
       return masquerAction(db, i.id, parsed.data.id, parsed.data.jusqua);
+    }),
+  );
+
+  app.put<MasqueRoute>(
+    '/api/i/:slug/aide-relance/masquees/lot',
+    onInstance<MasqueRoute>(async (i, request, reply) => {
+      const parsed = schemaMasqueLot.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Lot invalide' });
+      return masquerActions(db, i.id, parsed.data.ids, parsed.data.jusqua);
     }),
   );
 

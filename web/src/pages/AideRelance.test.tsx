@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   createTache: vi.fn(),
   fetchMasqueesRelance: vi.fn(),
   masquerRelance: vi.fn(),
+  masquerRelanceLot: vi.fn(),
   fetchBrouillonsPrepares: vi.fn(),
   decider: vi.fn(),
 }));
@@ -64,6 +65,7 @@ describe('AideRelance', () => {
     api.createTache.mockResolvedValue({});
     api.fetchMasqueesRelance.mockResolvedValue({});
     api.masquerRelance.mockResolvedValue({});
+    api.masquerRelanceLot.mockResolvedValue({});
     api.fetchBrouillonsPrepares.mockResolvedValue([]);
   });
   afterEach(() => {
@@ -290,6 +292,82 @@ describe('AideRelance', () => {
     expect(
       screen.getByRole<HTMLButtonElement>('button', { name: 'Créer le brouillon Gmail' }).disabled,
     ).toBe(true);
+  });
+
+  describe('nettoyage des tâches périmées', () => {
+    const vieille = (id: string, nom: string) => ({
+      ...tacheRetard,
+      id,
+      echeance: '2026-01-01T08:00:00Z',
+      entreprise: { id: `e${id}`, nom },
+    });
+    beforeEach(() => {
+      api.fetchPipeline.mockResolvedValue({ etapes: [], inactiviteJours: 14, opportunites: [] });
+      api.fetchTaches.mockResolvedValue({
+        enRetard: [vieille('v1', 'Périmée Un'), vieille('v2', 'Périmée Deux'), tacheRetard],
+      });
+    });
+
+    it("propose d'écarter en une fois les seules tâches de plus de 30 jours, sans toucher aux autres", async () => {
+      render(<AideRelance slug="simatis" />);
+      expect(
+        await screen.findByText(/2 tâche\(s\) en retard depuis plus de 30 jours/),
+      ).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: /Les écarter de cette liste/ }));
+      const fenetre = await screen.findByRole('dialog');
+      expect(within(fenetre).getByText(/restent dans l'Agenda et dans le CRM/)).toBeTruthy();
+      expect(api.masquerRelanceLot).not.toHaveBeenCalled();
+
+      fireEvent.click(within(fenetre).getByRole('button', { name: 'Écarter 2 tâche(s)' }));
+      await waitFor(() =>
+        expect(api.masquerRelanceLot).toHaveBeenCalledWith(
+          'simatis',
+          ['ent:perimee un', 'ent:perimee deux'],
+          8.64e15,
+        ),
+      );
+      await waitFor(() => expect(screen.queryByText('Périmée Un')).toBeNull());
+      expect(screen.getByText('Retard Fictif')).toBeTruthy();
+      // Rien n'est clos ni supprimé : seul le rangement de la liste change.
+      expect(api.updateTache).not.toHaveBeenCalled();
+      expect(screen.queryByText(/depuis plus de 30 jours/)).toBeNull();
+    });
+
+    it('ne fait rien si on annule, et signale un échec sans rien cacher', async () => {
+      render(<AideRelance slug="simatis" />);
+      fireEvent.click(await screen.findByRole('button', { name: /Les écarter de cette liste/ }));
+      fireEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', { name: 'Annuler' }),
+      );
+      expect(api.masquerRelanceLot).not.toHaveBeenCalled();
+      expect(screen.getByText('Périmée Un')).toBeTruthy();
+
+      api.masquerRelanceLot.mockRejectedValue(new Error('hors ligne'));
+      fireEvent.click(screen.getByRole('button', { name: /Les écarter de cette liste/ }));
+      fireEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', {
+          name: 'Écarter 2 tâche(s)',
+        }),
+      );
+      expect(await screen.findByRole('alert')).toBeTruthy();
+      expect(screen.getByText('Périmée Un')).toBeTruthy();
+    });
+
+    it("n'écarte pas une tâche ancienne qui a une autre raison d'être proposée", async () => {
+      api.fetchPipeline.mockResolvedValue({
+        etapes: [
+          { id: 'e1', label: 'Étape' },
+          { id: 'e2', label: 'Deux' },
+          { id: 'e3', label: 'Trois' },
+        ],
+        inactiviteJours: 14,
+        opportunites: [opp(1, { entreprise: 'Périmée Un', etape: 'e3', joursInactif: 40 })],
+      });
+      render(<AideRelance slug="simatis" />);
+      expect(
+        await screen.findByText(/1 tâche\(s\) en retard depuis plus de 30 jours/),
+      ).toBeTruthy();
+    });
   });
 
   it("n'envoie ni ne crée rien tant que Marc n'a pas validé", async () => {

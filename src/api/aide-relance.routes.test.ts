@@ -45,4 +45,23 @@ describe("Routes de l'aide à la relance", () => {
     });
     expect(inconnu.statusCode).toBe(404);
   });
+
+  it('masque un lot, relu ensuite, et refuse un lot invalide', async () => {
+    const jusqua = Date.now() + 86_400_000;
+    const put = await app.inject({
+      method: 'PUT',
+      url: `${url}/lot`,
+      payload: { ids: ['ent:a', 'ent:b'], jusqua },
+    });
+    expect(put.statusCode).toBe(200);
+    const lu = (await app.inject({ method: 'GET', url })).json<Record<string, number>>();
+    expect(lu['ent:a']).toBe(jusqua);
+    expect(lu['ent:b']).toBe(jusqua);
+    const mauvais = await app.inject({
+      method: 'PUT',
+      url: `${url}/lot`,
+      payload: { ids: [], jusqua },
+    });
+    expect(mauvais.statusCode).toBe(400);
+  });
 });

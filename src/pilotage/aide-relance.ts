@@ -30,6 +30,14 @@ export async function lireMasquees(
   );
 }
 
+// Plusieurs actions d'un coup (nettoyage des tâches périmées) : une seule écriture.
+export const schemaMasqueLot = z
+  .object({
+    ids: z.array(z.string().min(1).max(300)).min(1).max(2000),
+    jusqua: z.number().int().min(0).max(MAX_MASQUE),
+  })
+  .strict();
+
 export async function masquerAction(
   db: Database,
   instanceId: string,
@@ -37,7 +45,20 @@ export async function masquerAction(
   jusqua: number,
   maintenant = Date.now(),
 ): Promise<Masquees> {
-  const suivantes = { ...(await lireMasquees(db, instanceId, maintenant)), [id]: jusqua };
+  return masquerActions(db, instanceId, [id], jusqua, maintenant);
+}
+
+export async function masquerActions(
+  db: Database,
+  instanceId: string,
+  ids: string[],
+  jusqua: number,
+  maintenant = Date.now(),
+): Promise<Masquees> {
+  const suivantes = {
+    ...(await lireMasquees(db, instanceId, maintenant)),
+    ...Object.fromEntries(ids.map((id) => [id, jusqua])),
+  };
   await db
     .insert(preferences)
     .values({
