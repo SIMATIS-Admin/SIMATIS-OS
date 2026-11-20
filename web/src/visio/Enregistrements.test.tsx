@@ -86,4 +86,32 @@ describe('Enregistrements du cockpit', () => {
     const lien = await screen.findByRole('link', { name: 'Ouvrir la fiche' });
     expect(lien.getAttribute('href')).toBe('#/simatis/fiche/rdv/os%3Av1');
   });
+
+  it('suggère la réunion probable et fusionne d’un clic, après confirmation', async () => {
+    liste = [
+      ligne({
+        id: 'libre1',
+        titre: 'Enregistrement du 12/10/2026 à 10h00',
+        suggestion: { rdvId: 'g-9', titre: 'V - Réunion Fictive', debut: '2026-10-12T08:00:00Z' },
+      }),
+    ];
+    render(<Enregistrements slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir' }));
+    const fenetre = await screen.findByRole('dialog');
+    expect(await within(fenetre).findByText('V - Réunion Fictive')).toBeTruthy();
+    fireEvent.click(within(fenetre).getByRole('button', { name: 'Fusionner' }));
+    await waitFor(() =>
+      expect(
+        appels.some((c) => c.method === 'POST' && c.url.endsWith('/visio/sessions/libre1/fusion')),
+      ).toBe(true),
+    );
+  });
+
+  it('ne propose pas de fusion sans suggestion', async () => {
+    liste = [ligne({})];
+    render(<Enregistrements slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir' }));
+    await screen.findByRole('dialog');
+    expect(screen.queryByRole('button', { name: 'Fusionner' })).toBeNull();
+  });
 });

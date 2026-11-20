@@ -8844,3 +8844,16 @@ button.recherche-carte:hover,
   background: #fff8e8;
   font-size: 14px;
 }
+
+.enregistrement-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin: 0 12px 10px;
+  border-radius: 8px;
+  background: var(--bg-soft, rgba(11, 37, 69, 0.06));
+  font-size: 0.9em;
+}
