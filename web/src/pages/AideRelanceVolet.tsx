@@ -65,6 +65,8 @@ export function VoletAction({
   const [resultat, setResultat] = useState('joint');
   const [suites, setSuites] = useState<ReturnType<typeof suitesProposees> | null>(null);
   const [choix, setChoix] = useState(0);
+  // Suite planifiée après un mail envoyé : la première par défaut, au choix de Marc.
+  const [suiteMail, setSuiteMail] = useState(0);
   const [message, setMessage] = useState('');
   const [enCours, setEnCours] = useState(false);
   const [cree, setCree] = useState(false);
@@ -166,8 +168,8 @@ export function VoletAction({
         setEnCours(false);
         return;
       }
-      // Envoyé : l'action est faite, la première suite proposée est planifiée et on passe à la suivante.
-      await cloturer(suitesProposees('mail')[0]);
+      // Envoyé : l'action est faite, la suite choisie est planifiée et on passe à la suivante.
+      await cloturer(suitesProposees('mail')[suiteMail]);
     } catch {
       setMessage(
         mode === 'envoi'
@@ -329,6 +331,24 @@ export function VoletAction({
                 </button>
               </div>
             )}
+            {mail && (
+              <div className="aide-pied-ligne">
+                <label className="muted small" htmlFor="aide-suite-mail">
+                  Ensuite :
+                </label>
+                <select
+                  id="aide-suite-mail"
+                  value={suiteMail}
+                  onChange={(e) => setSuiteMail(Number(e.target.value))}
+                >
+                  {suitesProposees('mail').map((x, i) => (
+                    <option key={x.libelle} value={i}>
+                      {x.libelle}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="aide-pied-ligne">
               <span className="muted small">Reporter :</span>
               <button className="btn sm ghost" type="button" onClick={() => onMasquer(1, false)}>
@@ -345,7 +365,7 @@ export function VoletAction({
                   className="btn sm aide-deja"
                   type="button"
                   disabled={enCours}
-                  onClick={() => void cloturer(suitesProposees('mail')[0])}
+                  onClick={() => void cloturer(suitesProposees('mail')[suiteMail])}
                   title="Vous l'avez déjà envoyé vous-même : l'action est clôturée et on passe à la suivante."
                 >
                   Mail envoyé
