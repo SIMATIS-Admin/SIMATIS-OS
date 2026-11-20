@@ -7,6 +7,10 @@ const api = vi.hoisted(() => ({
   fetchTaches: vi.fn(),
   updateTache: vi.fn(),
   createTache: vi.fn(),
+  fetchMasqueesRelance: vi.fn(),
+  masquerRelance: vi.fn(),
+  fetchBrouillonsPrepares: vi.fn(),
+  decider: vi.fn(),
 }));
 vi.mock('../api.js', () => api);
 
@@ -34,7 +38,8 @@ const tacheRetard = {
   canal: 'email',
   type: 'email',
   fait: false,
-  echeance: '2026-01-01T08:00:00Z',
+  // En retard de trois jours : plus récent que le seuil des tâches périmées.
+  echeance: new Date(Date.now() - 3 * 86_400_000).toISOString(),
   contact: { id: 'c1', nom: 'Dana Imaginaire', email: 'dana@exemple.test' },
   entreprise: { id: 'e1', nom: 'Retard Fictif' },
   opportunite: { id: 'o99', titre: 'Devis', clos: null },
@@ -55,6 +60,9 @@ describe('AideRelance', () => {
     api.fetchTaches.mockResolvedValue({ enRetard: [tacheRetard] });
     api.updateTache.mockResolvedValue({});
     api.createTache.mockResolvedValue({});
+    api.fetchMasqueesRelance.mockResolvedValue({});
+    api.masquerRelance.mockResolvedValue({});
+    api.fetchBrouillonsPrepares.mockResolvedValue([]);
   });
   afterEach(() => {
     cleanup();
@@ -118,17 +126,57 @@ describe('AideRelance', () => {
     expect(screen.getByText("1 faite(s) aujourd'hui")).toBeTruthy();
   });
 
-  it('écarte une action pour de bon et retient les actions écartées', async () => {
+  it('écarte une action pour de bon, côté serveur, et ne la repropose plus', async () => {
     render(<AideRelance slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Pas pertinent' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: /Retard Fictif/ })).toBeNull());
     expect(api.updateTache).not.toHaveBeenCalled();
+    expect(api.masquerRelance).toHaveBeenCalledWith('simatis', 'ent:retard fictif', 8.64e15);
 
+    // Au chargement suivant, le serveur redonne l'écart : la ligne ne revient pas.
+    api.fetchMasqueesRelance.mockResolvedValue({ 'ent:retard fictif': 8.64e15 });
     cleanup();
     render(<AideRelance slug="simatis" />);
     await screen.findByText(/Société fictive 12/);
     expect(screen.queryByText('Retard Fictif')).toBeNull();
+  });
+
+  it('affiche la file même si les reports ou les brouillons préparés sont indisponibles', async () => {
+    api.fetchMasqueesRelance.mockRejectedValue(new Error('indisponible'));
+    api.fetchBrouillonsPrepares.mockRejectedValue(new Error('indisponible'));
+    render(<AideRelance slug="simatis" />);
+    expect(await screen.findByText('Retard Fictif')).toBeTruthy();
+  });
+
+  it('montre le brouillon préparé par la routine et le dépose dans la messagerie sans rien envoyer', async () => {
+    api.fetchBrouillonsPrepares.mockResolvedValue([
+      {
+        id: 'p1',
+        type: 'email.brouillon',
+        statut: 'proposee',
+        contenu: {
+          tacheId: 't1',
+          contactId: 'c1',
+          objet: 'Objet préparé',
+          corps: '<p>Bonjour Dana,</p><p>Voici trois créneaux&nbsp;: mardi, jeudi.</p>',
+        },
+      },
+    ]);
+    api.decider.mockResolvedValue({ statut: 'appliquee', resultat: { simulation: true } });
+    render(<AideRelance slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
+    const texte = await screen.findByLabelText<HTMLTextAreaElement>(/Mail préparé \(à modifier/);
+    expect(texte.value).toContain('Bonjour Dana,');
+    expect(texte.value).toContain('créneaux : mardi, jeudi.');
+    expect(api.decider).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le brouillon Gmail' }));
+    await waitFor(() => expect(api.decider).toHaveBeenCalledWith('simatis', 'p1', 'valider'));
+    expect(await screen.findByText(/Brouillon simulé/)).toBeTruthy();
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Créer le brouillon Gmail' }).disabled,
+    ).toBe(true);
   });
 
   it("n'envoie ni ne crée rien tant que Marc n'a pas validé", async () => {

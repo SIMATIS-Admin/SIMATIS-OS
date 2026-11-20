@@ -46,7 +46,8 @@ Marc veut qu'au lieu de chercher quoi faire, l'OS lui propose des activités com
 
 - **Maquette** (faite) : `maquettes/aide-relance.html`.
 - **1 : bloc du Cockpit** (décisions de l'agent, à relire) : la file est calculée dans l'interface à partir de données déjà exposées (`fetchPipeline`, tâches en retard), sans nouvelle table. Mail et fiche d'appel sont rédigés par des modèles fixes selon l'angle (suivi, relance, réponse reçue, premier contact), au prénom seul, sans créneaux ni signature. Boutons « Copier le mail » et « Ouvrir dans ma messagerie » ; « Mail envoyé » ou « Appel passé » clôt les tâches liées et crée la tâche de suite dans l'OS seulement (jamais dans HubSpot). Reports et « pas pertinent » sont retenus dans le navigateur.
-- **2 (à planifier)** : brouillons Gmail avec 3 créneaux libres et rédaction par la skill « naturelle », préparés d'avance par la routine du matin ; rangement serveur des actions écartées.
+- **2 : brouillons préparés et reports serveur** (décisions de l'agent, à relire) : la routine quotidienne existante (skill de relance, mails rédigés avec la skill « naturelle » et trois créneaux libres) dépose déjà des brouillons en attente de validation ; le bloc les retrouve par tâche liée ou par contact et les montre à la place du modèle. « Créer le brouillon Gmail » valide la proposition (dépôt dans la messagerie, simulé tant que l'écriture réelle est fermée) ; rien n'est envoyé. Reports et « pas pertinent » sont rangés côté serveur (préférences de l'instance, sans migration). Une tâche en retard depuis plus de 30 jours passe après les affaires sans activité et le Radar.
+- **Hors livraison** : la routine ne prépare des brouillons que pour des tâches échues dans sa fenêtre de retard ; les affaires du Radar ou sans activité sans tâche gardent le modèle fixe. L'étendre demande de modifier la skill de la routine (hors dépôt).
 
 ## À la charge du constructeur
 
