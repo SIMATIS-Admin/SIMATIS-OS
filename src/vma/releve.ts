@@ -38,6 +38,8 @@ const resultatSchema = z.object({
   invitation: hex32,
   type: z.enum(['premier', 'essai']),
   recueLe: z.iso.datetime({ offset: true }),
+  // Chrono du site, en secondes : absent des résultats d'avant le test pas à pas.
+  dureeS: z.number().int().min(0).max(86400).nullish(),
   version: z.string().min(1),
   parametres: z.record(z.string(), z.unknown()),
   reponses: z.record(z.string(), z.unknown()),
@@ -65,6 +67,13 @@ async function trouverInvitation(db: Database, instances: Instance[], invitation
     if (ligne) return ligne;
   }
   return null;
+}
+
+// 432 s -> « 7 min 12 s » ; sous la minute -> « 45 s ».
+export function dureeLisible(s: number): string {
+  const min = Math.floor(s / 60);
+  const sec = s % 60;
+  return min === 0 ? `${sec} s` : `${min} min ${String(sec).padStart(2, '0')} s`;
 }
 
 const euros = (v: number) => `${Math.round(v).toLocaleString('fr-FR')}\u00a0€`;
@@ -104,6 +113,7 @@ export function resumeResultat(r: ResultatSite): string {
     `Entreprise : ${r.ecran.entreprise}`,
     `Type : ${r.type === 'essai' ? 'essai (non rangé, hors historique)' : 'premier test'}`,
     `Date du test : ${new Date(r.recueLe).toLocaleDateString('fr-FR')}`,
+    typeof r.dureeS === 'number' && `Durée du test : ${dureeLisible(r.dureeS)}`,
     `VMA${v3 ? ' ponctuelle' : ''} : ${vma}`,
     v3 &&
       `CA mensuel : ${euros(c.caMensuel ?? 0)} (régulier variable ${euros(c.regulier ?? 0)}, sous engagement ${euros(c.engage ?? 0)}, ponctuel ${euros(c.ponctuel ?? 0)})`,
@@ -217,6 +227,7 @@ export async function releverTestsVma(
             statut: 'utilisee',
             resultatId: r.id,
             recueLe: new Date(r.recueLe),
+            dureeS: r.dureeS ?? null,
             version: r.version,
             parametres: r.parametres,
             reponses: r.reponses,

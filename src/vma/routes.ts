@@ -75,6 +75,7 @@ const vueTest = (t: TestVma) => ({
   expireLe: t.expireLe,
   creeLe: t.createdAt,
   recueLe: t.recueLe,
+  dureeS: t.dureeS,
   version: t.version,
   // Écran du dirigeant (ce qu'il a vu) et calcul complet pour la fiche de Marc.
   resultat: t.ecran,

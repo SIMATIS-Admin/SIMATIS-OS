@@ -1,0 +1,1 @@
+ALTER TABLE "vma_tests" ADD COLUMN "duree_s" integer;

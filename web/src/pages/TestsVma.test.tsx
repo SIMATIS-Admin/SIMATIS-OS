@@ -41,6 +41,7 @@ const test = (extra: Partial<TestVma> = {}): TestVma => ({
   expireLe: '2099-01-01T00:00:00.000Z',
   creeLe: '2026-10-20T08:00:00.000Z',
   recueLe: null,
+  dureeS: null,
   version: null,
   resultat: null,
   calcul: null,
@@ -109,6 +110,22 @@ describe('Tests VMA : écran', () => {
     await waitFor(() => expect(screen.getByText('Pour Marc uniquement')).toBeTruthy());
     expect(screen.getByText('6. Plan de canaux')).toBeTruthy();
     expect(screen.getByText(/Potentiel brut/)).toBeTruthy();
+  });
+
+  it('indique la durée du test dans la liste quand elle est connue', async () => {
+    api.fetchTestsVma.mockResolvedValue([
+      test({ statut: 'utilisee', recueLe: '2026-10-20T09:00:00.000Z', dureeS: 432 }),
+      test({
+        id: 't2',
+        entrepriseNom: 'Ancien Test',
+        statut: 'utilisee',
+        recueLe: '2026-09-01T09:00:00.000Z',
+      }),
+    ]);
+    render(<TestsVma slug="mandat-fictif" />);
+    await waitFor(() => expect(screen.getByText('Atelier Fictif')).toBeTruthy());
+    expect(screen.getByText(/fait en 7 min 12 s/)).toBeTruthy();
+    expect(screen.getAllByText(/fait en/)).toHaveLength(1);
   });
 
   it('v2.0 : montre la trajectoire, le portefeuille et le poids de chaque frein', async () => {

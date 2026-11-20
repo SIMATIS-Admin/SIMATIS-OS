@@ -1,4 +1,13 @@
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { contacts, entreprises, opportunites } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
@@ -57,6 +66,8 @@ export const vmaTests = pgTable(
     // Résultat, rempli à la relève. Identifiant du résultat côté site : une relève ne le crée qu'une fois.
     resultatId: text('resultat_id').unique(),
     recueLe: timestamp('recue_le', { withTimezone: true }),
+    // Durée du test mesurée par le chrono du site, en secondes (absente avant le test pas à pas).
+    dureeS: integer('duree_s'),
     version: text('version'),
     parametres: jsonb('parametres').$type<Record<string, unknown>>(),
     reponses: jsonb('reponses').$type<Record<string, unknown>>(),

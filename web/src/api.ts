@@ -276,6 +276,8 @@ export type TestVma = {
   expireLe: string;
   creeLe: string;
   recueLe: string | null;
+  // Durée du test en secondes (chrono du site) ; null avant le test pas à pas.
+  dureeS: number | null;
   version: string | null;
   // Écran du dirigeant (ce qu'il a vu) : seulement après l'envoi.
   resultat: {

@@ -75,6 +75,7 @@ const test = (): TestVma => ({
   expireLe: '2026-12-01',
   creeLe: '2026-11-01',
   recueLe: '2026-11-02',
+  dureeS: null,
   version: '3.3',
   resultat: {
     entreprise: 'Atelier Fictif',

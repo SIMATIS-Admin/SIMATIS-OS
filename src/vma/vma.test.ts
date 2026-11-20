@@ -240,6 +240,41 @@ describe('Test de VMA : invitations et relève', () => {
     expect(site.acquittes).toEqual([[resultat.id]]);
   });
 
+  it('garde la durée chronométrée par le site, et reste vide pour un résultat d’avant le chrono', async () => {
+    const site = fauxSite();
+    const avec = await creerInvitation(t.app.db, deps(site), {
+      instanceId: mandat.id,
+      entrepriseId: entrepriseMandat,
+      entrepriseNom: 'Atelier Chrono',
+      type: 'premier',
+    });
+    const sans = await creerInvitation(t.app.db, deps(site), {
+      instanceId: mandat.id,
+      entrepriseId: entrepriseMandat,
+      entrepriseNom: 'Atelier Ancien',
+      type: 'premier',
+    });
+    site.deposer([
+      { ...resultatPour(avec.invitationId, 'Atelier Chrono'), dureeS: 432 },
+      resultatPour(sans.invitationId, 'Atelier Ancien'),
+    ]);
+
+    const r = await releverTestsVma(t.app.db, {
+      url: SITE,
+      token: JETON_RELEVE,
+      fetch: site.fetch,
+    });
+    expect(r.rattaches).toBe(2);
+
+    const durees = await t.owner.pool.query<{ id: string; duree_s: number | null }>(
+      'select id, duree_s from vma_tests where id = any($1)',
+      [[avec.id, sans.id]],
+    );
+    const parId = new Map(durees.rows.map((l) => [l.id, l.duree_s]));
+    expect(parId.get(avec.id)).toBe(432);
+    expect(parId.get(sans.id)).toBeNull();
+  });
+
   it('ne range jamais le résultat d’un mandat dans « Mon activité »', async () => {
     const site = fauxSite();
     const test = await creerInvitation(t.app.db, deps(site), {

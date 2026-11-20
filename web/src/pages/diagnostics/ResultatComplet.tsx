@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { FreinVma, TestVma } from '../../api.js';
 import { fmtEur } from '../TestsVma.js';
+import { dureeLisible } from './duree.js';
 import { exporterResultatPdf } from './exportPdf.js';
 import { CorpsV3 } from './ResultatV3.js';
 import { ResultatSynthese } from './ResultatSynthese.js';
@@ -41,6 +42,7 @@ export function ResultatComplet({ test, onRetour }: { test: TestVma; onRetour: (
               {test.recueLe
                 ? ` · reçu le ${new Date(test.recueLe).toLocaleDateString('fr-FR')}`
                 : ''}
+              {typeof test.dureeS === 'number' ? ` · fait en ${dureeLisible(test.dureeS)}` : ''}
               {test.type === 'essai' ? ' · essai (non compté dans l’historique)' : ''}
             </div>
           </div>
