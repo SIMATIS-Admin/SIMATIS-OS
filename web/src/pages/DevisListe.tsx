@@ -5,6 +5,8 @@ export const STATUT: Record<DevisItem['statut'], [string, string]> = {
   brouillon: ['Brouillon', 'amber'],
   valide: ['Validé', 'blue'],
   transmis: ['Envoyé', 'navy'],
+  accepte: ['Accepté', 'green'],
+  refuse: ['Refusé', 'red'],
 };
 
 export function DevisListe({

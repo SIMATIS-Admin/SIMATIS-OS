@@ -1361,7 +1361,7 @@ export type DevisDetail = ContenuDevis & {
   opportuniteId: string;
   numero: string;
   version: number;
-  statut: 'brouillon' | 'valide' | 'transmis';
+  statut: 'brouillon' | 'valide' | 'transmis' | 'accepte' | 'refuse';
   createdAt: string;
   envoyeLe: string | null;
   opportunite: string;
@@ -1431,6 +1431,12 @@ export const validerDevis = (slug: string, id: string) =>
   sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/valider`), {});
 export const nouvelleVersionDevis = (slug: string, id: string) =>
   sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/version`), {});
+export const conclureDevis = (
+  slug: string,
+  id: string,
+  issue: { issue: 'accepte' } | { issue: 'refuse'; motif?: string },
+) =>
+  sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/conclure`), issue);
 export const transmettreDevis = (slug: string, id: string) =>
   sendJson<{ id: string }>('POST', inst(slug, `devis/${encodeURIComponent(id)}/transmettre`), {});
 

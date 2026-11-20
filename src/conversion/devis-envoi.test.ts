@@ -44,7 +44,7 @@ describe('Devis : envoi (brouillon Gmail avec PDF, relance) et issue (accepté, 
     registerConnector(
       gmailConnector({
         fetch: (url, init) => {
-          if (url.endsWith('/drafts')) brouillons.push(String(init.body));
+          if (url.endsWith('/drafts')) brouillons.push(init.body as string);
           return Promise.resolve(
             new Response(
               JSON.stringify(url.includes('oauth2') ? { access_token: 'at' } : { id: 'draft-1' }),

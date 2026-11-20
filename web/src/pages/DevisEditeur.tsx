@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  conclureDevis,
   enregistrerDevis,
   fetchDevisDetail,
   fetchParametresDevis,
@@ -64,6 +65,7 @@ export function DevisEditeur({
   const [c, setC] = useState<ContenuDevis | null>(null);
   const [etape, setEtape] = useState<Etape>(etapeInitiale);
   const [message, setMessage] = useState<string | null>(null);
+  const [refus, setRefus] = useState<string | null>(null);
   const [clausesBib, setClausesBib] = useState<ParametresDevis['clauses']>([]);
   const sale = useRef(false);
   const dernier = useRef<ContenuDevis | null>(null);
@@ -127,6 +129,22 @@ export function DevisEditeur({
   const bloque = totaux.prixManquant || !c.inclus.trim();
   const off = !brouillon;
 
+  const conclure = async (issue: { issue: 'accepte' } | { issue: 'refuse'; motif?: string }) => {
+    try {
+      await conclureDevis(slug, id, issue);
+      const x = await fetchDevisDetail(slug, id);
+      setD(x);
+      setC(contenuDe(x));
+      setRefus(null);
+      setMessage(
+        issue.issue === 'accepte'
+          ? 'Devis accepté : l’affaire est gagnée'
+          : 'Devis refusé : l’affaire est perdue',
+      );
+    } catch (e) {
+      err(e);
+    }
+  };
   const valider = async () => {
     // L'enregistrement automatique ne doit pas courir avec la validation.
     if (minuteur.current) clearTimeout(minuteur.current);
@@ -538,7 +556,7 @@ export function DevisEditeur({
                       void transmettreDevis(slug, id).then(
                         () =>
                           setMessage(
-                            'Transmission proposée : validez-la dans l’Inbox, c’est un engagement auprès du client.',
+                            'Envoi proposé : validez-le dans l’Inbox. Un brouillon Gmail avec le PDF sera créé et une relance programmée à J+10.',
                           ),
                         err,
                       )
@@ -567,6 +585,40 @@ export function DevisEditeur({
                   </button>
                 )}
               </div>
+              {d.statut === 'transmis' && (
+                <div className="stack" style={{ gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn go" onClick={() => void conclure({ issue: 'accepte' })}>
+                      Accepté
+                    </button>
+                    <button className="btn" onClick={() => setRefus(refus === null ? '' : null)}>
+                      Refusé
+                    </button>
+                  </div>
+                  {refus !== null && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <input
+                        aria-label="Motif du refus (facultatif)"
+                        placeholder="Motif du refus (facultatif)"
+                        value={refus}
+                        maxLength={200}
+                        onChange={(e) => setRefus(e.target.value)}
+                      />
+                      <button
+                        className="btn"
+                        onClick={() =>
+                          void conclure({
+                            issue: 'refuse',
+                            ...(refus.trim() ? { motif: refus.trim() } : {}),
+                          })
+                        }
+                      >
+                        Confirmer le refus
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               {d.statut === 'transmis' && d.envoyeLe && (
                 <p className="small muted" style={{ margin: 0 }}>
                   Envoyé le {new Date(d.envoyeLe).toLocaleDateString('fr-FR')}.
