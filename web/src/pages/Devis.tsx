@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { creerDevis, fetchDevis, type DevisItem } from '../api.js';
+import {
+  creerDevis,
+  fetchDevis,
+  fetchParametresDevis,
+  type DevisItem,
+  type ParametresDevis,
+} from '../api.js';
 import { DevisAffaire } from './DevisAffaire.js';
 import { DevisEditeur } from './DevisEditeur.js';
 import { DevisListe } from './DevisListe.js';
@@ -22,6 +28,8 @@ export function Devis({
     ouvrir ? { ecran: 'editeur', id: ouvrir } : { ecran: 'liste' },
   );
   const [erreur, setErreur] = useState<string | null>(null);
+  // Modèles à proposer avant de créer le devis d'une affaire qui n'en a pas encore.
+  const [choix, setChoix] = useState<ParametresDevis['modeles'] | null>(null);
   // Vrai seulement le temps de créer (ou retrouver) le devis de l'affaire : après, le retour à la liste reste possible.
   const [prepare, setPrepare] = useState(Boolean(affaire));
 
@@ -45,8 +53,21 @@ export function Devis({
     [slug],
   );
   useEffect(() => {
-    if (affaire) void depuisAffaire(affaire);
-  }, [affaire, depuisAffaire]);
+    if (!affaire) return;
+    // Un devis existant s'ouvre tel quel ; sinon, s'il y a des modèles, on laisse choisir.
+    Promise.all([fetchDevis(slug), fetchParametresDevis(slug).catch(() => null)]).then(
+      ([existants, p]) => {
+        const modeles = p?.modeles ?? [];
+        if (existants.some((d) => d.opportuniteId === affaire) || modeles.length === 0) {
+          void depuisAffaire(affaire);
+        } else {
+          setPrepare(false);
+          setChoix(modeles);
+        }
+      },
+      () => void depuisAffaire(affaire),
+    );
+  }, [affaire, slug, depuisAffaire]);
 
   if (erreur) return <div className="empty">{erreur}</div>;
   if (vue.ecran === 'editeur')
@@ -67,6 +88,37 @@ export function Devis({
           onOuvrir={(id) => setVue({ ecran: 'editeur', id })}
         />
       </>
+    );
+  if (choix && affaire && vue.ecran === 'liste')
+    return (
+      <div className="panel">
+        <div className="panel-b stack">
+          <h3>Partir d’un modèle de mission ?</h3>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {choix.map((m) => (
+              <button
+                key={m.id}
+                className="btn"
+                onClick={() => {
+                  setChoix(null);
+                  void depuisAffaire(affaire, m.id);
+                }}
+              >
+                {m.nom}
+              </button>
+            ))}
+            <button
+              className="btn primary"
+              onClick={() => {
+                setChoix(null);
+                void depuisAffaire(affaire);
+              }}
+            >
+              Sans modèle
+            </button>
+          </div>
+        </div>
+      </div>
     );
   if (prepare && vue.ecran === 'liste')
     return (

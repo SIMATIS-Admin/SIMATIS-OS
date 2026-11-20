@@ -255,12 +255,31 @@ describe('écran Devis', () => {
 
   it('avec une affaire, ouvre directement le devis existant', async () => {
     existant = true;
+    detail = { ...brouillon, opportuniteId: 'o1' };
     render(<Devis slug="simatis" affaire="o1" />);
     expect(await screen.findByLabelText('Intitulé de la mission')).toBeTruthy();
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ opportuniteId: 'o1' });
   });
 
+  it('depuis une affaire sans devis, propose le choix du modèle avant de créer', async () => {
+    render(<Devis slug="simatis" affaire="o1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Modèle fictif' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({
+      opportuniteId: 'o1',
+      modeleId: 'm1',
+    });
+  });
+
+  it('depuis une affaire sans devis, « Sans modèle » crée comme avant', async () => {
+    render(<Devis slug="simatis" affaire="o1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sans modèle' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ opportuniteId: 'o1' });
+  });
+
   it('« Tous les devis » ramène à la liste même après une ouverture depuis une affaire', async () => {
+    detail = { ...brouillon, opportuniteId: 'o1' };
     render(<Devis slug="simatis" affaire="o1" />);
     fireEvent.click(await screen.findByRole('button', { name: /Tous les devis/ }));
     expect(await screen.findByText('+ Nouveau devis')).toBeTruthy();

@@ -265,4 +265,14 @@ describe('Devis : envoi (brouillon Gmail avec PDF, relance) et issue (accepté, 
     await transmettre(v.id, true);
     expect(brouillons).toHaveLength(1);
   });
+
+  it('le compteur de numéros repart à 001 chaque année', async () => {
+    await t.owner.pool.query(
+      "update devis set created_at = '2020-03-01', numero = 'ANC-' || id::text where instance_id = $1",
+      [simatis.id],
+    );
+    const v = await devisValide('contact.fictif@example.test');
+    const d = await lireDevis(t.app.db, simatis, v.id);
+    expect(d.numero).toBe(`DEV-${new Date().getFullYear()}-001`);
+  });
 });
