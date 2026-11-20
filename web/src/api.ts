@@ -2843,6 +2843,19 @@ export type TacheRelance = {
 };
 export const fetchProspection = (slug: string) =>
   getJson<VueProspection>(inst(slug, 'prospection'));
+// Un mail d'une action de la séquence, écrit dans la messagerie avec la signature choisie. En
+// simulation (écritures réelles fermées), rien n'est parti : l'action ne doit pas être clôturée.
+export const envoyerMailRelanceProspection = (
+  slug: string,
+  mail: {
+    to: string;
+    objet: string;
+    corps: string;
+    signatureId: string | null;
+    threadId?: string;
+    mode: 'brouillon' | 'envoi';
+  },
+) => sendJson<{ simulation: boolean }>('POST', inst(slug, 'prospection/mail-relance'), mail);
 export const reglerObjectifProspection = (slug: string, objectif: number) =>
   sendJson<{ ok: true }>('PUT', inst(slug, 'prospection/objectif'), { objectif });
 export type ImageSignature = { typeMime: string; imageBase64: string };
