@@ -31,7 +31,7 @@ const base = (url: string) => url.replace(/\/+$/, '');
 // Tranches du questionnaire pour la taille (effectifs).
 export function trancheEffectif(n: number | null): string {
   if (n == null) return '';
-  if (n <= 10) return 'moins de 10';
+  if (n < 10) return 'moins de 10';
   if (n <= 50) return 'de 10 à 50';
   if (n <= 250) return 'de 50 à 250';
   if (n <= 5000) return 'de 250 à 5000';

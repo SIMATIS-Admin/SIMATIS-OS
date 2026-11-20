@@ -47,7 +47,7 @@ describe('Passation : correspondance et tranches', () => {
   });
 
   it('range un effectif dans les tranches du questionnaire', () => {
-    expect([5, 10, 11, 50, 51, 250, 251, 5000, 5001].map(trancheEffectif)).toEqual([
+    expect([5, 9, 10, 50, 51, 250, 251, 5000, 5001].map(trancheEffectif)).toEqual([
       'moins de 10',
       'moins de 10',
       'de 10 à 50',
