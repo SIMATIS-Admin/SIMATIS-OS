@@ -195,12 +195,13 @@ describe('Inbox : réunions Wispr Flow', () => {
       eventId: string,
       statut: 'a_traiter' | 'traite',
       titre = 'Point agenda fictif',
+      debut = new Date('2026-10-27T14:00:00Z'),
     ) => {
       await t.owner.db.insert(rendezVous).values({
         instanceId: inst.id,
         eventId,
         titre,
-        debut: new Date('2026-10-27T14:00:00Z'),
+        debut,
         statut: 'rdv',
       });
       const s = await withInstance(t.app.db, inst.id, (tx) =>
@@ -248,6 +249,27 @@ describe('Inbox : réunions Wispr Flow', () => {
       expect(horaire.statut).toBe('cree');
       const titre = await deposer(a, wispr('w-d4', { titre: 'Sujet sans rapport' }));
       expect(titre.statut).toBe('cree');
+    });
+
+    it('titre différent mais un seul rendez-vous à cette heure : la réunion s’y relie', async () => {
+      const heure = new Date('2026-11-03T10:00:00Z');
+      const sujetId = await rdvEtSujet(
+        a,
+        'evt-seul',
+        'a_traiter',
+        'Point commercial fictif',
+        heure,
+      );
+      const r = await deposer(a, wispr('w-d6', { titre: 'Titre généré fictif', debutAt: heure }));
+      expect(r).toEqual({ statut: 'relie', sujetId });
+    });
+
+    it('titre différent et deux rendez-vous à cette heure : on ne devine pas', async () => {
+      const heure = new Date('2026-11-04T10:00:00Z');
+      await rdvEtSujet(a, 'evt-duo-1', 'a_traiter', 'Premier point fictif', heure);
+      await rdvEtSujet(a, 'evt-duo-2', 'a_traiter', 'Second point fictif', heure);
+      const r = await deposer(a, wispr('w-d7', { titre: 'Titre généré fictif', debutAt: heure }));
+      expect(r.statut).toBe('cree');
     });
 
     it('le rendez-vous d’un autre espace ne compte pas', async () => {

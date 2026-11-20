@@ -81,6 +81,27 @@ describe('Résumé d’une visio enregistrée', () => {
     expect(encore.json<{ id: string }[]>().map((m) => m.id)).not.toContain(id);
   });
 
+  it('range le résumé dans l’entrée « compte rendu » déjà ouverte du rendez-vous, sans doublon', async () => {
+    const id = await visioTranscrite('os:res-5', 'Moi : Texte fictif.');
+    await fabrique(t).insere(a, 'sujets', 'type, titre, origine, source, source_id', [
+      'compte_rendu',
+      'Rédiger le compte rendu de Visio os:res-5',
+      'agenda',
+      'routine',
+      'agenda:os:res-5',
+    ]);
+    await exec('POST', `/api/runner/resumes/${id}`, { instance: 'res-a', resume: 'Résumé rangé.' });
+    const visio = await t.owner.pool.query(
+      "select 1 from sujets where source = 'visio' and source_id = $1",
+      [id],
+    );
+    expect(visio.rows).toHaveLength(0);
+    const agenda = await t.owner.pool.query<{ texte: string }>(
+      "select compte_rendu_prepare->>'texte' as texte from sujets where source_id = 'agenda:os:res-5'",
+    );
+    expect(agenda.rows[0]?.texte).toBe('Résumé rangé.');
+  });
+
   it('refuse un résumé vide, une instance inconnue et l’absence de jeton', async () => {
     const id = await visioTranscrite('os:res-3', 'Moi : Texte.');
     const vide = await exec('POST', `/api/runner/resumes/${id}`, {
