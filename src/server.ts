@@ -8,6 +8,7 @@ import { startScheduler } from './connexions/service.js';
 import { startPlanification } from './routines/planification.js';
 import { startRelevePartenaires } from './partenaires/releve.js';
 import { startReleveSite } from './site/releve.js';
+import { startRelevePassations } from './diagnostic/passation.js';
 import { startReleveVma } from './vma/releve.js';
 import { startRelancesVma } from './vma/relances.js';
 import { creerClientOpenAI } from './enrichissement/client.js';
@@ -75,6 +76,7 @@ let stopScheduler = () => {};
 let stopPlanification = () => {};
 let stopReleveSite = () => {};
 let stopReleveVma = () => {};
+let stopRelevePassations = () => {};
 let stopRelancesVma = () => {};
 let stopRelevePartenaires = () => {};
 try {
@@ -127,6 +129,15 @@ try {
       },
       onError: (err) => app.log.warn({ err }, 'test de VMA pass failed'),
     });
+    stopRelevePassations = startRelevePassations(db, {
+      ...config.site,
+      onResult: (r) => {
+        if (r.enregistres > 0) app.log.info(r, 'diagnostic passations pulled');
+        if (r.inconnus > 0)
+          app.log.warn(r, 'diagnostic passations left on the site (unknown project)');
+      },
+      onError: (err) => app.log.warn({ err }, 'diagnostic passation pass failed'),
+    });
     if (config.vmaRelanceAuto && config.vmaOsToken) {
       stopRelancesVma = startRelancesVma(db, {
         ecriture: { secretsDir: config.secretsDir, realWrites: config.realWrites },
@@ -152,6 +163,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     stopPlanification();
     stopReleveSite();
     stopReleveVma();
+    stopRelevePassations();
     stopRelancesVma();
     stopRelevePartenaires();
     void app

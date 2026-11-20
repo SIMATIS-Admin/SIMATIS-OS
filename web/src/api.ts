@@ -1768,6 +1768,13 @@ export type ProjetDiag = {
   supportIntroId: string;
   pdfEntretienNom: string | null;
   reponsesEntretien: { section: string; numero: number; reponse: LettreReponse }[];
+  // Passation sur le site : toutes les réponses (rubrique#numéro → lettre), commentaires et temps passé.
+  passation?: {
+    recueLe: string;
+    tempsMs: number;
+    reponses: Record<string, string>;
+    commentaires: Record<string, string>;
+  } | null;
   historiqueReponses: { question: string; ancienne: string; nouvelle: string; le: string }[];
   ditParDirigeant: string;
   hypotheses: string;
@@ -1872,6 +1879,13 @@ export const importerEntretienDiag = (
     'POST',
     inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/entretien`),
     pdf,
+  );
+// « Lancer le diagnostic » : prépare la fiche sur le site et rend le lien de la console.
+export const lancerPassationDiag = (slug: string, id: string) =>
+  sendJson<{ lien: string; expireLe: string }>(
+    'POST',
+    inst(slug, `diagnostic/projets/${encodeURIComponent(id)}/passation`),
+    {},
   );
 // Word du rapport retravaillé hors de l'OS : il remplace le Word affiché (étape 4).
 export const envoyerRapportDriveDiag = (slug: string, id: string) =>

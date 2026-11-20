@@ -16,6 +16,7 @@ import {
   urlPptxRestitutionDiag,
   viderConversationDiag,
   importerEntretienDiag,
+  lancerPassationDiag,
   envoyerRapportDriveDiag,
   importerRapportDiag,
   annulerRegleDiag,
@@ -790,6 +791,14 @@ function Support({
             </button>
           )}
           {statut === 'final' && (
+            <button
+              className="btn go"
+              onClick={() => void lancerDiagnostic(slug, projet.id, onErreur)}
+            >
+              Lancer le diagnostic
+            </button>
+          )}
+          {statut === 'final' && (
             <button className="btn" disabled={occupe} onClick={() => void demander('rouvrir')}>
               Modifier le support
             </button>
@@ -830,6 +839,26 @@ function Support({
 }
 
 const PDF_MAX_OCTETS = 10 * 1024 * 1024;
+
+// L'onglet s'ouvre tout de suite (sinon le navigateur bloque la fenêtre) puis reçoit le lien du site.
+async function lancerDiagnostic(slug: string, id: string, onErreur: (m: string) => void) {
+  const fenetre = window.open('', '_blank');
+  try {
+    const { lien } = await lancerPassationDiag(slug, id);
+    if (fenetre) fenetre.location.href = lien;
+    else window.location.href = lien;
+  } catch (err) {
+    fenetre?.close();
+    onErreur(messageErreur(err));
+  }
+}
+
+const dureeLisible = (ms: number) => {
+  const min = Math.round(ms / 60000);
+  return min >= 60
+    ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
+    : `${min} min`;
+};
 
 function Resultat({
   slug,
@@ -877,6 +906,23 @@ function Resultat({
         {projet.profil && <span className="badge green">Profil : {projet.profil}</span>}
       </div>
       <div className="panel-b stack">
+        <div className="diag-actions">
+          <button
+            className="btn go"
+            onClick={() => void lancerDiagnostic(slug, projet.id, onErreur)}
+          >
+            Lancer le diagnostic
+          </button>
+        </div>
+        {projet.passation && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Passation reçue du site le{' '}
+            {new Date(projet.passation.recueLe).toLocaleDateString('fr-FR')} ·{' '}
+            {dureeLisible(projet.passation.tempsMs)} ·{' '}
+            {Object.keys(projet.passation.commentaires).length} commentaire(s). Le PDF reste
+            possible en secours.
+          </p>
+        )}
         <label className="diag-depot">
           <span>Importer le PDF de l’outil (10 Mo au plus)</span>
           <input
