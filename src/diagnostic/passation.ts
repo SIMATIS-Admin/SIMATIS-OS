@@ -26,6 +26,7 @@ export type FichePassation = {
   contexte: string;
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const base = (url: string) => url.replace(/\/+$/, '');
 
 // Tranches du questionnaire pour la taille (effectifs).
@@ -128,11 +129,43 @@ export async function ouvrirPassation(
 
 const diagSchema = z.object({
   id: z.string().min(8),
+  // Diagnostic créé dans la console du site : l'OS en fait un projet à la relève.
+  libre: z.boolean().optional(),
+  entreprise: z.string().optional(),
+  activite: z.string().optional(),
+  contexte: z.string().optional(),
   reponses: z.record(z.string(), z.enum(['A', 'B', 'C', 'D', 'E'])),
   commentaires: z.record(z.string(), z.string()).default({}),
   tempsMs: z.number().min(0).default(0),
   termineLe: z.iso.datetime({ offset: true }),
 });
+
+// Un diagnostic créé dans la console n'a pas encore de projet : il prend l'identifiant du site.
+async function creerProjetLibre(
+  db: Database,
+  instance: Instance,
+  d: {
+    id: string;
+    entreprise?: string | undefined;
+    activite?: string | undefined;
+    contexte?: string | undefined;
+  },
+) {
+  await withInstance(db, instance.id, async (tx) => {
+    const [existe] = await tx
+      .select({ id: diagnosticProjets.id })
+      .from(diagnosticProjets)
+      .where(eq(diagnosticProjets.id, d.id));
+    if (existe) return;
+    await tx.insert(diagnosticProjets).values({
+      id: d.id,
+      instanceId: instance.id,
+      nom: (d.entreprise ?? '').trim() || 'Diagnostic sans nom',
+      activite: (d.activite ?? '').trim() || 'autre',
+      contexte: d.contexte ?? '',
+    });
+  });
+}
 
 export type ResultatPassations = { recus: number; enregistres: number; inconnus: number };
 
@@ -170,6 +203,15 @@ export async function releverPassations(db: Database, deps: SiteDeps): Promise<R
     if (!parsed.success) continue; // mal formé : laissé sur le site, rien n'est perdu
     const d = parsed.data;
     let trouve = false;
+    // Identifiant qui n'est pas un UUID : aucun projet possible, le diagnostic reste sur le site.
+    if (!UUID.test(d.id)) {
+      compte.inconnus++;
+      continue;
+    }
+    if (d.libre && UUID.test(d.id)) {
+      const propre = instances[0];
+      if (propre) await creerProjetLibre(db, propre, d);
+    }
     for (const instance of instances) {
       const fait = await withInstance(db, instance.id, async (tx) => {
         const [p] = await tx
