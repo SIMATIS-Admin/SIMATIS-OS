@@ -12,7 +12,7 @@ import {
   type LigneDevis,
   type ParametresDevis,
 } from '../api.js';
-import { calculer, problemesAvantEnvoi } from '../devis.js';
+import { calculer, problemesAvantEnvoi, texteFraisPropose, texteSortiePropose } from '../devis.js';
 import { Icon } from '../icons.js';
 import { DevisApercu } from './DevisApercu.js';
 import { STATUT } from './DevisListe.js';
@@ -45,6 +45,12 @@ const contenuDe = (d: DevisDetail): ContenuDevis => ({
   remisePct: d.remisePct,
   acomptePct: d.acomptePct,
   frais: d.frais,
+  fraisPlafond: d.fraisPlafond,
+  fraisTexte: d.fraisTexte,
+  modePrix: d.modePrix,
+  sortieMois: d.sortieMois,
+  texteSortie: d.texteSortie,
+  conditionsParticulieres: d.conditionsParticulieres,
   validiteJours: d.validiteJours,
   clauses: d.clauses,
 });
@@ -125,6 +131,37 @@ export function DevisEditeur({
     maj({ lignes: c.lignes.map((l, i) => (i === k ? { ...l, ...patch } : l)) });
   const majClause = (k: number, patch: Partial<ContenuDevis['clauses'][number]>) =>
     maj({ clauses: c.clauses.map((x, i) => (i === k ? { ...x, ...patch } : x)) });
+  // The proposed sentence follows the figures until the pilot writes their own.
+  const majAbonnement = (ligne: Partial<LigneDevis>, sortieMois: number | null = c.sortieMois) => {
+    const l0 = c.lignes[0]!;
+    const avant = texteSortiePropose(l0.quantite, c.sortieMois);
+    const apres = texteSortiePropose(ligne.quantite ?? l0.quantite, sortieMois);
+    maj({
+      lignes: [{ ...l0, ...ligne }],
+      sortieMois,
+      texteSortie: c.texteSortie === '' || c.texteSortie === avant ? apres : c.texteSortie,
+    });
+  };
+  const choisirMode = (mode: ContenuDevis['modePrix']) => {
+    if (mode === c.modePrix) return;
+    if (mode === 'forfait') return maj({ modePrix: 'forfait' });
+    const l0 = c.lignes[0]!;
+    const quantite = l0.unite === 'mois' ? l0.quantite : 12;
+    maj({
+      modePrix: 'abonnement',
+      lignes: [{ ...l0, unite: 'mois', quantite }],
+      texteSortie: c.texteSortie || texteSortiePropose(quantite, c.sortieMois),
+    });
+  };
+  const majFrais = (patch: Partial<Pick<ContenuDevis, 'frais' | 'fraisPlafond'>>) => {
+    const avant = texteFraisPropose(c.frais, c.fraisPlafond);
+    const prochain = { frais: c.frais, fraisPlafond: c.fraisPlafond, ...patch };
+    const apres = texteFraisPropose(prochain.frais, prochain.fraisPlafond);
+    maj({
+      ...patch,
+      fraisTexte: c.fraisTexte === avant ? apres : c.fraisTexte,
+    });
+  };
   const err = (e: unknown) => setMessage(e instanceof Error ? e.message : String(e));
   const totaux = calculer(c, d.tvaPct);
   const problemes = problemesAvantEnvoi(c);
@@ -314,111 +351,221 @@ export function DevisEditeur({
                 </div>
               </div>
             )}
-            <table className="tbl d-lignes">
-              <thead>
-                <tr>
-                  <th>Prestation</th>
-                  <th>Unité</th>
-                  <th>Qté</th>
-                  <th>Prix unit. HT</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {c.lignes.map((l, k) => (
-                  <tr key={k}>
-                    <td>
-                      <input
-                        className="input"
-                        aria-label={`Libellé de la ligne ${k + 1}`}
-                        disabled={off}
-                        value={l.libelle}
-                        onChange={(e) => majLigne(k, { libelle: e.target.value })}
-                      />
-                    </td>
-                    <td>
-                      <select
-                        className="input"
-                        aria-label={`Unité de la ligne ${k + 1}`}
-                        disabled={off}
-                        value={l.unite}
-                        onChange={(e) =>
-                          majLigne(k, { unite: e.target.value as LigneDevis['unite'] })
-                        }
-                      >
-                        {UNITES.map((u) => (
-                          <option key={u}>{u}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        className="input"
-                        type="number"
-                        min={1}
-                        aria-label={`Quantité de la ligne ${k + 1}`}
-                        disabled={off}
-                        value={l.quantite}
-                        onChange={(e) =>
-                          majLigne(k, { quantite: entier(e.target.value, 1, 10_000) })
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className={`input num ${l.prixUnitaire === null ? 'vide' : ''}`}
-                        type="number"
-                        min={0}
-                        placeholder="à fixer"
-                        aria-label={`Prix unitaire : ${l.libelle}`}
-                        disabled={off}
-                        value={l.prixUnitaire ?? ''}
-                        onChange={(e) =>
-                          majLigne(k, {
-                            prixUnitaire:
-                              e.target.value === '' ? null : entier(e.target.value, 0, 10_000_000),
-                          })
-                        }
-                      />
-                      {!off && l.prixUnitaire === null && l.prixPropose != null && (
-                        <button
-                          className="btn ghost sm"
-                          onClick={() => majLigne(k, { prixUnitaire: l.prixPropose ?? null })}
-                        >
-                          Reprendre {Math.round(l.prixPropose).toLocaleString('fr-FR')} €
-                        </button>
-                      )}
-                    </td>
-                    <td>
-                      {!off && c.lignes.length > 1 && (
-                        <button
-                          className="btn ghost sm"
-                          aria-label={`Retirer la ligne ${k + 1}`}
-                          onClick={() => maj({ lignes: c.lignes.filter((_, i) => i !== k) })}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!off && (
+            <div className="d-etapes" role="group" aria-label="Présentation du prix">
               <button
-                className="btn sm"
-                style={{ marginTop: 8 }}
-                onClick={() =>
-                  maj({
-                    lignes: [
-                      ...c.lignes,
-                      { libelle: '', unite: 'forfait', quantite: 1, prixUnitaire: null },
-                    ],
-                  })
-                }
+                className={`chip ${c.modePrix === 'forfait' ? 'on' : ''}`}
+                disabled={off}
+                onClick={() => choisirMode('forfait')}
               >
-                + Ajouter une ligne
+                Forfait, lignes de prix
               </button>
+              <button
+                className={`chip ${c.modePrix === 'abonnement' ? 'on' : ''}`}
+                disabled={off}
+                onClick={() => choisirMode('abonnement')}
+              >
+                Abonnement mensuel
+              </button>
+            </div>
+            {c.modePrix === 'abonnement' && c.lignes[0] ? (
+              <div className="d-abo-edit">
+                <div className="d-bloc">
+                  <label htmlFor="dv-abo-nom">Nom de la formule</label>
+                  <input
+                    id="dv-abo-nom"
+                    className="input"
+                    disabled={off}
+                    value={c.lignes[0].libelle}
+                    onChange={(e) => majAbonnement({ libelle: e.target.value })}
+                  />
+                </div>
+                <div className="d-duo">
+                  <div className="d-bloc">
+                    <label htmlFor="dv-abo-prix">Mensualité (€ HT)</label>
+                    <input
+                      id="dv-abo-prix"
+                      className={`input num ${c.lignes[0].prixUnitaire === null ? 'vide' : ''}`}
+                      type="number"
+                      min={0}
+                      placeholder="à fixer"
+                      disabled={off}
+                      value={c.lignes[0].prixUnitaire ?? ''}
+                      onChange={(e) =>
+                        majAbonnement({
+                          prixUnitaire:
+                            e.target.value === '' ? null : entier(e.target.value, 0, 10_000_000),
+                        })
+                      }
+                    />
+                    {!off &&
+                      c.lignes[0].prixUnitaire === null &&
+                      c.lignes[0].prixPropose != null && (
+                        <button
+                          className="btn ghost sm"
+                          onClick={() =>
+                            majAbonnement({ prixUnitaire: c.lignes[0]?.prixPropose ?? null })
+                          }
+                        >
+                          Reprendre {Math.round(c.lignes[0].prixPropose).toLocaleString('fr-FR')} €
+                        </button>
+                      )}
+                  </div>
+                  <div className="d-bloc">
+                    <label htmlFor="dv-abo-engagement">Engagement (mois)</label>
+                    <input
+                      id="dv-abo-engagement"
+                      className="input"
+                      type="number"
+                      min={1}
+                      disabled={off}
+                      value={c.lignes[0].quantite}
+                      onChange={(e) => majAbonnement({ quantite: entier(e.target.value, 1, 120) })}
+                    />
+                  </div>
+                  <div className="d-bloc">
+                    <label htmlFor="dv-abo-sortie">Sortie possible dès le mois</label>
+                    <input
+                      id="dv-abo-sortie"
+                      className="input"
+                      type="number"
+                      min={1}
+                      placeholder="aucune"
+                      disabled={off}
+                      value={c.sortieMois ?? ''}
+                      onChange={(e) =>
+                        majAbonnement(
+                          {},
+                          e.target.value === '' ? null : entier(e.target.value, 1, 120),
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="d-bloc">
+                  <label htmlFor="dv-abo-texte">Engagement et sortie, tels qu’imprimés</label>
+                  <div className="aide">
+                    Phrase proposée d’après les chiffres ci-dessus : réécrivez-la comme vous voulez.
+                  </div>
+                  <textarea
+                    id="dv-abo-texte"
+                    className="input"
+                    disabled={off}
+                    value={c.texteSortie}
+                    onChange={(e) => maj({ texteSortie: e.target.value })}
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <table className="tbl d-lignes">
+                  <thead>
+                    <tr>
+                      <th>Prestation</th>
+                      <th>Unité</th>
+                      <th>Qté</th>
+                      <th>Prix unit. HT</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {c.lignes.map((l, k) => (
+                      <tr key={k}>
+                        <td>
+                          <input
+                            className="input"
+                            aria-label={`Libellé de la ligne ${k + 1}`}
+                            disabled={off}
+                            value={l.libelle}
+                            onChange={(e) => majLigne(k, { libelle: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="input"
+                            aria-label={`Unité de la ligne ${k + 1}`}
+                            disabled={off}
+                            value={l.unite}
+                            onChange={(e) =>
+                              majLigne(k, { unite: e.target.value as LigneDevis['unite'] })
+                            }
+                          >
+                            {UNITES.map((u) => (
+                              <option key={u}>{u}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            className="input"
+                            type="number"
+                            min={1}
+                            aria-label={`Quantité de la ligne ${k + 1}`}
+                            disabled={off}
+                            value={l.quantite}
+                            onChange={(e) =>
+                              majLigne(k, { quantite: entier(e.target.value, 1, 10_000) })
+                            }
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className={`input num ${l.prixUnitaire === null ? 'vide' : ''}`}
+                            type="number"
+                            min={0}
+                            placeholder="à fixer"
+                            aria-label={`Prix unitaire : ${l.libelle}`}
+                            disabled={off}
+                            value={l.prixUnitaire ?? ''}
+                            onChange={(e) =>
+                              majLigne(k, {
+                                prixUnitaire:
+                                  e.target.value === ''
+                                    ? null
+                                    : entier(e.target.value, 0, 10_000_000),
+                              })
+                            }
+                          />
+                          {!off && l.prixUnitaire === null && l.prixPropose != null && (
+                            <button
+                              className="btn ghost sm"
+                              onClick={() => majLigne(k, { prixUnitaire: l.prixPropose ?? null })}
+                            >
+                              Reprendre {Math.round(l.prixPropose).toLocaleString('fr-FR')} €
+                            </button>
+                          )}
+                        </td>
+                        <td>
+                          {!off && c.lignes.length > 1 && (
+                            <button
+                              className="btn ghost sm"
+                              aria-label={`Retirer la ligne ${k + 1}`}
+                              onClick={() => maj({ lignes: c.lignes.filter((_, i) => i !== k) })}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!off && (
+                  <button
+                    className="btn sm"
+                    style={{ marginTop: 8 }}
+                    onClick={() =>
+                      maj({
+                        lignes: [
+                          ...c.lignes,
+                          { libelle: '', unite: 'forfait', quantite: 1, prixUnitaire: null },
+                        ],
+                      })
+                    }
+                  >
+                    + Ajouter une ligne
+                  </button>
+                )}
+              </>
             )}
             <div className="d-duo" style={{ marginTop: 16 }}>
               {nombre('remisePct', 'Remise commerciale (%)', 0, 100)}
@@ -430,13 +577,47 @@ export function DevisEditeur({
                   className="input"
                   disabled={off}
                   value={c.frais}
-                  onChange={(e) => maj({ frais: e.target.value as ContenuDevis['frais'] })}
+                  onChange={(e) => majFrais({ frais: e.target.value as ContenuDevis['frais'] })}
                 >
                   <option value="refactures">Refacturés au réel</option>
+                  <option value="plafonnes">Refacturés, avec un plafond</option>
                   <option value="inclus">Inclus dans le prix</option>
                 </select>
               </div>
               {nombre('validiteJours', 'Validité du devis (jours)', 1, 365)}
+            </div>
+            {c.frais === 'plafonnes' && (
+              <div className="d-bloc">
+                <label htmlFor="dv-plafond">Plafond par aller-retour (€ HT)</label>
+                <input
+                  id="dv-plafond"
+                  className="input"
+                  type="number"
+                  min={0}
+                  disabled={off}
+                  value={c.fraisPlafond ?? ''}
+                  onChange={(e) =>
+                    majFrais({
+                      fraisPlafond:
+                        e.target.value === '' ? null : entier(e.target.value, 0, 100_000),
+                    })
+                  }
+                />
+              </div>
+            )}
+            <div className="d-bloc">
+              <label htmlFor="dv-frais-texte">Frais de déplacement, tels qu’imprimés</label>
+              <div className="aide">
+                Ex. le billet de train entre deux villes. Vide : la phrase proposée s’imprime.
+              </div>
+              <textarea
+                id="dv-frais-texte"
+                className="input"
+                disabled={off}
+                placeholder={texteFraisPropose(c.frais, c.fraisPlafond)}
+                value={c.fraisTexte}
+                onChange={(e) => maj({ fraisTexte: e.target.value })}
+              />
             </div>
             <div className="d-total">
               <div>
@@ -549,6 +730,17 @@ export function DevisEditeur({
                 + Ajouter une clause
               </button>
             )}
+            <div className="d-bloc" style={{ marginTop: 16 }}>
+              <label htmlFor="dv-particulieres">Conditions particulières (facultatif)</label>
+              <div className="aide">Propres à ce devis. Laissez vide : rien ne s’imprime.</div>
+              <textarea
+                id="dv-particulieres"
+                className="input"
+                disabled={off}
+                value={c.conditionsParticulieres}
+                onChange={(e) => maj({ conditionsParticulieres: e.target.value })}
+              />
+            </div>
           </>
         )}
 

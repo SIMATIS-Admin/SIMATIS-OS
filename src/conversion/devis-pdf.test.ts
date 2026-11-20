@@ -25,6 +25,12 @@ const base: DevisPourPdf = {
   remisePct: 10,
   acomptePct: 30,
   frais: 'refactures',
+  fraisPlafond: null,
+  fraisTexte: '',
+  modePrix: 'forfait',
+  sortieMois: null,
+  texteSortie: '',
+  conditionsParticulieres: '',
   clauses: [
     { titre: 'Paiement', texte: 'Facture à 30 jours.', active: true },
     { titre: 'Clause désactivée', texte: 'Ne doit pas apparaître.', active: false },
@@ -136,6 +142,64 @@ describe('genererPdfDevis, papier en-tête', () => {
     const t = await texte({ ...base, adresse: '', contact: null });
     expect(t).not.toContain('l’attention');
     expect(t).toContain('Exemple Industrie');
+  });
+});
+
+describe('genererPdfDevis, abonnement, déplacements et conditions', () => {
+  const abonnement: DevisPourPdf = {
+    ...base,
+    modePrix: 'abonnement',
+    remisePct: 0,
+    acomptePct: 0,
+    lignes: [{ libelle: 'Abonnement mensuel', unite: 'mois', quantite: 12, prixUnitaire: 2500 }],
+    sortieMois: 6,
+    texteSortie: 'Engagement de 12 mois, sortie possible dès le 6e mois.',
+  };
+
+  it('présente l’abonnement : mensualité, engagement, sortie, sans tableau de lignes', async () => {
+    const t = await texte(abonnement);
+    for (const attendu of [
+      '2 500,00 € HT / mois',
+      'Soit 30 000,00 € HT sur 12 mois.',
+      'Engagement de 12 mois, sortie possible dès le 6e mois.',
+      'Total HT sur l’engagement',
+      '36 000,00 €',
+    ])
+      expect(t).toContain(attendu);
+    expect(t).not.toContain('PU HT');
+  });
+
+  it('écrit l’engagement même sans texte de sortie, et « à fixer » sans prix', async () => {
+    const t = await texte({
+      ...abonnement,
+      texteSortie: '',
+      lignes: [{ libelle: 'Abonnement', unite: 'mois', quantite: 12, prixUnitaire: null }],
+    });
+    expect(t).toContain('Engagement de 12 mois.');
+    expect(t).toContain('Prix à fixer');
+  });
+
+  it('imprime le texte de déplacement saisi, sinon la phrase proposée selon le mode', async () => {
+    expect(await texte({ ...base, frais: 'plafonnes', fraisPlafond: 60 })).toContain(
+      'plafonnés à 60 € HT par aller-retour',
+    );
+    expect(
+      await texte({
+        ...base,
+        frais: 'plafonnes',
+        fraisPlafond: 60,
+        fraisTexte: 'Texte libre fictif.',
+      }),
+    ).toContain('Frais de déplacement : Texte libre fictif.');
+    expect(await texte({ ...base, frais: 'inclus' })).toContain('inclus dans le prix.');
+  });
+
+  it('n’imprime les conditions particulières que si elles existent', async () => {
+    expect(await texte(base)).not.toContain('CONDITIONS PARTICULIÈRES');
+    const t = await texte({ ...base, conditionsParticulieres: 'Clause fictive du devis.' });
+    expect(t).toContain('CONDITIONS PARTICULIÈRES');
+    expect(t).toContain('Clause fictive du devis.');
+    expect(t).toContain('CONDITIONS GÉNÉRALES DE VENTE');
   });
 });
 

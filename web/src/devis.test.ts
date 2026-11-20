@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { calculer, formatNumeroValide, problemesAvantEnvoi, type ContenuDevis } from './devis.js';
+import {
+  calculer,
+  formatNumeroValide,
+  problemesAvantEnvoi,
+  texteFraisPropose,
+  texteSortiePropose,
+  type ContenuDevis,
+} from './devis.js';
 
 const ligne = (quantite: number, prixUnitaire: number | null) => ({
   libelle: 'Prestation fictive',
@@ -23,6 +30,12 @@ const complet: ContenuDevis = {
   remisePct: 0,
   acomptePct: 0,
   frais: 'refactures',
+  fraisPlafond: null,
+  fraisTexte: '',
+  modePrix: 'forfait',
+  sortieMois: null,
+  texteSortie: '',
+  conditionsParticulieres: '',
   validiteJours: 30,
   clauses: [],
 };
@@ -73,6 +86,26 @@ describe('problemesAvantEnvoi', () => {
       'Aucune exclusion indiquée : à confirmer.',
     ]);
     expect(problemesAvantEnvoi(complet)).toEqual([]);
+  });
+});
+
+describe('abonnement et déplacements', () => {
+  it('refuse un abonnement à plusieurs lignes ou une sortie après l’engagement', () => {
+    const abo = { ...complet, modePrix: 'abonnement' as const, lignes: [ligne(12, 2500)] };
+    expect(problemesAvantEnvoi(abo)).toEqual([]);
+    expect(problemesAvantEnvoi({ ...abo, lignes: [ligne(12, 2500), ligne(1, 100)] })).toHaveLength(
+      1,
+    );
+    expect(problemesAvantEnvoi({ ...abo, sortieMois: 13 })).toHaveLength(1);
+    expect(problemesAvantEnvoi({ ...abo, sortieMois: 6 })).toEqual([]);
+  });
+
+  it('propose les mêmes phrases que le serveur', () => {
+    expect(texteSortiePropose(12, null)).toBe('Engagement de 12 mois.');
+    expect(texteSortiePropose(12, 6)).toContain('6e mois');
+    expect(texteFraisPropose('plafonnes', 60)).toContain('60 € HT');
+    expect(texteFraisPropose('inclus', null)).toBe('inclus dans le prix.');
+    expect(texteFraisPropose('refactures', null)).toBe('refacturés au réel, sur justificatifs.');
   });
 });
 

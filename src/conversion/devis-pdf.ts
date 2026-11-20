@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { calculer } from './devis-contenu.js';
+import { calculer, texteFraisPropose } from './devis-contenu.js';
 import { LOGO_PNG } from './devis-logo.js';
 import type { Clause, LigneDevis } from './schema.js';
 
@@ -21,7 +21,13 @@ export type DevisPourPdf = {
   lignes: LigneDevis[];
   remisePct: number;
   acomptePct: number;
-  frais: 'refactures' | 'inclus';
+  frais: 'refactures' | 'inclus' | 'plafonnes';
+  fraisPlafond: number | null;
+  fraisTexte: string;
+  modePrix: 'forfait' | 'abonnement';
+  sortieMois: number | null;
+  texteSortie: string;
+  conditionsParticulieres: string;
   clauses: Clause[];
   tvaPct: number;
   mentions: string;
@@ -79,6 +85,9 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
     exclu: n(brut.exclu),
     livrables: n(brut.livrables),
     duree: n(brut.duree),
+    fraisTexte: n(brut.fraisTexte),
+    texteSortie: n(brut.texteSortie),
+    conditionsParticulieres: n(brut.conditionsParticulieres),
     mentions: n(brut.mentions),
     lignes: brut.lignes.map((l) => ({ ...l, libelle: n(l.libelle) })),
     clauses: brut.clauses.map((c) => ({ ...c, titre: n(c.titre), texte: n(c.texte) })),
@@ -179,48 +188,67 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
 
     // Prix
     titreSection('Prix');
-    const colonnes = [MARGE, MARGE + 270, MARGE + 340, MARGE + 420];
-    const enTete = () => {
-      const y = doc.y;
-      doc.font('Helvetica-Bold').fontSize(9).fillColor('#1B2A40');
-      doc.text('Prestation', colonnes[0], y, { width: 260 });
-      doc.text('Qté', colonnes[1], y, { width: 65, align: 'right' });
-      doc.text('PU HT', colonnes[2], y, { width: 75, align: 'right' });
-      doc.text('Total HT', colonnes[3], y, {
-        width: MARGE + largeur - colonnes[3]!,
-        align: 'right',
+    const abonnement = d.modePrix === 'abonnement' && d.lignes.length === 1;
+    if (abonnement) {
+      const l = d.lignes[0]!;
+      place(90);
+      if (l.libelle.trim())
+        doc.font('Helvetica').fontSize(10).fillColor(GRIS).text(l.libelle, MARGE);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(18)
+        .fillColor(NAVY)
+        .text(l.prixUnitaire === null ? 'Prix à fixer' : `${eur(l.prixUnitaire)} HT / mois`, MARGE);
+      doc.font('Helvetica').fontSize(10).fillColor('#1B2A40');
+      if (l.prixUnitaire !== null)
+        doc.text(`Soit ${eur(l.prixUnitaire * l.quantite)} HT sur ${l.quantite} mois.`, MARGE);
+      doc.text(d.texteSortie.trim() || `Engagement de ${l.quantite} mois.`, MARGE, undefined, {
+        width: largeur,
       });
-      doc.y = y + 16;
-    };
-    const ligneTableau = (cellules: string[]) => {
-      doc.font('Helvetica').fontSize(9);
-      // The row is measured first: a long label must move to the next page whole, never split
-      // from its price columns.
-      const h = Math.max(doc.heightOfString(cellules[0] ?? '', { width: 260 }), 12);
-      if (doc.y + h + 4 > bas) {
-        doc.addPage();
-        enTete();
+    } else {
+      const colonnes = [MARGE, MARGE + 270, MARGE + 340, MARGE + 420];
+      const enTete = () => {
+        const y = doc.y;
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#1B2A40');
+        doc.text('Prestation', colonnes[0], y, { width: 260 });
+        doc.text('Qté', colonnes[1], y, { width: 65, align: 'right' });
+        doc.text('PU HT', colonnes[2], y, { width: 75, align: 'right' });
+        doc.text('Total HT', colonnes[3], y, {
+          width: MARGE + largeur - colonnes[3]!,
+          align: 'right',
+        });
+        doc.y = y + 16;
+      };
+      const ligneTableau = (cellules: string[]) => {
         doc.font('Helvetica').fontSize(9);
-      }
-      const y = doc.y;
-      doc.text(cellules[0] ?? '', colonnes[0], y, { width: 260 });
-      doc.text(cellules[1] ?? '', colonnes[1], y, { width: 65, align: 'right' });
-      doc.text(cellules[2] ?? '', colonnes[2], y, { width: 75, align: 'right' });
-      doc.text(cellules[3] ?? '', colonnes[3], y, {
-        width: MARGE + largeur - colonnes[3]!,
-        align: 'right',
-      });
-      doc.y = y + h + 4;
-    };
-    place(40);
-    enTete();
-    for (const l of d.lignes)
-      ligneTableau([
-        l.libelle || '…',
-        `${l.quantite} ${l.unite}`,
-        l.prixUnitaire === null ? 'à fixer' : eur(l.prixUnitaire),
-        l.prixUnitaire === null ? '' : eur(l.prixUnitaire * l.quantite),
-      ]);
+        // The row is measured first: a long label must move to the next page whole, never split
+        // from its price columns.
+        const h = Math.max(doc.heightOfString(cellules[0] ?? '', { width: 260 }), 12);
+        if (doc.y + h + 4 > bas) {
+          doc.addPage();
+          enTete();
+          doc.font('Helvetica').fontSize(9);
+        }
+        const y = doc.y;
+        doc.text(cellules[0] ?? '', colonnes[0], y, { width: 260 });
+        doc.text(cellules[1] ?? '', colonnes[1], y, { width: 65, align: 'right' });
+        doc.text(cellules[2] ?? '', colonnes[2], y, { width: 75, align: 'right' });
+        doc.text(cellules[3] ?? '', colonnes[3], y, {
+          width: MARGE + largeur - colonnes[3]!,
+          align: 'right',
+        });
+        doc.y = y + h + 4;
+      };
+      place(40);
+      enTete();
+      for (const l of d.lignes)
+        ligneTableau([
+          l.libelle || '…',
+          `${l.quantite} ${l.unite}`,
+          l.prixUnitaire === null ? 'à fixer' : eur(l.prixUnitaire),
+          l.prixUnitaire === null ? '' : eur(l.prixUnitaire * l.quantite),
+        ]);
+    }
     doc.moveDown(0.5);
     const total = (libelle: string, valeur: string, gras = false) => {
       place(18);
@@ -231,7 +259,7 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
       doc.y = y + 15;
     };
     if (d.remisePct > 0) total(`Remise ${d.remisePct} %`, `- ${eur(t.remise)}`);
-    total('Total HT', eur(t.ht));
+    total(abonnement ? 'Total HT sur l’engagement' : 'Total HT', eur(t.ht));
     total(`TVA ${d.tvaPct} %`, eur(t.tva));
     total('Total TTC', eur(t.ttc), true);
     if (d.acomptePct > 0) total(`Acompte ${d.acomptePct} % à la commande`, eur(t.acompte));
@@ -240,7 +268,7 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
       .font('Helvetica')
       .fontSize(10)
       .text(
-        `Frais de déplacement : ${d.frais === 'inclus' ? 'inclus dans le prix.' : 'refacturés au réel, sur justificatifs.'}`,
+        `Frais de déplacement : ${d.fraisTexte.trim() || texteFraisPropose(d.frais, d.fraisPlafond)}`,
         MARGE,
         doc.y + 6,
       );
@@ -248,7 +276,7 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
     // Conditions de vente
     const actives = d.clauses.filter((c) => c.active);
     if (actives.length) {
-      titreSection('Conditions de vente');
+      titreSection('Conditions générales de vente');
       doc.fontSize(8.5).fillColor('#3B4A60');
       actives.forEach((c, i) => {
         place(30);
@@ -262,6 +290,11 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
           .text(c.texte);
         doc.moveDown(0.3);
       });
+    }
+
+    if (d.conditionsParticulieres.trim()) {
+      titreSection('Conditions particulières');
+      doc.text(d.conditionsParticulieres.trim(), MARGE, undefined, { width: largeur });
     }
 
     // Signatures

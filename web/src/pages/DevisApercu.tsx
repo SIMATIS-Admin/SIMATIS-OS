@@ -1,6 +1,6 @@
 import type { ContenuDevis } from '../api.js';
 import logo from '../assets/simatis-logo.png';
-import { calculer } from '../devis.js';
+import { calculer, texteFraisPropose } from '../devis.js';
 
 const eur2 = (n: number) =>
   n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
@@ -41,6 +41,8 @@ export function DevisApercu({
   const t = calculer(c, tvaPct);
   const echeance = new Date(new Date(date).getTime() + c.validiteJours * 864e5);
   const clauses = c.clauses.filter((x) => x.active);
+  const abonnement = c.modePrix === 'abonnement' && c.lignes.length === 1;
+  const ligne = c.lignes[0];
   return (
     <div className="d-page" aria-label="Aperçu du devis">
       <div className="entete">
@@ -99,32 +101,51 @@ export function DevisApercu({
         {c.duree || <AFixer>à préciser</AFixer>}
       </p>
       <h2>Prix</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Prestation</th>
-            <th className="r">Qté</th>
-            <th className="r">PU HT</th>
-            <th className="r">Total HT</th>
-          </tr>
-        </thead>
-        <tbody>
-          {c.lignes.map((l, i) => (
-            <tr key={i}>
-              <td>{l.libelle || <AFixer>…</AFixer>}</td>
-              <td className="r">
-                {l.quantite} {l.unite}
-              </td>
-              <td className="r">
-                {l.prixUnitaire === null ? <AFixer>à fixer</AFixer> : eur2(l.prixUnitaire)}
-              </td>
-              <td className="r">
-                {l.prixUnitaire === null ? '' : eur2(l.prixUnitaire * l.quantite)}
-              </td>
+      {abonnement ? (
+        <div className="d-abo">
+          {ligne?.libelle.trim() && <div className="d-abo-nom">{ligne.libelle}</div>}
+          <div className="d-abo-prix">
+            {ligne?.prixUnitaire == null ? (
+              <AFixer>prix à fixer</AFixer>
+            ) : (
+              `${eur2(ligne.prixUnitaire)} HT / mois`
+            )}
+          </div>
+          {ligne?.prixUnitaire != null && (
+            <div>
+              Soit {eur2(ligne.prixUnitaire * ligne.quantite)} HT sur {ligne.quantite} mois.
+            </div>
+          )}
+          <div>{c.texteSortie.trim() || `Engagement de ${ligne?.quantite ?? 0} mois.`}</div>
+        </div>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Prestation</th>
+              <th className="r">Qté</th>
+              <th className="r">PU HT</th>
+              <th className="r">Total HT</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {c.lignes.map((l, i) => (
+              <tr key={i}>
+                <td>{l.libelle || <AFixer>…</AFixer>}</td>
+                <td className="r">
+                  {l.quantite} {l.unite}
+                </td>
+                <td className="r">
+                  {l.prixUnitaire === null ? <AFixer>à fixer</AFixer> : eur2(l.prixUnitaire)}
+                </td>
+                <td className="r">
+                  {l.prixUnitaire === null ? '' : eur2(l.prixUnitaire * l.quantite)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       <table style={{ width: '55%', marginLeft: 'auto' }}>
         <tbody>
           {c.remisePct > 0 && (
@@ -134,7 +155,7 @@ export function DevisApercu({
             </tr>
           )}
           <tr>
-            <td>Total HT</td>
+            <td>{abonnement ? 'Total HT sur l’engagement' : 'Total HT'}</td>
             <td className="r">{eur2(t.ht)}</td>
           </tr>
           <tr>
@@ -158,12 +179,11 @@ export function DevisApercu({
         </tbody>
       </table>
       <p>
-        Frais de déplacement :{' '}
-        {c.frais === 'inclus' ? 'inclus dans le prix.' : 'refacturés au réel, sur justificatifs.'}
+        Frais de déplacement : {c.fraisTexte.trim() || texteFraisPropose(c.frais, c.fraisPlafond)}
       </p>
       {clauses.length > 0 && (
         <>
-          <h2>Conditions de vente</h2>
+          <h2>Conditions générales de vente</h2>
           <div className="cgv">
             {clauses.map((x, i) => (
               <p key={i}>
@@ -174,6 +194,12 @@ export function DevisApercu({
               </p>
             ))}
           </div>
+        </>
+      )}
+      {c.conditionsParticulieres.trim() && (
+        <>
+          <h2>Conditions particulières</h2>
+          <p style={{ whiteSpace: 'pre-line' }}>{c.conditionsParticulieres.trim()}</p>
         </>
       )}
       <div className="signature">

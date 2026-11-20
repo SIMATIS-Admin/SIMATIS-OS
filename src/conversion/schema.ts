@@ -53,9 +53,20 @@ export const devis = pgTable(
     debut: date('debut'),
     remisePct: integer('remise_pct').notNull().default(0),
     acomptePct: integer('acompte_pct').notNull().default(0),
-    frais: text('frais', { enum: ['refactures', 'inclus'] })
+    frais: text('frais', { enum: ['refactures', 'inclus', 'plafonnes'] })
       .notNull()
       .default('refactures'),
+    // Cap per round trip (€ HT) when `frais` is 'plafonnes'; the sentence printed is the pilot's own.
+    fraisPlafond: integer('frais_plafond'),
+    fraisTexte: text('frais_texte').notNull().default(''),
+    // « abonnement » prints one monthly price with its commitment instead of the lines table: the
+    // single line holds the monthly price (unit price) and the commitment in months (quantity).
+    modePrix: text('mode_prix', { enum: ['forfait', 'abonnement'] })
+      .notNull()
+      .default('forfait'),
+    sortieMois: integer('sortie_mois'),
+    texteSortie: text('texte_sortie').notNull().default(''),
+    conditionsParticulieres: text('conditions_particulieres').notNull().default(''),
     validiteJours: integer('validite_jours').notNull().default(30),
     clauses: jsonb('clauses').$type<Clause[]>().notNull().default([]),
     lignes: jsonb('lignes').$type<LigneDevis[]>().notNull().default([]),

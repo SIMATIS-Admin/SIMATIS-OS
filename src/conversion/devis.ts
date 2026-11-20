@@ -248,6 +248,9 @@ export async function creerDepuisAffaire(
         duree: modele?.duree ?? '',
         validiteJours: reglages.validiteJours,
         acomptePct: reglages.acomptePct,
+        // A recurring deal reads as a subscription: one line, monthly price and commitment.
+        modePrix:
+          recurrente && lignes.length === 1 ? ('abonnement' as const) : ('forfait' as const),
         clauses,
         lignes,
       })
@@ -291,6 +294,12 @@ export async function validerDevis(db: Executor, instance: Instance, id: string)
     if (!current.titre.trim()) throw new DevisRefuse('Donnez un intitulé à la mission');
     if (current.lignes.some((l) => !l.libelle.trim()))
       throw new DevisRefuse('Chaque ligne de prix doit avoir un libellé');
+    if (current.modePrix === 'abonnement') {
+      if (current.lignes.length !== 1)
+        throw new DevisRefuse('Un abonnement a une seule ligne de prix');
+      if (current.sortieMois !== null && current.sortieMois > (current.lignes[0]?.quantite ?? 0))
+        throw new DevisRefuse('La sortie anticipée doit tomber pendant l’engagement');
+    }
     const [row] = await tx
       .update(devis)
       .set({ statut: 'valide', updatedAt: new Date() })
@@ -338,6 +347,12 @@ export async function nouvelleVersion(db: Executor, instance: Instance, id: stri
         remisePct: source.remisePct,
         acomptePct: source.acomptePct,
         frais: source.frais,
+        fraisPlafond: source.fraisPlafond,
+        fraisTexte: source.fraisTexte,
+        modePrix: source.modePrix,
+        sortieMois: source.sortieMois,
+        texteSortie: source.texteSortie,
+        conditionsParticulieres: source.conditionsParticulieres,
         validiteJours: source.validiteJours,
         clauses: source.clauses,
         lignes: source.lignes,

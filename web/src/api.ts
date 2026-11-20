@@ -1366,7 +1366,13 @@ export type ContenuDevis = {
   lignes: LigneDevis[];
   remisePct: number;
   acomptePct: number;
-  frais: 'refactures' | 'inclus';
+  frais: 'refactures' | 'inclus' | 'plafonnes';
+  fraisPlafond: number | null;
+  fraisTexte: string;
+  modePrix: 'forfait' | 'abonnement';
+  sortieMois: number | null;
+  texteSortie: string;
+  conditionsParticulieres: string;
   validiteJours: number;
   clauses: Clause[];
 };
