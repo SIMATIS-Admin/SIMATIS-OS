@@ -1,6 +1,8 @@
 import { and, asc, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { contacts, entreprises, opportunites } from '../crm/schema.js';
+import { diagnosticProjets } from '../diagnostic/schema.js';
+import type { Proposition } from '../diagnostic/proposition.js';
 import { changeOpportunite, pipelineSource } from '../crm/pipeline.js';
 import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -143,6 +145,16 @@ export async function lireDevis(db: Executor, instance: Instance, id: string) {
 
 // The OS prepares the quote from the deal; every price is left for the pilot to set. The deal's
 // amount is only offered as a suggestion (`prixPropose`).
+// Ce que l'OS sait déjà de l'affaire sert de point de départ au devis : les prestations de la formule
+// proposée à la restitution deviennent le périmètre, le contexte du diagnostic celui du devis. Tout
+// reste modifiable dans l'éditeur.
+export function assemblerPerimetre(contexte: string | null, proposition: Proposition | null) {
+  return {
+    contexte: (contexte ?? '').trim().slice(0, 4000),
+    inclus: (proposition?.formule.prestations ?? []).map((p) => `- ${p}`).join('\n'),
+  };
+}
+
 export async function creerDepuisAffaire(
   db: Executor,
   instance: Instance,
@@ -217,6 +229,26 @@ export async function creerDepuisAffaire(
     while (pris.has(formater(compteur))) compteur += 1;
     const numero = formater(compteur);
     const recurrente = opp.modeFacturation === 'recurrent';
+    // Le diagnostic le plus récent de l'affaire qui porte une proposition d'accompagnement.
+    const [projet] = modele
+      ? []
+      : await tx
+          .select({
+            proposition: diagnosticProjets.proposition,
+            contexte: diagnosticProjets.contexte,
+          })
+          .from(diagnosticProjets)
+          .where(
+            and(
+              eq(diagnosticProjets.instanceId, currentInstance),
+              eq(diagnosticProjets.opportuniteId, opportuniteId),
+              sql`${diagnosticProjets.proposition} is not null`,
+            ),
+          )
+          .orderBy(desc(diagnosticProjets.updatedAt))
+          .limit(1);
+    const formule = projet?.proposition?.formule ?? null;
+    const perimetre = assemblerPerimetre(projet?.contexte ?? null, projet?.proposition ?? null);
     const lignes = modele?.lignes.length
       ? modele.lignes.map((l) => ({
           ...l,
@@ -226,11 +258,13 @@ export async function creerDepuisAffaire(
         }))
       : [
           {
-            libelle: opp.titre,
-            unite: recurrente ? ('mois' as const) : ('forfait' as const),
-            quantite: recurrente ? opp.dureeEngagementMois : 1,
+            libelle: formule?.libelle ?? opp.titre,
+            unite: recurrente || formule ? ('mois' as const) : ('forfait' as const),
+            quantite: formule ? formule.engagementMois : recurrente ? opp.dureeEngagementMois : 1,
             prixUnitaire: null,
-            prixPropose: opp.montant ?? null,
+            prixPropose: formule
+              ? (formule.mensualite ?? opp.montant ?? null)
+              : (opp.montant ?? null),
           },
         ];
     const [row] = await tx
@@ -240,9 +274,9 @@ export async function creerDepuisAffaire(
         opportuniteId,
         numero,
         titre: opp.titre,
-        contexte: modele?.contexte ?? '',
+        contexte: modele?.contexte ?? perimetre.contexte,
         objectifs: modele?.objectifs ?? '',
-        inclus: modele?.inclus ?? '',
+        inclus: modele?.inclus ?? perimetre.inclus,
         exclu: modele?.exclu ?? '',
         livrables: modele?.livrables ?? '',
         duree: modele?.duree ?? '',
@@ -250,7 +284,9 @@ export async function creerDepuisAffaire(
         acomptePct: reglages.acomptePct,
         // A recurring deal reads as a subscription: one line, monthly price and commitment.
         modePrix:
-          recurrente && lignes.length === 1 ? ('abonnement' as const) : ('forfait' as const),
+          (recurrente || formule) && lignes.length === 1
+            ? ('abonnement' as const)
+            : ('forfait' as const),
         clauses,
         lignes,
       })
