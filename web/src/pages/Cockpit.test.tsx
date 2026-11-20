@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const compteur = vi.hoisted(() => vi.fn());
-vi.mock('../api.js', () => ({ fetchCompteurInbox: compteur }));
+const api = vi.hoisted(() => ({ fetchCompteurInbox: vi.fn(), fetchPipeline: vi.fn() }));
+vi.mock('../api.js', () => api);
 vi.mock('./Inbox.js', () => ({ Inbox: ({ slug }: { slug: string }) => <p>Inbox de {slug}</p> }));
 vi.mock('../visio/Enregistrements.js', () => ({
   Enregistrements: ({ slug }: { slug: string }) => <p>Enregistrements de {slug}</p>,
@@ -13,13 +13,24 @@ vi.mock('./Brief.js', () => ({ Brief: ({ slug }: { slug: string }) => <p>Brief d
 import { Cockpit } from './Cockpit.js';
 
 describe('Cockpit', () => {
+  beforeEach(() => {
+    api.fetchPipeline.mockResolvedValue({
+      etapes: [
+        { id: 'detection', label: 'Détection' },
+        { id: 'prospection', label: 'Prospection' },
+        { id: 'qualification', label: 'Qualification' },
+      ],
+      inactiviteJours: 14,
+      opportunites: [],
+    });
+  });
   afterEach(() => {
     cleanup();
-    compteur.mockReset();
+    vi.resetAllMocks();
   });
 
   it("montre le brief du jour et replie l'Inbox en un bandeau, sans l'afficher", async () => {
-    compteur.mockResolvedValue(3);
+    api.fetchCompteurInbox.mockResolvedValue(3);
     render(<Cockpit slug="simatis" />);
     expect(screen.getByRole('region', { name: 'Brief du jour' }).textContent).toBe(
       'Brief de simatis',
@@ -29,13 +40,13 @@ describe('Cockpit', () => {
   });
 
   it('montre les enregistrements de visio dans le cockpit', () => {
-    compteur.mockResolvedValue(0);
+    api.fetchCompteurInbox.mockResolvedValue(0);
     render(<Cockpit slug="simatis" />);
     expect(screen.getByText('Enregistrements de simatis')).toBeTruthy();
   });
 
   it("ouvre l'Inbox dans une fenêtre, et la referme en prévenant l'écran", async () => {
-    compteur.mockResolvedValue(3);
+    api.fetchCompteurInbox.mockResolvedValue(3);
     const onFerme = vi.fn();
     render(<Cockpit slug="simatis" onFerme={onFerme} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir' }));
@@ -47,7 +58,7 @@ describe('Cockpit', () => {
   });
 
   it("n'occupe presque rien quand l'Inbox est vide", async () => {
-    compteur.mockResolvedValue(0);
+    api.fetchCompteurInbox.mockResolvedValue(0);
     render(<Cockpit slug="simatis" />);
     const bandeau = await screen.findByRole('region', { name: 'Inbox' });
     await waitFor(() => expect(bandeau.textContent).toContain('rien à traiter'));
@@ -55,20 +66,65 @@ describe('Cockpit', () => {
   });
 
   it("ouvre l'Inbox quand l'en-tête demande un ajout ou le pas à pas", async () => {
-    compteur.mockResolvedValue(0);
+    api.fetchCompteurInbox.mockResolvedValue(0);
     const { rerender } = render(<Cockpit slug="simatis" />);
     expect(screen.queryByRole('dialog')).toBeNull();
     rerender(<Cockpit slug="simatis" ajoutOuvert />);
     expect(await screen.findByRole('dialog', { name: 'Inbox' })).toBeTruthy();
     cleanup();
-    compteur.mockResolvedValue(0);
+    api.fetchCompteurInbox.mockResolvedValue(0);
     render(<Cockpit slug="simatis" pasAPas />);
     expect(await screen.findByRole('dialog', { name: 'Inbox' })).toBeTruthy();
   });
 
   it('reste utilisable quand le compteur est indisponible', async () => {
-    compteur.mockRejectedValue(new Error('hors ligne'));
+    api.fetchCompteurInbox.mockRejectedValue(new Error('hors ligne'));
     render(<Cockpit slug="simatis" />);
     expect(await screen.findByRole('button', { name: 'Ouvrir' })).toBeTruthy();
+  });
+
+  it("affiche l'état du Radar et du Pipeline avec les alertes utiles", async () => {
+    api.fetchCompteurInbox.mockResolvedValue(0);
+    api.fetchPipeline.mockResolvedValue({
+      etapes: [
+        { id: 'detection', label: 'Détection' },
+        { id: 'prospection', label: 'Prospection' },
+        { id: 'qualification', label: 'Qualification' },
+      ],
+      inactiviteJours: 14,
+      opportunites: [
+        {
+          id: 'r1',
+          etape: 'detection',
+          clos: null,
+          tentatives: 3,
+          radar: 'sans_reponse',
+          radarEtapeManuelle: null,
+        },
+        {
+          id: 'r2',
+          etape: 'prospection',
+          clos: null,
+          tentatives: 1,
+          radar: 'repondu',
+          radarEtapeManuelle: null,
+        },
+        {
+          id: 'p1',
+          etape: 'qualification',
+          clos: null,
+          joursInactif: 18,
+          prochaine: { echeance: '2026-11-19', enRetard: true },
+        },
+      ],
+    });
+    render(<Cockpit slug="simatis" />);
+    const etat = await screen.findByRole('region', { name: 'État du Radar et du Pipeline' });
+    const radar = etat.querySelector<HTMLAnchorElement>('a[href="#/simatis/radar"]')!;
+    const pipeline = etat.querySelector<HTMLAnchorElement>('a[href="#/simatis/pipeline"]')!;
+    expect(radar.textContent).toMatch(/RadarÀ relancer2affaires actives1 à relancer1 a répondu/);
+    expect(pipeline.textContent).toMatch(
+      /PipelineÀ surveiller1affaire ouverte1 inactive1 action en retard/,
+    );
   });
 });
