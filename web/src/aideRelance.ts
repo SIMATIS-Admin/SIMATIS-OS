@@ -21,6 +21,11 @@ export type ActionRelance = {
   opportuniteId: string | null;
   contactId: string | null;
   entrepriseId: string | null;
+  // Mandat dont vient l'action quand ce n'est pas l'espace affiché (« Mon activité » réunit les
+  // tâches de ses mandats) ; null : l'espace courant.
+  instance: { slug: string; nom: string; couleur: string | null } | null;
+  // Slug du mandat concerné, toujours renseigné : sert au filtre « mandats affichés ».
+  mandat: string | null;
   tacheIds: string[];
   derniereActivite: string | null;
   tri: number[];
@@ -34,8 +39,12 @@ const JOUR = 86_400_000;
 export const RETARD_ANCIEN = 30;
 const normaliser = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-const cleDe = (entreprise: string | null, secours: string) =>
-  entreprise?.trim() ? `ent:${normaliser(entreprise)}` : secours;
+// Une même entreprise peut exister dans deux mandats : la clé porte alors le mandat. Pour l'espace
+// courant elle reste celle des versions précédentes, afin de garder les reports déjà faits.
+const cleDe = (entreprise: string | null, secours: string, mandat: string | null = null) => {
+  const base = entreprise?.trim() ? `ent:${normaliser(entreprise)}` : secours;
+  return mandat ? `${mandat}|${base}` : base;
+};
 
 export function comparerTri(a: number[], b: number[]): number {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
@@ -50,6 +59,8 @@ type Entree = {
   enRetard: TacheVue[];
   maintenant?: Date;
   masquees?: Masquees;
+  // Espace affiché : ses tâches gardent la clé simple, celles des autres mandats portent leur slug.
+  slugCourant?: string;
 };
 
 // Ordre de priorité : tâche en retard (la plus ancienne d'abord), puis affaire sans activité la plus
@@ -59,6 +70,7 @@ export function construireFile({
   enRetard,
   maintenant = new Date(),
   masquees = {},
+  slugCourant,
 }: Entree): ActionRelance[] {
   const parCle = new Map<string, ActionRelance>();
   const obtenir = (cle: string, base: () => ActionRelance) => {
@@ -69,7 +81,7 @@ export function construireFile({
     }
     return a;
   };
-  const vide = (cle: string, entreprise: string): ActionRelance => ({
+  const vide = (cle: string, entreprise: string, mandat: string | null): ActionRelance => ({
     id: cle,
     entreprise,
     contact: null,
@@ -82,6 +94,8 @@ export function construireFile({
     opportuniteId: null,
     contactId: null,
     entrepriseId: null,
+    instance: null,
+    mandat,
     tacheIds: [],
     derniereActivite: null,
     tri: [3],
@@ -93,13 +107,15 @@ export function construireFile({
   for (const t of enRetard) {
     if (t.fait || (t.canal !== 'email' && t.canal !== 'appel')) continue;
     const nom = t.entreprise?.nom ?? t.opportunite?.titre ?? t.contact?.nom ?? t.titre;
-    const cle = cleDe(t.entreprise?.nom ?? null, `tache:${t.id}`);
-    const a = obtenir(cle, () => vide(cle, nom));
+    const autre = t.instance && t.instance.slug !== slugCourant ? t.instance : null;
+    const cle = cleDe(t.entreprise?.nom ?? null, `tache:${t.id}`, autre?.slug ?? null);
+    const a = obtenir(cle, () => vide(cle, nom, autre?.slug ?? slugCourant ?? null));
     const jours = t.echeance
       ? Math.max(1, Math.floor((maintenant.getTime() - Date.parse(t.echeance)) / JOUR))
       : 1;
     a.raisons.push({ source: 'retard', jours, texte: t.titre });
     a.tacheIds.push(t.id);
+    a.instance ??= autre;
     a.contact ??= t.contact?.nom ?? null;
     a.contactId ??= t.contact?.id ?? null;
     a.email ??= t.contact?.email ?? null;
@@ -117,7 +133,7 @@ export function construireFile({
   const libelleEtape = new Map(pipeline.etapes.map((e) => [e.id, e.label]));
   const rejoindre = (o: PipelineOpp, raison: Raison, tri: number[], appel = false) => {
     const cle = cleDe(o.entreprise, `opp:${o.id}`);
-    const a = obtenir(cle, () => vide(cle, o.entreprise ?? o.titre));
+    const a = obtenir(cle, () => vide(cle, o.entreprise ?? o.titre, slugCourant ?? null));
     a.raisons.push(raison);
     a.opportuniteId ??= o.id;
     a.contact ??= o.contact;
@@ -296,3 +312,7 @@ export function brouillonPour(
     null
   );
 }
+
+// Mandats cochés : une action d'un mandat décoché n'est ni listée ni proposée en séquence.
+export const dansMandats = (a: ActionRelance, masques: string[]) =>
+  !a.mandat || !masques.includes(a.mandat);

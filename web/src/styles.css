@@ -8661,3 +8661,61 @@ button.recherche-carte:hover,
   border-radius: var(--r-s);
   font-size: 14px;
 }
+
+/* Cockpit : une seule colonne centrée, la date en tête, le bloc d'actions repliable. */
+.cockpit-date {
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+  font-size: 22px;
+}
+.cockpit-date::first-letter {
+  text-transform: uppercase;
+}
+.cockpit-brief {
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+}
+.aide-relance {
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+}
+.aide-relance.replie .panel-b {
+  padding-block: 12px;
+}
+.aide-bascule {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.aide-bascule > span:last-child {
+  display: flex;
+  flex-direction: column;
+}
+.aide-bascule strong {
+  font-size: 20px;
+}
+.aide-chevron {
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--ink-3);
+  border-bottom: 2px solid var(--ink-3);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.aide-relance.deploye .aide-chevron {
+  transform: rotate(45deg);
+}
+.aide-mandat {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--line-2);
+}
