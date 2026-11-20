@@ -10,6 +10,7 @@ import {
   type TestVmaCree,
   type TestVmaType,
 } from '../api.js';
+import { dureeLisible } from './diagnostics/duree.js';
 import { messageEnvoi } from './diagnostics/envoi.js';
 import { ListeFreinsV3, textesV3 } from './diagnostics/ResultatV3.js';
 import { ResultatSynthese } from './diagnostics/ResultatSynthese.js';
@@ -215,6 +216,7 @@ export function TestsVma({ slug }: { slug: string }) {
                 <span className="small muted">
                   {t.type === 'essai' ? 'Essai' : 'Premier test'} · {libelleStatut(t)}
                   {t.recueLe ? ` · reçu le ${new Date(t.recueLe).toLocaleDateString('fr-FR')}` : ''}
+                  {typeof t.dureeS === 'number' ? ` · fait en ${dureeLisible(t.dureeS)}` : ''}
                 </span>
               </div>
               <div className="row">

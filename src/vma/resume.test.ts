@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resumeResultat } from './releve.js';
+import { dureeLisible, resumeResultat } from './releve.js';
 
 const resultat = (calcul: Record<string, unknown>) =>
   ({
@@ -35,6 +35,19 @@ describe('résumé du sujet d’Inbox (contenu du rangement)', () => {
     expect(texte).toMatch(new RegExp(`Potentiel brut : \\+11${SEP}719${SEP}€ par mois`));
     expect(texte).toContain('Temps commercial (bloc 6. Plan de canaux)');
     expect(texte).not.toContain('Socle récurrent');
+  });
+
+  it('donne la durée du test quand le site l’a chronométrée, et rien sinon', () => {
+    const base = resultat({ top: [] });
+    expect(resumeResultat({ ...base, dureeS: 432 })).toContain('Durée du test : 7 min 12 s');
+    expect(resumeResultat(base)).not.toContain('Durée du test');
+    expect(resumeResultat({ ...base, dureeS: null })).not.toContain('Durée du test');
+  });
+
+  it('écrit la durée en minutes et secondes', () => {
+    expect(dureeLisible(45)).toBe('45 s');
+    expect(dureeLisible(60)).toBe('1 min 00 s');
+    expect(dureeLisible(605)).toBe('10 min 05 s');
   });
 
   it('ajoute le socle récurrent et l’allure actuelle quand il y en a un', () => {

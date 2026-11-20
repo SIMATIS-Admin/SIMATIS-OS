@@ -34,6 +34,7 @@ const test = (resultat: Partial<NonNullable<TestVma['resultat']>>): TestVma => (
   expireLe: '2099-01-01T00:00:00.000Z',
   creeLe: '2026-10-20T08:00:00.000Z',
   recueLe: '2026-10-22T09:00:00.000Z',
+  dureeS: null,
   version: '2.2',
   calcul: null,
   resultat: {
@@ -56,6 +57,15 @@ const test = (resultat: Partial<NonNullable<TestVma['resultat']>>): TestVma => (
 });
 
 describe('Résultat complet : même contenu que le mail', () => {
+  it('indique la durée du test en en-tête quand elle est connue', () => {
+    const { rerender } = render(
+      <ResultatComplet onRetour={() => {}} test={{ ...test({}), dureeS: 432 }} />,
+    );
+    expect(screen.getByText(/fait en 7 min 12 s/)).toBeTruthy();
+    rerender(<ResultatComplet onRetour={() => {}} test={{ ...test({}), dureeS: null }} />);
+    expect(screen.queryByText(/fait en/)).toBeNull();
+  });
+
   it('compares current, projected and target values on the same scale with direct labels', () => {
     const { container } = render(<ResultatComplet onRetour={() => {}} test={test({})} />);
     const figure = screen.getByRole('figure', { name: 'Comparaison des allures commerciales' });
