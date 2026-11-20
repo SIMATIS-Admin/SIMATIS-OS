@@ -380,26 +380,29 @@ registerPropositionType({
           eq(opportunites.id, current.opportuniteId),
         ),
       );
-    const message = await brouillonDuDevis(
-      tx,
-      ctx,
-      current,
-      lien?.email ?? null,
-      lien?.nom ?? null,
-    );
-    // The reminder is part of sending: a quote left without answer must come back to the pilot.
-    await creerTacheSuivi(
-      tx,
-      ctx,
-      {
-        titre: `Relancer le devis ${current.numero}`,
-        canal: 'email',
-        echeance: new Date(envoye.getTime() + DELAI_RELANCE_JOURS * 864e5),
-        contactId: lien?.contactId ?? null,
-        opportuniteId: current.opportuniteId,
-      },
-      `Devis ${current.numero} envoyé sans réponse depuis ${DELAI_RELANCE_JOURS} jours.`,
-    );
+    // The reminder first (undoable), the mail last (a real draft cannot be taken back). Neither
+    // may undo the quote's own change of state: a failure is reported in the result.
+    let relance = '';
+    try {
+      await tx.transaction((sp) =>
+        creerTacheSuivi(
+          sp,
+          ctx,
+          {
+            titre: `Relancer le devis ${current.numero}`,
+            canal: 'email',
+            echeance: new Date(envoye.getTime() + DELAI_RELANCE_JOURS * 864e5),
+            contactId: lien?.contactId ?? null,
+            opportuniteId: current.opportuniteId,
+          },
+          `Devis ${current.numero} envoyé sans réponse depuis ${DELAI_RELANCE_JOURS} jours.`,
+        ),
+      );
+    } catch (error) {
+      relance = ` Relance à J+${DELAI_RELANCE_JOURS} non créée (${error instanceof Error ? error.message : String(error)}).`;
+    }
+    const message =
+      (await brouillonDuDevis(tx, ctx, current, lien?.email ?? null, lien?.nom ?? null)) + relance;
     return { simulation: false, statut: 'transmis', message };
   },
 });
@@ -418,13 +421,6 @@ async function brouillonDuDevis(
   if (!email) {
     return 'Aucune adresse pour le contact de l’affaire : brouillon non créé, le PDF reste téléchargeable depuis le devis.';
   }
-  const [enrichi] = await enrichir(tx, [d]);
-  if (!enrichi) throw new DevisRefuse('Devis introuvable');
-  const pdf = await genererPdfDevis({
-    ...enrichi,
-    createdAt: enrichi.createdAt,
-    entreprise: enrichi.entreprise,
-  });
   const validite = d.validite ? new Date(d.validite).toLocaleDateString('fr-FR') : null;
   const html = [
     paragraphe(salutation(nomContact)),
@@ -434,6 +430,13 @@ async function brouillonDuDevis(
     paragraphe('Je reste à votre disposition pour en parler et répondre à vos questions.'),
   ].join('\n');
   try {
+    const [enrichi] = await enrichir(tx, [d]);
+    if (!enrichi) throw new DevisRefuse('Devis introuvable');
+    const pdf = await genererPdfDevis({
+      ...enrichi,
+      createdAt: enrichi.createdAt,
+      entreprise: enrichi.entreprise,
+    });
     // Savepoint: a mailbox error must not undo the quote's own change of state.
     const resultat = await tx.transaction((sp) =>
       writeVia(
@@ -448,7 +451,7 @@ async function brouillonDuDevis(
             html,
             pieces: [
               {
-                nom: `devis-${d.numero}.pdf`,
+                nom: `devis-${d.numero.replace(/[^A-Za-z0-9._-]/g, '-')}.pdf`,
                 typeMime: 'application/pdf',
                 base64: pdf.toString('base64'),
               },
@@ -498,20 +501,33 @@ export async function conclureDevis(
   const courant = await lireDevis(db, instance, id);
   if (courant.statut !== 'transmis')
     throw new DevisRefuse('Seul un devis envoyé peut être accepté ou refusé');
-  await changeOpportunite(
-    db,
-    instance,
-    courant.opportuniteId,
-    issue === 'accepte' ? { clos: 'gagne' } : { clos: 'perdu', motif: motif ?? null },
-    deps,
-  );
-  return withInstance(db, instance.id, async (tx) => {
-    const [row] = await tx
+  // Claim the quote first (atomic), so two simultaneous answers cannot both reach the affair.
+  const row = await withInstance(db, instance.id, async (tx) => {
+    const [pris] = await tx
       .update(devis)
       .set({ statut: issue, updatedAt: new Date() })
       .where(and(eq(devis.id, id), eq(devis.statut, 'transmis')))
       .returning();
-    if (!row) throw new DevisRefuse('Devis déjà conclu');
+    return pris;
+  });
+  if (!row) throw new DevisRefuse('Devis déjà conclu');
+  try {
+    const fait = await changeOpportunite(
+      db,
+      instance,
+      courant.opportuniteId,
+      issue === 'accepte' ? { clos: 'gagne' } : { clos: 'perdu', motif: motif ?? null },
+      deps,
+    );
+    if (!fait) throw new DevisRefuse('Affaire introuvable dans cette instance');
+  } catch (error) {
+    // The affair refused (read-only CRM…): the quote goes back to « envoyé ».
+    await withInstance(db, instance.id, (tx) =>
+      tx.update(devis).set({ statut: 'transmis' }).where(eq(devis.id, id)),
+    );
+    throw error;
+  }
+  return withInstance(db, instance.id, async (tx) => {
     await logEvent(tx, {
       acteur: 'pilote',
       action: `Devis ${row.numero} ${issue === 'accepte' ? 'accepté' : 'refusé'}`,

@@ -69,6 +69,18 @@ describe('Devis : envoi (brouillon Gmail avec PDF, relance) et issue (accepté, 
       'select id, contact_id from opportunites where instance_id = $1 and clos is null and contact_id is not null and id not in (select opportunite_id from devis) order by titre limit 1',
       [simatis.id],
     );
+    if (!rows[0]) {
+      // Demo affairs are used up: duplicate one (new id, no CRM link).
+      await t.owner.pool.query(
+        "insert into opportunites select (json_populate_record(null::opportunites, (to_jsonb(o) || jsonb_build_object('id', gen_random_uuid(), 'source_id', null, 'clos', null))::json)).* from opportunites o where o.instance_id = $1 and o.contact_id is not null limit 1",
+        [simatis.id],
+      );
+      const { rows: neuf } = await t.owner.pool.query<{ id: string; contact_id: string | null }>(
+        'select id, contact_id from opportunites where instance_id = $1 and clos is null and contact_id is not null and id not in (select opportunite_id from devis) limit 1',
+        [simatis.id],
+      );
+      rows.push(neuf[0]!);
+    }
     const affaire = rows[0]!;
     await t.owner.pool.query("update opportunites set etape = 'qualification' where id = $1", [
       affaire.id,
@@ -228,5 +240,29 @@ describe('Devis : envoi (brouillon Gmail avec PDF, relance) et issue (accepté, 
     await expect(
       modifierContenu(t.app.db, simatis, v.id, { ...d, titre: 'Autre' }),
     ).rejects.toBeInstanceOf(DevisRefuse);
+  });
+
+  it('deux réponses simultanées : une seule passe, l’affaire suit la première', async () => {
+    const v = await devisValide('contact.fictif@example.test');
+    await transmettre(v.id, false);
+    const res = await Promise.allSettled([
+      conclureDevis(t.app.db, simatis, v.id, { issue: 'accepte' }, deps(false)),
+      conclureDevis(t.app.db, simatis, v.id, { issue: 'refuse' }, deps(false)),
+    ]);
+    expect(res.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const d = await lireDevis(t.app.db, simatis, v.id);
+    const { rows } = await t.owner.pool.query<{ clos: string }>(
+      'select clos from opportunites where id = $1',
+      [v.opportuniteId],
+    );
+    expect(rows[0]!.clos).toBe(d.statut === 'accepte' ? 'gagne' : 'perdu');
+  });
+
+  it('un numéro de devis avec caractères libres ne bloque pas le brouillon', async () => {
+    const v = await devisValide('contact.fictif@example.test');
+    await t.owner.pool.query("update devis set numero = 'Dév/2026 é' where id = $1", [v.id]);
+    brouillons.length = 0;
+    await transmettre(v.id, true);
+    expect(brouillons).toHaveLength(1);
   });
 });
