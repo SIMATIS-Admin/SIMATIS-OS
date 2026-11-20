@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { rendezVous } from '../crm/schema.js';
+import { proposerResumeAuSujet } from '../inbox/sujet-rdv.js';
 import { sujets } from '../inbox/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
@@ -353,8 +354,105 @@ export async function rattacherSession(
     .update(enregistrementsVisio)
     .set({ rendezVousId: cible.id })
     .where(eq(enregistrementsVisio.id, id));
+  await fusionnerRdvLibre(tx, id, s.rdv, cible.id);
+  await rangerSujetVisio(tx, id, cible.id);
   await supprimerRdvLibreVide(tx, s.rdv);
   return { rdvId: rdvEventId };
+}
+
+// L'entrée d'Inbox du résumé de cette visio se range dans celle du rendez-vous cible, si elle en a
+// une ouverte : une réunion, une entrée.
+async function rangerSujetVisio(tx: Tx, sessionId: string, cibleId: string): Promise<void> {
+  const [s] = await tx
+    .select({ resume: enregistrementsVisio.resume })
+    .from(enregistrementsVisio)
+    .where(eq(enregistrementsVisio.id, sessionId));
+  if (!s?.resume || !(await proposerResumeAuSujet(tx, cibleId, s.resume))) return;
+  await tx
+    .delete(sujets)
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.source, 'visio'),
+        eq(sujets.sourceId, sessionId),
+        eq(sujets.statut, 'a_traiter'),
+      ),
+    );
+}
+
+// Fusion avec le rendez-vous libre d'origine : son compte rendu et son transcript passent dans le
+// rendez-vous cible, sans jamais écraser ce que celui-ci porte déjà. Un texte identique à ce qui
+// existe ailleurs (cible, résumé de l'enregistrement) est une simple copie : il n'est pas gardé.
+// Un texte différent d'un compte rendu déjà présent reste dans le rendez-vous libre, qui n'est
+// alors pas supprimé : rien de ce que Marc a écrit ne se perd.
+async function fusionnerRdvLibre(
+  tx: Tx,
+  sessionId: string,
+  libreId: string,
+  cibleId: string,
+): Promise<void> {
+  const lire = async (rdvId: string) => {
+    const [r] = await tx.select().from(rendezVous).where(eq(rendezVous.id, rdvId));
+    return r;
+  };
+  const libre = await lire(libreId);
+  const cible = await lire(cibleId);
+  if (libre?.source !== SOURCE_RDV_LIBRE || !cible) return;
+  const [session] = await tx
+    .select({ resume: enregistrementsVisio.resume, transcript: enregistrementsVisio.transcript })
+    .from(enregistrementsVisio)
+    .where(eq(enregistrementsVisio.id, sessionId));
+  const net = (t: string | null) => (t ?? '').trim();
+
+  const modifsCible: {
+    compteRendu?: string;
+    compteRenduAt?: Date;
+    transcript?: string;
+    transcriptAt?: Date;
+  } = {};
+  const modifsLibre: {
+    compteRendu?: null;
+    compteRenduAt?: null;
+    transcript?: null;
+    transcriptAt?: null;
+  } = {};
+
+  if (net(libre.compteRendu)) {
+    if (!net(cible.compteRendu)) {
+      modifsCible.compteRendu = libre.compteRendu ?? '';
+      modifsCible.compteRenduAt = libre.compteRenduAt ?? new Date();
+      modifsLibre.compteRendu = null;
+      modifsLibre.compteRenduAt = null;
+    } else if (
+      net(libre.compteRendu) === net(cible.compteRendu) ||
+      net(libre.compteRendu) === net(session?.resume ?? null)
+    ) {
+      modifsLibre.compteRendu = null;
+      modifsLibre.compteRenduAt = null;
+    }
+  } else {
+    modifsLibre.compteRendu = null;
+    modifsLibre.compteRenduAt = null;
+  }
+  // Le transcript suit l'enregistrement : le rendez-vous cible reçoit celui de l'enregistrement
+  // (ou, à défaut, celui que Marc avait gardé dans le rendez-vous libre) tant qu'il n'en a pas un.
+  const transcript = net(libre.transcript) || net(session?.transcript ?? null);
+  if (transcript && !net(cible.transcript)) {
+    modifsCible.transcript = libre.transcript?.trim()
+      ? libre.transcript
+      : (session?.transcript ?? '');
+    modifsCible.transcriptAt = libre.transcriptAt ?? new Date();
+  }
+  if (libre.transcript !== null) {
+    modifsLibre.transcript = null;
+    modifsLibre.transcriptAt = null;
+  }
+  if (Object.keys(modifsCible).length > 0) {
+    await tx.update(rendezVous).set(modifsCible).where(eq(rendezVous.id, cibleId));
+  }
+  if (Object.keys(modifsLibre).length > 0) {
+    await tx.update(rendezVous).set(modifsLibre).where(eq(rendezVous.id, libreId));
+  }
 }
 
 // Le transcript de la session est copié dans son rendez-vous (qui n'en garde qu'un, le dernier).

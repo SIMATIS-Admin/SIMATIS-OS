@@ -105,7 +105,9 @@ function Rattacher({
       <h3>Rattacher à un autre rendez-vous</h3>
       <p className="small muted">
         L’enregistrement, son résumé et son transcript suivent le rendez-vous choisi, avec son
-        organisation, son contact et son affaire.
+        organisation, son contact et son affaire. Le compte rendu et le transcript du rendez-vous
+        d’origine y sont fusionnés ; un compte rendu déjà présent dans le rendez-vous choisi n’est
+        jamais écrasé.
       </p>
       {!nouveau ? (
         <>
@@ -121,6 +123,7 @@ function Rattacher({
               {(rdv ?? []).map((r) => (
                 <option key={r.id} value={r.id}>
                   {quand(r.debut)} · {r.titre || 'Sans titre'}
+                  {r.compteRendu ? ' · compte rendu déjà écrit' : ''}
                 </option>
               ))}
             </select>

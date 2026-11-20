@@ -296,22 +296,105 @@ describe('Interface d’enregistrement des visios', () => {
       );
     });
 
-    it('garde l’ancien rendez-vous libre s’il porte déjà un compte rendu', async () => {
+    const ligne = async (eventId: string) =>
+      (
+        await t.owner.pool.query<{ compte_rendu: string | null; transcript: string | null }>(
+          'select compte_rendu, transcript from rendez_vous where event_id = $1',
+          [eventId],
+        )
+      ).rows[0];
+    const rattacher = (id: string, rdvId: string) =>
+      app.inject({ method: 'PATCH', url: `${base}/sessions/${id}`, payload: { rdvId } });
+
+    it('fusionne : le compte rendu et le transcript du rendez-vous libre passent dans la cible', async () => {
+      await t.owner.pool.query(
+        "update rendez_vous set compte_rendu = null, transcript = null where event_id = 'os:rte-1'",
+      );
       const id = await libre();
       const ancien = await rdvDe(id);
       await t.owner.pool.query(
-        "update rendez_vous set compte_rendu = 'Compte rendu fictif' where event_id = $1",
+        "update rendez_vous set compte_rendu = 'Compte rendu fictif', transcript = 'Texte fictif' where event_id = $1",
         [ancien],
       );
       await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
-      await app.inject({
-        method: 'PATCH',
-        url: `${base}/sessions/${id}`,
-        payload: { rdvId: 'os:rte-1' },
+      expect((await rattacher(id, 'os:rte-1')).statusCode).toBe(200);
+      expect(await ligne('os:rte-1')).toEqual({
+        compte_rendu: 'Compte rendu fictif',
+        transcript: 'Texte fictif',
       });
       expect(await compte('select count(*) n from rendez_vous where event_id = $1', [ancien])).toBe(
-        1,
+        0,
       );
+    });
+
+    it('garde le compte rendu déjà présent dans la cible et ne perd pas un texte différent', async () => {
+      await t.owner.pool.query(
+        "update rendez_vous set compte_rendu = 'Déjà là', transcript = null where event_id = 'os:rte-1'",
+      );
+      const id = await libre();
+      const ancien = await rdvDe(id);
+      await t.owner.pool.query(
+        "update rendez_vous set compte_rendu = 'Autre texte fictif' where event_id = $1",
+        [ancien],
+      );
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      await rattacher(id, 'os:rte-1');
+      expect((await ligne('os:rte-1'))?.compte_rendu).toBe('Déjà là');
+      // Le texte différent reste dans le rendez-vous libre, qui n'est donc pas supprimé.
+      expect((await ligne(ancien!))?.compte_rendu).toBe('Autre texte fictif');
+    });
+
+    it('supprime le rendez-vous libre quand son compte rendu est une copie de la cible', async () => {
+      await t.owner.pool.query(
+        "update rendez_vous set compte_rendu = 'Identique fictif' where event_id = 'os:rte-1'",
+      );
+      const id = await libre();
+      const ancien = await rdvDe(id);
+      await t.owner.pool.query(
+        "update rendez_vous set compte_rendu = 'Identique fictif' where event_id = $1",
+        [ancien],
+      );
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      await rattacher(id, 'os:rte-1');
+      expect(await compte('select count(*) n from rendez_vous where event_id = $1', [ancien])).toBe(
+        0,
+      );
+      await t.owner.pool.query(
+        "update rendez_vous set compte_rendu = null where event_id = 'os:rte-1'",
+      );
+    });
+
+    it('range l’entrée d’Inbox du résumé dans celle du rendez-vous cible', async () => {
+      const id = await libre();
+      await app.inject({ method: 'POST', url: `${base}/sessions/${id}/fin` });
+      await t.owner.pool.query(
+        "update enregistrements_visio set resume = 'Résumé fictif', statut = 'transcrit' where id = $1",
+        [id],
+      );
+      await t.owner.pool.query(
+        `insert into sujets (instance_id, type, titre, origine, source, source_id)
+         select instance_id, 'compte_rendu', 'Résumé de la visio', 'os', 'visio', id::text from enregistrements_visio where id = $1`,
+        [id],
+      );
+      await t.owner.pool.query(
+        `insert into sujets (instance_id, type, titre, origine, source, source_id)
+         select instance_id, 'compte_rendu', 'Rédiger le compte rendu', 'agenda', 'routine', 'agenda:os:rte-1'
+         from enregistrements_visio where id = $1`,
+        [id],
+      );
+      await rattacher(id, 'os:rte-1');
+      expect(
+        await compte("select count(*) n from sujets where source = 'visio' and source_id = $1", [
+          id,
+        ]),
+      ).toBe(0);
+      expect(
+        (
+          await t.owner.pool.query<{ t: string }>(
+            "select compte_rendu_prepare->>'texte' t from sujets where source_id = 'agenda:os:rte-1'",
+          )
+        ).rows[0]?.t,
+      ).toBe('Résumé fictif');
     });
 
     it('refuse un rendez-vous inconnu et ne touche pas à la session', async () => {

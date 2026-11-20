@@ -27,8 +27,8 @@ export type DepotReunion = {
 // titre, et un rendez-vous de l'OS à l'heure de la réunion. Sans elle, une réunion Wispr Flow
 // arrivée après le traitement de l'entrée en créerait une seconde.
 const sujetDuRendezVous = async (tx: Tx, titre: string, debutAt: Date): Promise<string | null> => {
-  const [s] = await tx
-    .select({ id: sujets.id })
+  const candidats = await tx
+    .select({ id: sujets.id, titre: rendezVous.titre })
     .from(sujets)
     .innerJoin(
       rendezVous,
@@ -43,13 +43,17 @@ const sujetDuRendezVous = async (tx: Tx, titre: string, debutAt: Date): Promise<
         eq(sujets.type, 'compte_rendu'),
         like(sujets.sourceId, 'agenda:%'),
         ne(rendezVous.statut, 'ignore'),
-        sql`lower(btrim(${rendezVous.titre})) = lower(btrim(${titre}))`,
         gte(rendezVous.debut, new Date(debutAt.getTime() - PROCHE_MS)),
         lte(rendezVous.debut, new Date(debutAt.getTime() + PROCHE_MS)),
       ),
-    )
-    .limit(1);
-  return s?.id ?? null;
+    );
+  const norme = (t: string) => t.trim().toLowerCase();
+  // Wispr Flow titre souvent la réunion à sa façon : à défaut du même titre, l'unique réunion de
+  // l'agenda à cette heure est la bonne. À deux ou plus, on ne devine pas.
+  return (
+    candidats.find((c) => norme(c.titre) === norme(titre))?.id ??
+    (candidats.length === 1 ? (candidats[0]?.id ?? null) : null)
+  );
 };
 
 const reunionPar = async (tx: Tx, wisprId: string) => {

@@ -3,6 +3,7 @@ import { rendezVous } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { deposerSujet } from '../inbox/depot.js';
+import { proposerResumeAuSujet } from '../inbox/sujet-rdv.js';
 import { enregistrementsVisio } from './schema.js';
 
 const PAR_PASSAGE = 3;
@@ -51,6 +52,8 @@ export async function poserResume(tx: Tx, id: string, resume: string): Promise<b
     .select({ titre: rendezVous.titre })
     .from(rendezVous)
     .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.id, s.rendezVousId)));
+  // Le rendez-vous a déjà son entrée « compte rendu » (agenda) : le résumé s'y range, sans doublon.
+  if (await proposerResumeAuSujet(tx, s.rendezVousId, resume)) return true;
   await deposerSujet(tx, {
     type: 'compte_rendu',
     titre: `Résumé de la visio : ${r?.titre ?? 'rendez-vous'}`.slice(0, 300),

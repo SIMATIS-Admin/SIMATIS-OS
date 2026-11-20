@@ -308,6 +308,21 @@ describe('Inbox screen', () => {
     expect(screen.getAllByRole('img', { name: 'Priorité 3 sur 5' }).length).toBeGreaterThan(1);
   });
 
+  it('says where an entry comes from and when its meeting report is ready to read', async () => {
+    supplementaires = [
+      sujet('cr1', {
+        type: 'compte_rendu',
+        origine: 'os',
+        titre: 'Résumé de la visio : Réunion fictive',
+        compteRenduPrepare: { texte: 'Texte fictif', prepareeLe: '2026-10-10T08:00:00Z' },
+      }),
+    ];
+    render(<AvecEntete slug="simatis" />);
+    await screen.findAllByText('Résumé de la visio : Réunion fictive');
+    expect(screen.getAllByText('Visio enregistrée').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Compte rendu prêt à relire').length).toBeGreaterThan(0);
+  });
+
   it('adds an entry by hand, then reloads the list', async () => {
     const onChange = vi.fn();
     const onAjoutFerme = vi.fn();

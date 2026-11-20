@@ -109,6 +109,23 @@ const secteurDe = (s: SujetVue, aujourdhui: string, fin: string): Secteur => {
   return jour <= fin ? 'semaine' : 'plus_tard';
 };
 
+// D'où vient l'entrée, dit en clair : plusieurs routines déposent des entrées sur une même réunion.
+const PROVENANCES: Record<string, string> = {
+  messagerie: 'Mail',
+  agenda: 'Agenda',
+  cerveau: 'Second cerveau',
+  os: 'OS',
+  site: 'Site web',
+  'test-vma': 'Test de VMA',
+  wispr: 'Wispr Flow',
+  partenaire: 'Partenaire',
+};
+const provenance = (s: SujetVue): string => {
+  if (s.type === 'compte_rendu' && s.origine === 'os') return 'Visio enregistrée';
+  if (s.type === 'compte_rendu' && s.origine === 'agenda') return 'Réunion de l’agenda';
+  return PROVENANCES[s.origine] ?? s.origine;
+};
+
 function Ligne({
   s,
   slug,
@@ -136,6 +153,10 @@ function Ligne({
             <Icon name={ico} />
           </span>
           <b className="vq-titre">{s.titre}</b>
+          <span className="badge">{provenance(s)}</span>
+          {s.type === 'compte_rendu' && s.compteRenduPrepare && (
+            <span className="badge green">Compte rendu prêt à relire</span>
+          )}
           <Jauge niveau={s.priorite} />
           {s.instance.slug !== slug && (
             <span
@@ -448,6 +469,7 @@ function Detail({
       <div className="panel-h">
         <h2>{s.titre}</h2>
         <span className="badge">{TYPES[s.type][1]}</span>
+        <span className="badge">{provenance(s)}</span>
         <PastilleInstance
           slug={slug}
           instance={s.instance}
