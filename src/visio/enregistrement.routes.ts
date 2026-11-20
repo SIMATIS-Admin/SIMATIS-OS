@@ -17,6 +17,8 @@ import {
   cloturerAbandonnees,
   finaliser,
   finaliserCloses,
+  FusionImpossible,
+  fusionnerSession,
   garderTranscriptDansRdv,
   lireSession,
   ouvrirSession,
@@ -228,6 +230,29 @@ export function registerEnregistrementRoutes(app: FastifyInstance, { db }: { db:
       );
       if (!session) return reply.code(404).send({ error: 'Session introuvable' });
       return { ...resume(session), ...(rattache ? { rdvId: rattache.rdvId } : {}) };
+    },
+  );
+
+  // Fusion avec un rendez-vous existant : le contenu passe dans le rendez-vous, l'enregistrement disparaît.
+  app.post<{ Params: SessionParams; Body: unknown }>(
+    '/api/i/:slug/visio/sessions/:id/fusion',
+    async (request, reply) => {
+      const instance = await instanceDe(request.params.slug, reply);
+      if (!instance) return reply;
+      const parsed = z
+        .object({ rdvId: z.string().min(1).max(300) })
+        .strict()
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Rendez-vous invalide' });
+      try {
+        const r = await withInstance(db, instance.id, (tx) =>
+          fusionnerSession(tx, request.params.id, parsed.data.rdvId),
+        );
+        return r ?? reply.code(404).send({ error: 'Session ou rendez-vous introuvable' });
+      } catch (e) {
+        if (e instanceof FusionImpossible) return reply.code(409).send({ error: e.message });
+        throw e;
+      }
     },
   );
 

@@ -1249,6 +1249,13 @@ export const modifierEnregistrement = (
 // Rattache l'enregistrement à un autre rendez-vous (le libre d'origine, resté vide, disparaît).
 export const rattacherEnregistrement = (slug: string, sessionId: string, rdvId: string) =>
   sendJson<SessionVisio>('PATCH', inst(slug, `visio/sessions/${sessionId}`), { rdvId });
+// Fusionne l'enregistrement avec un rendez-vous existant : son contenu y passe, il disparaît de la liste.
+export const fusionnerEnregistrement = (slug: string, sessionId: string, rdvId: string) =>
+  sendJson<{ rdvId: string; compteRendu: 'repris' | 'conserve' | 'aucun' }>(
+    'POST',
+    inst(slug, `visio/sessions/${sessionId}/fusion`),
+    { rdvId },
+  );
 // Garde le transcript de l'enregistrement dans son rendez-vous.
 export const garderTranscriptDansRdv = (slug: string, sessionId: string) =>
   sendJson<{ ok: true }>('POST', inst(slug, `visio/sessions/${sessionId}/transcript-rdv`), {});

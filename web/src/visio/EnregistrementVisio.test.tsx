@@ -167,6 +167,23 @@ describe('EnregistrementVisio', () => {
     expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ rdvId: 'os:autre' });
   });
 
+  it('fusionne l’enregistrement avec un rendez-vous existant après confirmation', async () => {
+    vi.stubGlobal('confirm', () => true);
+    const onRattache = vi.fn();
+    monter({ onRattache });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Rattacher à un autre rendez-vous' }),
+    );
+    const liste = await screen.findByLabelText('Rendez-vous existant');
+    await screen.findByRole('option', { name: /Réunion avec Dupont fictif/ });
+    fireEvent.change(liste, { target: { value: 'os:autre' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Fusionner/ }));
+    await waitFor(() => expect(onRattache).toHaveBeenCalledWith('os:autre'));
+    const fusion = calls.find((c) => c.method === 'POST' && c.url.endsWith('/sessions/s1/fusion'));
+    expect(fusion?.body).toEqual({ rdvId: 'os:autre' });
+    vi.unstubAllGlobals();
+  });
+
   it('crée un rendez-vous sur place puis y rattache l’enregistrement', async () => {
     const onRattache = vi.fn();
     monter({ onRattache });

@@ -360,6 +360,66 @@ export async function rattacherSession(
   return { rdvId: rdvEventId };
 }
 
+export class FusionImpossible extends Error {}
+
+// Marc fusionne l'enregistrement avec un rendez-vous existant : son transcript et son résumé passent
+// dans le rendez-vous, puis l'enregistrement disparaît de la liste. Rien n'est écrasé : un transcript
+// déjà présent reçoit le nouveau à la suite ; un compte rendu déjà présent reste tel quel (le
+// résumé n'est alors pas repris, le transcript l'est). Null si la session ou le rendez-vous manque.
+export async function fusionnerSession(
+  tx: Tx,
+  id: string,
+  rdvEventId: string,
+): Promise<{ rdvId: string; compteRendu: 'repris' | 'conserve' | 'aucun' } | null> {
+  const session = await lireSession(tx, id);
+  if (!session) return null;
+  if (session.statut !== 'transcrit') {
+    throw new FusionImpossible(
+      'L’enregistrement n’est pas encore transcrit : patientez un instant.',
+    );
+  }
+  // Rattache d'abord : le contenu du rendez-vous libre d'origine est fusionné au passage.
+  const rattache = await rattacherSession(tx, id, rdvEventId);
+  if (!rattache) return null;
+  const [cible] = await tx
+    .select()
+    .from(rendezVous)
+    .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.eventId, rdvEventId)));
+  if (!cible) return null;
+  const net = (t: string | null) => (t ?? '').trim();
+  const modifs: {
+    compteRendu?: string;
+    compteRenduAt?: Date;
+    transcript?: string;
+    transcriptAt?: Date;
+  } = {};
+
+  const texte = net(session.transcript) || assemblerTranscript(session.morceaux);
+  if (texte) {
+    if (!net(cible.transcript)) modifs.transcript = texte;
+    else if (net(cible.transcript) !== texte) {
+      const quand = session.debutAt;
+      modifs.transcript = `${net(cible.transcript)}\n\n— Enregistrement du ${dateParis(quand)} à ${heureParis(quand)} —\n${texte}`;
+    }
+    if (modifs.transcript !== undefined) modifs.transcriptAt = new Date();
+  }
+  let compteRendu: 'repris' | 'conserve' | 'aucun' = 'aucun';
+  if (net(session.resume)) {
+    if (!net(cible.compteRendu)) {
+      modifs.compteRendu = net(session.resume);
+      modifs.compteRenduAt = new Date();
+      compteRendu = 'repris';
+    } else {
+      compteRendu = net(cible.compteRendu) === net(session.resume) ? 'repris' : 'conserve';
+    }
+  }
+  if (Object.keys(modifs).length > 0) {
+    await tx.update(rendezVous).set(modifs).where(eq(rendezVous.id, cible.id));
+  }
+  await supprimerSession(tx, id);
+  return { rdvId: rdvEventId, compteRendu };
+}
+
 // L'entrée d'Inbox du résumé de cette visio se range dans celle du rendez-vous cible, si elle en a
 // une ouverte : une réunion, une entrée.
 async function rangerSujetVisio(tx: Tx, sessionId: string, cibleId: string): Promise<void> {
