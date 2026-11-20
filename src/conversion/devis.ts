@@ -192,14 +192,30 @@ export async function creerDepuisAffaire(
         .where(and(eq(devisModeles.instanceId, currentInstance), eq(devisModeles.id, modeleId)));
       if (!modele) throw new DevisRefuse('Modèle de mission introuvable');
     }
+    // The counter restarts each year when the format carries the year; otherwise it never resets.
+    // Numbers already taken are skipped, so two quotes never share one.
+    const annee = new Date().getFullYear();
+    const parAnnee = instance.type !== 'prospect' && reglages.numerotation.includes('{AAAA}');
     const premieres = await tx
-      .select({ id: devis.id })
+      .select({ id: devis.id, createdAt: devis.createdAt, numero: devis.numero })
       .from(devis)
       .where(and(eq(devis.instanceId, currentInstance), eq(devis.version, 1)));
-    const numero =
+    const pris = new Set(
+      (
+        await tx
+          .select({ numero: devis.numero })
+          .from(devis)
+          .where(eq(devis.instanceId, currentInstance))
+      ).map((r) => baseNumero(r.numero)),
+    );
+    let compteur =
+      1 + premieres.filter((r) => !parAnnee || r.createdAt.getFullYear() === annee).length;
+    const formater = (n: number) =>
       instance.type === 'prospect'
-        ? `DEMO-${String(premieres.length + 1).padStart(3, '0')}`
-        : formaterNumero(reglages.numerotation, new Date().getFullYear(), premieres.length + 1);
+        ? `DEMO-${String(n).padStart(3, '0')}`
+        : formaterNumero(reglages.numerotation, annee, n);
+    while (pris.has(formater(compteur))) compteur += 1;
+    const numero = formater(compteur);
     const recurrente = opp.modeFacturation === 'recurrent';
     const lignes = modele?.lignes.length
       ? modele.lignes.map((l) => ({
