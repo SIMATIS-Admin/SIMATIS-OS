@@ -209,6 +209,37 @@ describe('Passation : relève par l’OS', () => {
     expect((await relire(p.id)).updatedAt).toEqual(avant.updatedAt);
   });
 
+  it('crée le projet d’un diagnostic lancé depuis la console, avec les informations saisies', async () => {
+    const id = '33333333-4444-5555-6666-777777777777';
+    const { acquittes, deps } = siteAvec([
+      diag(id, {
+        libre: true,
+        entreprise: 'Entreprise Console',
+        activite: 'Industrie',
+        contexte: 'Contexte fictif',
+      }),
+    ]);
+    const r = await releverPassations(t.app.db, deps);
+    expect(r).toMatchObject({ recus: 1, enregistres: 1, inconnus: 0 });
+    const vu = await relire(id);
+    expect(vu).toMatchObject({
+      nom: 'Entreprise Console',
+      activite: 'Industrie',
+      contexte: 'Contexte fictif',
+    });
+    expect(vu.dims).toEqual({ outils: 10, strategie: 7, polyvalence: 4 });
+    expect(acquittes).toHaveLength(1);
+  });
+
+  it('un diagnostic libre sans identifiant valide reste sur le site', async () => {
+    const { acquittes, deps } = siteAvec([
+      diag('pas-un-uuid-du-tout', { libre: true, entreprise: 'X' }),
+    ]);
+    const r = await releverPassations(t.app.db, deps);
+    expect(r).toMatchObject({ enregistres: 0, inconnus: 1 });
+    expect(acquittes).toEqual([]);
+  });
+
   it('laisse sur le site un diagnostic dont le projet est inconnu', async () => {
     const { acquittes, deps } = siteAvec([diag('99999999-2222-3333-4444-555555555555')]);
     const r = await releverPassations(t.app.db, deps);
