@@ -155,6 +155,21 @@ describe('AideRelance', () => {
     expect(screen.getByText(/1 faite\(s\) aujourd'hui/)).toBeTruthy();
   });
 
+  it('« Mail envoyé » planifie la suite choisie dans la liste « Ensuite », pas toujours la première', async () => {
+    render(<AideRelance slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
+    const choix = await screen.findByLabelText<HTMLSelectElement>('Ensuite :');
+    expect(choix.value).toBe('0');
+    fireEvent.change(choix, { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mail envoyé' }));
+    await waitFor(() =>
+      expect(api.createTache).toHaveBeenCalledWith(
+        'simatis',
+        expect.objectContaining({ type: 'email', hubspot: false }),
+      ),
+    );
+  });
+
   it('écarte une action pour de bon, côté serveur, et ne la repropose plus', async () => {
     render(<AideRelance slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
