@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import {
   fetchBrief,
   fetchCompteurRdv,
@@ -68,7 +68,7 @@ function Periode({
   );
 }
 
-export function Brief({ slug }: { slug: string }) {
+export function Brief({ slug, children }: { slug: string; children?: ReactNode }) {
   const [data, setData] = useState<BriefData | null>(null);
   const [maintenant, setMaintenant] = useState(() => Date.now());
   const [message, setMessage] = useState<string | null>(null);
@@ -141,30 +141,14 @@ export function Brief({ slug }: { slug: string }) {
           .filter((r) => !r.journee && new Date(r.fin).getTime() > maintenant)
           .sort((a, b) => Date.parse(a.debut) - Date.parse(b.debut))[0]
       : undefined;
-  const faites = data.realisees.aujourdhui.total;
-  const total = faites + jour.total + retard;
-  // Les tâches en retard ne sont plus un message à part : le bloc « À faire maintenant » du Cockpit
-  // les propose une par une, en séquence.
-  const priorite = prochain
-    ? {
-        titre: 'Un rendez-vous bien préparé.',
-        texte: `${heure(prochain.debut)} · ${prochain.titre}`,
-        action: 'Ouvrir mon agenda',
-        lien: `#/${slug}/agenda`,
-      }
-    : jour.total > 0
-      ? {
-          titre: 'Une action, puis la suivante.',
-          texte: `${jour.total} ${pluriel(jour.total, 'tâche')} à faire aujourd’hui. Commence par celle qui compte le plus.`,
-          action: 'Choisir ma prochaine action',
-          lien: taches,
-        }
-      : {
-          titre: 'De la place pour avancer.',
-          texte: 'Aucune tâche prévue aujourd’hui. Le plus utile : faire avancer la prospection.',
-          action: 'Prospecter',
-          lien: `#/${slug}/prospection`,
-        };
+  const prochainTexte =
+    data.rdvEtat === 'non_configure'
+      ? 'Agenda non connecté'
+      : data.rdvEtat === 'erreur'
+        ? 'Agenda momentanément indisponible'
+        : prochain
+          ? `${heure(prochain.debut)} · ${prochain.titre}`
+          : "Aucun autre rendez-vous aujourd'hui";
 
   return (
     <div className="brief-focus">
@@ -173,116 +157,45 @@ export function Brief({ slug }: { slug: string }) {
           Actualisation impossible. Les dernières données restent affichées.
         </p>
       )}
-      <section className="brief-priorite" aria-label="Priorité proposée">
+      <section className="brief-priorite" aria-label="Prochain rendez-vous">
         <div>
-          <h2>{priorite.titre}</h2>
-          <p>{priorite.texte}</p>
+          <h2>Prochain rendez-vous</h2>
+          <p>{prochainTexte}</p>
+          {prochain?.lieu && <span className="small muted">{prochain.lieu}</span>}
         </div>
-        <a className="btn primary" href={priorite.lien}>
-          {priorite.action}
-          <Icon name="play" />
+        <a className="btn primary" href={`#/${slug}/agenda`}>
+          Ouvrir mon agenda
         </a>
-        {total > 0 && (
-          <div className="brief-progression">
-            <span>
-              {faites} / {total} tâches
-            </span>
-            <progress
-              aria-label="Tâches terminées sur les tâches terminées, du jour et en retard"
-              value={faites}
-              max={total}
-            />
-          </div>
-        )}
       </section>
+      <h2 className="brief-reperes-titre">Aujourd’hui</h2>
       <div className="brief-reperes">
-        <a className="panel kpi kpi-link" href={`#/${slug}/agenda`}>
-          <span className="l">
-            <Icon name="cal" /> Rendez-vous et réunions
-          </span>
+        <a className="brief-repere" href={`#/${slug}/agenda`}>
           <span className="v">{data.rdvEtat === 'ok' ? data.rdv.length : '–'}</span>
-          <span className="small muted">
-            {data.rdvEtat === 'non_configure'
-              ? 'Agenda non connecté'
-              : data.rdvEtat === 'erreur'
-                ? 'Agenda indisponible'
-                : "Aujourd'hui"}
-          </span>
+          <span className="l">Rendez-vous</span>
         </a>
-        <a className="panel kpi kpi-link" href={taches}>
-          <span className="l">
-            <Icon name="list" /> Tâches du jour
-          </span>
+        <a className="brief-repere" href={taches}>
           <span className="v">{jour.total}</span>
-          <span className="small muted">
-            {jour.email} {pluriel(jour.email, 'email')} · {jour.appel}{' '}
-            {pluriel(jour.appel, 'appel')} · {jour.autre} {pluriel(jour.autre, 'action')}
-          </span>
+          <span className="l">Tâches du jour</span>
         </a>
-        <a className={`panel kpi kpi-link ${retard > 0 ? 'alerte' : ''}`} href={taches}>
-          <span className="l">
-            <Icon name="clock" /> Tâches en retard
-          </span>
+        <a className={`brief-repere ${retard > 0 ? 'alerte' : ''}`} href={taches}>
           <span className="v">{retard}</span>
-          <span className="small muted">
-            {data.source === 'hubspot' ? 'Tâches HubSpot' : "Tâches de l'OS"}
-          </span>
+          <span className="l">En retard</span>
         </a>
         {aConfirmer > 0 && (
-          <a className="panel kpi kpi-link" href={`#/${slug}/rendez-vous`}>
-            <span className="l">
-              <Icon name="cal" /> À confirmer
-            </span>
+          <a className="brief-repere" href={`#/${slug}/rendez-vous`}>
             <span className="v">{aConfirmer}</span>
-            <span className="small muted">Rendez-vous ou organisation ?</span>
+            <span className="l">À confirmer</span>
           </a>
         )}
         {reponses !== null && (
-          <a className="panel kpi kpi-link" href={`#/${slug}/radar`}>
-            <span className="l">
-              <Icon name="mail" /> Ont répondu
-            </span>
+          <a className="brief-repere" href={`#/${slug}/radar`}>
             <span className="v">{reponses}</span>
-            <span className="small muted">Prospection</span>
+            <span className="l">Ont répondu</span>
           </a>
         )}
       </div>
+      {children && <div className="brief-intermede">{children}</div>}
       <div className="brief-details">
-        <details className="panel brief-historique">
-          <summary>
-            Rendez-vous et réunions du jour <Icon name="down" />
-          </summary>
-          <div className="panel-b">
-            {data.rdvEtat === 'erreur' && (
-              <p className="small" style={{ color: 'var(--red)' }}>
-                Agenda indisponible : {data.rdvErreur}
-              </p>
-            )}
-            {data.rdv.length ? (
-              <ul className="tasks">
-                {data.rdv.map((r) => (
-                  <li key={`${r.debut}-${r.titre}`}>
-                    <span className="canal">
-                      <Icon name="cal" />
-                    </span>
-                    <div>
-                      <b>
-                        {r.journee ? 'Toute la journée' : heure(r.debut)}, {r.titre}
-                      </b>
-                      {r.lieu && <div className="small muted">{r.lieu}</div>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="empty">
-                {data.rdvEtat === 'non_configure'
-                  ? 'Connectez Google Agenda dans Paramètres pour voir vos rendez-vous.'
-                  : "Aucun rendez-vous aujourd'hui."}
-              </div>
-            )}
-          </div>
-        </details>
         <details className="panel brief-historique">
           <summary>
             Mon activité récente <Icon name="down" />

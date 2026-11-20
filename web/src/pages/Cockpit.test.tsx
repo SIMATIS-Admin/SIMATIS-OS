@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({ fetchCompteurInbox: vi.fn(), fetchPipeline: vi.fn() }));
@@ -11,7 +12,14 @@ vi.mock('../visio/Enregistrements.js', () => ({
 vi.mock('./AideRelance.js', () => ({
   AideRelance: ({ slug }: { slug: string }) => <p>Aide à la relance de {slug}</p>,
 }));
-vi.mock('./Brief.js', () => ({ Brief: ({ slug }: { slug: string }) => <p>Brief de {slug}</p> }));
+vi.mock('./Brief.js', () => ({
+  Brief: ({ slug, children }: { slug: string; children?: ReactNode }) => (
+    <>
+      <p>Brief de {slug}</p>
+      {children}
+    </>
+  ),
+}));
 
 import { Cockpit } from './Cockpit.js';
 
@@ -35,7 +43,7 @@ describe('Cockpit', () => {
   it("montre le brief du jour et replie l'Inbox en un bandeau, sans l'afficher", async () => {
     api.fetchCompteurInbox.mockResolvedValue(3);
     render(<Cockpit slug="simatis" />);
-    expect(screen.getByRole('region', { name: 'Brief du jour' }).textContent).toBe(
+    expect(screen.getByRole('region', { name: 'Brief du jour' }).textContent).toContain(
       'Brief de simatis',
     );
     expect(await screen.findByText('Inbox : 3 à traiter')).toBeTruthy();
@@ -125,10 +133,8 @@ describe('Cockpit', () => {
     const etat = await screen.findByRole('region', { name: 'État du Radar et du Pipeline' });
     const radar = etat.querySelector<HTMLAnchorElement>('a[href="#/simatis/radar"]')!;
     const pipeline = etat.querySelector<HTMLAnchorElement>('a[href="#/simatis/pipeline"]')!;
-    expect(radar.textContent).toMatch(/RadarÀ relancer2affaires actives1 à relancer1 a répondu/);
-    expect(pipeline.textContent).toMatch(
-      /PipelineÀ surveiller1affaire ouverte1 inactive1 action en retard/,
-    );
+    expect(radar.textContent).toMatch(/Radaraffaires actives2à relancer1a répondu1/);
+    expect(pipeline.textContent).toMatch(/Pipelineaffaire ouverte1inactive1action en retard1/);
   });
 
   it("met la date du jour tout en haut, avant l'Inbox", async () => {

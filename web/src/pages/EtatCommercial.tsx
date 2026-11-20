@@ -17,65 +17,42 @@ function Etat({ slug, data }: { slug: string; data: Pipeline }) {
     (affaire) => (affaire.joursInactif ?? 0) > data.inactiviteJours,
   ).length;
   const actionsEnRetard = pipeline.filter((affaire) => affaire.prochaine?.enRetard).length;
-  const etatRadar = radar.length === 0 ? 'Vide' : aRelancer > 0 ? 'À relancer' : 'À développer';
-  const etatPipeline =
-    pipeline.length === 0
-      ? 'Vide'
-      : inactives > 0 || actionsEnRetard > 0
-        ? 'À surveiller'
-        : 'Sous contrôle';
-
   return (
     <div className="cockpit-commercial-surface">
       <a className="cockpit-commercial-indicateur radar" href={`#/${slug}/radar`}>
-        <span className="cockpit-commercial-identite">
-          <span className="cockpit-commercial-icone">
-            <Icon name="radar" />
-          </span>
-          <span>
-            <strong>Radar</strong>
-            <small className={aRelancer > 0 ? 'attention' : ''}>{etatRadar}</small>
-          </span>
-        </span>
-        <span className="cockpit-commercial-volume">
-          <b className="num">{radar.length}</b>
-          <small>{radar.length > 1 ? 'affaires actives' : 'affaire active'}</small>
-        </span>
-        <span className="cockpit-commercial-details">
-          <span>
-            <b className="num">{aRelancer}</b> à relancer
-          </span>
-          <span>
-            <b className="num">{reponses}</b> {reponses > 1 ? 'ont répondu' : 'a répondu'}
-          </span>
-        </span>
+        <strong>Radar</strong>
+        <dl className="cockpit-commercial-details">
+          <div>
+            <dt>{radar.length > 1 ? 'affaires actives' : 'affaire active'}</dt>
+            <dd className="num">{radar.length}</dd>
+          </div>
+          <div>
+            <dt>à relancer</dt>
+            <dd className={`num ${aRelancer > 0 ? 'attention' : ''}`}>{aRelancer}</dd>
+          </div>
+          <div>
+            <dt>{reponses > 1 ? 'ont répondu' : 'a répondu'}</dt>
+            <dd className="num">{reponses}</dd>
+          </div>
+        </dl>
         <Icon name="down" />
       </a>
       <a className="cockpit-commercial-indicateur pipeline" href={`#/${slug}/pipeline`}>
-        <span className="cockpit-commercial-identite">
-          <span className="cockpit-commercial-icone">
-            <Icon name="kanban" />
-          </span>
-          <span>
-            <strong>Pipeline</strong>
-            <small className={inactives > 0 || actionsEnRetard > 0 ? 'attention' : ''}>
-              {etatPipeline}
-            </small>
-          </span>
-        </span>
-        <span className="cockpit-commercial-volume">
-          <b className="num">{pipeline.length}</b>
-          <small>{pipeline.length > 1 ? 'affaires ouvertes' : 'affaire ouverte'}</small>
-        </span>
-        <span className="cockpit-commercial-details">
-          <span>
-            <b className="num">{inactives}</b> {inactives > 1 ? 'inactives' : 'inactive'}
-          </span>
-          <span>
-            <b className="num">{actionsEnRetard}</b>{' '}
-            {actionsEnRetard > 1 ? 'actions en retard' : 'action en retard'}
-          </span>
-        </span>
+        <strong>Pipeline</strong>
+        <dl className="cockpit-commercial-details">
+          <div>
+            <dt>{pipeline.length > 1 ? 'affaires ouvertes' : 'affaire ouverte'}</dt>
+            <dd className="num">{pipeline.length}</dd>
+          </div>
+          <div>
+            <dt>{inactives > 1 ? 'inactives' : 'inactive'}</dt>
+            <dd className={`num ${inactives > 0 ? 'attention' : ''}`}>{inactives}</dd>
+          </div>
+          <div>
+            <dt>{actionsEnRetard > 1 ? 'actions en retard' : 'action en retard'}</dt>
+            <dd className={`num ${actionsEnRetard > 0 ? 'attention' : ''}`}>{actionsEnRetard}</dd>
+          </div>
+        </dl>
         <Icon name="down" />
       </a>
     </div>

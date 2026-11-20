@@ -232,8 +232,32 @@ export function AideRelance({ slug }: { slug: string }) {
               </span>
             </span>
           </button>
-          <div className="aide-choix" role="group" aria-label="Nombre d'actions">
-            <span className="muted small">Je peux en faire :</span>
+          <div className="aide-choix" role="group" aria-label="Paramètres de la séquence">
+            {mandats.length > 1 && (
+              <div className="aide-instances">
+                <span>Instances</span>
+                <details className="ag-instances">
+                  <summary className="input">
+                    {mandatsMasques.length === 0
+                      ? 'Toutes les instances'
+                      : `${mandats.filter((m) => !mandatsMasques.includes(m.slug)).length} sur ${mandats.length}`}
+                  </summary>
+                  <div className="ag-instances-liste" role="group" aria-label="Instances affichées">
+                    {mandats.map((m) => (
+                      <label key={m.slug}>
+                        <input
+                          type="checkbox"
+                          checked={!mandatsMasques.includes(m.slug)}
+                          onChange={() => basculerMandat(m.slug)}
+                        />
+                        {m.nom}
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
+            <span className="aide-quantite muted small">Nombre :</span>
             {CHOIX.map((n) => (
               <button
                 key={n}
@@ -278,27 +302,6 @@ export function AideRelance({ slug }: { slug: string }) {
                 </button>
               ))}
             </div>
-            {mandats.length > 1 && (
-              <details className="ag-instances">
-                <summary className="input">
-                  {mandatsMasques.length === 0
-                    ? 'Tous les mandats'
-                    : `${mandats.filter((m) => !mandatsMasques.includes(m.slug)).length} mandat(s) sur ${mandats.length}`}
-                </summary>
-                <div className="ag-instances-liste" role="group" aria-label="Mandats affichés">
-                  {mandats.map((m) => (
-                    <label key={m.slug}>
-                      <input
-                        type="checkbox"
-                        checked={!mandatsMasques.includes(m.slug)}
-                        onChange={() => basculerMandat(m.slug)}
-                      />
-                      {m.nom}
-                    </label>
-                  ))}
-                </div>
-              </details>
-            )}
           </div>
         )}
       </div>
