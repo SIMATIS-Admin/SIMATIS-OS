@@ -70,6 +70,12 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
       remisePct: d.remisePct,
       acomptePct: d.acomptePct,
       frais: d.frais,
+      fraisPlafond: d.fraisPlafond,
+      fraisTexte: d.fraisTexte,
+      modePrix: d.modePrix,
+      sortieMois: d.sortieMois,
+      texteSortie: d.texteSortie,
+      conditionsParticulieres: d.conditionsParticulieres,
       validiteJours: d.validiteJours,
       clauses: d.clauses,
       adresse: d.adresse,
@@ -90,6 +96,8 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
     ]);
     expect(calculer(devis).prixManquant).toBe(true);
     expect(devis.validiteJours).toBe(30);
+    // Une affaire récurrente se lit comme un abonnement : une ligne, mensualité et engagement.
+    expect(devis.modePrix).toBe('abonnement');
     expect(devis.numero).toBe(`DEV-${new Date().getFullYear()}-001`);
   });
 
@@ -233,5 +241,47 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
     await validerDevis(t.app.db, simatis, devis.id);
     const v2 = await nouvelleVersion(t.app.db, simatis, devis.id);
     expect(v2).toMatchObject({ adresse: lu.adresse, attention: 'Alex Fictif' });
+  });
+
+  it('un abonnement exige une seule ligne et une sortie pendant l’engagement ; tout passe à la version suivante', async () => {
+    const { devis } = await creerDepuisAffaire(t.app.db, simatis, await affaireLibre());
+    const base = await contenuDe(devis.id);
+    const ligne = {
+      libelle: 'Abonnement',
+      unite: 'mois' as const,
+      quantite: 12,
+      prixUnitaire: 2500,
+    };
+    const abonne = {
+      ...base,
+      inclus: 'Une prestation',
+      modePrix: 'abonnement' as const,
+      lignes: [ligne],
+      sortieMois: 6,
+      texteSortie: 'Engagement de 12 mois, sortie possible dès le 6e mois.',
+      frais: 'plafonnes' as const,
+      fraisPlafond: 60,
+      fraisTexte: 'Plafonnés à 60 € HT par aller-retour.',
+      conditionsParticulieres: 'Condition fictive.',
+    };
+    await modifierContenu(t.app.db, simatis, devis.id, {
+      ...abonne,
+      lignes: [ligne, { ...ligne, libelle: 'Autre' }],
+    });
+    await expect(validerDevis(t.app.db, simatis, devis.id)).rejects.toThrow(/une seule ligne/);
+    await modifierContenu(t.app.db, simatis, devis.id, { ...abonne, sortieMois: 13 });
+    await expect(validerDevis(t.app.db, simatis, devis.id)).rejects.toThrow(/pendant l’engagement/);
+    await modifierContenu(t.app.db, simatis, devis.id, abonne);
+    await validerDevis(t.app.db, simatis, devis.id);
+    const v2 = await nouvelleVersion(t.app.db, simatis, devis.id);
+    expect(v2).toMatchObject({
+      modePrix: 'abonnement',
+      sortieMois: 6,
+      texteSortie: abonne.texteSortie,
+      frais: 'plafonnes',
+      fraisPlafond: 60,
+      fraisTexte: abonne.fraisTexte,
+      conditionsParticulieres: 'Condition fictive.',
+    });
   });
 });

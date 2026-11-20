@@ -35,12 +35,26 @@ export const contenuSchema = z.object({
   lignes: z.array(ligneSchema).min(1).max(50),
   remisePct: z.number().int().min(0).max(100),
   acomptePct: z.number().int().min(0).max(100),
-  frais: z.enum(['refactures', 'inclus']),
+  frais: z.enum(['refactures', 'inclus', 'plafonnes']),
+  fraisPlafond: z.number().int().min(0).max(100_000).nullable().default(null),
+  fraisTexte: texte(1000).default(''),
+  modePrix: z.enum(['forfait', 'abonnement']).default('forfait'),
+  sortieMois: z.number().int().min(1).max(10_000).nullable().default(null),
+  texteSortie: texte(1000).default(''),
+  conditionsParticulieres: texte(4000).default(''),
   validiteJours: z.number().int().min(1).max(365),
   clauses: z.array(clauseSchema).max(40),
 });
 
 export type ContenuDevis = z.infer<typeof contenuSchema>;
+
+// Proposed wording, used when the pilot has not typed their own: same text as web/src/devis.ts.
+export const texteFraisPropose = (frais: ContenuDevis['frais'], plafond: number | null) =>
+  frais === 'inclus'
+    ? 'inclus dans le prix.'
+    : frais === 'plafonnes' && plafond !== null
+      ? `refacturés au réel, plafonnés à ${plafond} € HT par aller-retour.`
+      : 'refacturés au réel, sur justificatifs.';
 
 const centimes = (x: number) => Math.round(x * 100) / 100;
 

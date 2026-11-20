@@ -757,6 +757,13 @@
       "when": 1795185775339,
       "tag": "0107_devis_destinataire",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1795198510751,
+      "tag": "0108_devis_abonnement",
+      "breakpoints": true
     }
   ]
 }

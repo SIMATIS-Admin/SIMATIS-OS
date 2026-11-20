@@ -20,6 +20,12 @@ const contenu = {
   remisePct: 0,
   acomptePct: 0,
   frais: 'refactures',
+  fraisPlafond: null,
+  fraisTexte: '',
+  modePrix: 'forfait',
+  sortieMois: null,
+  texteSortie: '',
+  conditionsParticulieres: '',
   validiteJours: 30,
   clauses: [{ titre: 'Paiement', texte: 'À 30 jours', active: true }],
 };
@@ -354,6 +360,39 @@ describe('écran Devis', () => {
     expect(apercu.textContent).toContain('12 rue Fictive');
     expect(apercu.textContent).toContain('Alex Fictif');
     expect(apercu.querySelector('.pied')?.textContent).toBe('Société fictive, 1 rue fictive');
+  });
+
+  it('passe en abonnement mensuel : l’aperçu montre le prix par mois et la sortie', async () => {
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    const apercu = await screen.findByLabelText('Aperçu du devis');
+    fireEvent.click(screen.getByRole('button', { name: /Prix/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Abonnement mensuel' }));
+    fireEvent.change(screen.getByLabelText('Mensualité (€ HT)'), { target: { value: '2500' } });
+    fireEvent.change(screen.getByLabelText('Engagement (mois)'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Sortie possible dès le mois'), {
+      target: { value: '6' },
+    });
+    expect(apercu.textContent).toMatch(/2\s500,00\s€ HT \/ mois/);
+    expect(apercu.textContent).toContain('6e mois');
+    fireEvent.change(screen.getByLabelText('Frais de déplacement'), {
+      target: { value: 'plafonnes' },
+    });
+    fireEvent.change(screen.getByLabelText('Plafond par aller-retour (€ HT)'), {
+      target: { value: '60' },
+    });
+    expect(apercu.textContent).toContain('plafonnés à 60 € HT par aller-retour');
+  });
+
+  it('les conditions particulières n’apparaissent que si elles sont saisies', async () => {
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    const apercu = await screen.findByLabelText('Aperçu du devis');
+    expect(apercu.textContent).not.toContain('Conditions particulières');
+    fireEvent.click(screen.getByRole('button', { name: /Conditions/ }));
+    fireEvent.change(screen.getByLabelText('Conditions particulières (facultatif)'), {
+      target: { value: 'Clause fictive' },
+    });
+    expect(apercu.textContent).toContain('Conditions particulières');
+    expect(apercu.textContent).toContain('Clause fictive');
   });
 
   it('propose le PDF du devis à l’étape Envoi', async () => {

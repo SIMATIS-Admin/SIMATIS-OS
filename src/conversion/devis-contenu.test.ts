@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculer, contenuSchema } from './devis-contenu.js';
+import { calculer, contenuSchema, texteFraisPropose } from './devis-contenu.js';
 
 const ligne = (quantite: number, prixUnitaire: number | null) => ({
   libelle: 'Prestation fictive',
@@ -79,6 +79,37 @@ describe('contenuSchema', () => {
     expect(r).toMatchObject({ adresse: '1 rue Fictive', attention: 'Camille' });
     expect(contenuSchema.safeParse({ ...base, adresse: 'x'.repeat(501) }).success).toBe(false);
     expect(contenuSchema.safeParse({ ...base, attention: 'x'.repeat(201) }).success).toBe(false);
+  });
+
+  it('lit les champs d’abonnement, de déplacement et de conditions, vides sur un contenu ancien', () => {
+    const ancien = contenuSchema.parse(base);
+    expect(ancien).toMatchObject({
+      modePrix: 'forfait',
+      sortieMois: null,
+      texteSortie: '',
+      fraisPlafond: null,
+      fraisTexte: '',
+      conditionsParticulieres: '',
+    });
+    const r = contenuSchema.parse({
+      ...base,
+      modePrix: 'abonnement',
+      sortieMois: 6,
+      frais: 'plafonnes',
+      fraisPlafond: 60,
+    });
+    expect(r).toMatchObject({ modePrix: 'abonnement', sortieMois: 6, fraisPlafond: 60 });
+    expect(contenuSchema.safeParse({ ...base, modePrix: 'autre' }).success).toBe(false);
+    expect(contenuSchema.safeParse({ ...base, sortieMois: 0 }).success).toBe(false);
+  });
+
+  it('propose une phrase de déplacement selon le mode', () => {
+    expect(texteFraisPropose('inclus', null)).toBe('inclus dans le prix.');
+    expect(texteFraisPropose('refactures', null)).toBe('refacturés au réel, sur justificatifs.');
+    expect(texteFraisPropose('plafonnes', 60)).toBe(
+      'refacturés au réel, plafonnés à 60 € HT par aller-retour.',
+    );
+    expect(texteFraisPropose('plafonnes', null)).toBe('refacturés au réel, sur justificatifs.');
   });
 
   it('refuse une remise de 101 % et une liste de lignes vide', () => {

@@ -8392,6 +8392,20 @@ button.recherche-carte:hover,
   width: 150px;
   height: auto;
 }
+.d-page .d-abo {
+  background: var(--line-2);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.d-page .d-abo-nom {
+  color: #4a5b72;
+}
+.d-page .d-abo-prix {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 2px 0 4px;
+}
 .d-page .pied {
   margin-top: 22px;
   padding-top: 8px;

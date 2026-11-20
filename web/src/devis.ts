@@ -25,8 +25,26 @@ export function calculer(c: Montants, tvaPct = 20) {
   };
 }
 
+// Proposed wordings, same texts as src/conversion/devis-contenu.ts: the pilot can rewrite them.
+export const texteFraisPropose = (frais: ContenuDevis['frais'], plafond: number | null) =>
+  frais === 'inclus'
+    ? 'inclus dans le prix.'
+    : frais === 'plafonnes' && plafond !== null
+      ? `refacturés au réel, plafonnés à ${plafond} € HT par aller-retour.`
+      : 'refacturés au réel, sur justificatifs.';
+
+export const texteSortiePropose = (engagement: number, sortie: number | null) =>
+  sortie === null
+    ? `Engagement de ${engagement} mois.`
+    : `Engagement de ${engagement} mois, avec possibilité de sortie à partir du ${sortie === 1 ? '1er' : `${sortie}e`} mois.`;
+
 export function problemesAvantEnvoi(c: ContenuDevis): string[] {
   const p: string[] = [];
+  if (c.modePrix === 'abonnement') {
+    if (c.lignes.length !== 1) p.push('Un abonnement a une seule ligne de prix.');
+    else if (c.sortieMois !== null && c.sortieMois > (c.lignes[0]?.quantite ?? 0))
+      p.push('La sortie anticipée doit tomber pendant l’engagement.');
+  }
   if (calculer(c).prixManquant) p.push('Un ou plusieurs prix restent à fixer.');
   if (!c.inclus.trim()) p.push('Le périmètre inclus est vide.');
   if (!c.exclu.trim()) p.push('Aucune exclusion indiquée : à confirmer.');
