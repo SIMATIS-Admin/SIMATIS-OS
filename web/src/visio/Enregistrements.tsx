@@ -78,8 +78,8 @@ export function Enregistrements({
             {actifs > 0
               ? `${actifs} en cours`
               : liste.length > 0
-                ? `${liste.length} récents`
-                : 'Aucun récemment'}
+                ? `${liste.length} ${liste.length > 1 ? 'récents' : 'récent'}`
+                : 'Aucun récent'}
           </span>
         </span>
         <button className="btn sm" onClick={() => setOuvert(true)}>

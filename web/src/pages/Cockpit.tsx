@@ -60,8 +60,8 @@ export function Cockpit({ onFerme, ...props }: Props) {
               {aTraiter === null
                 ? 'Chargement en cours'
                 : aTraiter === 0
-                  ? 'Inbox : rien à traiter'
-                  : `Inbox : ${aTraiter} à traiter`}
+                  ? 'Rien à traiter'
+                  : `${aTraiter} à traiter`}
             </span>
           </span>
           <button className="btn sm" onClick={() => setOuvert(true)}>
