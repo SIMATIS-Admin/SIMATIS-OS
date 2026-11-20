@@ -32,6 +32,8 @@ const entier = (v: string, min: number, max: number) =>
 
 const contenuDe = (d: DevisDetail): ContenuDevis => ({
   titre: d.titre,
+  adresse: d.adresse,
+  attention: d.attention,
   contexte: d.contexte,
   objectifs: d.objectifs,
   inclus: d.inclus,
@@ -243,6 +245,33 @@ export function DevisEditeur({
 
         {etape === 'mission' && (
           <>
+            <div className="d-bloc">
+              <label htmlFor="dv-attention">À l’attention de</label>
+              <input
+                id="dv-attention"
+                className="input"
+                type="text"
+                disabled={off}
+                placeholder={d.contact ?? ''}
+                value={c.attention}
+                onChange={(e) => maj({ attention: e.target.value })}
+              />
+              <div className="aide">
+                Laissé vide, le devis reprend le contact de l’affaire
+                {d.contact ? ` (${d.contact})` : ''}.
+              </div>
+            </div>
+            <div className="d-bloc">
+              <label htmlFor="dv-adresse">Adresse du client</label>
+              <textarea
+                id="dv-adresse"
+                className="input"
+                rows={3}
+                disabled={off}
+                value={c.adresse}
+                onChange={(e) => maj({ adresse: e.target.value })}
+              />
+            </div>
             {champ('titre', 'Intitulé de la mission', undefined, true)}
             {champ(
               'contexte',
@@ -641,7 +670,8 @@ export function DevisEditeur({
           contenu={c}
           numero={d.numero}
           client={d.entreprise}
-          contact={d.contact}
+          contact={c.attention.trim() || d.contact}
+          adresse={c.adresse}
           date={d.createdAt}
           tvaPct={d.tvaPct}
           mentions={d.mentions}

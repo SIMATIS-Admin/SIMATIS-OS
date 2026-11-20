@@ -10,6 +10,8 @@ const ligne = (quantite: number, prixUnitaire: number | null) => ({
 
 const complet: ContenuDevis = {
   titre: 'Mission fictive',
+  adresse: '',
+  attention: '',
   contexte: '',
   objectifs: '',
   inclus: 'Une prestation',

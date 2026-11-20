@@ -9,6 +9,7 @@ const base: DevisPourPdf = {
   validiteJours: 30,
   entreprise: 'Exemple Industrie',
   contact: 'Camille Exemple',
+  adresse: '12 rue Fictive\n71200 Ville Fictive',
   titre: 'Diagnostic fictif',
   contexte: 'Contexte fictif de la mission.',
   objectifs: 'Mesurer le niveau\nDécider d’un plan',
@@ -93,6 +94,48 @@ describe('nettoyerTexte', () => {
     expect(nettoyerTexte('Été à Paris : « 1\u202f200 € »')).toBe('Été à Paris : « 1 200 € »');
     expect(nettoyerTexte('a → b ≥ c')).toBe('a -> b >= c');
     expect(nettoyerTexte('ok ✓ 😀 fin')).toBe('ok   fin');
+  });
+});
+
+describe('genererPdfDevis, papier en-tête', () => {
+  it('porte le logo, sans l’ancien en-tête texte, et l’adresse du destinataire', async () => {
+    const buf = await genererPdfDevis(base);
+    expect(buf.toString('latin1')).toContain('/Subtype /Image');
+    const t = await texte(base);
+    expect(t).not.toContain('Direction commerciale à temps partagé');
+    expect(t).toContain('12 rue Fictive');
+    expect(t).toContain('71200 Ville Fictive');
+    expect(t).toContain('À l’attention de Camille Exemple');
+  });
+
+  it('répète les mentions légales en pied de chaque page', async () => {
+    const lignes = Array.from({ length: 60 }, (_, i) => ({
+      libelle: `Ligne ${i + 1}`,
+      unite: 'forfait' as const,
+      quantite: 1,
+      prixUnitaire: 100,
+    }));
+    const items = await itemsDuPdf(new Uint8Array(await genererPdfDevis({ ...base, lignes })));
+    const pages = new Set(items.map((i) => i.page));
+    expect(pages.size).toBeGreaterThan(1);
+    const pagesAvecPied = new Set(
+      items.filter((i) => i.texte.includes('Société fictive')).map((i) => i.page),
+    );
+    expect(pagesAvecPied).toEqual(pages);
+    const pied = items.find((i) => i.texte.includes('Société fictive'))!;
+    for (const i of items.filter((x) => /^Ligne \d+$/.test(x.texte)))
+      expect(i.page === pied.page ? Math.abs(i.y - pied.y) > 12 : true).toBe(true);
+  });
+
+  it('n’imprime pas de pied de page quand les mentions sont vides', async () => {
+    const t = await texte({ ...base, mentions: '  ' });
+    expect(t).not.toContain('Société fictive');
+  });
+
+  it('omet l’adresse et l’attention quand elles sont vides', async () => {
+    const t = await texte({ ...base, adresse: '', contact: null });
+    expect(t).not.toContain('l’attention');
+    expect(t).toContain('Exemple Industrie');
   });
 });
 

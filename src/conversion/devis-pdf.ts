@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { calculer } from './devis-contenu.js';
+import { LOGO_PNG } from './devis-logo.js';
 import type { Clause, LigneDevis } from './schema.js';
 
 export type DevisPourPdf = {
@@ -8,6 +9,7 @@ export type DevisPourPdf = {
   validiteJours: number;
   entreprise: string | null;
   contact: string | null;
+  adresse: string;
   titre: string;
   contexte: string;
   objectifs: string;
@@ -26,10 +28,10 @@ export type DevisPourPdf = {
 };
 
 const NAVY = '#0C376B';
-const TEAL = '#41A594';
 const GRIS = '#4A5B72';
 const MARGE = 50;
 const BAS_DE_PAGE = 770;
+const HAUT_DU_PIED = 818;
 
 // Plain spaces and ASCII minus only: the narrow no-break space of Intl and U+2212 are not in the
 // PDF base font.
@@ -69,6 +71,7 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
     ...brut,
     entreprise: brut.entreprise === null ? null : n(brut.entreprise),
     contact: brut.contact === null ? null : n(brut.contact),
+    adresse: n(brut.adresse),
     titre: n(brut.titre),
     contexte: n(brut.contexte),
     objectifs: n(brut.objectifs),
@@ -84,6 +87,7 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
     const doc = new PDFDocument({
       size: 'A4',
       margin: MARGE,
+      bufferPages: true,
       info: { Title: `Devis ${d.numero}`, Author: 'SIMATIS' },
     });
     const morceaux: Buffer[] = [];
@@ -92,8 +96,13 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
     doc.on('error', reject);
 
     const largeur = doc.page.width - 2 * MARGE;
+    // The legal footer sits at the bottom of every page: the body stops above it.
+    const pied = d.mentions.trim();
+    doc.font('Helvetica').fontSize(7.5);
+    const hauteurPied = pied ? doc.heightOfString(pied, { width: largeur - 60 }) : 0;
+    const bas = pied ? Math.min(BAS_DE_PAGE, HAUT_DU_PIED - hauteurPied - 14) : BAS_DE_PAGE;
     const place = (hauteur: number) => {
-      if (doc.y + hauteur > BAS_DE_PAGE) doc.addPage();
+      if (doc.y + hauteur > bas) doc.addPage();
     };
     const titreSection = (t: string) => {
       place(40);
@@ -117,14 +126,8 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
     const t = calculer(d, d.tvaPct);
     const echeance = new Date(d.createdAt.getTime() + d.validiteJours * 864e5);
 
-    // En-tête
-    doc.font('Helvetica-Bold').fontSize(16).fillColor(NAVY).text('SIMATIS ', MARGE, MARGE, {
-      continued: true,
-    });
-    doc.fillColor(TEAL).font('Helvetica').text('OS');
-    doc.fontSize(9).fillColor(GRIS).text('Direction commerciale à temps partagé', MARGE);
-    if (d.mentions.trim()) doc.text(d.mentions, MARGE, undefined, { width: 250 });
-    const yFin = doc.y;
+    // En-tête : logo à gauche, références du devis à droite.
+    doc.image(LOGO_PNG, MARGE, MARGE - 6, { width: 130 });
     doc
       .font('Helvetica-Bold')
       .fontSize(11)
@@ -136,16 +139,18 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
       .fillColor(GRIS)
       .text(`Émis le ${jourParis(d.createdAt)}`, { width: 220, align: 'right' })
       .text(`Valable jusqu’au ${jourParis(echeance)}`, { width: 220, align: 'right' });
-    doc.y = Math.max(yFin, doc.y) + 14;
+    doc.y = Math.max(MARGE + 50, doc.y) + 22;
     doc.x = MARGE;
 
-    // Client et titre
+    // Destinataire et titre
     doc
       .font('Helvetica-Bold')
       .fontSize(11)
       .fillColor('#1B2A40')
       .text(d.entreprise ?? '—', MARGE);
-    if (d.contact) doc.font('Helvetica').fontSize(10).text(`À l’attention de ${d.contact}`, MARGE);
+    doc.font('Helvetica').fontSize(10);
+    if (d.adresse.trim()) doc.text(d.adresse.trim(), MARGE, undefined, { width: 260 });
+    if (d.contact) doc.text(`À l’attention de ${d.contact}`, MARGE);
     doc.moveDown(0.8).font('Helvetica-Bold').fontSize(18).fillColor(NAVY).text(d.titre, MARGE);
     doc.font('Helvetica').fontSize(10).fillColor('#1B2A40');
 
@@ -192,7 +197,7 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
       // The row is measured first: a long label must move to the next page whole, never split
       // from its price columns.
       const h = Math.max(doc.heightOfString(cellules[0] ?? '', { width: 260 }), 12);
-      if (doc.y + h + 4 > BAS_DE_PAGE) {
+      if (doc.y + h + 4 > bas) {
         doc.addPage();
         enTete();
         doc.font('Helvetica').fontSize(9);
@@ -280,6 +285,28 @@ export function genererPdfDevis(brut: DevisPourPdf): Promise<Buffer> {
       .text('Date, signature et mention « Bon pour accord »', MARGE + demi + 28, undefined, {
         width: demi - 16,
       });
+    // Footer and page numbers, drawn last when the page count is known. The bottom margin is lifted
+    // meanwhile: text below it would start a new page.
+    const { count, start } = doc.bufferedPageRange();
+    for (let i = start; i < start + count; i++) {
+      doc.switchToPage(i);
+      doc.page.margins.bottom = 0;
+      doc.fontSize(7.5).fillColor(GRIS).font('Helvetica');
+      if (pied) {
+        doc
+          .moveTo(MARGE, HAUT_DU_PIED - 6)
+          .lineTo(MARGE + largeur, HAUT_DU_PIED - 6)
+          .lineWidth(0.5)
+          .strokeColor('#DCE3EC')
+          .stroke();
+        doc.text(pied, MARGE, HAUT_DU_PIED, { width: largeur - 60 });
+      }
+      doc.text(`Page ${i - start + 1} / ${count}`, MARGE + largeur - 55, HAUT_DU_PIED, {
+        width: 55,
+        align: 'right',
+        lineBreak: false,
+      });
+    }
     doc.end();
   });
 }

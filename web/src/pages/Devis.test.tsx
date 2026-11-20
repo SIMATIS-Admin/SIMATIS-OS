@@ -8,6 +8,8 @@ let calls: Call[] = [];
 
 const contenu = {
   titre: 'Diagnostic fictif',
+  adresse: '',
+  attention: '',
   contexte: 'Contexte fictif',
   objectifs: '',
   inclus: 'Entretiens',
@@ -335,6 +337,23 @@ describe('écran Devis', () => {
     render(<Devis slug="simatis" ouvrir="d1" />);
     expect(await screen.findByText(/Société fictive, 1 rue fictive/)).toBeTruthy();
     expect(screen.getAllByText(/TVA 10 %/).length).toBeGreaterThan(0);
+  });
+
+  it('l’aperçu porte le logo, le pied de page et l’adresse saisie du client', async () => {
+    detail = { ...brouillon, mentions: 'Société fictive, 1 rue fictive' };
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    const apercu = await screen.findByLabelText('Aperçu du devis');
+    expect(apercu.querySelector('img[alt="SIMATIS"]')).toBeTruthy();
+    expect(apercu.textContent).not.toContain('Direction commerciale à temps partagé');
+    fireEvent.change(screen.getByLabelText('Adresse du client'), {
+      target: { value: '12 rue Fictive' },
+    });
+    fireEvent.change(screen.getByLabelText('À l’attention de'), {
+      target: { value: 'Alex Fictif' },
+    });
+    expect(apercu.textContent).toContain('12 rue Fictive');
+    expect(apercu.textContent).toContain('Alex Fictif');
+    expect(apercu.querySelector('.pied')?.textContent).toBe('Société fictive, 1 rue fictive');
   });
 
   it('propose le PDF du devis à l’étape Envoi', async () => {

@@ -47,6 +47,9 @@ export const devis = pgTable(
     exclu: text('exclu').notNull().default(''),
     livrables: text('livrables').notNull().default(''),
     duree: text('duree').notNull().default(''),
+    // Recipient block, typed on the quote: empty `attention` falls back to the deal's contact.
+    adresse: text('adresse').notNull().default(''),
+    attention: text('attention').notNull().default(''),
     debut: date('debut'),
     remisePct: integer('remise_pct').notNull().default(0),
     acomptePct: integer('acompte_pct').notNull().default(0),
