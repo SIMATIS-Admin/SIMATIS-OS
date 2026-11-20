@@ -21,7 +21,7 @@ export type Manifest = {
   // Bouton propre au support dans la barre du lecteur (les slides n'exécutent aucun script).
   action: ActionSupport | null;
 };
-export const ACTIONS_SUPPORT = ['testeur-vma'] as const;
+export const ACTIONS_SUPPORT = ['testeur-vma', 'console-diagnostic'] as const;
 export type ActionSupport = (typeof ACTIONS_SUPPORT)[number];
 export type PartieHtml = { titre: string; duree: number | null; slides: string[] };
 
