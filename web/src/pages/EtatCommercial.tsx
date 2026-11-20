@@ -1,20 +1,7 @@
 import { useEffect, useState } from 'react';
-import { fetchPipeline, type Pipeline, type PipelineOpp } from '../api.js';
+import { fetchPipeline, type Pipeline } from '../api.js';
 import { Icon } from '../icons.js';
-
-const etapeRadar = (affaire: PipelineOpp) =>
-  Number.isInteger(affaire.radarEtapeManuelle) &&
-  affaire.radarEtapeManuelle !== null &&
-  affaire.radarEtapeManuelle >= 0 &&
-  affaire.radarEtapeManuelle <= 3
-    ? affaire.radarEtapeManuelle
-    : affaire.radar === 'repondu'
-      ? 3
-      : (affaire.tentatives ?? 0) >= 3
-        ? 2
-        : (affaire.tentatives ?? 0) > 0
-          ? 1
-          : 0;
+import { etapeRadar } from '../radar.js';
 
 function Etat({ slug, data }: { slug: string; data: Pipeline }) {
   const etapesRadar = new Set(data.etapes.slice(0, 2).map((etape) => etape.id));

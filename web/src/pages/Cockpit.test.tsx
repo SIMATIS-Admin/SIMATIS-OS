@@ -8,6 +8,9 @@ vi.mock('./Inbox.js', () => ({ Inbox: ({ slug }: { slug: string }) => <p>Inbox d
 vi.mock('../visio/Enregistrements.js', () => ({
   Enregistrements: ({ slug }: { slug: string }) => <p>Enregistrements de {slug}</p>,
 }));
+vi.mock('./AideRelance.js', () => ({
+  AideRelance: ({ slug }: { slug: string }) => <p>Aide à la relance de {slug}</p>,
+}));
 vi.mock('./Brief.js', () => ({ Brief: ({ slug }: { slug: string }) => <p>Brief de {slug}</p> }));
 
 import { Cockpit } from './Cockpit.js';
