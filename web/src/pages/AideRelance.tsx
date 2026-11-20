@@ -5,6 +5,7 @@ import {
   fetchPipeline,
   fetchTaches,
   masquerRelance,
+  masquerRelanceLot,
   type Pipeline,
   type PropositionItem,
   type SemaineTaches,
@@ -15,6 +16,7 @@ import {
   construireFile,
   dansMandats,
   POUR_TOUJOURS,
+  RETARD_ANCIEN,
   type ActionRelance,
   type Masquees,
   type SourceAction,
@@ -74,6 +76,7 @@ export function AideRelance({ slug }: { slug: string }) {
   const [masquees, setMasquees] = useState<Masquees>({});
   const [brouillons, setBrouillons] = useState<PropositionItem[]>([]);
   const [faites, setFaites] = useState(0);
+  const [nettoyage, setNettoyage] = useState<{ erreur: boolean } | null>(null);
   const [ouverte, setOuverte] = useState<ActionRelance | null>(null);
   const [sequence, setSequence] = useState<{
     actions: ActionRelance[];
@@ -115,6 +118,21 @@ export function AideRelance({ slug }: { slug: string }) {
     // Rangé dans l'espace affiché ; la clé d'une action d'un autre mandat porte déjà ce mandat.
     masquerRelance(slug, id, jusqua).catch(charger);
   };
+  // Écarte d'un coup les tâches périmées de cette liste : elles restent dans l'Agenda et dans le
+  // CRM, seule l'aide à la relance cesse de les proposer.
+  const ecarterAnciennes = async () => {
+    const ids = file.filter((a) => a.ancienne).map((a) => a.id);
+    try {
+      await masquerRelanceLot(slug, ids, POUR_TOUJOURS);
+      setMasquees((deja) => ({
+        ...deja,
+        ...Object.fromEntries(ids.map((id) => [id, POUR_TOUJOURS])),
+      }));
+      setNettoyage(null);
+    } catch {
+      setNettoyage({ erreur: true });
+    }
+  };
   const choisir = (n: Nombre) => {
     setNb(n);
     ecrire('aideRelance:nb', n);
@@ -151,6 +169,10 @@ export function AideRelance({ slug }: { slug: string }) {
   const compte = (s: SourceAction) =>
     file.filter((a) => a.raisons.some((r) => r.source === s)).length;
   const mandats = donnees?.mandats ?? [];
+  const anciennes = file.filter((a) => a.ancienne);
+  const parMandat = mandats
+    .map((m) => ({ nom: m.nom, n: anciennes.filter((a) => a.mandat === m.slug).length }))
+    .filter((m) => m.n > 0);
 
   const lancer = () =>
     setSequence({ actions: visibles, i: 0, faites: 0, reportees: 0, passees: 0 });
@@ -280,6 +302,17 @@ export function AideRelance({ slug }: { slug: string }) {
           </div>
         )}
       </div>
+      {deploye && anciennes.length > 0 && (
+        <div className="aide-nettoyage">
+          <span>
+            {anciennes.length} tâche(s) en retard depuis plus de {RETARD_ANCIEN} jours, sans doute
+            périmées.
+          </span>
+          <button className="btn sm" type="button" onClick={() => setNettoyage({ erreur: false })}>
+            Les écarter de cette liste…
+          </button>
+        </div>
+      )}
       {deploye && (
         <div className="aide-liste" id="aide-liste">
           {erreur ? (
@@ -343,6 +376,43 @@ export function AideRelance({ slug }: { slug: string }) {
             </>
           )}
         </div>
+      )}
+      {nettoyage && (
+        <Fenetre
+          titre="Écarter les tâches périmées ?"
+          onFermer={() => setNettoyage(null)}
+          pied={
+            <>
+              <button className="btn" type="button" onClick={() => setNettoyage(null)}>
+                Annuler
+              </button>
+              <button className="btn primary" type="button" onClick={() => void ecarterAnciennes()}>
+                Écarter {anciennes.length} tâche(s)
+              </button>
+            </>
+          }
+        >
+          <p>
+            Ces {anciennes.length} tâches sont en retard depuis plus de {RETARD_ANCIEN} jours et
+            n'ont aucune autre raison de figurer ici. Elles{' '}
+            <b>restent dans l'Agenda et dans le CRM</b>: seule cette liste cesse de les proposer.
+            Rien n'est supprimé ni marqué comme fait.
+          </p>
+          {parMandat.length > 1 && (
+            <ul>
+              {parMandat.map((m) => (
+                <li key={m.nom}>
+                  {m.nom} : {m.n}
+                </li>
+              ))}
+            </ul>
+          )}
+          {nettoyage.erreur && (
+            <p role="alert" className="muted small">
+              L'opération a échoué. Réessayez.
+            </p>
+          )}
+        </Fenetre>
       )}
       {ouverte && !sequence && (
         <VoletAction

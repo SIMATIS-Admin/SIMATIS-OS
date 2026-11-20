@@ -349,3 +349,32 @@ describe('mandats', () => {
     expect(file.filter((a) => dansMandats(a, [])).length).toBe(2);
   });
 });
+
+describe('tâches anciennes', () => {
+  it('ne marque « ancienne » que la tâche seule en retard depuis plus de 30 jours', () => {
+    const file = construireFile({
+      maintenant,
+      pipeline: pipeline([
+        opp({ id: 'd', entreprise: 'Avec Autre Raison', etape: 'proposition', joursInactif: 40 }),
+      ]),
+      enRetard: [
+        tache({
+          id: 'a',
+          entreprise: { id: 'e1', nom: 'Seule Périmée' },
+          echeance: '2026-08-01T08:00:00Z',
+        }),
+        tache({
+          id: 'b',
+          entreprise: { id: 'e2', nom: 'Avec Autre Raison' },
+          echeance: '2026-08-01T08:00:00Z',
+        }),
+        tache({
+          id: 'c',
+          entreprise: { id: 'e3', nom: 'Récente' },
+          echeance: '2026-11-15T08:00:00Z',
+        }),
+      ],
+    });
+    expect(file.filter((a) => a.ancienne).map((a) => a.entreprise)).toEqual(['Seule Périmée']);
+  });
+});

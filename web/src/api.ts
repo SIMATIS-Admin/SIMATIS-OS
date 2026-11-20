@@ -1022,6 +1022,8 @@ export const fetchMasqueesRelance = (slug: string) =>
   getJson<Record<string, number>>(inst(slug, 'aide-relance/masquees'));
 export const masquerRelance = (slug: string, id: string, jusqua: number) =>
   sendJson<Record<string, number>>('PUT', inst(slug, 'aide-relance/masquees'), { id, jusqua });
+export const masquerRelanceLot = (slug: string, ids: string[], jusqua: number) =>
+  sendJson<Record<string, number>>('PUT', inst(slug, 'aide-relance/masquees/lot'), { ids, jusqua });
 export const fetchBrouillonsPrepares = (slug: string) =>
   getJson<PropositionItem[]>(inst(slug, 'propositions?filtre=brouillon'));
 export const fetchCompteurRdv = (slug: string) =>

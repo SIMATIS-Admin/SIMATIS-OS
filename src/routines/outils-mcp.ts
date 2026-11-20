@@ -4,6 +4,8 @@ import { creneauxLibres, zoned, type CreneauxOptions } from '../connecteurs/goog
 import { freeBusy } from '../connecteurs/google/google.js';
 import { MESSAGERIES, messagerieDe } from '../connecteurs/messagerie.js';
 import { connexions, type Kind } from '../connexions/schema.js';
+import { classementAffaire } from '../crm/echanges.js';
+import { INACTIVITE_DEFAUT, rdvDeLAffaire } from '../crm/pipeline.js';
 import { contacts, entreprises, opportunites, taches } from '../crm/schema.js';
 import { currentInstance } from '../db/columns.js';
 import { registerTool, type ToolCtx } from '../mcp/tools.js';
@@ -143,6 +145,76 @@ registerTool({
       )
       .orderBy(taches.echeance);
     return rows.filter((t) => (canaux as string[]).includes(t.canal)).slice(0, 200);
+  },
+});
+
+registerTool({
+  name: 'affaires_a_relancer',
+  description:
+    "Affaires ouvertes à relancer que taches_du_jour ne couvre pas, faute de tâche échue : sans activité depuis le seuil de l'instance (14 jours par défaut), ou rangées au Radar (sans réponse, ou ont répondu). Seules celles dont le contact a une adresse email sont renvoyées, avec son identifiant : à utiliser avec proposer_brouillon (un brouillon à valider, jamais d'envoi).",
+  input: z.object({
+    joursInactifMin: z.number().int().min(1).max(365).optional(),
+    limite: z.number().int().min(1).max(50).default(20),
+  }),
+  scope: 'instance',
+  handler: async ({ tx, instance }, input) => {
+    const seuil = input.joursInactifMin ?? instance.config.inactiviteJours ?? INACTIVITE_DEFAUT;
+    const depuis = sql`coalesce(${opportunites.derniereActivite}, ${opportunites.createdAt})`;
+    const rows = await tx
+      .select({
+        opportuniteId: opportunites.id,
+        titre: opportunites.titre,
+        etape: opportunites.etape,
+        montant: opportunites.montant,
+        entreprise: entreprises.nom,
+        contactId: contacts.id,
+        contact: contacts.nom,
+        email: contacts.email,
+        classement: classementAffaire,
+        aUnRdv: sql<boolean>`exists (select 1 from rendez_vous r where ${rdvDeLAffaire})`,
+        joursInactif: sql<number>`floor(extract(epoch from (now() - ${depuis})) / 86400)::int`,
+      })
+      .from(opportunites)
+      .innerJoin(
+        contacts,
+        and(eq(contacts.id, opportunites.contactId), eq(contacts.instanceId, currentInstance)),
+      )
+      .leftJoin(
+        entreprises,
+        and(
+          eq(entreprises.id, opportunites.entrepriseId),
+          eq(entreprises.instanceId, currentInstance),
+        ),
+      )
+      .where(
+        and(
+          eq(opportunites.instanceId, currentInstance),
+          isNull(opportunites.clos),
+          sql`${contacts.email} is not null and ${contacts.email} <> ''`,
+          // Les affaires qui ont une tâche échue sont celles de taches_du_jour.
+          sql`not exists (select 1 from taches t where t.instance_id = ${currentInstance}
+            and t.fait_at is null and t.echeance < now()
+            and (t.opportunite_id = "opportunites"."id"
+              or (t.opportunite_id is null and t.contact_id = "opportunites"."contact_id")))`,
+          sql`(
+            (${classementAffaire} is not null
+              and not exists (select 1 from rendez_vous r where ${rdvDeLAffaire}))
+            or ${depuis} < now() - make_interval(days => ${seuil})
+          )`,
+        ),
+      )
+      .orderBy(sql`${depuis} asc`)
+      .limit(input.limite);
+    // Une affaire qui a un rendez-vous n'est plus au Radar : elle n'est là que par son inactivité.
+    return rows.map(({ classement, aUnRdv, ...r }) => ({
+      ...r,
+      raison:
+        aUnRdv || !classement
+          ? 'sans_activite'
+          : classement === 'repondu'
+            ? 'radar_a_repondu'
+            : 'radar_sans_reponse',
+    }));
   },
 });
 
