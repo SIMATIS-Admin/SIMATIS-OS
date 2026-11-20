@@ -58,8 +58,8 @@ describe('Brief', () => {
     const tuile = (nom: string) => screen.getByText(nom).closest('a')!;
     expect(tuile('Ont répondu').textContent).toContain('3');
     expect(tuile('Ont répondu').getAttribute('href')).toBe('#/simatis/radar');
-    expect(tuile('Tâches en retard').textContent).toContain('2');
-    expect(tuile('Tâches en retard').classList.contains('alerte')).toBe(true);
+    expect(tuile('En retard').textContent).toContain('2');
+    expect(tuile('En retard').classList.contains('alerte')).toBe(true);
     expect(tuile('Tâches du jour').textContent).toContain('4');
     // Les détails sont repliés : un clic les ouvre, ils n'allongent pas la page.
     const details = document.querySelectorAll('details');
@@ -74,8 +74,28 @@ describe('Brief', () => {
     render(<Brief slug="simatis" />);
     expect(await screen.findByText('Tâches du jour')).toBeTruthy();
     expect(screen.queryByText('Ont répondu')).toBeNull();
-    expect(screen.getByText('Tâches en retard').closest('a')!.classList.contains('alerte')).toBe(
-      false,
-    );
+    expect(screen.getByText('En retard').closest('a')!.classList.contains('alerte')).toBe(false);
+  });
+
+  it('montre directement le prochain rendez-vous sans répéter le détail de la journée', async () => {
+    api.fetchBrief.mockResolvedValue({
+      ...brief(2),
+      rdv: [
+        {
+          titre: 'Rendez-vous fictif',
+          debut: '2099-11-20T15:00:00Z',
+          fin: '2099-11-20T16:00:00Z',
+          journee: false,
+          lieu: null,
+        },
+      ],
+    });
+    api.fetchRadar.mockResolvedValue({ ontRepondu: { total: 0 } });
+    api.fetchCompteurRdv.mockResolvedValue(0);
+    render(<Brief slug="simatis" />);
+    const prochain = await screen.findByRole('region', { name: 'Prochain rendez-vous' });
+    expect(prochain.textContent).toContain('Rendez-vous fictif');
+    expect(prochain.textContent).not.toMatch(/tâches/);
+    expect(screen.queryByText('Rendez-vous et réunions du jour')).toBeNull();
   });
 });

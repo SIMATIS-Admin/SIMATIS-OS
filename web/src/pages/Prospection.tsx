@@ -474,13 +474,10 @@ export function PanneauProspection({ slug }: { slug: string }) {
 
   if (!stats) return null;
   return (
-    <div className="panel">
-      <div className="panel-h">
-        <h2>Prospection du jour</h2>
-        <a className="btn sm" href={`#/${slug}/prospection`}>
-          Ouvrir
-        </a>
-      </div>
+    <details className="panel brief-historique">
+      <summary>
+        Prospection du jour <Icon name="down" />
+      </summary>
       <div className="panel-b">
         <JaugeJour jour={stats.jour} objectif={stats.objectif} />
         <p className="small" style={{ margin: '10px 0 0' }}>
@@ -490,7 +487,12 @@ export function PanneauProspection({ slug }: { slug: string }) {
           Cette semaine : <b className="num">{stats.semaine}</b> {pluriel(stats.semaine, 'mail')},{' '}
           <b className="num">{stats.reponses}</b> {pluriel(stats.reponses, 'réponse')}
         </p>
+        <p style={{ marginBottom: 0 }}>
+          <a className="btn sm" href={`#/${slug}/prospection`}>
+            Ouvrir la prospection
+          </a>
+        </p>
       </div>
-    </div>
+    </details>
   );
 }

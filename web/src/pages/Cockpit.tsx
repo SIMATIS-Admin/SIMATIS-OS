@@ -38,14 +38,17 @@ export function Cockpit({ onFerme, ...props }: Props) {
 
   return (
     <div className="cockpit">
-      <h2 className="cockpit-date">
-        {new Date().toLocaleDateString('fr-FR', {
-          timeZone: 'Europe/Paris',
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-        })}
-      </h2>
+      <header className="cockpit-intro">
+        <h2 className="cockpit-date">
+          {new Date().toLocaleDateString('fr-FR', {
+            timeZone: 'Europe/Paris',
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+          })}
+        </h2>
+        <p>Votre activité, vos priorités et vos actions du jour.</p>
+      </header>
       <div className="cockpit-raccourcis">
         <section className={`cockpit-bandeau ${aTraiter === 0 ? 'vide' : ''}`} aria-label="Inbox">
           <span className="cockpit-bandeau-icone">
@@ -67,10 +70,11 @@ export function Cockpit({ onFerme, ...props }: Props) {
         </section>
         <Enregistrements slug={slug} />
       </div>
-      <EtatCommercial slug={slug} />
-      <AideRelance slug={slug} />
       <section className="cockpit-brief" aria-label="Brief du jour">
-        <Brief slug={slug} />
+        <Brief slug={slug}>
+          <EtatCommercial slug={slug} />
+          <AideRelance slug={slug} />
+        </Brief>
       </section>
       {ouvert && (
         <Fenetre titre="Inbox" large onFermer={fermer}>

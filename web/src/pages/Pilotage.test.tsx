@@ -48,26 +48,23 @@ describe('pilot screens', () => {
 
   it('brief: counters only, linking to the tasks screen, with today meetings', async () => {
     const { container } = render(<Brief slug="simatis" />);
-    const retard = (await screen.findByText('Tâches en retard')).closest('a');
+    const retard = (await screen.findByText('En retard')).closest('a');
     expect(retard?.getAttribute('href')).toBe('#/simatis/taches');
     expect(retard?.textContent).toContain('4');
     const jour = screen.getByText('Tâches du jour').closest('a');
     expect(jour?.getAttribute('href')).toBe('#/simatis/taches');
-    expect(jour?.textContent).toMatch(/6.*2 emails.*3 appels.*1 action/);
-    expect(screen.getByText(/Point Fonderie/)).toBeTruthy();
-    expect(screen.getByText('Rendez-vous et réunions').closest('a')?.textContent).toContain('1');
+    expect(jour?.textContent).toContain('6');
+    expect(screen.getByText('Rendez-vous').closest('a')?.textContent).toContain('1');
     // No task list nor "mark done" any more: that is the Tâches screen's job.
     expect(screen.queryByText('Marquer fait')).toBeNull();
     expect(container.querySelectorAll('.vq-filter')).toHaveLength(0);
   });
 
-  it('brief: overdue tasks no longer get their own message, but still count in the progress', async () => {
+  it('brief: leaves overdue tasks to the action sequence and shows no duplicate progress', async () => {
     render(<Brief slug="simatis" />);
-    const priority = await screen.findByRole('region', { name: 'Priorité proposée' });
-    // Les tâches en retard sont proposées une par une par « À faire maintenant » du Cockpit.
-    expect(within(priority).queryByText('Reprendre le fil.')).toBeNull();
-    expect(screen.getByRole('progressbar').getAttribute('max')).toBe('10');
-    expect(screen.getByRole('progressbar').getAttribute('value')).toBe('0');
+    const appointment = await screen.findByRole('region', { name: 'Prochain rendez-vous' });
+    expect(within(appointment).queryByText(/tâches/)).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
     expect(calls.every((c) => c.method === 'GET')).toBe(true);
   });
 
@@ -126,13 +123,13 @@ describe('pilot screens', () => {
       ),
     );
     render(<Brief slug="simatis" />);
-    const priority = await screen.findByRole('region', { name: 'Priorité proposée' });
-    expect(within(priority).getByText(/Prochain échange/)).toBeTruthy();
-    expect(within(priority).queryByText(/Congé|Terminé|Plus tard/)).toBeNull();
+    const appointment = await screen.findByRole('region', { name: 'Prochain rendez-vous' });
+    expect(within(appointment).getByText(/Prochain échange/)).toBeTruthy();
+    expect(within(appointment).queryByText(/Congé|Terminé|Plus tard/)).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
-  it('brief: offers prospecting on a day without tasks or connected calendar', async () => {
+  it('brief: keeps the agenda entry point when the calendar is not connected', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -149,9 +146,9 @@ describe('pilot screens', () => {
       ),
     );
     render(<Brief slug="simatis" />);
-    expect((await screen.findByRole('link', { name: 'Prospecter' })).getAttribute('href')).toBe(
-      '#/simatis/prospection',
-    );
+    expect(
+      (await screen.findByRole('link', { name: 'Ouvrir mon agenda' })).getAttribute('href'),
+    ).toBe('#/simatis/agenda');
     expect(screen.getByText('Agenda non connecté')).toBeTruthy();
   });
 });
