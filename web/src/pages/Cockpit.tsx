@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchCompteurInbox } from '../api.js';
 import { Icon } from '../icons.js';
 import { Enregistrements } from '../visio/Enregistrements.js';
+import { AideRelance } from './AideRelance.js';
 import { Brief } from './Brief.js';
 import { EtatCommercial } from './EtatCommercial.js';
 import { Fenetre } from './Fenetre.js';
@@ -59,6 +60,7 @@ export function Cockpit({ onFerme, ...props }: Props) {
         <Enregistrements slug={slug} />
       </div>
       <EtatCommercial slug={slug} />
+      <AideRelance slug={slug} />
       <section className="cockpit-brief" aria-label="Brief du jour">
         <Brief slug={slug} />
       </section>

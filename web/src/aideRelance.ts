@@ -1,0 +1,253 @@
+import type { Pipeline, PipelineOpp, TacheVue } from './api.js';
+import { etapeRadar } from './radar.js';
+
+// L'aide à la relance : réunit en une file courte ce que Marc peut faire tout de suite, à partir de
+// trois sources déjà connues de l'OS (tâches en retard, affaires sans activité, Radar). Aucun
+// envoi : l'OS prépare, Marc relit et envoie.
+export type SourceAction = 'retard' | 'dormante' | 'radar';
+export type Raison = { source: SourceAction; jours: number | null; texte: string };
+export type ActionRelance = {
+  // Clé stable d'une entreprise (ou d'une affaire sans entreprise) : une seule ligne par clé.
+  id: string;
+  entreprise: string;
+  contact: string | null;
+  email: string | null;
+  telephone: string | null;
+  canal: 'mail' | 'appel';
+  raisons: Raison[];
+  // Étape de l'affaire (libellé) et montant, pour situer l'enjeu.
+  etape: string | null;
+  montant: number | null;
+  opportuniteId: string | null;
+  contactId: string | null;
+  entrepriseId: string | null;
+  tacheIds: string[];
+  derniereActivite: string | null;
+  tri: number[];
+};
+
+// Une action écartée ou reportée : clé → instant (ms) jusqu'auquel elle reste cachée.
+export type Masquees = Record<string, number>;
+export const POUR_TOUJOURS = 8.64e15;
+
+const JOUR = 86_400_000;
+const normaliser = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+const cleDe = (entreprise: string | null, secours: string) =>
+  entreprise?.trim() ? `ent:${normaliser(entreprise)}` : secours;
+
+export function comparerTri(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+type Entree = {
+  pipeline: Pick<Pipeline, 'etapes' | 'opportunites' | 'inactiviteJours'>;
+  enRetard: TacheVue[];
+  maintenant?: Date;
+  masquees?: Masquees;
+};
+
+// Ordre de priorité : tâche en retard (la plus ancienne d'abord), puis affaire sans activité la plus
+// avancée dans le pipeline, puis signal du Radar (a répondu, à relancer, à contacter).
+export function construireFile({
+  pipeline,
+  enRetard,
+  maintenant = new Date(),
+  masquees = {},
+}: Entree): ActionRelance[] {
+  const parCle = new Map<string, ActionRelance>();
+  const obtenir = (cle: string, base: () => ActionRelance) => {
+    let a = parCle.get(cle);
+    if (!a) {
+      a = base();
+      parCle.set(cle, a);
+    }
+    return a;
+  };
+  const vide = (cle: string, entreprise: string): ActionRelance => ({
+    id: cle,
+    entreprise,
+    contact: null,
+    email: null,
+    telephone: null,
+    canal: 'mail',
+    raisons: [],
+    etape: null,
+    montant: null,
+    opportuniteId: null,
+    contactId: null,
+    entrepriseId: null,
+    tacheIds: [],
+    derniereActivite: null,
+    tri: [3],
+  });
+  const poser = (a: ActionRelance, tri: number[]) => {
+    if (comparerTri(tri, a.tri) < 0) a.tri = tri;
+  };
+
+  for (const t of enRetard) {
+    if (t.fait || (t.canal !== 'email' && t.canal !== 'appel')) continue;
+    const nom = t.entreprise?.nom ?? t.opportunite?.titre ?? t.contact?.nom ?? t.titre;
+    const cle = cleDe(t.entreprise?.nom ?? null, `tache:${t.id}`);
+    const a = obtenir(cle, () => vide(cle, nom));
+    const jours = t.echeance
+      ? Math.max(1, Math.floor((maintenant.getTime() - Date.parse(t.echeance)) / JOUR))
+      : 1;
+    a.raisons.push({ source: 'retard', jours, texte: t.titre });
+    a.tacheIds.push(t.id);
+    a.contact ??= t.contact?.nom ?? null;
+    a.contactId ??= t.contact?.id ?? null;
+    a.email ??= t.contact?.email ?? null;
+    a.telephone ??= t.contact?.telephone ?? null;
+    a.entrepriseId ??= t.entreprise?.id ?? null;
+    a.opportuniteId ??= t.opportunite?.id ?? null;
+    if (t.canal === 'appel') a.canal = 'appel';
+    poser(a, [0, -jours]);
+  }
+
+  const etapesRadar = new Set(pipeline.etapes.slice(0, 2).map((e) => e.id));
+  const rangEtape = new Map(pipeline.etapes.map((e, i) => [e.id, i]));
+  const libelleEtape = new Map(pipeline.etapes.map((e) => [e.id, e.label]));
+  const rejoindre = (o: PipelineOpp, raison: Raison, tri: number[], appel = false) => {
+    const cle = cleDe(o.entreprise, `opp:${o.id}`);
+    const a = obtenir(cle, () => vide(cle, o.entreprise ?? o.titre));
+    a.raisons.push(raison);
+    a.opportuniteId ??= o.id;
+    a.contact ??= o.contact;
+    a.etape ??= libelleEtape.get(o.etape) ?? null;
+    a.montant ??= o.montant;
+    a.derniereActivite ??= o.derniereActivite;
+    if (appel) a.canal = 'appel';
+    poser(a, tri);
+  };
+
+  for (const o of pipeline.opportunites) {
+    if (o.clos) continue;
+    if (etapesRadar.has(o.etape)) {
+      const e = etapeRadar(o);
+      const n = o.tentatives ?? 0;
+      if (e === 3)
+        rejoindre(o, { source: 'radar', jours: null, texte: 'A répondu : à traiter' }, [2, 0]);
+      else if (e === 2)
+        rejoindre(
+          o,
+          { source: 'radar', jours: null, texte: `${n} tentative(s) sans réponse : à relancer` },
+          [2, 1],
+          n >= 3,
+        );
+      else if (e === 0)
+        rejoindre(
+          o,
+          { source: 'radar', jours: null, texte: 'Première prise de contact à faire' },
+          [2, 2],
+        );
+    } else if (o.joursInactif !== null && o.joursInactif > pipeline.inactiviteJours) {
+      rejoindre(
+        o,
+        {
+          source: 'dormante',
+          jours: o.joursInactif,
+          texte: `Aucune activité depuis ${o.joursInactif} jours`,
+        },
+        [1, -(rangEtape.get(o.etape) ?? 0), -o.joursInactif],
+      );
+    }
+  }
+
+  return [...parCle.values()]
+    .filter((a) => (masquees[a.id] ?? 0) <= maintenant.getTime())
+    .sort((x, y) => comparerTri(x.tri, y.tri));
+}
+
+// ---- Textes préparés ---------------------------------------------------------------------------
+
+const CIVILITES = /^(m\.?|mme\.?|mlle\.?|monsieur|madame|mademoiselle|dr\.?|pr\.?)$/i;
+// Le prénom seul (« Bonjour Landry »), jamais le nom de famille : on écarte les civilités et les
+// mots tout en majuscules (« DUPONT Jeanne »). Même règle que la salutation des mails du serveur.
+export function prenomDe(nomComplet: string | null | undefined): string {
+  const mots = (nomComplet ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter((m) => m && !CIVILITES.test(m));
+  const enMajuscules = (m: string) =>
+    m.length > 1 && m === m.toUpperCase() && m !== m.toLowerCase();
+  return mots.find((m) => !enMajuscules(m)) ?? mots[0] ?? '';
+}
+
+export type Angle = 'repondu' | 'froid' | 'relance' | 'suivi';
+export function angleDe(a: ActionRelance): Angle {
+  if (a.raisons.some((r) => r.source === 'retard')) return 'suivi';
+  if (a.raisons.some((r) => r.source === 'dormante')) return 'relance';
+  if (a.raisons.some((r) => r.texte.startsWith('A répondu'))) return 'repondu';
+  return a.raisons.some((r) => r.texte.includes('sans réponse')) ? 'relance' : 'froid';
+}
+
+const CORPS: Record<Angle, string> = {
+  repondu:
+    'Merci pour votre retour. Je vous propose un échange de 20 minutes pour voir concrètement ce que cela peut vous apporter et répondre à vos questions.',
+  froid:
+    'Je propose aux dirigeants un point de 20 minutes sur leur organisation commerciale, sans engagement. Seriez-vous disponible dans les prochains jours ?',
+  relance:
+    "Je me permets de revenir vers vous : où en est votre réflexion ? S'il reste un point à éclaircir, je peux vous répondre rapidement.",
+  suivi:
+    'Je reviens vers vous pour faire suite à notre dernier échange et voir comment avancer ensemble. Auriez-vous quelques minutes cette semaine ?',
+};
+const OBJETS: Record<Angle, string> = {
+  repondu: 'Suite à votre retour',
+  froid: 'Un point sur votre organisation commerciale',
+  relance: 'Où en êtes-vous ?',
+  suivi: 'Suite à notre échange',
+};
+
+// Mail prêt à relire : salutation au prénom seul, corps selon l'angle, sans signature (celle de la
+// messagerie). Les créneaux libres seront ajoutés avec les brouillons Gmail.
+export function redigerMail(a: ActionRelance): { objet: string; corps: string } {
+  const angle = angleDe(a);
+  const prenom = prenomDe(a.contact);
+  return {
+    objet: OBJETS[angle],
+    corps: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n${CORPS[angle]}`,
+  };
+}
+
+export type FicheAppel = { objectif: string; ouverture: string; questions: string[] };
+const OBJECTIFS: Record<Angle, string> = {
+  repondu: 'Répondre à ses questions et fixer un rendez-vous.',
+  froid: 'Se présenter et proposer un premier échange de 20 minutes.',
+  relance: 'Savoir où il en est et lever le point qui bloque.',
+  suivi: 'Reprendre le fil du dernier échange et décider de la suite.',
+};
+export function ficheAppel(a: ActionRelance): FicheAppel {
+  const prenom = prenomDe(a.contact);
+  return {
+    objectif: OBJECTIFS[angleDe(a)],
+    ouverture: `${prenom ? `Bonjour ${prenom}, c'est` : "Bonjour, c'est"} Marc de SIMATIS. Avez-vous un instant ?`,
+    questions: [
+      "Où en est l'organisation commerciale aujourd'hui ?",
+      "Qui d'autre faut-il associer à la discussion ?",
+    ],
+  };
+}
+
+// Suite proposée une fois l'action faite (tâche à planifier) : délai en jours.
+export type Suite = { libelle: string; canal: 'email' | 'appel' | null; jours: number };
+export function suitesProposees(canal: 'mail' | 'appel', resultat?: string): Suite[] {
+  const aucune: Suite = { libelle: 'Aucune suite', canal: null, jours: 0 };
+  if (canal === 'mail')
+    return [
+      { libelle: 'Relancer par téléphone dans 5 jours', canal: 'appel', jours: 5 },
+      { libelle: 'Relancer par mail dans 7 jours', canal: 'email', jours: 7 },
+      aucune,
+    ];
+  if (resultat === 'joint')
+    return [{ libelle: 'Envoyer un mail récapitulatif demain', canal: 'email', jours: 1 }, aucune];
+  return [
+    { libelle: 'Rappeler dans 2 jours', canal: 'appel', jours: 2 },
+    { libelle: 'Envoyer un mail dans 2 jours', canal: 'email', jours: 2 },
+    aucune,
+  ];
+}

@@ -44,8 +44,9 @@ Marc veut qu'au lieu de chercher quoi faire, l'OS lui propose des activités com
 
 ## Livraisons
 
-- **Maquette** : `maquettes/aide-relance.html` seule, pour valider l'écran.
-- **Ensuite (à planifier après validation)** : calcul de la file, branchement de la routine, bloc du Cockpit réel.
+- **Maquette** (faite) : `maquettes/aide-relance.html`.
+- **1 : bloc du Cockpit** (décisions de l'agent, à relire) : la file est calculée dans l'interface à partir de données déjà exposées (`fetchPipeline`, tâches en retard), sans nouvelle table. Mail et fiche d'appel sont rédigés par des modèles fixes selon l'angle (suivi, relance, réponse reçue, premier contact), au prénom seul, sans créneaux ni signature. Boutons « Copier le mail » et « Ouvrir dans ma messagerie » ; « Mail envoyé » ou « Appel passé » clôt les tâches liées et crée la tâche de suite dans l'OS seulement (jamais dans HubSpot). Reports et « pas pertinent » sont retenus dans le navigateur.
+- **2 (à planifier)** : brouillons Gmail avec 3 créneaux libres et rédaction par la skill « naturelle », préparés d'avance par la routine du matin ; rangement serveur des actions écartées.
 
 ## À la charge du constructeur
 
