@@ -6,6 +6,7 @@ import {
   sendMessage,
   type GoogleOptions,
   type ImageIntegree,
+  type PieceJointe,
 } from './google.js';
 
 const VIDE = { lus: 0, crees: 0, maj: 0, erreurs: [] };
@@ -20,17 +21,25 @@ export function gmailConnector(options: GoogleOptions = {}): Connector {
       return VIDE;
     },
     write: async (ctx, op) => {
-      const { to, subject, html, images, threadId } = op.data as {
+      const { to, subject, html, images, pieces, threadId } = op.data as {
         to: string;
         subject: string;
         html: string;
         images?: ImageIntegree[];
+        pieces?: PieceJointe[];
         threadId?: string;
       };
       if (op.op === 'message.send') {
         const result = await sendMessage(
           ctx,
-          { to, subject, html, ...(images ? { images } : {}), ...(threadId ? { threadId } : {}) },
+          {
+            to,
+            subject,
+            html,
+            ...(images ? { images } : {}),
+            ...(pieces ? { pieces } : {}),
+            ...(threadId ? { threadId } : {}),
+          },
           options,
         );
         return { simulation: result.simulation };
@@ -39,7 +48,14 @@ export function gmailConnector(options: GoogleOptions = {}): Connector {
         throw new Error(`Écriture Gmail non prise en charge : ${op.op}`);
       const result = await createDraft(
         ctx,
-        { to, subject, html, ...(images ? { images } : {}), ...(threadId ? { threadId } : {}) },
+        {
+          to,
+          subject,
+          html,
+          ...(images ? { images } : {}),
+          ...(pieces ? { pieces } : {}),
+          ...(threadId ? { threadId } : {}),
+        },
         options,
       );
       return { simulation: result.simulation, ...(result.draftId ? { id: result.draftId } : {}) };

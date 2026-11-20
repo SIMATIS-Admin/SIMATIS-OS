@@ -1,7 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { connexions } from '../connexions/schema.js';
-import { writeVia } from '../connexions/service.js';
+import { writeVia, type ConnexionDeps } from '../connexions/service.js';
+import type { Tx } from '../db.js';
+import type { Instance } from '../instances/schema.js';
 import { taches } from '../crm/schema.js';
 import { currentInstance } from '../db/columns.js';
 import { registerPropositionType } from '../propositions/registry.js';
@@ -43,6 +45,50 @@ registerPropositionType({
 });
 
 // Follow-up task: in the instance's CRM when it has one (then its copy), otherwise in the OS.
+// Shared with the quote's J+10 reminder.
+export async function creerTacheSuivi(
+  tx: Tx,
+  ctx: { instance: Instance; deps: ConnexionDeps },
+  values: {
+    titre: string;
+    canal: 'email' | 'appel' | 'tache';
+    echeance: Date | null;
+    contactId: string | null;
+    opportuniteId: string | null;
+  },
+  detail?: string | null,
+) {
+  const [crm] = await tx
+    .select({ fournisseur: connexions.fournisseur })
+    .from(connexions)
+    .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'crm')));
+  if (crm?.fournisseur === 'hubspot') {
+    const result = await writeVia(
+      tx,
+      ctx.instance,
+      'crm',
+      {
+        op: 'task.create',
+        data: { ...values, detail, echeance: values.echeance?.toISOString() ?? null },
+      },
+      ctx.deps,
+    );
+    if (result.simulation) return result;
+    await tx.insert(taches).values({
+      instanceId: currentInstance,
+      source: 'hubspot',
+      sourceId: typeof result.id === 'string' ? result.id : null,
+      ...values,
+    });
+    return result;
+  }
+  const [row] = await tx
+    .insert(taches)
+    .values({ instanceId: currentInstance, ...values })
+    .returning({ id: taches.id });
+  return { simulation: false, id: row?.id };
+}
+
 export const crmTache = z.object({
   titre: z.string().trim().min(1).max(300),
   detail: z.string().max(5_000).nullish(),
@@ -57,41 +103,19 @@ registerPropositionType({
   type: 'crm.tache',
   action: 'tache',
   schema: crmTache,
-  apply: async (tx, c, ctx) => {
-    const [crm] = await tx
-      .select({ fournisseur: connexions.fournisseur })
-      .from(connexions)
-      .where(and(eq(connexions.instanceId, currentInstance), eq(connexions.kind, 'crm')));
-    const values = {
-      titre: c.titre,
-      canal: c.canal,
-      echeance: c.echeance ? new Date(c.echeance) : null,
-      contactId: c.contactId ?? null,
-      opportuniteId: c.opportuniteId ?? null,
-    };
-    if (crm?.fournisseur === 'hubspot') {
-      const result = await writeVia(
-        tx,
-        ctx.instance,
-        'crm',
-        { op: 'task.create', data: { ...values, detail: c.detail, echeance: c.echeance } },
-        ctx.deps,
-      );
-      if (result.simulation) return result;
-      await tx.insert(taches).values({
-        instanceId: currentInstance,
-        source: 'hubspot',
-        sourceId: typeof result.id === 'string' ? result.id : null,
-        ...values,
-      });
-      return result;
-    }
-    const [row] = await tx
-      .insert(taches)
-      .values({ instanceId: currentInstance, ...values })
-      .returning({ id: taches.id });
-    return { simulation: false, id: row?.id };
-  },
+  apply: (tx, c, ctx) =>
+    creerTacheSuivi(
+      tx,
+      ctx,
+      {
+        titre: c.titre,
+        canal: c.canal,
+        echeance: c.echeance ? new Date(c.echeance) : null,
+        contactId: c.contactId ?? null,
+        opportuniteId: c.opportuniteId ?? null,
+      },
+      c.detail,
+    ),
 });
 
 // Note for the second brain: always a draft that the pilot rereads there, never validated by the OS.

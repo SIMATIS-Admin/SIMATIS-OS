@@ -216,6 +216,8 @@ import {
   modifierContenu,
   nouvelleVersion,
   validerDevis,
+  conclureDevis,
+  issueDevisSchema,
 } from '../conversion/devis.js';
 import {
   clauseBibliothequeSchema,
@@ -2302,6 +2304,23 @@ export function registerApi(
   app.post<DevisRoute>(
     '/api/i/:slug/devis/:id/valider',
     surDevis<DevisRoute>((i, request) => validerDevis(db, i, request.params.id)),
+  );
+  app.post<DevisRoute>(
+    '/api/i/:slug/devis/:id/conclure',
+    surDevis<DevisRoute>(async (i, request, reply) => {
+      try {
+        return await conclureDevis(
+          db,
+          i,
+          request.params.id,
+          issueDevisSchema.parse(request.body),
+          connexionDeps,
+        );
+      } catch (error) {
+        if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+        throw error;
+      }
+    }),
   );
   app.post<DevisRoute>(
     '/api/i/:slug/devis/:id/transmettre',

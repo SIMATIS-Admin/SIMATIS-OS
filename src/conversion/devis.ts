@@ -1,15 +1,19 @@
 import { and, asc, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { contacts, entreprises, opportunites } from '../crm/schema.js';
-import { pipelineSource } from '../crm/pipeline.js';
+import { changeOpportunite, pipelineSource } from '../crm/pipeline.js';
 import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
+import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import { logEvent } from '../journal/service.js';
+import { echapper, paragraphe, salutation } from '../mail/gabarit.js';
+import { creerTacheSuivi } from '../pilotage/types-propositions.js';
 import { registerPropositionType } from '../propositions/registry.js';
 import { propose, type PropositionCtx } from '../propositions/service.js';
 import { calculer, DevisRefuse, type ContenuDevis } from './devis-contenu.js';
+import { genererPdfDevis } from './devis-pdf.js';
 import { formaterNumero, REGLAGES_PAR_DEFAUT, type Reglages } from './devis-parametres.js';
 import { devis, devisClauses, devisModeles, devisReglages, type Devis } from './schema.js';
 
@@ -339,7 +343,7 @@ registerPropositionType({
   type: 'devis.transmettre',
   action: 'transmettre',
   schema: transmission,
-  apply: async (tx, c) => {
+  apply: async (tx, c, ctx) => {
     const current = await charger(tx, c.devisId);
     if (current.statut !== 'valide') throw new DevisRefuse('Le devis doit être validé avant envoi');
     const envoye = new Date();
@@ -363,9 +367,107 @@ registerPropositionType({
           inArray(opportunites.etape, ['detection', 'prospection', 'qualification']),
         ),
       );
-    return { simulation: false, statut: 'transmis' };
+    const [lien] = await tx
+      .select({ contactId: contacts.id, nom: contacts.nom, email: contacts.email })
+      .from(opportunites)
+      .leftJoin(
+        contacts,
+        and(eq(contacts.id, opportunites.contactId), eq(contacts.instanceId, currentInstance)),
+      )
+      .where(
+        and(
+          eq(opportunites.instanceId, currentInstance),
+          eq(opportunites.id, current.opportuniteId),
+        ),
+      );
+    // The reminder first (undoable), the mail last (a real draft cannot be taken back). Neither
+    // may undo the quote's own change of state: a failure is reported in the result.
+    let relance = '';
+    try {
+      await tx.transaction((sp) =>
+        creerTacheSuivi(
+          sp,
+          ctx,
+          {
+            titre: `Relancer le devis ${current.numero}`,
+            canal: 'email',
+            echeance: new Date(envoye.getTime() + DELAI_RELANCE_JOURS * 864e5),
+            contactId: lien?.contactId ?? null,
+            opportuniteId: current.opportuniteId,
+          },
+          `Devis ${current.numero} envoyé sans réponse depuis ${DELAI_RELANCE_JOURS} jours.`,
+        ),
+      );
+    } catch (error) {
+      relance = ` Relance à J+${DELAI_RELANCE_JOURS} non créée (${error instanceof Error ? error.message : String(error)}).`;
+    }
+    const message =
+      (await brouillonDuDevis(tx, ctx, current, lien?.email ?? null, lien?.nom ?? null)) + relance;
+    return { simulation: false, statut: 'transmis', message };
   },
 });
+
+const DELAI_RELANCE_JOURS = 10;
+
+// The mail is only ever a draft in the instance's mailbox: the pilot rereads and sends it. A
+// missing address or mailbox never blocks the quote, the message says what was left undone.
+async function brouillonDuDevis(
+  tx: Tx,
+  ctx: { instance: Instance; deps: ConnexionDeps },
+  d: Devis,
+  email: string | null,
+  nomContact: string | null,
+): Promise<string> {
+  if (!email) {
+    return 'Aucune adresse pour le contact de l’affaire : brouillon non créé, le PDF reste téléchargeable depuis le devis.';
+  }
+  const validite = d.validite ? new Date(d.validite).toLocaleDateString('fr-FR') : null;
+  const html = [
+    paragraphe(salutation(nomContact)),
+    paragraphe(
+      `Comme convenu, vous trouverez ci-joint notre proposition « ${echapper(d.titre)} » (devis ${echapper(d.numero)})${validite ? `, valable jusqu’au ${validite}` : ''}.`,
+    ),
+    paragraphe('Je reste à votre disposition pour en parler et répondre à vos questions.'),
+  ].join('\n');
+  try {
+    const [enrichi] = await enrichir(tx, [d]);
+    if (!enrichi) throw new DevisRefuse('Devis introuvable');
+    const pdf = await genererPdfDevis({
+      ...enrichi,
+      createdAt: enrichi.createdAt,
+      entreprise: enrichi.entreprise,
+    });
+    // Savepoint: a mailbox error must not undo the quote's own change of state.
+    const resultat = await tx.transaction((sp) =>
+      writeVia(
+        sp,
+        ctx.instance,
+        'messagerie',
+        {
+          op: 'draft.create',
+          data: {
+            to: email,
+            subject: `Devis ${d.numero} : ${d.titre}`,
+            html,
+            pieces: [
+              {
+                nom: `devis-${d.numero.replace(/[^A-Za-z0-9._-]/g, '-')}.pdf`,
+                typeMime: 'application/pdf',
+                base64: pdf.toString('base64'),
+              },
+            ],
+          },
+        },
+        ctx.deps,
+      ),
+    );
+    return resultat.simulation
+      ? 'Brouillon Gmail simulé (écritures réelles désactivées).'
+      : `Brouillon Gmail créé pour ${email}, avec le PDF : à relire et à envoyer.`;
+  } catch (error) {
+    return `Brouillon non créé (${error instanceof Error ? error.message : String(error)}) : le PDF reste téléchargeable depuis le devis.`;
+  }
+}
 
 export async function demanderTransmission(db: Executor, ctx: PropositionCtx, id: string) {
   return withInstance(db, ctx.instance.id, async (tx) => {
@@ -377,5 +479,60 @@ export async function demanderTransmission(db: Executor, ctx: PropositionCtx, id
       contenu: { devisId: id, numero: current.numero, montant: calculer(current).ht },
       auteur: 'os',
     });
+  });
+}
+
+const issueSchema = z.object({
+  issue: z.enum(['accepte', 'refuse']),
+  motif: z.string().trim().max(200).nullish(),
+});
+export type IssueDevis = z.infer<typeof issueSchema>;
+export const issueDevisSchema = issueSchema;
+
+// The client's answer: the affair follows (won or lost, through the same path as the Pipeline, so a
+// mirrored CRM is written, simulated or refused exactly like a drag in the board).
+export async function conclureDevis(
+  db: Executor,
+  instance: Instance,
+  id: string,
+  { issue, motif }: IssueDevis,
+  deps: ConnexionDeps,
+) {
+  const courant = await lireDevis(db, instance, id);
+  if (courant.statut !== 'transmis')
+    throw new DevisRefuse('Seul un devis envoyé peut être accepté ou refusé');
+  // Claim the quote first (atomic), so two simultaneous answers cannot both reach the affair.
+  const row = await withInstance(db, instance.id, async (tx) => {
+    const [pris] = await tx
+      .update(devis)
+      .set({ statut: issue, updatedAt: new Date() })
+      .where(and(eq(devis.id, id), eq(devis.statut, 'transmis')))
+      .returning();
+    return pris;
+  });
+  if (!row) throw new DevisRefuse('Devis déjà conclu');
+  try {
+    const fait = await changeOpportunite(
+      db,
+      instance,
+      courant.opportuniteId,
+      issue === 'accepte' ? { clos: 'gagne' } : { clos: 'perdu', motif: motif ?? null },
+      deps,
+    );
+    if (!fait) throw new DevisRefuse('Affaire introuvable dans cette instance');
+  } catch (error) {
+    // The affair refused (read-only CRM…): the quote goes back to « envoyé ».
+    await withInstance(db, instance.id, (tx) =>
+      tx.update(devis).set({ statut: 'transmis' }).where(eq(devis.id, id)),
+    );
+    throw error;
+  }
+  return withInstance(db, instance.id, async (tx) => {
+    await logEvent(tx, {
+      acteur: 'pilote',
+      action: `Devis ${row.numero} ${issue === 'accepte' ? 'accepté' : 'refusé'}`,
+      niveau: 'L1',
+    });
+    return row;
   });
 }

@@ -187,6 +187,33 @@ describe('Rendez-vous and Devis', () => {
     ).toBe(404);
   });
 
+  it('records the client answer on a sent quote: refused closes the affair as lost', async () => {
+    const { rows } = await t.owner.pool.query<{ id: string }>(
+      "select id from devis where statut = 'transmis' limit 1",
+    );
+    const id = rows[0]!.id;
+    expect(
+      (await send('POST', `/api/i/simatis/devis/${id}/conclure`, { issue: 'peut-etre' })).status,
+    ).toBe(400);
+    expect(
+      (await send('POST', `/api/i/helioval/devis/${id}/conclure`, { issue: 'refuse' })).status,
+    ).toBe(404);
+    const refuse = await send('POST', `/api/i/simatis/devis/${id}/conclure`, {
+      issue: 'refuse',
+      motif: 'Budget gelé',
+    });
+    expect(refuse.status).toBe(200);
+    expect(refuse.body).toMatchObject({ statut: 'refuse' });
+    const { rows: opp } = await t.owner.pool.query<{ clos: string }>(
+      'select clos from opportunites where id = (select opportunite_id from devis where id = $1)',
+      [id],
+    );
+    expect(opp[0]?.clos).toBe('perdu');
+    expect(
+      (await send('POST', `/api/i/simatis/devis/${id}/conclure`, { issue: 'accepte' })).status,
+    ).toBe(400);
+  });
+
   it('serves the quote settings and libraries, only for the own instance', async () => {
     expect((await send('GET', '/api/i/helioval/devis/parametres')).status).toBe(404);
     const vide = await send('GET', '/api/i/simatis/devis/parametres');

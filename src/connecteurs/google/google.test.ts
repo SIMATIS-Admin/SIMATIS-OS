@@ -476,6 +476,58 @@ describe('Gmail and Calendar', () => {
     expect(faire({ cid: 'sig', typeMime: 'image/png', base64: '<script>' })).toThrow();
   });
 
+  it('joint un PDF dans un message multipart/mixed, après le corps', () => {
+    const pdf = Buffer.from('%PDF-1.3 fictif'.repeat(20));
+    const brut = mimeBrut({
+      to: 'a@b.example',
+      subject: 'Proposition',
+      html: '<p>Bonjour</p>',
+      pieces: [
+        {
+          nom: 'devis-DEV-2026-001.pdf',
+          typeMime: 'application/pdf',
+          base64: pdf.toString('base64'),
+        },
+      ],
+    });
+    const frontiere = /Content-Type: multipart\/mixed; boundary="([^"]+)"/.exec(brut)?.[1];
+    expect(frontiere).toBeTruthy();
+    const parties = brut.split(`--${frontiere}`);
+    expect(parties).toHaveLength(4);
+    expect(parties[1]).toContain('Content-Type: text/html; charset="UTF-8"');
+    expect(parties[2]).toContain('Content-Type: application/pdf; name="devis-DEV-2026-001.pdf"');
+    expect(parties[2]).toContain(
+      'Content-Disposition: attachment; filename="devis-DEV-2026-001.pdf"',
+    );
+    const lignes = (parties[2] ?? '').split('\r\n').filter((l) => /^[A-Za-z0-9+/=]{20,}$/.test(l));
+    expect(lignes.every((l) => l.length <= 76)).toBe(true);
+    expect(Buffer.from(lignes.join(''), 'base64').equals(pdf)).toBe(true);
+  });
+
+  it('joint un PDF à un message qui a déjà une signature en image (mixed autour de related)', () => {
+    const brut = mimeBrut({
+      to: 'a@b.example',
+      subject: 'Proposition',
+      html: '<p><img src="cid:signature"></p>',
+      images: [{ cid: 'signature', typeMime: 'image/png', base64: 'AAAA' }],
+      pieces: [{ nom: 'devis.pdf', typeMime: 'application/pdf', base64: 'AAAA' }],
+    });
+    expect(brut).toMatch(/multipart\/mixed/);
+    expect(brut).toMatch(/multipart\/related/);
+    expect(brut).toContain('Content-ID: <signature>');
+    expect(brut).toContain('filename="devis.pdf"');
+  });
+
+  it('refuse une pièce jointe dont le nom, le type ou le contenu n’est pas sûr', () => {
+    const faire = (p: { nom: string; typeMime: string; base64: string }) => () =>
+      mimeBrut({ to: 'a@b.example', subject: 's', html: 'h', pieces: [p] });
+    expect(faire({ nom: 'x.pdf', typeMime: 'text/html', base64: 'AAAA' })).toThrow();
+    expect(
+      faire({ nom: 'x"\r\nBcc: y.pdf', typeMime: 'application/pdf', base64: 'AAAA' }),
+    ).toThrow();
+    expect(faire({ nom: 'x.pdf', typeMime: 'application/pdf', base64: '<script>' })).toThrow();
+  });
+
   it('crée le brouillon dans le fil Gmail quand un threadId est donné, et seulement alors', async () => {
     await ctx(true, (c) =>
       createDraft(

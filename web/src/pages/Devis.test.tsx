@@ -219,6 +219,40 @@ describe('écran Devis', () => {
     await waitFor(() => expect(calls.some((c) => c.url.endsWith('/version'))).toBe(true));
   });
 
+  it('un devis envoyé propose « Accepté » et « Refusé » ; le refus envoie le motif', async () => {
+    detail = { ...valide, statut: 'transmis', envoyeLe: '2026-11-10T09:00:00Z' };
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Envoi/ }));
+    expect(screen.queryByText('Demander l’envoi')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Refusé' }));
+    fireEvent.change(screen.getByLabelText('Motif du refus (facultatif)'), {
+      target: { value: 'Budget gelé' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer le refus' }));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/conclure'))).toBe(true));
+    expect(calls.find((c) => c.url.endsWith('/conclure'))?.body).toEqual({
+      issue: 'refuse',
+      motif: 'Budget gelé',
+    });
+  });
+
+  it('« Accepté » envoie l’issue sans motif', async () => {
+    detail = { ...valide, statut: 'transmis', envoyeLe: '2026-11-10T09:00:00Z' };
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Envoi/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accepté' }));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/conclure'))).toBe(true));
+    expect(calls.find((c) => c.url.endsWith('/conclure'))?.body).toEqual({ issue: 'accepte' });
+  });
+
+  it('un devis accepté est verrouillé et affiche son issue', async () => {
+    detail = { ...valide, statut: 'accepte', envoyeLe: '2026-11-10T09:00:00Z' };
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Mission/ }));
+    expect(screen.getByLabelText<HTMLInputElement>('Intitulé de la mission').disabled).toBe(true);
+    expect(screen.getAllByText('Accepté').length).toBeGreaterThan(0);
+  });
+
   it('avec une affaire, ouvre directement le devis existant', async () => {
     existant = true;
     render(<Devis slug="simatis" affaire="o1" />);

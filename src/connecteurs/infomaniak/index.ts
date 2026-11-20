@@ -1,6 +1,6 @@
 import { registerConnector } from '../../connexions/service.js';
 import type { Connector } from '../../connexions/types.js';
-import type { ImageIntegree } from '../google/google.js';
+import type { ImageIntegree, PieceJointe } from '../google/google.js';
 import { createDraft, verifier } from './imap.js';
 
 const VIDE = { lus: 0, crees: 0, maj: 0, erreurs: [] };
@@ -17,14 +17,21 @@ export function infomaniakConnector(): Connector {
     write: async (ctx, op) => {
       if (op.op !== 'draft.create')
         throw new Error(`Écriture de messagerie non prise en charge : ${op.op}`);
-      const { to, subject, html, images } = op.data as {
+      const { to, subject, html, images, pieces } = op.data as {
         to: string;
         subject: string;
         html: string;
         images?: ImageIntegree[];
+        pieces?: PieceJointe[];
       };
       // Pas de notion de fil ici : le brouillon est créé dans le dossier des brouillons.
-      const result = await createDraft(ctx, { to, subject, html, ...(images ? { images } : {}) });
+      const result = await createDraft(ctx, {
+        to,
+        subject,
+        html,
+        ...(images ? { images } : {}),
+        ...(pieces ? { pieces } : {}),
+      });
       return { simulation: result.simulation, ...(result.draftId ? { id: result.draftId } : {}) };
     },
     verify: (secrets) => verifier(secrets),
