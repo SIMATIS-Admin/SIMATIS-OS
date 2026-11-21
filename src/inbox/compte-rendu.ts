@@ -16,6 +16,7 @@ import { plusProche } from '../conversion/reunion-rdv.js';
 import { FusionImpossible, fusionnerSession } from '../visio/enregistrement.js';
 import { reunionsWispr, sujets } from './schema.js';
 import { marquerTraite, SujetRefuse, type SujetVue } from './service.js';
+import { appliquerSuite, suiteAcquittementSchema, verifierSuite } from './suite-rdv.js';
 
 const JOUR_MS = 86_400_000;
 
@@ -90,6 +91,8 @@ export const compteRenduSujetSchema = z
     // Interlocuteur choisi par le pilote (sinon celui de l'entrée) ; note du second cerveau cochée ou non.
     contactId: z.uuid().nullish(),
     cerveau: z.boolean().optional(),
+    // Lignes de suite laissées cochées (livraison 2) : diagnostic, rendez-vous, relance.
+    suite: suiteAcquittementSchema.optional(),
   })
   .strict();
 
@@ -157,6 +160,8 @@ async function acquitterSujet(
     if (trouves.length !== contactIds.length) throw new SujetRefuse('Interlocuteur introuvable.');
   }
 
+  verifierSuite(instance, input.suite);
+
   let eventId = input.eventId;
   if (!eventId) {
     const debut = input.debut ?? s.createdAt.toISOString();
@@ -187,6 +192,28 @@ async function acquitterSujet(
   } catch (error) {
     if (error instanceof RdvIndisponible) throw new SujetRefuse(error.message);
     throw error;
+  }
+  if (input.suite) {
+    const lien = contactIds[0] ?? null;
+    const [fiche] = lien
+      ? await withInstance(db, instance.id, (tx) =>
+          tx
+            .select({ entrepriseId: contacts.entrepriseId })
+            .from(contacts)
+            .where(and(eq(contacts.instanceId, currentInstance), eq(contacts.id, lien))),
+        )
+      : [];
+    await appliquerSuite(
+      db,
+      instance,
+      input.suite,
+      {
+        contactId: lien,
+        entrepriseId: s.entrepriseId ?? fiche?.entrepriseId ?? null,
+        opportuniteId: input.opportuniteId ?? null,
+      },
+      deps,
+    );
   }
   const traitee = await marquerTraite(db, instance, sujetId);
   // Une réunion, une entrée : celle que l'agenda a déposée pour le rendez-vous retenu est traitée aussi.

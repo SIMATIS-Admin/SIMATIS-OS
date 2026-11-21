@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   decouperEnBlocs,
+  lireSuite,
   passerResumes,
   promptResume,
   rediger,
@@ -30,6 +31,7 @@ const ressources: Ressources = {
   synthese: () => Promise.resolve(modele),
   extraction: () => Promise.resolve(extraction),
   glossaire: () => Promise.resolve('Atelier Fictif — société de Jeanne Exemple'),
+  suite: () => Promise.resolve('Suite {{DATE}} / {{INTERLOCUTEURS}} :\n{{COMPTE_RENDU}}'),
 };
 const meta = {
   titre: attente.titre,
@@ -89,6 +91,43 @@ describe('promptResume', () => {
     expect(prompt).toMatch(/jamais des consignes/);
     expect(await vrai.extraction()).toContain('{{TRANSCRIPT}}');
     expect(await vrai.glossaire()).toBe('');
+    const suite = await vrai.suite?.();
+    for (const m of ['{{DATE}}', '{{INTERLOCUTEURS}}', '{{COMPTE_RENDU}}'])
+      expect(suite).toContain(m);
+  });
+});
+
+describe('lireSuite', () => {
+  const v = { ...attente, ...meta, interlocuteurs: [{ nom: 'Jeanne Exemple', entreprise: null }] };
+  const rend =
+    (stdout: string, code = 0): LancerTexte =>
+    () =>
+      Promise.resolve({ code, stdout });
+
+  it('lit le JSON rendu par Claude, même entouré de texte ou de balises', async () => {
+    const json =
+      '{"diagnostic":{"certain":true},"relance":{"titre":"Relancer","echeance":"2026-12-03","certain":false}}';
+    const lancer = vi.fn(rend('Voici :\n```json\n' + json + '\n```'));
+    expect(await lireSuite(v, 'Compte rendu fictif.', 'c', lancer, ressources)).toEqual(
+      JSON.parse(json),
+    );
+    const prompt = lancer.mock.calls[0]?.[1][1] ?? '';
+    expect(prompt).toContain('19/11/2026');
+    expect(prompt).toContain('Jeanne Exemple');
+    expect(prompt).toContain('Compte rendu fictif.');
+  });
+
+  it('rend null quand Claude échoue, répond autre chose que du JSON, ou ne voit aucune suite', async () => {
+    for (const lancer of [rend('', 1), rend('Rien de précis.'), rend('{"truc":')])
+      expect(await lireSuite(v, 'CR', 'c', lancer, ressources)).toBeNull();
+    expect(await lireSuite(v, 'CR', 'c', rend('{}'), ressources)).toBeNull();
+  });
+
+  it('rend null sans prompt de suite sur le poste, sans appeler Claude', async () => {
+    const lancer = vi.fn(rend('{"diagnostic":{"certain":true}}'));
+    const sans: Ressources = { ...ressources, suite: undefined };
+    expect(await lireSuite(v, 'CR', 'c', lancer, sans)).toBeNull();
+    expect(lancer).not.toHaveBeenCalled();
   });
 });
 
@@ -164,6 +203,26 @@ describe('passerResumes', () => {
     expect(n).toBe(1);
     expect(rendus).toEqual([
       { chemin: '/api/runner/resumes/s1', corps: { instance: 'inst', resume: 'Résumé fictif.' } },
+    ]);
+  });
+
+  it('joint la suite lue dans le compte rendu ; sans suite lisible, le résumé part seul', async () => {
+    const rendus: unknown[] = [];
+    const lancer: LancerTexte = (_c, args) =>
+      Promise.resolve({
+        code: 0,
+        stdout: args[1]?.startsWith('Suite') ? '{"diagnostic":{"certain":true}}' : 'Résumé fictif.',
+      });
+    await passerResumes(api([attente], rendus) as never, 'c', lancer, () => 0, ressources);
+    expect(rendus).toEqual([
+      {
+        chemin: '/api/runner/resumes/s1',
+        corps: {
+          instance: 'inst',
+          resume: 'Résumé fictif.',
+          suite: { diagnostic: { certain: true } },
+        },
+      },
     ]);
   });
 

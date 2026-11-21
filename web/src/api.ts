@@ -1121,12 +1121,34 @@ export type DossierRdv = {
     entreprise: string | null;
     principal: boolean;
   }[];
+  suite?: LigneSuite[];
 };
+// La suite déduite du compte rendu : `coche` est l'état initial de la case.
+export type LigneSuite =
+  | {
+      genre: 'diagnostic';
+      nom: string;
+      coche: boolean;
+      existant: { id: string; nom: string } | null;
+    }
+  | {
+      genre: 'rdv';
+      titre: string;
+      debut: string;
+      coche: boolean;
+      dejaAgenda: { eventId: string; titre: string; debut: string | null } | null;
+    }
+  | { genre: 'relance'; titre: string; echeance: string; coche: boolean };
 export type CorpsAcquittement = {
   eventId?: string;
   texte: string;
   cerveau: boolean;
   contactId: string | null;
+  suite?: {
+    diagnostic?: { nom: string };
+    rdv?: { titre: string; debut: string };
+    relance?: { titre: string; echeance: string };
+  };
 };
 export type CandidatRdv = {
   eventId: string;

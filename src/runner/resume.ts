@@ -26,6 +26,8 @@ export type Ressources = {
   synthese: () => Promise<string>;
   extraction: () => Promise<string>;
   glossaire: () => Promise<string>;
+  // Absent sur un poste sans ce prompt : le résumé part alors sans suite déduite.
+  suite?: () => Promise<string>;
 };
 
 const REESSAI_MS = 10 * 60_000;
@@ -59,6 +61,7 @@ export function ressourcesDuPoste(
   return {
     synthese: () => requis('prompt-synthese-visio.md'),
     extraction: () => requis('prompt-extraction-visio.md'),
+    suite: () => requis('prompt-suite-visio.md'),
     glossaire: () =>
       cerveau
         ? lireSiPresent(path.join(cerveau, 'brain', 'outils', 'glossaire-visio.txt'))
@@ -184,6 +187,39 @@ export async function rediger(
   );
 }
 
+// Second regard, sur le compte rendu déjà rédigé : ce que les participants ont annoncé pour la suite
+// (diagnostic, prochain rendez-vous, relance). Le JSON est vérifié par l'OS ; ici on le lit seulement.
+// Une suite illisible ou absente n'empêche jamais le compte rendu de partir.
+export async function lireSuite(
+  v: Pick<VisioAResumer, 'titre' | 'debut' | 'fin' | 'participants' | 'interlocuteurs'>,
+  compteRendu: string,
+  claude: string,
+  lancer: LancerTexte,
+  ressources: Ressources,
+): Promise<Record<string, unknown> | null> {
+  if (!ressources.suite) return null;
+  const meta = metadonnees(v);
+  const { code, stdout } = await lancer(claude, [
+    '-p',
+    remplir(await ressources.suite(), {
+      DATE: meta.DATE,
+      INTERLOCUTEURS: meta.INTERLOCUTEURS,
+      COMPTE_RENDU: compteRendu,
+    }),
+  ]);
+  if (code !== 0) return null;
+  const debut = stdout.indexOf('{');
+  const fin = stdout.lastIndexOf('}');
+  if (debut < 0 || fin < debut) return null;
+  try {
+    const lu: unknown = JSON.parse(stdout.slice(debut, fin + 1));
+    if (!lu || typeof lu !== 'object' || Array.isArray(lu)) return null;
+    return Object.keys(lu).length > 0 ? (lu as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 // Un passage : résume les visios transcrites que l'OS signale, une à une.
 export async function passerResumes(
   api: Api,
@@ -203,7 +239,12 @@ export async function passerResumes(
       return null;
     });
     if (!resume) continue;
-    await api(`/api/runner/resumes/${v.id}`, { instance: v.instance, resume });
+    const suite = await lireSuite(v, resume, claude, lancer, ressources).catch(() => null);
+    await api(`/api/runner/resumes/${v.id}`, {
+      instance: v.instance,
+      resume,
+      ...(suite ? { suite } : {}),
+    });
     dernierEssai.delete(v.id);
     faits++;
   }

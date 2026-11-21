@@ -114,7 +114,34 @@ export type DossierRdv = {
     entreprise: string | null;
     principal: boolean;
   }[];
+  // La suite déduite du compte rendu (livraison 2) : lignes que Marc coche, corrige ou écarte.
+  suite?: LigneSuite[];
 };
+
+// Ce que l'exécuteur a lu dans la visio : une suite annoncée, avec son degré de certitude.
+export type SuiteAnnoncee = {
+  diagnostic?: { certain: boolean };
+  rdv?: { titre: string; debut: string; certain: boolean };
+  relance?: { titre: string; echeance: string; certain: boolean };
+};
+
+// Au plus une ligne par genre. `coche` est l'état initial de la case : seules les lignes dites
+// clairement dans la visio sont cochées d'avance.
+export type LigneSuite =
+  | {
+      genre: 'diagnostic';
+      nom: string;
+      coche: boolean;
+      existant: { id: string; nom: string } | null;
+    }
+  | {
+      genre: 'rdv';
+      titre: string;
+      debut: string;
+      coche: boolean;
+      dejaAgenda: { eventId: string; titre: string; debut: string | null } | null;
+    }
+  | { genre: 'relance'; titre: string; echeance: string; coche: boolean };
 
 export type Sujet = typeof sujets.$inferSelect;
 

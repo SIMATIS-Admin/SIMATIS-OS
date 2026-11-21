@@ -156,6 +156,49 @@ describe('Résumé d’une visio enregistrée', () => {
     expect(r.rows[0]?.prepare.dossier.interlocuteurs[0]?.nom).toBe('Camille Fictive');
   });
 
+  it('la suite lue par l’exécuteur devient des lignes du dossier, vérifiées contre l’agenda', async () => {
+    const id = await visioTranscrite('os:res-suite', 'Moi : Texte fictif.');
+    const debut = '2031-03-04T14:00:00.000Z';
+    await fabrique(t).insere(a, 'rendez_vous', 'event_id, titre, debut, statut', [
+      'ev-deja',
+      'Diagnostic fictif',
+      debut,
+      'rdv',
+    ]);
+    const r = await exec('POST', `/api/runner/resumes/${id}`, {
+      instance: 'res-a',
+      resume: 'Résumé fictif.',
+      suite: {
+        rdv: { titre: 'Diagnostic', debut, certain: true },
+        relance: { titre: 'Relancer', echeance: '2031-03-18', certain: false },
+      },
+    });
+    expect(r.statusCode).toBe(200);
+    const q = await t.owner.pool.query<{ suite: { genre: string; coche: boolean }[] }>(
+      "select compte_rendu_prepare->'dossier'->'suite' as suite from sujets where source = 'visio' and source_id = $1",
+      [id],
+    );
+    expect(q.rows[0]?.suite).toMatchObject([
+      { genre: 'rdv', coche: false, dejaAgenda: { eventId: 'ev-deja' } },
+      { genre: 'relance', coche: false, echeance: '2031-03-18' },
+    ]);
+  });
+
+  it('une suite illisible est ignorée : le résumé est posé quand même', async () => {
+    const id = await visioTranscrite('os:res-suite-ko', 'Moi : Texte fictif.');
+    const r = await exec('POST', `/api/runner/resumes/${id}`, {
+      instance: 'res-a',
+      resume: 'Résumé fictif.',
+      suite: { rdv: { titre: 'Sans date' } },
+    });
+    expect(r.statusCode).toBe(200);
+    const q = await t.owner.pool.query<{ suite: unknown }>(
+      "select compte_rendu_prepare->'dossier'->'suite' as suite from sujets where source = 'visio' and source_id = $1",
+      [id],
+    );
+    expect(q.rows[0]?.suite ?? null).toBeNull();
+  });
+
   it('une visio sans invité reconnu dépose un dossier sans interlocuteur, sans bloquer', async () => {
     const id = await visioTranscrite('os:res-8', 'Moi : Texte fictif.');
     await exec('POST', `/api/runner/resumes/${id}`, {
