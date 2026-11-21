@@ -5,7 +5,9 @@ import { contacts } from '../crm/schema.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
+import { enregistrerCompteRendu } from '../conversion/rdv.js';
 import { candidatsRendezVous, enregistrerDepuisSujet } from './compte-rendu.js';
+import type { DossierRdv } from './schema.js';
 import { deposerSujet } from './depot.js';
 import { deposerReunion } from './reunions.js';
 import { SujetRefuse } from './service.js';
@@ -147,5 +149,214 @@ describe('Inbox : compte rendu écrit dans le rendez-vous', () => {
     await expect(
       enregistrerDepuisSujet(t.app.db, a, sujetId, { eventId: 'os:inventé', texte: 'x' }, deps),
     ).rejects.toBeInstanceOf(SujetRefuse);
+  });
+});
+
+describe('Inbox : acquittement d’un rendez-vous avec dossier', () => {
+  let t: TestApp;
+  let a: Instance;
+  let camille: string;
+  let n = 0;
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    a = await createInstance(t.owner.db, { slug: 'acq-a', nom: 'A', type: 'mandat' });
+    const entreprise = (
+      await t.owner.pool.query<{ id: string }>(
+        "insert into entreprises (instance_id, nom) values ($1, 'Entreprise Fictive') returning id",
+        [a.id],
+      )
+    ).rows[0]!.id;
+    camille = (
+      await t.owner.pool.query<{ id: string }>(
+        "insert into contacts (instance_id, nom, entreprise_id) values ($1, 'Camille Fictive', $2) returning id",
+        [a.id, entreprise],
+      )
+    ).rows[0]!.id;
+  });
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  const sql = <T extends object>(texte: string, valeurs: unknown[] = []) =>
+    t.owner.pool.query<T>(texte, valeurs);
+  const rdvAgenda = async (eventId: string) =>
+    (
+      await sql<{ id: string }>(
+        "insert into rendez_vous (instance_id, event_id, titre, debut, statut) values ($1, $2, $3, now(), 'rdv') returning id",
+        [a.id, eventId, `Visio ${eventId}`],
+      )
+    ).rows[0]!.id;
+  // Entrée « compte rendu » d'une visio, avec son dossier.
+  const entree = async (dossier: Partial<DossierRdv> = {}, contactId: string | null = null) => {
+    const cle = `acq-${++n}`;
+    const { id } = await withInstance(t.app.db, a.id, (tx) =>
+      deposerSujet(tx, {
+        type: 'compte_rendu',
+        titre: `Résumé de la visio : ${cle}`,
+        origine: 'os',
+        source: 'visio',
+        sourceId: cle,
+        contactId,
+      }),
+    );
+    const complet: DossierRdv = {
+      sessionVisioId: '00000000-0000-4000-8000-000000000001',
+      sourceRdvEventId: `os:${cle}`,
+      rdv: null,
+      rdvCertain: false,
+      candidats: [],
+      interlocuteurs: [],
+      ...dossier,
+    };
+    await sql('update sujets set compte_rendu_prepare = $1 where id = $2', [
+      JSON.stringify({
+        texte: 'Texte fictif.',
+        prepareeLe: '2026-11-20T10:00:00Z',
+        dossier: complet,
+      }),
+      id,
+    ]);
+    return { id, cle };
+  };
+  const acquitter = (id: string, corps: Parameters<typeof enregistrerDepuisSujet>[3]) =>
+    enregistrerDepuisSujet(t.app.db, a, id, corps, deps);
+  const compterNotes = async (titre: string) =>
+    (
+      await sql<{ statut: string }>(
+        "select statut from propositions where instance_id = $1 and type = 'note.second_cerveau' and contenu->>'titre' like $2",
+        [a.id, `%${titre}%`],
+      )
+    ).rows;
+
+  it('enregistre le compte rendu sur le rendez-vous retenu et lie l’interlocuteur choisi', async () => {
+    await rdvAgenda('ev-acq-1');
+    const { id } = await entree();
+    const vue = await acquitter(id, {
+      eventId: 'ev-acq-1',
+      texte: 'Compte rendu fictif.',
+      contactId: camille,
+    });
+    expect(vue?.statut).toBe('traite');
+    const r = await sql<{ compte_rendu: string; n: number }>(
+      `select r.compte_rendu, (select count(*)::int from rdv_contacts rc where rc.rendez_vous_id = r.id and rc.contact_id = $2) as n
+       from rendez_vous r where r.instance_id = $1 and r.event_id = 'ev-acq-1'`,
+      [a.id, camille],
+    );
+    expect(r.rows[0]).toEqual({ compte_rendu: 'Compte rendu fictif.', n: 1 });
+  });
+
+  it('cerveau coché : la note est appliquée sur l’accord de l’acquittement, sans entrée de plus', async () => {
+    await rdvAgenda('ev-acq-2');
+    const { id, cle } = await entree();
+    await acquitter(id, { eventId: 'ev-acq-2', texte: 'Texte note.', cerveau: true });
+    expect((await compterNotes(cle)).map((x) => x.statut)).toEqual(['appliquee']);
+    const ouvertes = await sql(
+      `select 1 from sujets s join propositions p on p.id = s.proposition_id
+       where s.instance_id = $1 and s.statut = 'a_traiter' and p.contenu->>'titre' like $2`,
+      [a.id, `%${cle}%`],
+    );
+    expect(ouvertes.rowCount).toBe(0);
+  });
+
+  it('cerveau décoché : aucune note, et jamais de tâche « Prochaine étape »', async () => {
+    await rdvAgenda('ev-acq-3');
+    const { id, cle } = await entree();
+    await acquitter(id, { eventId: 'ev-acq-3', texte: 'Sans note.', cerveau: false });
+    expect(await compterNotes(cle)).toEqual([]);
+    const taches = await sql(
+      "select 1 from propositions where instance_id = $1 and type = 'crm.tache'",
+      [a.id],
+    );
+    expect(taches.rowCount).toBe(0);
+  });
+
+  it('sans rendez-vous choisi ni contact, l’acquittement crée le rendez-vous et ne lie personne', async () => {
+    const { id, cle } = await entree();
+    const vue = await acquitter(id, { texte: 'Rien à lier.', titre: `Rendez-vous ${cle}` });
+    expect(vue?.statut).toBe('traite');
+    const liens = await sql(
+      `select 1 from rdv_contacts rc join rendez_vous r on r.id = rc.rendez_vous_id
+       where r.instance_id = $1 and r.titre = $2`,
+      [a.id, `Rendez-vous ${cle}`],
+    );
+    expect(liens.rowCount).toBe(0);
+  });
+
+  it('un double clic ne crée qu’un rendez-vous, un compte rendu et une note', async () => {
+    const { id, cle } = await entree();
+    const corps = { texte: 'Double clic.', titre: `Double ${cle}`, cerveau: true };
+    const rs = await Promise.allSettled([acquitter(id, corps), acquitter(id, corps)]);
+    expect(rs.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const refus = rs.find((r) => r.status === 'rejected');
+    expect(refus?.status === 'rejected' && refus.reason).toBeInstanceOf(SujetRefuse);
+    const rdv = await sql('select 1 from rendez_vous where instance_id = $1 and titre = $2', [
+      a.id,
+      `Double ${cle}`,
+    ]);
+    expect(rdv.rowCount).toBe(1);
+    expect(await compterNotes(cle)).toHaveLength(1);
+  });
+
+  it('fusionne la visio libre dans le rendez-vous retenu de l’agenda', async () => {
+    await rdvAgenda('ev-acq-5');
+    const libre = (
+      await sql<{ id: string }>(
+        "insert into rendez_vous (instance_id, event_id, titre, debut, statut, source) values ($1, 'os:lib-5', 'Enregistrement fictif', now(), 'rdv', 'visio-libre') returning id",
+        [a.id],
+      )
+    ).rows[0]!.id;
+    const session = (
+      await sql<{ id: string }>(
+        "insert into enregistrements_visio (instance_id, rendez_vous_id, statut, transcript) values ($1, $2, 'transcrit', 'Moi : Texte de la visio fictive.') returning id",
+        [a.id, libre],
+      )
+    ).rows[0]!.id;
+    const { id } = await entree({
+      sessionVisioId: session,
+      sourceRdvEventId: 'os:lib-5',
+      rdv: { eventId: 'ev-acq-5', titre: 'Visio ev-acq-5', debut: null },
+      rdvCertain: true,
+    });
+    await acquitter(id, { eventId: 'ev-acq-5', texte: 'Après fusion.' });
+    const r = await sql<{ transcript: string }>(
+      "select transcript from rendez_vous where instance_id = $1 and event_id = 'ev-acq-5'",
+      [a.id],
+    );
+    expect(r.rows[0]?.transcript).toContain('Texte de la visio fictive.');
+  });
+
+  describe('enregistrerCompteRendu depuis la fiche du rendez-vous', () => {
+    const enregistrer = (eventId: string, titre: string) =>
+      enregistrerCompteRendu(
+        t.app.db,
+        a,
+        eventId,
+        { titre, texte: 'Texte fiche.', proposerTache: true, versCerveau: true },
+        deps,
+      );
+    const propositionsDe = async (titre: string) =>
+      (
+        await sql<{ type: string }>(
+          "select type from propositions where instance_id = $1 and (contenu->>'titre' like $2)",
+          [a.id, `%${titre}%`],
+        )
+      ).rows.map((x) => x.type);
+
+    it('ne crée ni note ni tâche quand une entrée avec dossier est ouverte pour ce rendez-vous', async () => {
+      await rdvAgenda('ev-acq-6');
+      await entree({ rdv: { eventId: 'ev-acq-6', titre: 'x', debut: null }, rdvCertain: true });
+      await enregistrer('ev-acq-6', 'Garde-fou fictif');
+      expect(await propositionsDe('Garde-fou fictif')).toEqual([]);
+    });
+
+    it('sans entrée ouverte, propose toujours la note et la tâche', async () => {
+      await rdvAgenda('ev-acq-7');
+      await enregistrer('ev-acq-7', 'Sans entrée fictive');
+      expect((await propositionsDe('Sans entrée fictive')).sort()).toEqual([
+        'crm.tache',
+        'note.second_cerveau',
+      ]);
+    });
   });
 });

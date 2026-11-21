@@ -55,3 +55,22 @@ export async function proposerResumeAuSujet(
     .where(and(eq(sujets.id, id), sql`${sujets.compteRenduPrepare} is null`));
   return true;
 }
+
+// L'entrée « compte rendu » ouverte dont le dossier porte ce rendez-vous (celui de la visio ou celui
+// de l'agenda retenu) : elle porte déjà la note du second cerveau et la suite, à l'acquittement.
+export async function sujetAvecDossierOuvert(tx: Tx, eventId: string): Promise<string | null> {
+  const [s] = await tx
+    .select({ id: sujets.id })
+    .from(sujets)
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.type, 'compte_rendu'),
+        eq(sujets.statut, 'a_traiter'),
+        sql`(${sujets.compteRenduPrepare}->'dossier'->>'sourceRdvEventId' = ${eventId}
+          or ${sujets.compteRenduPrepare}->'dossier'->'rdv'->>'eventId' = ${eventId})`,
+      ),
+    )
+    .limit(1);
+  return s?.id ?? null;
+}

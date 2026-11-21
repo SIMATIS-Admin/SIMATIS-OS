@@ -13,6 +13,7 @@ import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { plusProche } from '../conversion/reunion-rdv.js';
+import { FusionImpossible, fusionnerSession } from '../visio/enregistrement.js';
 import { reunionsWispr, sujets } from './schema.js';
 import { marquerTraite, SujetRefuse, type SujetVue } from './service.js';
 
@@ -86,13 +87,40 @@ export const compteRenduSujetSchema = z
     debut: z.iso.datetime().optional(),
     texte: z.string().trim().min(1).max(10_000),
     opportuniteId: z.uuid().nullish(),
+    // Interlocuteur choisi par le pilote (sinon celui de l'entrée) ; note du second cerveau cochée ou non.
+    contactId: z.uuid().nullish(),
+    cerveau: z.boolean().optional(),
   })
   .strict();
 
 // Marc écrit le compte rendu depuis l'entrée d'Inbox : il va sur le rendez-vous (objet miroir de
 // l'événement Google, ou créé dans l'OS), relié au contact et à l'entreprise de l'entrée, puis
 // l'entrée est traitée. Refaire l'opération met à jour le même rendez-vous, sans doublon.
-export async function enregistrerDepuisSujet(
+// Un double clic ne doit pas créer deux rendez-vous : les acquittements d'une même entrée passent
+// l'un après l'autre (un seul processus serveur), le second trouve l'entrée déjà traitée.
+const enCours = new Map<string, Promise<unknown>>();
+async function enSerie<T>(cle: string, travail: () => Promise<T>): Promise<T> {
+  const precedent = enCours.get(cle) ?? Promise.resolve();
+  const suite = precedent.then(travail, travail);
+  const fin = suite.catch(() => undefined);
+  enCours.set(cle, fin);
+  try {
+    return await suite;
+  } finally {
+    if (enCours.get(cle) === fin) enCours.delete(cle);
+  }
+}
+
+export const enregistrerDepuisSujet = (
+  db: Executor,
+  instance: Instance,
+  sujetId: string,
+  input: z.infer<typeof compteRenduSujetSchema>,
+  deps: ConnexionDeps,
+): Promise<SujetVue | null> =>
+  enSerie(`${instance.id}:${sujetId}`, () => acquitterSujet(db, instance, sujetId, input, deps));
+
+async function acquitterSujet(
   db: Executor,
   instance: Instance,
   sujetId: string,
@@ -122,6 +150,8 @@ export async function enregistrerDepuisSujet(
   const titre = input.titre ?? s.titre;
   try {
     if (s.contactId) await lierRdv(db, instance, eventId, 'contact', s.contactId);
+    if (input.contactId && input.contactId !== s.contactId)
+      await lierRdv(db, instance, eventId, 'contact', input.contactId);
     if (s.entrepriseId) await lierRdv(db, instance, eventId, 'entreprise', s.entrepriseId);
     await enregistrerCompteRendu(
       db,
@@ -132,13 +162,26 @@ export async function enregistrerDepuisSujet(
         texte: input.texte,
         opportuniteId: input.opportuniteId ?? null,
         proposerTache: false,
-        versCerveau: false,
+        versCerveau: input.cerveau ?? false,
       },
       deps,
+      { accorde: true },
     );
   } catch (error) {
     if (error instanceof RdvIndisponible) throw new SujetRefuse(error.message);
     throw error;
   }
-  return marquerTraite(db, instance, sujetId);
+  const traitee = await marquerTraite(db, instance, sujetId);
+  // La visio enregistrée hors agenda rejoint le rendez-vous retenu (son texte y passe). Après le
+  // traitement de l'entrée : la fusion range le résumé et peut retirer les entrées de la visio.
+  // Elle ne bloque jamais l'acquittement.
+  const dossier = s.compteRenduPrepare?.dossier;
+  if (dossier?.sessionVisioId && dossier.sourceRdvEventId !== eventId) {
+    await withInstance(db, instance.id, (tx) =>
+      fusionnerSession(tx, dossier.sessionVisioId, eventId),
+    ).catch((error: unknown) => {
+      if (!(error instanceof FusionImpossible)) throw error;
+    });
+  }
+  return traitee;
 }
