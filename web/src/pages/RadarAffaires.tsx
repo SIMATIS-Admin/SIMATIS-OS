@@ -9,6 +9,7 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { libelleLecture, useLectureEchanges } from './radar/useLectureEchanges.js';
+import { AjoutRadar } from './radar/AjoutRadar.js';
 import { PassageQualification } from './radar/PassageQualification.js';
 import './radar/affaires.css';
 
@@ -101,6 +102,7 @@ export function RadarAffaires({ slug }: { slug: string }) {
   const [survol, setSurvol] = useState<string | null>(null);
   const [surColonne, setSurColonne] = useState<number | null>(null);
   const [message, setMessage] = useState('');
+  const [ajout, setAjout] = useState(false);
   const [selectionListe, setSelectionListe] = useState<Set<string>>(new Set());
   const [canalMasse, setCanalMasse] = useState<Canal>('LinkedIn');
   const [revision, actualiser] = useState(0);
@@ -350,11 +352,25 @@ export function RadarAffaires({ slug }: { slug: string }) {
             }}
           />
         </label>
+        <button className="btn" aria-expanded={ajout} onClick={() => setAjout((v) => !v)}>
+          <Icon name="edit" />
+          Ajouter au Radar
+        </button>
         <a className="btn" href={`#/${slug}/pipeline`}>
           <Icon name="kanban" />
           Pipeline de vente
         </a>
       </div>
+      {ajout && (
+        <AjoutRadar
+          slug={slug}
+          origines={[
+            ...new Set(data.opportunites.map((o) => o.origineCommerciale ?? '').filter(Boolean)),
+          ].sort()}
+          onFerme={() => setAjout(false)}
+          onAjoute={() => actualiser((n) => n + 1)}
+        />
+      )}
       <div className="ra-filtres" aria-label="Filtrer par dernier canal">
         <span>Dernier canal</span>
         {['', ...canaux].map((c) => (
