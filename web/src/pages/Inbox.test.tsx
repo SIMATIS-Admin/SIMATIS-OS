@@ -915,6 +915,43 @@ describe('Inbox screen', () => {
       );
     });
 
+    it('une entrée avec dossier s’acquitte d’un clic et envoie le rendez-vous, le texte et le contact', async () => {
+      supplementaires = [
+        sujet('w5', {
+          type: 'compte_rendu',
+          origine: 'os',
+          titre: 'Compte rendu : Point fictif',
+          compteRenduPrepare: {
+            texte: '## Résumé\nTexte fictif.',
+            prepareeLe: '2026-11-20T10:00:00Z',
+            dossier: {
+              sessionVisioId: 'v-1',
+              sourceRdvEventId: 'os:1',
+              rdv: { eventId: 'g-5', titre: 'Visio fictive', debut: null },
+              rdvCertain: true,
+              candidats: [],
+              interlocuteurs: [
+                { contactId: 'c-5', nom: 'Camille Fictive', entreprise: null, principal: true },
+              ],
+            },
+          },
+        }),
+      ];
+      const detail = await ouvrir();
+      expect(
+        within(detail).queryByRole('button', { name: 'Enregistrer le compte rendu' }),
+      ).toBeNull();
+      fireEvent.click(await within(detail).findByRole('button', { name: 'Acquitter' }));
+      await waitFor(() =>
+        expect(posts().find((c) => c.url.endsWith('/sujets/w5/compte-rendu'))?.body).toEqual({
+          eventId: 'g-5',
+          texte: '## Résumé\nTexte fictif.',
+          cerveau: true,
+          contactId: 'c-5',
+        }),
+      );
+    });
+
     it('signale un compte rendu déjà trouvé et permet de le clore', async () => {
       supplementaires = [
         sujet('w3', {

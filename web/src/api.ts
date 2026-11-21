@@ -945,7 +945,7 @@ export type SujetVue = {
     prepareeLe: string;
   } | null;
   // Compte rendu rédigé par la routine pour une entrée « compte rendu », à relire.
-  compteRenduPrepare: { texte: string; prepareeLe: string } | null;
+  compteRenduPrepare: { texte: string; prepareeLe: string; dossier?: DossierRdv } | null;
   // Réunion Wispr Flow ; dejaRelie : elle s'est reliée à un compte rendu déjà à faire.
   reunion: {
     critique: boolean;
@@ -1089,6 +1089,26 @@ export const attribuerReunionSujet = (
   id: string,
   corps: { contactId: string | null; entrepriseId: string | null; critique: boolean },
 ) => sendJson<SujetVue>('POST', sujet(slug, id, 'reunion'), corps);
+// Ce que l'OS a repéré autour d'une visio enregistrée (rendez-vous probable, personnes du CRM).
+export type DossierRdv = {
+  sessionVisioId: string;
+  sourceRdvEventId: string;
+  rdv: { eventId: string; titre: string; debut: string | null } | null;
+  rdvCertain: boolean;
+  candidats: { eventId: string; titre: string; debut: string | null }[];
+  interlocuteurs: {
+    contactId: string;
+    nom: string;
+    entreprise: string | null;
+    principal: boolean;
+  }[];
+};
+export type CorpsAcquittement = {
+  eventId?: string;
+  texte: string;
+  cerveau: boolean;
+  contactId: string | null;
+};
 export type CandidatRdv = {
   eventId: string;
   titre: string;
@@ -1101,7 +1121,7 @@ export const fetchCandidatsRdv = (slug: string, id: string) =>
 export const compteRenduSujet = (
   slug: string,
   id: string,
-  corps: { eventId?: string; texte: string },
+  corps: { eventId?: string; texte: string; cerveau?: boolean; contactId?: string | null },
 ) => sendJson<SujetVue>('POST', sujet(slug, id, 'compte-rendu'), corps);
 export const marquerSujetTraite = (slug: string, id: string) =>
   sendJson<SujetVue>('POST', sujet(slug, id, 'traite'), {});
