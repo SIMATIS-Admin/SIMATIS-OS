@@ -8,7 +8,7 @@ import { enregistrementsVisio } from './schema.js';
 
 const PAR_PASSAGE = 3;
 // Au-delà, le résumé n'est plus un résumé ; l'entrée d'Inbox n'en montre que le début.
-export const RESUME_MAX = 10_000;
+export const RESUME_MAX = 20_000;
 const EXTRAIT_INBOX = 2_000;
 
 // Visios transcrites que personne n'a encore résumées. Une visio sans parole transcrite n'a rien à résumer.
@@ -18,6 +18,10 @@ export async function sessionsAResumer(tx: Tx) {
       id: enregistrementsVisio.id,
       titre: rendezVous.titre,
       transcript: enregistrementsVisio.transcript,
+      debut: enregistrementsVisio.debutAt,
+      finEnregistrement: enregistrementsVisio.finAt,
+      finRendezVous: rendezVous.fin,
+      participants: rendezVous.participants,
     })
     .from(enregistrementsVisio)
     .innerJoin(rendezVous, eq(rendezVous.id, enregistrementsVisio.rendezVousId))
