@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte, ne } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lte, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   creerRendezVousOs,
@@ -7,12 +7,13 @@ import {
   RdvIndisponible,
 } from '../conversion/rdv.js';
 import type { ConnexionDeps } from '../connexions/service.js';
-import { rendezVous } from '../crm/schema.js';
+import { contacts, rendezVous } from '../crm/schema.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { plusProche } from '../conversion/reunion-rdv.js';
+import { FusionImpossible, fusionnerSession } from '../visio/enregistrement.js';
 import { reunionsWispr, sujets } from './schema.js';
 import { marquerTraite, SujetRefuse, type SujetVue } from './service.js';
 
@@ -86,13 +87,40 @@ export const compteRenduSujetSchema = z
     debut: z.iso.datetime().optional(),
     texte: z.string().trim().min(1).max(10_000),
     opportuniteId: z.uuid().nullish(),
+    // Interlocuteur choisi par le pilote (sinon celui de l'entrée) ; note du second cerveau cochée ou non.
+    contactId: z.uuid().nullish(),
+    cerveau: z.boolean().optional(),
   })
   .strict();
 
 // Marc écrit le compte rendu depuis l'entrée d'Inbox : il va sur le rendez-vous (objet miroir de
 // l'événement Google, ou créé dans l'OS), relié au contact et à l'entreprise de l'entrée, puis
 // l'entrée est traitée. Refaire l'opération met à jour le même rendez-vous, sans doublon.
-export async function enregistrerDepuisSujet(
+// Un double clic ne doit pas créer deux rendez-vous : les acquittements d'une même entrée passent
+// l'un après l'autre (un seul processus serveur), le second trouve l'entrée déjà traitée.
+const enCours = new Map<string, Promise<unknown>>();
+async function enSerie<T>(cle: string, travail: () => Promise<T>): Promise<T> {
+  const precedent = enCours.get(cle) ?? Promise.resolve();
+  const suite = precedent.then(travail, travail);
+  const fin = suite.catch(() => undefined);
+  enCours.set(cle, fin);
+  try {
+    return await suite;
+  } finally {
+    if (enCours.get(cle) === fin) enCours.delete(cle);
+  }
+}
+
+export const enregistrerDepuisSujet = (
+  db: Executor,
+  instance: Instance,
+  sujetId: string,
+  input: z.infer<typeof compteRenduSujetSchema>,
+  deps: ConnexionDeps,
+): Promise<SujetVue | null> =>
+  enSerie(`${instance.id}:${sujetId}`, () => acquitterSujet(db, instance, sujetId, input, deps));
+
+async function acquitterSujet(
   db: Executor,
   instance: Instance,
   sujetId: string,
@@ -110,6 +138,25 @@ export async function enregistrerDepuisSujet(
   if (s.type !== 'compte_rendu') throw new SujetRefuse('Cette entrée n’est pas un compte rendu.');
   if (s.statut !== 'a_traiter') throw new SujetRefuse('Sujet déjà traité.');
 
+  // Une entrée avec dossier : l'interlocuteur est celui que Marc a choisi à l'écran (null = personne),
+  // jamais celui de l'OS en plus. Sans dossier, comportement d'avant.
+  const dossier = s.compteRenduPrepare?.dossier;
+  const contactIds = dossier
+    ? input.contactId
+      ? [input.contactId]
+      : []
+    : [...new Set([s.contactId, input.contactId].filter((c): c is string => !!c))];
+  if (contactIds.length > 0) {
+    // Avant de créer quoi que ce soit : un contact disparu ne doit pas laisser un rendez-vous orphelin.
+    const trouves = await withInstance(db, instance.id, (tx) =>
+      tx
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(and(eq(contacts.instanceId, currentInstance), inArray(contacts.id, contactIds))),
+    );
+    if (trouves.length !== contactIds.length) throw new SujetRefuse('Interlocuteur introuvable.');
+  }
+
   let eventId = input.eventId;
   if (!eventId) {
     const debut = input.debut ?? s.createdAt.toISOString();
@@ -121,7 +168,7 @@ export async function enregistrerDepuisSujet(
   }
   const titre = input.titre ?? s.titre;
   try {
-    if (s.contactId) await lierRdv(db, instance, eventId, 'contact', s.contactId);
+    for (const contactId of contactIds) await lierRdv(db, instance, eventId, 'contact', contactId);
     if (s.entrepriseId) await lierRdv(db, instance, eventId, 'entreprise', s.entrepriseId);
     await enregistrerCompteRendu(
       db,
@@ -132,13 +179,42 @@ export async function enregistrerDepuisSujet(
         texte: input.texte,
         opportuniteId: input.opportuniteId ?? null,
         proposerTache: false,
-        versCerveau: false,
+        versCerveau: input.cerveau ?? false,
       },
       deps,
+      { accorde: true },
     );
   } catch (error) {
     if (error instanceof RdvIndisponible) throw new SujetRefuse(error.message);
     throw error;
   }
-  return marquerTraite(db, instance, sujetId);
+  const traitee = await marquerTraite(db, instance, sujetId);
+  // Une réunion, une entrée : celle que l'agenda a déposée pour le rendez-vous retenu est traitée aussi.
+  const doublon = await withInstance(db, instance.id, async (tx) => {
+    const [d] = await tx
+      .select({ id: sujets.id })
+      .from(sujets)
+      .where(
+        and(
+          eq(sujets.instanceId, currentInstance),
+          eq(sujets.type, 'compte_rendu'),
+          eq(sujets.statut, 'a_traiter'),
+          eq(sujets.sourceId, `agenda:${eventId}`),
+          ne(sujets.id, sujetId),
+        ),
+      );
+    return d;
+  });
+  if (doublon) await marquerTraite(db, instance, doublon.id);
+  // La visio enregistrée hors agenda rejoint le rendez-vous retenu (son texte y passe). Après le
+  // traitement de l'entrée : la fusion range le résumé et peut retirer les entrées de la visio.
+  // Elle ne bloque jamais l'acquittement.
+  if (dossier?.sessionVisioId && dossier.sourceRdvEventId !== eventId) {
+    await withInstance(db, instance.id, (tx) =>
+      fusionnerSession(tx, dossier.sessionVisioId, eventId),
+    ).catch((error: unknown) => {
+      if (!(error instanceof FusionImpossible)) throw error;
+    });
+  }
+  return traitee;
 }

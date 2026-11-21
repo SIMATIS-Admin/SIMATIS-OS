@@ -97,7 +97,24 @@ export type ReponsePreparee = {
 
 // Compte rendu rédigé par la routine d'après la transcription ou le résumé de la réunion. Il remplit
 // le champ de l'entrée « compte rendu » : le pilote le relit, le corrige, puis l'enregistre.
-export type CompteRenduPrepare = { texte: string; prepareeLe: string };
+export type CompteRenduPrepare = { texte: string; prepareeLe: string; dossier?: DossierRdv };
+
+// Ce que l'OS a repéré, sans IA, autour d'une visio enregistrée : le rendez-vous de l'agenda et les
+// personnes de la fiche CRM. Calculé une fois, à la préparation ; Marc le corrige avant d'acquitter.
+export type DossierRdv = {
+  sessionVisioId: string;
+  // Rendez-vous propre à la visio (souvent « os:… », créé hors agenda).
+  sourceRdvEventId: string;
+  rdv: { eventId: string; titre: string; debut: string | null } | null;
+  rdvCertain: boolean;
+  candidats: { eventId: string; titre: string; debut: string | null }[];
+  interlocuteurs: {
+    contactId: string;
+    nom: string;
+    entreprise: string | null;
+    principal: boolean;
+  }[];
+};
 
 export type Sujet = typeof sujets.$inferSelect;
 

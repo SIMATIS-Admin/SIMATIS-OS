@@ -29,6 +29,30 @@ describe('Résumé d’une visio enregistrée', () => {
     ]);
   };
 
+  // Une visio dont le rendez-vous invite une personne connue du CRM.
+  const visioAvecInvite = async (eventId: string, email: string) => {
+    const f = fabrique(t);
+    const entreprise = await f.entreprise(a, 'Entreprise Fictive');
+    const contact = await f.insere(a, 'contacts', 'nom, source, email, entreprise_id', [
+      'Camille Fictive',
+      'natif',
+      email,
+      entreprise,
+    ]);
+    const rdv = await f.insere(a, 'rendez_vous', 'event_id, titre, statut, participants', [
+      eventId,
+      `Visio ${eventId}`,
+      'rdv',
+      JSON.stringify([email]),
+    ]);
+    const id = await f.insere(a, 'enregistrements_visio', 'rendez_vous_id, statut, transcript', [
+      rdv,
+      'transcrit',
+      'Moi : Texte fictif.',
+    ]);
+    return { id, contact };
+  };
+
   beforeAll(async () => {
     t = await setupTestApp();
     a = await createInstance(t.owner.db, { slug: 'res-a', nom: 'A', type: 'mandat' });
@@ -103,6 +127,88 @@ describe('Résumé d’une visio enregistrée', () => {
       "select compte_rendu_prepare->>'texte' as texte from sujets where source_id = 'agenda:os:res-5'",
     );
     expect(agenda.rows[0]?.texte).toBe('Résumé rangé.');
+  });
+
+  it('indique à l’exécuteur les interlocuteurs reconnus dans le CRM', async () => {
+    const { id } = await visioAvecInvite('os:res-6', 'camille@exemple.test');
+    const r = await exec('GET', '/api/runner/resumes');
+    const visio = r.json<{ id: string; interlocuteurs: unknown }[]>().find((m) => m.id === id);
+    expect(visio?.interlocuteurs).toEqual([
+      { nom: 'Camille Fictive', entreprise: 'Entreprise Fictive' },
+    ]);
+  });
+
+  it('dépose un compte rendu préparé avec son dossier et relie l’interlocuteur', async () => {
+    const { id, contact } = await visioAvecInvite('os:res-7', 'camille7@exemple.test');
+    await exec('POST', `/api/runner/resumes/${id}`, {
+      instance: 'res-a',
+      resume: 'Résumé complet fictif.',
+    });
+    const r = await t.owner.pool.query<{
+      contact_id: string;
+      prepare: { texte: string; dossier: { interlocuteurs: { nom: string }[] } };
+    }>(
+      "select contact_id, compte_rendu_prepare as prepare from sujets where source = 'visio' and source_id = $1",
+      [id],
+    );
+    expect(r.rows[0]?.contact_id).toBe(contact);
+    expect(r.rows[0]?.prepare.texte).toBe('Résumé complet fictif.');
+    expect(r.rows[0]?.prepare.dossier.interlocuteurs[0]?.nom).toBe('Camille Fictive');
+  });
+
+  it('une visio sans invité reconnu dépose un dossier sans interlocuteur, sans bloquer', async () => {
+    const id = await visioTranscrite('os:res-8', 'Moi : Texte fictif.');
+    await exec('POST', `/api/runner/resumes/${id}`, {
+      instance: 'res-a',
+      resume: 'Résumé fictif.',
+    });
+    const r = await t.owner.pool.query<{ dossier: { rdv: unknown; interlocuteurs: unknown[] } }>(
+      "select compte_rendu_prepare->'dossier' as dossier from sujets where source = 'visio' and source_id = $1",
+      [id],
+    );
+    expect(r.rows[0]?.dossier).toMatchObject({ interlocuteurs: [] });
+  });
+
+  it('le dossier suit le résumé rangé dans l’entrée ouverte de l’agenda', async () => {
+    const { id } = await visioAvecInvite('os:res-9', 'camille9@exemple.test');
+    await fabrique(t).insere(a, 'sujets', 'type, titre, origine, source, source_id', [
+      'compte_rendu',
+      'Rédiger le compte rendu de Visio os:res-9',
+      'agenda',
+      'routine',
+      'agenda:os:res-9',
+    ]);
+    await exec('POST', `/api/runner/resumes/${id}`, { instance: 'res-a', resume: 'Résumé rangé.' });
+    const r = await t.owner.pool.query<{ nom: string }>(
+      "select compte_rendu_prepare->'dossier'->'interlocuteurs'->0->>'nom' as nom from sujets where source_id = 'agenda:os:res-9'",
+    );
+    expect(r.rows[0]?.nom).toBe('Camille Fictive');
+  });
+
+  it('ne remplace pas un compte rendu que Marc a déjà modifié, dossier compris', async () => {
+    const { id } = await visioAvecInvite('os:res-10', 'camille10@exemple.test');
+    await fabrique(t).insere(
+      a,
+      'sujets',
+      'type, titre, origine, source, source_id, compte_rendu_prepare',
+      [
+        'compte_rendu',
+        'Rédiger le compte rendu de Visio os:res-10',
+        'agenda',
+        'routine',
+        'agenda:os:res-10',
+        JSON.stringify({ texte: 'Texte corrigé par Marc.', prepareeLe: '2026-11-20T10:00:00Z' }),
+      ],
+    );
+    await exec('POST', `/api/runner/resumes/${id}`, {
+      instance: 'res-a',
+      resume: 'Nouveau résumé.',
+    });
+    const r = await t.owner.pool.query<{ prepare: { texte: string; dossier?: unknown } }>(
+      "select compte_rendu_prepare as prepare from sujets where source_id = 'agenda:os:res-10'",
+    );
+    expect(r.rows[0]?.prepare.texte).toBe('Texte corrigé par Marc.');
+    expect(r.rows[0]?.prepare.dossier).toBeUndefined();
   });
 
   it('refuse un résumé vide, une instance inconnue et l’absence de jeton', async () => {

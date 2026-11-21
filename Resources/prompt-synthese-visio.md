@@ -24,7 +24,7 @@ Un paragraphe de 4 à 7 phrases par thème. Entre 6 et 12 thèmes selon la duré
 
 # Règles
 
-1. Nommer chaque personne. N'écris jamais « l'interlocuteur », « un contact » ou « l'autre partie ». Chaque fait, proposition, refus ou action est attribué nommément.
+1. Nommer chaque personne. N'écris jamais « l'interlocuteur », « un contact » ou « l'autre partie ». Chaque fait, proposition, refus ou action est attribué nommément. Les interlocuteurs reconnus dans le CRM sont nommés par leur nom exact ; quand une seule personne extérieure est reconnue, les lignes « Autres : » sont les siennes. Accorde le texte au genre de leur prénom (« elle », « directrice »…) et reste neutre si le prénom ne permet pas de le savoir ; n'écris jamais « le dirigeant… il » quand un nom est fourni.
 2. Ne jamais fusionner deux personnes. Chaque tiers mentionné (investisseur, salarié, partenaire…) reste distinct, avec son nom et son rôle tels qu'ils ont été dits. En cas de doute sur une attribution, écris-le.
 3. Statut explicite de chaque point :
    - acquis : « retenu », « validé », « confirmé » ;
@@ -50,6 +50,7 @@ Titre : {{TITRE}}
 Date : {{DATE}}
 Heures : {{HEURES}}
 Participants : {{PARTICIPANTS}}
+Interlocuteurs reconnus dans le CRM : {{INTERLOCUTEURS}}
 
 # Glossaire des noms propres
 {{GLOSSAIRE}}

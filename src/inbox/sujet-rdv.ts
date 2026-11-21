@@ -3,7 +3,7 @@ import type { PgColumn } from 'drizzle-orm/pg-core';
 import { rendezVous } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
-import { sujets } from './schema.js';
+import { sujets, type DossierRdv } from './schema.js';
 
 const sqlCle = (eventId: PgColumn) => sql`'agenda:' || ${eventId}`;
 
@@ -38,15 +38,39 @@ export async function proposerResumeAuSujet(
   tx: Tx,
   rdvId: string,
   resume: string,
+  dossier?: DossierRdv,
 ): Promise<boolean> {
   const id = await sujetCompteRenduOuvert(tx, rdvId);
   if (!id) return false;
   await tx
     .update(sujets)
     .set({
-      compteRenduPrepare: { texte: resume, prepareeLe: new Date().toISOString() },
+      compteRenduPrepare: {
+        texte: resume,
+        prepareeLe: new Date().toISOString(),
+        ...(dossier ? { dossier } : {}),
+      },
       updatedAt: new Date(),
     })
     .where(and(eq(sujets.id, id), sql`${sujets.compteRenduPrepare} is null`));
   return true;
+}
+
+// L'entrée « compte rendu » ouverte dont le dossier porte ce rendez-vous (celui de la visio ou celui
+// de l'agenda retenu) : elle porte déjà la note du second cerveau et la suite, à l'acquittement.
+export async function sujetAvecDossierOuvert(tx: Tx, eventId: string): Promise<string | null> {
+  const [s] = await tx
+    .select({ id: sujets.id })
+    .from(sujets)
+    .where(
+      and(
+        eq(sujets.instanceId, currentInstance),
+        eq(sujets.type, 'compte_rendu'),
+        eq(sujets.statut, 'a_traiter'),
+        sql`(${sujets.compteRenduPrepare}->'dossier'->>'sourceRdvEventId' = ${eventId}
+          or ${sujets.compteRenduPrepare}->'dossier'->'rdv'->>'eventId' = ${eventId})`,
+      ),
+    )
+    .limit(1);
+  return s?.id ?? null;
 }

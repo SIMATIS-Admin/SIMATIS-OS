@@ -1,8 +1,10 @@
-import { and, eq, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { rendezVous } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { deposerSujet } from '../inbox/depot.js';
+import { construireDossier } from '../inbox/dossier-rdv.js';
+import { sujets } from '../inbox/schema.js';
 import { proposerResumeAuSujet } from '../inbox/sujet-rdv.js';
 import { enregistrementsVisio } from './schema.js';
 
@@ -16,6 +18,7 @@ export async function sessionsAResumer(tx: Tx) {
   return tx
     .select({
       id: enregistrementsVisio.id,
+      rendezVousId: enregistrementsVisio.rendezVousId,
       titre: rendezVous.titre,
       transcript: enregistrementsVisio.transcript,
       debut: enregistrementsVisio.debutAt,
@@ -53,18 +56,44 @@ export async function poserResume(tx: Tx, id: string, resume: string): Promise<b
     .returning({ rendezVousId: enregistrementsVisio.rendezVousId });
   if (!s) return false;
   const [r] = await tx
-    .select({ titre: rendezVous.titre })
+    .select({
+      titre: rendezVous.titre,
+      participants: rendezVous.participants,
+      debut: rendezVous.debut,
+    })
     .from(rendezVous)
     .where(and(eq(rendezVous.instanceId, currentInstance), eq(rendezVous.id, s.rendezVousId)));
+  const [session] = await tx
+    .select({ debutAt: enregistrementsVisio.debutAt })
+    .from(enregistrementsVisio)
+    .where(
+      and(eq(enregistrementsVisio.instanceId, currentInstance), eq(enregistrementsVisio.id, id)),
+    );
+  const dossier = await construireDossier(tx, {
+    sessionVisioId: id,
+    rdvId: s.rendezVousId,
+    debutAt: session?.debutAt ?? r?.debut ?? new Date(),
+    participants: r?.participants ?? [],
+  });
   // Le rendez-vous a déjà son entrée « compte rendu » (agenda) : le résumé s'y range, sans doublon.
-  if (await proposerResumeAuSujet(tx, s.rendezVousId, resume)) return true;
-  await deposerSujet(tx, {
+  if (await proposerResumeAuSujet(tx, s.rendezVousId, resume, dossier)) return true;
+  const { id: sujetId } = await deposerSujet(tx, {
     type: 'compte_rendu',
     titre: `Résumé de la visio : ${r?.titre ?? 'rendez-vous'}`.slice(0, 300),
     resume: resume.slice(0, EXTRAIT_INBOX),
     origine: 'os',
     source: 'visio',
     sourceId: id,
+    contactId: dossier.interlocuteurs.find((i) => i.principal)?.contactId ?? null,
   });
+  // Le texte complet et le dossier remplissent l'entrée ; un second dépôt du même résultat ne
+  // remplace ni le texte ni les corrections déjà faites.
+  await tx
+    .update(sujets)
+    .set({
+      compteRenduPrepare: { texte: resume, prepareeLe: new Date().toISOString(), dossier },
+      updatedAt: new Date(),
+    })
+    .where(and(eq(sujets.id, sujetId), sql`${sujets.compteRenduPrepare} is null`));
   return true;
 }

@@ -34,7 +34,8 @@ import type { Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { decaler, estCreneau, jourDe } from '../pilotage/realisees.js';
 import '../pilotage/types-propositions.js';
-import { canWriteReal, propose, PropositionRefusee } from '../propositions/service.js';
+import { canWriteReal, decide, propose, PropositionRefusee } from '../propositions/service.js';
+import { sujetAvecDossierOuvert } from '../inbox/sujet-rdv.js';
 import { loadInstanceSecrets } from '../secrets.js';
 import { reunionsWispr, sujets } from '../inbox/schema.js';
 import { classerEvenement } from './classement-rdv.js';
@@ -930,10 +931,28 @@ export async function enregistrerCompteRendu(
   evenementId: string,
   input: z.input<typeof compteRenduSchema>,
   deps: ConnexionDeps,
+  // `accorde` : le pilote vient d'acquitter l'entrée d'Inbox du rendez-vous, ce qui vaut son accord
+  // pour la note du second cerveau (appliquée tout de suite au lieu de rester à valider).
+  options: { accorde?: boolean } = {},
 ) {
-  const { proposerTache = true, versCerveau = true, ...cr } = input;
+  const { accorde = false } = options;
+  const { proposerTache: tacheVoulue = true, versCerveau: noteVoulue = true, ...cr } = input;
   return withInstance(db, instance.id, async (tx) => {
     const rdvId = await assurerRdv(tx, evenementId);
+    // Une entrée d'Inbox avec dossier porte déjà la note et la suite : pas de doublon à valider.
+    const entreeId = accorde ? null : await sujetAvecDossierOuvert(tx, evenementId);
+    const entreeOuverte = entreeId !== null;
+    // Le texte écrit ici devient celui de l'entrée : l'acquittement ne l'écrasera pas.
+    if (entreeId)
+      await tx
+        .update(sujets)
+        .set({
+          compteRenduPrepare: sql`jsonb_set(${sujets.compteRenduPrepare}, '{texte}', to_jsonb(${cr.texte}::text))`,
+          updatedAt: new Date(),
+        })
+        .where(eq(sujets.id, entreeId));
+    const proposerTache = tacheVoulue && !entreeOuverte;
+    const versCerveau = noteVoulue && !entreeOuverte;
     const liens = await liensDe(tx, [rdvId]);
     const contactId = liens.contacts.get(rdvId)?.[0]?.id ?? cr.contactId ?? null;
     const entrepriseId = liens.entreprises.get(rdvId)?.[0]?.id ?? null;
@@ -982,7 +1001,7 @@ export async function enregistrerCompteRendu(
     const ctx = { instance, realWrites: deps.realWrites, secretsDir: deps.secretsDir };
     if (versCerveau) {
       // The compte rendu is saved whatever the autonomy says about the second brain.
-      await propose(tx, ctx, {
+      const note = await propose(tx, ctx, {
         type: 'note.second_cerveau',
         auteur: 'os',
         contenu: {
@@ -992,7 +1011,11 @@ export async function enregistrerCompteRendu(
         },
       }).catch((error: unknown) => {
         if (!(error instanceof PropositionRefusee)) throw error;
+        return null;
       });
+      if (accorde && note?.statut === 'proposee') {
+        await decide(tx, ctx, note.id, { decision: 'valider', par: 'pilote' });
+      }
     }
     if (!proposerTache) return { ok: true };
     const echeance = new Date(Date.now() + 3 * 864e5).toISOString();

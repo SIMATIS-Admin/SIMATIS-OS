@@ -26,6 +26,7 @@ import {
   type EchangeAjout,
   type Execution,
   type RoutineInfo,
+  type CorpsAcquittement,
   type SujetVue,
   type TypeSujet,
 } from '../api.js';
@@ -33,6 +34,7 @@ import { Icon } from '../icons.js';
 import { PastilleInstance } from './transfert/PastilleInstance.js';
 import { PropositionDetail } from './inbox/Proposition.js';
 import { CompteRendu } from './inbox/CompteRendu.js';
+import { DossierRendezVous } from './inbox/DossierRendezVous.js';
 import { ReponseCampagneCarte } from './inbox/ReponseCampagne.js';
 import { ReponsePreparee } from './inbox/ReponsePreparee.js';
 import { EditionTache } from './taches/Edition.js';
@@ -451,7 +453,9 @@ function Detail({
 }: {
   slug: string;
   s: SujetVue;
-  onCompteRendu: (corps: { eventId?: string; texte: string }) => void;
+  onCompteRendu: (
+    corps: CorpsAcquittement | { eventId?: string; texte: string },
+  ) => void | Promise<unknown>;
   onReunion: (corps: {
     contactId: string | null;
     entrepriseId: string | null;
@@ -505,14 +509,23 @@ function Detail({
             onClore={onTraite}
           />
         )}
-        {s.statut === 'a_traiter' && s.type === 'compte_rendu' && (
-          <CompteRendu
-            key={`compte-rendu-${s.id}`}
-            slug={s.instance.slug}
-            s={s}
-            onEnregistrer={onCompteRendu}
-          />
-        )}
+        {s.statut === 'a_traiter' &&
+          s.type === 'compte_rendu' &&
+          (s.compteRenduPrepare?.dossier ? (
+            <DossierRendezVous
+              key={`dossier-${s.id}`}
+              slug={s.instance.slug}
+              s={s}
+              onAcquitter={onCompteRendu}
+            />
+          ) : (
+            <CompteRendu
+              key={`compte-rendu-${s.id}`}
+              slug={s.instance.slug}
+              s={s}
+              onEnregistrer={(corps) => void onCompteRendu(corps)}
+            />
+          ))}
         {s.statut === 'a_traiter' && s.type !== 'a_valider' && (
           <Reglages key={`reglages-${s.id}`} s={s} onModifier={onModifier} />
         )}
@@ -1063,7 +1076,7 @@ export function Inbox({
           void agir(modifierSujet(s.instance.slug, s.id, modif), 'Entrée modifiée.')
         }
         onCompteRendu={(corps) =>
-          void agir(
+          agir(
             compteRenduSujet(s.instance.slug, s.id, corps),
             'Compte rendu enregistré dans le rendez-vous.',
           )
