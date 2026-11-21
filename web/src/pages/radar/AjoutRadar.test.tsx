@@ -26,11 +26,11 @@ const simuler = (
   );
   return appels;
 };
-const corpsEnvoye = (appels: Appel[]) =>
-  JSON.parse(String(appels.find((a) => a.url.includes('/radar/entrees'))?.init?.body)) as Record<
-    string,
-    unknown
-  >;
+const corpsEnvoye = (appels: Appel[]): Record<string, unknown> =>
+  JSON.parse(
+    (appels.find((a) => a.url.includes('/radar/entrees'))?.init?.body as string | undefined) ??
+      '{}',
+  ) as Record<string, unknown>;
 const rendre = (origines: string[] = []) => {
   const onFerme = vi.fn();
   const onAjoute = vi.fn();
@@ -97,5 +97,5 @@ it('une erreur serveur s’affiche et garde le formulaire rempli', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
   expect((await screen.findByRole('alert')).textContent).toContain('déjà une affaire ouverte');
   expect(onAjoute).not.toHaveBeenCalled();
-  expect((screen.getByLabelText('Nom') as HTMLInputElement).value).toBe('Fictive');
+  expect(screen.getByLabelText<HTMLInputElement>('Nom').value).toBe('Fictive');
 });

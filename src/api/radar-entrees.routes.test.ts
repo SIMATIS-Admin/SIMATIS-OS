@@ -35,10 +35,9 @@ describe('POST /radar/entrees', () => {
       origine: 'Origine Test',
     });
     expect(r.statusCode, r.body).toBe(201);
-    expect(r.json<{ id: string; contactId: string }>()).toEqual({
-      id: expect.any(String),
-      contactId: expect.any(String),
-    });
+    const corps = r.json<{ id: string; contactId: string }>();
+    expect(corps.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(corps.contactId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('refuse un corps sans nom, une étape 4 et un canal inconnu (400)', async () => {
