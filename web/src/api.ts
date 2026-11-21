@@ -921,6 +921,8 @@ export type SujetVue = {
   resume: string | null;
   origine:
     'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site' | 'wispr' | 'partenaire' | 'linkedin';
+  // LinkedIn : l'aperçu du mail seul est connu, le texte complet reste à lire sur LinkedIn.
+  messageALire: boolean;
   lien: string | null;
   echeance: string | null;
   priorite: number;

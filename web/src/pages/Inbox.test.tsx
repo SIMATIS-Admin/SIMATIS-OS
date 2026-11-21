@@ -48,6 +48,7 @@ const sujet = (id: string, extra: Record<string, unknown> = {}) => ({
   titre: `Sujet ${id}`,
   resume: `Résumé ${id}`,
   origine: 'messagerie',
+  messageALire: false,
   lien: null,
   echeance: null,
   priorite: 3,
@@ -186,6 +187,8 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
         derniere: derniereRoutine,
       },
     ]);
+  if (url.endsWith('/routines/linkedin/executions') && method === 'POST')
+    return json(execution('demandee'), 201);
   if (url.endsWith('/routines/inbox/executions') && method === 'POST')
     return json(execution('demandee'), 201);
   if (url.includes('/executions/')) return json(execution(statutsExecution.shift() ?? 'terminee'));
@@ -248,6 +251,23 @@ describe('Inbox screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Messages LinkedIn' }));
     expect(await screen.findByText('2 nouveaux messages LinkedIn ajoutés.')).toBeTruthy();
     expect(posts().map((c) => c.url)).toContain('/api/i/simatis/inbox/linkedin');
+  });
+
+  it('offers to read the LinkedIn text only when an entry is still at the mail preview', async () => {
+    supplementaires = [sujet('lk1', { origine: 'linkedin', messageALire: true })];
+    render(<AvecEntete slug="simatis" linkedin />);
+    await screen.findAllByText('Répondre à Hélène');
+    fireEvent.click(await screen.findByRole('button', { name: 'Lire sur LinkedIn' }));
+    await waitFor(() =>
+      expect(posts().map((c) => c.url)).toContain('/api/i/simatis/routines/linkedin/executions'),
+    );
+    expect(await screen.findByText(/Lecture lancée/)).toBeTruthy();
+  });
+
+  it('shows no « Lire sur LinkedIn » button when every message is already read', async () => {
+    render(<AvecEntete slug="simatis" linkedin />);
+    await screen.findAllByText('Répondre à Hélène');
+    expect(screen.queryByRole('button', { name: 'Lire sur LinkedIn' })).toBeNull();
   });
 
   it('shows no LinkedIn button outside Mon activité', async () => {

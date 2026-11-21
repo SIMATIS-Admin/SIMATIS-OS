@@ -7,11 +7,22 @@ import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { listInstances } from '../instances/service.js';
 import { loadInstanceSecrets } from '../secrets.js';
-import { actualiserLinkedin, JOURS_LINKEDIN, LIBELLE_LINKEDIN } from './linkedin.js';
+import { paramsOf } from '../routines/params.js';
+import { DejaEnCours, demanderExecution, getRoutine } from '../routines/service.js';
+import {
+  actualiserLinkedin,
+  compterMessagesALire,
+  JOURS_LINKEDIN,
+  LIBELLE_LINKEDIN,
+} from './linkedin.js';
 
 const FUSEAU = 'Europe/Paris';
 // Deux passages par jour ouvré : un lien LinkedIn lu plus souvent n'apporterait rien au pilote.
 export const HEURES_PASSAGES = [9, 14];
+// Le passage de l'après-midi, qui a vu les messages de la matinée, demande aussi la lecture du
+// texte sur LinkedIn : une fois par jour.
+export const PASSAGE_LECTURE = 14;
+const DECLENCHEMENT_QUOTIDIEN = 'Une fois par jour, si de nouveaux messages sont arrivés';
 
 export class LinkedinIndisponible extends Error {}
 
@@ -69,6 +80,28 @@ export async function lireLinkedin(
   );
 }
 
+// Demande à l'exécuteur de lire sur LinkedIn le texte des messages dont seul l'aperçu est connu.
+// Rien à lire, routine en pause ou réglée « à la demande » : aucune demande, LinkedIn reste fermé.
+export async function demanderLectureLinkedin(
+  db: Database,
+  instance: Instance,
+): Promise<'demandee' | 'rien' | 'refusee'> {
+  return withInstance(db, instance.id, async (tx) => {
+    if ((await compterMessagesALire(tx)) === 0) return 'rien';
+    const routine = await getRoutine(tx, 'linkedin');
+    const quotidien =
+      paramsOf('linkedin', routine.params).declenchement === DECLENCHEMENT_QUOTIDIEN;
+    if (!routine.actif || !quotidien) return 'refusee';
+    try {
+      await demanderExecution(tx, 'linkedin', 'planification');
+      return 'demandee';
+    } catch (error) {
+      if (error instanceof DejaEnCours) return 'refusee';
+      throw error;
+    }
+  });
+}
+
 // Every minute, checks whether a passage is due. A passage missed while the computer was off is
 // made up at the next check; what has already been filed is never filed twice.
 export function startPassagesLinkedin(
@@ -90,6 +123,7 @@ export function startPassagesLinkedin(
       try {
         const r = await lireLinkedin(db, instance, opts.secretsDir);
         opts.onResult?.({ slug: instance.slug, ...r });
+        if (passage.endsWith(`@${PASSAGE_LECTURE}`)) await demanderLectureLinkedin(db, instance);
       } catch (error) {
         // Without a Gmail mailbox there is nothing to read: not an error worth a warning.
         if (!(error instanceof LinkedinIndisponible)) opts.onError(error, instance.slug);

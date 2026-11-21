@@ -7,7 +7,14 @@ import { connexions } from '../connexions/schema.js';
 import { withInstance } from '../db/context.js';
 import type { Instance } from '../instances/schema.js';
 import { createInstance } from '../instances/service.js';
-import { lireLinkedin, LinkedinIndisponible, passageDu } from './linkedin-passages.js';
+import { actualiserLinkedin } from './linkedin.js';
+import {
+  demanderLectureLinkedin,
+  lireLinkedin,
+  LinkedinIndisponible,
+  passageDu,
+} from './linkedin-passages.js';
+import { modifierRoutine } from '../routines/service.js';
 
 describe('LinkedIn : passages du jour', () => {
   // October 2026 is on summer time: Paris = UTC + 2.
@@ -105,5 +112,71 @@ describe('LinkedIn : lecture du libellé', () => {
     await expect(lireLinkedin(t.app.db, mandat, dir, { fetch })).rejects.toBeInstanceOf(
       LinkedinIndisponible,
     );
+  });
+});
+
+describe('LinkedIn : demande de lecture du texte', () => {
+  let t: TestApp;
+  let i: Instance;
+
+  const deposer = (id: string) =>
+    withInstance(t.app.db, i.id, (tx) =>
+      actualiserLinkedin(tx, () =>
+        Promise.resolve([
+          {
+            messageId: id,
+            threadId: `t-${id}`,
+            de: null,
+            objet: 'Votre résumé de la semaine',
+            date: null,
+            extrait: 'Aperçu',
+          },
+        ]),
+      ),
+    );
+  const executions = async () =>
+    (
+      await t.owner.pool.query<{ demande_par: string }>(
+        "select demande_par from executions where instance_id = $1 and routine = 'linkedin'",
+        [i.id],
+      )
+    ).rows;
+  const regler = (change: Parameters<typeof modifierRoutine>[2]) =>
+    withInstance(t.app.db, i.id, (tx) => modifierRoutine(tx, 'linkedin', change));
+
+  beforeAll(async () => {
+    t = await setupTestApp();
+    i = await createInstance(t.owner.db, { slug: 'lkd-propre', nom: 'P', type: 'propre' });
+  });
+
+  afterAll(async () => {
+    await t.drop();
+  });
+
+  it('asks for nothing when there is nothing to read', async () => {
+    expect(await demanderLectureLinkedin(t.app.db, i)).toBe('rien');
+  });
+
+  it('asks for nothing while the routine is paused, which is how it is created', async () => {
+    await deposer('x1');
+    expect(await demanderLectureLinkedin(t.app.db, i)).toBe('refusee');
+    expect(await executions()).toEqual([]);
+  });
+
+  it('asks once the pilot has turned the routine on, and not twice while a run is open', async () => {
+    await regler({ actif: true });
+    expect(await demanderLectureLinkedin(t.app.db, i)).toBe('demandee');
+    expect(await executions()).toEqual([{ demande_par: 'planification' }]);
+    expect(await demanderLectureLinkedin(t.app.db, i)).toBe('refusee');
+  });
+
+  it('asks for nothing when the routine is set to on demand only', async () => {
+    await t.owner.pool.query(
+      "update executions set statut = 'terminee' where instance_id = $1 and routine = 'linkedin'",
+      [i.id],
+    );
+    await regler({ params: { declenchement: 'À la demande seulement' } });
+    expect(await demanderLectureLinkedin(t.app.db, i)).toBe('refusee');
+    expect(await executions()).toHaveLength(1);
   });
 });

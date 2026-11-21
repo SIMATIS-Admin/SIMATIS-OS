@@ -41,6 +41,7 @@ export async function listerRoutines(tx: Tx): Promise<Routine[]> {
         cle: r.cle,
         skill: r.skill,
         params: paramsOf(r.cle, {}),
+        actif: !r.pause,
       })),
     )
     .onConflictDoNothing();

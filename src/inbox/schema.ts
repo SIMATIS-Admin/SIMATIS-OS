@@ -74,6 +74,8 @@ export const sujets = pgTable(
     reporteAt: timestamp('reporte_at', { withTimezone: true }),
     // Entries added by hand: when the Inbox routine noted their creation in the second brain.
     noteCerveauAt: timestamp('note_cerveau_at', { withTimezone: true }),
+    // LinkedIn : quand le texte complet du message a été lu sur LinkedIn (absent = l'aperçu du mail seul).
+    texteLuAt: timestamp('texte_lu_at', { withTimezone: true }),
     reponsePreparee: jsonb('reponse_preparee').$type<ReponsePreparee>(),
     compteRenduPrepare: jsonb('compte_rendu_prepare').$type<CompteRenduPrepare>(),
   },
