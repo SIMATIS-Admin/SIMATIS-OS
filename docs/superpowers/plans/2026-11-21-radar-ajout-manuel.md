@@ -64,7 +64,7 @@
 - Consumes: `createEntreprise`, `createContact`, `Simulation` (`src/crm/service.ts`), `createOpportunite`, `pipelineSource`, `ChangementInvalide` (`src/crm/pipeline.ts`), `contactsParEmails`, `ajouterEmail` (`src/crm/emails.ts`), tables `contacts`, `entreprises`, `opportunites`, `activites`.
 
 - [ ] **Step 1 : écrire les tests** (un `it` par ligne, noms exacts) :
-  - `crée entreprise, contact et affaire à la première étape du Pipeline, étape et canal fixés` : après appel avec `{ nom: 'Alice Fictive', entreprise: 'Société Exemple', email: 'alice@exemple.test', canal: 'LinkedIn', etape: 1, origine: 'Alpes IA' }`, l'affaire a `etape` = première étape de `pipelineSource`, `radarEtapeManuelle` 1, `radarCanalManuel` `'LinkedIn'`, `origine` `'Alpes IA'`, `contactId` du contact créé, titre `'Société Exemple'`.
+  - `crée entreprise, contact et affaire à la première étape du Pipeline, étape et canal fixés` : après appel avec `{ nom: 'Alice Fictive', entreprise: 'Société Exemple', email: 'alice@exemple.test', canal: 'LinkedIn', etape: 1, origine: 'Origine Test' }`, l'affaire a `etape` = première étape de `pipelineSource`, `radarEtapeManuelle` 1, `radarCanalManuel` `'LinkedIn'`, `origine` `'Origine Test'`, `contactId` du contact créé, titre `'Société Exemple'`.
   - `étape 0 : aucun placement manuel enregistré` (`radarEtapeManuelle` est `null`).
   - `nom seul : crée le contact et l'affaire, titre = nom`.
   - `réutilise l'entreprise de même nom, casse différente` (une seule ligne `entreprises` après deux appels avec `'SOCIÉTÉ exemple'` / `'Société Exemple'`).
