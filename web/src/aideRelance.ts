@@ -4,7 +4,7 @@ import { etapeRadar } from './radar.js';
 // L'aide à la relance : réunit en une file courte ce que Marc peut faire tout de suite, à partir de
 // trois sources déjà connues de l'OS (tâches en retard, affaires sans activité, Radar). Aucun
 // envoi : l'OS prépare, Marc relit et envoie.
-export type SourceAction = 'retard' | 'dormante' | 'radar';
+export type SourceAction = 'retard' | 'aujourdhui' | 'dormante' | 'radar';
 export type Raison = { source: SourceAction; jours: number | null; texte: string };
 export type ActionRelance = {
   // Clé stable d'une entreprise (ou d'une affaire sans entreprise) : une seule ligne par clé.
@@ -59,6 +59,8 @@ export function comparerTri(a: number[], b: number[]): number {
 type Entree = {
   pipeline: Pick<Pipeline, 'etapes' | 'opportunites' | 'inactiviteJours'>;
   enRetard: TacheVue[];
+  // Tâches dont l'échéance est aujourd'hui (HubSpot comme OS) : elles se font maintenant, sans retard.
+  duJour?: TacheVue[];
   maintenant?: Date;
   masquees?: Masquees;
   // Espace affiché : ses tâches gardent la clé simple, celles des autres mandats portent leur slug.
@@ -70,6 +72,7 @@ type Entree = {
 export function construireFile({
   pipeline,
   enRetard,
+  duJour = [],
   maintenant = new Date(),
   masquees = {},
   slugCourant,
@@ -107,16 +110,19 @@ export function construireFile({
     if (comparerTri(tri, a.tri) < 0) a.tri = tri;
   };
 
-  for (const t of enRetard) {
+  for (const t of [...enRetard, ...duJour]) {
     if (t.fait || (t.canal !== 'email' && t.canal !== 'appel')) continue;
     const nom = t.entreprise?.nom ?? t.opportunite?.titre ?? t.contact?.nom ?? t.titre;
     const autre = t.instance && t.instance.slug !== slugCourant ? t.instance : null;
     const cle = cleDe(t.entreprise?.nom ?? null, `tache:${t.id}`, autre?.slug ?? null);
     const a = obtenir(cle, () => vide(cle, nom, autre?.slug ?? slugCourant ?? null));
-    const jours = t.echeance
-      ? Math.max(1, Math.floor((maintenant.getTime() - Date.parse(t.echeance)) / JOUR))
-      : 1;
-    a.raisons.push({ source: 'retard', jours, texte: t.titre });
+    const duJourMeme = duJour.includes(t);
+    const jours = duJourMeme
+      ? 0
+      : t.echeance
+        ? Math.max(1, Math.floor((maintenant.getTime() - Date.parse(t.echeance)) / JOUR))
+        : 1;
+    a.raisons.push({ source: duJourMeme ? 'aujourdhui' : 'retard', jours, texte: t.titre });
     a.tacheIds.push(t.id);
     a.instance ??= autre;
     a.contact ??= t.contact?.nom ?? null;
@@ -128,6 +134,7 @@ export function construireFile({
     if (t.canal === 'appel') a.canal = 'appel';
     // Une tâche en retard depuis plus d'un mois est probablement périmée : elle passe après les
     // affaires sans activité et les signaux du Radar, plus frais.
+    // Une tâche du jour passe après les retards (le plus ancien d'abord), avant le reste.
     poser(a, jours > RETARD_ANCIEN ? [2.5, -jours] : [0, -jours]);
   }
 
@@ -205,7 +212,7 @@ export function prenomDe(nomComplet: string | null | undefined): string {
 
 export type Angle = 'repondu' | 'froid' | 'relance' | 'suivi';
 export function angleDe(a: ActionRelance): Angle {
-  if (a.raisons.some((r) => r.source === 'retard')) return 'suivi';
+  if (a.raisons.some((r) => r.source === 'retard' || r.source === 'aujourdhui')) return 'suivi';
   if (a.raisons.some((r) => r.source === 'dormante')) return 'relance';
   if (a.raisons.some((r) => r.texte.startsWith('A répondu'))) return 'repondu';
   return a.raisons.some((r) => r.texte.includes('sans réponse')) ? 'relance' : 'froid';
