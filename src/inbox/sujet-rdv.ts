@@ -3,7 +3,7 @@ import type { PgColumn } from 'drizzle-orm/pg-core';
 import { rendezVous } from '../crm/schema.js';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
-import { sujets } from './schema.js';
+import { sujets, type DossierRdv } from './schema.js';
 
 const sqlCle = (eventId: PgColumn) => sql`'agenda:' || ${eventId}`;
 
@@ -38,13 +38,18 @@ export async function proposerResumeAuSujet(
   tx: Tx,
   rdvId: string,
   resume: string,
+  dossier?: DossierRdv,
 ): Promise<boolean> {
   const id = await sujetCompteRenduOuvert(tx, rdvId);
   if (!id) return false;
   await tx
     .update(sujets)
     .set({
-      compteRenduPrepare: { texte: resume, prepareeLe: new Date().toISOString() },
+      compteRenduPrepare: {
+        texte: resume,
+        prepareeLe: new Date().toISOString(),
+        ...(dossier ? { dossier } : {}),
+      },
       updatedAt: new Date(),
     })
     .where(and(eq(sujets.id, id), sql`${sujets.compteRenduPrepare} is null`));

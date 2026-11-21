@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
+import { construireDossier } from '../inbox/dossier-rdv.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { poserResume, RESUME_MAX, sessionsAResumer } from './resume.js';
 
@@ -17,7 +18,19 @@ export function registerResumeRunnerRoutes(
     if (!(await auth(request, reply))) return reply;
     const out = [];
     for (const instance of await listInstances(db)) {
-      const rows = await withInstance(db, instance.id, (tx) => sessionsAResumer(tx));
+      const rows = await withInstance(db, instance.id, async (tx) =>
+        Promise.all(
+          (await sessionsAResumer(tx)).map(async (r) => ({
+            ...r,
+            dossier: await construireDossier(tx, {
+              sessionVisioId: r.id,
+              rdvId: r.rendezVousId,
+              debutAt: r.debut ?? new Date(),
+              participants: r.participants,
+            }),
+          })),
+        ),
+      );
       for (const r of rows) {
         out.push({
           id: r.id,
@@ -28,6 +41,11 @@ export function registerResumeRunnerRoutes(
           debut: r.debut,
           fin: r.finEnregistrement ?? r.finRendezVous,
           participants: r.participants,
+          // Les personnes que l'OS reconnaît dans le CRM : le compte rendu les nomme et les accorde.
+          interlocuteurs: r.dossier.interlocuteurs.map(({ nom, entreprise }) => ({
+            nom,
+            entreprise,
+          })),
         });
       }
     }

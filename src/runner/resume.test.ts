@@ -20,6 +20,7 @@ const attente = {
 const modele = [
   'Rédige.',
   'Titre : {{TITRE}} | Date : {{DATE}} | Heures : {{HEURES}} | Participants : {{PARTICIPANTS}}',
+  'Interlocuteurs : {{INTERLOCUTEURS}}',
   'Glossaire : {{GLOSSAIRE}}',
   '# {{NATURE_TEXTE}}',
   '{{TRANSCRIPT}}',
@@ -47,6 +48,20 @@ describe('promptResume', () => {
     expect(p).toContain('Moi : Bonjour.');
   });
 
+  it('nomme l’interlocuteur reconnu par l’OS, avec son entreprise', () => {
+    const p = promptResume(
+      modele,
+      { ...meta, interlocuteurs: [{ nom: 'Camille Fictive', entreprise: 'Entreprise Fictive' }] },
+      'x',
+      '',
+    );
+    expect(p).toContain('Interlocuteurs : Camille Fictive (Entreprise Fictive)');
+  });
+
+  it('dit « non identifié » quand l’OS ne reconnaît personne', () => {
+    expect(promptResume(modele, meta, 'x', '')).toContain('Interlocuteurs : non identifié');
+  });
+
   it('dit les données absentes plutôt que de laisser un trou', () => {
     const p = promptResume(modele, { titre: 'T' }, 'x', '');
     expect(p).toContain('Date : non disponible');
@@ -66,6 +81,7 @@ describe('promptResume', () => {
       '{{TITRE}}',
       '{{DATE}}',
       '{{PARTICIPANTS}}',
+      '{{INTERLOCUTEURS}}',
       '{{GLOSSAIRE}}',
       '{{TRANSCRIPT}}',
     ])

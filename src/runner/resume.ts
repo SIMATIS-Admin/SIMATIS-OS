@@ -17,6 +17,8 @@ type VisioAResumer = {
   debut?: string | null;
   fin?: string | null;
   participants?: string[];
+  // Reconnus dans le CRM par l'OS : le compte rendu les nomme et les accorde.
+  interlocuteurs?: { nom: string; entreprise: string | null }[];
 };
 
 // Prompts et glossaire sont des fichiers relus à chaque passage : Marc les modifie sans recompiler.
@@ -103,7 +105,9 @@ const heureParis = (d: Date) =>
     .replace(':', ' h ');
 
 // Données de la réunion, telles que le prompt les attend ; une donnée absente est dite absente.
-export function metadonnees(v: Pick<VisioAResumer, 'titre' | 'debut' | 'fin' | 'participants'>) {
+export function metadonnees(
+  v: Pick<VisioAResumer, 'titre' | 'debut' | 'fin' | 'participants' | 'interlocuteurs'>,
+) {
   const debut = v.debut ? new Date(v.debut) : null;
   const fin = v.fin ? new Date(v.fin) : null;
   return {
@@ -113,6 +117,11 @@ export function metadonnees(v: Pick<VisioAResumer, 'titre' | 'debut' | 'fin' | '
       ? `${heureParis(debut)} – ${fin ? heureParis(fin) : 'fin non disponible'} (fuseau Europe/Paris)`
       : 'non disponibles',
     PARTICIPANTS: v.participants?.length ? v.participants.join(', ') : 'non disponibles',
+    INTERLOCUTEURS: v.interlocuteurs?.length
+      ? v.interlocuteurs
+          .map((i) => (i.entreprise ? `${i.nom} (${i.entreprise})` : i.nom))
+          .join(', ')
+      : 'non identifié',
   };
 }
 
@@ -127,7 +136,7 @@ const NATURE_EXTRAITS =
 
 export const promptResume = (
   modele: string,
-  v: Pick<VisioAResumer, 'titre' | 'debut' | 'fin' | 'participants'>,
+  v: Pick<VisioAResumer, 'titre' | 'debut' | 'fin' | 'participants' | 'interlocuteurs'>,
   texte: string,
   glossaire: string,
   nature = NATURE_TRANSCRIPTION,
