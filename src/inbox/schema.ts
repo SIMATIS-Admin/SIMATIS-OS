@@ -24,7 +24,7 @@ export const TYPES_SUJET = [
 ] as const;
 // `site`: a request left on the public website's contact form. `test-vma`: a result of the VMA test.
 // `wispr`: a meeting note read in Wispr Flow by the Inbox routine. `partenaire`: news from a partner
-// OS through the agents relay.
+// OS through the agents relay. `linkedin`: a LinkedIn message notification filed in Gmail.
 export const ORIGINES_SUJET = [
   'messagerie',
   'agenda',
@@ -34,6 +34,7 @@ export const ORIGINES_SUJET = [
   'test-vma',
   'wispr',
   'partenaire',
+  'linkedin',
 ] as const;
 export const STATUTS_SUJET = ['a_traiter', 'tache', 'traite'] as const;
 export const PRIORITE_MIN = 1;

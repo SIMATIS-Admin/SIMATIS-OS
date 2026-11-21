@@ -919,7 +919,8 @@ export type SujetVue = {
   type: TypeSujet;
   titre: string;
   resume: string | null;
-  origine: 'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site' | 'wispr' | 'partenaire';
+  origine:
+    'messagerie' | 'agenda' | 'cerveau' | 'os' | 'site' | 'wispr' | 'partenaire' | 'linkedin';
   lien: string | null;
   echeance: string | null;
   priorite: number;
@@ -1042,6 +1043,9 @@ export const fetchInbox = (slug: string, filtre: string) =>
   getJson<SujetVue[]>(inst(slug, `inbox?filtre=${encodeURIComponent(filtre)}`));
 export const fetchCompteurInbox = (slug: string) =>
   getJson<{ n: number }>(inst(slug, 'inbox/compteur')).then((r) => r.n);
+// Lit les notifications LinkedIn rangées dans Gmail et dépose les nouvelles dans l'Inbox.
+export const actualiserLinkedin = (slug: string) =>
+  sendJson<{ lues: number; nouveaux: number }>('POST', inst(slug, 'inbox/linkedin'), {});
 const sujet = (slug: string, id: string, action: string) =>
   inst(slug, `sujets/${encodeURIComponent(id)}/${action}`);
 export const ajouterSujet = (

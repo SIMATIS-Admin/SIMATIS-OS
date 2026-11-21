@@ -78,6 +78,16 @@ describe('Inbox : API', () => {
     });
   });
 
+  it('reads LinkedIn only for the pilot’s own instance with a Gmail mailbox', async () => {
+    expect((await req('POST', '/api/i/inconnue/inbox/linkedin')).status).toBe(404);
+    // A mandate never reads the pilot's LinkedIn messages.
+    const mandat = await req('POST', '/api/i/helioval/inbox/linkedin');
+    expect(mandat.status).toBe(400);
+    expect(mandat.body).toEqual({
+      error: 'Les messages LinkedIn ne sont lus que dans Mon activité.',
+    });
+  });
+
   it('acts on a mandate subject through the mandate slug, 404 through simatis', async () => {
     const { id } = await deposer('helioval', 'api-action');
     expect((await req('POST', `/api/i/simatis/sujets/${id}/traite`)).status).toBe(404);
