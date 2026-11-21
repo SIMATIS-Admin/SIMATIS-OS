@@ -1,6 +1,6 @@
 import { passerPreparations } from './devis-preparation.js';
 import { lancerClaudeTexte, passerResumes } from './resume.js';
-import { outilsDepuisEnv, passerTranscriptions } from './transcription.js';
+import { amorceDepuisGlossaire, outilsDepuisEnv, passerTranscriptions } from './transcription.js';
 import { randomUUID } from 'node:crypto';
 import { convertirDeck } from '../cours/import-deck.js';
 import { idSupportDe } from '../diagnostic/service.js';
@@ -500,7 +500,20 @@ export async function tourPreparationsDevis(opts: RunnerOptions): Promise<number
 export async function tourTranscriptions(opts: RunnerOptions): Promise<number> {
   const lancer =
     opts.lancer ?? ((commande: string, args: string[]) => lancerProcessus(commande, args));
-  return passerTranscriptions(clientOs(opts), outilsDepuisEnv(process.env), lancer);
+  const outils = outilsDepuisEnv(process.env);
+  // Le glossaire (noms réels) est dans le second cerveau privé ; relu à chaque passage.
+  const cerveau = process.env.SECOND_CERVEAU_DIR;
+  const glossaire = cerveau
+    ? await readFile(path.join(cerveau, 'brain', 'outils', 'glossaire-visio.txt'), 'utf8').catch(
+        () => '',
+      )
+    : '';
+  const amorce = amorceDepuisGlossaire(glossaire);
+  return passerTranscriptions(
+    clientOs(opts),
+    outils && amorce ? { ...outils, amorce } : outils,
+    lancer,
+  );
 }
 
 // Answers the waiting add conversations, one Claude call each. Separate from tour() so that a

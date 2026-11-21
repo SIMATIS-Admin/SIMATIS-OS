@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  amorceDepuisGlossaire,
   nettoyerTranscription,
   outilsDepuisEnv,
   passerTranscriptions,
@@ -43,6 +44,33 @@ describe('nettoyerTranscription', () => {
   });
 });
 
+describe('nettoyerTranscription : génériques parasites', () => {
+  it('retire les phrases de sous-titrage inventées par Whisper', () => {
+    expect(nettoyerTranscription("Merci. Sous-titres réalisés par la communauté d'Amara.org")).toBe(
+      'Merci.',
+    );
+    expect(nettoyerTranscription('Ok. Sous-titrage Société Radio-Canada Bonjour.')).toBe(
+      'Ok. Bonjour.',
+    );
+    expect(nettoyerTranscription('Le sous-titrage est utile pour nous.')).toBe(
+      'Le sous-titrage est utile pour nous.',
+    );
+  });
+});
+
+describe('amorceDepuisGlossaire', () => {
+  it('garde le terme de chaque ligne, sans commentaires ni explications', () => {
+    const glossaire = '# commentaire\nACME — société fictive (corriger : Akmé)\n\nJeanne Martin\n';
+    expect(amorceDepuisGlossaire(glossaire)).toBe('Noms propres : ACME, Jeanne Martin.');
+  });
+
+  it('rend une amorce vide sans glossaire et plafonne la longueur', () => {
+    expect(amorceDepuisGlossaire('')).toBe('');
+    expect(amorceDepuisGlossaire('# seulement un commentaire')).toBe('');
+    expect(amorceDepuisGlossaire('Terme\n'.repeat(500)).length).toBeLessThanOrEqual(600);
+  });
+});
+
 describe('outilsDepuisEnv', () => {
   it('exige le programme et le modèle de transcription', () => {
     expect(outilsDepuisEnv({})).toBeNull();
@@ -69,6 +97,21 @@ describe('transcrireMorceau', () => {
     expect(transcription?.args).toEqual(
       expect.arrayContaining(['-m', outils.modele, '-l', 'fr', '-nt']),
     );
+  });
+
+  it('souffle le glossaire à Whisper seulement quand il y en a un', async () => {
+    const avec = fauxLanceur();
+    await transcrireMorceau(
+      { mime: 'audio/webm', audio: Buffer.from('son') },
+      { ...outils, amorce: 'Noms propres : ACME.' },
+      avec.lancer,
+    );
+    expect(avec.appels[1]?.args).toEqual(
+      expect.arrayContaining(['--prompt', 'Noms propres : ACME.']),
+    );
+    const sans = fauxLanceur();
+    await transcrireMorceau({ mime: 'audio/webm', audio: Buffer.from('son') }, outils, sans.lancer);
+    expect(sans.appels[1]?.args).not.toContain('--prompt');
   });
 
   it('supprime ses fichiers temporaires, même en cas d’échec', async () => {
