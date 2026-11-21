@@ -27,6 +27,13 @@ export type LigneDevis = {
 // Clause texts are the pilot's own: they live in the database, never in the code.
 export type Clause = { titre: string; texte: string; active: boolean };
 
+export type Preparation = {
+  statut: 'demandee' | 'prete' | 'echec';
+  demandeLe: string;
+  propose?: { contexte: string; objectifs: string; inclus: string; exclu: string };
+  erreur?: string;
+};
+
 export const devis = pgTable(
   'devis',
   {
@@ -67,6 +74,9 @@ export const devis = pgTable(
     sortieMois: integer('sortie_mois'),
     texteSortie: text('texte_sortie').notNull().default(''),
     conditionsParticulieres: text('conditions_particulieres').notNull().default(''),
+    // « Préparer avec Claude » : demandée, prête à relire (proposition de périmètre) ou en échec.
+    // Rien n'est écrit dans le devis tant que le pilote n'a pas appliqué la proposition.
+    preparation: jsonb('preparation').$type<Preparation>(),
     validiteJours: integer('validite_jours').notNull().default(30),
     clauses: jsonb('clauses').$type<Clause[]>().notNull().default([]),
     lignes: jsonb('lignes').$type<LigneDevis[]>().notNull().default([]),

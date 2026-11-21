@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import {
   conclureDevis,
   enregistrerDevis,
+  classerPreparationDevis,
   fetchDevisDetail,
+  preparerDevis,
   fetchParametresDevis,
   nouvelleVersionDevis,
   transmettreDevis,
@@ -97,6 +99,18 @@ export function DevisEditeur({
   }, [slug]);
 
   const brouillon = d?.statut === 'brouillon';
+  const prepStatut = d?.preparation?.statut;
+  // Tant que Claude prépare, on relit la demande : l'exécuteur la reprend à son prochain passage.
+  useEffect(() => {
+    if (prepStatut !== 'demandee') return;
+    const t = setInterval(() => {
+      fetchDevisDetail(slug, id).then(
+        (x) => setD((cur) => (cur ? { ...cur, preparation: x.preparation } : cur)),
+        () => undefined,
+      );
+    }, 4000);
+    return () => clearInterval(t);
+  }, [slug, id, prepStatut]);
   dernier.current = c;
   // Quitter l'éditeur avec une saisie en attente l'enregistre d'abord : rien ne se perd.
   useEffect(
@@ -161,6 +175,24 @@ export function DevisEditeur({
       ...patch,
       fraisTexte: c.fraisTexte === avant ? apres : c.fraisTexte,
     });
+  };
+  const demanderPreparation = async () => {
+    try {
+      const preparation = await preparerDevis(slug, id);
+      setD((cur) => (cur ? { ...cur, preparation } : cur));
+    } catch (e) {
+      err(e);
+    }
+  };
+  const classerPreparation = async (appliquer: boolean) => {
+    const propose = d?.preparation?.propose;
+    if (appliquer && propose) maj(propose);
+    try {
+      await classerPreparationDevis(slug, id);
+      setD((cur) => (cur ? { ...cur, preparation: null } : cur));
+    } catch (e) {
+      err(e);
+    }
   };
   const err = (e: unknown) => setMessage(e instanceof Error ? e.message : String(e));
   const totaux = calculer(c, d.tvaPct);
@@ -309,6 +341,86 @@ export function DevisEditeur({
                 onChange={(e) => maj({ adresse: e.target.value })}
               />
             </div>
+            {!off && (
+              <div className="d-bloc" aria-label="Préparation par Claude">
+                {!d.preparation && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void demanderPreparation()}
+                    >
+                      Préparer avec Claude
+                    </button>
+                    <div className="aide">
+                      Claude propose le contexte, les objectifs et le périmètre à partir du
+                      diagnostic et des comptes rendus de l’affaire. Rien n’est écrit sans votre
+                      accord.
+                    </div>
+                  </>
+                )}
+                {d.preparation?.statut === 'demandee' && (
+                  <div className="aide">
+                    Claude prépare la proposition… Elle apparaîtra ici dans un instant.
+                  </div>
+                )}
+                {d.preparation?.statut === 'echec' && (
+                  <>
+                    <div className="aide">{d.preparation.erreur ?? 'La préparation a échoué.'}</div>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void demanderPreparation()}
+                    >
+                      Réessayer
+                    </button>{' '}
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void classerPreparation(false)}
+                    >
+                      Fermer
+                    </button>
+                  </>
+                )}
+                {d.preparation?.statut === 'prete' && d.preparation.propose && (
+                  <>
+                    <b>Proposition de Claude</b>
+                    {(
+                      [
+                        ['Contexte', d.preparation.propose.contexte],
+                        ['Objectifs', d.preparation.propose.objectifs],
+                        ['Inclus', d.preparation.propose.inclus],
+                        ['Exclu', d.preparation.propose.exclu],
+                      ] as const
+                    ).map(([nom, texte]) => (
+                      <div key={nom}>
+                        <div className="aide">{nom}</div>
+                        <div style={{ whiteSpace: 'pre-wrap' }}>{texte || '—'}</div>
+                      </div>
+                    ))}
+                    <div className="aide">
+                      « Appliquer » remplace le contexte, les objectifs, l’inclus et l’exclu actuels
+                      ; vous pourrez ensuite tout retoucher.
+                    </div>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void classerPreparation(true)}
+                    >
+                      Appliquer
+                    </button>{' '}
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void classerPreparation(false)}
+                    >
+                      Écarter
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             {champ('titre', 'Intitulé de la mission', undefined, true)}
             {champ(
               'contexte',

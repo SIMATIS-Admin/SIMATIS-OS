@@ -3,7 +3,14 @@ import { setupTestApp, type TestApp } from '../../test/database.js';
 import { seedDemoIfEmpty } from '../demo/seed.js';
 import { getInstanceBySlug } from '../instances/service.js';
 import type { Instance } from '../instances/schema.js';
+import { withInstance } from '../db/context.js';
 import { calculer } from './devis-contenu.js';
+import {
+  classerPreparation,
+  demanderPreparation,
+  devisAPreparer,
+  poserPreparation,
+} from './devis-preparation.js';
 import {
   creerDepuisAffaire,
   DevisRefuse,
@@ -319,5 +326,43 @@ describe('Devis : création depuis l’affaire, contenu et versions', () => {
         prixPropose: 2500,
       }),
     ]);
+  });
+
+  it('« Préparer avec Claude » : demande, proposition relue, rien écrit dans le devis avant', async () => {
+    const id = (
+      await t.owner.pool.query<{ id: string }>(
+        "insert into opportunites (instance_id, titre, etape) values ($1, 'Affaire préparée', 'qualification') returning id",
+        [simatis.id],
+      )
+    ).rows[0]!.id;
+    const { devis } = await creerDepuisAffaire(t.app.db, simatis, id);
+    await demanderPreparation(t.app.db, simatis, devis.id);
+    // Une seconde demande ne double pas la première.
+    await demanderPreparation(t.app.db, simatis, devis.id);
+    const attente = await withInstance(t.app.db, simatis.id, (tx) => devisAPreparer(tx));
+    expect(attente.map((a) => a.id)).toContain(devis.id);
+    const propose = { contexte: 'C', objectifs: '- O', inclus: '- I', exclu: '- E' };
+    expect(
+      await withInstance(t.app.db, simatis.id, (tx) => poserPreparation(tx, devis.id, { propose })),
+    ).toBe(true);
+    // Un second résultat est ignoré : la demande n'est plus en cours.
+    expect(
+      await withInstance(t.app.db, simatis.id, (tx) =>
+        poserPreparation(tx, devis.id, { erreur: 'tard' }),
+      ),
+    ).toBe(false);
+    const lu = await lireDevis(t.app.db, simatis, devis.id);
+    expect(lu.preparation).toMatchObject({ statut: 'prete', propose });
+    expect(lu.inclus).toBe('');
+    await classerPreparation(t.app.db, simatis, devis.id);
+    expect((await lireDevis(t.app.db, simatis, devis.id)).preparation).toBeNull();
+    // Un devis validé ne se prépare plus.
+    await modifierContenu(t.app.db, simatis, devis.id, {
+      ...(await contenuDe(devis.id)),
+      inclus: 'Une prestation',
+      lignes: [{ libelle: 'X', unite: 'forfait', quantite: 1, prixUnitaire: 100 }],
+    });
+    await validerDevis(t.app.db, simatis, devis.id);
+    await expect(demanderPreparation(t.app.db, simatis, devis.id)).rejects.toThrow(/brouillon/);
   });
 });

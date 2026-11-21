@@ -1399,7 +1399,22 @@ export type DevisDetail = ContenuDevis & {
   totaux: TotauxDevis;
   tvaPct: number;
   mentions: string;
+  preparation: PreparationDevis | null;
 };
+export type PreparationDevis = {
+  statut: 'demandee' | 'prete' | 'echec';
+  demandeLe: string;
+  propose?: { contexte: string; objectifs: string; inclus: string; exclu: string };
+  erreur?: string;
+};
+export const preparerDevis = (slug: string, id: string) =>
+  sendJson<PreparationDevis>('POST', inst(slug, `devis/${encodeURIComponent(id)}/preparation`), {});
+export const classerPreparationDevis = (slug: string, id: string) =>
+  sendJson<{ ok: boolean }>(
+    'DELETE',
+    inst(slug, `devis/${encodeURIComponent(id)}/preparation`),
+    {},
+  );
 export type DevisItem = DevisDetail & { versions: number };
 export const fetchDevis = (slug: string) => getJson<DevisItem[]>(inst(slug, 'devis'));
 export const fetchDevisDetail = (slug: string, id: string) =>
