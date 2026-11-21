@@ -51,6 +51,9 @@ describe('Résumé d’une visio enregistrée', () => {
         id,
         titre: 'Visio os:res-1',
         transcript: 'Moi : Bonjour.\nAutres : Bonjour à vous.',
+        // Pour dater la réunion et nommer ses participants dans le compte rendu.
+        debut: expect.any(String) as unknown,
+        participants: [],
       }),
     ]);
   });

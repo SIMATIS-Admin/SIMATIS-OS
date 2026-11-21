@@ -19,7 +19,16 @@ export function registerResumeRunnerRoutes(
     for (const instance of await listInstances(db)) {
       const rows = await withInstance(db, instance.id, (tx) => sessionsAResumer(tx));
       for (const r of rows) {
-        out.push({ id: r.id, instance: instance.slug, titre: r.titre, transcript: r.transcript });
+        out.push({
+          id: r.id,
+          instance: instance.slug,
+          titre: r.titre,
+          transcript: r.transcript,
+          // Heures réelles de l'enregistrement ; à défaut de fin, celle de l'agenda.
+          debut: r.debut,
+          fin: r.finEnregistrement ?? r.finRendezVous,
+          participants: r.participants,
+        });
       }
     }
     return out;

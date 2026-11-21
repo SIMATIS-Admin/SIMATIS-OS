@@ -308,7 +308,7 @@ describe('Interface d’enregistrement des visios', () => {
       const trop = await app.inject({
         method: 'PATCH',
         url: `${base}/sessions/${id}`,
-        payload: { resume: 'x'.repeat(10_001) },
+        payload: { resume: 'x'.repeat(20_001) },
       });
       expect(trop.statusCode).toBe(400);
       const autre = await app.inject({
