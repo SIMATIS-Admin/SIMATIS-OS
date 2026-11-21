@@ -1,4 +1,5 @@
 import { creerAffairePourContact } from '../crm/affaire-contact.js';
+import { ajouterAuRadar } from '../crm/ajout-radar.js';
 import { and, count, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -1963,6 +1964,40 @@ export function registerApi(
       if (!UUID.test(request.params.id)) return reply.code(400).send({ error: 'Contact invalide' });
       try {
         return await creerAffairePourContact(db, i, request.params.id, connexionDeps);
+      } catch (error) {
+        if (error instanceof ChangementInvalide)
+          return reply.code(400).send({ error: error.message });
+        if (error instanceof CrmIndisponible) return reply.code(409).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+
+  // Une personne approchée hors de l'OS entre dans le Radar : contact, entreprise et affaire.
+  const texteRadar = z.string().trim().max(300).nullish();
+  const entreeRadarSchema = z
+    .object({
+      prenom: texteRadar,
+      nom: z.string().trim().min(1).max(300),
+      entreprise: texteRadar,
+      email: z.email().nullish(),
+      fonction: texteRadar,
+      lienLinkedin: z.url().max(500).nullish(),
+      origine: texteRadar,
+      canal: z.enum(['Téléphone', 'LinkedIn', 'E-mail', 'À préciser']),
+      etape: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
+      note: z.string().trim().max(2000).nullish(),
+      contactId: z.uuid().nullish(),
+    })
+    .strict();
+  app.post<SlugParams & { Body: unknown }>(
+    '/api/i/:slug/radar/entrees',
+    onInstance<SlugParams & { Body: unknown }>(async (i, request, reply) => {
+      const parsed = entreeRadarSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Entrée invalide' });
+      try {
+        const created = await ajouterAuRadar(db, i, parsed.data, connexionDeps);
+        return reply.code('simulation' in created ? 202 : 201).send(created);
       } catch (error) {
         if (error instanceof ChangementInvalide)
           return reply.code(400).send({ error: error.message });
