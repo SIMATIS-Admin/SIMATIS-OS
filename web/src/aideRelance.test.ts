@@ -169,6 +169,21 @@ describe('construireFile', () => {
     expect(file.map((a) => [a.entreprise, a.canal])).toEqual([['Appel Fictif', 'appel']]);
   });
 
+  it('fait entrer les tâches du jour, après les retards, sans les marquer en retard', () => {
+    const file = construireFile({
+      maintenant,
+      pipeline: pipeline([]),
+      enRetard: [tache({ id: 'r', entreprise: { id: 'a', nom: 'Retard Fictif' } })],
+      duJour: [
+        tache({ id: 'j1', entreprise: { id: 'b', nom: 'Jour Fictif' } }),
+        tache({ id: 'j2', canal: 'tache', type: 'tache', entreprise: { id: 'c', nom: 'Simple' } }),
+        tache({ id: 'j3', fait: true, entreprise: { id: 'd', nom: 'Terminée' } }),
+      ],
+    });
+    expect(file.map((a) => a.entreprise)).toEqual(['Retard Fictif', 'Jour Fictif']);
+    expect(file[1]?.raisons[0]).toMatchObject({ source: 'aujourdhui', jours: 0 });
+  });
+
   it("cache les actions reportées jusqu'à leur date et écarte celles écartées", () => {
     const base = {
       maintenant,

@@ -28,6 +28,7 @@ const CHOIX = [5, 10, 15, 'tout'] as const;
 type Nombre = (typeof CHOIX)[number];
 const SOURCES: Record<SourceAction, { libelle: string; classe: string }> = {
   retard: { libelle: 'En retard', classe: 'red' },
+  aujourdhui: { libelle: 'Aujourd’hui', classe: 'blue' },
   dormante: { libelle: 'Sans activité', classe: 'amber' },
   radar: { libelle: 'Radar', classe: 'green' },
 };
@@ -61,6 +62,7 @@ export function AideRelance({ slug }: { slug: string }) {
   const [donnees, setDonnees] = useState<{
     pipeline: Pipeline;
     enRetard: TacheVue[];
+    duJour: TacheVue[];
     mandats: SemaineTaches['instances'];
   } | null>(null);
   const [erreur, setErreur] = useState(false);
@@ -99,6 +101,7 @@ export function AideRelance({ slug }: { slug: string }) {
         setDonnees({
           pipeline,
           enRetard: semaine.enRetard,
+          duJour: semaine.taches,
           mandats: semaine.instances ?? [],
         });
         // Les reports faits pendant la lecture priment : le serveur peut ne pas les avoir encore.
@@ -155,6 +158,7 @@ export function AideRelance({ slug }: { slug: string }) {
         ? construireFile({
             pipeline: donnees.pipeline,
             enRetard: donnees.enRetard,
+            duJour: donnees.duJour,
             masquees,
             slugCourant: slug,
           }).filter((a) => dansMandats(a, mandatsMasques))
