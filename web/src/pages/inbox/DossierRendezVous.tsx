@@ -61,6 +61,12 @@ function CompteRenduRendu({ texte }: { texte: string }) {
 }
 
 const NOUVEAU = '';
+const TITRE_ZONE = {
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  margin: '12px 0 0',
+} as const;
+const LIGNE_CASE = { display: 'block' } as const;
 
 // Entrée « le rendez-vous et sa suite » : ce que l'OS a repéré, le compte rendu relu et corrigeable,
 // et ce qui sera fait à l'acquittement, en un seul clic.
@@ -105,7 +111,9 @@ export function DossierRendezVous({
 
   return (
     <div className="stack" style={{ marginBottom: 12 }}>
-      <h3>Déjà fait</h3>
+      <h3 className="small muted" style={TITRE_ZONE}>
+        Déjà fait
+      </h3>
       <div className="stack">
         {montrerListe ? (
           <>
@@ -165,7 +173,9 @@ export function DossierRendezVous({
         )}
       </div>
 
-      <h3>Compte rendu</h3>
+      <h3 className="small muted" style={TITRE_ZONE}>
+        Compte rendu
+      </h3>
       {edition ? (
         <textarea
           className="input"
@@ -183,13 +193,15 @@ export function DossierRendezVous({
         </button>
       </div>
 
-      <h3>À l’acquittement, l’OS va…</h3>
+      <h3 className="small muted" style={TITRE_ZONE}>
+        À l’acquittement, l’OS va…
+      </h3>
       <Fragment>
-        <label>
+        <label style={LIGNE_CASE}>
           <input type="checkbox" checked disabled readOnly /> Enregistrer le compte rendu sur le
           rendez-vous et dans les fiches
         </label>
-        <label>
+        <label style={LIGNE_CASE}>
           <input type="checkbox" checked={cerveau} onChange={(e) => setCerveau(e.target.checked)} />{' '}
           <span>Écrire dans le second cerveau</span>
         </label>
