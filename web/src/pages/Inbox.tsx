@@ -157,6 +157,8 @@ function Ligne({
             <Icon name={ico} />
           </span>
           <b className="vq-titre">{s.titre}</b>
+        </div>
+        <div className="row1 inbox-badges">
           <span className="badge">{provenance(s)}</span>
           {s.type === 'compte_rendu' && s.compteRenduPrepare && (
             <span className="badge green">Compte rendu prêt à relire</span>

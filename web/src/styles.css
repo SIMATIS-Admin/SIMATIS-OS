@@ -1306,6 +1306,12 @@ textarea.input {
 .inbox-ouvrir .vq-titre {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Badges sit on their own line under the title, so a narrow list never squeezes the title to one word per line. */
+.inbox-ouvrir .inbox-badges {
+  flex-wrap: wrap;
+  margin-top: 6px;
 }
 .badge-instance {
   border: 1px solid var(--line);
