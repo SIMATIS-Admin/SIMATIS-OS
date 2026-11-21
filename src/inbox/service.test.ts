@@ -33,6 +33,7 @@ const vue = (id: string, echeance: string | null, createdAt: string): SujetVue =
   titre: id,
   resume: null,
   origine: 'os',
+  messageALire: false,
   lien: null,
   echeance,
   priorite: 3,

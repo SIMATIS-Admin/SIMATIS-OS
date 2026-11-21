@@ -188,6 +188,20 @@ export const PARTAGE_OUTILS_LECTURE = [
   'mcp__partage__lire_partage',
 ] as const;
 
+// Routine « Messages LinkedIn » : elle lit dans le Chrome du pilote (extension Claude in Chrome).
+// Seuls les outils de lecture et de navigation sont autorisés : ni formulaire, ni script, ni envoi de fichier.
+export const SKILL_LINKEDIN = 'lire-messages-linkedin';
+export const CHROME_OUTILS_LECTURE = [
+  'mcp__claude-in-chrome__tabs_context_mcp',
+  'mcp__claude-in-chrome__tabs_create_mcp',
+  'mcp__claude-in-chrome__tabs_close_mcp',
+  'mcp__claude-in-chrome__navigate',
+  'mcp__claude-in-chrome__read_page',
+  'mcp__claude-in-chrome__get_page_text',
+  'mcp__claude-in-chrome__find',
+  'mcp__claude-in-chrome__computer',
+] as const;
+
 // Même routine avec Codex : la skill est collée dans la consigne. Wispr Flow et l'espace partagé
 // sont des connecteurs de Claude, absents de Codex : la routine le sait et le signale.
 export async function lancementCodexRoutine(
@@ -231,15 +245,21 @@ export async function argumentsClaude(
   // interactif tout outil non listé est refusé : les autres connecteurs claude.ai restent inutilisables.
   // Jamais pour une démo (`cerveau` faux) : elle lirait de vraies réunions pour des données fictives.
   const wispr = d.skill === 'alimenter-inbox' && d.cerveau === true;
+  // Le Chrome du pilote est branché par l'option --chrome, pas par la config MCP : le mode strict
+  // le masquerait peut-être, et tout outil non listé reste refusé de toute façon.
+  const linkedin = d.skill === SKILL_LINKEDIN;
   const base = [
     '--mcp-config',
     config,
-    ...(wispr ? [] : ['--strict-mcp-config']),
+    ...(wispr || linkedin ? [] : ['--strict-mcp-config']),
+    ...(linkedin ? ['--chrome'] : []),
     '--allowedTools',
   ];
   const simatis = wispr
     ? ['mcp__simatis__*', ...WISPR_OUTILS_LECTURE, ...PARTAGE_OUTILS_LECTURE]
-    : ['mcp__simatis__*'];
+    : linkedin
+      ? ['mcp__simatis__*', ...CHROME_OUTILS_LECTURE]
+      : ['mcp__simatis__*'];
   if (!d.cerveau) return { args: ['-p', prompt(d), ...base, simatis.join(',')] };
   if (!cerveau || !(await dossierExiste(cerveau))) {
     const texte = `${prompt(d)}\nSecond cerveau non accessible sur ce poste : saute ce qui en a besoin et signale-le dans le rapport.`;

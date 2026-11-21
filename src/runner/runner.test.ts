@@ -13,6 +13,7 @@ import {
   tourEchanges,
   PARTAGE_OUTILS_LECTURE,
   WISPR_OUTILS_LECTURE,
+  CHROME_OUTILS_LECTURE,
   type Demande,
 } from './runner.js';
 
@@ -49,6 +50,25 @@ describe('argumentsClaude', () => {
     );
     expect(args).toContain('--strict-mcp-config');
     expect(args.join(' ')).not.toMatch(/Wispr|partage/);
+  });
+
+  it('Messages LinkedIn : Chrome branché, outils de lecture seulement, rien de Wispr', async () => {
+    const { args } = await argumentsClaude(
+      demande('lire-messages-linkedin', false),
+      'config.json',
+      undefined,
+    );
+    expect(args).toContain('--chrome');
+    const outils = (args[args.indexOf('--allowedTools') + 1] ?? '').split(',');
+    expect(outils).toEqual(['mcp__simatis__*', ...CHROME_OUTILS_LECTURE]);
+    expect(outils.join(',')).not.toMatch(
+      /form_input|javascript_tool|file_upload|upload_image|Wispr/,
+    );
+  });
+
+  it('les autres routines ne branchent pas Chrome', async () => {
+    const { args } = await argumentsClaude(demande('autre-skill'), 'config.json', undefined);
+    expect(args).not.toContain('--chrome');
   });
 
   it('autre routine : mode strict conservé, aucun outil Wispr', async () => {

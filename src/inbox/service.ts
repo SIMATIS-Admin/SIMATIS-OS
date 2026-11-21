@@ -60,6 +60,7 @@ export type SujetVue = {
   titre: string;
   resume: string | null;
   origine: OrigineSujet;
+  messageALire: boolean;
   lien: string | null;
   echeance: string | null;
   priorite: number;
@@ -163,6 +164,8 @@ async function vues(tx: Tx, instance: Instance, where: SQL | undefined): Promise
     titre: s.titre,
     resume: s.resume,
     origine: s.origine,
+    // LinkedIn : seul l'aperçu du mail est connu, le texte complet reste à lire sur LinkedIn.
+    messageALire: s.origine === 'linkedin' && s.statut === 'a_traiter' && !s.texteLuAt,
     lien: s.lien,
     echeance: s.echeance?.toISOString() ?? null,
     priorite: s.priorite,

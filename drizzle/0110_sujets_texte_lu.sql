@@ -1,0 +1,1 @@
+ALTER TABLE "sujets" ADD COLUMN "texte_lu_at" timestamp with time zone;

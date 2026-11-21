@@ -21,6 +21,11 @@ const DECLENCHEMENTS_BASE = [
   'À la demande seulement',
 ] as const;
 
+const DECLENCHEMENTS_LINKEDIN = [
+  'Une fois par jour, si de nouveaux messages sont arrivés',
+  'À la demande seulement',
+] as const;
+
 export const paramsSchemas = {
   inbox: z.object({
     heure: z.enum(HEURES),
@@ -51,6 +56,9 @@ export const paramsSchemas = {
   base: z.object({
     declenchement: z.enum(DECLENCHEMENTS_BASE),
   }),
+  linkedin: z.object({
+    declenchement: z.enum(DECLENCHEMENTS_LINKEDIN),
+  }),
 } satisfies Record<CleRoutine, z.ZodObject>;
 
 export type ParamsQuotidienne = z.infer<typeof paramsSchemas.quotidienne>;
@@ -72,6 +80,7 @@ export const PARAMS_DEFAUT: { [K in CleRoutine]: z.infer<(typeof paramsSchemas)[
   hebdo: { jour: 'Lundi', heure: '8h00' },
   evenement: { devis: 10, stop: true },
   base: { declenchement: 'Après chaque rapprochement de boîte mail' },
+  linkedin: { declenchement: 'Une fois par jour, si de nouveaux messages sont arrivés' },
 };
 
 // Steps that need a connection stop the run when the instance does not have it.
@@ -80,12 +89,14 @@ const e = (texte: string, besoin?: Etape['besoin']): Etape =>
   besoin ? { texte, besoin } : { texte };
 
 // `cerveau`: the workstation's runner opens the second brain folder to this routine only.
+// `pause`: created paused, the pilot turns it on (it drives his browser, not only the OS).
 export const ROUTINES: {
   cle: CleRoutine;
   nom: string;
   skill: string;
   etapes: Etape[];
   cerveau?: true;
+  pause?: true;
 }[] = [
   {
     cle: 'inbox',
@@ -153,6 +164,17 @@ export const ROUTINES: {
       e('Classer les réponses reçues, à valider par le pilote'),
     ],
   },
+  {
+    cle: 'linkedin',
+    nom: 'Messages LinkedIn',
+    skill: 'lire-messages-linkedin',
+    pause: true,
+    etapes: [
+      e("Lister les entrées LinkedIn dont le texte n'est pas encore lu"),
+      e('Ouvrir chaque conversation dans le Chrome du pilote et lire le message'),
+      e("Enregistrer le texte complet dans l'entrée de l'Inbox"),
+    ],
+  },
 ];
 
 export const CLES = ROUTINES.map((r) => r.cle);
@@ -173,6 +195,7 @@ export function rythme(cle: CleRoutine, params: Record<string, unknown>): string
   }
   if (cle === 'nettoyage') return paramsOf('nettoyage', params).declenchement;
   if (cle === 'base') return paramsOf('base', params).declenchement;
+  if (cle === 'linkedin') return paramsOf('linkedin', params).declenchement;
   if (cle === 'hebdo') {
     const p = paramsOf('hebdo', params);
     return `${p.jour} à ${p.heure}`;
@@ -210,6 +233,9 @@ export function resume(cle: CleRoutine, params: Record<string, unknown>): string
   }
   if (cle === 'base') {
     return `${rythme(cle, params)} : propose la correspondance des colonnes des imports, corrige les lignes signalées dans le sas et classe les réponses reçues. Rien n'entre dans la base ni dans un CRM sans votre validation.`;
+  }
+  if (cle === 'linkedin') {
+    return `${rythme(cle, params)} : ouvre dans votre Chrome les conversations LinkedIn dont l'OS a reçu la notification et enregistre le texte du message dans l'Inbox. Il ne répond à rien et n'envoie rien.`;
   }
   const p = paramsOf('evenement', params);
   return `Relance un devis sans réponse après ${pluriel(p.devis, 'jour')}${p.stop ? ", et arrête la séquence dès qu'un contact répond" : ''}.`;

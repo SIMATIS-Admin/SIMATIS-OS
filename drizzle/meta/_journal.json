@@ -771,6 +771,13 @@
       "when": 1795251668089,
       "tag": "0109_devis_preparation",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1795255698632,
+      "tag": "0110_sujets_texte_lu",
+      "breakpoints": true
     }
   ]
 }

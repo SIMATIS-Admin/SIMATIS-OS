@@ -1125,6 +1125,23 @@ export function Inbox({
               Messages LinkedIn
             </button>
           )}
+          {linkedin && (list ?? []).some((s) => s.messageALire) && (
+            <button
+              className="btn sm"
+              title="Ouvrir LinkedIn dans votre Chrome et lire le texte des messages reçus"
+              onClick={() => {
+                void lancerRoutine(slug, 'linkedin').then(
+                  () =>
+                    apres(
+                      'Lecture lancée : le texte des messages sera ajouté dans quelques minutes, Chrome doit être ouvert sur votre Mac.',
+                    ),
+                  erreur,
+                );
+              }}
+            >
+              Lire sur LinkedIn
+            </button>
+          )}
         </div>
         {/* The mandate filter sits in the page header, beside the title. */}
         {entete?.droite &&
