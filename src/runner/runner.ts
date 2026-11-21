@@ -1,3 +1,4 @@
+import { passerPreparations } from './devis-preparation.js';
 import { lancerClaudeTexte, passerResumes } from './resume.js';
 import { outilsDepuisEnv, passerTranscriptions } from './transcription.js';
 import { randomUUID } from 'node:crypto';
@@ -466,6 +467,13 @@ export async function tourResumes(opts: RunnerOptions): Promise<number> {
   const api = clientOs(opts);
   if (!(await moteurChoisi(api)).engage) return 0;
   return passerResumes(api, opts.claude, lancerClaudeTexte);
+}
+
+// « Préparer avec Claude » sur un devis : proposition de périmètre, relue par le pilote.
+export async function tourPreparationsDevis(opts: RunnerOptions): Promise<number> {
+  const api = clientOs(opts);
+  if (!(await moteurChoisi(api)).engage) return 0;
+  return passerPreparations(api, opts.claude, lancerClaudeTexte);
 }
 
 // Transcription locale des visios enregistrées : ffmpeg et whisper.cpp du poste, sans service payant.
@@ -2134,6 +2142,18 @@ function main() {
       });
   };
   setInterval(passeResume, 20_000);
+
+  let occupePreparation = false;
+  const passePreparation = () => {
+    if (occupePreparation) return;
+    occupePreparation = true;
+    tourPreparationsDevis(opts)
+      .catch((err: unknown) => console.error('runner :', err instanceof Error ? err.message : err))
+      .finally(() => {
+        occupePreparation = false;
+      });
+  };
+  setInterval(passePreparation, 15_000);
 
   // Journal de consommation IA : relevé des sessions du Mac, 30 jours au premier passage.
   const etatConso = { depuis: new Date(Date.now() - 30 * 24 * 3_600_000) };

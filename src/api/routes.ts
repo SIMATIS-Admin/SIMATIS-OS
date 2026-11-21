@@ -240,6 +240,7 @@ import {
   supprimerModele,
 } from '../conversion/devis-parametres.js';
 import { contenuSchema } from '../conversion/devis-contenu.js';
+import { classerPreparation, demanderPreparation } from '../conversion/devis-preparation.js';
 import { genererPdfDevis } from '../conversion/devis-pdf.js';
 import {
   compteRenduSchema,
@@ -2310,6 +2311,14 @@ export function registerApi(
       if (!parsed.success) throw new DevisRefuse('Contenu du devis invalide');
       return modifierContenu(db, i, request.params.id, parsed.data);
     }),
+  );
+  app.post<DevisRoute>(
+    '/api/i/:slug/devis/:id/preparation',
+    surDevis<DevisRoute>((i, request) => demanderPreparation(db, i, request.params.id)),
+  );
+  app.delete<DevisRoute>(
+    '/api/i/:slug/devis/:id/preparation',
+    surDevis<DevisRoute>((i, request) => classerPreparation(db, i, request.params.id)),
   );
   app.get<DevisRoute>(
     '/api/i/:slug/devis/:id/pdf',

@@ -29,6 +29,7 @@ import {
   releveSchema,
 } from '../ia/conso/service.js';
 import { registerTranscriptionRunnerRoutes } from '../visio/enregistrement.routes.js';
+import { registerDevisPreparationRunnerRoutes } from '../conversion/devis-preparation.routes.js';
 import { registerResumeRunnerRoutes } from '../visio/resume.routes.js';
 import { ROUTINES } from './params.js';
 import { signalerPoste } from './sante.js';
@@ -74,6 +75,7 @@ export function registerRunnerApi(
 
   registerTranscriptionRunnerRoutes(app, { db, auth });
   registerResumeRunnerRoutes(app, { db, auth });
+  registerDevisPreparationRunnerRoutes(app, { db, auth });
 
   // Journal de consommation IA : relevé des sessions du Mac et lancements de l'exécuteur.
   app.post('/api/runner/conso-ia', { bodyLimit: 20 * 1024 * 1024 }, async (request, reply) => {

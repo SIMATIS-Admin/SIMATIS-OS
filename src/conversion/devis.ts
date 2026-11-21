@@ -143,8 +143,6 @@ export async function lireDevis(db: Executor, instance: Instance, id: string) {
   });
 }
 
-// The OS prepares the quote from the deal; every price is left for the pilot to set. The deal's
-// amount is only offered as a suggestion (`prixPropose`).
 // Ce que l'OS sait déjà de l'affaire sert de point de départ au devis : les prestations de la formule
 // proposée à la restitution deviennent le périmètre, le contexte du diagnostic celui du devis. Tout
 // reste modifiable dans l'éditeur.
@@ -155,6 +153,8 @@ export function assemblerPerimetre(contexte: string | null, proposition: Proposi
   };
 }
 
+// The OS prepares the quote from the deal; every price is left for the pilot to set. The deal's
+// amount is only offered as a suggestion (`prixPropose`).
 export async function creerDepuisAffaire(
   db: Executor,
   instance: Instance,

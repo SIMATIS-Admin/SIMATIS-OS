@@ -133,6 +133,9 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.endsWith('/devis') && method === 'GET') return json([detail]);
   if (url.endsWith('/devis') && method === 'POST') return json({ ...detail, existant });
   if (url.endsWith('/devis/d1') && method === 'GET') return json(detail);
+  if (url.endsWith('/preparation') && method === 'POST')
+    return json({ statut: 'demandee', demandeLe: '2026-11-21T00:00:00Z' });
+  if (url.endsWith('/preparation') && method === 'DELETE') return json({ ok: true });
   if (url.endsWith('/version')) return json({ ...brouillon, id: 'd2', version: 2 });
   return json({ id: 'd1', statut: 'proposee' });
 }
@@ -393,6 +396,46 @@ describe('écran Devis', () => {
     });
     expect(apercu.textContent).toContain('Conditions particulières');
     expect(apercu.textContent).toContain('Clause fictive');
+  });
+
+  it('« Préparer avec Claude » envoie la demande, puis la proposition s’applique ou s’écarte', async () => {
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Préparer avec Claude' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/d1/preparation'))).toBe(
+        true,
+      ),
+    );
+    expect(await screen.findByText(/Claude prépare la proposition/)).toBeTruthy();
+    cleanup();
+    detail = {
+      ...brouillon,
+      preparation: {
+        statut: 'prete',
+        demandeLe: '2026-11-21T00:00:00Z',
+        propose: {
+          contexte: 'Contexte proposé',
+          objectifs: '- O',
+          inclus: '- Inclus proposé',
+          exclu: '',
+        },
+      },
+    };
+    render(<Devis slug="simatis" ouvrir="d1" />);
+    expect(await screen.findByText('Proposition de Claude')).toBeTruthy();
+    // Rien n'est écrit tant qu'on n'a pas appliqué.
+    expect(screen.getByLabelText<HTMLTextAreaElement>('Ce qui est inclus (périmètre)').value).toBe(
+      'Entretiens',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Appliquer' }));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText<HTMLTextAreaElement>('Ce qui est inclus (périmètre)').value,
+      ).toBe('- Inclus proposé'),
+    );
+    expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('/d1/preparation'))).toBe(
+      true,
+    );
   });
 
   it('propose le PDF du devis à l’étape Envoi', async () => {
