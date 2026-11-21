@@ -940,7 +940,17 @@ export async function enregistrerCompteRendu(
   return withInstance(db, instance.id, async (tx) => {
     const rdvId = await assurerRdv(tx, evenementId);
     // Une entrée d'Inbox avec dossier porte déjà la note et la suite : pas de doublon à valider.
-    const entreeOuverte = !accorde && (await sujetAvecDossierOuvert(tx, evenementId)) !== null;
+    const entreeId = accorde ? null : await sujetAvecDossierOuvert(tx, evenementId);
+    const entreeOuverte = entreeId !== null;
+    // Le texte écrit ici devient celui de l'entrée : l'acquittement ne l'écrasera pas.
+    if (entreeId)
+      await tx
+        .update(sujets)
+        .set({
+          compteRenduPrepare: sql`jsonb_set(${sujets.compteRenduPrepare}, '{texte}', to_jsonb(${cr.texte}::text))`,
+          updatedAt: new Date(),
+        })
+        .where(eq(sujets.id, entreeId));
     const proposerTache = tacheVoulue && !entreeOuverte;
     const versCerveau = noteVoulue && !entreeOuverte;
     const liens = await liensDe(tx, [rdvId]);

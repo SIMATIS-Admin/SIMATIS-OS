@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { sujets } from './schema.js';
@@ -14,7 +14,11 @@ export async function preparerCompteRendu(
   const [maj] = await tx
     .update(sujets)
     .set({
-      compteRenduPrepare: { texte, prepareeLe: new Date().toISOString() },
+      // Le dossier de rendez-vous déjà préparé (rendez-vous, interlocuteurs) survit à un nouveau texte.
+      compteRenduPrepare: sql`jsonb_build_object('texte', ${texte}::text, 'prepareeLe', ${new Date().toISOString()}::text)
+        || case when jsonb_exists(${sujets.compteRenduPrepare}, 'dossier')
+             then jsonb_build_object('dossier', ${sujets.compteRenduPrepare}->'dossier')
+             else '{}'::jsonb end`,
       updatedAt: new Date(),
     })
     .where(

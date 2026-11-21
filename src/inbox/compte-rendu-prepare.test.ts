@@ -57,6 +57,29 @@ describe('Inbox : compte rendu préparé', () => {
     expect((await vue(a, id))?.compteRenduPrepare?.texte).toBe('Seconde version.');
   });
 
+  it('un nouveau brouillon garde le dossier de rendez-vous déjà préparé', async () => {
+    const { id } = await deposer(a, 'evt-dossier');
+    await t.owner.pool.query('update sujets set compte_rendu_prepare = $1 where id = $2', [
+      JSON.stringify({
+        texte: 'Avant.',
+        prepareeLe: '2026-11-20T10:00:00Z',
+        dossier: {
+          sessionVisioId: 'v',
+          sourceRdvEventId: 'os:1',
+          rdv: null,
+          rdvCertain: false,
+          candidats: [],
+          interlocuteurs: [],
+        },
+      }),
+      id,
+    ]);
+    await preparer(a, id, 'Après.');
+    const prepare = (await vue(a, id))?.compteRenduPrepare;
+    expect(prepare?.texte).toBe('Après.');
+    expect(prepare?.dossier?.sourceRdvEventId).toBe('os:1');
+  });
+
   it("ne touche ni un autre type de sujet, ni un sujet traité, ni celui d'un autre espace", async () => {
     const mail = await deposer(a, 'fil-mail', 'mail_a_repondre');
     expect(await preparer(a, mail.id, 'x')).toEqual({ statut: 'introuvable' });

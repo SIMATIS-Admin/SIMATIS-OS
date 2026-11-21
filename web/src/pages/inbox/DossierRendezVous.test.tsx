@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DossierRdv, SujetVue } from '../../api.js';
 import { DossierRendezVous } from './DossierRendezVous.js';
@@ -69,11 +69,10 @@ describe('DossierRendezVous', () => {
     expect(onAcquitter.mock.calls[0]?.[0]).not.toHaveProperty('eventId');
   });
 
-  it('un interlocuteur reconnu : son nom et son entreprise', () => {
+  it('un interlocuteur reconnu est proposé avec son nom et son entreprise', () => {
     monte(sujet(dossier()));
-    const ligne = screen.getByText(/✔ Interlocuteur/).textContent;
-    expect(ligne).toContain('Camille Fictive');
-    expect(ligne).toContain('Entreprise Fictive');
+    const liste = screen.getByLabelText<HTMLSelectElement>('Interlocuteur du rendez-vous');
+    expect(liste.selectedOptions[0]?.textContent).toBe('Camille Fictive (Entreprise Fictive)');
   });
 
   it('plusieurs interlocuteurs : le principal d’abord, et le choix change le contact envoyé', () => {
@@ -169,6 +168,26 @@ describe('DossierRendezVous', () => {
     fireEvent.click(bouton);
     fireEvent.click(bouton);
     expect(onAcquitter).toHaveBeenCalledTimes(1);
+  });
+
+  it('si l’acquittement échoue, le bouton redevient disponible pour réessayer', async () => {
+    const onAcquitter = vi.fn(() => Promise.resolve());
+    monte(sujet(dossier()), onAcquitter);
+    fireEvent.click(screen.getByRole('button', { name: 'Acquitter' }));
+    await waitFor(() =>
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Acquitter' }).disabled).toBe(
+        false,
+      ),
+    );
+  });
+
+  it('l’interlocuteur peut être écarté avec « Aucun »', () => {
+    const onAcquitter = monte(sujet(dossier()));
+    fireEvent.change(screen.getByLabelText('Interlocuteur du rendez-vous'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Acquitter' }));
+    expect(onAcquitter.mock.calls[0]?.[0]).toMatchObject({ contactId: null });
   });
 
   it('un dossier vide n’empêche pas d’acquitter', () => {

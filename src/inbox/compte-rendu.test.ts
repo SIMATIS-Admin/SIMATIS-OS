@@ -156,6 +156,7 @@ describe('Inbox : acquittement d’un rendez-vous avec dossier', () => {
   let t: TestApp;
   let a: Instance;
   let camille: string;
+  let robin: string;
   let n = 0;
 
   beforeAll(async () => {
@@ -171,6 +172,12 @@ describe('Inbox : acquittement d’un rendez-vous avec dossier', () => {
       await t.owner.pool.query<{ id: string }>(
         "insert into contacts (instance_id, nom, entreprise_id) values ($1, 'Camille Fictive', $2) returning id",
         [a.id, entreprise],
+      )
+    ).rows[0]!.id;
+    robin = (
+      await t.owner.pool.query<{ id: string }>(
+        "insert into contacts (instance_id, nom) values ($1, 'Robin Fictif') returning id",
+        [a.id],
       )
     ).rows[0]!.id;
   });
@@ -324,6 +331,95 @@ describe('Inbox : acquittement d’un rendez-vous avec dossier', () => {
       [a.id],
     );
     expect(r.rows[0]?.transcript).toContain('Texte de la visio fictive.');
+  });
+
+  const liensContact = async (eventId: string) =>
+    (
+      await sql<{ contact_id: string }>(
+        `select rc.contact_id from rdv_contacts rc join rendez_vous r on r.id = rc.rendez_vous_id
+         where r.instance_id = $1 and r.event_id = $2`,
+        [a.id, eventId],
+      )
+    ).rows.map((x) => x.contact_id);
+
+  it('le contact choisi remplace celui de l’OS : seul lui est lié et reçoit l’historique', async () => {
+    await rdvAgenda('ev-acq-8');
+    const { id } = await entree({}, camille);
+    await acquitter(id, { eventId: 'ev-acq-8', texte: 'Pour Robin.', contactId: robin });
+    expect(await liensContact('ev-acq-8')).toEqual([robin]);
+    const histo = await sql<{ contact_id: string }>(
+      "select contact_id from activites where instance_id = $1 and source_id = 'ev-acq-8'",
+      [a.id],
+    );
+    expect(histo.rows[0]?.contact_id).toBe(robin);
+  });
+
+  it('aucun interlocuteur choisi : personne n’est lié, même si l’OS en avait reconnu un', async () => {
+    await rdvAgenda('ev-acq-9');
+    const { id } = await entree({}, camille);
+    await acquitter(id, { eventId: 'ev-acq-9', texte: 'Pour personne.', contactId: null });
+    expect(await liensContact('ev-acq-9')).toEqual([]);
+  });
+
+  it('un contact introuvable est refusé avant toute création de rendez-vous', async () => {
+    const { id, cle } = await entree();
+    await expect(
+      acquitter(id, {
+        texte: 'x',
+        titre: `Orphelin ${cle}`,
+        contactId: '00000000-0000-4000-8000-0000000000aa',
+      }),
+    ).rejects.toBeInstanceOf(SujetRefuse);
+    const rdv = await sql('select 1 from rendez_vous where instance_id = $1 and titre = $2', [
+      a.id,
+      `Orphelin ${cle}`,
+    ]);
+    expect(rdv.rowCount).toBe(0);
+  });
+
+  it('l’entrée de l’agenda du rendez-vous retenu est traitée en même temps : une réunion, une entrée', async () => {
+    await rdvAgenda('ev-acq-10');
+    const agenda = await withInstance(t.app.db, a.id, (tx) =>
+      deposerSujet(tx, {
+        type: 'compte_rendu',
+        titre: 'Rédiger le compte rendu de ev-acq-10',
+        origine: 'agenda',
+        source: 'routine',
+        sourceId: 'agenda:ev-acq-10',
+      }),
+    );
+    const { id } = await entree();
+    await acquitter(id, { eventId: 'ev-acq-10', texte: 'Une seule entrée.' });
+    const r = await sql<{ statut: string }>('select statut from sujets where id = $1', [agenda.id]);
+    expect(r.rows[0]?.statut).toBe('traite');
+  });
+
+  describe('enregistrerCompteRendu depuis la fiche, avec une entrée ouverte', () => {
+    it('met le texte écrit par Marc dans l’entrée, pour que l’acquittement ne l’écrase pas', async () => {
+      await rdvAgenda('ev-acq-11');
+      const { id } = await entree({
+        rdv: { eventId: 'ev-acq-11', titre: 'x', debut: null },
+        rdvCertain: true,
+      });
+      await enregistrerCompteRendu(
+        t.app.db,
+        a,
+        'ev-acq-11',
+        {
+          titre: 'Fiche fictive',
+          texte: 'Écrit depuis la fiche.',
+          proposerTache: true,
+          versCerveau: true,
+        },
+        deps,
+      );
+      const r = await sql<{ texte: string; dossier: unknown }>(
+        "select compte_rendu_prepare->>'texte' as texte, compte_rendu_prepare->'dossier' as dossier from sujets where id = $1",
+        [id],
+      );
+      expect(r.rows[0]?.texte).toBe('Écrit depuis la fiche.');
+      expect(r.rows[0]?.dossier).not.toBeNull();
+    });
   });
 
   describe('enregistrerCompteRendu depuis la fiche du rendez-vous', () => {

@@ -453,7 +453,9 @@ function Detail({
 }: {
   slug: string;
   s: SujetVue;
-  onCompteRendu: (corps: CorpsAcquittement | { eventId?: string; texte: string }) => void;
+  onCompteRendu: (
+    corps: CorpsAcquittement | { eventId?: string; texte: string },
+  ) => void | Promise<unknown>;
   onReunion: (corps: {
     contactId: string | null;
     entrepriseId: string | null;
@@ -521,7 +523,7 @@ function Detail({
               key={`compte-rendu-${s.id}`}
               slug={s.instance.slug}
               s={s}
-              onEnregistrer={onCompteRendu}
+              onEnregistrer={(corps) => void onCompteRendu(corps)}
             />
           ))}
         {s.statut === 'a_traiter' && s.type !== 'a_valider' && (
@@ -1074,7 +1076,7 @@ export function Inbox({
           void agir(modifierSujet(s.instance.slug, s.id, modif), 'Entrée modifiée.')
         }
         onCompteRendu={(corps) =>
-          void agir(
+          agir(
             compteRenduSujet(s.instance.slug, s.id, corps),
             'Compte rendu enregistré dans le rendez-vous.',
           )

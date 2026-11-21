@@ -77,7 +77,7 @@ export function DossierRendezVous({
 }: {
   slug: string;
   s: SujetVue;
-  onAcquitter: (corps: CorpsAcquittement) => void;
+  onAcquitter: (corps: CorpsAcquittement) => void | Promise<unknown>;
 }) {
   const prepare = s.compteRenduPrepare;
   const dossier = prepare?.dossier;
@@ -106,7 +106,10 @@ export function DossierRendezVous({
   const acquitter = () => {
     if (envoi) return;
     setEnvoi(true);
-    onAcquitter({ ...(eventId ? { eventId } : {}), texte, cerveau, contactId });
+    // En cas d'échec le bouton se libère : Marc peut corriger et réessayer.
+    void Promise.resolve(
+      onAcquitter({ ...(eventId ? { eventId } : {}), texte, cerveau, contactId }),
+    ).finally(() => setEnvoi(false));
   };
 
   return (
@@ -143,10 +146,10 @@ export function DossierRendezVous({
             </button>
           </div>
         )}
-        {dossier.interlocuteurs.length > 1 ? (
+        {dossier.interlocuteurs.length > 0 ? (
           <>
             <label className="small muted" htmlFor={`dos-contact-${s.id}`}>
-              Interlocuteur
+              {interlocuteur ? '✔ Interlocuteur' : 'Interlocuteur'}
             </label>
             <select
               id={`dos-contact-${s.id}`}
@@ -161,13 +164,9 @@ export function DossierRendezVous({
                   {i.entreprise ? ` (${i.entreprise})` : ''}
                 </option>
               ))}
+              <option value="">Aucun</option>
             </select>
           </>
-        ) : interlocuteur ? (
-          <div>
-            ✔ Interlocuteur : {interlocuteur.nom}
-            {interlocuteur.entreprise ? ` (${interlocuteur.entreprise})` : ''}
-          </div>
         ) : (
           <div className="small muted">Aucun interlocuteur reconnu dans le CRM.</div>
         )}
