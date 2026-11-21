@@ -756,6 +756,48 @@ export async function filsRecents(
   return out;
 }
 
+export type NotificationMail = {
+  messageId: string;
+  threadId: string;
+  de: string | null;
+  objet: string | null;
+  date: string | null;
+  extrait: string;
+};
+
+// Messages of a label, newest window only: the pilot's own filter files notifications there
+// (a mail per message, so each one is read on its own, not through its thread).
+export async function messagesDuLibelle(
+  ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
+  libelle: string,
+  jours: number,
+  options: GoogleOptions = {},
+): Promise<NotificationMail[]> {
+  const api = googleApi(ctx, options);
+  // Gmail's search writes a label without capitals or spaces: « Messages Linkedin » is messages-linkedin.
+  const q = `label:${libelle.trim().toLowerCase().replace(/\s+/g, '-')} newer_than:${jours}d`;
+  const list = await api.request<{ messages?: { id: string; threadId: string }[] }>(
+    'GET',
+    `${GMAIL}/messages?${new URLSearchParams({ q, maxResults: '100' }).toString()}`,
+  );
+  const out: NotificationMail[] = [];
+  for (const { id, threadId } of list.messages ?? []) {
+    const m = await api.request<{ snippet?: string; payload?: { headers?: Headers } }>(
+      'GET',
+      `${GMAIL}/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+    );
+    out.push({
+      messageId: id,
+      threadId,
+      de: header(m.payload?.headers, 'From'),
+      objet: header(m.payload?.headers, 'Subject'),
+      date: header(m.payload?.headers, 'Date'),
+      extrait: m.snippet ?? '',
+    });
+  }
+  return out;
+}
+
 export type Brouillon = {
   draftId: string;
   objet: string | null;

@@ -5,6 +5,7 @@ import { loadConfig, type Config } from './config.js';
 import { createDb } from './db.js';
 import './connexions/index.js';
 import { startScheduler } from './connexions/service.js';
+import { startPassagesLinkedin } from './inbox/linkedin-passages.js';
 import { startPlanification } from './routines/planification.js';
 import { startRelevePartenaires } from './partenaires/releve.js';
 import { startReleveSite } from './site/releve.js';
@@ -74,6 +75,7 @@ async function prepareDatabase(): Promise<void> {
 
 let stopScheduler = () => {};
 let stopPlanification = () => {};
+let stopPassagesLinkedin = () => {};
 let stopReleveSite = () => {};
 let stopReleveVma = () => {};
 let stopRelevePassations = () => {};
@@ -98,6 +100,13 @@ try {
   });
   stopPlanification = startPlanification(db, {
     onError: (err) => app.log.warn({ err }, 'routine planning pass failed'),
+  });
+  stopPassagesLinkedin = startPassagesLinkedin(db, {
+    secretsDir: config.secretsDir,
+    onResult: (r) => {
+      if (r.nouveaux > 0) app.log.info(r, 'linkedin messages filed');
+    },
+    onError: (err, slug) => app.log.warn({ err, slug }, 'linkedin pass failed'),
   });
   if (config.relaisUrl) {
     stopRelevePartenaires = startRelevePartenaires(db, {
@@ -161,6 +170,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     app.log.info({ signal }, 'shutting down');
     stopScheduler();
     stopPlanification();
+    stopPassagesLinkedin();
     stopReleveSite();
     stopReleveVma();
     stopRelevePassations();

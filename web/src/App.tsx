@@ -225,6 +225,7 @@ export function App() {
             }}
             pasAPas={pasAPasInbox}
             entete={{ droite: enteteDroite }}
+            linkedin={current.type === 'propre'}
           />
         );
       case 'radar':

@@ -189,6 +189,7 @@ function fakeFetch(url: string, init?: { method?: string; body?: string }) {
   if (url.endsWith('/routines/inbox/executions') && method === 'POST')
     return json(execution('demandee'), 201);
   if (url.includes('/executions/')) return json(execution(statutsExecution.shift() ?? 'terminee'));
+  if (url.endsWith('/inbox/linkedin') && method === 'POST') return json({ lues: 3, nouveaux: 2 });
   if (url.endsWith('/sujets') && method === 'POST')
     return json(sujet('n1', { type: 'autre' }), 201);
   if (method === 'POST') return json(sujet('s1', { statut: 'traite' }));
@@ -239,6 +240,20 @@ describe('Inbox screen', () => {
       await screen.findByText('Aucun sujet dans cette sélection. Essaie un autre filtre.'),
     ).toBeTruthy();
     expect(screen.queryByText('Tout est à jour.')).toBeNull();
+  });
+
+  it('reads the LinkedIn messages on demand and tells how many are new', async () => {
+    render(<AvecEntete slug="simatis" linkedin />);
+    await screen.findAllByText('Répondre à Hélène');
+    fireEvent.click(screen.getByRole('button', { name: 'Messages LinkedIn' }));
+    expect(await screen.findByText('2 nouveaux messages LinkedIn ajoutés.')).toBeTruthy();
+    expect(posts().map((c) => c.url)).toContain('/api/i/simatis/inbox/linkedin');
+  });
+
+  it('shows no LinkedIn button outside Mon activité', async () => {
+    render(<AvecEntete slug="simatis" />);
+    await screen.findAllByText('Répondre à Hélène');
+    expect(screen.queryByRole('button', { name: 'Messages LinkedIn' })).toBeNull();
   });
 
   it('runs the Inbox routine, follows it, then reloads the list', async () => {

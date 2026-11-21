@@ -13,6 +13,7 @@ import {
   fetchEchange,
   fetchEntreprises,
   fetchExecution,
+  actualiserLinkedin,
   fetchInbox,
   fetchRoutines,
   lancerRoutine,
@@ -119,6 +120,7 @@ const PROVENANCES: Record<string, string> = {
   'test-vma': 'Test de VMA',
   wispr: 'Wispr Flow',
   partenaire: 'Partenaire',
+  linkedin: 'LinkedIn',
 };
 const provenance = (s: SujetVue): string => {
   if (s.type === 'compte_rendu' && s.origine === 'os') return 'Visio enregistrée';
@@ -933,6 +935,7 @@ export function Inbox({
   onAjoutFerme = () => undefined,
   pasAPas = false,
   entete,
+  linkedin = false,
 }: {
   slug: string;
   onChange?: () => void;
@@ -942,6 +945,8 @@ export function Inbox({
   pasAPas?: boolean;
   // Slots of the page header, where the update button and the mandate filter are shown.
   entete?: { droite: HTMLElement | null };
+  // Mon activité : bouton qui lit les messages LinkedIn reçus (notifications rangées dans Gmail).
+  linkedin?: boolean;
 }) {
   const [filtre, setFiltre] = useState<Filtre>('tout');
   const [list, setList] = useState<SujetVue[] | null>(null);
@@ -1101,6 +1106,25 @@ export function Inbox({
             }
           />
           {routine && <MiseAJour slug={slug} routine={routine} onFini={fini} />}
+          {linkedin && (
+            <button
+              className="btn sm"
+              title="Lire les nouveaux messages LinkedIn"
+              onClick={() => {
+                void actualiserLinkedin(slug).then(
+                  (r) =>
+                    apres(
+                      r.nouveaux
+                        ? `${r.nouveaux} nouveau${r.nouveaux > 1 ? 'x' : ''} message${r.nouveaux > 1 ? 's' : ''} LinkedIn ajouté${r.nouveaux > 1 ? 's' : ''}.`
+                        : 'Aucun nouveau message LinkedIn.',
+                    ),
+                  erreur,
+                );
+              }}
+            >
+              Messages LinkedIn
+            </button>
+          )}
         </div>
         {/* The mandate filter sits in the page header, beside the title. */}
         {entete?.droite &&

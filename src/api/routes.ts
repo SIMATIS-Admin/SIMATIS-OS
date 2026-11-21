@@ -115,6 +115,7 @@ import {
   repondreMessagePartage,
 } from '../inbox/service.js';
 import { estNumeroLivreBlanc } from '../inbox/livre-blanc.js';
+import { LinkedinIndisponible, lireLinkedin } from '../inbox/linkedin-passages.js';
 import {
   candidatsRendezVous,
   compteRenduSujetSchema,
@@ -1631,6 +1632,24 @@ export function registerApi(
   app.get<SlugParams>(
     '/api/i/:slug/inbox/compteur',
     onInstance(async (i) => ({ n: await compterInbox(db, i) })),
+  );
+
+  // Reads the LinkedIn notifications the pilot's Gmail filter files under a label, and drops the
+  // new ones in the Inbox. The same read runs twice a day (server.ts).
+  app.post<SlugParams>(
+    '/api/i/:slug/inbox/linkedin',
+    onInstance<SlugParams>(async (i, _request, reply) => {
+      try {
+        return await lireLinkedin(db, i, secretsDir);
+      } catch (error) {
+        if (error instanceof LinkedinIndisponible) {
+          return reply.code(400).send({ error: error.message });
+        }
+        return reply
+          .code(502)
+          .send({ error: error instanceof Error ? error.message : String(error) });
+      }
+    }),
   );
 
   // Always through the slug of the subject's own instance: the action runs there, never elsewhere.
