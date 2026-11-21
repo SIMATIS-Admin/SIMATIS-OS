@@ -171,3 +171,61 @@ it('présente les mêmes affaires et les mêmes liens dans les deux vues', async
     '#/demo/fiche/rdv/rdv-fictif',
   );
 });
+
+it('« Ajouter au Radar » ouvre le formulaire, propose les origines connues et recharge le Radar après un ajout', async () => {
+  const pipeline = {
+    opportunites: [
+      {
+        id: 'a',
+        titre: 'Mission fictive',
+        etape: 'lead',
+        tentatives: 0,
+        radar: null,
+        radarEtapeManuelle: null,
+        radarEtapesDates: {},
+        origineCommerciale: 'Origine Test',
+      },
+    ],
+    etapes: [
+      { id: 'cible', label: 'Cible' },
+      { id: 'lead', label: 'Lead identifié' },
+    ],
+    contactsARattacher: [],
+  };
+  const fetchMock = vi.fn((url: string, init?: RequestInit) =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify(
+          init?.method === 'POST'
+            ? { id: 'n', contactId: 'c' }
+            : url.endsWith('/pipeline')
+              ? pipeline
+              : url.includes('/contacts?')
+                ? []
+                : url.endsWith('/rendez-vous')
+                  ? { etat: 'ok', rdv: [] }
+                  : { etat: 'termine' },
+        ),
+        { status: init?.method === 'POST' ? 201 : 200 },
+      ),
+    ),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  render(<RadarAffaires slug="demo" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Ajouter au Radar' }));
+  const options = Array.from(document.querySelectorAll('datalist option')).map((o) =>
+    o.getAttribute('value'),
+  );
+  expect(options).toEqual(['Origine Test']);
+  const pipelinesAvant = fetchMock.mock.calls.filter(([u]) =>
+    String(u).endsWith('/pipeline'),
+  ).length;
+  fireEvent.change(screen.getByLabelText('Nom'), { target: { value: 'Fictive' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+  await waitFor(() =>
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith('/pipeline')).length).toBe(
+      pipelinesAvant + 1,
+    ),
+  );
+  expect(screen.queryByRole('form', { name: 'Ajouter au Radar' })).toBeNull();
+});

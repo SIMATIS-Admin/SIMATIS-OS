@@ -592,6 +592,25 @@ export const creerAffaireContact = (slug: string, contactId: string) =>
     inst(slug, `contacts/${encodeURIComponent(contactId)}/affaire`),
     {},
   );
+export type EntreeRadarInput = {
+  prenom?: string;
+  nom: string;
+  entreprise?: string;
+  email?: string;
+  fonction?: string;
+  lienLinkedin?: string;
+  origine?: string;
+  canal: 'Téléphone' | 'LinkedIn' | 'E-mail' | 'À préciser';
+  etape?: 0 | 1 | 2 | 3;
+  note?: string;
+  contactId?: string;
+};
+export const ajouterAuRadar = (slug: string, input: EntreeRadarInput) =>
+  sendJson<{ id?: string; contactId?: string; simulation?: boolean; message?: string }>(
+    'POST',
+    inst(slug, 'radar/entrees'),
+    input,
+  );
 export const fetchRadar = (slug: string) => getJson<EtatRadar>(inst(slug, 'radar'));
 
 export const fetchContacts = (slug: string, q: string) =>
