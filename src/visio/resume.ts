@@ -6,6 +6,9 @@ import { deposerSujet } from '../inbox/depot.js';
 import { construireDossier } from '../inbox/dossier-rdv.js';
 import { sujets } from '../inbox/schema.js';
 import { proposerResumeAuSujet } from '../inbox/sujet-rdv.js';
+import { construireSuite } from '../inbox/suite-rdv.js';
+import type { SuiteAnnoncee } from '../inbox/schema.js';
+import type { Instance } from '../instances/schema.js';
 import { enregistrementsVisio } from './schema.js';
 
 const PAR_PASSAGE = 3;
@@ -42,7 +45,12 @@ export async function sessionsAResumer(tx: Tx) {
 
 // Enregistre le résumé et le dépose dans l'Inbox (une seule entrée par visio, même si l'exécuteur
 // rend deux fois son résultat). Marc le relit, puis en fait le compte rendu du rendez-vous.
-export async function poserResume(tx: Tx, id: string, resume: string): Promise<boolean> {
+export async function poserResume(
+  tx: Tx,
+  id: string,
+  resume: string,
+  suite?: { instance: Instance; annoncee: SuiteAnnoncee },
+): Promise<boolean> {
   const [s] = await tx
     .update(enregistrementsVisio)
     .set({ resume, resumeAt: new Date() })
@@ -75,6 +83,10 @@ export async function poserResume(tx: Tx, id: string, resume: string): Promise<b
     debutAt: session?.debutAt ?? r?.debut ?? new Date(),
     participants: r?.participants ?? [],
   });
+  if (suite) {
+    const lignes = await construireSuite(tx, { ...suite, dossier });
+    if (lignes.length > 0) dossier.suite = lignes;
+  }
   // Le rendez-vous a déjà son entrée « compte rendu » (agenda) : le résumé s'y range, sans doublon.
   if (await proposerResumeAuSujet(tx, s.rendezVousId, resume, dossier)) return true;
   const { id: sujetId } = await deposerSujet(tx, {

@@ -196,4 +196,89 @@ describe('DossierRendezVous', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Acquitter' }));
     expect(onAcquitter).toHaveBeenCalledWith(expect.objectContaining({ contactId: null }));
   });
+
+  describe('suite déduite', () => {
+    const DEBUT = '2026-12-04T14:00:00.000Z';
+    const lignes: NonNullable<DossierRdv['suite']> = [
+      { genre: 'diagnostic', nom: 'Diagnostic – Entreprise Fictive', coche: true, existant: null },
+      { genre: 'rdv', titre: 'Diagnostic', debut: DEBUT, coche: true, dejaAgenda: null },
+      { genre: 'relance', titre: 'Relancer Camille', echeance: '2026-12-18', coche: false },
+    ];
+    const acquitte = (onAcquitter: ReturnType<typeof vi.fn>) => {
+      fireEvent.click(screen.getByRole('button', { name: 'Acquitter' }));
+      return onAcquitter.mock.calls[0]?.[0] as Record<string, unknown>;
+    };
+
+    it('cochées d’avance : celles dites clairement ; les autres décochées et modifiables', () => {
+      monte(sujet(dossier({ suite: lignes })));
+      expect(
+        screen.getByRole<HTMLInputElement>('checkbox', { name: /Créer le diagnostic/ }).checked,
+      ).toBe(true);
+      expect(
+        screen.getByRole<HTMLInputElement>('checkbox', { name: /Créer le rendez-vous/ }).checked,
+      ).toBe(true);
+      expect(
+        screen.getByRole<HTMLInputElement>('checkbox', { name: /Créer la tâche de relance/ })
+          .checked,
+      ).toBe(false);
+    });
+
+    it('envoie à l’acquittement les lignes cochées, avec les textes corrigés', () => {
+      const onAcquitter = monte(sujet(dossier({ suite: lignes })));
+      fireEvent.change(screen.getByLabelText('Nom du diagnostic'), {
+        target: { value: 'Diagnostic – Nom corrigé' },
+      });
+      fireEvent.click(screen.getByRole('checkbox', { name: /Créer la tâche de relance/ }));
+      const corps = acquitte(onAcquitter);
+      expect(corps.suite).toEqual({
+        diagnostic: { nom: 'Diagnostic – Nom corrigé' },
+        rdv: { titre: 'Diagnostic', debut: DEBUT },
+        relance: { titre: 'Relancer Camille', echeance: '2026-12-18' },
+      });
+    });
+
+    it('une ligne décochée n’est pas envoyée, et sans aucune ligne la clé suite est absente', () => {
+      const onAcquitter = monte(sujet(dossier({ suite: lignes })));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Créer le diagnostic/ }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Créer le rendez-vous/ }));
+      expect(acquitte(onAcquitter)).not.toHaveProperty('suite');
+    });
+
+    it('sans suite dans le dossier : rien de plus à l’écran ni dans le corps', () => {
+      const onAcquitter = monte(sujet(dossier()));
+      expect(screen.queryByRole('checkbox', { name: /Créer/ })).toBeNull();
+      expect(acquitte(onAcquitter)).not.toHaveProperty('suite');
+    });
+
+    it('rendez-vous déjà dans l’agenda et diagnostic existant : lignes faites, rien à cocher', () => {
+      monte(
+        sujet(
+          dossier({
+            suite: [
+              {
+                genre: 'diagnostic',
+                nom: 'Diagnostic – X',
+                coche: false,
+                existant: { id: 'd-1', nom: 'Diagnostic ancien' },
+              },
+              {
+                genre: 'rdv',
+                titre: 'Diagnostic',
+                debut: DEBUT,
+                coche: false,
+                dejaAgenda: { eventId: 'ev-9', titre: 'Diagnostic fictif', debut: DEBUT },
+              },
+            ],
+          }),
+        ),
+      );
+      expect(screen.getByText(/Prochain rendez-vous déjà dans l’agenda/).textContent).toContain(
+        'Diagnostic fictif',
+      );
+      expect(screen.getByText(/Diagnostic déjà créé/).textContent).toContain('Diagnostic ancien');
+      expect(
+        screen.queryByRole('checkbox', { name: /Créer le (diagnostic|rendez-vous)/ }),
+      ).toBeNull();
+    });
+  });
 });

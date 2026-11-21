@@ -3,6 +3,7 @@ import {
   fetchCandidatsRdv,
   type CandidatRdv,
   type CorpsAcquittement,
+  type LigneSuite,
   type SujetVue,
 } from '../../api.js';
 import { enLigne } from '../../cours/Markdown.js';
@@ -60,6 +61,16 @@ function CompteRenduRendu({ texte }: { texte: string }) {
   return <div data-testid="compte-rendu-rendu">{blocs}</div>;
 }
 
+// Le champ date-heure du navigateur travaille en heure locale, l'OS en UTC.
+const deuxChiffres = (n: number) => String(n).padStart(2, '0');
+const versLocal = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${deuxChiffres(d.getMonth() + 1)}-${deuxChiffres(d.getDate())}T${deuxChiffres(d.getHours())}:${deuxChiffres(d.getMinutes())}`;
+};
+const versIso = (local: string) => new Date(local).toISOString();
+
+type Ligne<G extends LigneSuite['genre']> = Extract<LigneSuite, { genre: G }>;
+
 const NOUVEAU = '';
 const TITRE_ZONE = {
   textTransform: 'uppercase',
@@ -91,7 +102,31 @@ export function DossierRendezVous({
   );
   const [cerveau, setCerveau] = useState(true);
   const [envoi, setEnvoi] = useState(false);
+  const diag = dossier?.suite?.find((l): l is Ligne<'diagnostic'> => l.genre === 'diagnostic');
+  const rdvSuite = dossier?.suite?.find((l): l is Ligne<'rdv'> => l.genre === 'rdv');
+  const relance = dossier?.suite?.find((l): l is Ligne<'relance'> => l.genre === 'relance');
+  const [diagCoche, setDiagCoche] = useState(diag?.coche ?? false);
+  const [diagNom, setDiagNom] = useState(diag?.nom ?? '');
+  const [rdvCoche, setRdvCoche] = useState(rdvSuite?.coche ?? false);
+  const [rdvTitre, setRdvTitre] = useState(rdvSuite?.titre ?? '');
+  const [rdvDebut, setRdvDebut] = useState(rdvSuite ? versLocal(rdvSuite.debut) : '');
+  const [relCoche, setRelCoche] = useState(relance?.coche ?? false);
+  const [relTitre, setRelTitre] = useState(relance?.titre ?? '');
+  const [relEcheance, setRelEcheance] = useState(relance?.echeance ?? '');
   if (!dossier) return null;
+
+  // Seules les lignes cochées, avec leurs textes tels que Marc les a laissés, partent à l'acquittement.
+  const suiteChoisie: NonNullable<CorpsAcquittement['suite']> = {
+    ...(diag && !diag.existant && diagCoche && diagNom.trim()
+      ? { diagnostic: { nom: diagNom } }
+      : {}),
+    ...(rdvSuite && !rdvSuite.dejaAgenda && rdvCoche && rdvTitre.trim() && rdvDebut
+      ? { rdv: { titre: rdvTitre, debut: versIso(rdvDebut) } }
+      : {}),
+    ...(relance && relCoche && relTitre.trim() && relEcheance
+      ? { relance: { titre: relTitre, echeance: relEcheance } }
+      : {}),
+  };
 
   const listeRdv: { eventId: string; titre: string; debut: string | null }[] =
     candidats ?? dossier.candidats;
@@ -108,7 +143,13 @@ export function DossierRendezVous({
     setEnvoi(true);
     // En cas d'échec le bouton se libère : Marc peut corriger et réessayer.
     void Promise.resolve(
-      onAcquitter({ ...(eventId ? { eventId } : {}), texte, cerveau, contactId }),
+      onAcquitter({
+        ...(eventId ? { eventId } : {}),
+        texte,
+        cerveau,
+        contactId,
+        ...(Object.keys(suiteChoisie).length > 0 ? { suite: suiteChoisie } : {}),
+      }),
     ).finally(() => setEnvoi(false));
   };
 
@@ -170,6 +211,13 @@ export function DossierRendezVous({
         ) : (
           <div className="small muted">Aucun interlocuteur reconnu dans le CRM.</div>
         )}
+        {rdvSuite?.dejaAgenda ? (
+          <div>
+            ✔ Prochain rendez-vous déjà dans l’agenda : {rdvSuite.dejaAgenda.titre} ·{' '}
+            {quand(rdvSuite.dejaAgenda.debut)}
+          </div>
+        ) : null}
+        {diag?.existant ? <div>✔ Diagnostic déjà créé : {diag.existant.nom}</div> : null}
       </div>
 
       <h3 className="small muted" style={TITRE_ZONE}>
@@ -204,6 +252,74 @@ export function DossierRendezVous({
           <input type="checkbox" checked={cerveau} onChange={(e) => setCerveau(e.target.checked)} />{' '}
           <span>Écrire dans le second cerveau</span>
         </label>
+        {diag && !diag.existant ? (
+          <div className="stack">
+            <label style={LIGNE_CASE}>
+              <input
+                type="checkbox"
+                checked={diagCoche}
+                onChange={(e) => setDiagCoche(e.target.checked)}
+              />{' '}
+              Créer le diagnostic dans « Outils et diagnostics »
+            </label>
+            <input
+              className="input"
+              aria-label="Nom du diagnostic"
+              value={diagNom}
+              onChange={(e) => setDiagNom(e.target.value)}
+            />
+          </div>
+        ) : null}
+        {rdvSuite && !rdvSuite.dejaAgenda ? (
+          <div className="stack">
+            <label style={LIGNE_CASE}>
+              <input
+                type="checkbox"
+                checked={rdvCoche}
+                onChange={(e) => setRdvCoche(e.target.checked)}
+              />{' '}
+              Créer le rendez-vous dans l’agenda de l’OS
+            </label>
+            <input
+              className="input"
+              aria-label="Titre du rendez-vous à créer"
+              value={rdvTitre}
+              onChange={(e) => setRdvTitre(e.target.value)}
+            />
+            <input
+              className="input"
+              type="datetime-local"
+              aria-label="Date du rendez-vous à créer"
+              value={rdvDebut}
+              onChange={(e) => setRdvDebut(e.target.value)}
+            />
+          </div>
+        ) : null}
+        {relance ? (
+          <div className="stack">
+            <label style={LIGNE_CASE}>
+              <input
+                type="checkbox"
+                checked={relCoche}
+                onChange={(e) => setRelCoche(e.target.checked)}
+              />{' '}
+              Créer la tâche de relance
+            </label>
+            <input
+              className="input"
+              aria-label="Titre de la relance"
+              value={relTitre}
+              onChange={(e) => setRelTitre(e.target.value)}
+            />
+            <input
+              className="input"
+              type="date"
+              aria-label="Échéance de la relance"
+              value={relEcheance}
+              onChange={(e) => setRelEcheance(e.target.value)}
+            />
+          </div>
+        ) : null}
       </Fragment>
       <div className="decision">
         <button className="btn go" disabled={envoi || !texte.trim()} onClick={acquitter}>

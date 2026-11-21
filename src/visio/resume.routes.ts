@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { construireDossier } from '../inbox/dossier-rdv.js';
+import { suiteAnnonceeSchema } from '../inbox/suite-rdv.js';
 import { getInstanceBySlug, listInstances } from '../instances/service.js';
 import { poserResume, RESUME_MAX, sessionsAResumer } from './resume.js';
 
@@ -65,8 +66,11 @@ export function registerResumeRunnerRoutes(
       const cible = instance.success ? await getInstanceBySlug(db, instance.data.instance) : null;
       if (!cible) return reply.code(404).send({ error: 'Instance inconnue' });
       if (!corps.success) return reply.code(400).send({ error: 'Résumé invalide' });
+      // Une suite illisible ne doit jamais perdre le résumé : elle est simplement ignorée.
+      const lue = suiteAnnonceeSchema.safeParse((request.body as { suite?: unknown }).suite);
+      const suite = lue.success ? { instance: cible, annoncee: lue.data } : undefined;
       const pose = await withInstance(db, cible.id, (tx) =>
-        poserResume(tx, request.params.id, corps.data.resume),
+        poserResume(tx, request.params.id, corps.data.resume, suite),
       );
       if (!pose) return reply.code(404).send({ error: 'Session introuvable' });
       return { ok: true };
