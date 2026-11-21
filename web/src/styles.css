@@ -1307,11 +1307,36 @@ textarea.input {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+  line-height: 1.3;
+  /* Two lines at most: a long meeting title never pushes the rest down. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 /* Badges sit on their own line under the title, so a narrow list never squeezes the title to one word per line. */
 .inbox-ouvrir .inbox-badges {
   flex-wrap: wrap;
   margin-top: 6px;
+}
+/* The gauge closes the badge line on the right. */
+.inbox-badges .inbox-jauge {
+  margin-left: auto;
+}
+.vq-item .inbox-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  margin-top: 6px;
+}
+.inbox-qui {
+  color: var(--ink-2, var(--ink-3));
+  font-weight: 600;
+}
+.inbox-quand {
+  margin-left: auto;
+  white-space: nowrap;
 }
 .badge-instance {
   border: 1px solid var(--line);

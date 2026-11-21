@@ -163,7 +163,6 @@ function Ligne({
           {s.type === 'compte_rendu' && s.compteRenduPrepare && (
             <span className="badge green">Compte rendu prêt à relire</span>
           )}
-          <Jauge niveau={s.priorite} />
           {s.instance.slug !== slug && (
             <span
               className="badge badge-instance"
@@ -172,15 +171,18 @@ function Ligne({
               {s.instance.nom}
             </span>
           )}
+          <Jauge niveau={s.priorite} />
         </div>
-        <small>
-          {qui(s) && `${qui(s)} · `}
-          {s.echeance && (
-            <span className={`echeance ${depassee(s) ? 'red' : ''}`}>
-              Échéance {date(s.echeance)} ·{' '}
-            </span>
-          )}
-          arrivé le {date(s.createdAt)}
+        <small className="inbox-meta">
+          {qui(s) && <span className="inbox-qui">{qui(s)}</span>}
+          <span className="inbox-quand">
+            {s.echeance && (
+              <span className={`echeance ${depassee(s) ? 'red' : ''}`}>
+                Échéance {date(s.echeance)} ·{' '}
+              </span>
+            )}
+            arrivé le {date(s.createdAt)}
+          </span>
         </small>
       </button>
     </div>
