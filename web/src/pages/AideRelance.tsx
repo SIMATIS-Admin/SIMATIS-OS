@@ -165,6 +165,31 @@ export function AideRelance({ slug }: { slug: string }) {
         : [],
     [donnees, masquees, mandatsMasques, slug],
   );
+  // Actions cachées par un report (pas par « Pas pertinent ») : on les compte pour ne rien cacher
+  // en silence, et on peut les remettre d'un clic.
+  const reportees = useMemo(() => {
+    if (!donnees) return [];
+    const maintenant = Date.now();
+    return construireFile({
+      pipeline: donnees.pipeline,
+      enRetard: donnees.enRetard,
+      duJour: donnees.duJour,
+      slugCourant: slug,
+    }).filter((a) => {
+      const jusqua = masquees[a.id] ?? 0;
+      return dansMandats(a, mandatsMasques) && jusqua > maintenant && jusqua < POUR_TOUJOURS;
+    });
+  }, [donnees, masquees, mandatsMasques, slug]);
+  const remettre = async () => {
+    const ids = reportees.map((a) => a.id);
+    try {
+      // Une date passée vaut « plus de report » : le serveur ne renvoie que les reports à venir.
+      await masquerRelanceLot(slug, ids, 0);
+      setMasquees((deja) => ({ ...deja, ...Object.fromEntries(ids.map((id) => [id, 0])) }));
+    } catch {
+      charger();
+    }
+  };
   const filtrees = file.filter(
     (a) => filtre === 'tout' || a.raisons.some((r) => r.source === filtre),
   );
@@ -309,6 +334,16 @@ export function AideRelance({ slug }: { slug: string }) {
           </div>
         )}
       </div>
+      {reportees.length > 0 && (
+        <div className="aide-reportees">
+          <span>
+            {reportees.length} action(s) reportée(s), cachée(s) de cette liste jusqu'à leur date.
+          </span>
+          <button className="btn sm" type="button" onClick={() => void remettre()}>
+            Les remettre dans la liste
+          </button>
+        </div>
+      )}
       {deploye && anciennes.length > 0 && (
         <div className="aide-nettoyage">
           <span>

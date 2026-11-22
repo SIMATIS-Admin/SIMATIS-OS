@@ -8890,6 +8890,18 @@ button.recherche-carte:hover,
   font-size: 14px;
 }
 
+.aide-reportees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line-2);
+  background: var(--blue-bg);
+  font-size: 14px;
+}
+
 .enregistrement-suggestion {
   display: flex;
   align-items: center;
