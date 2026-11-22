@@ -170,6 +170,29 @@ describe('AideRelance', () => {
     );
   });
 
+  it('signale les actions reportées et les remet dans la liste d\u2019un clic', async () => {
+    const demain = Date.now() + 86_400_000;
+    api.fetchMasqueesRelance.mockResolvedValue({
+      'ent:retard fictif': demain,
+      'ent:ecartee pour toujours': 8.64e15,
+    });
+    render(<AideRelance slug="simatis" />);
+    expect(await screen.findByText(/1 action\(s\) reportée\(s\)/)).toBeTruthy();
+    expect(screen.queryByText('Retard Fictif')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Les remettre dans la liste' }));
+    await waitFor(() =>
+      expect(api.masquerRelanceLot).toHaveBeenCalledWith('simatis', ['ent:retard fictif'], 0),
+    );
+    await waitFor(() => expect(screen.queryByText(/action\(s\) reportée\(s\)/)).toBeNull());
+    expect(await screen.findByText('Retard Fictif')).toBeTruthy();
+  });
+
+  it('n\u2019affiche rien quand aucune action n\u2019est reportée', async () => {
+    render(<AideRelance slug="simatis" />);
+    await screen.findByText('Retard Fictif');
+    expect(screen.queryByText(/reportée\(s\)/)).toBeNull();
+  });
+
   it('écarte une action pour de bon, côté serveur, et ne la repropose plus', async () => {
     render(<AideRelance slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
