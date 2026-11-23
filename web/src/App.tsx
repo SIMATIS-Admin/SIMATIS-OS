@@ -34,6 +34,9 @@ const Radar = lazy(() =>
 );
 const SuiviProspection = lazy(() => import('./pages/Radar.js').then((m) => ({ default: m.Radar })));
 const Icp = lazy(() => import('./pages/Icp.js').then((m) => ({ default: m.Icp })));
+const SalesnavMessages = lazy(() =>
+  import('./pages/SalesnavMessages.js').then((m) => ({ default: m.SalesnavMessages })),
+);
 const Recherches = lazy(() =>
   import('./pages/Recherches.js').then((m) => ({ default: m.Recherches })),
 );
@@ -240,6 +243,8 @@ export function App() {
         );
       case 'icp':
         return <Icp key={current.slug} slug={current.slug} nom={current.nom} />;
+      case 'salesnav':
+        return <SalesnavMessages key={current.slug} slug={current.slug} />;
       case 'pipeline':
         return (
           <Pipeline

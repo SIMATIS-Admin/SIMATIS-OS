@@ -25,6 +25,7 @@ import { registerPassationRoutes } from './diagnostic/passation-routes.js';
 import { registerVmaRoutes } from './vma/routes.js';
 import { registerGestionRoutes } from './gestion/routes.js';
 import { registerProspectionRoutes } from './prospection/routes.js';
+import { registerSalesnavRoutes } from './salesnav/routes.js';
 import { registerVisioRoutes } from './visio/routes.js';
 import { registerEnregistrementRoutes } from './visio/enregistrement.routes.js';
 import { registerTransfertRoutes } from './transfert/routes.js';
@@ -198,6 +199,7 @@ export function buildApp({
   registerEnregistrementRoutes(app, { db });
   registerVisioRoutes(app, { db, secretsDir, realWrites, googleFetch, hote: visioNomHote });
   registerProspectionRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
+  registerSalesnavRoutes(app, { db });
   registerAtelierRoutes(app, { db });
   registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });
