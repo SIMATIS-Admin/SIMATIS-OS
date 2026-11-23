@@ -153,6 +153,8 @@ describe('routine health check', () => {
     const a = await getInstanceBySlug(t.app.db, 'mandat-a');
     if (!a) throw new Error('no instance');
     const id = await withInstance(t.app.db, a.id, async (tx) => {
+      // Le lundi après 7h, un test plus haut a déjà fait planifier la revue hebdomadaire.
+      await tx.delete(executions).where(eq(executions.routine, 'hebdo'));
       const e = await demanderExecution(tx, 'hebdo', 'test');
       await tx
         .update(executions)
