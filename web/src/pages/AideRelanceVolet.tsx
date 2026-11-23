@@ -292,6 +292,22 @@ export function VoletAction({
 
   const traitees = sequence ? sequence.n - 1 : 0;
 
+  const verbe = mail ? 'Écrire à' : 'Appeler';
+  const cibleNom = action.contact ?? action.entreprise;
+
+  const enveloppe = (
+    <svg className="aide-avion" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        d="M21.5 3.5 2.8 10.7c-.7.3-.7 1.3 0 1.5l5.3 1.9 2 5.3c.3.7 1.2.7 1.5 0L21.5 3.5Z M8.1 14.1 21.5 3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+
   return (
     <Fenetre
       titre={action.entreprise}
@@ -309,7 +325,7 @@ export function VoletAction({
       pied={
         suites ? (
           <button
-            className="btn primary"
+            className="btn primary aide-grand"
             type="button"
             onClick={() => void valider()}
             disabled={enCours}
@@ -325,101 +341,63 @@ export function VoletAction({
                   : "Cette action n'est liée à aucun contact : rattachez-la à un contact pour pouvoir envoyer d'ici."}
               </p>
             )}
-            {mail ? (
-              <div className="aide-pied-ligne aide-envoi">
-                <button className="btn" type="button" onClick={() => void copier()}>
-                  Copier le mail
-                </button>
-                {email && (
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => void ecrireMail('brouillon')}
-                    disabled={enCours || cree}
-                  >
-                    Créer le brouillon Gmail
-                  </button>
-                )}
-                {email && (
-                  <a
-                    className="btn"
-                    href={`mailto:${email}?subject=${encodeURIComponent(objetFinal)}&body=${encodeURIComponent(corpsFinal)}`}
-                  >
-                    Ouvrir dans ma messagerie
-                  </a>
-                )}
-                {email && (
-                  <span className="aide-envoyer">
+            <div className="aide-pied-principal">
+              {mail ? (
+                <>
+                  <span className="aide-ensuite">
+                    <label className="muted small" htmlFor="aide-suite-mail">
+                      Ensuite :
+                    </label>
                     <select
-                      aria-label="Signature"
-                      value={signatureId}
-                      onChange={(e) => setSignatureId(e.target.value)}
+                      id="aide-suite-mail"
+                      value={suiteMail}
+                      onChange={(e) => setSuiteMail(Number(e.target.value))}
                     >
-                      <option value="">Sans signature</option>
-                      {signatures.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          Signature : {x.nom}
+                      {suitesMail.map((x, i) => (
+                        <option key={x.libelle} value={i}>
+                          {x.libelle}
                         </option>
                       ))}
                     </select>
-                    <button
-                      className="btn primary"
-                      type="button"
-                      onClick={() => void ecrireMail('envoi')}
-                      disabled={enCours}
-                      title={`Envoie ce mail à ${email}${signatureId ? ' avec la signature choisie' : ''}, clôt l'action et passe à la suivante.`}
-                    >
-                      <svg
-                        className="aide-avion"
-                        viewBox="0 0 24 24"
-                        width="16"
-                        height="16"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M21.5 3.5 2.8 10.7c-.7.3-.7 1.3 0 1.5l5.3 1.9 2 5.3c.3.7 1.2.7 1.5 0L21.5 3.5Z M8.1 14.1 21.5 3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinejoin="round"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      Envoyer le mail
-                    </button>
                   </span>
-                )}
-              </div>
-            ) : (
-              <div className="aide-pied-ligne">
+                  {email && (
+                    <span className="aide-envoyer">
+                      <select
+                        aria-label="Signature"
+                        value={signatureId}
+                        onChange={(e) => setSignatureId(e.target.value)}
+                      >
+                        <option value="">Sans signature</option>
+                        {signatures.map((x) => (
+                          <option key={x.id} value={x.id}>
+                            Signature : {x.nom}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="btn primary aide-grand"
+                        type="button"
+                        onClick={() => void ecrireMail('envoi')}
+                        disabled={enCours}
+                        title={`Envoie ce mail à ${email}${signatureId ? ' avec la signature choisie' : ''}, clôt l'action et passe à la suivante.`}
+                      >
+                        {enveloppe}
+                        Envoyer le mail
+                      </button>
+                    </span>
+                  )}
+                </>
+              ) : (
                 <button
-                  className="btn primary"
+                  className="btn primary aide-grand"
                   type="button"
                   onClick={() => setSuites(suitesProposees(canal, resultat, !!telephone))}
                 >
                   Appel passé
                 </button>
-              </div>
-            )}
-            {mail && (
-              <div className="aide-pied-ligne">
-                <label className="muted small" htmlFor="aide-suite-mail">
-                  Ensuite :
-                </label>
-                <select
-                  id="aide-suite-mail"
-                  value={suiteMail}
-                  onChange={(e) => setSuiteMail(Number(e.target.value))}
-                >
-                  {suitesMail.map((x, i) => (
-                    <option key={x.libelle} value={i}>
-                      {x.libelle}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className="aide-pied-ligne">
+              )}
+            </div>
+            <div className="aide-pied-ligne aide-pied-secondaire">
               <span className="muted small">Reporter :</span>
               <button className="btn sm ghost" type="button" onClick={() => onMasquer(1, false)}>
                 Demain
@@ -430,9 +408,10 @@ export function VoletAction({
               <button className="btn sm ghost" type="button" onClick={() => onMasquer(7, false)}>
                 +7 jours
               </button>
+              <span className="aide-ecart" />
               {mail && (
                 <button
-                  className="btn sm aide-deja"
+                  className="btn sm"
                   type="button"
                   disabled={enCours}
                   onClick={() => void cloturer(suitesMail[suiteMail])}
@@ -476,23 +455,164 @@ export function VoletAction({
           </span>
         </div>
       )}
-      <div className="aide-blocs">
-        <section className="aide-note" aria-label="L'action">
-          <b>L'action</b>
-          <p className="aide-sous-titre">Pourquoi elle est proposée</p>
-          <ul>
-            {action.raisons.map((r, i) => (
-              <li key={i}>{r.texte}</li>
-            ))}
-          </ul>
+      <section className="aide-mission" aria-label="L'action">
+        <span className="aide-mission-etiquette">À faire</span>
+        <p className="aide-mission-titre">
+          {verbe} {cibleNom}
+        </p>
+        <p className="aide-mission-raisons">
+          {action.raisons.map((r, i) => (
+            <span key={i}>{r.texte}</span>
+          ))}
           {action.derniereActivite && (
-            <p>
+            <span className="muted">
               Dernière activité : {new Date(action.derniereActivite).toLocaleDateString('fr-FR')}
+            </span>
+          )}
+        </p>
+      </section>
+      <div className="aide-duo">
+        <div className="aide-redaction">
+          {!suites && telephone && (
+            <div className="aide-canal" role="radiogroup" aria-label="Canal de la relance">
+              <span className="muted small">Relancer par :</span>
+              <span className="aide-segment">
+                {(['mail', 'appel'] as const).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={canal === c}
+                    className={canal === c ? 'on' : ''}
+                    onClick={() => setCanalChoisi(c)}
+                  >
+                    {c === 'mail' ? 'Mail' : `Appel · ${telephone}`}
+                  </button>
+                ))}
+              </span>
+            </div>
+          )}
+          {!suites && !telephone && action.canal === 'appel' && fiches && (
+            <p className="muted small" role="note">
+              Aucun numéro pour ce contact : la relance se fait par mail.
             </p>
           )}
-        </section>
-        <section className="aide-note aide-histo" aria-label="Situation et historique">
-          <b>Situation et historique</b>
+          {suites ? (
+            <div className="aide-suite" role="radiogroup" aria-label="Suite proposée">
+              <p>
+                <b>Fait.</b> Que faut-il planifier ensuite ?
+              </p>
+              {suites.map((s, i) => (
+                <label key={s.libelle}>
+                  <input
+                    type="radio"
+                    name="suite"
+                    checked={choix === i}
+                    onChange={() => setChoix(i)}
+                  />
+                  <span>{s.libelle}</span>
+                </label>
+              ))}
+            </div>
+          ) : mail ? (
+            <div className="aide-mail-carte">
+              {email && (
+                <p className="aide-dest">
+                  <span className="muted">À</span> <b>{email}</b>
+                </p>
+              )}
+              <div className="aide-champ aide-champ-objet">
+                <label htmlFor="aide-objet">Objet</label>
+                <input
+                  id="aide-objet"
+                  type="text"
+                  value={objet}
+                  onChange={(e) => setObjet(e.target.value)}
+                />
+              </div>
+              <div className="aide-champ">
+                <label htmlFor="aide-corps">
+                  {prepare
+                    ? 'Mail préparé par la routine (modifiable, signature au choix à l’envoi)'
+                    : 'Mail préparé (modifiable, signature au choix à l’envoi)'}
+                </label>
+                <textarea
+                  id="aide-corps"
+                  value={corps}
+                  onChange={(e) => setCorps(e.target.value)}
+                />
+              </div>
+              <div className="aide-outils">
+                <span className="muted small">Autrement :</span>
+                <button className="btn sm ghost" type="button" onClick={() => void copier()}>
+                  Copier le mail
+                </button>
+                {email && (
+                  <button
+                    className="btn sm ghost"
+                    type="button"
+                    onClick={() => void ecrireMail('brouillon')}
+                    disabled={enCours || cree}
+                  >
+                    Créer le brouillon Gmail
+                  </button>
+                )}
+                {email && (
+                  <a
+                    className="btn sm ghost"
+                    href={`mailto:${email}?subject=${encodeURIComponent(objetFinal)}&body=${encodeURIComponent(corpsFinal)}`}
+                  >
+                    Ouvrir dans ma messagerie
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <dl className="aide-fiche">
+                <dt>Objectif de l'appel</dt>
+                <dd>{fiche.objectif}</dd>
+                <dt>Pour ouvrir</dt>
+                <dd>« {fiche.ouverture} »</dd>
+                <dt>Deux questions</dt>
+                <dd>
+                  <ul>
+                    {fiche.questions.map((q) => (
+                      <li key={q}>{q}</li>
+                    ))}
+                  </ul>
+                </dd>
+                {telephone && (
+                  <>
+                    <dt>Téléphone</dt>
+                    <dd>
+                      <a href={`tel:${telephone}`}>{telephone}</a>
+                    </dd>
+                  </>
+                )}
+              </dl>
+              <div className="aide-champ">
+                <label htmlFor="aide-resultat">Résultat de l'appel</label>
+                <select
+                  id="aide-resultat"
+                  value={resultat}
+                  onChange={(e) => setResultat(e.target.value)}
+                >
+                  <option value="joint">Joint, échange fait</option>
+                  <option value="absent">Pas de réponse</option>
+                  <option value="message">Message laissé</option>
+                </select>
+              </div>
+            </>
+          )}
+          {message && (
+            <p className="aide-message" role="status">
+              {message}
+            </p>
+          )}
+        </div>
+        <section className="aide-contexte aide-histo" aria-label="Situation et historique">
+          <b>Pour vous remettre dans le contexte</b>
           {fiches && (
             <Faits
               action={action}
@@ -541,111 +661,14 @@ export function VoletAction({
                 ))}
             </>
           )}
-          <Chronologie evenements={autres} />
+          {autres.length > 0 && (
+            <details className="aide-plus">
+              <summary>Voir les autres échanges ({autres.length})</summary>
+              <Chronologie evenements={autres} />
+            </details>
+          )}
         </section>
       </div>
-      {!suites && telephone && (
-        <div className="aide-canal" role="radiogroup" aria-label="Canal de la relance">
-          <span className="muted small">Relancer par :</span>
-          {(['mail', 'appel'] as const).map((c) => (
-            <button
-              key={c}
-              type="button"
-              role="radio"
-              aria-checked={canal === c}
-              className={`btn sm${canal === c ? ' primary' : ''}`}
-              onClick={() => setCanalChoisi(c)}
-            >
-              {c === 'mail' ? 'Mail' : `Appel · ${telephone}`}
-            </button>
-          ))}
-        </div>
-      )}
-      {!suites && !telephone && action.canal === 'appel' && fiches && (
-        <p className="muted small" role="note">
-          Aucun numéro pour ce contact : la relance se fait par mail.
-        </p>
-      )}
-      {suites ? (
-        <div className="aide-suite" role="radiogroup" aria-label="Suite proposée">
-          <p>
-            <b>Fait.</b> Que faut-il planifier ensuite ?
-          </p>
-          {suites.map((s, i) => (
-            <label key={s.libelle}>
-              <input type="radio" name="suite" checked={choix === i} onChange={() => setChoix(i)} />
-              <span>{s.libelle}</span>
-            </label>
-          ))}
-        </div>
-      ) : mail ? (
-        <>
-          {email && (
-            <p className="aide-dest muted small">
-              À : <b>{email}</b>
-            </p>
-          )}
-          <div className="aide-champ">
-            <label htmlFor="aide-objet">Objet</label>
-            <input
-              id="aide-objet"
-              type="text"
-              value={objet}
-              onChange={(e) => setObjet(e.target.value)}
-            />
-          </div>
-          <div className="aide-champ">
-            <label htmlFor="aide-corps">
-              {prepare
-                ? 'Mail préparé par la routine (modifiable, signature au choix à l’envoi)'
-                : 'Mail préparé (modifiable, signature au choix à l’envoi)'}
-            </label>
-            <textarea id="aide-corps" value={corps} onChange={(e) => setCorps(e.target.value)} />
-          </div>
-        </>
-      ) : (
-        <>
-          <dl className="aide-fiche">
-            <dt>Objectif de l'appel</dt>
-            <dd>{fiche.objectif}</dd>
-            <dt>Pour ouvrir</dt>
-            <dd>« {fiche.ouverture} »</dd>
-            <dt>Deux questions</dt>
-            <dd>
-              <ul>
-                {fiche.questions.map((q) => (
-                  <li key={q}>{q}</li>
-                ))}
-              </ul>
-            </dd>
-            {telephone && (
-              <>
-                <dt>Téléphone</dt>
-                <dd>
-                  <a href={`tel:${telephone}`}>{telephone}</a>
-                </dd>
-              </>
-            )}
-          </dl>
-          <div className="aide-champ">
-            <label htmlFor="aide-resultat">Résultat de l'appel</label>
-            <select
-              id="aide-resultat"
-              value={resultat}
-              onChange={(e) => setResultat(e.target.value)}
-            >
-              <option value="joint">Joint, échange fait</option>
-              <option value="absent">Pas de réponse</option>
-              <option value="message">Message laissé</option>
-            </select>
-          </div>
-        </>
-      )}
-      {message && (
-        <p className="muted small" role="status">
-          {message}
-        </p>
-      )}
     </Fenetre>
   );
 }

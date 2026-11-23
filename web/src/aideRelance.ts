@@ -355,3 +355,44 @@ export function chronologie(mails: Evenement[] | null, fiche: Evenement[]): Even
     .filter((e) => (vus.has(e.id) ? false : (vus.add(e.id), true)))
     .sort((a, b) => b.at.localeCompare(a.at));
 }
+
+// ---- Ventiler : étaler les actions choisies sur plusieurs jours ouvrés -------------------------
+
+export const PAR_JOUR_MAX = 5;
+export const JOURS_MIN = 3;
+
+// Le jour ouvré numéro `k` après `depuis` (le jour 0 est `depuis` lui-même), à 9 h. Samedi et
+// dimanche sont sautés : une action reportée un week-end réapparaîtrait sans que Marc travaille.
+export function jourOuvre(depuis: Date, k: number): Date {
+  const d = new Date(depuis);
+  d.setHours(9, 0, 0, 0);
+  for (let restant = k; restant > 0;) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) restant--;
+  }
+  return d;
+}
+
+// Répartit les actions, dans l'ordre reçu, au plus PAR_JOUR_MAX par jour et sur au moins JOURS_MIN
+// jours ouvrés, avec des paquets de taille presque égale (10 actions : 4, 3, 3). Le premier paquet
+// reste pour aujourd'hui ; on rend seulement les autres, avec le jour (à 9 h) où elles reviennent.
+export function ventiler(
+  ids: string[],
+  depuis: Date = new Date(),
+): { id: string; jusqua: number }[] {
+  const jours = Math.min(ids.length, Math.max(JOURS_MIN, Math.ceil(ids.length / PAR_JOUR_MAX)));
+  if (jours <= 1) return [];
+  const base = Math.floor(ids.length / jours);
+  const reste = ids.length % jours;
+  const resultat: { id: string; jusqua: number }[] = [];
+  let debut = 0;
+  for (let j = 0; j < jours; j++) {
+    const taille = base + (j < reste ? 1 : 0);
+    if (j > 0) {
+      const jusqua = jourOuvre(depuis, j).getTime();
+      for (const id of ids.slice(debut, debut + taille)) resultat.push({ id, jusqua });
+    }
+    debut += taille;
+  }
+  return resultat;
+}

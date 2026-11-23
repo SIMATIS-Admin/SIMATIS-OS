@@ -17,6 +17,7 @@ import {
   dansMandats,
   POUR_TOUJOURS,
   RETARD_ANCIEN,
+  ventiler,
   type ActionRelance,
   type Masquees,
   type SourceAction,
@@ -54,6 +55,9 @@ const jourIso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const CLE_MANDATS = 'aideRelance.instances-masquees';
+const CLE_PLAFOND = 'aideRelance:plafond';
+const jourLong = (t: number) =>
+  new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
 // Le bloc « À faire maintenant » du Cockpit : les actions commerciales à réaliser vite, tirées du
 // Radar, des tâches en retard et des affaires sans activité. L'OS prépare, Marc relit et envoie.
@@ -70,6 +74,13 @@ export function AideRelance({ slug }: { slug: string }) {
     const v = lire<Nombre>('aideRelance:nb', 10);
     return CHOIX.includes(v) ? v : 10;
   });
+  // Après « Ventiler », la liste du jour se limite à ce qui reste pour aujourd'hui : sans cela, les
+  // actions étalées seraient aussitôt remplacées par les suivantes de la file.
+  const [plafond, setPlafond] = useState<number | null>(() => {
+    const v = lire<{ jour: string; n: number } | null>(CLE_PLAFOND, null);
+    return v && v.jour === jourIso(new Date()) ? v.n : null;
+  });
+  const [infoVentilation, setInfoVentilation] = useState('');
   const [deploye, setDeploye] = useState<boolean>(() => lire('aideRelance:deploye', false));
   const [filtre, setFiltre] = useState<'tout' | SourceAction>('tout');
   // Mandats décochés (comme dans l'Agenda) : on retient ceux qu'on cache, un mandat ajouté plus
@@ -138,6 +149,8 @@ export function AideRelance({ slug }: { slug: string }) {
   };
   const choisir = (n: Nombre) => {
     setNb(n);
+    setPlafond(null);
+    ecrire(CLE_PLAFOND, null);
     ecrire('aideRelance:nb', n);
   };
   const basculer = () => {
@@ -193,7 +206,12 @@ export function AideRelance({ slug }: { slug: string }) {
   const filtrees = file.filter(
     (a) => filtre === 'tout' || a.raisons.some((r) => r.source === filtre),
   );
-  const visibles = nb === 'tout' ? filtrees : filtrees.slice(0, nb);
+  const visibles =
+    plafond !== null
+      ? filtrees.slice(0, Math.min(plafond, nb === 'tout' ? Infinity : nb))
+      : nb === 'tout'
+        ? filtrees
+        : filtrees.slice(0, nb);
   const attente = filtrees.length - visibles.length;
   const compte = (s: SourceAction) =>
     file.filter((a) => a.raisons.some((r) => r.source === s)).length;
@@ -202,6 +220,34 @@ export function AideRelance({ slug }: { slug: string }) {
   const parMandat = mandats
     .map((m) => ({ nom: m.nom, n: anciennes.filter((a) => a.mandat === m.slug).length }))
     .filter((m) => m.n > 0);
+
+  // Étale les actions choisies sur plusieurs jours ouvrés (5 par jour au plus). On ne touche ni aux
+  // tâches ni au CRM : les actions étalées sont reportées, comme avec « Reporter », et reviennent
+  // dans la liste à leur jour ; « Les remettre dans la liste » défait tout.
+  const ventilerVisibles = async () => {
+    const lot = ventiler(visibles.map((a) => a.id));
+    if (lot.length === 0) {
+      setInfoVentilation('Pas assez d’actions pour les étaler.');
+      return;
+    }
+    const parJour = new Map<number, string[]>();
+    for (const { id, jusqua } of lot) parJour.set(jusqua, [...(parJour.get(jusqua) ?? []), id]);
+    try {
+      for (const [jusqua, ids] of parJour) await masquerRelanceLot(slug, ids, jusqua);
+    } catch {
+      charger();
+      setInfoVentilation('La répartition a échoué. Réessayez.');
+      return;
+    }
+    setMasquees((deja) => ({ ...deja, ...Object.fromEntries(lot.map((x) => [x.id, x.jusqua])) }));
+    const gardees = visibles.length - lot.length;
+    setPlafond(gardees);
+    ecrire(CLE_PLAFOND, { jour: jourIso(new Date()), n: gardees });
+    const dernier = Math.max(...lot.map((x) => x.jusqua));
+    setInfoVentilation(
+      `${gardees} action(s) pour aujourd'hui, ${lot.length} étalée(s) sur ${parJour.size} jour(s) ouvré(s) suivants, jusqu'à ${jourLong(dernier)}.`,
+    );
+  };
 
   const lancer = () =>
     setSequence({ actions: visibles, i: 0, faites: 0, reportees: 0, passees: 0 });
@@ -245,22 +291,43 @@ export function AideRelance({ slug }: { slug: string }) {
     >
       <div className="panel-b">
         <div className="aide-tete">
-          <button
-            type="button"
-            className="aide-bascule"
-            aria-expanded={deploye}
-            aria-controls="aide-liste"
-            onClick={basculer}
-          >
-            <span className="aide-chevron" aria-hidden="true" />
-            <span>
-              <strong>À faire maintenant</strong>
-              <span className="muted small">
-                {donnees ? `${file.length} action(s) possible(s)` : 'Chargement en cours'}
-                {faites > 0 ? ` · ${faites} faite(s) aujourd'hui` : ''}
+          <div className="aide-titre">
+            <button
+              type="button"
+              className="aide-bascule"
+              aria-expanded={deploye}
+              aria-controls="aide-liste"
+              onClick={basculer}
+            >
+              <span className="aide-chevron" aria-hidden="true" />
+              <span>
+                <strong>À faire maintenant</strong>
+                <span className="muted small">
+                  {donnees ? `${file.length} action(s) possible(s)` : 'Chargement en cours'}
+                  {faites > 0 ? ` · ${faites} faite(s) aujourd'hui` : ''}
+                </span>
               </span>
-            </span>
-          </button>
+            </button>
+            <button
+              type="button"
+              className="aide-vent"
+              aria-label="Ventiler les actions"
+              title="Étale les actions choisies sur plusieurs jours ouvrés, 5 par jour au plus. Rien n'est supprimé : « Les remettre dans la liste » défait tout."
+              disabled={visibles.length < 2}
+              onClick={() => void ventilerVisibles()}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <path
+                  d="M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7a2.5 2.5 0 1 1-2.5 2.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
           <div className="aide-choix" role="group" aria-label="Paramètres de la séquence">
             {mandats.length > 1 && (
               <div className="aide-instances">
@@ -334,6 +401,11 @@ export function AideRelance({ slug }: { slug: string }) {
           </div>
         )}
       </div>
+      {infoVentilation && (
+        <p className="aide-info" role="status">
+          {infoVentilation}
+        </p>
+      )}
       {reportees.length > 0 && (
         <div className="aide-reportees">
           <span>
