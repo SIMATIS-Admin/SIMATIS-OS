@@ -38,6 +38,8 @@ import {
   statsPipe,
 } from './prospects.js';
 import { ActionInvalide, ActionRefusee, enregistrerAction, indicateurs } from './actions.js';
+import { DejaEnCours, demanderExecution } from '../routines/service.js';
+import { alerteAcceptation, demanderEnvoi, derniersEnvois, EnvoiRefuse } from './envois.js';
 import { lireReglages, ReglageInvalide, sauverReglages } from './reglages.js';
 import { ETAPES_SALESNAV } from './schema.js';
 
@@ -48,6 +50,7 @@ const campagneSchema = z.object({ nom: z.string().max(200), icp: z.string().max(
 const reglagesSchema = z.object({
   quotaJour: z.number().optional(),
   pause: z.boolean().optional(),
+  essaiABlanc: z.boolean().optional(),
 });
 const actionSchema = z.object({
   type: z.string().max(40),
@@ -70,6 +73,7 @@ const ACTIONS_PIPE = [
   'sans-reponse',
   'ecarter',
 ] as const;
+const envoiSchema = z.object({ note: z.string().max(2_000) });
 const variablesSchema = z.object({
   prenom: z.string().max(200).optional(),
   entreprise: z.string().max(200).optional(),
@@ -82,7 +86,8 @@ export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoute
     if (e instanceof CampagneIntrouvable || e instanceof ProspectIntrouvable)
       return reply.code(404).send({ error: e.message });
     if (e instanceof ProspectInvalide) return reply.code(400).send({ error: e.message });
-    if (e instanceof ActionRefusee) return reply.code(409).send({ error: e.message });
+    if (e instanceof ActionRefusee || e instanceof EnvoiRefuse || e instanceof DejaEnCours)
+      return reply.code(409).send({ error: e.message });
     if (e instanceof ActionInvalide) return reply.code(400).send({ error: e.message });
     if (e instanceof ModeleInvalide || e instanceof ReglageInvalide)
       return reply.code(400).send({ error: e.message });
@@ -126,12 +131,20 @@ export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoute
       const stats = await statsPipe(tx);
       const modeles = await listerModeles(tx);
       const disponibles = await disponiblesDansLaBase(tx);
+      const envois = await derniersEnvois(tx);
+      const alerte = await alerteAcceptation(tx);
+      const reglages = await lireReglages(tx);
       const texte = (cible: string | null, etape: string) =>
         modeles.find((m) => m.icp === cible && m.etape === etape)?.texte ?? null;
       return {
         stats,
         disponibles,
         joursAvantRetrait: JOURS_AVANT_RETRAIT,
+        envois,
+        alerte,
+        pause: reglages.pause,
+        pauseRaison: reglages.pauseRaison,
+        essaiABlanc: reglages.essaiABlanc,
         cibles: [...new Set(modeles.map((m) => m.icp))],
         prospects: prospects.map((p) => {
           const etape =
@@ -181,6 +194,21 @@ export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoute
       return dansInstance(request.params.slug, reply, async (tx) => {
         await choisirCible(tx, request.params.id, p.data.cible);
         return { ok: true };
+      });
+    },
+  );
+
+  // Envoi par le Chrome du pilote : la demande entre dans la file et la routine est lancée dans la
+  // même transaction, donc un refus de l'une annule l'autre.
+  app.post<{ Params: { slug: string; id: string }; Body: unknown }>(
+    '/api/i/:slug/salesnav/pipe/prospects/:id/envoyer',
+    (request, reply) => {
+      const p = envoiSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, 'Note invalide');
+      return dansInstance(request.params.slug, reply, async (tx) => {
+        const envoi = await demanderEnvoi(tx, request.params.id, p.data.note);
+        await demanderExecution(tx, 'salesnav', 'pilote');
+        return { id: envoi.id, essai: envoi.essai };
       });
     },
   );

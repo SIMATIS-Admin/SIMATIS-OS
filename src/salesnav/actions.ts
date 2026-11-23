@@ -3,7 +3,12 @@ import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { decaler, jourDe } from '../pilotage/realisees.js';
 import { lireReglages } from './reglages.js';
-import { salesnavActions, TYPES_ACTION_SALESNAV, type TypeActionSalesnav } from './schema.js';
+import {
+  salesnavActions,
+  TYPES_ACTION_SALESNAV,
+  type OrigineActionSalesnav,
+  type TypeActionSalesnav,
+} from './schema.js';
 
 export class ActionInvalide extends Error {}
 // Le quota du jour est atteint ou le canal est en pause : l'action n'est pas enregistrée.
@@ -50,7 +55,7 @@ export async function indicateurs(
     if (j >= debutSemaine && j <= aujourdhui) semaine[l.type]++;
     if (j === aujourdhui) jour[l.type]++;
   }
-  const reglages = await lireReglages(tx);
+  const reglages = await lireReglages(tx, maintenant);
   return {
     jour,
     semaine,
@@ -65,13 +70,20 @@ export async function indicateurs(
 // protège le compte LinkedIn, on ne le dépasse pas par un simple clic.
 export async function enregistrerAction(
   tx: Executor,
-  entree: { type: string; opportuniteId?: string | null; campagneId?: string | null },
+  entree: {
+    type: string;
+    opportuniteId?: string | null;
+    campagneId?: string | null;
+    origine?: OrigineActionSalesnav;
+    // L'action a déjà eu lieu sur LinkedIn : on la note même si le quota est atteint ou le canal en pause.
+    forcer?: boolean;
+  },
   maintenant: Date = new Date(),
 ): Promise<void> {
   if (!(TYPES_ACTION_SALESNAV as readonly string[]).includes(entree.type))
     throw new ActionInvalide('Type d’action inconnu.');
   const type = entree.type as TypeActionSalesnav;
-  if (type === 'demande_envoyee' || type === 'message_envoye') {
+  if (!entree.forcer && (type === 'demande_envoyee' || type === 'message_envoye')) {
     const etat = await indicateurs(tx, maintenant);
     if (etat.pause)
       throw new ActionRefusee('Le canal SalesNav est en pause : reprenez-le pour envoyer.');
@@ -83,6 +95,8 @@ export async function enregistrerAction(
   await tx.insert(salesnavActions).values({
     instanceId: currentInstance,
     type,
+    origine: entree.origine ?? 'manuel',
+    createdAt: maintenant,
     opportuniteId: entree.opportuniteId ?? null,
     campagneId: entree.campagneId ?? null,
   });

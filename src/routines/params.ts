@@ -59,6 +59,8 @@ export const paramsSchemas = {
   linkedin: z.object({
     declenchement: z.enum(DECLENCHEMENTS_LINKEDIN),
   }),
+  // Aucun réglage : l'envoi se déclenche au clic du pilote, les règles sont celles de la page SalesNav.
+  salesnav: z.object({}),
 } satisfies Record<CleRoutine, z.ZodObject>;
 
 export type ParamsQuotidienne = z.infer<typeof paramsSchemas.quotidienne>;
@@ -81,6 +83,7 @@ export const PARAMS_DEFAUT: { [K in CleRoutine]: z.infer<(typeof paramsSchemas)[
   evenement: { devis: 10, stop: true },
   base: { declenchement: 'Après chaque rapprochement de boîte mail' },
   linkedin: { declenchement: 'Une fois par jour, si de nouveaux messages sont arrivés' },
+  salesnav: {},
 };
 
 // Steps that need a connection stop the run when the instance does not have it.
@@ -175,6 +178,18 @@ export const ROUTINES: {
       e("Enregistrer le texte complet dans l'entrée de l'Inbox"),
     ],
   },
+  {
+    cle: 'salesnav',
+    nom: 'Envoi SalesNav',
+    skill: 'envoyer-demande-salesnav',
+    pause: true,
+    etapes: [
+      e('Lire la demande de connexion validée par le pilote'),
+      e('Ouvrir le profil dans le Chrome du pilote et vérifier que le nom correspond'),
+      e('Envoyer la demande avec la note validée, une seule à la fois'),
+      e("Rendre compte à l'OS : envoyée, déjà connecté, introuvable ou avertissement"),
+    ],
+  },
 ];
 
 export const CLES = ROUTINES.map((r) => r.cle);
@@ -196,6 +211,7 @@ export function rythme(cle: CleRoutine, params: Record<string, unknown>): string
   if (cle === 'nettoyage') return paramsOf('nettoyage', params).declenchement;
   if (cle === 'base') return paramsOf('base', params).declenchement;
   if (cle === 'linkedin') return paramsOf('linkedin', params).declenchement;
+  if (cle === 'salesnav') return 'Au clic du pilote, une demande à la fois';
   if (cle === 'hebdo') {
     const p = paramsOf('hebdo', params);
     return `${p.jour} à ${p.heure}`;
@@ -236,6 +252,9 @@ export function resume(cle: CleRoutine, params: Record<string, unknown>): string
   }
   if (cle === 'linkedin') {
     return `${rythme(cle, params)} : ouvre dans votre Chrome les conversations LinkedIn dont l'OS a reçu la notification et enregistre le texte du message dans l'Inbox. Il ne répond à rien et n'envoie rien.`;
+  }
+  if (cle === 'salesnav') {
+    return `${rythme(cle, params)} : ouvre le profil dans votre Chrome, vérifie que c'est la bonne personne et envoie la demande de connexion avec la note que vous avez validée. Une seule demande à la fois, dans le quota et les horaires de la page SalesNav ; rien d'autre n'est lu ni cliqué.`;
   }
   const p = paramsOf('evenement', params);
   return `Relance un devis sans réponse après ${pluriel(p.devis, 'jour')}${p.stop ? ", et arrête la séquence dès qu'un contact répond" : ''}.`;

@@ -3861,6 +3861,8 @@ export type ReglagesSalesnav = {
   quotaJour: number;
   quotaSemaine: number;
   pause: boolean;
+  pauseRaison: string | null;
+  essaiABlanc: boolean;
   quotaMax: number;
   recommande: number;
   cible: number;
@@ -3870,7 +3872,7 @@ export const fetchReglagesSalesnav = (slug: string) =>
   getJson<ReglagesSalesnav>(inst(slug, 'salesnav/reglages'));
 export const enregistrerReglagesSalesnav = (
   slug: string,
-  reglages: { quotaJour?: number; pause?: boolean },
+  reglages: { quotaJour?: number; pause?: boolean; essaiABlanc?: boolean },
 ) => sendJson<ReglagesSalesnav>('PUT', inst(slug, 'salesnav/reglages'), reglages);
 
 export type TypeActionSalesnav =
@@ -3913,7 +3915,21 @@ export type StatsPipeSalesnav = {
   reponses: number;
   tauxReponse: number | null;
 };
+export type EnvoiSalesnav = {
+  id: string;
+  prospectId: string;
+  statut: 'en_attente' | 'en_cours' | 'envoye' | 'essai' | 'echec';
+  essai: boolean;
+  detail: string | null;
+  note: string;
+  creeLe: string;
+};
 export type PipeSalesnav = {
+  envois: EnvoiSalesnav[];
+  alerte: { taux: number; echantillon: number; message: string } | null;
+  pause: boolean;
+  pauseRaison: string | null;
+  essaiABlanc: boolean;
   stats: StatsPipeSalesnav;
   disponibles: number;
   joursAvantRetrait: number;
@@ -3943,4 +3959,10 @@ export const actionProspectSalesnav = (slug: string, id: string, action: ActionP
     'POST',
     inst(slug, `salesnav/pipe/prospects/${id}/${action}`),
     {},
+  );
+export const envoyerDemandeSalesnav = (slug: string, id: string, note: string) =>
+  sendJson<{ id: string; essai: boolean }>(
+    'POST',
+    inst(slug, `salesnav/pipe/prospects/${id}/envoyer`),
+    { note },
   );

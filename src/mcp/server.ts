@@ -13,6 +13,7 @@ import '../inbox/linkedin-outils.js';
 import '../partenaires/outils-mcp.js';
 import '../prospection/outils-mcp.js';
 import '../routines/outils-mcp.js';
+import '../salesnav/outils-mcp.js';
 import { echouerExecution, RoutineArretee } from '../routines/service.js';
 
 const asText = (value: unknown) => ({
