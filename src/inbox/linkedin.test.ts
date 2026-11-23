@@ -8,6 +8,7 @@ import {
   actualiserLinkedin,
   compterMessagesALire,
   enregistrerMessage,
+  apercuPropre,
   expediteurLinkedin,
   LECTURES_MAX,
   messagesALire,
@@ -21,6 +22,14 @@ const notif = (id: string, objet: string, extra: Partial<NotificationMail> = {})
   date: 'Mon, 5 Oct 2026 09:00:00 +0200',
   extrait: 'Bonjour, pouvons-nous échanger cette semaine ?',
   ...extra,
+});
+
+describe('LinkedIn : aperçu', () => {
+  it('removes the invisible padding of the notification preview', () => {
+    expect(apercuPropre('1 nouveau message attend votre réponse \u034f \u034f \u034f  ')).toBe(
+      '1 nouveau message attend votre réponse',
+    );
+  });
 });
 
 describe('LinkedIn : nom de l’expéditeur', () => {

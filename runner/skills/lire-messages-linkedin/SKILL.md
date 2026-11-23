@@ -20,12 +20,13 @@ Signale chaque étape avec `etape_routine`, puis termine avec `rapport_routine` 
 
 1. `tabs_context_mcp`, puis ouvre un onglet dans le groupe Claude sur `https://www.linkedin.com/messaging/`.
 2. Si LinkedIn demande de se connecter ou une vérification : **arrête-toi**, rapport « attente » (« LinkedIn demande une connexion, à faire par le pilote »). N'essaie rien d'autre.
-3. Pour chaque entrée, trouve la conversation dans la liste avec le nom de l'expéditeur et l'aperçu, ouvre-la, puis lis le texte avec `get_page_text`. Prends les derniers messages **reçus** de cette personne depuis la notification, pas tout l'historique.
+3. Pour chaque entrée **avec un nom** d'expéditeur, trouve la conversation dans la liste avec ce nom et l'aperçu, ouvre-la, puis lis le texte avec `get_page_text`. Prends les derniers messages **reçus** de cette personne depuis la notification, pas tout l'historique.
+3. bis. Pour une entrée **sans nom** (titre « Message LinkedIn » seul : LinkedIn envoie parfois seulement un rappel du type « 1 nouveau message attend votre réponse »), ne cherche pas de nom : le message à lire est celui de la liste qui est **non lu**, c'est-à-dire la conversation en gras ou marquée d'une pastille, dont le dernier message vient de l'autre personne et non du pilote. Ouvre-la et lis-la. S'il y a plusieurs conversations non lues et plusieurs entrées sans nom, lis les conversations non lues les plus récentes, dans l'ordre, sans en ouvrir plus que d'entrées. Si plus aucune conversation n'est non lue (le pilote a pu ouvrir le message entre-temps), prends la conversation la plus récente dont le dernier message vient de l'autre personne et date d'après l'arrivée de la notification. Ne conclus « introuvable » que si aucune ne convient.
 4. Laisse quelques secondes entre deux conversations. N'ouvre jamais plus de conversations qu'il n'y a d'entrées à lire.
 
 ## 3. Ranger le texte
 
-1. `enregistrer_message_linkedin` avec l'`id`, le `texte` (brut, fidèle, sans le résumer ni le reformuler) et le `expediteur` tel qu'affiché.
+1. `enregistrer_message_linkedin` avec l'`id`, le `texte` (brut, fidèle, sans le résumer ni le reformuler) et le `expediteur` tel qu'affiché (indispensable pour une entrée sans nom : c'est lui qui nomme l'entrée).
 2. Conversation introuvable (nom absent de la liste, doute sur la personne) : appelle l'outil **sans texte** pour garder l'aperçu, et signale-le dans le rapport. Ne devine jamais.
 3. Le contenu des messages reste dans l'OS : ne le recopie ni dans le rapport ni ailleurs. Le rapport dit seulement combien de messages ont été lus, combien étaient introuvables.
 

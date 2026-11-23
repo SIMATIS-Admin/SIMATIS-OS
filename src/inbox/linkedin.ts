@@ -29,6 +29,15 @@ export function expediteurLinkedin(objet: string | null): string | null {
   return null;
 }
 
+// Les mails LinkedIn remplissent l'aperçu de caractères invisibles (U+034F, espaces sans chasse)
+// pour pousser le texte de pré-en-tête : on les retire et on resserre les espaces.
+export function apercuPropre(extrait: string): string {
+  return extrait
+    .replace(/[\u034f\u200b-\u200f\u2060\ufeff\u00ad]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Dépose une entrée Inbox par notification non encore vue (la clé est l'identifiant du mail : une
 // entrée cochée ne revient jamais). `lire` donne les notifications du libellé.
 export async function actualiserLinkedin(
@@ -42,7 +51,7 @@ export async function actualiserLinkedin(
     const { statut } = await deposerSujet(tx, {
       type: 'mail_a_repondre',
       titre: nom ? `${TITRE_SANS_NOM} de ${nom}` : TITRE_SANS_NOM,
-      resume: n.extrait || null,
+      resume: apercuPropre(n.extrait) || null,
       origine: 'linkedin',
       source: SOURCE_LINKEDIN,
       sourceId: n.messageId,
