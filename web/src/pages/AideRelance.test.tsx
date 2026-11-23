@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
   fetchBrouillonsPrepares: vi.fn(),
   decider: vi.fn(),
   fetchProspection: vi.fn(),
+  fetchFiche: vi.fn(),
   fetchMailsFiche: vi.fn(),
   envoyerMailRelanceProspection: vi.fn(),
 }));
@@ -44,10 +45,26 @@ const tacheRetard = {
   fait: false,
   // En retard de trois jours : plus récent que le seuil des tâches périmées.
   echeance: new Date(Date.now() - 3 * 86_400_000).toISOString(),
-  contact: { id: 'c1', nom: 'Dana Imaginaire', email: 'dana@exemple.test' },
+  contact: {
+    id: 'c1',
+    nom: 'Dana Imaginaire',
+    email: 'dana@exemple.test',
+    telephone: '0600000000',
+  },
   entreprise: { id: 'e1', nom: 'Retard Fictif' },
   opportunite: { id: 'o99', titre: 'Devis', clos: null },
 };
+
+const ficheVide = (extra: Record<string, unknown> = {}, champs: Record<string, unknown> = {}) => ({
+  kind: 'contact',
+  fiche: { id: 'c1', origine: 'os', ...champs },
+  liens: {},
+  aVenir: [],
+  rendezVous: [],
+  historique: [],
+  ecrit: true,
+  ...extra,
+});
 
 describe('AideRelance', () => {
   beforeEach(() => {
@@ -77,6 +94,7 @@ describe('AideRelance', () => {
       ],
     });
     api.fetchMailsFiche.mockResolvedValue({ mails: [], adresses: 1 });
+    api.fetchFiche.mockResolvedValue(ficheVide());
     api.envoyerMailRelanceProspection.mockResolvedValue({ simulation: false });
   });
   afterEach(() => {
@@ -567,15 +585,89 @@ describe('AideRelance', () => {
     expect(api.createTache).not.toHaveBeenCalled();
   });
 
-  it("affiche la fiche d'appel pour une tâche d'appel", async () => {
-    api.fetchTaches.mockResolvedValue({
-      enRetard: [{ ...tacheRetard, id: 't2', canal: 'appel', type: 'appel' }],
-    });
+  const tacheAppel = (contact: Record<string, unknown>) => ({
+    ...tacheRetard,
+    id: 't2',
+    canal: 'appel',
+    type: 'appel',
+    contact: { id: 'c1', nom: 'Dana Imaginaire', email: 'dana@exemple.test', ...contact },
+  });
+  const ouvrirRetard = async () => {
     render(<AideRelance slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
-    const volet = await screen.findByRole('dialog');
+    return screen.findByRole('dialog');
+  };
+
+  it("affiche la fiche d'appel pour une tâche d'appel quand le contact a un numéro", async () => {
+    api.fetchTaches.mockResolvedValue({ enRetard: [tacheAppel({ telephone: '0600000000' })] });
+    const volet = await ouvrirRetard();
     expect(within(volet).getByText("Objectif de l'appel")).toBeTruthy();
     expect(within(volet).getByText(/Marc de SIMATIS/)).toBeTruthy();
+  });
+
+  it("bascule d'office sur la relance par mail quand le contact n'a aucun numéro", async () => {
+    api.fetchTaches.mockResolvedValue({ enRetard: [tacheAppel({ telephone: null })] });
+    const volet = await ouvrirRetard();
+    expect(await within(volet).findByLabelText(/Mail préparé/)).toBeTruthy();
+    expect(within(volet).queryByText("Objectif de l'appel")).toBeNull();
+    expect(within(volet).getByText(/Aucun numéro pour ce contact/)).toBeTruthy();
+    expect(within(volet).queryByRole('radiogroup', { name: 'Canal de la relance' })).toBeNull();
+    // Pas de suite par téléphone proposée sans numéro.
+    expect(within(volet).queryByRole('option', { name: /par téléphone/ })).toBeNull();
+  });
+
+  it('laisse choisir entre mail et appel quand le numéro existe, et retrouve le numéro sur la fiche', async () => {
+    api.fetchTaches.mockResolvedValue({ enRetard: [tacheAppel({ telephone: null })] });
+    api.fetchFiche.mockResolvedValue(ficheVide({}, { telephone: '0611223344' }));
+    const volet = await ouvrirRetard();
+    const choix = await within(volet).findByRole('radiogroup', { name: 'Canal de la relance' });
+    expect(within(choix).getByRole('radio', { name: /Appel/ }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    expect(within(volet).getByText("Objectif de l'appel")).toBeTruthy();
+    fireEvent.click(within(choix).getByRole('radio', { name: 'Mail' }));
+    expect(await within(volet).findByLabelText(/Mail préparé/)).toBeTruthy();
+    expect(within(volet).getByRole('option', { name: /par téléphone/ })).toBeTruthy();
+  });
+
+  it('complète la situation : coordonnées, déjà prévu, notes et appels de la fiche', async () => {
+    api.fetchFiche.mockResolvedValue(
+      ficheVide(
+        {
+          aVenir: [
+            { id: 'tv1', titre: 'Envoyer la proposition', echeance: '2026-12-01T09:00:00Z' },
+          ],
+          historique: [
+            {
+              id: 'n1',
+              type: 'note',
+              titre: null,
+              texte: "Souhaite un devis avant l'été",
+              at: '2026-11-05T09:00:00Z',
+              origine: 'os',
+            },
+            {
+              id: 'a1',
+              type: 'appel',
+              titre: 'Appel de découverte',
+              texte: null,
+              at: '2026-11-01T09:00:00Z',
+              origine: 'hubspot',
+            },
+          ],
+        },
+        { fonction: 'Directrice', telephone: '0611223344' },
+      ),
+    );
+    api.fetchTaches.mockResolvedValue({ enRetard: [tacheAppel({ telephone: null })] });
+    const volet = await ouvrirRetard();
+    const situation = within(volet).getByLabelText('Situation et historique');
+    expect(await within(situation).findByText(/Directrice/)).toBeTruthy();
+    expect(within(situation).getByText(/0611223344/)).toBeTruthy();
+    expect(within(situation).getByText(/Envoyer la proposition/)).toBeTruthy();
+    expect(within(situation).getByText('Appel de découverte')).toBeTruthy();
+    expect(within(situation).getByText(/Souhaite un devis/)).toBeTruthy();
+    expect(api.fetchFiche).toHaveBeenCalledWith('simatis', 'contact', 'c1');
   });
 
   it('indique une erreur de chargement sans planter', async () => {

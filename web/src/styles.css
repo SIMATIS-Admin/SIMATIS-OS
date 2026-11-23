@@ -8775,6 +8775,53 @@ button.recherche-carte:hover,
   border: 1px solid var(--line);
   border-radius: var(--r-s);
 }
+.aide-faits {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 12px;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.aide-faits dt {
+  color: var(--ink-3);
+}
+.aide-faits dd {
+  margin: 0;
+}
+.aide-faits ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.aide-chrono {
+  margin-top: 12px;
+}
+.aide-chrono ul {
+  margin: 4px 0 6px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.aide-chrono li {
+  padding: 3px 0;
+  border-top: 1px solid var(--line);
+}
+.aide-chrono summary {
+  cursor: pointer;
+}
+.aide-chrono pre {
+  max-height: 160px;
+  margin: 6px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: inherit;
+  line-height: 1.45;
+}
+.aide-canal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
 .aide-mail summary {
   cursor: pointer;
   font-size: 13px;
