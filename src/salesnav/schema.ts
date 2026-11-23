@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
 // Canal Sales Navigator : les messages envoyés à la main (invitation, remerciement, relances).
@@ -44,6 +44,25 @@ export const salesnavModeles = pgTable(
       .on(t.campagneId, t.etape)
       .where(sql`campagne_id is not null`),
     instanceIsolation('salesnav_modeles'),
+  ],
+);
+
+// Réglages du canal : une ligne par instance. Le quota est le nombre de demandes de connexion
+// par jour ouvré ; `pause` coupe tout le canal d'un coup.
+export const QUOTA_DEFAUT = 8;
+export const QUOTA_MAX = 25;
+
+export const salesnavReglages = pgTable(
+  'salesnav_reglages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    quotaJour: integer('quota_jour').notNull().default(QUOTA_DEFAUT),
+    pause: boolean('pause').notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex('salesnav_reglages_instance_idx').on(t.instanceId),
+    instanceIsolation('salesnav_reglages'),
   ],
 );
 

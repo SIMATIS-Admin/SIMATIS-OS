@@ -229,3 +229,70 @@ it('« Ajouter au Radar » ouvre le formulaire, propose les origines connues et 
   );
   expect(screen.queryByRole('form', { name: 'Ajouter au Radar' })).toBeNull();
 });
+
+it('ouvre la sous-section SalesNav depuis le quartier SalesNav du Radar', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url.endsWith('/pipeline')
+              ? {
+                  opportunites: [
+                    {
+                      id: 'sn',
+                      titre: 'Affaire par SalesNav',
+                      entreprise: 'Société Démo',
+                      etape: 'lead',
+                      tentatives: 0,
+                      radar: null,
+                      radarEtapeManuelle: null,
+                      canalRadar: 'SalesNav',
+                    },
+                    {
+                      id: 'tel',
+                      titre: 'Affaire par téléphone',
+                      etape: 'lead',
+                      tentatives: 1,
+                      radar: null,
+                      radarEtapeManuelle: null,
+                      canalRadar: 'Téléphone',
+                    },
+                  ],
+                  etapes: [{ id: 'lead', label: 'Lead identifié' }],
+                  contactsARattacher: [],
+                }
+              : url.endsWith('/salesnav/modeles')
+                ? {
+                    etapes: ['invitation', 'acceptation', 'relance1', 'relance2'],
+                    limiteInvitation: 300,
+                    modeles: [],
+                    campagnes: [],
+                  }
+                : url.endsWith('/salesnav/reglages')
+                  ? {
+                      quotaJour: 8,
+                      quotaSemaine: 40,
+                      pause: false,
+                      quotaMax: 25,
+                      recommande: 8,
+                      cible: 12,
+                      niveau: 'normal',
+                    }
+                  : url.endsWith('/rendez-vous')
+                    ? { etat: 'ok', rdv: [] }
+                    : { etat: 'termine' },
+          ),
+        ),
+      ),
+    ),
+  );
+  render(<RadarAffaires slug="demo" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'SalesNav · 1' }));
+  const sous = await screen.findByLabelText('SalesNav');
+  expect(within(sous).getByText('Société Démo')).toBeTruthy();
+  expect(within(sous).queryByText('Affaire par téléphone')).toBeNull();
+  fireEvent.click(within(sous).getByRole('button', { name: '← Retour au Radar' }));
+  expect(await screen.findByRole('button', { name: 'SalesNav · 1' })).toBeTruthy();
+});

@@ -17,12 +17,17 @@ import {
   sauverSurcharge,
   supprimerCampagne,
 } from './modeles.js';
+import { lireReglages, ReglageInvalide, sauverReglages } from './reglages.js';
 import { ETAPES_SALESNAV } from './schema.js';
 
 export type SalesnavRoutesDeps = { db: Database };
 
 const texteSchema = z.object({ texte: z.string().max(10_000) });
 const campagneSchema = z.object({ nom: z.string().max(200), icp: z.string().max(200) });
+const reglagesSchema = z.object({
+  quotaJour: z.number().optional(),
+  pause: z.boolean().optional(),
+});
 const variablesSchema = z.object({
   prenom: z.string().max(200).optional(),
   entreprise: z.string().max(200).optional(),
@@ -33,7 +38,8 @@ export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoute
 
   const erreur = (e: unknown, reply: FastifyReply) => {
     if (e instanceof CampagneIntrouvable) return reply.code(404).send({ error: e.message });
-    if (e instanceof ModeleInvalide) return reply.code(400).send({ error: e.message });
+    if (e instanceof ModeleInvalide || e instanceof ReglageInvalide)
+      return reply.code(400).send({ error: e.message });
     throw e;
   };
   const invalide = (reply: FastifyReply, issue?: string) =>
@@ -52,6 +58,19 @@ export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoute
       return erreur(e, reply);
     }
   }
+
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/salesnav/reglages', (request, reply) =>
+    dansInstance(request.params.slug, reply, (tx) => lireReglages(tx)),
+  );
+
+  app.put<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/salesnav/reglages',
+    (request, reply) => {
+      const p = reglagesSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, 'Réglage invalide');
+      return dansInstance(request.params.slug, reply, (tx) => sauverReglages(tx, p.data));
+    },
+  );
 
   // Tout ce que l'écran affiche : étapes, limite, modèles par défaut, campagnes et leurs surcharges.
   app.get<{ Params: { slug: string } }>('/api/i/:slug/salesnav/modeles', (request, reply) =>

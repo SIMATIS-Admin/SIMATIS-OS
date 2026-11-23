@@ -114,4 +114,29 @@ describe('Routes des messages Sales Navigator', () => {
     expect((await vue()).campagnes).toEqual([]);
     expect((await vue()).modeles).toHaveLength(1);
   });
+
+  it('règle le quota par jour et la pause, par espace, 400 si invalide', async () => {
+    const defaut = await app.inject({ method: 'GET', url: `${base}/reglages` });
+    expect(defaut.json()).toMatchObject({ quotaJour: 8, quotaSemaine: 40, pause: false });
+    const ok = await app.inject({
+      method: 'PUT',
+      url: `${base}/reglages`,
+      payload: { quotaJour: 12, pause: true },
+    });
+    expect(ok.json()).toMatchObject({ quotaJour: 12, quotaSemaine: 60, pause: true });
+    const autre = await app.inject({ method: 'GET', url: '/api/i/sn-autre/salesnav/reglages' });
+    expect(autre.json()).toMatchObject({ quotaJour: 8, pause: false });
+    for (const mauvais of [
+      { quotaJour: 30 },
+      { quotaJour: -2 },
+      { quotaJour: 1.5 },
+      { pause: 'oui' },
+    ]) {
+      const r = await app.inject({ method: 'PUT', url: `${base}/reglages`, payload: mauvais });
+      expect(r.statusCode).toBe(400);
+    }
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/i/inconnue/salesnav/reglages' })).statusCode,
+    ).toBe(404);
+  });
 });

@@ -9184,3 +9184,87 @@ button.recherche-carte:hover,
   flex: 1;
   margin: 0;
 }
+
+/* Sous-section SalesNav du Radar. */
+.ra-canal-lien {
+  cursor: pointer;
+  text-decoration: underline;
+}
+.salesnav-radar h2,
+.salesnav-radar h3 {
+  margin: 0.75rem 0 0.5rem;
+}
+.sr-entete {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.sr-quota,
+.sr-liste {
+  border: 1px solid var(--border, #d8dde6);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+.sr-valeur {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.sr-quota input[type='range'] {
+  width: 100%;
+  max-width: 28rem;
+}
+.sr-alerte {
+  margin: 0.5rem 0;
+  font-weight: 600;
+}
+.sr-attention {
+  color: #b45f06;
+}
+.sr-danger {
+  color: var(--danger, #b3261e);
+}
+.sr-actions,
+.sr-lot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.sr-etapes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.sr-etape {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border, #d8dde6);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+.sr-etape strong {
+  font-size: 1.5rem;
+}
+.sr-affaires {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.sr-affaires li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border, #d8dde6);
+}
+.sr-nom {
+  display: flex;
+  flex-direction: column;
+}
+.sr-messages {
+  margin-top: 1rem;
+}

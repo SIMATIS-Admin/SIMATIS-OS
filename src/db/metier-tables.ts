@@ -46,7 +46,7 @@ import {
   prospectionSignatures,
   prospectionSuiviFroid,
 } from '../prospection/schema.js';
-import { salesnavCampagnes, salesnavModeles } from '../salesnav/schema.js';
+import { salesnavCampagnes, salesnavModeles, salesnavReglages } from '../salesnav/schema.js';
 import {
   enrichissementLignes,
   enrichissementSuggestions,
@@ -111,6 +111,7 @@ export const METIER_TABLES = [
   prospectionSuiviFroid,
   salesnavCampagnes,
   salesnavModeles,
+  salesnavReglages,
   activites,
   taches,
   opportunites,

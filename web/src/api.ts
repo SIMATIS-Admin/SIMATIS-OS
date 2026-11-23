@@ -600,7 +600,7 @@ export type EntreeRadarInput = {
   fonction?: string;
   lienLinkedin?: string;
   origine?: string;
-  canal: 'Téléphone' | 'LinkedIn' | 'E-mail' | 'À préciser';
+  canal: 'Téléphone' | 'LinkedIn' | 'E-mail' | 'À préciser' | 'SalesNav';
   etape?: 0 | 1 | 2 | 3;
   note?: string;
   contactId?: string;
@@ -3856,3 +3856,19 @@ export const enregistrerSurchargeSalesnav = (
   sendJson<{ ok: true }>('PUT', inst(slug, `salesnav/campagnes/${id}/modeles/${etape}`), { texte });
 export const retirerSurchargeSalesnav = (slug: string, id: string, etape: EtapeSalesnav) =>
   sendJson<{ ok: true }>('DELETE', inst(slug, `salesnav/campagnes/${id}/modeles/${etape}`), {});
+
+export type ReglagesSalesnav = {
+  quotaJour: number;
+  quotaSemaine: number;
+  pause: boolean;
+  quotaMax: number;
+  recommande: number;
+  cible: number;
+  niveau: 'normal' | 'attention' | 'danger';
+};
+export const fetchReglagesSalesnav = (slug: string) =>
+  getJson<ReglagesSalesnav>(inst(slug, 'salesnav/reglages'));
+export const enregistrerReglagesSalesnav = (
+  slug: string,
+  reglages: { quotaJour?: number; pause?: boolean },
+) => sendJson<ReglagesSalesnav>('PUT', inst(slug, 'salesnav/reglages'), reglages);

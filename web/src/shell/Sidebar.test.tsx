@@ -95,14 +95,7 @@ describe('Sidebar', () => {
     const libelles = (i: number) =>
       [...(groupes[i]?.querySelectorAll('.lbl') ?? [])].map((n) => n.textContent);
     expect(libelles(0)).toEqual(['Cockpit', 'Agenda']);
-    expect(libelles(1)).toEqual([
-      'Radar',
-      'Recherches',
-      'ICP',
-      'Campagnes',
-      'Messages LinkedIn',
-      'Base des suspects',
-    ]);
+    expect(libelles(1)).toEqual(['Radar', 'Recherches', 'ICP', 'Campagnes', 'Base des suspects']);
     expect(libelles(2)).toContain('Pipeline');
     expect(libelles(3)).toEqual(['Entreprises', 'Contacts']);
   });
