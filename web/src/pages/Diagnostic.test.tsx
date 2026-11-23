@@ -33,7 +33,6 @@ const api = vi.hoisted(() => ({
   enregistrerCapitalisationDiag: vi.fn(),
   urlPptxRestitutionDiag: (slug: string, id: string) =>
     `/api/i/${slug}/diagnostic/projets/${id}/restitution/pptx`,
-  importerEntretienDiag: vi.fn(),
   lancerPassationDiag: vi.fn(),
   importerRapportDiag: vi.fn(),
   envoyerRapportDriveDiag: vi.fn(),
@@ -253,7 +252,7 @@ describe('Diagnostic', () => {
     expect(await screen.findByText(/revue des préconisations/)).toBeTruthy();
   });
 
-  it('étape 2 : enregistrer reste impossible tant que le PDF n a pas donné de notes', async () => {
+  it('étape 2 : enregistrer reste impossible tant que la passation n a pas donné de notes', async () => {
     api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2 })]);
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
@@ -751,7 +750,6 @@ describe('Mise en page des étapes', () => {
 
   it.each([
     [1, 'moitie'],
-    [2, 'moitie'],
     [3, ''],
     [5, 'moitie'],
   ])('étape %i : classe « %s »', async (etape, classe) => {
@@ -935,36 +933,13 @@ describe('Passation sur le site', () => {
 });
 
 describe('Entretien à l étape 2', () => {
-  it('importe le PDF choisi, en envoyant son nom et son contenu', async () => {
+  it('ne propose ni import de PDF ni assistant Claude', async () => {
     api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 2, etapeMax: 2 })]);
-    api.importerEntretienDiag.mockResolvedValue(
-      projet({
-        etape: 2,
-        etapeMax: 2,
-        demande: 'entretien',
-        aPdfEntretien: true,
-        pdfEntretienNom: 'entretien.pdf',
-      }),
-    );
     render(<Diagnostic slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    const champ = await screen.findByLabelText("Importer le PDF de l'outil");
-    const fichier = new File(['%PDF'], 'entretien.pdf', { type: 'application/pdf' });
-    fireEvent.change(champ, { target: { files: [fichier] } });
-    await waitFor(() => expect(api.importerEntretienDiag).toHaveBeenCalled());
-    expect(api.importerEntretienDiag).toHaveBeenCalledWith('simatis', 'p1', {
-      nom: 'entretien.pdf',
-      base64: 'JVBERg==',
-    });
-  });
-
-  it('montre que Claude lit le PDF pendant la demande', async () => {
-    api.fetchProjetsDiag.mockResolvedValue([
-      projet({ etape: 2, etapeMax: 2, demande: 'entretien', aPdfEntretien: true }),
-    ]);
-    render(<Diagnostic slug="simatis" />);
-    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
-    expect(await screen.findByText(/Claude lit le PDF/)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Enregistrer le résultat' })).toBeTruthy();
+    expect(screen.queryByLabelText("Importer le PDF de l'outil")).toBeNull();
+    expect(screen.queryByLabelText(/Assistant Claude/)).toBeNull();
   });
 
   it('garde la saisie manuelle des trois notes comme secours', async () => {

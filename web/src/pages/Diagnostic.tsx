@@ -15,7 +15,6 @@ import {
   purgerPresentationRestitutionDiag,
   urlPptxRestitutionDiag,
   viderConversationDiag,
-  importerEntretienDiag,
   lancerPassationDiag,
   envoyerRapportDriveDiag,
   importerRapportDiag,
@@ -105,9 +104,9 @@ const DIMENSIONS: [keyof Dimensions, string][] = [
   ['polyvalence', 'Polyvalence'],
 ];
 const SEUIL = 6;
-// Places du chat : moitié-moitié quand la conversation est l'outil de l'étape (1, 2 et 5), sous le
+// Places du chat : moitié-moitié quand la conversation est l'outil de l'étape (1 et 5), sous le
 // rapport à l'étape 4, étroit à la revue (3) où le formulaire prime.
-const MISE_EN_PAGE: Record<number, string> = { 1: 'moitie', 2: 'moitie', 4: 'empile', 5: 'moitie' };
+const MISE_EN_PAGE: Record<number, string> = { 1: 'moitie', 4: 'empile', 5: 'moitie' };
 const STATUTS_SUPPORT: Record<ProjetDiag['supportStatut'], string> = {
   aucun: 'Pas encore préparé',
   preparation: 'Claude prépare le deck…',
@@ -425,13 +424,7 @@ export function ProjetVue({
             />
           )}
           {projet.etape === 2 && (
-            <Resultat
-              slug={slug}
-              projet={projet}
-              onSauver={sauver}
-              onChange={onChange}
-              onErreur={onErreur}
-            />
+            <Resultat slug={slug} projet={projet} onSauver={sauver} onErreur={onErreur} />
           )}
           {projet.etape === 3 && (
             <Revue
@@ -471,7 +464,7 @@ export function ProjetVue({
           {projet.etape === 5 && <Restitution projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
         </div>
-        {projet.etape !== 4 && (
+        {projet.etape !== 2 && projet.etape !== 4 && (
           <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
         )}
       </div>
@@ -838,8 +831,6 @@ function Support({
   );
 }
 
-const PDF_MAX_OCTETS = 10 * 1024 * 1024;
-
 // L'onglet s'ouvre tout de suite (sinon le navigateur bloque la fenêtre) puis reçoit le lien du site.
 async function lancerDiagnostic(slug: string, id: string, onErreur: (m: string) => void) {
   const fenetre = window.open('', '_blank');
@@ -864,29 +855,16 @@ function Resultat({
   slug,
   projet,
   onSauver,
-  onChange,
   onErreur,
 }: {
   slug: string;
   projet: ProjetDiag;
   onSauver: Sauver;
-  onChange: (p: ProjetDiag) => void;
   onErreur: (m: string) => void;
 }) {
   const [date, setDate] = useState(projet.dateDiagnostic ?? '');
   const [message, setMessage] = useState<string | null>(null);
   useEffect(() => setDate(projet.dateDiagnostic ?? ''), [projet.dateDiagnostic]);
-
-  const importer = async (fichier: File | undefined) => {
-    if (!fichier) return;
-    if (fichier.size > PDF_MAX_OCTETS) return onErreur('PDF trop lourd (10 Mo au plus).');
-    try {
-      const base64 = await lireBase64(fichier);
-      onChange(await importerEntretienDiag(slug, projet.id, { nom: fichier.name, base64 }));
-    } catch (err) {
-      onErreur(messageErreur(err));
-    }
-  };
 
   // Enregistrer vaut « l'entretien est fait et ses résultats sont calculés » : le statut passe à
   // « Rapport à rédiger » (sauf s'il est déjà « Restitué »), les notes viennent du PDF.
@@ -919,27 +897,7 @@ function Resultat({
             Passation reçue du site le{' '}
             {new Date(projet.passation.recueLe).toLocaleDateString('fr-FR')} ·{' '}
             {dureeLisible(projet.passation.tempsMs)} ·{' '}
-            {Object.keys(projet.passation.commentaires).length} commentaire(s). Le PDF reste
-            possible en secours.
-          </p>
-        )}
-        <label className="diag-depot">
-          <span>Importer le PDF de l’outil (10 Mo au plus)</span>
-          <input
-            type="file"
-            accept="application/pdf"
-            aria-label="Importer le PDF de l'outil"
-            onChange={(e) => void importer(e.target.files?.[0])}
-          />
-        </label>
-        {projet.pdfEntretienNom && (
-          <p className="small muted" style={{ margin: 0 }}>
-            PDF importé : {projet.pdfEntretienNom}
-          </p>
-        )}
-        {projet.demande === 'entretien' && (
-          <p className="small muted" style={{ margin: 0 }}>
-            Claude lit le PDF… Les réponses apparaîtront ici.
+            {Object.keys(projet.passation.commentaires).length} commentaire(s).
           </p>
         )}
         {projet.dims ? (
@@ -953,7 +911,7 @@ function Resultat({
           </div>
         ) : (
           <p className="small muted" style={{ margin: 0 }}>
-            Les notes et le profil se calculent à partir du PDF : rien à saisir à la main.
+            Les notes et le profil arrivent avec la passation du site : rien à saisir à la main.
           </p>
         )}
         <label className="field diag-date">
