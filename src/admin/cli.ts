@@ -10,6 +10,9 @@ import { connexions } from '../connexions/schema.js';
 import { brancherGoogle } from '../connexions/brancher.js';
 import { eq, isNull } from 'drizzle-orm';
 import { detacherHubspot } from '../crm/detachement.js';
+import { enrichirActivites } from '../crm/archive-hubspot.js';
+import { ecrireArchive, lireTout } from '../connecteurs/hubspot/archive.js';
+import { hubspotClient, personalKeyAuth } from '../connecteurs/hubspot/client.js';
 import { entreprises } from '../crm/schema.js';
 import { diagnosticProjets } from '../diagnostic/schema.js';
 import { proposerRapprochements } from '../diagnostic/rapprochement.js';
@@ -42,6 +45,7 @@ export const USAGE = `Commandes :
   diagnostic:import --slug <slug> --fichier <chemin.json|->   (projets de diagnostic, espace SIMATIS)
   diagnostic:rattacher --slug <slug> [--appliquer]   (rattache les projets à leur entreprise ; simulation sans --appliquer)
   crm:detacher --slug <slug> [--appliquer]   (détache l'instance de HubSpot : fiches et étapes passent dans l'OS ; simulation sans --appliquer)
+  crm:archiver-hubspot --slug <slug> [--appliquer]   (copie intégrale de HubSpot sur disque, lecture seule ; avec --appliquer, complète l'historique de l'OS)
   token:create --nom <nom> (--instance <slug> | --portefeuille | --runner)
   token:list
   token:revoke --id <id>
@@ -62,6 +66,8 @@ type Deps = {
   secretsDir?: string;
   // Où `crm:detacher` garde les identifiants HubSpot (hors du dépôt).
   dossierSauvegarde?: string;
+  // Où `crm:archiver-hubspot` écrit la copie complète (hors du dépôt).
+  dossierArchives?: string;
   realWrites?: boolean;
   openUrl?: (url: string) => void;
   connectGoogle?: GoogleConnect;
@@ -222,6 +228,42 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
         } else {
           out('Simulation : rien n’a été écrit. Ajoutez --appliquer pour détacher.');
         }
+        return 0;
+      }
+      case 'crm:archiver-hubspot': {
+        const slug = need('slug');
+        const secrets = await loadInstanceSecrets(deps.secretsDir ?? './secrets/instances', slug);
+        const auth = secrets.HUBSPOT_TOKEN
+          ? secrets.HUBSPOT_TOKEN
+          : secrets.HUBSPOT_PERSONAL_KEY
+            ? personalKeyAuth(secrets.HUBSPOT_PERSONAL_KEY)
+            : null;
+        if (!auth) throw new Error(`Jeton HubSpot absent pour l'instance ${slug}.`);
+        const archive = await lireTout(hubspotClient(auth), slug);
+        const fichier = await ecrireArchive(
+          archive,
+          deps.dossierArchives ?? './secrets/archives-hubspot',
+        );
+        for (const [type, lignes] of Object.entries(archive.objets))
+          out(`${type.padEnd(12)} ${lignes.length}`);
+        for (const [type, raison] of Object.entries(archive.ignores))
+          out(`${type.padEnd(12)} NON LU : ${raison}`);
+        out(`Copie complète : ${fichier}`);
+        const rapport = await enrichirActivites(
+          db,
+          slug,
+          archive,
+          deps.dossierSauvegarde ?? './secrets/detachements',
+          values.appliquer,
+        );
+        out(
+          `Activités (notes, appels, réunions) : ${rapport.activitesArchivees} dans HubSpot, ${rapport.retrouvees} retrouvées dans l'OS, ${rapport.absentesDeLOs} absentes, ${rapport.enrichies} à compléter`,
+        );
+        out(
+          values.appliquer
+            ? 'Historique complété.'
+            : 'Simulation : ajoutez --appliquer pour compléter l’historique.',
+        );
         return 0;
       }
       case 'demo:seed':
