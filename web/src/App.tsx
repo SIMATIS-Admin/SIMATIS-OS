@@ -49,7 +49,6 @@ const FeuilleDeRouteOS = lazy(() =>
 const Fiche = lazy(() => import('./pages/Fiche.js').then((m) => ({ default: m.Fiche })));
 const FicheRdv = lazy(() => import('./pages/FicheRdv.js').then((m) => ({ default: m.FicheRdv })));
 const Gestion = lazy(() => import('./pages/Gestion.js').then((m) => ({ default: m.Gestion })));
-const Journal = lazy(() => import('./pages/Journal.js').then((m) => ({ default: m.Journal })));
 const Parametres = lazy(() =>
   import('./pages/Parametres.js').then((m) => ({ default: m.Parametres })),
 );
@@ -67,7 +66,6 @@ const Prospection = lazy(() =>
 const RendezVous = lazy(() =>
   import('./pages/RendezVous.js').then((m) => ({ default: m.RendezVous })),
 );
-const Routines = lazy(() => import('./pages/Routines.js').then((m) => ({ default: m.Routines })));
 const SiteWeb = lazy(() => import('./pages/SiteWeb.js').then((m) => ({ default: m.SiteWeb })));
 const Tableau = lazy(() => import('./pages/Tableau.js').then((m) => ({ default: m.Tableau })));
 
@@ -248,8 +246,6 @@ export function App() {
             devisAutorise={current.modules.includes('devis')}
           />
         );
-      case 'routines':
-        return <Routines key={current.slug} slug={current.slug} />;
       case 'agenda':
         return <Agenda key={current.slug} slug={current.slug} />;
       case 'rendez-vous':
@@ -354,8 +350,6 @@ export function App() {
             autorise={current.type === 'propre' && current.modules.includes('cerveau')}
           />
         );
-      case 'journal':
-        return <Journal key={current.slug} slug={current.slug} />;
       case 'parametres':
         return <Parametres key={current.slug} slug={current.slug} onRenamed={loadInstances} />;
       case 'fiche':

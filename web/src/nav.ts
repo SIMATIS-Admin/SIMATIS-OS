@@ -42,7 +42,7 @@ export const NAV: NavGroup[] = [
       item('devis', 'Devis', 'file', 'devis'),
       // Diagnostic et tests VMA réunis par entreprise (spec du 21 octobre 2026) ; la section s'appelle
       // « Outils et diagnostics » pour accueillir d'autres outils que le diagnostic.
-      item('diagnostics', 'Outils et diagnostics', 'radar', 'diagnostic'),
+      item('diagnostics', 'Outils et diagnostics', 'tools', 'diagnostic'),
       item('relais', 'Relais internes', 'users', 'relais'),
     ],
   },
@@ -64,14 +64,9 @@ export const NAV: NavGroup[] = [
     title: 'Plus',
     later: true,
     items: [
-      item('routines', 'Automatismes', 'clock'),
       item('cours', 'Supports', 'file'),
       item('siteweb', 'Site web', 'globe', 'site-web'),
       item('parametres', 'Paramètres', 'gear'),
-      item('plan', "Plan d'action", 'map'),
-      item('detection', 'Détection', 'pulse'),
-      item('autonomie', 'Autonomie', 'sliders'),
-      item('journal', "Journal d'audit", 'list'),
     ],
   },
 ];
@@ -85,7 +80,6 @@ export const BUILT = new Set([
   'pipeline',
   'entreprises',
   'contacts',
-  'journal',
   'parametres',
   'tableau',
   'agenda',
@@ -93,7 +87,6 @@ export const BUILT = new Set([
   'devis',
   'diagnostics',
   'atelier',
-  'routines',
   'siteweb',
   'bases',
   'cerveau',
@@ -103,7 +96,6 @@ export const BUILT = new Set([
 
 // Where each screen comes from in docs/plans/2026-10-08-implementation-maquette.md.
 export const LOTS: Record<string, string> = {
-  routines: 'Lot 12, Routines Claude',
   tableau: 'Lot 14, Tableau de bord',
   agenda: 'Lot 15, Rendez-vous et Devis',
   devis: 'Lot 15, Rendez-vous et Devis',
@@ -125,6 +117,12 @@ const ANCIENNES_VUES = new Map<string, string>([
   ['presentation-simatis', 'cours'],
   ['presentation-diagnostic', 'cours'],
   ['presentation-vma', 'cours'],
+  // Rubriques retirées du menu (23/11/2026) : Automatismes et Journal d'audit vivent dans Paramètres.
+  ['routines', 'parametres'],
+  ['journal', 'parametres'],
+  ['plan', 'parametres'],
+  ['detection', 'parametres'],
+  ['autonomie', 'parametres'],
 ]);
 export const vueCanonique = (view: string) => ANCIENNES_VUES.get(view) ?? view;
 

@@ -67,6 +67,11 @@ describe('nav', () => {
     expect(ids('Vendre')).toEqual(['pipeline', 'rendez-vous', 'devis', 'diagnostics', 'relais']);
     expect(ids('Ma base')).toEqual(['entreprises', 'contacts']);
     expect(ids("Piloter l'activité")).toEqual(['atelier', 'tableau', 'cerveau', 'demarrage']);
+    expect(ids('Plus')).toEqual(['cours', 'siteweb', 'parametres']);
+    // Rubriques retirées : Automatismes, Plan d'action, Détection, Autonomie, Journal d'audit.
+    for (const ancien of ['routines', 'plan', 'detection', 'autonomie', 'journal'])
+      expect(vueCanonique(ancien)).toBe('parametres');
+    expect(allItems().find((i) => i.id === 'diagnostics')?.icon).toBe('tools');
     // Plus aucun écran caché du menu : chaque entrée est visible.
     expect(allItems().every((i) => !('masque' in i))).toBe(true);
   });

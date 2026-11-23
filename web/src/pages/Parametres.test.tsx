@@ -76,3 +76,17 @@ describe('Paramètres, onglet Devis', () => {
     expect(screen.queryByRole('button', { name: 'Devis' })).toBeNull();
   });
 });
+
+describe("Paramètres, journal d'audit", () => {
+  it("ouvre le journal d'audit depuis un onglet", async () => {
+    const base = fetch as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+      url.endsWith('/journal')
+        ? (calls.push({ url, method: 'GET', body: undefined }), Promise.resolve(new Response('[]')))
+        : base(url, init),
+    );
+    render(<Parametres slug="beta" onRenamed={() => undefined} />);
+    fireEvent.click(await screen.findByRole('button', { name: "Journal d'audit" }));
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/i/beta/journal')).toBe(true));
+  });
+});
