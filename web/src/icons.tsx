@@ -7,6 +7,9 @@ const PATHS: Record<string, string> = {
   wallet: '<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h2"/>',
   map: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
   radar: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>',
+  // Clé et marteau croisés (outils et diagnostics) : le marteau à gauche, la clé en miroir à droite.
+  tools:
+    '<path d="m15 12-8.4 8.4a1 1 0 11-3-3L12 9M18 15l4-4M21.5 11.5l-1.9-1.9a2 2 0 01-.6-1.4V7l-2.3-2.3a6 6 0 00-4.2-1.8L9 3l.9.8a6.2 6.2 0 012.1 4.6V10l2 2h1.2a2 2 0 011.4.6l1.9 1.9" transform="translate(-2.5 0) scale(.85) translate(2 2)"/><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.8-3.8a6 6 0 01-7.9 7.9l-6.9 6.9a2.1 2.1 0 01-3-3l6.9-6.9a6 6 0 017.9-7.9z" transform="matrix(-.85 0 0 .85 22 2)"/>',
   send: '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>',
   db: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
   kanban:

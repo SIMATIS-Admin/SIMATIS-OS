@@ -9,6 +9,7 @@ import {
 } from '../api.js';
 import { Icon } from '../icons.js';
 import { libelleType, type InstanceSummary } from '../nav.js';
+import { Journal } from './Journal.js';
 import { Connexions } from './parametres/Connexions.js';
 import { Partenaires } from './parametres/Partenaires.js';
 import { DevisParametres } from './parametres/DevisParametres.js';
@@ -166,7 +167,7 @@ export function Parametres({ slug, onRenamed }: Props) {
   const [nom, setNom] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [tab, setTab] = useState<
-    'instance' | 'connexions' | 'partenaires' | 'routines' | 'prospection' | 'devis'
+    'instance' | 'connexions' | 'partenaires' | 'routines' | 'prospection' | 'devis' | 'journal'
   >(location.hash.includes('google=') ? 'connexions' : 'instance');
 
   useEffect(() => {
@@ -218,6 +219,9 @@ export function Parametres({ slug, onRenamed }: Props) {
             Devis
           </button>
         )}
+        <button className={tab === 'journal' ? 'on' : ''} onClick={() => setTab('journal')}>
+          Journal d'audit
+        </button>
       </div>
       <div className="alert blue" style={{ marginBottom: 18 }}>
         <Icon name="lock" />
@@ -236,6 +240,8 @@ export function Parametres({ slug, onRenamed }: Props) {
         <ProspectionReglages slug={slug} />
       ) : tab === 'devis' ? (
         <DevisParametres slug={slug} />
+      ) : tab === 'journal' ? (
+        <Journal slug={slug} />
       ) : (
         <div className="grid g2">
           <div className="panel">
