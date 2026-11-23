@@ -616,6 +616,32 @@ describe('AideRelance', () => {
       }
     });
 
+    it("décale dans l'Agenda les tâches des actions déjà reportées, à la date de leur report", async () => {
+      const report = Date.now() + 3 * 86_400_000;
+      api.fetchMasqueesRelance.mockResolvedValue({ 'ent:retard fictif': report });
+      render(<AideRelance slug="simatis" />);
+      const bouton = await screen.findByRole('button', {
+        name: "Décaler 1 tâche(s) dans l'Agenda",
+      });
+      fireEvent.click(bouton);
+      await waitFor(() =>
+        expect(api.updateTache).toHaveBeenCalledWith('simatis', 't1', {
+          echeance: new Date(report).toISOString(),
+          localSeul: true,
+        }),
+      );
+      expect(await screen.findByText(/1 tâche\(s\) décalée\(s\)/)).toBeTruthy();
+    });
+
+    it("n'offre pas de décalage quand aucune action reportée n'a de tâche en retard", async () => {
+      api.fetchMasqueesRelance.mockResolvedValue({
+        'ent:autre sans tache': Date.now() + 86_400_000,
+      });
+      render(<AideRelance slug="simatis" />);
+      await screen.findByText('Retard Fictif');
+      expect(screen.queryByRole('button', { name: /Décaler \d+ tâche/ })).toBeNull();
+    });
+
     it('signale un échec sans rien cacher', async () => {
       api.masquerRelanceLot.mockRejectedValueOnce(new Error('refusé'));
       await ouvrir();

@@ -9090,6 +9090,11 @@ button.recherche-carte:hover,
   background: #f1faf8;
   font-size: 14px;
 }
+.aide-reportees-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .aide-nettoyage {
   display: flex;
   flex-wrap: wrap;
