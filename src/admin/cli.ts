@@ -9,6 +9,7 @@ import { withInstance } from '../db/context.js';
 import { connexions } from '../connexions/schema.js';
 import { brancherGoogle } from '../connexions/brancher.js';
 import { eq, isNull } from 'drizzle-orm';
+import { detacherHubspot } from '../crm/detachement.js';
 import { entreprises } from '../crm/schema.js';
 import { diagnosticProjets } from '../diagnostic/schema.js';
 import { proposerRapprochements } from '../diagnostic/rapprochement.js';
@@ -40,6 +41,7 @@ export const USAGE = `Commandes :
   demo:seed
   diagnostic:import --slug <slug> --fichier <chemin.json|->   (projets de diagnostic, espace SIMATIS)
   diagnostic:rattacher --slug <slug> [--appliquer]   (rattache les projets à leur entreprise ; simulation sans --appliquer)
+  crm:detacher --slug <slug> [--appliquer]   (détache l'instance de HubSpot : fiches et étapes passent dans l'OS ; simulation sans --appliquer)
   token:create --nom <nom> (--instance <slug> | --portefeuille | --runner)
   token:list
   token:revoke --id <id>
@@ -58,6 +60,8 @@ type Deps = {
   db: Database;
   out: (line: string) => void;
   secretsDir?: string;
+  // Où `crm:detacher` garde les identifiants HubSpot (hors du dépôt).
+  dossierSauvegarde?: string;
   realWrites?: boolean;
   openUrl?: (url: string) => void;
   connectGoogle?: GoogleConnect;
@@ -200,6 +204,23 @@ export async function runCommand(argv: string[], deps: Deps): Promise<number> {
           out(`Rattachés : ${propositions.filter((p) => p.statut === 'exact').length}`);
         } else {
           out('Simulation : rien n’a été écrit. Ajoutez --appliquer pour rattacher les « exact ».');
+        }
+        return 0;
+      }
+      case 'crm:detacher': {
+        const rapport = await detacherHubspot(db, need('slug'), {
+          appliquer: values.appliquer,
+          dossierSauvegarde: deps.dossierSauvegarde ?? './secrets/detachements',
+        });
+        for (const [table, n] of Object.entries(rapport.lignes)) out(`${table.padEnd(24)} ${n}`);
+        out(`étapes du pipeline reprises : ${rapport.etapes}`);
+        if (rapport.appliquer) {
+          out(`Détaché. Identifiants HubSpot gardés dans : ${rapport.sauvegarde}`);
+          out(
+            'Reste à faire à la main : effacer le jeton HubSpot de l’instance puis le révoquer dans HubSpot.',
+          );
+        } else {
+          out('Simulation : rien n’a été écrit. Ajoutez --appliquer pour détacher.');
         }
         return 0;
       }

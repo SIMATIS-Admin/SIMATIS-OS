@@ -7,7 +7,7 @@ import { writeVia, type ConnexionDeps } from '../connexions/service.js';
 import type { Executor, Tx } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { withInstance } from '../db/context.js';
-import type { Instance } from '../instances/schema.js';
+import { instances, type Instance } from '../instances/schema.js';
 import { logEvent } from '../journal/service.js';
 import { jourDe } from '../pilotage/realisees.js';
 import { contacts, entreprises, opportunites, taches } from './schema.js';
@@ -74,9 +74,20 @@ export async function pipelineSource(tx: Tx): Promise<Source> {
     };
   }
   if (crm?.fournisseur !== 'hubspot') {
+    // Une instance détachée de son CRM garde ses propres étapes (elles ne sont plus lues d'une connexion).
+    const [propre] = await tx
+      .select({ config: instances.config })
+      .from(instances)
+      .where(eq(instances.id, currentInstance));
+    const etapesPropres = propre?.config.pipeline?.etapes;
     return {
       source: 'natif',
-      etapes: ETAPES_NATIVES,
+      etapes: etapesPropres?.length
+        ? [...etapesPropres]
+            .sort((a, b) => a.ordre - b.ordre)
+            .filter((e) => !e.clos)
+            .map((e) => ({ id: e.id, label: e.label, probabilite: e.probabilite ?? null }))
+        : ETAPES_NATIVES,
       hubspot: null,
       ecrit: true,
       derniereSynchro: null,

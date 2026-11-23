@@ -24,6 +24,18 @@ export type InstanceConfig = {
     relireSupports?: boolean;
     relireRestitutions?: boolean;
   };
+  // Étapes du pipeline propres à l'instance, quand elle n'a plus de CRM (reprises de HubSpot par
+  // `crm:detacher`). Sans elles, le pipeline natif par défaut s'applique.
+  pipeline?: {
+    etapes: {
+      id: string;
+      label: string;
+      ordre: number;
+      clos: boolean;
+      gagne: boolean;
+      probabilite?: number | null;
+    }[];
+  };
   // Mandate created from (or linked to) a deal of the own activity.
   origine?: { opportuniteId: string; entrepriseId: string | null };
 };
