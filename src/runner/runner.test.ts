@@ -66,6 +66,17 @@ describe('argumentsClaude', () => {
     );
   });
 
+  it('Envoi SalesNav : Chrome branché, mêmes outils, rien d’autre', async () => {
+    const { args } = await argumentsClaude(
+      demande('envoyer-demande-salesnav', false),
+      'config.json',
+      undefined,
+    );
+    expect(args).toContain('--chrome');
+    const outils = (args[args.indexOf('--allowedTools') + 1] ?? '').split(',');
+    expect(outils).toEqual(['mcp__simatis__*', ...CHROME_OUTILS_LECTURE]);
+  });
+
   it('les autres routines ne branchent pas Chrome', async () => {
     const { args } = await argumentsClaude(demande('autre-skill'), 'config.json', undefined);
     expect(args).not.toContain('--chrome');

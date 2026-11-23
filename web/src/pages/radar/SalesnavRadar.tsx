@@ -5,6 +5,7 @@ import {
   choisirCibleSalesnav,
   enregistrerActionSalesnav,
   enregistrerReglagesSalesnav,
+  envoyerDemandeSalesnav,
   fetchPipeSalesnav,
   fetchReglagesSalesnav,
   proposerSalesnav,
@@ -14,6 +15,7 @@ import {
   type ReglagesSalesnav,
   type StatutProspectSalesnav,
 } from '../../api.js';
+import { LIMITE_NOTE_SALESNAV } from './salesnav-constantes.js';
 import { Fenetre } from '../Fenetre.js';
 import { SalesnavMessages } from '../SalesnavMessages.js';
 
@@ -50,6 +52,8 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
   const [ajout, setAjout] = useState(false);
   const [lien, setLien] = useState('');
   const [nom, setNom] = useState('');
+  const [aEnvoyer, setAEnvoyer] = useState<ProspectSalesnav | null>(null);
+  const [note, setNote] = useState('');
 
   const charger = useCallback(async () => {
     try {
@@ -75,6 +79,16 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
     };
   }, [slug, charger]);
 
+  // Tant qu'un envoi est ouvert, la page se rafraîchit pour afficher son résultat.
+  const envoiOuvert = (pipe?.envois ?? []).some(
+    (e) => e.statut === 'en_attente' || e.statut === 'en_cours',
+  );
+  useEffect(() => {
+    if (!envoiOuvert) return;
+    const t = setInterval(() => void charger(), 3000);
+    return () => clearInterval(t);
+  }, [envoiOuvert, charger]);
+
   const executer = async (fn: () => Promise<unknown>, succes?: string) => {
     setErreur(null);
     setInfo(null);
@@ -87,7 +101,7 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
     }
   };
 
-  const enregistrerReglages = (r: { quotaJour?: number; pause?: boolean }) =>
+  const enregistrerReglages = (r: { quotaJour?: number; pause?: boolean; essaiABlanc?: boolean }) =>
     executer(async () => {
       const nouveau = await enregistrerReglagesSalesnav(slug, r);
       setReglages(nouveau);
@@ -118,6 +132,23 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
       );
     });
 
+  const ouvrirEnvoi = (p: ProspectSalesnav) => {
+    setNote(p.message?.texte ?? '');
+    setAEnvoyer(p);
+  };
+
+  const confirmerEnvoi = () => {
+    const p = aEnvoyer;
+    if (!p) return;
+    setAEnvoyer(null);
+    void executer(
+      () => envoyerDemandeSalesnav(slug, p.id, note),
+      pipe?.essaiABlanc
+        ? 'Essai à blanc lancé : Chrome ouvre le profil mais n’envoie rien.'
+        : 'Envoi lancé : Chrome va se connecter au profil.',
+    );
+  };
+
   const copier = async (texte: string) => {
     try {
       await navigator.clipboard.writeText(texte);
@@ -131,143 +162,168 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
   const prospects = pipe?.prospects ?? [];
   const stats = pipe?.stats;
 
-  const carte = (p: ProspectSalesnav) => (
-    <article key={p.id} className="sr-prospect" aria-label={p.nom}>
-      <header>
-        <a href={p.lienLinkedin} target="_blank" rel="noreferrer" className="sr-nom">
-          <strong>{p.nom}</strong>
-        </a>
-        <span className="muted small">
-          {[p.fonction, p.entreprise].filter(Boolean).join(' · ') || 'Poste non renseigné'}
-        </span>
-        {p.aRetirer && <span className="chip small sr-retirer">À retirer</span>}
-      </header>
-      {(p.statut === 'propose' || p.statut === 'connecte') && (
-        <label className="sr-cible">
-          <span className="small">Cible des messages</span>
-          <select
-            aria-label={`Cible de ${p.nom}`}
-            value={p.cible ?? ''}
-            onChange={(e) =>
-              void executer(() => choisirCibleSalesnav(slug, p.id, e.target.value || null))
-            }
-          >
-            <option value="">À choisir</option>
-            {(pipe?.cibles ?? []).map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {p.message && (
-        <div className="sr-message">
-          <p className="small">
-            {p.message.etape === 'invitation' ? 'Note d’invitation' : 'Message à envoyer'}
-          </p>
-          <p>{p.message.texte}</p>
-          {p.message.manquantes.length > 0 && (
-            <p className="small salesnav-erreur">
-              À compléter : {p.message.manquantes.join(', ')}.
+  const carte = (p: ProspectSalesnav) => {
+    const envoi = (pipe?.envois ?? []).find((e) => e.prospectId === p.id);
+    const enCours = envoi?.statut === 'en_attente' || envoi?.statut === 'en_cours';
+    return (
+      <article key={p.id} className="sr-prospect" aria-label={p.nom}>
+        <header>
+          <a href={p.lienLinkedin} target="_blank" rel="noreferrer" className="sr-nom">
+            <strong>{p.nom}</strong>
+          </a>
+          <span className="muted small">
+            {[p.fonction, p.entreprise].filter(Boolean).join(' · ') || 'Poste non renseigné'}
+          </span>
+          {p.aRetirer && <span className="chip small sr-retirer">À retirer</span>}
+        </header>
+        {(p.statut === 'propose' || p.statut === 'connecte') && (
+          <label className="sr-cible">
+            <span className="small">Cible des messages</span>
+            <select
+              aria-label={`Cible de ${p.nom}`}
+              value={p.cible ?? ''}
+              onChange={(e) =>
+                void executer(() => choisirCibleSalesnav(slug, p.id, e.target.value || null))
+              }
+            >
+              <option value="">À choisir</option>
+              {(pipe?.cibles ?? []).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {p.message && (
+          <div className="sr-message">
+            <p className="small">
+              {p.message.etape === 'invitation' ? 'Note d’invitation' : 'Message à envoyer'}
             </p>
-          )}
-          <button
-            type="button"
-            className="btn sm"
-            aria-label={`Copier le message pour ${p.nom}`}
-            onClick={() => void copier(p.message!.texte)}
-          >
-            Copier
-          </button>
-        </div>
-      )}
-      {(p.statut === 'propose' || p.statut === 'connecte') && !p.message && (
-        <p className="small muted">
-          Choisissez la cible pour voir le message ; écrivez-le dans « Messages » s’il n’existe pas
-          encore.
-        </p>
-      )}
-      <div className="sr-actions">
-        {p.statut === 'propose' && (
-          <>
-            <a className="btn sm" href={p.lienLinkedin} target="_blank" rel="noreferrer">
-              Ouvrir le profil
-            </a>
-            <button
-              type="button"
-              className="btn sm primary"
-              onClick={() => void agir(p, 'demande')}
-            >
-              Demande envoyée
-            </button>
-            <button type="button" className="btn sm" onClick={() => void agir(p, 'ecarter')}>
-              Écarter
-            </button>
-          </>
-        )}
-        {p.statut === 'demande_envoyee' && (
-          <>
-            <button
-              type="button"
-              className="btn sm primary"
-              onClick={() => void agir(p, 'connecte')}
-            >
-              Connecté(e)
-            </button>
-            <button type="button" className="btn sm" onClick={() => void agir(p, 'reponse')}>
-              A répondu
-            </button>
-            <button type="button" className="btn sm" onClick={() => void agir(p, 'sans-reponse')}>
-              Sans réponse
-            </button>
-          </>
-        )}
-        {p.statut === 'connecte' && (
-          <>
-            <button
-              type="button"
-              className="btn sm primary"
-              onClick={() => void agir(p, 'message')}
-            >
-              Message envoyé
-            </button>
-            <button type="button" className="btn sm" onClick={() => void agir(p, 'reponse')}>
-              A répondu
-            </button>
-            <button type="button" className="btn sm" onClick={() => void agir(p, 'sans-reponse')}>
-              Sans réponse
-            </button>
-          </>
-        )}
-        {p.statut === 'a_repondu' && (
-          <>
-            <button type="button" className="btn sm" onClick={() => void agir(p, 'message')}>
-              Message envoyé
-            </button>
-            {p.opportuniteId && (
-              <a
-                className="btn sm"
-                href={`#/${slug}/fiche/affaire/${p.opportuniteId}?depuis=radar`}
-              >
-                Opportunité
-              </a>
+            <p>{p.message.texte}</p>
+            {p.message.manquantes.length > 0 && (
+              <p className="small salesnav-erreur">
+                À compléter : {p.message.manquantes.join(', ')}.
+              </p>
             )}
-          </>
+            <button
+              type="button"
+              className="btn sm"
+              aria-label={`Copier le message pour ${p.nom}`}
+              onClick={() => void copier(p.message!.texte)}
+            >
+              Copier
+            </button>
+          </div>
         )}
-        {p.statut === 'sans_reponse' && (
-          <button type="button" className="btn sm" onClick={() => void agir(p, 'ecarter')}>
-            Retirer
-          </button>
+        {(p.statut === 'propose' || p.statut === 'connecte') && !p.message && (
+          <p className="small muted">
+            Choisissez la cible pour voir le message ; écrivez-le dans « Messages » s’il n’existe
+            pas encore.
+          </p>
         )}
-      </div>
-      {p.nbMessages > 0 && (
-        <p className="small muted">
-          {p.nbMessages} message{p.nbMessages > 1 ? 's' : ''} envoyé{p.nbMessages > 1 ? 's' : ''}
-        </p>
-      )}
-    </article>
-  );
+        <div className="sr-actions">
+          {p.statut === 'propose' && (
+            <>
+              <a className="btn sm" href={p.lienLinkedin} target="_blank" rel="noreferrer">
+                Ouvrir le profil
+              </a>
+              <button
+                type="button"
+                className="btn sm primary"
+                disabled={!p.message || enCours || (p.message?.manquantes.length ?? 0) > 0}
+                onClick={() => ouvrirEnvoi(p)}
+              >
+                Envoyer la demande
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                disabled={enCours}
+                onClick={() => void agir(p, 'demande')}
+              >
+                Déjà envoyée à la main
+              </button>
+              <button type="button" className="btn sm" onClick={() => void agir(p, 'ecarter')}>
+                Écarter
+              </button>
+            </>
+          )}
+          {p.statut === 'demande_envoyee' && (
+            <>
+              <button
+                type="button"
+                className="btn sm primary"
+                onClick={() => void agir(p, 'connecte')}
+              >
+                Connecté(e)
+              </button>
+              <button type="button" className="btn sm" onClick={() => void agir(p, 'reponse')}>
+                A répondu
+              </button>
+              <button type="button" className="btn sm" onClick={() => void agir(p, 'sans-reponse')}>
+                Sans réponse
+              </button>
+            </>
+          )}
+          {p.statut === 'connecte' && (
+            <>
+              <button
+                type="button"
+                className="btn sm primary"
+                onClick={() => void agir(p, 'message')}
+              >
+                Message envoyé
+              </button>
+              <button type="button" className="btn sm" onClick={() => void agir(p, 'reponse')}>
+                A répondu
+              </button>
+              <button type="button" className="btn sm" onClick={() => void agir(p, 'sans-reponse')}>
+                Sans réponse
+              </button>
+            </>
+          )}
+          {p.statut === 'a_repondu' && (
+            <>
+              <button type="button" className="btn sm" onClick={() => void agir(p, 'message')}>
+                Message envoyé
+              </button>
+              {p.opportuniteId && (
+                <a
+                  className="btn sm"
+                  href={`#/${slug}/fiche/affaire/${p.opportuniteId}?depuis=radar`}
+                >
+                  Opportunité
+                </a>
+              )}
+            </>
+          )}
+          {p.statut === 'sans_reponse' && (
+            <button type="button" className="btn sm" onClick={() => void agir(p, 'ecarter')}>
+              Retirer
+            </button>
+          )}
+        </div>
+        {p.statut === 'propose' && envoi && (
+          <p
+            className={`small ${envoi.statut === 'echec' ? 'salesnav-erreur' : 'muted'}`}
+            role="status"
+          >
+            {enCours
+              ? 'Envoi en cours dans Chrome…'
+              : envoi.statut === 'essai'
+                ? `Essai à blanc terminé : ${envoi.detail ?? ''}`
+                : (envoi.detail ?? 'Envoi terminé.')}
+          </p>
+        )}
+        {p.nbMessages > 0 && (
+          <p className="small muted">
+            {p.nbMessages} message{p.nbMessages > 1 ? 's' : ''} envoyé{p.nbMessages > 1 ? 's' : ''}
+          </p>
+        )}
+      </article>
+    );
+  };
 
   return (
     <section className="salesnav-radar" aria-label="SalesNav">
@@ -305,6 +361,17 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
       {info && !erreur && (
         <p role="status" className="muted small">
           {info}
+        </p>
+      )}
+
+      {pipe?.pause && pipe.pauseRaison && (
+        <p role="alert" className="sr-alerte sr-danger">
+          Canal en pause : {pipe.pauseRaison}
+        </p>
+      )}
+      {pipe?.alerte && (
+        <p role="alert" className="sr-alerte sr-attention">
+          {pipe.alerte.message}
         </p>
       )}
 
@@ -372,6 +439,15 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
             />
             Mettre le canal en pause
           </label>
+          <label className="sr-pause">
+            <input
+              type="checkbox"
+              checked={reglages?.essaiABlanc ?? true}
+              disabled={!reglages}
+              onChange={(e) => void enregistrerReglages({ essaiABlanc: e.target.checked })}
+            />
+            Essai à blanc : aucune demande n’est envoyée
+          </label>
         </div>
       </div>
 
@@ -436,6 +512,56 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
           );
         })}
       </div>
+
+      {aEnvoyer && (
+        <Fenetre
+          titre="Envoyer la demande"
+          onFermer={() => setAEnvoyer(null)}
+          pied={
+            <>
+              <button type="button" className="btn" onClick={() => setAEnvoyer(null)}>
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={note.trim() === '' || note.trim().length > LIMITE_NOTE_SALESNAV}
+                onClick={confirmerEnvoi}
+              >
+                {pipe?.essaiABlanc ? 'Lancer l’essai à blanc' : 'Confirmer et envoyer'}
+              </button>
+            </>
+          }
+        >
+          <p>
+            <strong>{aEnvoyer.nom}</strong>
+            <span className="muted small">
+              {' '}
+              {[aEnvoyer.fonction, aEnvoyer.entreprise].filter(Boolean).join(' · ')}
+            </span>
+          </p>
+          <p className="small muted">
+            {pipe?.essaiABlanc
+              ? 'Essai à blanc : Chrome ouvre le profil et prépare la note, mais n’envoie rien.'
+              : 'Chrome va cliquer sur « Se connecter » avec cette note, une seule demande.'}
+          </p>
+          <label>
+            <span className="small">Note d’invitation</span>
+            <textarea
+              aria-label="Note d’invitation"
+              rows={6}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </label>
+          <span
+            className={`small ${note.trim().length > LIMITE_NOTE_SALESNAV ? 'salesnav-trop' : 'muted'}`}
+            aria-live="polite"
+          >
+            {note.trim().length} / {LIMITE_NOTE_SALESNAV} caractères
+          </span>
+        </Fenetre>
+      )}
 
       {messages && (
         <Fenetre titre="Messages SalesNav" large onFermer={() => setMessages(false)}>

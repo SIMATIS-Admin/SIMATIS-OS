@@ -191,6 +191,8 @@ export const PARTAGE_OUTILS_LECTURE = [
 // Routine « Messages LinkedIn » : elle lit dans le Chrome du pilote (extension Claude in Chrome).
 // Seuls les outils de lecture et de navigation sont autorisés : ni formulaire, ni script, ni envoi de fichier.
 export const SKILL_LINKEDIN = 'lire-messages-linkedin';
+// Routine « Envoi SalesNav » : même Chrome, pour une demande de connexion à la fois.
+export const SKILL_SALESNAV = 'envoyer-demande-salesnav';
 export const CHROME_OUTILS_LECTURE = [
   'mcp__claude-in-chrome__tabs_context_mcp',
   'mcp__claude-in-chrome__tabs_create_mcp',
@@ -247,7 +249,7 @@ export async function argumentsClaude(
   const wispr = d.skill === 'alimenter-inbox' && d.cerveau === true;
   // Le Chrome du pilote est branché par l'option --chrome, pas par la config MCP : le mode strict
   // le masquerait peut-être, et tout outil non listé reste refusé de toute façon.
-  const linkedin = d.skill === SKILL_LINKEDIN;
+  const linkedin = d.skill === SKILL_LINKEDIN || d.skill === SKILL_SALESNAV;
   const base = [
     '--mcp-config',
     config,
