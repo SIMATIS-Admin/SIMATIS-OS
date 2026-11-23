@@ -13,6 +13,7 @@ import {
   prenomDe,
   redigerMail,
   suitesProposees,
+  ventiler,
 } from './aideRelance.js';
 
 const maintenant = new Date('2026-11-20T09:00:00Z');
@@ -432,5 +433,51 @@ describe('tâches anciennes', () => {
       expect(chronologie([], fiche).map((e) => e.id)).toEqual(['n1']);
       expect(chronologie(null, fiche).map((e) => e.id)).toEqual(['n1', 'e1']);
     });
+  });
+});
+
+describe('ventiler', () => {
+  // Mercredi 18 novembre 2026, 15 h : fictif, sans lien avec un jour réel de travail.
+  const mercredi = new Date(2026, 10, 18, 15, 0);
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `a${i}`);
+  const parJour = (n: number, depuis = mercredi) => {
+    const r = ventiler(ids(n), depuis);
+    const groupes = new Map<number, number>();
+    for (const x of r) groupes.set(x.jusqua, (groupes.get(x.jusqua) ?? 0) + 1);
+    return { restent: n - r.length, groupes: [...groupes.values()] };
+  };
+
+  it('ne met jamais plus de 5 actions par jour', () => {
+    for (const n of [5, 10, 15, 20, 37]) {
+      const { restent, groupes } = parJour(n);
+      expect(Math.max(restent, ...groupes)).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it('répartit à parts presque égales sur au moins 3 jours ouvrés', () => {
+    expect(parJour(10)).toEqual({ restent: 4, groupes: [3, 3] });
+    expect(parJour(15)).toEqual({ restent: 5, groupes: [5, 5] });
+    expect(parJour(5)).toEqual({ restent: 2, groupes: [2, 1] });
+    expect(parJour(20)).toEqual({ restent: 5, groupes: [5, 5, 5] });
+  });
+
+  it("garde les premières actions pour aujourd'hui et ne perd aucune action", () => {
+    const r = ventiler(ids(10), mercredi);
+    expect(r.map((x) => x.id)).toEqual(ids(10).slice(4));
+    expect(new Set(r.map((x) => x.id)).size).toBe(6);
+  });
+
+  it('saute le week-end et fixe 9 h', () => {
+    const jeudi = new Date(2026, 10, 19, 10, 0);
+    const jours = [...new Set(ventiler(ids(15), jeudi).map((x) => x.jusqua))].map(
+      (t) => new Date(t),
+    );
+    expect(jours.map((d) => d.getDay())).toEqual([5, 1]);
+    expect(jours.every((d) => d.getHours() === 9 && d.getMinutes() === 0)).toBe(true);
+  });
+
+  it("n'étale rien quand il y a une seule action", () => {
+    expect(ventiler(['a'], mercredi)).toEqual([]);
+    expect(ventiler([], mercredi)).toEqual([]);
   });
 });

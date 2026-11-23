@@ -577,6 +577,49 @@ describe('AideRelance', () => {
     });
   });
 
+  describe('ventiler', () => {
+    const lignes = () => document.querySelectorAll('.aide-ligne');
+    const ouvrir = async () => {
+      render(<AideRelance slug="simatis" />);
+      await screen.findByText('Retard Fictif');
+    };
+
+    it('étale les actions choisies, 5 par jour au plus, et ne garde que la part du jour', async () => {
+      await ouvrir();
+      expect(lignes()).toHaveLength(10);
+      fireEvent.click(screen.getByRole('button', { name: 'Ventiler les actions' }));
+      await waitFor(() => expect(api.masquerRelanceLot).toHaveBeenCalled());
+      const lots = api.masquerRelanceLot.mock.calls.map(([, ids]) => ids as string[]);
+      const total = lots.reduce((n, ids) => n + ids.length, 0);
+      expect(lots.every((ids) => ids.length <= 5)).toBe(true);
+      expect(total).toBe(6);
+      // Jamais de report dans le passé, ni en dehors des jours ouvrés.
+      for (const appel of api.masquerRelanceLot.mock.calls) {
+        const jusqua = appel[2] as number;
+        expect(jusqua).toBeGreaterThan(Date.now());
+        expect([0, 6]).not.toContain(new Date(jusqua).getDay());
+      }
+      await waitFor(() => expect(lignes()).toHaveLength(4));
+      expect(screen.getByRole('status').textContent).toMatch(/4 action\(s\) pour aujourd'hui/);
+    });
+
+    it('revient au nombre choisi quand on change de nombre', async () => {
+      await ouvrir();
+      fireEvent.click(screen.getByRole('button', { name: 'Ventiler les actions' }));
+      await waitFor(() => expect(lignes()).toHaveLength(4));
+      fireEvent.click(screen.getByRole('button', { name: '5' }));
+      await waitFor(() => expect(lignes()).toHaveLength(5));
+    });
+
+    it('signale un échec sans rien cacher', async () => {
+      api.masquerRelanceLot.mockRejectedValueOnce(new Error('refusé'));
+      await ouvrir();
+      fireEvent.click(screen.getByRole('button', { name: 'Ventiler les actions' }));
+      expect(await screen.findByText(/La répartition a échoué/)).toBeTruthy();
+      expect(lignes()).toHaveLength(10);
+    });
+  });
+
   it("n'envoie ni ne crée rien tant que Marc n'a pas validé", async () => {
     render(<AideRelance slug="simatis" />);
     fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));

@@ -8752,15 +8752,6 @@ button.recherche-carte:hover,
   color: var(--ink-3);
   white-space: nowrap;
 }
-.aide-blocs {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.aide-blocs .aide-note {
-  margin-bottom: 0;
-}
 .aide-sous-titre {
   font-size: 12px;
   color: var(--ink-3);
@@ -8816,12 +8807,6 @@ button.recherche-carte:hover,
   font: inherit;
   line-height: 1.45;
 }
-.aide-canal {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
 .aide-mail summary {
   cursor: pointer;
   font-size: 13px;
@@ -8835,15 +8820,13 @@ button.recherche-carte:hover,
   font-size: 13px;
   line-height: 1.45;
 }
-.aide-dest {
-  margin: 0 0 8px;
-}
 .aide-envoyer {
   display: flex;
   gap: 8px;
   align-items: center;
   margin-left: auto;
 }
+.aide-ensuite select,
 .aide-envoyer select {
   max-width: 200px;
   padding: 7px 8px;
@@ -8856,13 +8839,163 @@ button.recherche-carte:hover,
   gap: 8px;
   align-items: center;
 }
-.aide-deja {
-  margin-left: auto;
+
+/* Fenêtre d'une action : une mission claire, le mail au centre, le contexte à côté, un seul
+   gros bouton. Les gestes secondaires (reporter, passer) restent discrets en bas. */
+.aide-mission {
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  border-left: 4px solid var(--teal);
+  border-radius: var(--r-s);
+  background: #f1faf8;
 }
-@media (max-width: 760px) {
-  .aide-blocs {
+.aide-mission-etiquette {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+.aide-mission-titre {
+  margin: 2px 0 4px;
+  font-size: 19px;
+  font-weight: 700;
+}
+.aide-mission-raisons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  font-size: 14px;
+}
+.aide-duo {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.aide-redaction {
+  min-width: 0;
+}
+.aide-canal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.aide-segment {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--line-2);
+}
+.aide-segment button {
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.aide-segment button.on {
+  background: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(12, 37, 63, 0.18);
+}
+.aide-dest {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.aide-champ-objet input[type='text'] {
+  font-size: 16px;
+  font-weight: 600;
+}
+.aide-mail-carte .aide-champ textarea {
+  min-height: 220px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.aide-champ input[type='text']:focus,
+.aide-champ textarea:focus {
+  outline: 2px solid var(--teal);
+  outline-offset: 1px;
+}
+.aide-outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.aide-message {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--r-s);
+  background: var(--blue-bg);
+  font-size: 14px;
+}
+.aide-contexte {
+  position: sticky;
+  top: 0;
+  max-height: 56vh;
+  padding: 14px 16px;
+  overflow-y: auto;
+  border-radius: var(--r-s);
+  background: var(--line-2);
+  font-size: 14px;
+}
+.aide-plus {
+  margin-top: 10px;
+}
+.aide-plus > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.aide-pied-principal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.aide-ensuite select {
+  max-width: 280px;
+}
+.aide-ensuite {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.aide-pied-secondaire {
+  padding-top: 8px;
+  border-top: 1px solid var(--line-2);
+}
+.aide-ecart {
+  flex: 1;
+}
+.btn.aide-grand {
+  padding: 11px 24px;
+  font-size: 16px;
+}
+.bv-fenetre.tiroir:has(.aide-pied) .bv-fenetre-pied {
+  position: sticky;
+  bottom: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--white);
+}
+@media (max-width: 860px) {
+  .aide-duo {
     grid-template-columns: minmax(0, 1fr);
   }
+  .aide-contexte {
+    position: static;
+    max-height: none;
+  }
+}
+@media (max-width: 760px) {
   .aide-envoyer {
     margin-left: 0;
   }
@@ -8924,6 +9057,38 @@ button.recherche-carte:hover,
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--line-2);
+}
+.aide-titre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.aide-vent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--teal);
+  cursor: pointer;
+}
+.aide-vent:hover:not(:disabled) {
+  background: #f1faf8;
+  border-color: var(--teal);
+}
+.aide-vent:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.aide-info {
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line-2);
+  background: #f1faf8;
+  font-size: 14px;
 }
 .aide-nettoyage {
   display: flex;
