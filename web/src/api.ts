@@ -3811,3 +3811,48 @@ export const lireOrigineContactBase = (slug: string, id: string) =>
   getJson<OrigineContactBase>(inst(slug, `base/fiches/${id}/origine`));
 export const noterContactsRechercheBase = (slug: string, contacts: ProspectRecherche[]) =>
   sendJson<{ ok: boolean }>('POST', inst(slug, 'base/notes-recherche'), { contacts });
+
+// Messages envoyés à la main depuis Sales Navigator : un modèle par cible et par étape, que chaque
+// campagne peut remplacer pour une étape.
+export type EtapeSalesnav = 'invitation' | 'acceptation' | 'relance1' | 'relance2';
+export type ModeleSalesnav = { icp: string; etape: EtapeSalesnav; texte: string };
+export type CampagneSalesnav = {
+  id: string;
+  nom: string;
+  icp: string;
+  surcharges: { etape: EtapeSalesnav; texte: string }[];
+};
+export type VueSalesnav = {
+  etapes: EtapeSalesnav[];
+  limiteInvitation: number;
+  modeles: ModeleSalesnav[];
+  campagnes: CampagneSalesnav[];
+};
+export const fetchSalesnav = (slug: string) => getJson<VueSalesnav>(inst(slug, 'salesnav/modeles'));
+export const enregistrerModeleSalesnav = (
+  slug: string,
+  icp: string,
+  etape: EtapeSalesnav,
+  texte: string,
+) =>
+  sendJson<{ ok: true }>(
+    'PUT',
+    inst(slug, `salesnav/modeles/${encodeURIComponent(icp)}/${etape}`),
+    { texte },
+  );
+export const creerCampagneSalesnav = (slug: string, nom: string, icp: string) =>
+  sendJson<{ id: string; nom: string; icp: string }>('POST', inst(slug, 'salesnav/campagnes'), {
+    nom,
+    icp,
+  });
+export const supprimerCampagneSalesnav = (slug: string, id: string) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `salesnav/campagnes/${id}`), {});
+export const enregistrerSurchargeSalesnav = (
+  slug: string,
+  id: string,
+  etape: EtapeSalesnav,
+  texte: string,
+) =>
+  sendJson<{ ok: true }>('PUT', inst(slug, `salesnav/campagnes/${id}/modeles/${etape}`), { texte });
+export const retirerSurchargeSalesnav = (slug: string, id: string, etape: EtapeSalesnav) =>
+  sendJson<{ ok: true }>('DELETE', inst(slug, `salesnav/campagnes/${id}/modeles/${etape}`), {});

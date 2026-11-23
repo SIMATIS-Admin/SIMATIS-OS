@@ -9126,3 +9126,61 @@ button.recherche-carte:hover,
   background: var(--bg-soft, rgba(11, 37, 69, 0.06));
   font-size: 0.9em;
 }
+
+/* Messages Sales Navigator : modèles par défaut et surcharges par campagne. */
+.salesnav h2 {
+  margin: 1.5rem 0 0.5rem;
+}
+.salesnav-cible {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 28rem;
+}
+.salesnav-grille {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+.salesnav-champ textarea {
+  width: 100%;
+  resize: vertical;
+}
+.salesnav-etape {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.salesnav-pied {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.salesnav-trop,
+.salesnav-erreur {
+  color: var(--danger, #b3261e);
+}
+.salesnav-creation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+.salesnav-campagne {
+  border: 1px solid var(--border, #d8dde6);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+.salesnav-campagne header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.salesnav-campagne header h3 {
+  flex: 1;
+  margin: 0;
+}
