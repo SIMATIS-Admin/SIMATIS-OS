@@ -38,6 +38,12 @@ export function apercuPropre(extrait: string): string {
     .trim();
 }
 
+// Date d'en-tête du mail (« Sat, 21 Nov 2026 20:20:00 +0100 ») ; absente ou illisible : aucune.
+export function dateDuMail(date: string | null): Date | null {
+  const t = date ? Date.parse(date) : NaN;
+  return Number.isNaN(t) ? null : new Date(t);
+}
+
 // Dépose une entrée Inbox par notification non encore vue (la clé est l'identifiant du mail : une
 // entrée cochée ne revient jamais). `lire` donne les notifications du libellé.
 export async function actualiserLinkedin(
@@ -52,6 +58,7 @@ export async function actualiserLinkedin(
       type: 'mail_a_repondre',
       titre: nom ? `${TITRE_SANS_NOM} de ${nom}` : TITRE_SANS_NOM,
       resume: apercuPropre(n.extrait) || null,
+      recuLe: dateDuMail(n.date),
       origine: 'linkedin',
       source: SOURCE_LINKEDIN,
       sourceId: n.messageId,
@@ -76,6 +83,7 @@ export async function messagesALire(tx: Tx, max = LECTURES_MAX): Promise<Message
       titre: sujets.titre,
       resume: sujets.resume,
       createdAt: sujets.createdAt,
+      recuLe: sujets.recuLe,
     })
     .from(sujets)
     .where(
@@ -92,7 +100,8 @@ export async function messagesALire(tx: Tx, max = LECTURES_MAX): Promise<Message
     id: r.id,
     titre: r.titre,
     apercu: r.resume,
-    recuLe: r.createdAt.toISOString(),
+    // Sans heure de mail (entrées anciennes), le dépôt est la seule borne connue.
+    recuLe: (r.recuLe ?? r.createdAt).toISOString(),
   }));
 }
 

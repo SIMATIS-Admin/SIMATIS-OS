@@ -20,9 +20,14 @@ Signale chaque étape avec `etape_routine`, puis termine avec `rapport_routine` 
 
 1. `tabs_context_mcp`, puis ouvre un onglet dans le groupe Claude sur `https://www.linkedin.com/messaging/`.
 2. Si LinkedIn demande de se connecter ou une vérification : **arrête-toi**, rapport « attente » (« LinkedIn demande une connexion, à faire par le pilote »). N'essaie rien d'autre.
-3. Pour chaque entrée **avec un nom** d'expéditeur, trouve la conversation dans la liste avec ce nom et l'aperçu, ouvre-la, puis lis le texte avec `get_page_text`. Prends les derniers messages **reçus** de cette personne depuis la notification, pas tout l'historique.
-3. bis. Pour une entrée **sans nom** (titre « Message LinkedIn » seul : LinkedIn envoie parfois seulement un rappel du type « 1 nouveau message attend votre réponse »), ne cherche pas de nom : le message à lire est celui de la liste qui est **non lu**, c'est-à-dire la conversation en gras ou marquée d'une pastille, dont le dernier message vient de l'autre personne et non du pilote. Ouvre-la et lis-la. S'il y a plusieurs conversations non lues et plusieurs entrées sans nom, lis les conversations non lues les plus récentes, dans l'ordre, sans en ouvrir plus que d'entrées. Si plus aucune conversation n'est non lue (le pilote a pu ouvrir le message entre-temps), prends la conversation la plus récente dont le dernier message vient de l'autre personne et date d'après l'arrivée de la notification. Ne conclus « introuvable » que si aucune ne convient.
-4. Laisse quelques secondes entre deux conversations. N'ouvre jamais plus de conversations qu'il n'y a d'entrées à lire.
+3. Chaque entrée porte `recuLe` : l'heure d'arrivée du **mail de notification**. LinkedIn l'envoie quelques minutes après le message. Le message à lire est donc **le message reçu d'une autre personne dans l'heure qui précède `recuLe`** (jusqu'à cinq minutes après, par prudence). Il peut être lu ou non, avec ou sans réponse du pilote, des heures ou un jour plus tard : **ne tiens aucun compte du lu / non lu**, seule l'heure de réception compte. Les heures de LinkedIn sont celles de Paris ; convertis `recuLe` (UTC).
+4. Trouver la conversation :
+   - Titre avec un nom d'expéditeur (« Message LinkedIn de … ») : ouvre la conversation de cette personne, repère le message reçu dans la fenêtre, lis-le.
+   - Titre sans nom (LinkedIn envoie parfois seulement un rappel) : parcours la liste, ouvre une conversation à la fois, et cherche dans chacune un message **reçu de l'autre personne** (pas écrit par « Vous ») dont l'heure tombe dans la fenêtre. Regarde d'abord les conversations les plus récentes, utilise « Charger plus de conversations » si besoin, et n'en ouvre jamais plus de vingt par entrée. Dès que tu l'as trouvé, arrête-toi.
+   - Les jours sont indiqués dans la conversation (« AUJOURD'HUI », « SAMEDI », une date) : vérifie le jour **et** l'heure, pas seulement l'heure.
+   - Prends tout ce que l'autre personne a écrit dans la fenêtre (plusieurs messages d'affilée comptent pour un seul), pas le reste de l'historique.
+   - Si plusieurs conversations ont un message dans la fenêtre, range-les tous dans un seul appel, séparés et chacun précédé du nom de la personne : le pilote tranchera. Aucune ? Voir « introuvable » plus bas.
+5. Laisse quelques secondes entre deux conversations. N'ouvre pas plus de conversations que nécessaire.
 
 ## 3. Ranger le texte
 

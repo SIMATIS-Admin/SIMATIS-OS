@@ -76,6 +76,8 @@ export const sujets = pgTable(
     noteCerveauAt: timestamp('note_cerveau_at', { withTimezone: true }),
     // LinkedIn : quand le texte complet du message a été lu sur LinkedIn (absent = l'aperçu du mail seul).
     texteLuAt: timestamp('texte_lu_at', { withTimezone: true }),
+    // LinkedIn : heure d'arrivée du mail de notification (borne de la recherche sur LinkedIn).
+    recuLe: timestamp('recu_le', { withTimezone: true }),
     reponsePreparee: jsonb('reponse_preparee').$type<ReponsePreparee>(),
     compteRenduPrepare: jsonb('compte_rendu_prepare').$type<CompteRenduPrepare>(),
   },
