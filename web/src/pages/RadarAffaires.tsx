@@ -331,6 +331,13 @@ export function RadarAffaires({ slug, ouvrir }: { slug: string; ouvrir?: string 
       )}
     </article>
   );
+  // La sous-section SalesNav est une page à part entière : elle remplace la barre et les vues du Radar.
+  if (vue === 'salesnav')
+    return (
+      <section className="radar-affaires">
+        <SalesnavRadar slug={slug} onRetour={() => setVue('radar')} />
+      </section>
+    );
   return (
     <section className="radar-affaires">
       <div className="ra-toolbar">
@@ -390,7 +397,7 @@ export function RadarAffaires({ slug, ouvrir }: { slug: string; ouvrir?: string 
       )}
       <div
         className="ra-filtres"
-        hidden={vue === 'salesnav'}
+
         aria-label="Filtrer par dernier canal"
       >
         <span>Dernier canal</span>
@@ -602,23 +609,6 @@ export function RadarAffaires({ slug, ouvrir }: { slug: string; ouvrir?: string 
             {!affaires.length && <p className="ra-empty">Aucune affaire ne correspond.</p>}
           </div>
         </section>
-      )}
-      {vue === 'salesnav' && (
-        <SalesnavRadar
-          slug={slug}
-          affaires={toutes
-            .filter((o) => canal(o) === 'SalesNav')
-            .map((o) => ({
-              id: o.id,
-              titre: o.titre,
-              entreprise: o.entreprise ?? '',
-              contact: o.contact ?? '',
-              etape: etape(o),
-              lien: lien(o),
-            }))}
-          onRetour={() => setVue('radar')}
-          onChange={() => actualiser((n) => n + 1)}
-        />
       )}
       {vue === 'radar' && (
         <div className="ra-workspace">

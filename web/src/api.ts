@@ -3889,3 +3889,58 @@ export const enregistrerActionSalesnav = (
   slug: string,
   action: { type: TypeActionSalesnav; opportuniteId?: string | null },
 ) => sendJson<IndicateursSalesnav>('POST', inst(slug, 'salesnav/actions'), action);
+
+export type StatutProspectSalesnav =
+  'propose' | 'demande_envoyee' | 'connecte' | 'a_repondu' | 'sans_reponse';
+export type ProspectSalesnav = {
+  id: string;
+  nom: string;
+  fonction: string | null;
+  entreprise: string | null;
+  lienLinkedin: string;
+  cible: string | null;
+  statut: StatutProspectSalesnav;
+  nbMessages: number;
+  opportuniteId: string | null;
+  aRetirer: boolean;
+  message: { etape: string; texte: string; manquantes: string[]; longueur: number } | null;
+};
+export type StatsPipeSalesnav = {
+  demandesEnvoyees: number;
+  acceptees: number;
+  tauxAcceptation: number | null;
+  messagesEnvoyes: number;
+  reponses: number;
+  tauxReponse: number | null;
+};
+export type PipeSalesnav = {
+  stats: StatsPipeSalesnav;
+  disponibles: number;
+  joursAvantRetrait: number;
+  cibles: string[];
+  prospects: ProspectSalesnav[];
+};
+export type ActionProspectSalesnav =
+  'demande' | 'connecte' | 'message' | 'reponse' | 'sans-reponse' | 'ecarter';
+export const fetchPipeSalesnav = (slug: string) =>
+  getJson<PipeSalesnav>(inst(slug, 'salesnav/pipe'));
+export const proposerSalesnav = (slug: string) =>
+  sendJson<{ proposes: number; manque: number }>('POST', inst(slug, 'salesnav/pipe/proposer'), {});
+export const ajouterProspectSalesnav = (
+  slug: string,
+  prospect: {
+    lien: string;
+    nom: string;
+    fonction?: string | null;
+    entreprise?: string | null;
+    cible?: string | null;
+  },
+) => sendJson<{ id: string }>('POST', inst(slug, 'salesnav/pipe/prospects'), prospect);
+export const choisirCibleSalesnav = (slug: string, id: string, cible: string | null) =>
+  sendJson<{ ok: true }>('PATCH', inst(slug, `salesnav/pipe/prospects/${id}`), { cible });
+export const actionProspectSalesnav = (slug: string, id: string, action: ActionProspectSalesnav) =>
+  sendJson<{ ok: true; opportuniteCreee: boolean }>(
+    'POST',
+    inst(slug, `salesnav/pipe/prospects/${id}/${action}`),
+    {},
+  );
