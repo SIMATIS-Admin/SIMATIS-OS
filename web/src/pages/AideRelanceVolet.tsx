@@ -3,21 +3,26 @@ import {
   createTache,
   decider,
   envoyerMailRelanceProspection,
+  fetchFiche,
   fetchMailsFiche,
   fetchProspection,
   updateTache,
   type Evenement,
+  type FicheDetail,
   type KindFiche,
   type PropositionItem,
   type SignatureProspection,
 } from '../api.js';
 import {
+  chronologie,
+  decoderEntites,
   ficheAppel,
   htmlEnTexte,
   redigerMail,
   suitesProposees,
   type ActionRelance,
 } from '../aideRelance.js';
+import { Chronologie, Faits } from './AideRelanceSituation.js';
 import { Fenetre } from './Fenetre.js';
 
 export const dansJours = (n: number) => {
@@ -51,7 +56,6 @@ export function VoletAction({
 }) {
   // Une action d'un autre mandat s'écrit dans ce mandat, jamais dans l'espace affiché.
   const espace = action.instance?.slug ?? slug;
-  const mail = action.canal === 'mail';
   const brouillon = useMemo(() => redigerMail(action), [action]);
   const fiche = useMemo(() => ficheAppel(action), [action]);
   const objetPrepare = typeof prepare?.contenu.objet === 'string' ? prepare.contenu.objet : '';
@@ -75,6 +79,61 @@ export function VoletAction({
   const [historique, setHistorique] = useState<Evenement[] | 'chargement' | 'indisponible'>(
     'chargement',
   );
+  const [detail, setDetail] = useState<
+    { cible: FicheDetail | null; contact: FicheDetail | null } | 'chargement' | 'indisponible'
+  >('chargement');
+  const [complets, setComplets] = useState<Record<string, string>>({});
+  const [canalChoisi, setCanalChoisi] = useState<'mail' | 'appel' | null>(null);
+
+  const cible: { kind: KindFiche; id: string } | null = action.contactId
+    ? { kind: 'contact', id: action.contactId }
+    : action.opportuniteId
+      ? { kind: 'affaire', id: action.opportuniteId }
+      : action.entrepriseId
+        ? { kind: 'entreprise', id: action.entrepriseId }
+        : null;
+  const ficheCle = cible ? `${cible.kind}:${cible.id}` : '';
+
+  // La fiche du contact donne ce que la file ne porte pas toujours (numéro, adresse, notes, appels,
+  // rendez-vous). Pour une affaire, le contact est celui qui lui est lié.
+  useEffect(() => {
+    if (!cible) {
+      setDetail({ cible: null, contact: null });
+      return;
+    }
+    let actif = true;
+    setDetail('chargement');
+    void (async () => {
+      try {
+        const f = (await fetchFiche(espace, cible.kind, cible.id)) ?? null;
+        const idContact = cible.kind === 'contact' ? null : (f?.liens?.contact?.id ?? null);
+        const contact =
+          cible.kind === 'contact'
+            ? f
+            : idContact
+              ? ((await fetchFiche(espace, 'contact', idContact).catch(() => null)) ?? null)
+              : null;
+        if (actif) setDetail({ cible: f, contact });
+      } catch {
+        if (actif) setDetail('indisponible');
+      }
+    })();
+    return () => {
+      actif = false;
+    };
+  }, [espace, ficheCle]);
+  const fiches = typeof detail === 'object' ? detail : null;
+  const champ = (cle: string) => {
+    const v = fiches?.contact?.fiche[cle];
+    return typeof v === 'string' && v.trim() ? v.trim() : null;
+  };
+  const email = action.email ?? champ('email');
+  const telephone = action.telephone ?? champ('telephone');
+  // Sans numéro, l'appel est impossible : la relance se fait par mail d'office. Avec un numéro,
+  // Marc choisit ; par défaut, le canal que l'OS propose.
+  const canal: 'mail' | 'appel' = !telephone ? 'mail' : (canalChoisi ?? action.canal);
+  const mail = canal === 'mail';
+  const suitesMail = suitesProposees('mail', undefined, !!telephone);
 
   // Les signatures sont celles des campagnes ; la signature par défaut est déjà choisie.
   useEffect(() => {
@@ -96,14 +155,6 @@ export function VoletAction({
   }, [espace, mail]);
 
   // L'historique des échanges est lu dans la messagerie, à part : il peut prendre quelques secondes.
-  const cible: { kind: KindFiche; id: string } | null = action.contactId
-    ? { kind: 'contact', id: action.contactId }
-    : action.opportuniteId
-      ? { kind: 'affaire', id: action.opportuniteId }
-      : action.entrepriseId
-        ? { kind: 'entreprise', id: action.entrepriseId }
-        : null;
-  const ficheCle = cible ? `${cible.kind}:${cible.id}` : '';
   useEffect(() => {
     if (!cible) {
       setHistorique([]);
@@ -133,6 +184,25 @@ export function VoletAction({
     (m) => m.mail?.sens === 'recu' && (!dernierEnvoye || m.at > dernierEnvoye.at),
   );
   const fil = (dernierEnvoye ?? derniereReponse ?? mails[0])?.mail?.fil;
+  // Tout le reste de l'historique (notes, appels, rendez-vous, mails plus anciens), sans répéter les
+  // deux mails déjà mis en avant.
+  const miseEnAvant = new Set([derniereReponse?.id, dernierEnvoye?.id]);
+  const autres = chronologie(
+    Array.isArray(historique) ? mails : null,
+    fiches?.contact?.historique ?? fiches?.cible?.historique ?? [],
+  ).filter((e) => !miseEnAvant.has(e.id));
+
+  // L'aperçu d'un mail est tronqué : à l'ouverture, on va chercher le texte complet.
+  const chargerComplet = async (m: Evenement) => {
+    if (!cible || m.mail?.charge || complets[m.id] !== undefined) return;
+    try {
+      const r = await fetchMailsFiche(espace, cible.kind, cible.id, m.id);
+      const texte = r?.mails?.find((x) => x.id === m.id)?.mail?.corps;
+      if (texte) setComplets((c) => ({ ...c, [m.id]: texte }));
+    } catch {
+      // L'aperçu reste affiché : rien d'autre à faire.
+    }
+  };
 
   const objetFinal = objet;
   const corpsFinal = corps;
@@ -140,12 +210,12 @@ export function VoletAction({
   // Un mail d'une action : brouillon ou envoi direct, avec la signature choisie. Le brouillon préparé
   // par la routine est écarté une fois le mail parti ou déposé, pour ne pas rester en double dans l'Inbox.
   const ecrireMail = async (mode: 'brouillon' | 'envoi') => {
-    if (!action.email) return;
+    if (!email) return;
     setEnCours(true);
     setMessage('');
     try {
       const r = await envoyerMailRelanceProspection(espace, {
-        to: action.email,
+        to: email,
         objet,
         corps,
         signatureId: signatureId || null,
@@ -169,7 +239,7 @@ export function VoletAction({
         return;
       }
       // Envoyé : l'action est faite, la suite choisie est planifiée et on passe à la suivante.
-      await cloturer(suitesProposees('mail')[suiteMail]);
+      await cloturer(suitesMail[suiteMail]);
     } catch {
       setMessage(
         mode === 'envoi'
@@ -248,7 +318,7 @@ export function VoletAction({
           </button>
         ) : (
           <div className="aide-pied">
-            {mail && !action.email && (
+            {mail && !email && (
               <p className="muted small" role="note">
                 {action.contactId
                   ? "Aucune adresse mail pour ce contact : ajoutez-la sur sa fiche pour pouvoir envoyer d'ici."
@@ -260,7 +330,7 @@ export function VoletAction({
                 <button className="btn" type="button" onClick={() => void copier()}>
                   Copier le mail
                 </button>
-                {action.email && (
+                {email && (
                   <button
                     className="btn"
                     type="button"
@@ -270,15 +340,15 @@ export function VoletAction({
                     Créer le brouillon Gmail
                   </button>
                 )}
-                {action.email && (
+                {email && (
                   <a
                     className="btn"
-                    href={`mailto:${action.email}?subject=${encodeURIComponent(objetFinal)}&body=${encodeURIComponent(corpsFinal)}`}
+                    href={`mailto:${email}?subject=${encodeURIComponent(objetFinal)}&body=${encodeURIComponent(corpsFinal)}`}
                   >
                     Ouvrir dans ma messagerie
                   </a>
                 )}
-                {action.email && (
+                {email && (
                   <span className="aide-envoyer">
                     <select
                       aria-label="Signature"
@@ -297,7 +367,7 @@ export function VoletAction({
                       type="button"
                       onClick={() => void ecrireMail('envoi')}
                       disabled={enCours}
-                      title={`Envoie ce mail à ${action.email}${signatureId ? ' avec la signature choisie' : ''}, clôt l'action et passe à la suivante.`}
+                      title={`Envoie ce mail à ${email}${signatureId ? ' avec la signature choisie' : ''}, clôt l'action et passe à la suivante.`}
                     >
                       <svg
                         className="aide-avion"
@@ -325,7 +395,7 @@ export function VoletAction({
                 <button
                   className="btn primary"
                   type="button"
-                  onClick={() => setSuites(suitesProposees(action.canal, resultat))}
+                  onClick={() => setSuites(suitesProposees(canal, resultat, !!telephone))}
                 >
                   Appel passé
                 </button>
@@ -341,7 +411,7 @@ export function VoletAction({
                   value={suiteMail}
                   onChange={(e) => setSuiteMail(Number(e.target.value))}
                 >
-                  {suitesProposees('mail').map((x, i) => (
+                  {suitesMail.map((x, i) => (
                     <option key={x.libelle} value={i}>
                       {x.libelle}
                     </option>
@@ -365,7 +435,7 @@ export function VoletAction({
                   className="btn sm aide-deja"
                   type="button"
                   disabled={enCours}
-                  onClick={() => void cloturer(suitesProposees('mail')[suiteMail])}
+                  onClick={() => void cloturer(suitesMail[suiteMail])}
                   title="Vous l'avez déjà envoyé vous-même : l'action est clôturée et on passe à la suivante."
                 >
                   Mail envoyé
@@ -423,6 +493,15 @@ export function VoletAction({
         </section>
         <section className="aide-note aide-histo" aria-label="Situation et historique">
           <b>Situation et historique</b>
+          {fiches && (
+            <Faits
+              action={action}
+              email={email}
+              telephone={telephone}
+              contact={fiches.contact}
+              cible={fiches.cible}
+            />
+          )}
           {historique === 'chargement' ? (
             <p className="muted small">Lecture de la messagerie…</p>
           ) : historique === 'indisponible' ? (
@@ -438,7 +517,14 @@ export function VoletAction({
               {[derniereReponse, dernierEnvoye]
                 .filter((m): m is Evenement => !!m)
                 .map((m) => (
-                  <details key={m.id} className="aide-mail" open={m === derniereReponse}>
+                  <details
+                    key={m.id}
+                    className="aide-mail"
+                    open={m === derniereReponse}
+                    onToggle={(e) => {
+                      if (e.currentTarget.open) void chargerComplet(m);
+                    }}
+                  >
                     <summary>
                       <span className={`badge ${m.mail?.sens === 'recu' ? 'green' : 'blue'}`}>
                         {m.mail?.sens === 'recu' ? 'Réponse reçue' : 'Votre dernier mail'}
@@ -446,14 +532,40 @@ export function VoletAction({
                       {new Date(m.at).toLocaleDateString('fr-FR')} · {m.mail?.objet}
                     </summary>
                     <pre>
-                      {(m.mail?.corps ?? m.texte ?? '').slice(0, 1500) || '(contenu indisponible)'}
+                      {decoderEntites(complets[m.id] ?? m.mail?.corps ?? m.texte ?? '').slice(
+                        0,
+                        4000,
+                      ) || '(contenu indisponible)'}
                     </pre>
                   </details>
                 ))}
             </>
           )}
+          <Chronologie evenements={autres} />
         </section>
       </div>
+      {!suites && telephone && (
+        <div className="aide-canal" role="radiogroup" aria-label="Canal de la relance">
+          <span className="muted small">Relancer par :</span>
+          {(['mail', 'appel'] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={canal === c}
+              className={`btn sm${canal === c ? ' primary' : ''}`}
+              onClick={() => setCanalChoisi(c)}
+            >
+              {c === 'mail' ? 'Mail' : `Appel · ${telephone}`}
+            </button>
+          ))}
+        </div>
+      )}
+      {!suites && !telephone && action.canal === 'appel' && fiches && (
+        <p className="muted small" role="note">
+          Aucun numéro pour ce contact : la relance se fait par mail.
+        </p>
+      )}
       {suites ? (
         <div className="aide-suite" role="radiogroup" aria-label="Suite proposée">
           <p>
@@ -468,9 +580,9 @@ export function VoletAction({
         </div>
       ) : mail ? (
         <>
-          {action.email && (
+          {email && (
             <p className="aide-dest muted small">
-              À : <b>{action.email}</b>
+              À : <b>{email}</b>
             </p>
           )}
           <div className="aide-champ">
@@ -506,11 +618,11 @@ export function VoletAction({
                 ))}
               </ul>
             </dd>
-            {action.telephone && (
+            {telephone && (
               <>
                 <dt>Téléphone</dt>
                 <dd>
-                  <a href={`tel:${action.telephone}`}>{action.telephone}</a>
+                  <a href={`tel:${telephone}`}>{telephone}</a>
                 </dd>
               </>
             )}

@@ -1,4 +1,4 @@
-import type { Pipeline, PipelineOpp, PropositionItem, TacheVue } from './api.js';
+import type { Evenement, Pipeline, PipelineOpp, PropositionItem, TacheVue } from './api.js';
 import { etapeRadar } from './radar.js';
 
 // L'aide à la relance : réunit en une file courte ce que Marc peut faire tout de suite, à partir de
@@ -267,11 +267,18 @@ export function ficheAppel(a: ActionRelance): FicheAppel {
 
 // Suite proposée une fois l'action faite (tâche à planifier) : délai en jours.
 export type Suite = { libelle: string; canal: 'email' | 'appel' | null; jours: number };
-export function suitesProposees(canal: 'mail' | 'appel', resultat?: string): Suite[] {
+// Sans numéro connu, aucune suite par téléphone n'est proposée : on ne planifie pas un appel impossible.
+export function suitesProposees(
+  canal: 'mail' | 'appel',
+  resultat?: string,
+  avecTelephone = true,
+): Suite[] {
   const aucune: Suite = { libelle: 'Aucune suite', canal: null, jours: 0 };
   if (canal === 'mail')
     return [
-      { libelle: 'Relancer par téléphone dans 5 jours', canal: 'appel', jours: 5 },
+      ...(avecTelephone
+        ? [{ libelle: 'Relancer par téléphone dans 5 jours', canal: 'appel', jours: 5 } as Suite]
+        : []),
       { libelle: 'Relancer par mail dans 7 jours', canal: 'email', jours: 7 },
       aucune,
     ];
@@ -294,14 +301,21 @@ const ENTITES: Record<string, string> = {
   '&quot;': '"',
   '&#39;': "'",
 };
+// Les mails arrivent parfois avec leurs entités (« qu&#39;un ») : on les remet en caractères.
+export const decoderEntites = (texte: string): string =>
+  texte.replace(/&(?:nbsp|amp|lt|gt|quot|#39|#\d{1,6});/g, (e) => {
+    if (ENTITES[e]) return ENTITES[e];
+    const code = Number(e.slice(2, -1));
+    return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : e;
+  });
 // Texte lisible d'un mail HTML : l'aperçu n'insère jamais de HTML dans la page.
 export function htmlEnTexte(html: string): string {
-  return html
+  const sansBalises = html
     .replace(/<\s*br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n\n')
     .replace(/<(style|script)[\s\S]*?<\/\1>/gi, '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (e) => ENTITES[e] ?? e)
+    .replace(/<[^>]*>/g, '');
+  return decoderEntites(sansBalises)
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -329,3 +343,15 @@ export function brouillonPour(
 // Mandats cochés : une action d'un mandat décoché n'est ni listée ni proposée en séquence.
 export const dansMandats = (a: ActionRelance, masques: string[]) =>
   !a.mandat || !masques.includes(a.mandat);
+
+// ---- Situation : tout ce qui s'est passé avec le contact ---------------------------------------
+
+// Mails de la messagerie et événements de la fiche (notes, appels, rendez-vous, étapes, activités
+// faites) en une seule chronologie, du plus récent au plus ancien. Quand la messagerie a répondu,
+// ses mails font foi : les emails de la fiche seraient des doublons.
+export function chronologie(mails: Evenement[] | null, fiche: Evenement[]): Evenement[] {
+  const vus = new Set<string>();
+  return [...(mails ?? []), ...fiche.filter((e) => mails === null || e.type !== 'email')]
+    .filter((e) => (vus.has(e.id) ? false : (vus.add(e.id), true)))
+    .sort((a, b) => b.at.localeCompare(a.at));
+}

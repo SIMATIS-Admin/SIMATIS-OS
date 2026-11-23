@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { PipelineOpp, PropositionItem, TacheVue } from './api.js';
+import type { Evenement, PipelineOpp, PropositionItem, TacheVue } from './api.js';
 import {
   angleDe,
   brouillonPour,
+  chronologie,
+  decoderEntites,
   htmlEnTexte,
   construireFile,
   dansMandats,
@@ -391,5 +393,44 @@ describe('tâches anciennes', () => {
       ],
     });
     expect(file.filter((a) => a.ancienne).map((a) => a.entreprise)).toEqual(['Seule Périmée']);
+  });
+
+  it("ne propose aucune suite par téléphone quand il n'y a pas de numéro", () => {
+    const suites = suitesProposees('mail', undefined, false);
+    expect(suites.some((s) => s.canal === 'appel')).toBe(false);
+    expect(suites.map((s) => s.canal)).toEqual(['email', null]);
+  });
+
+  it('remet en caractères les entités des mails', () => {
+    expect(decoderEntites('une option plus légère : qu&#39;un diagnostic &amp; plus')).toBe(
+      "une option plus légère : qu'un diagnostic & plus",
+    );
+    expect(decoderEntites('caf&#233;')).toBe('café');
+  });
+
+  describe('chronologie', () => {
+    const ev = (id: string, type: Evenement['type'], at: string): Evenement => ({
+      id,
+      type,
+      titre: null,
+      texte: null,
+      at,
+      origine: 'os',
+    });
+    it('réunit mails et événements de la fiche du plus récent au plus ancien', () => {
+      const l = chronologie(
+        [ev('m1', 'email', '2026-11-10T00:00:00Z')],
+        [ev('n1', 'note', '2026-11-12T00:00:00Z'), ev('a1', 'appel', '2026-11-01T00:00:00Z')],
+      );
+      expect(l.map((e) => e.id)).toEqual(['n1', 'm1', 'a1']);
+    });
+    it('écarte les emails de la fiche quand la messagerie a répondu, les garde sinon', () => {
+      const fiche = [
+        ev('e1', 'email', '2026-11-02T00:00:00Z'),
+        ev('n1', 'note', '2026-11-03T00:00:00Z'),
+      ];
+      expect(chronologie([], fiche).map((e) => e.id)).toEqual(['n1']);
+      expect(chronologie(null, fiche).map((e) => e.id)).toEqual(['n1', 'e1']);
+    });
   });
 });
