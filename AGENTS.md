@@ -1,4 +1,4 @@
-<!-- coding.md:start (dernière synchro : 2026-10-08 ; adapté au projet : sans staging, sans worktrees, sans VPS, git autonome) -->
+<!-- coding.md:start (dernière synchro : 2026-10-08 ; adapté au projet : sans staging, sans VPS, git autonome) -->
 # SIMATIS OS — consignes pour les agents
 
 Système d'exploitation interne de SIMATIS (direction commerciale en mode partagé). Vue d'ensemble et démarrage : `README.md`. Plan de développement : `docs/plan.md`.
@@ -68,14 +68,16 @@ Le second cerveau est privé et contient toute l'information confidentielle et m
 **Référence : le dépôt GitHub privé `SIMATIS-Admin/second-cerveau`** (plus le Drive), cloné sur le poste de Marc dans `~/Second Cerveau` (`SECOND_CERVEAU_DIR`). Toute écriture dans le second cerveau, par l'agent ou par l'OS (routines, éditeur de notes), se termine par : `git pull --rebase`, `git add` des fichiers modifiés (jamais `-A`), commit, `git push` sur `main`. En fin de travail, ne jamais laisser de modification non poussée dans ce clone. Le dépôt est privé : y mettre du contenu métier est permis, mais il ne doit jamais être copié dans le présent dépôt public.
 La configuration locale (chemins, URL, jetons) passe par des variables d'environnement ou des fichiers ignorés par git.
 
-## Branches (pas de worktree)
+## Branches et sessions parallèles (worktree dédié)
 
-- Toujours vérifier `git branch --show-current` avant de travailler.
-- **Pas de worktree** : on travaille toujours dans le dossier principal du dépôt, en changeant de branche. Un seul agent travaille à la fois dans ce dépôt.
-- Si des modifications non commitées que l'agent n'a pas faites sont présentes, s'arrêter et prévenir Marc.
-- Chaque branche part de `main` à jour : `git fetch` puis `git switch -c feature/nom-court origin/main`.
-- Jamais de travail ni de commit direct sur `main`.
-- Avant de changer de branche, l'arbre de travail doit être propre : committer plutôt que stasher.
+- Toujours vérifier `git branch --show-current` avant de travailler et dans la même commande que chaque `git commit`.
+- **Règle permanente : une session parallèle = un worktree dédié, sans exception.** Dès qu'une autre session travaille dans le dossier principal (modifications non commitées qui ne sont pas les miennes, branche autre que celle attendue, session « busy » sur ce dépôt), ou que Marc demande un travail en parallèle d'une autre session, l'agent crée son propre worktree et n'y touche jamais au dossier principal.
+- Création : `git fetch` puis `git worktree add -b feature/nom-court "$HOME/Simatis-OS-worktrees/nom-court" origin/main`. Les worktrees vivent dans `~/Simatis-OS-worktrees/`, jamais dans `/tmp` (nettoyé au redémarrage) ni dans le dépôt.
+- Dans un worktree : `.env`, `node_modules` et `secrets/` n'y sont pas (ignorés par git). Les lier ou les installer (`npm ci`) avant `npm run verify` ; ne jamais copier un secret dans un fichier suivi par git.
+- Ressources partagées entre worktrees, donc à ne pas se disputer : la base locale, les ports (serveurs de dev) et le conteneur Docker. Un seul worktree à la fois reconstruit ou relance le conteneur, et seulement après merge, depuis `origin/main` à jour (voir « Livraison »). Les migrations Drizzle (`drizzle/NNNN_*.sql`) : avant de merger, rebaser sur `origin/main` et renuméroter si un autre merge a pris le même numéro.
+- Chaque branche part de `main` à jour et n'est ouverte que dans un seul worktree (git l'impose). Jamais de travail ni de commit direct sur `main`.
+- Dossier principal : si des modifications non commitées que l'agent n'a pas faites y sont présentes, ne pas y travailler ni y changer de branche ; passer en worktree et prévenir Marc.
+- Fin de feature (après merge) : supprimer le worktree (`git worktree remove <chemin>`) et la branche locale, puis `git worktree prune`. Ne jamais supprimer un worktree qui contient des modifications non commitées.
 
 ## Gestion de git (autonome)
 
