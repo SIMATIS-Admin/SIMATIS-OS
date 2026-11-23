@@ -54,17 +54,25 @@ export async function actualiserLinkedin(
   let nouveaux = 0;
   for (const n of notifications) {
     const nom = expediteurLinkedin(n.objet);
-    const { statut } = await deposerSujet(tx, {
+    const recuLe = dateDuMail(n.date);
+    const { statut, id } = await deposerSujet(tx, {
       type: 'mail_a_repondre',
       titre: nom ? `${TITRE_SANS_NOM} de ${nom}` : TITRE_SANS_NOM,
       resume: apercuPropre(n.extrait) || null,
-      recuLe: dateDuMail(n.date),
+      recuLe,
       origine: 'linkedin',
       source: SOURCE_LINKEDIN,
       sourceId: n.messageId,
       lien: MESSAGERIE_LINKEDIN,
     });
     if (statut === 'cree') nouveaux += 1;
+    // Entrée déposée avant que l'heure du mail soit conservée : on la complète à ce passage.
+    else if (recuLe) {
+      await tx
+        .update(sujets)
+        .set({ recuLe })
+        .where(and(eq(sujets.id, id), isNull(sujets.recuLe)));
+    }
   }
   return { lues: notifications.length, nouveaux };
 }
@@ -73,7 +81,32 @@ export async function actualiserLinkedin(
 export const LECTURES_MAX = 5;
 const TEXTE_MAX = 8000;
 
-export type MessageALire = { id: string; titre: string; apercu: string | null; recuLe: string };
+// Fenêtre où chercher le message sur LinkedIn : reçu dans l'heure avant le mail (LinkedIn le
+// notifie après quelques minutes), par prudence jusqu'à cinq minutes après.
+const FENETRE_AVANT_MS = 60 * 60_000;
+const FENETRE_APRES_MS = 5 * 60_000;
+
+// LinkedIn affiche les heures de Paris : on les donne toutes faites pour que l'agent n'ait aucune
+// conversion à faire (une heure UTC lue comme heure de Paris décale la recherche d'une heure).
+const parisJourHeure = (d: Date) =>
+  new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(d);
+
+export type MessageALire = {
+  id: string;
+  titre: string;
+  apercu: string | null;
+  recuLe: string;
+  // Heure du mail et fenêtre de recherche, en heure de Paris.
+  recuLeParis: string;
+  fenetreParis: { de: string; a: string };
+};
 
 // Entrées LinkedIn encore à l'aperçu du mail : le texte complet n'a pas été lu sur LinkedIn.
 export async function messagesALire(tx: Tx, max = LECTURES_MAX): Promise<MessageALire[]> {
@@ -96,13 +129,21 @@ export async function messagesALire(tx: Tx, max = LECTURES_MAX): Promise<Message
     )
     .orderBy(asc(sujets.createdAt))
     .limit(max);
-  return rows.map((r) => ({
-    id: r.id,
-    titre: r.titre,
-    apercu: r.resume,
+  return rows.map((r) => {
     // Sans heure de mail (entrées anciennes), le dépôt est la seule borne connue.
-    recuLe: (r.recuLe ?? r.createdAt).toISOString(),
-  }));
+    const recu = r.recuLe ?? r.createdAt;
+    return {
+      id: r.id,
+      titre: r.titre,
+      apercu: r.resume,
+      recuLe: recu.toISOString(),
+      recuLeParis: parisJourHeure(recu),
+      fenetreParis: {
+        de: parisJourHeure(new Date(recu.getTime() - FENETRE_AVANT_MS)),
+        a: parisJourHeure(new Date(recu.getTime() + FENETRE_APRES_MS)),
+      },
+    };
+  });
 }
 
 export async function compterMessagesALire(tx: Tx): Promise<number> {
