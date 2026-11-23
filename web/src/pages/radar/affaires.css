@@ -19,7 +19,8 @@
 .ra-filtres {
   order: 2;
 }
-.ra-workspace {
+.ra-workspace,
+.salesnav-radar {
   order: 4;
 }
 .ra-pipe,
