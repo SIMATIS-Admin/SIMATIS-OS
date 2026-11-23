@@ -270,37 +270,52 @@ it('ouvre la sous-section SalesNav depuis le quartier SalesNav du Radar', async 
                     modeles: [],
                     campagnes: [],
                   }
-                : url.endsWith('/salesnav/indicateurs')
+                : url.endsWith('/salesnav/pipe')
                   ? {
-                      jour: {
-                        demande_envoyee: 0,
-                        demande_recue: 0,
-                        message_envoye: 0,
-                        reponse_recue: 0,
+                      stats: {
+                        demandesEnvoyees: 0,
+                        acceptees: 0,
+                        tauxAcceptation: null,
+                        messagesEnvoyes: 0,
+                        reponses: 0,
+                        tauxReponse: null,
                       },
-                      semaine: {
-                        demande_envoyee: 0,
-                        demande_recue: 0,
-                        message_envoye: 0,
-                        reponse_recue: 0,
-                      },
-                      quotaJour: 8,
-                      restantAujourdhui: 8,
-                      pause: false,
+                      disponibles: 0,
+                      joursAvantRetrait: 21,
+                      cibles: [],
+                      prospects: [],
                     }
-                  : url.endsWith('/salesnav/reglages')
+                  : url.endsWith('/salesnav/indicateurs')
                     ? {
+                        jour: {
+                          demande_envoyee: 0,
+                          demande_recue: 0,
+                          message_envoye: 0,
+                          reponse_recue: 0,
+                        },
+                        semaine: {
+                          demande_envoyee: 0,
+                          demande_recue: 0,
+                          message_envoye: 0,
+                          reponse_recue: 0,
+                        },
                         quotaJour: 8,
-                        quotaSemaine: 40,
+                        restantAujourdhui: 8,
                         pause: false,
-                        quotaMax: 25,
-                        recommande: 8,
-                        cible: 12,
-                        niveau: 'normal',
                       }
-                    : url.endsWith('/rendez-vous')
-                      ? { etat: 'ok', rdv: [] }
-                      : { etat: 'termine' },
+                    : url.endsWith('/salesnav/reglages')
+                      ? {
+                          quotaJour: 8,
+                          quotaSemaine: 40,
+                          pause: false,
+                          quotaMax: 25,
+                          recommande: 8,
+                          cible: 12,
+                          niveau: 'normal',
+                        }
+                      : url.endsWith('/rendez-vous')
+                        ? { etat: 'ok', rdv: [] }
+                        : { etat: 'termine' },
           ),
         ),
       ),
@@ -309,8 +324,8 @@ it('ouvre la sous-section SalesNav depuis le quartier SalesNav du Radar', async 
   render(<RadarAffaires slug="demo" />);
   fireEvent.click(await screen.findByRole('button', { name: 'SalesNav · 1' }));
   const sous = await screen.findByLabelText('SalesNav');
-  expect(within(sous).getByText('Société Démo')).toBeTruthy();
-  expect(within(sous).queryByText('Affaire par téléphone')).toBeNull();
+  // La page SalesNav remplace la barre et les vues du Radar.
+  expect(screen.queryByRole('button', { name: 'Vue pipe' })).toBeNull();
   fireEvent.click(within(sous).getByRole('button', { name: '← Retour au Radar' }));
   expect(await screen.findByRole('button', { name: 'SalesNav · 1' })).toBeTruthy();
 });

@@ -1,21 +1,24 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { IndicateursSalesnav, ReglagesSalesnav } from '../../api.js';
+import type { PipeSalesnav, ProspectSalesnav, ReglagesSalesnav } from '../../api.js';
 
 const api = vi.hoisted(() => ({
-  fetchIndicateursSalesnav: vi.fn(),
-  enregistrerActionSalesnav: vi.fn(),
+  fetchPipeSalesnav: vi.fn(),
+  proposerSalesnav: vi.fn(),
+  ajouterProspectSalesnav: vi.fn(),
+  choisirCibleSalesnav: vi.fn(),
+  actionProspectSalesnav: vi.fn(),
   fetchReglagesSalesnav: vi.fn(),
   enregistrerReglagesSalesnav: vi.fn(),
-  patchFiche: vi.fn(),
+  enregistrerActionSalesnav: vi.fn(),
 }));
 vi.mock('../../api.js', () => api);
 vi.mock('../SalesnavMessages.js', () => ({
-  SalesnavMessages: () => <div>Messages fictifs</div>,
+  SalesnavMessages: () => <div>Éditeur de messages fictif</div>,
 }));
 
-import { SalesnavRadar, type AffaireSalesnav } from './SalesnavRadar.js';
+import { SalesnavRadar } from './SalesnavRadar.js';
 
 const reglages = (quotaJour = 8, pause = false): ReglagesSalesnav => ({
   quotaJour,
@@ -26,20 +29,41 @@ const reglages = (quotaJour = 8, pause = false): ReglagesSalesnav => ({
   cible: 12,
   niveau: 'normal',
 });
-const indicateurs = (envoyees = 0): IndicateursSalesnav => ({
-  jour: { demande_envoyee: envoyees, demande_recue: 0, message_envoye: 0, reponse_recue: 0 },
-  semaine: { demande_envoyee: envoyees, demande_recue: 0, message_envoye: 0, reponse_recue: 0 },
-  quotaJour: 8,
-  restantAujourdhui: 8 - envoyees,
-  pause: false,
-});
-const affaire = (id: string, etape: number): AffaireSalesnav => ({
+const prospect = (
+  id: string,
+  statut: ProspectSalesnav['statut'],
+  extra: Partial<ProspectSalesnav> = {},
+): ProspectSalesnav => ({
   id,
-  titre: `Affaire ${id}`,
-  entreprise: `Entreprise ${id}`,
-  contact: `Contact ${id}`,
-  etape,
-  lien: `#/demo/fiche/affaire/${id}`,
+  nom: `Personne ${id}`,
+  fonction: 'Gérant',
+  entreprise: `Atelier ${id}`,
+  lienLinkedin: `https://www.linkedin.com/in/fictif-${id}`,
+  cible: 'Cible fictive',
+  statut,
+  nbMessages: 0,
+  opportuniteId: null,
+  aRetirer: false,
+  message: null,
+  ...extra,
+});
+const pipe = (
+  prospects: ProspectSalesnav[] = [],
+  extra: Partial<PipeSalesnav> = {},
+): PipeSalesnav => ({
+  stats: {
+    demandesEnvoyees: 20,
+    acceptees: 9,
+    tauxAcceptation: 45,
+    messagesEnvoyes: 12,
+    reponses: 3,
+    tauxReponse: 33.3,
+  },
+  disponibles: 40,
+  joursAvantRetrait: 21,
+  cibles: ['Cible fictive'],
+  prospects,
+  ...extra,
 });
 
 describe('SalesnavRadar', () => {
@@ -48,168 +72,203 @@ describe('SalesnavRadar', () => {
     vi.resetAllMocks();
   });
 
-  const monter = async (affaires: AffaireSalesnav[] = [], r = reglages()) => {
+  const monter = async (p: PipeSalesnav = pipe(), r = reglages()) => {
+    api.fetchPipeSalesnav.mockResolvedValue(p);
     api.fetchReglagesSalesnav.mockResolvedValue(r);
-    api.fetchIndicateursSalesnav.mockResolvedValue(indicateurs());
-    const onChange = vi.fn();
     const onRetour = vi.fn();
-    render(
-      <SalesnavRadar slug="demo" affaires={affaires} onRetour={onRetour} onChange={onChange} />,
-    );
-    await screen.findByText('8 par jour · 40 par semaine').catch(() => undefined);
-    return { onChange, onRetour };
+    render(<SalesnavRadar slug="demo" onRetour={onRetour} />);
+    await screen.findByLabelText('Statistiques SalesNav');
+    await waitFor(() => expect(api.fetchPipeSalesnav).toHaveBeenCalled());
+    return { onRetour };
   };
 
-  it('affiche le quota enregistré et la valeur recommandée', async () => {
-    await monter([], reglages(12));
-    expect(await screen.findByText('12 par jour · 60 par semaine')).toBeTruthy();
-    expect(screen.getByText(/Recommandé au départ : 8 par jour, puis 12/)).toBeTruthy();
+  it('affiche les statistiques classiques d’une campagne', async () => {
+    await monter();
+    const stats = await screen.findByLabelText('Statistiques SalesNav');
+    await waitFor(() => expect(within(stats).getByText('20')).toBeTruthy());
+    expect(within(stats).getByText('Demandes envoyées')).toBeTruthy();
+    expect(within(stats).getByText('45 %')).toBeTruthy();
+    expect(within(stats).getByText('9 connexions')).toBeTruthy();
+    expect(within(stats).getByText('12')).toBeTruthy();
+    expect(within(stats).getByText('33,3 % des connectés')).toBeTruthy();
   });
 
-  it('enregistre le quota choisi avec le curseur', async () => {
+  it('range les personnes dans les colonnes du pipe', async () => {
+    await monter(
+      pipe([
+        prospect('a', 'propose'),
+        prospect('b', 'demande_envoyee'),
+        prospect('c', 'connecte'),
+        prospect('d', 'a_repondu'),
+        prospect('e', 'sans_reponse'),
+      ]),
+    );
+    for (const [colonne, nom] of [
+      ['Proposés', 'Personne a'],
+      ['Demande envoyée', 'Personne b'],
+      ['Connectés', 'Personne c'],
+      ['Ont répondu', 'Personne d'],
+      ['Sans réponse', 'Personne e'],
+    ] as const) {
+      const c = await screen.findByRole('region', { name: colonne });
+      expect(within(c).getByText(nom)).toBeTruthy();
+    }
+  });
+
+  it('propose les profils du jour et dit combien il en manque', async () => {
+    await monter();
+    api.proposerSalesnav.mockResolvedValue({ proposes: 7, manque: 3 });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Proposer des profils pour aujourd’hui' }),
+    );
+    expect(await screen.findByText(/7 profils proposés\. Il en manque 3/)).toBeTruthy();
+    expect(screen.getByText('40 disponibles dans la Base des suspects')).toBeTruthy();
+  });
+
+  it('affiche le message à envoyer, le copie, et signale ce qui manque', async () => {
+    const ecrire = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText: ecrire } });
+    await monter(
+      pipe([
+        prospect('a', 'propose', {
+          message: {
+            etape: 'invitation',
+            texte: 'Bonjour Alex, chez Atelier a ?',
+            manquantes: [],
+            longueur: 30,
+          },
+        }),
+        prospect('b', 'connecte', {
+          message: {
+            etape: 'acceptation',
+            texte: 'Merci {prénom}.',
+            manquantes: ['prenom'],
+            longueur: 15,
+          },
+        }),
+      ]),
+    );
+    expect(await screen.findByText('Note d’invitation')).toBeTruthy();
+    expect(screen.getByText('À compléter : prenom.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copier le message pour Personne a' }));
+    await waitFor(() => expect(ecrire).toHaveBeenCalledWith('Bonjour Alex, chez Atelier a ?'));
+  });
+
+  it('suit une personne : demande envoyée, connectée, message, réponse', async () => {
+    api.actionProspectSalesnav.mockResolvedValue({ ok: true, opportuniteCreee: false });
+    await monter(
+      pipe([prospect('a', 'propose'), prospect('b', 'demande_envoyee'), prospect('c', 'connecte')]),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Demande envoyée' }));
+    await waitFor(() =>
+      expect(api.actionProspectSalesnav).toHaveBeenCalledWith('demo', 'a', 'demande'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Connecté(e)' }));
+    await waitFor(() =>
+      expect(api.actionProspectSalesnav).toHaveBeenCalledWith('demo', 'b', 'connecte'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Message envoyé' }));
+    await waitFor(() =>
+      expect(api.actionProspectSalesnav).toHaveBeenCalledWith('demo', 'c', 'message'),
+    );
+  });
+
+  it('annonce l’opportunité créée dans le Radar à la première réponse', async () => {
+    api.actionProspectSalesnav.mockResolvedValue({ ok: true, opportuniteCreee: true });
+    await monter(pipe([prospect('c', 'connecte')]));
+    fireEvent.click(await screen.findByRole('button', { name: 'A répondu' }));
+    expect(await screen.findByText(/une opportunité a été créée dans le Radar/)).toBeTruthy();
+    expect(api.actionProspectSalesnav).toHaveBeenCalledWith('demo', 'c', 'reponse');
+  });
+
+  it('range sans réponse, écarte, et signale les demandes à retirer', async () => {
+    api.actionProspectSalesnav.mockResolvedValue({ ok: true, opportuniteCreee: false });
+    await monter(
+      pipe([prospect('a', 'propose'), prospect('b', 'demande_envoyee', { aRetirer: true })]),
+    );
+    expect(await screen.findByText('À retirer', { selector: 'span.chip' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sans réponse' }));
+    await waitFor(() =>
+      expect(api.actionProspectSalesnav).toHaveBeenCalledWith('demo', 'b', 'sans-reponse'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Écarter' }));
+    await waitFor(() =>
+      expect(api.actionProspectSalesnav).toHaveBeenCalledWith('demo', 'a', 'ecarter'),
+    );
+  });
+
+  it('affiche le refus du quota', async () => {
+    api.actionProspectSalesnav.mockRejectedValue(new Error('Quota atteint : 8 demandes par jour.'));
+    await monter(pipe([prospect('a', 'propose')]));
+    fireEvent.click(await screen.findByRole('button', { name: 'Demande envoyée' }));
+    expect(await screen.findByText(/Quota atteint/)).toBeTruthy();
+  });
+
+  it('choisit la cible des messages d’une personne', async () => {
+    api.choisirCibleSalesnav.mockResolvedValue({ ok: true });
+    await monter(pipe([prospect('a', 'propose', { cible: null })]));
+    fireEvent.change(await screen.findByLabelText('Cible de Personne a'), {
+      target: { value: 'Cible fictive' },
+    });
+    await waitFor(() =>
+      expect(api.choisirCibleSalesnav).toHaveBeenCalledWith('demo', 'a', 'Cible fictive'),
+    );
+  });
+
+  it('ajoute un profil par son lien', async () => {
+    api.ajouterProspectSalesnav.mockResolvedValue({ id: 'n' });
+    await monter();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter un profil' }));
+    fireEvent.change(screen.getByLabelText('Lien du profil'), {
+      target: { value: 'https://www.linkedin.com/in/nouveau-fictif' },
+    });
+    fireEvent.change(screen.getByLabelText('Nom de la personne'), {
+      target: { value: 'Alex Fictif' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    await waitFor(() =>
+      expect(api.ajouterProspectSalesnav).toHaveBeenCalledWith('demo', {
+        lien: 'https://www.linkedin.com/in/nouveau-fictif',
+        nom: 'Alex Fictif',
+      }),
+    );
+  });
+
+  it('règle le quota avec le curseur, avertit au-delà de 15 et met en pause', async () => {
     await monter();
     api.enregistrerReglagesSalesnav.mockResolvedValue(reglages(10));
     const curseur = await screen.findByLabelText('Demandes par jour');
-    fireEvent.change(curseur, { target: { value: '10' } });
-    expect(screen.getByText('10 par jour · 50 par semaine')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le quota' }));
-    await waitFor(() =>
-      expect(api.enregistrerReglagesSalesnav).toHaveBeenCalledWith('demo', { quotaJour: 10 }),
-    );
-  });
-
-  it('avertit au-delà de 15 par jour et plus fort au-delà de 20', async () => {
-    await monter();
-    const curseur = await screen.findByLabelText('Demandes par jour');
-    expect(screen.queryByRole('alert')).toBeNull();
     fireEvent.change(curseur, { target: { value: '16' } });
     expect(screen.getByRole('alert').textContent).toMatch(/Au-delà de 15 demandes/);
     fireEvent.change(curseur, { target: { value: '21' } });
     expect(screen.getByRole('alert').textContent).toMatch(/Plus de 20 demandes/);
-  });
-
-  it('met le canal en pause', async () => {
-    await monter();
-    api.enregistrerReglagesSalesnav.mockResolvedValue(reglages(8, true));
-    fireEvent.click(await screen.findByLabelText('Mettre le canal en pause'));
+    fireEvent.change(curseur, { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le quota' }));
+    await waitFor(() =>
+      expect(api.enregistrerReglagesSalesnav).toHaveBeenCalledWith('demo', { quotaJour: 10 }),
+    );
+    fireEvent.click(screen.getByLabelText('Mettre le canal en pause'));
     await waitFor(() =>
       expect(api.enregistrerReglagesSalesnav).toHaveBeenCalledWith('demo', { pause: true }),
     );
   });
 
-  it('compte les opportunités par étape du Radar', async () => {
-    await monter([affaire('a', 0), affaire('b', 0), affaire('c', 3)]);
-    const bloc = screen.getByLabelText('Avancement des opportunités SalesNav');
-    expect(within(bloc).getByText('À contacter').previousSibling?.textContent).toBe('2');
-    expect(within(bloc).getByText('Ont répondu').previousSibling?.textContent).toBe('1');
-    expect(within(bloc).getByText('À relancer').previousSibling?.textContent).toBe('0');
-  });
-
-  it('fait avancer une opportunité seule', async () => {
-    const { onChange } = await monter([affaire('a', 0)]);
-    api.patchFiche.mockResolvedValue({});
-    fireEvent.change(screen.getByLabelText('Étape de Affaire a'), { target: { value: '1' } });
-    await waitFor(() =>
-      expect(api.patchFiche).toHaveBeenCalledWith('demo', 'affaire', 'a', {
-        radarEtapeManuelle: 1,
-      }),
-    );
-    await waitFor(() => expect(onChange).toHaveBeenCalled());
-  });
-
-  it('fait avancer plusieurs opportunités à la fois', async () => {
-    await monter([affaire('a', 0), affaire('b', 0), affaire('c', 0)]);
-    api.patchFiche.mockResolvedValue({});
-    fireEvent.click(screen.getByLabelText('Sélectionner Affaire a'));
-    fireEvent.click(screen.getByLabelText('Sélectionner Affaire c'));
-    fireEvent.change(screen.getByLabelText('Étape à appliquer'), { target: { value: '2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Appliquer' }));
-    await waitFor(() => expect(api.patchFiche).toHaveBeenCalledTimes(2));
-    expect(api.patchFiche).toHaveBeenCalledWith('demo', 'affaire', 'a', { radarEtapeManuelle: 2 });
-    expect(api.patchFiche).toHaveBeenCalledWith('demo', 'affaire', 'c', { radarEtapeManuelle: 2 });
-  });
-
-  it('sort une sélection du canal SalesNav', async () => {
-    await monter([affaire('a', 0)]);
-    api.patchFiche.mockResolvedValue({});
-    fireEvent.click(screen.getByLabelText('Sélectionner Affaire a'));
-    fireEvent.click(screen.getByRole('button', { name: 'Sortir de SalesNav' }));
-    await waitFor(() =>
-      expect(api.patchFiche).toHaveBeenCalledWith('demo', 'affaire', 'a', {
-        radarCanalManuel: 'À préciser',
-      }),
-    );
-  });
-
-  it('signale les opportunités non mises à jour et revient au Radar', async () => {
-    const { onRetour } = await monter([affaire('a', 0)]);
-    api.patchFiche.mockRejectedValue(new Error('refus'));
-    fireEvent.click(screen.getByLabelText('Sélectionner Affaire a'));
-    fireEvent.click(screen.getByRole('button', { name: 'Appliquer' }));
-    expect(await screen.findByText(/n’a pas été mise à jour/)).toBeTruthy();
+  it('ouvre les messages dans une fenêtre, sans les mettre au bas de la page', async () => {
+    const { onRetour } = await monter();
+    expect(screen.queryByText('Éditeur de messages fictif')).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Messages' }));
+    expect(await screen.findByText('Éditeur de messages fictif')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '← Retour au Radar' }));
     expect(onRetour).toHaveBeenCalled();
   });
 
-  it("enregistre une demande envoyée et place l'opportunité à l'étape Contactées", async () => {
-    const { onChange } = await monter([affaire('a', 0)]);
-    api.enregistrerActionSalesnav.mockResolvedValue(indicateurs(1));
-    api.patchFiche.mockResolvedValue({});
-    fireEvent.click(screen.getByRole('button', { name: 'Demande envoyée à Affaire a' }));
-    await waitFor(() =>
-      expect(api.enregistrerActionSalesnav).toHaveBeenCalledWith('demo', {
-        type: 'demande_envoyee',
-        opportuniteId: 'a',
-      }),
-    );
-    await waitFor(() =>
-      expect(api.patchFiche).toHaveBeenCalledWith('demo', 'affaire', 'a', {
-        radarEtapeManuelle: 1,
-      }),
-    );
-    expect(onChange).toHaveBeenCalled();
-    expect(await screen.findByText('1 / 8 demandes aujourd’hui')).toBeTruthy();
-  });
-
-  it('ne fait pas reculer une opportunité qui a déjà répondu quand on note un message envoyé', async () => {
-    await monter([affaire('a', 3)]);
-    api.enregistrerActionSalesnav.mockResolvedValue(indicateurs());
-    fireEvent.click(screen.getByRole('button', { name: 'Message envoyé à Affaire a' }));
-    await waitFor(() => expect(api.enregistrerActionSalesnav).toHaveBeenCalled());
-    expect(api.patchFiche).not.toHaveBeenCalled();
-  });
-
-  it("place l'opportunité à Ont répondu quand une réponse est reçue", async () => {
-    await monter([affaire('a', 1)]);
-    api.enregistrerActionSalesnav.mockResolvedValue(indicateurs());
-    api.patchFiche.mockResolvedValue({});
-    fireEvent.click(screen.getByRole('button', { name: 'Réponse reçue de Affaire a' }));
-    await waitFor(() =>
-      expect(api.patchFiche).toHaveBeenCalledWith('demo', 'affaire', 'a', {
-        radarEtapeManuelle: 3,
-      }),
-    );
-  });
-
-  it('affiche le refus du quota sans toucher à l’opportunité', async () => {
-    await monter([affaire('a', 0)]);
-    api.enregistrerActionSalesnav.mockRejectedValue(
-      new Error('Quota atteint : 8 demandes par jour.'),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Demande envoyée à Affaire a' }));
-    expect(await screen.findByText(/Quota atteint/)).toBeTruthy();
-    expect(api.patchFiche).not.toHaveBeenCalled();
-  });
-
-  it('enregistre une demande reçue sans opportunité', async () => {
+  it('note une demande de connexion reçue', async () => {
+    api.enregistrerActionSalesnav.mockResolvedValue({});
     await monter();
-    api.enregistrerActionSalesnav.mockResolvedValue(indicateurs());
-    fireEvent.click(screen.getByRole('button', { name: '+ Demande reçue' }));
+    fireEvent.click(await screen.findByRole('button', { name: '+ Demande reçue' }));
     await waitFor(() =>
-      expect(api.enregistrerActionSalesnav).toHaveBeenCalledWith('demo', {
-        type: 'demande_recue',
-        opportuniteId: null,
-      }),
+      expect(api.enregistrerActionSalesnav).toHaveBeenCalledWith('demo', { type: 'demande_recue' }),
     );
+    expect(await screen.findByText('Demande reçue enregistrée.')).toBeTruthy();
   });
 });

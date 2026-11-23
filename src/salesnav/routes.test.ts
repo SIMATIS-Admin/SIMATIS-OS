@@ -179,4 +179,87 @@ describe('Routes des messages Sales Navigator', () => {
       (await app.inject({ method: 'GET', url: '/api/i/inconnue/salesnav/indicateurs' })).statusCode,
     ).toBe(404);
   });
+
+  it('suit une personne dans le pipe, propose le bon message et crée l’opportunité à la réponse', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: `${base}/reglages`,
+      payload: { quotaJour: 25, pause: false },
+    });
+    await put(`${base}/modeles/cible-pipe/invitation`, 'Bonjour {prénom}, chez {entreprise} ?');
+    await put(`${base}/modeles/cible-pipe/acceptation`, 'Merci {prénom}.');
+    const ajout = await app.inject({
+      method: 'POST',
+      url: `${base}/pipe/prospects`,
+      payload: {
+        lien: 'https://www.linkedin.com/in/personne-fictive/',
+        nom: 'Camille Fictive',
+        entreprise: 'Atelier Fictif',
+        cible: 'cible-pipe',
+      },
+    });
+    expect(ajout.statusCode).toBe(201);
+    const { id } = ajout.json<{ id: string }>();
+    const doublon = await app.inject({
+      method: 'POST',
+      url: `${base}/pipe/prospects`,
+      payload: { lien: 'https://www.linkedin.com/in/personne-fictive', nom: 'Camille Fictive' },
+    });
+    expect(doublon.statusCode).toBe(400);
+
+    const lire = async () =>
+      (await app.inject({ method: 'GET', url: `${base}/pipe` })).json<{
+        stats: { demandesEnvoyees: number; acceptees: number };
+        prospects: {
+          id: string;
+          statut: string;
+          message: { etape: string; texte: string } | null;
+        }[];
+      }>();
+    let p = (await lire()).prospects.find((x) => x.id === id)!;
+    expect(p.statut).toBe('propose');
+    expect(p.message).toMatchObject({
+      etape: 'invitation',
+      texte: 'Bonjour Camille, chez Atelier Fictif ?',
+    });
+
+    const agir = (action: string) =>
+      app.inject({ method: 'POST', url: `${base}/pipe/prospects/${id}/${action}` });
+    expect((await agir('connecte')).statusCode).toBe(400);
+    expect((await agir('demande')).statusCode).toBe(200);
+    expect((await agir('connecte')).statusCode).toBe(200);
+    p = (await lire()).prospects.find((x) => x.id === id)!;
+    expect(p.message).toMatchObject({ etape: 'acceptation', texte: 'Merci Camille.' });
+    expect((await agir('message')).statusCode).toBe(200);
+    const reponse = await agir('reponse');
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toMatchObject({ ok: true, opportuniteCreee: true });
+    const vue = await lire();
+    expect(vue.prospects.find((x) => x.id === id)?.statut).toBe('a_repondu');
+    expect(vue.stats).toMatchObject({ demandesEnvoyees: 1, acceptees: 1 });
+    const pipeline = await app.inject({ method: 'GET', url: '/api/i/sn-routes/pipeline' });
+    expect(
+      pipeline
+        .json<{ opportunites: { canalRadar: string | null }[] }>()
+        .opportunites.some((o) => o.canalRadar === 'SalesNav'),
+    ).toBe(true);
+    expect((await agir('inconnue')).statusCode).toBe(404);
+  });
+
+  it('change la cible d’un profil et propose les profils du jour', async () => {
+    const ajout = await app.inject({
+      method: 'POST',
+      url: `${base}/pipe/prospects`,
+      payload: { lien: 'https://www.linkedin.com/in/autre-fictif', nom: 'Alex Fictif' },
+    });
+    const { id } = ajout.json<{ id: string }>();
+    const r = await app.inject({
+      method: 'PATCH',
+      url: `${base}/pipe/prospects/${id}`,
+      payload: { cible: 'cible-pipe' },
+    });
+    expect(r.statusCode).toBe(200);
+    const vide = await app.inject({ method: 'POST', url: `${base}/pipe/proposer` });
+    expect(vide.json()).toMatchObject({ proposes: 0 });
+  });
 });

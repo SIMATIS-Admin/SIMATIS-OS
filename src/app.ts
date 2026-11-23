@@ -199,7 +199,7 @@ export function buildApp({
   registerEnregistrementRoutes(app, { db });
   registerVisioRoutes(app, { db, secretsDir, realWrites, googleFetch, hote: visioNomHote });
   registerProspectionRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
-  registerSalesnavRoutes(app, { db });
+  registerSalesnavRoutes(app, { db, connexionDeps: { secretsDir, realWrites } });
   registerAtelierRoutes(app, { db });
   registerPartenairesRoutes(app, { db, secretsDir, realWrites, relais });
   registerMcp(app, { db, pool, lectureRole, realWrites, secretsDir });

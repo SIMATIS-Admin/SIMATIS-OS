@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import type { ConnexionDeps } from '../connexions/service.js';
+import { ajouterAuRadar } from '../crm/ajout-radar.js';
 import type { Database } from '../db.js';
 import { withInstance } from '../db/context.js';
 import { getInstanceBySlug } from '../instances/service.js';
@@ -17,11 +19,29 @@ import {
   sauverSurcharge,
   supprimerCampagne,
 } from './modeles.js';
+import {
+  ajouterProspect,
+  choisirCible,
+  disponiblesDansLaBase,
+  ecarter,
+  enregistrerMessage,
+  JOURS_AVANT_RETRAIT,
+  lierOpportunite,
+  listerProspects,
+  marquerConnecte,
+  marquerDemandeEnvoyee,
+  marquerReponse,
+  marquerSansReponse,
+  proposerDuJour,
+  ProspectIntrouvable,
+  ProspectInvalide,
+  statsPipe,
+} from './prospects.js';
 import { ActionInvalide, ActionRefusee, enregistrerAction, indicateurs } from './actions.js';
 import { lireReglages, ReglageInvalide, sauverReglages } from './reglages.js';
 import { ETAPES_SALESNAV } from './schema.js';
 
-export type SalesnavRoutesDeps = { db: Database };
+export type SalesnavRoutesDeps = { db: Database; connexionDeps: ConnexionDeps };
 
 const texteSchema = z.object({ texte: z.string().max(10_000) });
 const campagneSchema = z.object({ nom: z.string().max(200), icp: z.string().max(200) });
@@ -34,16 +54,34 @@ const actionSchema = z.object({
   opportuniteId: z.uuid().nullable().optional(),
   campagneId: z.uuid().nullable().optional(),
 });
+const prospectSchema = z.object({
+  lien: z.string().max(500),
+  nom: z.string().max(200),
+  fonction: z.string().max(200).nullable().optional(),
+  entreprise: z.string().max(200).nullable().optional(),
+  cible: z.string().max(200).nullable().optional(),
+});
+const cibleSchema = z.object({ cible: z.string().max(200).nullable() });
+const ACTIONS_PIPE = [
+  'demande',
+  'connecte',
+  'message',
+  'reponse',
+  'sans-reponse',
+  'ecarter',
+] as const;
 const variablesSchema = z.object({
   prenom: z.string().max(200).optional(),
   entreprise: z.string().max(200).optional(),
 });
 
 export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoutesDeps): void {
-  const { db } = deps;
+  const { db, connexionDeps } = deps;
 
   const erreur = (e: unknown, reply: FastifyReply) => {
-    if (e instanceof CampagneIntrouvable) return reply.code(404).send({ error: e.message });
+    if (e instanceof CampagneIntrouvable || e instanceof ProspectIntrouvable)
+      return reply.code(404).send({ error: e.message });
+    if (e instanceof ProspectInvalide) return reply.code(400).send({ error: e.message });
     if (e instanceof ActionRefusee) return reply.code(409).send({ error: e.message });
     if (e instanceof ActionInvalide) return reply.code(400).send({ error: e.message });
     if (e instanceof ModeleInvalide || e instanceof ReglageInvalide)
@@ -77,6 +115,127 @@ export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoute
       const p = reglagesSchema.safeParse(request.body);
       if (!p.success) return invalide(reply, 'Réglage invalide');
       return dansInstance(request.params.slug, reply, (tx) => sauverReglages(tx, p.data));
+    },
+  );
+
+  // Le pipe : les personnes proposées ou suivies, les statistiques de la campagne et, pour chaque
+  // personne, le message à envoyer ensuite (modèle par défaut de sa cible, variables remplies).
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/salesnav/pipe', (request, reply) =>
+    dansInstance(request.params.slug, reply, async (tx) => {
+      const prospects = await listerProspects(tx);
+      const stats = await statsPipe(tx);
+      const modeles = await listerModeles(tx);
+      const disponibles = await disponiblesDansLaBase(tx);
+      const texte = (cible: string | null, etape: string) =>
+        modeles.find((m) => m.icp === cible && m.etape === etape)?.texte ?? null;
+      return {
+        stats,
+        disponibles,
+        joursAvantRetrait: JOURS_AVANT_RETRAIT,
+        cibles: [...new Set(modeles.map((m) => m.icp))],
+        prospects: prospects.map((p) => {
+          const etape =
+            p.statut === 'propose'
+              ? 'invitation'
+              : p.statut === 'connecte'
+                ? (['acceptation', 'relance1', 'relance2'][p.nbMessages] ?? null)
+                : null;
+          const brut = etape ? texte(p.cible, etape) : null;
+          return {
+            ...p,
+            message:
+              etape && brut
+                ? {
+                    etape,
+                    ...rendre(brut, {
+                      prenom: p.nom.split(' ')[0],
+                      entreprise: p.entreprise ?? undefined,
+                    }),
+                  }
+                : null,
+          };
+        }),
+      };
+    }),
+  );
+
+  app.post<{ Params: { slug: string } }>('/api/i/:slug/salesnav/pipe/proposer', (request, reply) =>
+    dansInstance(request.params.slug, reply, (tx) => proposerDuJour(tx)),
+  );
+
+  app.post<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/salesnav/pipe/prospects',
+    async (request, reply) => {
+      const p = prospectSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, 'Profil invalide');
+      const r = await dansInstance(request.params.slug, reply, (tx) => ajouterProspect(tx, p.data));
+      return reply.sent ? undefined : reply.code(201).send(r);
+    },
+  );
+
+  app.patch<{ Params: { slug: string; id: string }; Body: unknown }>(
+    '/api/i/:slug/salesnav/pipe/prospects/:id',
+    (request, reply) => {
+      const p = cibleSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, 'Cible invalide');
+      return dansInstance(request.params.slug, reply, async (tx) => {
+        await choisirCible(tx, request.params.id, p.data.cible);
+        return { ok: true };
+      });
+    },
+  );
+
+  app.post<{ Params: { slug: string; id: string; action: string } }>(
+    '/api/i/:slug/salesnav/pipe/prospects/:id/:action',
+    async (request, reply) => {
+      const { id, action } = request.params;
+      if (!(ACTIONS_PIPE as readonly string[]).includes(action))
+        return reply.code(404).send({ error: 'Action inconnue' });
+      const instance = await getInstanceBySlug(db, request.params.slug);
+      if (!instance) return reply.code(404).send({ error: 'Instance inconnue' });
+      try {
+        const avant = await withInstance(db, instance.id, async (tx) => {
+          if (action === 'demande') await marquerDemandeEnvoyee(tx, id);
+          else if (action === 'connecte') await marquerConnecte(tx, id);
+          else if (action === 'message') await enregistrerMessage(tx, id);
+          else if (action === 'reponse') return marquerReponse(tx, id);
+          else if (action === 'sans-reponse') await marquerSansReponse(tx, id);
+          else await ecarter(tx, id);
+          return null;
+        });
+        // À la première réponse, la personne devient une opportunité du Radar (canal SalesNav).
+        let opportuniteCreee = false;
+        if (avant && !avant.opportuniteId) {
+          const [prenom, ...reste] = avant.nom.split(' ');
+          try {
+            const r = await ajouterAuRadar(
+              db,
+              instance,
+              {
+                prenom: reste.length ? prenom : null,
+                nom: reste.length ? reste.join(' ') : (prenom ?? avant.nom),
+                entreprise: avant.entreprise,
+                fonction: avant.fonction,
+                lienLinkedin: avant.lienLinkedin,
+                origine: 'SalesNav',
+                canal: 'SalesNav',
+                etape: 3,
+                note: 'Réponse reçue sur Sales Navigator.',
+              },
+              connexionDeps,
+            );
+            if ('id' in r) {
+              await withInstance(db, instance.id, (tx) => lierOpportunite(tx, id, r.id));
+              opportuniteCreee = true;
+            }
+          } catch (e) {
+            request.log.warn({ err: e }, 'Opportunité SalesNav non créée');
+          }
+        }
+        return { ok: true, opportuniteCreee };
+      } catch (e) {
+        return erreur(e, reply);
+      }
     },
   );
 

@@ -50,6 +50,7 @@ import {
   salesnavActions,
   salesnavCampagnes,
   salesnavModeles,
+  salesnavProspects,
   salesnavReglages,
 } from '../salesnav/schema.js';
 import {
@@ -117,6 +118,7 @@ export const METIER_TABLES = [
   salesnavActions,
   salesnavCampagnes,
   salesnavModeles,
+  salesnavProspects,
   salesnavReglages,
   activites,
   taches,

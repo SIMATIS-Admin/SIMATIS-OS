@@ -1,41 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  actionProspectSalesnav,
+  ajouterProspectSalesnav,
+  choisirCibleSalesnav,
   enregistrerActionSalesnav,
   enregistrerReglagesSalesnav,
-  fetchIndicateursSalesnav,
+  fetchPipeSalesnav,
   fetchReglagesSalesnav,
-  patchFiche,
-  type IndicateursSalesnav,
+  proposerSalesnav,
+  type ActionProspectSalesnav,
+  type PipeSalesnav,
+  type ProspectSalesnav,
   type ReglagesSalesnav,
-  type TypeActionSalesnav,
+  type StatutProspectSalesnav,
 } from '../../api.js';
+import { Fenetre } from '../Fenetre.js';
 import { SalesnavMessages } from '../SalesnavMessages.js';
 
-export type AffaireSalesnav = {
-  id: string;
-  titre: string;
-  entreprise: string;
-  contact: string;
-  etape: number;
-  lien: string;
-};
+const message = (e: unknown) => (e instanceof Error ? e.message : 'Une erreur est survenue.');
 
-// Étape du Radar où une action place l'opportunité (sans jamais la faire reculer).
-const ETAPE_APRES: Partial<Record<TypeActionSalesnav, number>> = {
-  demande_envoyee: 1,
-  message_envoye: 1,
-  reponse_recue: 3,
-};
-const COMPTEURS: { type: TypeActionSalesnav; libelle: string }[] = [
-  { type: 'demande_envoyee', libelle: 'Demandes envoyées' },
-  { type: 'demande_recue', libelle: 'Demandes reçues' },
-  { type: 'message_envoye', libelle: 'Messages envoyés' },
-  { type: 'reponse_recue', libelle: 'Réponses reçues' },
+const COLONNES: { statut: StatutProspectSalesnav; titre: string; aide: string }[] = [
+  { statut: 'propose', titre: 'Proposés', aide: 'À valider aujourd’hui' },
+  { statut: 'demande_envoyee', titre: 'Demande envoyée', aide: 'En attente d’acceptation' },
+  { statut: 'connecte', titre: 'Connectés', aide: 'Vous pouvez leur écrire' },
+  { statut: 'a_repondu', titre: 'Ont répondu', aide: 'Opportunités du Radar' },
+  { statut: 'sans_reponse', titre: 'Sans réponse', aide: 'À retirer' },
 ];
 
-export const ETAPES_RADAR = ['À contacter', 'Contactées', 'À relancer', 'Ont répondu'] as const;
-
-const message = (e: unknown) => (e instanceof Error ? e.message : 'Une erreur est survenue.');
+const pct = (v: number | null) => (v === null ? '–' : `${String(v).replace('.', ',')} %`);
 
 const AVERTISSEMENTS: Record<ReglagesSalesnav['niveau'], string> = {
   normal: '',
@@ -45,29 +37,30 @@ const AVERTISSEMENTS: Record<ReglagesSalesnav['niveau'], string> = {
     'Plus de 20 demandes par jour : le risque de restriction du compte est élevé. Baissez le quota.',
 };
 
-// Le quartier SalesNav du Radar : le quota de demandes par jour, l'avancement des opportunités qui
-// arrivent par Sales Navigator (une par une ou par lot) et les messages à envoyer. Les opportunités
-// restent celles du Radar ; cet écran ne fait que les regrouper par canal.
-export function SalesnavRadar({
-  slug,
-  affaires,
-  onRetour,
-  onChange,
-}: {
-  slug: string;
-  affaires: AffaireSalesnav[];
-  onRetour: () => void;
-  onChange: () => void;
-}) {
+// La page SalesNav : une campagne de prospection LinkedIn menée à la main, un profil à la fois.
+// Chaque jour l'OS propose une dizaine de profils ; on valide chacun, puis on suit la demande, la
+// connexion, les messages et la réponse. Les chiffres sont ceux d'une campagne LinkedIn classique.
+export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () => void }) {
+  const [pipe, setPipe] = useState<PipeSalesnav | null>(null);
   const [reglages, setReglages] = useState<ReglagesSalesnav | null>(null);
-  const [indic, setIndic] = useState<IndicateursSalesnav | null>(null);
   const [quota, setQuota] = useState(8);
-  const [selection, setSelection] = useState<Set<string>>(new Set());
-  const [etapeLot, setEtapeLot] = useState(1);
   const [erreur, setErreur] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [messages, setMessages] = useState(false);
+  const [ajout, setAjout] = useState(false);
+  const [lien, setLien] = useState('');
+  const [nom, setNom] = useState('');
+
+  const charger = useCallback(async () => {
+    try {
+      setPipe(await fetchPipeSalesnav(slug));
+    } catch (e) {
+      setErreur(message(e));
+    }
+  }, [slug]);
 
   useEffect(() => {
+    void charger();
     let actif = true;
     fetchReglagesSalesnav(slug).then(
       (r) => {
@@ -77,75 +70,204 @@ export function SalesnavRadar({
       },
       (e: unknown) => actif && setErreur(message(e)),
     );
-    fetchIndicateursSalesnav(slug).then(
-      (i) => actif && setIndic(i),
-      () => undefined,
-    );
     return () => {
       actif = false;
     };
-  }, [slug]);
+  }, [slug, charger]);
 
-  const enregistrer = async (r: { quotaJour?: number; pause?: boolean }) => {
+  const executer = async (fn: () => Promise<unknown>, succes?: string) => {
     setErreur(null);
+    setInfo(null);
     try {
+      await fn();
+      if (succes) setInfo(succes);
+      await charger();
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
+
+  const enregistrerReglages = (r: { quotaJour?: number; pause?: boolean }) =>
+    executer(async () => {
       const nouveau = await enregistrerReglagesSalesnav(slug, r);
       setReglages(nouveau);
       setQuota(nouveau.quotaJour);
-      setInfo('Réglage enregistré.');
-    } catch (e) {
-      setErreur(message(e));
-    }
-  };
+    }, 'Réglage enregistré.');
 
-  const agir = async (type: TypeActionSalesnav, affaire?: AffaireSalesnav) => {
-    setErreur(null);
-    setInfo(null);
-    try {
-      setIndic(await enregistrerActionSalesnav(slug, { type, opportuniteId: affaire?.id ?? null }));
-      const cible = ETAPE_APRES[type];
-      if (affaire && cible !== undefined && affaire.etape < cible)
-        await patchFiche(slug, 'affaire', affaire.id, { radarEtapeManuelle: cible });
-      setInfo('Action enregistrée.');
-      onChange();
-    } catch (e) {
-      setErreur(message(e));
-    }
-  };
-
-  const appliquer = async (ids: string[], champs: Record<string, unknown>) => {
-    setErreur(null);
-    setInfo(null);
-    const resultats = await Promise.allSettled(
-      ids.map((id) => patchFiche(slug, 'affaire', id, champs)),
-    );
-    const echecs = resultats.filter((r) => r.status === 'rejected').length;
-    if (echecs > 0)
-      setErreur(`${echecs} affaire${echecs > 1 ? 's n’ont' : ' n’a'} pas été mise à jour.`);
-    else setInfo(`${ids.length} affaire${ids.length > 1 ? 's mises' : ' mise'} à jour.`);
-    setSelection(new Set());
-    onChange();
-  };
-
-  const niveau = reglages
-    ? quota > 20
-      ? 'danger'
-      : quota > 15
-        ? 'attention'
-        : 'normal'
-    : 'normal';
-  const parEtape = ETAPES_RADAR.map((nom, i) => ({
-    nom,
-    nombre: affaires.filter((a) => a.etape === i).length,
-  }));
-  const bascule = (id: string) =>
-    setSelection((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
+  const agir = (p: ProspectSalesnav, action: ActionProspectSalesnav) =>
+    executer(async () => {
+      const r = await actionProspectSalesnav(slug, p.id, action);
+      if (action === 'reponse')
+        setInfo(
+          r.opportuniteCreee
+            ? 'Réponse enregistrée : une opportunité a été créée dans le Radar.'
+            : 'Réponse enregistrée.',
+        );
     });
-  const ids = [...selection];
+
+  const proposer = () =>
+    executer(async () => {
+      const r = await proposerSalesnav(slug);
+      setInfo(
+        r.proposes === 0
+          ? 'Rien à proposer pour le moment : traitez d’abord les profils proposés, ou le quota du jour est atteint.'
+          : `${r.proposes} profil${r.proposes > 1 ? 's' : ''} proposé${r.proposes > 1 ? 's' : ''}.` +
+              (r.manque > 0
+                ? ` Il en manque ${r.manque} : ajoutez des profils par leur lien.`
+                : ''),
+      );
+    });
+
+  const copier = async (texte: string) => {
+    try {
+      await navigator.clipboard.writeText(texte);
+      setInfo('Message copié.');
+    } catch {
+      setErreur('Copie impossible : sélectionnez le texte à la main.');
+    }
+  };
+
+  const niveau = quota > 20 ? 'danger' : quota > 15 ? 'attention' : 'normal';
+  const prospects = pipe?.prospects ?? [];
+  const stats = pipe?.stats;
+
+  const carte = (p: ProspectSalesnav) => (
+    <article key={p.id} className="sr-prospect" aria-label={p.nom}>
+      <header>
+        <a href={p.lienLinkedin} target="_blank" rel="noreferrer" className="sr-nom">
+          <strong>{p.nom}</strong>
+        </a>
+        <span className="muted small">
+          {[p.fonction, p.entreprise].filter(Boolean).join(' · ') || 'Poste non renseigné'}
+        </span>
+        {p.aRetirer && <span className="chip small sr-retirer">À retirer</span>}
+      </header>
+      {(p.statut === 'propose' || p.statut === 'connecte') && (
+        <label className="sr-cible">
+          <span className="small">Cible des messages</span>
+          <select
+            aria-label={`Cible de ${p.nom}`}
+            value={p.cible ?? ''}
+            onChange={(e) =>
+              void executer(() => choisirCibleSalesnav(slug, p.id, e.target.value || null))
+            }
+          >
+            <option value="">À choisir</option>
+            {(pipe?.cibles ?? []).map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {p.message && (
+        <div className="sr-message">
+          <p className="small">
+            {p.message.etape === 'invitation' ? 'Note d’invitation' : 'Message à envoyer'}
+          </p>
+          <p>{p.message.texte}</p>
+          {p.message.manquantes.length > 0 && (
+            <p className="small salesnav-erreur">
+              À compléter : {p.message.manquantes.join(', ')}.
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn sm"
+            aria-label={`Copier le message pour ${p.nom}`}
+            onClick={() => void copier(p.message!.texte)}
+          >
+            Copier
+          </button>
+        </div>
+      )}
+      {(p.statut === 'propose' || p.statut === 'connecte') && !p.message && (
+        <p className="small muted">
+          Choisissez la cible pour voir le message ; écrivez-le dans « Messages » s’il n’existe pas
+          encore.
+        </p>
+      )}
+      <div className="sr-actions">
+        {p.statut === 'propose' && (
+          <>
+            <a className="btn sm" href={p.lienLinkedin} target="_blank" rel="noreferrer">
+              Ouvrir le profil
+            </a>
+            <button
+              type="button"
+              className="btn sm primary"
+              onClick={() => void agir(p, 'demande')}
+            >
+              Demande envoyée
+            </button>
+            <button type="button" className="btn sm" onClick={() => void agir(p, 'ecarter')}>
+              Écarter
+            </button>
+          </>
+        )}
+        {p.statut === 'demande_envoyee' && (
+          <>
+            <button
+              type="button"
+              className="btn sm primary"
+              onClick={() => void agir(p, 'connecte')}
+            >
+              Connecté(e)
+            </button>
+            <button type="button" className="btn sm" onClick={() => void agir(p, 'reponse')}>
+              A répondu
+            </button>
+            <button type="button" className="btn sm" onClick={() => void agir(p, 'sans-reponse')}>
+              Sans réponse
+            </button>
+          </>
+        )}
+        {p.statut === 'connecte' && (
+          <>
+            <button
+              type="button"
+              className="btn sm primary"
+              onClick={() => void agir(p, 'message')}
+            >
+              Message envoyé
+            </button>
+            <button type="button" className="btn sm" onClick={() => void agir(p, 'reponse')}>
+              A répondu
+            </button>
+            <button type="button" className="btn sm" onClick={() => void agir(p, 'sans-reponse')}>
+              Sans réponse
+            </button>
+          </>
+        )}
+        {p.statut === 'a_repondu' && (
+          <>
+            <button type="button" className="btn sm" onClick={() => void agir(p, 'message')}>
+              Message envoyé
+            </button>
+            {p.opportuniteId && (
+              <a
+                className="btn sm"
+                href={`#/${slug}/fiche/affaire/${p.opportuniteId}?depuis=radar`}
+              >
+                Opportunité
+              </a>
+            )}
+          </>
+        )}
+        {p.statut === 'sans_reponse' && (
+          <button type="button" className="btn sm" onClick={() => void agir(p, 'ecarter')}>
+            Retirer
+          </button>
+        )}
+      </div>
+      {p.nbMessages > 0 && (
+        <p className="small muted">
+          {p.nbMessages} message{p.nbMessages > 1 ? 's' : ''} envoyé{p.nbMessages > 1 ? 's' : ''}
+        </p>
+      )}
+    </article>
+  );
 
   return (
     <section className="salesnav-radar" aria-label="SalesNav">
@@ -154,8 +276,25 @@ export function SalesnavRadar({
           ← Retour au Radar
         </button>
         <h2>SalesNav</h2>
-        <span className="muted small">
-          {affaires.length} opportunité{affaires.length > 1 ? 's' : ''}
+        <span className="sr-entete-actions">
+          <button
+            type="button"
+            className="btn"
+            onClick={() =>
+              void executer(
+                () => enregistrerActionSalesnav(slug, { type: 'demande_recue' }),
+                'Demande reçue enregistrée.',
+              )
+            }
+          >
+            + Demande reçue
+          </button>
+          <button type="button" className="btn" onClick={() => setAjout((v) => !v)}>
+            Ajouter un profil
+          </button>
+          <button type="button" className="btn" onClick={() => setMessages(true)}>
+            Messages
+          </button>
         </span>
       </header>
       {erreur && (
@@ -169,8 +308,29 @@ export function SalesnavRadar({
         </p>
       )}
 
+      <div className="sr-stats" aria-label="Statistiques SalesNav">
+        <div className="sr-etape">
+          <strong>{stats?.demandesEnvoyees ?? '–'}</strong>
+          <span>Demandes envoyées</span>
+        </div>
+        <div className="sr-etape">
+          <strong>{stats ? pct(stats.tauxAcceptation) : '–'}</strong>
+          <span>Acceptées en relation</span>
+          <small className="muted">{stats?.acceptees ?? 0} connexions</small>
+        </div>
+        <div className="sr-etape">
+          <strong>{stats?.messagesEnvoyes ?? '–'}</strong>
+          <span>Messages envoyés</span>
+        </div>
+        <div className="sr-etape">
+          <strong>{stats?.reponses ?? '–'}</strong>
+          <span>Réponses</span>
+          <small className="muted">{stats ? pct(stats.tauxReponse) : '–'} des connectés</small>
+        </div>
+      </div>
+
       <div className="sr-quota">
-        <h3>Demandes de connexion par jour</h3>
+        <h3>Demandes par jour</h3>
         <label>
           <span className="sr-valeur">
             {quota} par jour · {quota * 5} par semaine
@@ -187,7 +347,7 @@ export function SalesnavRadar({
         </label>
         <p className="muted small">
           Recommandé au départ : {reglages?.recommande ?? 8} par jour, puis {reglages?.cible ?? 12}{' '}
-          si le taux d’acceptation reste bon. Montez de 2 par semaine.
+          si le taux d’acceptation reste bon.
         </p>
         {AVERTISSEMENTS[niveau] && (
           <p role="alert" className={`sr-alerte sr-${niveau}`}>
@@ -199,7 +359,7 @@ export function SalesnavRadar({
             type="button"
             className="btn primary"
             disabled={!reglages || quota === reglages.quotaJour}
-            onClick={() => void enregistrer({ quotaJour: quota })}
+            onClick={() => void enregistrerReglages({ quotaJour: quota })}
           >
             Enregistrer le quota
           </button>
@@ -208,155 +368,80 @@ export function SalesnavRadar({
               type="checkbox"
               checked={reglages?.pause ?? false}
               disabled={!reglages}
-              onChange={(e) => void enregistrer({ pause: e.target.checked })}
+              onChange={(e) => void enregistrerReglages({ pause: e.target.checked })}
             />
             Mettre le canal en pause
           </label>
         </div>
       </div>
 
-      <div className="sr-compteurs" aria-label="Activité SalesNav">
-        {COMPTEURS.map((c) => (
-          <div key={c.type} className="sr-etape">
-            <strong>{indic ? indic.jour[c.type] : '–'}</strong>
-            <span>{c.libelle}</span>
-            <small className="muted">
-              aujourd’hui · {indic ? indic.semaine[c.type] : '–'} sur 7 jours
-            </small>
-          </div>
-        ))}
-        <div className="sr-compteurs-pied">
-          {indic && (
-            <span className="small">
-              {indic.jour.demande_envoyee} / {indic.quotaJour} demande
-              {indic.quotaJour > 1 ? 's' : ''} aujourd’hui
-              {indic.pause ? ' · canal en pause' : ''}
-            </span>
-          )}
-          <button type="button" className="btn" onClick={() => void agir('demande_recue')}>
-            + Demande reçue
+      {ajout && (
+        <form
+          className="sr-ajout"
+          aria-label="Ajouter un profil"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void executer(async () => {
+              await ajouterProspectSalesnav(slug, { lien, nom });
+              setLien('');
+              setNom('');
+              setAjout(false);
+            }, 'Profil ajouté aux profils proposés.');
+          }}
+        >
+          <input
+            aria-label="Lien du profil"
+            value={lien}
+            placeholder="Lien du profil LinkedIn ou Sales Navigator"
+            onChange={(e) => setLien(e.target.value)}
+          />
+          <input
+            aria-label="Nom de la personne"
+            value={nom}
+            placeholder="Nom"
+            onChange={(e) => setNom(e.target.value)}
+          />
+          <button type="submit" className="btn primary" disabled={!lien.trim() || !nom.trim()}>
+            Ajouter
           </button>
-        </div>
+        </form>
+      )}
+
+      <div className="sr-proposer">
+        <button type="button" className="btn primary" onClick={() => void proposer()}>
+          Proposer des profils pour aujourd’hui
+        </button>
+        <span className="muted small">
+          {pipe ? `${pipe.disponibles} disponibles dans la Base des suspects` : ''}
+        </span>
       </div>
 
-      <div className="sr-etapes" aria-label="Avancement des opportunités SalesNav">
-        {parEtape.map((e) => (
-          <div key={e.nom} className="sr-etape">
-            <strong>{e.nombre}</strong>
-            <span>{e.nom}</span>
-          </div>
-        ))}
+      <div className="sr-colonnes" aria-label="Pipe SalesNav">
+        {COLONNES.map((c) => {
+          const lignes = prospects.filter((p) => p.statut === c.statut);
+          return (
+            <section key={c.statut} className="sr-colonne" aria-label={c.titre}>
+              <header>
+                <h3>
+                  {c.titre} <span className="muted small">{lignes.length}</span>
+                </h3>
+                <span className="muted small">{c.aide}</span>
+              </header>
+              {lignes.length === 0 ? (
+                <p className="muted small">Personne pour le moment.</p>
+              ) : (
+                lignes.map(carte)
+              )}
+            </section>
+          );
+        })}
       </div>
 
-      <div className="sr-liste">
-        <h3>Opportunités</h3>
-        {affaires.length === 0 ? (
-          <p className="muted small">
-            Aucune opportunité par ce canal pour le moment. Ajoutez-en depuis « Ajouter au Radar »
-            en choisissant le canal SalesNav.
-          </p>
-        ) : (
-          <>
-            <div className="sr-lot" aria-label="Actions sur la sélection">
-              <span className="small">
-                {ids.length} sélectionnée{ids.length > 1 ? 's' : ''}
-              </span>
-              <label>
-                <span className="small">Passer à l’étape</span>
-                <select
-                  aria-label="Étape à appliquer"
-                  value={etapeLot}
-                  onChange={(e) => setEtapeLot(Number(e.target.value))}
-                >
-                  {ETAPES_RADAR.map((nom, i) => (
-                    <option key={nom} value={i}>
-                      {nom}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className="btn"
-                disabled={ids.length === 0}
-                onClick={() => void appliquer(ids, { radarEtapeManuelle: etapeLot })}
-              >
-                Appliquer
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={ids.length === 0}
-                onClick={() => void appliquer(ids, { radarCanalManuel: 'À préciser' })}
-              >
-                Sortir de SalesNav
-              </button>
-            </div>
-            <ul className="sr-affaires">
-              {affaires.map((a) => (
-                <li key={a.id}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      aria-label={`Sélectionner ${a.titre}`}
-                      checked={selection.has(a.id)}
-                      onChange={() => bascule(a.id)}
-                    />
-                  </label>
-                  <a href={a.lien} className="sr-nom">
-                    <strong>{a.entreprise || a.titre}</strong>
-                    <span className="muted small">{a.contact || a.titre}</span>
-                  </a>
-                  <span className="sr-boutons">
-                    <button
-                      type="button"
-                      className="btn sm"
-                      aria-label={`Demande envoyée à ${a.titre}`}
-                      onClick={() => void agir('demande_envoyee', a)}
-                    >
-                      Demande envoyée
-                    </button>
-                    <button
-                      type="button"
-                      className="btn sm"
-                      aria-label={`Message envoyé à ${a.titre}`}
-                      onClick={() => void agir('message_envoye', a)}
-                    >
-                      Message envoyé
-                    </button>
-                    <button
-                      type="button"
-                      className="btn sm"
-                      aria-label={`Réponse reçue de ${a.titre}`}
-                      onClick={() => void agir('reponse_recue', a)}
-                    >
-                      Réponse reçue
-                    </button>
-                  </span>
-                  <select
-                    aria-label={`Étape de ${a.titre}`}
-                    value={a.etape}
-                    onChange={(e) =>
-                      void appliquer([a.id], { radarEtapeManuelle: Number(e.target.value) })
-                    }
-                  >
-                    {ETAPES_RADAR.map((nom, i) => (
-                      <option key={nom} value={i}>
-                        {nom}
-                      </option>
-                    ))}
-                  </select>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </div>
-
-      <details className="sr-messages">
-        <summary>Messages d’invitation et de relance</summary>
-        <SalesnavMessages slug={slug} />
-      </details>
+      {messages && (
+        <Fenetre titre="Messages SalesNav" large onFermer={() => setMessages(false)}>
+          <SalesnavMessages slug={slug} />
+        </Fenetre>
+      )}
     </section>
   );
 }
