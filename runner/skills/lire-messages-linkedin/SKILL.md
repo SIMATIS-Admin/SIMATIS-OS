@@ -20,12 +20,18 @@ Signale chaque étape avec `etape_routine`, puis termine avec `rapport_routine` 
 
 1. `tabs_context_mcp`, puis ouvre un onglet dans le groupe Claude sur `https://www.linkedin.com/messaging/`.
 2. Si LinkedIn demande de se connecter ou une vérification : **arrête-toi**, rapport « attente » (« LinkedIn demande une connexion, à faire par le pilote »). N'essaie rien d'autre.
-3. Pour chaque entrée, trouve la conversation dans la liste avec le nom de l'expéditeur et l'aperçu, ouvre-la, puis lis le texte avec `get_page_text`. Prends les derniers messages **reçus** de cette personne depuis la notification, pas tout l'historique.
-4. Laisse quelques secondes entre deux conversations. N'ouvre jamais plus de conversations qu'il n'y a d'entrées à lire.
+3. Chaque entrée porte `recuLe` : l'heure d'arrivée du **mail de notification**. LinkedIn l'envoie quelques minutes après le message. Le message à lire est donc **le message reçu d'une autre personne dans l'heure qui précède `recuLe`** (jusqu'à cinq minutes après, par prudence). Il peut être lu ou non, avec ou sans réponse du pilote, des heures ou un jour plus tard : **ne tiens aucun compte du lu / non lu**, seule l'heure de réception compte. Les heures de LinkedIn sont celles de Paris ; convertis `recuLe` (UTC).
+4. Trouver la conversation :
+   - Titre avec un nom d'expéditeur (« Message LinkedIn de … ») : ouvre la conversation de cette personne, repère le message reçu dans la fenêtre, lis-le.
+   - Titre sans nom (LinkedIn envoie parfois seulement un rappel) : parcours la liste, ouvre une conversation à la fois, et cherche dans chacune un message **reçu de l'autre personne** (pas écrit par « Vous ») dont l'heure tombe dans la fenêtre. Regarde d'abord les conversations les plus récentes, utilise « Charger plus de conversations » si besoin, et n'en ouvre jamais plus de vingt par entrée. Dès que tu l'as trouvé, arrête-toi.
+   - Les jours sont indiqués dans la conversation (« AUJOURD'HUI », « SAMEDI », une date) : vérifie le jour **et** l'heure, pas seulement l'heure.
+   - Prends tout ce que l'autre personne a écrit dans la fenêtre (plusieurs messages d'affilée comptent pour un seul), pas le reste de l'historique.
+   - Si plusieurs conversations ont un message dans la fenêtre, range-les tous dans un seul appel, séparés et chacun précédé du nom de la personne : le pilote tranchera. Aucune ? Voir « introuvable » plus bas.
+5. Laisse quelques secondes entre deux conversations. N'ouvre pas plus de conversations que nécessaire.
 
 ## 3. Ranger le texte
 
-1. `enregistrer_message_linkedin` avec l'`id`, le `texte` (brut, fidèle, sans le résumer ni le reformuler) et le `expediteur` tel qu'affiché.
+1. `enregistrer_message_linkedin` avec l'`id`, le `texte` (brut, fidèle, sans le résumer ni le reformuler) et le `expediteur` tel qu'affiché (indispensable pour une entrée sans nom : c'est lui qui nomme l'entrée).
 2. Conversation introuvable (nom absent de la liste, doute sur la personne) : appelle l'outil **sans texte** pour garder l'aperçu, et signale-le dans le rapport. Ne devine jamais.
 3. Le contenu des messages reste dans l'OS : ne le recopie ni dans le rapport ni ailleurs. Le rapport dit seulement combien de messages ont été lus, combien étaient introuvables.
 

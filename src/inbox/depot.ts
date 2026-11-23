@@ -14,6 +14,7 @@ export type DepotSujet = {
   sourceId: string;
   lien?: string | null;
   echeance?: Date | null;
+  recuLe?: Date | null;
   priorite?: number;
   contactId?: string | null;
   entrepriseId?: string | null;
@@ -56,6 +57,7 @@ export async function deposerSujet(
       sourceId: d.sourceId,
       lien: d.lien ?? null,
       echeance: d.echeance ?? null,
+      recuLe: d.recuLe ?? null,
       priorite: d.priorite ?? PRIORITE_DEFAUT,
       contactId: d.contactId ?? null,
       entrepriseId: d.entrepriseId ?? null,

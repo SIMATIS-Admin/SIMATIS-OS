@@ -152,6 +152,12 @@ describe('routine health check', () => {
   it('flags a run left open for more than two hours', async () => {
     const a = await getInstanceBySlug(t.app.db, 'mandat-a');
     if (!a) throw new Error('no instance');
+    // Le lundi, la planification du test précédent a déjà demandé la revue hebdomadaire : on la
+    // clôt pour que ce test ouvre lui-même l'exécution qu'il vérifie.
+    await t.owner.pool.query(
+      "update executions set statut = 'terminee' where routine = 'hebdo' and instance_id = $1 and statut in ('demandee', 'en_cours')",
+      [a.id],
+    );
     const id = await withInstance(t.app.db, a.id, async (tx) => {
       // Le lundi après 7h, un test plus haut a déjà fait planifier la revue hebdomadaire.
       await tx.delete(executions).where(eq(executions.routine, 'hebdo'));

@@ -8,6 +8,8 @@ import {
   actualiserLinkedin,
   compterMessagesALire,
   enregistrerMessage,
+  apercuPropre,
+  dateDuMail,
   expediteurLinkedin,
   LECTURES_MAX,
   messagesALire,
@@ -21,6 +23,24 @@ const notif = (id: string, objet: string, extra: Partial<NotificationMail> = {})
   date: 'Mon, 5 Oct 2026 09:00:00 +0200',
   extrait: 'Bonjour, pouvons-nous échanger cette semaine ?',
   ...extra,
+});
+
+describe('LinkedIn : aperçu', () => {
+  it('removes the invisible padding of the notification preview', () => {
+    expect(apercuPropre('1 nouveau message attend votre réponse \u034f \u034f \u034f  ')).toBe(
+      '1 nouveau message attend votre réponse',
+    );
+  });
+});
+
+describe('LinkedIn : heure du mail', () => {
+  it('reads the Date header, or nothing when it is missing or unreadable', () => {
+    expect(dateDuMail('Sat, 21 Nov 2026 20:20:00 +0100')?.toISOString()).toBe(
+      '2026-11-21T19:20:00.000Z',
+    );
+    expect(dateDuMail('pas une date')).toBeNull();
+    expect(dateDuMail(null)).toBeNull();
+  });
 });
 
 describe('LinkedIn : nom de l’expéditeur', () => {
@@ -151,6 +171,19 @@ describe('LinkedIn : lecture du texte complet', () => {
     });
     expect(await dans(simatis.id, compterMessagesALire)).toBe(LECTURES_MAX + 2);
     expect(await dans(autre.id, compterMessagesALire)).toBe(0);
+  });
+
+  it('gives the arrival time of the notification mail, the filing time without it', async () => {
+    await deposer(simatis.id, [
+      notif('r1', 'Message LinkedIn', { date: 'Sat, 21 Nov 2026 20:20:00 +0100' }),
+      notif('r2', 'Message LinkedIn', { date: null }),
+    ]);
+    const liste = await dans(simatis.id, (tx) => messagesALire(tx, 50));
+    const r1 = await ligne(simatis.id, 'r1');
+    const r2 = await ligne(simatis.id, 'r2');
+    const recu = (id?: string) => liste.find((m) => m.id === id)?.recuLe;
+    expect(recu(r1?.id)).toBe('2026-11-21T19:20:00.000Z');
+    expect(new Date(recu(r2?.id) ?? '').getFullYear()).toBeGreaterThanOrEqual(2026);
   });
 
   it('stores the text read on LinkedIn, names the sender, and stops offering the entry', async () => {

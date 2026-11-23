@@ -1,0 +1,1 @@
+ALTER TABLE "sujets" ADD COLUMN "recu_le" timestamp with time zone;
