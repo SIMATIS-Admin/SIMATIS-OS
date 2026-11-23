@@ -17,6 +17,9 @@ const code = await runCommand(process.argv.slice(2), {
   dossierSauvegarde: process.env.SECRETS_DIR
     ? `${process.env.SECRETS_DIR}/../detachements`
     : undefined,
+  dossierArchives: process.env.SECRETS_DIR
+    ? `${process.env.SECRETS_DIR}/../archives-hubspot`
+    : undefined,
   realWrites: process.env.REAL_WRITES === 'on',
   // google:connect: opens the consent page in the browser of this computer.
   openUrl: (url) => {
