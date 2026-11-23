@@ -173,17 +173,38 @@ describe('LinkedIn : lecture du texte complet', () => {
     expect(await dans(autre.id, compterMessagesALire)).toBe(0);
   });
 
-  it('gives the arrival time of the notification mail, the filing time without it', async () => {
+  it('gives the arrival time of the notification mail, in UTC and in Paris time with its window', async () => {
     await deposer(simatis.id, [
-      notif('r1', 'Message LinkedIn', { date: 'Sat, 21 Nov 2026 20:20:00 +0100' }),
+      notif('r1', 'Message LinkedIn', { date: 'Sat, 21 Nov 2026 20:16:00 +0100' }),
+      notif('r3', 'Message LinkedIn', { date: 'Mon, 6 Jul 2026 15:30:00 +0200' }),
       notif('r2', 'Message LinkedIn', { date: null }),
     ]);
     const liste = await dans(simatis.id, (tx) => messagesALire(tx, 50));
     const r1 = await ligne(simatis.id, 'r1');
     const r2 = await ligne(simatis.id, 'r2');
-    const recu = (id?: string) => liste.find((m) => m.id === id)?.recuLe;
-    expect(recu(r1?.id)).toBe('2026-11-21T19:20:00.000Z');
-    expect(new Date(recu(r2?.id) ?? '').getFullYear()).toBeGreaterThanOrEqual(2026);
+    const r3 = await ligne(simatis.id, 'r3');
+    const m = (id?: string) => liste.find((x) => x.id === id);
+    expect(m(r1?.id)?.recuLe).toBe('2026-11-21T19:16:00.000Z');
+    // Heure d'hiver : l'heure UTC ne doit jamais être lue comme une heure de Paris.
+    expect(m(r1?.id)?.recuLeParis).toBe('samedi 21 novembre à 20:16');
+    expect(m(r1?.id)?.fenetreParis).toEqual({
+      de: 'samedi 21 novembre à 19:16',
+      a: 'samedi 21 novembre à 20:21',
+    });
+    // Heure d'été : décalage de deux heures.
+    expect(m(r3?.id)?.recuLeParis).toBe('lundi 6 juillet à 15:30');
+    expect(new Date(m(r2?.id)?.recuLe ?? '').getFullYear()).toBeGreaterThanOrEqual(2026);
+  });
+
+  it('completes the mail time of an older entry when its notification is read again', async () => {
+    await deposer(simatis.id, [notif('r4', 'Message LinkedIn', { date: null })]);
+    const avant = await ligne(simatis.id, 'r4');
+    await t.owner.pool.query('update sujets set recu_le = null where id = $1', [avant?.id]);
+    await deposer(simatis.id, [
+      notif('r4', 'Message LinkedIn', { date: 'Sat, 21 Nov 2026 20:16:00 +0100' }),
+    ]);
+    const liste = await dans(simatis.id, (tx) => messagesALire(tx, 50));
+    expect(liste.find((x) => x.id === avant?.id)?.recuLe).toBe('2026-11-21T19:16:00.000Z');
   });
 
   it('stores the text read on LinkedIn, names the sender, and stops offering the entry', async () => {

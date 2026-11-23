@@ -10,7 +10,7 @@ const execution = z.uuid().optional().describe("Identifiant de l'exécution de r
 registerTool({
   name: 'messages_linkedin_a_lire',
   description:
-    "Entrées LinkedIn de l'Inbox dont le texte complet n'a pas été lu (au plus cinq, les plus anciennes d'abord) : identifiant, titre (« Message LinkedIn de … » quand l'objet du mail nommait l'expéditeur), aperçu du mail et `recuLe` (heure d'arrivée du mail de notification : le message à lire a été reçu juste avant, lu ou non). Liste vide : rien à lire, ne pas ouvrir LinkedIn.",
+    "Entrées LinkedIn de l'Inbox dont le texte complet n'a pas été lu (au plus cinq, les plus anciennes d'abord) : identifiant, titre (« Message LinkedIn de … » quand l'objet du mail nommait l'expéditeur), aperçu du mail `recuLeParis` (heure d'arrivée du mail de notification, en heure de Paris) et `fenetreParis` (de/a : l'intervalle où chercher le message, en heure de Paris). Le message à lire a été reçu dans cette fenêtre, lu ou non. Liste vide : rien à lire, ne pas ouvrir LinkedIn.",
   input: z.object({ executionId: execution }),
   scope: 'instance',
   handler: async ({ tx }) => ({ messages: await messagesALire(tx) }),
