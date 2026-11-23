@@ -24,6 +24,12 @@
   min-height: 420px;
   overflow: hidden;
 }
+.cours-lancer {
+  position: absolute;
+  right: 24px;
+  bottom: 20px;
+  z-index: 2;
+}
 .cours-slide {
   flex: 1;
   min-width: 0;

@@ -38,7 +38,12 @@ async function trouverImage(source: string, ref: string): Promise<string | null>
 
 type Section = { description?: unknown; start?: unknown };
 
-export async function convertirDeck(source: string, destination: string): Promise<ResultatImport> {
+// `diagnosticProjet` : projet dont le lecteur proposera de lancer le diagnostic sur la dernière slide.
+export async function convertirDeck(
+  source: string,
+  destination: string,
+  options: { diagnosticProjet?: string } = {},
+): Promise<ResultatImport> {
   const deck = JSON.parse(await readFile(path.join(source, 'project', 'deck.json'), 'utf8')) as {
     title?: unknown;
     order?: unknown;
@@ -144,6 +149,7 @@ export async function convertirDeck(source: string, destination: string): Promis
     ...(aUneFeuille ? { css: 'deck.css' } : {}),
     polices,
     generique: {},
+    ...(options.diagnosticProjet ? { diagnosticProjet: options.diagnosticProjet } : {}),
     parties,
   };
   await writeFile(path.join(temporaire, 'manifest.json'), JSON.stringify(manifest, null, 2));

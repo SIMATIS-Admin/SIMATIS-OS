@@ -67,6 +67,12 @@ describe('lireManifest', () => {
     ).toMatchObject({ logo: null, couleur: null, accent: null });
   });
   it('lit une présentation permanente et son action, et ignore une action inconnue', () => {
+    expect(
+      lireManifest({ diagnosticProjet: '3f1c9a52-7d0e-4b8a-9c11-2a6b5e8d4f70' }),
+    ).toMatchObject({
+      diagnosticProjet: '3f1c9a52-7d0e-4b8a-9c11-2a6b5e8d4f70',
+    });
+    expect(lireManifest({ diagnosticProjet: '../x' }).diagnosticProjet).toBeNull();
     expect(lireManifest({ permanent: true, action: 'testeur-vma' })).toMatchObject({
       permanent: true,
       action: 'testeur-vma',
