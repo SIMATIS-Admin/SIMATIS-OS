@@ -1303,7 +1303,9 @@ export function registerApi(
       titre: texteCourt.min(1),
       origineCommerciale: texteCourt.nullable(),
       radarEtapeManuelle: z.number().int().min(0).max(3).nullable(),
-      radarCanalManuel: z.enum(['Téléphone', 'LinkedIn', 'E-mail', 'À préciser']).nullable(),
+      radarCanalManuel: z
+        .enum(['Téléphone', 'LinkedIn', 'E-mail', 'À préciser', 'SalesNav'])
+        .nullable(),
       nom: texteCourt.min(1),
       montant: z.number().int().min(0).nullable(),
       modeFacturation: z.enum(['spot', 'recurrent']),
@@ -1985,7 +1987,7 @@ export function registerApi(
       fonction: texteRadar,
       lienLinkedin: z.url().max(500).nullish(),
       origine: texteRadar,
-      canal: z.enum(['Téléphone', 'LinkedIn', 'E-mail', 'À préciser']),
+      canal: z.enum(['Téléphone', 'LinkedIn', 'E-mail', 'À préciser', 'SalesNav']),
       etape: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
       note: z.string().trim().max(2000).nullish(),
       contactId: z.uuid().nullish(),

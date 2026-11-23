@@ -10,14 +10,27 @@ import {
 import { Icon } from '../icons.js';
 import { libelleLecture, useLectureEchanges } from './radar/useLectureEchanges.js';
 import { AjoutRadar } from './radar/AjoutRadar.js';
+import { SalesnavRadar } from './radar/SalesnavRadar.js';
 import { PassageQualification } from './radar/PassageQualification.js';
 import './radar/affaires.css';
 
-const canaux = ['Téléphone', 'LinkedIn', 'E-mail', 'À préciser'] as const;
+const canaux = ['Téléphone', 'LinkedIn', 'E-mail', 'À préciser', 'SalesNav'] as const;
 const etapes = ['À contacter', 'Contactées', 'À relancer', 'Ont répondu'];
 type Canal = (typeof canaux)[number];
-type VueRadar = 'radar' | 'pipe' | 'liste';
+type VueRadar = 'radar' | 'pipe' | 'liste' | 'salesnav';
 const RADAR_MIME = 'application/x-simatis-radar-affaire';
+// Chaque canal occupe un quartier du Radar : 5 quartiers de 72 degrés.
+const PAS_CANAL = 360 / canaux.length;
+const sur = (angle: number, r: number) => ({
+  x: 260 + Math.cos((angle * Math.PI) / 180) * r,
+  y: 260 + Math.sin((angle * Math.PI) / 180) * r,
+});
+const axes = canaux
+  .map((_, i) => {
+    const p = sur(-90 + i * PAS_CANAL, 207);
+    return `M260 260L${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+  })
+  .join('');
 const touches = (o: PipelineOpp) => o.tentatives ?? 0;
 const compte = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 const etape = (o: PipelineOpp) =>
@@ -46,7 +59,11 @@ function position(o: PipelineOpp, affaires: PipelineOpp[]) {
     .sort((a, b) => a.id.localeCompare(b.id));
   const rang = groupe.findIndex((a) => a.id === o.id);
   const angle =
-    ((canaux.indexOf(canal(o)) * 90 - 90 + 10 + (70 * (rang + 0.5)) / groupe.length) * Math.PI) /
+    ((canaux.indexOf(canal(o)) * PAS_CANAL -
+      90 +
+      10 +
+      ((PAS_CANAL - 20) * (rang + 0.5)) / groupe.length) *
+      Math.PI) /
     180;
   const r = 49 + 155 / (1 + touches(o) * 0.46) - (groupe.length > 12 ? (rang % 2) * 12 : 0);
   return { x: 260 + Math.cos(angle) * r, y: 260 + Math.sin(angle) * r };
@@ -371,7 +388,11 @@ export function RadarAffaires({ slug }: { slug: string }) {
           onAjoute={() => actualiser((n) => n + 1)}
         />
       )}
-      <div className="ra-filtres" aria-label="Filtrer par dernier canal">
+      <div
+        className="ra-filtres"
+        hidden={vue === 'salesnav'}
+        aria-label="Filtrer par dernier canal"
+      >
         <span>Dernier canal</span>
         {['', ...canaux].map((c) => (
           <button
@@ -582,6 +603,23 @@ export function RadarAffaires({ slug }: { slug: string }) {
           </div>
         </section>
       )}
+      {vue === 'salesnav' && (
+        <SalesnavRadar
+          slug={slug}
+          affaires={toutes
+            .filter((o) => canal(o) === 'SalesNav')
+            .map((o) => ({
+              id: o.id,
+              titre: o.titre,
+              entreprise: o.entreprise ?? '',
+              contact: o.contact ?? '',
+              etape: etape(o),
+              lien: lien(o),
+            }))}
+          onRetour={() => setVue('radar')}
+          onChange={() => actualiser((n) => n + 1)}
+        />
+      )}
       {vue === 'radar' && (
         <div className="ra-workspace">
           <div className="ra-primary">
@@ -590,6 +628,16 @@ export function RadarAffaires({ slug }: { slug: string }) {
                 <div>
                   <h2>{compte(affaires.length, 'affaire')} au radar</h2>
                 </div>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setVue('salesnav');
+                    setSelection(null);
+                  }}
+                >
+                  SalesNav · {toutes.filter((o) => canal(o) === 'SalesNav').length}
+                </button>
               </header>
               <div className="ra-plot" onMouseLeave={() => setSurvol(null)}>
                 <svg
@@ -611,7 +659,7 @@ export function RadarAffaires({ slug }: { slug: string }) {
                   {[72, 115, 158, 207].map((r) => (
                     <circle key={r} cx="260" cy="260" r={r} className="ra-anneau" />
                   ))}
-                  <path d="M53 260H467M260 53V467" className="ra-axe" />
+                  <path d={axes} className="ra-axe" />
                   <g clipPath={`url(#${clip})`}>
                     <g className="ra-balayage">
                       <animateTransform
@@ -636,17 +684,22 @@ export function RadarAffaires({ slug }: { slug: string }) {
                   <text x="260" y="272" className="ra-centre-detail" textAnchor="middle">
                     accepté
                   </text>
-                  {canaux.map((c, i) => (
-                    <text
-                      key={c}
-                      className="ra-canal"
-                      x={[376, 376, 144, 144][i]}
-                      y={[39, 490, 490, 39][i]}
-                      textAnchor="middle"
-                    >
-                      {c}
-                    </text>
-                  ))}
+                  {canaux.map((c, i) => {
+                    const p = sur(-90 + i * PAS_CANAL + PAS_CANAL / 2, 232);
+                    const lien = c === 'SalesNav';
+                    return (
+                      <text
+                        key={c}
+                        className={lien ? 'ra-canal ra-canal-lien' : 'ra-canal'}
+                        x={p.x}
+                        y={p.y + 4}
+                        textAnchor="middle"
+                        onClick={lien ? () => setVue('salesnav') : undefined}
+                      >
+                        {c}
+                      </text>
+                    );
+                  })}
                   <text className="ra-repere" x="265" y="64">
                     0
                   </text>

@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { ajouterAuRadar, fetchContacts, type Contact, type EntreeRadarInput } from '../../api.js';
 
-const CANAUX = ['LinkedIn', 'E-mail', 'Téléphone', 'À préciser'] as const;
+const CANAUX = ['LinkedIn', 'SalesNav', 'E-mail', 'Téléphone', 'À préciser'] as const;
 const ETAPES = ['À contacter', 'Contactées', 'À relancer', 'Ont répondu'] as const;
 
 // Ajouter à la main une personne au Radar : contact, entreprise et affaire créés d'un geste.

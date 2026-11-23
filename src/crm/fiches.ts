@@ -378,7 +378,7 @@ export type PatchFiche = {
   titre?: string;
   origineCommerciale?: string | null;
   radarEtapeManuelle?: number | null;
-  radarCanalManuel?: 'Téléphone' | 'LinkedIn' | 'E-mail' | 'À préciser' | null;
+  radarCanalManuel?: 'Téléphone' | 'LinkedIn' | 'E-mail' | 'À préciser' | 'SalesNav' | null;
   montant?: number | null;
   modeFacturation?: 'spot' | 'recurrent';
   dureeEngagementMois?: number;

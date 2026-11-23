@@ -17,7 +17,7 @@ export type EntreeRadar = {
   fonction?: string | null;
   lienLinkedin?: string | null;
   origine?: string | null;
-  canal: 'Téléphone' | 'LinkedIn' | 'E-mail' | 'À préciser';
+  canal: 'Téléphone' | 'LinkedIn' | 'E-mail' | 'À préciser' | 'SalesNav';
   etape?: 0 | 1 | 2 | 3;
   note?: string | null;
   // Contact déjà connu, choisi dans les suggestions du formulaire.

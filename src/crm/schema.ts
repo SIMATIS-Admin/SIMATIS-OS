@@ -98,7 +98,7 @@ export const opportunites = pgTable(
     radarEtapeManuelle: integer('radar_etape_manuelle'),
     // Manual channel shown in the Radar. Null keeps the channel inferred from the latest activity.
     radarCanalManuel: text('radar_canal_manuel', {
-      enum: ['Téléphone', 'LinkedIn', 'E-mail', 'À préciser'],
+      enum: ['Téléphone', 'LinkedIn', 'E-mail', 'À préciser', 'SalesNav'],
     }),
     // First observed entry into each Radar step (0-3), used for conversion-time indicators.
     radarEtapesDates: jsonb('radar_etapes_dates')
