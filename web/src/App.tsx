@@ -227,7 +227,13 @@ export function App() {
           />
         );
       case 'radar':
-        return <Radar key={current.slug} slug={current.slug} />;
+        return (
+          <Radar
+            key={`${current.slug}-${route.kind === 'ouvrir' ? route.id : ''}`}
+            slug={current.slug}
+            ouvrir={route.kind === 'ouvrir' ? route.id : undefined}
+          />
+        );
       case 'recherches':
         return (
           <Recherches

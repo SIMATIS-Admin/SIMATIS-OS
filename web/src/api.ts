@@ -3872,3 +3872,20 @@ export const enregistrerReglagesSalesnav = (
   slug: string,
   reglages: { quotaJour?: number; pause?: boolean },
 ) => sendJson<ReglagesSalesnav>('PUT', inst(slug, 'salesnav/reglages'), reglages);
+
+export type TypeActionSalesnav =
+  'demande_envoyee' | 'demande_recue' | 'message_envoye' | 'reponse_recue';
+export type CompteursSalesnav = Record<TypeActionSalesnav, number>;
+export type IndicateursSalesnav = {
+  jour: CompteursSalesnav;
+  semaine: CompteursSalesnav;
+  quotaJour: number;
+  restantAujourdhui: number;
+  pause: boolean;
+};
+export const fetchIndicateursSalesnav = (slug: string) =>
+  getJson<IndicateursSalesnav>(inst(slug, 'salesnav/indicateurs'));
+export const enregistrerActionSalesnav = (
+  slug: string,
+  action: { type: TypeActionSalesnav; opportuniteId?: string | null },
+) => sendJson<IndicateursSalesnav>('POST', inst(slug, 'salesnav/actions'), action);

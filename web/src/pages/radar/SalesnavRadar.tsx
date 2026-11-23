@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
+  enregistrerActionSalesnav,
   enregistrerReglagesSalesnav,
+  fetchIndicateursSalesnav,
   fetchReglagesSalesnav,
   patchFiche,
+  type IndicateursSalesnav,
   type ReglagesSalesnav,
+  type TypeActionSalesnav,
 } from '../../api.js';
 import { SalesnavMessages } from '../SalesnavMessages.js';
 
@@ -15,6 +19,19 @@ export type AffaireSalesnav = {
   etape: number;
   lien: string;
 };
+
+// Étape du Radar où une action place l'opportunité (sans jamais la faire reculer).
+const ETAPE_APRES: Partial<Record<TypeActionSalesnav, number>> = {
+  demande_envoyee: 1,
+  message_envoye: 1,
+  reponse_recue: 3,
+};
+const COMPTEURS: { type: TypeActionSalesnav; libelle: string }[] = [
+  { type: 'demande_envoyee', libelle: 'Demandes envoyées' },
+  { type: 'demande_recue', libelle: 'Demandes reçues' },
+  { type: 'message_envoye', libelle: 'Messages envoyés' },
+  { type: 'reponse_recue', libelle: 'Réponses reçues' },
+];
 
 export const ETAPES_RADAR = ['À contacter', 'Contactées', 'À relancer', 'Ont répondu'] as const;
 
@@ -43,6 +60,7 @@ export function SalesnavRadar({
   onChange: () => void;
 }) {
   const [reglages, setReglages] = useState<ReglagesSalesnav | null>(null);
+  const [indic, setIndic] = useState<IndicateursSalesnav | null>(null);
   const [quota, setQuota] = useState(8);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [etapeLot, setEtapeLot] = useState(1);
@@ -59,6 +77,10 @@ export function SalesnavRadar({
       },
       (e: unknown) => actif && setErreur(message(e)),
     );
+    fetchIndicateursSalesnav(slug).then(
+      (i) => actif && setIndic(i),
+      () => undefined,
+    );
     return () => {
       actif = false;
     };
@@ -71,6 +93,21 @@ export function SalesnavRadar({
       setReglages(nouveau);
       setQuota(nouveau.quotaJour);
       setInfo('Réglage enregistré.');
+    } catch (e) {
+      setErreur(message(e));
+    }
+  };
+
+  const agir = async (type: TypeActionSalesnav, affaire?: AffaireSalesnav) => {
+    setErreur(null);
+    setInfo(null);
+    try {
+      setIndic(await enregistrerActionSalesnav(slug, { type, opportuniteId: affaire?.id ?? null }));
+      const cible = ETAPE_APRES[type];
+      if (affaire && cible !== undefined && affaire.etape < cible)
+        await patchFiche(slug, 'affaire', affaire.id, { radarEtapeManuelle: cible });
+      setInfo('Action enregistrée.');
+      onChange();
     } catch (e) {
       setErreur(message(e));
     }
@@ -178,6 +215,30 @@ export function SalesnavRadar({
         </div>
       </div>
 
+      <div className="sr-compteurs" aria-label="Activité SalesNav">
+        {COMPTEURS.map((c) => (
+          <div key={c.type} className="sr-etape">
+            <strong>{indic ? indic.jour[c.type] : '–'}</strong>
+            <span>{c.libelle}</span>
+            <small className="muted">
+              aujourd’hui · {indic ? indic.semaine[c.type] : '–'} sur 7 jours
+            </small>
+          </div>
+        ))}
+        <div className="sr-compteurs-pied">
+          {indic && (
+            <span className="small">
+              {indic.jour.demande_envoyee} / {indic.quotaJour} demande
+              {indic.quotaJour > 1 ? 's' : ''} aujourd’hui
+              {indic.pause ? ' · canal en pause' : ''}
+            </span>
+          )}
+          <button type="button" className="btn" onClick={() => void agir('demande_recue')}>
+            + Demande reçue
+          </button>
+        </div>
+      </div>
+
       <div className="sr-etapes" aria-label="Avancement des opportunités SalesNav">
         {parEtape.map((e) => (
           <div key={e.nom} className="sr-etape">
@@ -246,6 +307,32 @@ export function SalesnavRadar({
                     <strong>{a.entreprise || a.titre}</strong>
                     <span className="muted small">{a.contact || a.titre}</span>
                   </a>
+                  <span className="sr-boutons">
+                    <button
+                      type="button"
+                      className="btn sm"
+                      aria-label={`Demande envoyée à ${a.titre}`}
+                      onClick={() => void agir('demande_envoyee', a)}
+                    >
+                      Demande envoyée
+                    </button>
+                    <button
+                      type="button"
+                      className="btn sm"
+                      aria-label={`Message envoyé à ${a.titre}`}
+                      onClick={() => void agir('message_envoye', a)}
+                    >
+                      Message envoyé
+                    </button>
+                    <button
+                      type="button"
+                      className="btn sm"
+                      aria-label={`Réponse reçue de ${a.titre}`}
+                      onClick={() => void agir('reponse_recue', a)}
+                    >
+                      Réponse reçue
+                    </button>
+                  </span>
                   <select
                     aria-label={`Étape de ${a.titre}`}
                     value={a.etape}

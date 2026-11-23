@@ -9260,7 +9260,7 @@ button.recherche-carte:hover,
 }
 .sr-affaires li {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 0.75rem;
   padding: 0.4rem 0;
@@ -9272,4 +9272,23 @@ button.recherche-carte:hover,
 }
 .sr-messages {
   margin-top: 1rem;
+}
+
+.sr-compteurs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.sr-compteurs-pied {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.sr-boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }

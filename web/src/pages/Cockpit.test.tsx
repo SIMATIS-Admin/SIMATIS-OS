@@ -3,7 +3,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const api = vi.hoisted(() => ({ fetchCompteurInbox: vi.fn(), fetchPipeline: vi.fn() }));
+const api = vi.hoisted(() => ({
+  fetchCompteurInbox: vi.fn(),
+  fetchPipeline: vi.fn(),
+  fetchIndicateursSalesnav: vi.fn(),
+}));
 vi.mock('../api.js', () => api);
 vi.mock('./Inbox.js', () => ({ Inbox: ({ slug }: { slug: string }) => <p>Inbox de {slug}</p> }));
 vi.mock('../visio/Enregistrements.js', () => ({
@@ -25,6 +29,7 @@ import { Cockpit } from './Cockpit.js';
 
 describe('Cockpit', () => {
   beforeEach(() => {
+    api.fetchIndicateursSalesnav.mockRejectedValue(new Error('indisponible'));
     api.fetchPipeline.mockResolvedValue({
       etapes: [
         { id: 'detection', label: 'Détection' },
@@ -150,5 +155,33 @@ describe('Cockpit', () => {
     const inbox = await screen.findByText('Rien à traiter');
     expect(titre.compareDocumentPosition(inbox) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('Aide à la relance de simatis')).toBeTruthy();
+  });
+
+  it("affiche sous l'état commercial la barre SalesNav avec les quatre chiffres du jour", async () => {
+    api.fetchCompteurInbox.mockResolvedValue(0);
+    api.fetchIndicateursSalesnav.mockResolvedValue({
+      jour: { demande_envoyee: 5, demande_recue: 2, message_envoye: 3, reponse_recue: 1 },
+      semaine: { demande_envoyee: 20, demande_recue: 7, message_envoye: 11, reponse_recue: 4 },
+      quotaJour: 8,
+      restantAujourdhui: 3,
+      pause: false,
+    });
+    render(<Cockpit slug="simatis" />);
+    const barre = await screen.findByRole('link', { name: 'Activité SalesNav du jour' });
+    expect(barre.getAttribute('href')).toBe('#/simatis/radar/ouvrir/salesnav');
+    expect(barre.textContent).toContain('demandes envoyées');
+    expect(barre.textContent).toContain('demandes reçues');
+    expect(barre.textContent).toContain('messages envoyés');
+    expect(barre.textContent).toContain('réponses reçues');
+    expect(barre.textContent).toContain('20 sur 7 jours');
+    expect(barre.textContent).toContain('5 / 8 par jour');
+  });
+
+  it("n'affiche pas la barre SalesNav quand les chiffres ne sont pas disponibles", async () => {
+    api.fetchCompteurInbox.mockResolvedValue(0);
+    render(<Cockpit slug="simatis" />);
+    await screen.findByRole('region', { name: 'État du Radar et du Pipeline' });
+    await waitFor(() => expect(api.fetchIndicateursSalesnav).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: 'Activité SalesNav du jour' })).toBeNull();
   });
 });

@@ -799,6 +799,13 @@
       "when": 1795446209517,
       "tag": "0113_tense_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1795462692109,
+      "tag": "0114_tough_jack_flag",
+      "breakpoints": true
     }
   ]
 }

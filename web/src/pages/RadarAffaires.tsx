@@ -108,11 +108,11 @@ function conversionsRadar(affaires: PipelineOpp[]): ConversionRadar[] {
 const jours = (n: number) =>
   new Intl.NumberFormat('fr-FR', { maximumFractionDigits: n < 10 ? 1 : 0 }).format(n);
 
-export function RadarAffaires({ slug }: { slug: string }) {
+export function RadarAffaires({ slug, ouvrir }: { slug: string; ouvrir?: string }) {
   const [data, setData] = useState<Pipeline | null>(null);
   const [rendezVous, setRendezVous] = useState<RendezVous[]>([]);
   const [erreur, setErreur] = useState('');
-  const [vue, setVue] = useState<VueRadar>('radar');
+  const [vue, setVue] = useState<VueRadar>(ouvrir === 'salesnav' ? 'salesnav' : 'radar');
   const [recherche, setRecherche] = useState('');
   const [filtre, setFiltre] = useState('');
   const [selection, setSelection] = useState<string | null>(null);

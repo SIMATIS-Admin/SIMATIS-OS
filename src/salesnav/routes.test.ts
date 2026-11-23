@@ -139,4 +139,44 @@ describe('Routes des messages Sales Navigator', () => {
       (await app.inject({ method: 'GET', url: '/api/i/inconnue/salesnav/reglages' })).statusCode,
     ).toBe(404);
   });
+
+  it('enregistre les actions et renvoie les compteurs ; 409 au quota, 400 si invalide', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: `${base}/reglages`,
+      payload: { quotaJour: 2, pause: false },
+    });
+    const envoyer = (type: string) =>
+      app.inject({ method: 'POST', url: `${base}/actions`, payload: { type } });
+    expect((await envoyer('demande_envoyee')).statusCode).toBe(201);
+    const deuxieme = await envoyer('demande_envoyee');
+    expect(deuxieme.json()).toMatchObject({
+      jour: { demande_envoyee: 2 },
+      restantAujourdhui: 0,
+    });
+    const refus = await envoyer('demande_envoyee');
+    expect(refus.statusCode).toBe(409);
+    expect(refus.json<{ error: string }>().error).toMatch(/Quota atteint/);
+    expect((await envoyer('reponse_recue')).statusCode).toBe(201);
+    expect((await envoyer('autre')).statusCode).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `${base}/actions`,
+          payload: { type: 'demande_recue', opportuniteId: 'x' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    const i = await app.inject({ method: 'GET', url: `${base}/indicateurs` });
+    expect(i.json()).toMatchObject({
+      jour: { demande_envoyee: 2, reponse_recue: 1 },
+      quotaJour: 2,
+    });
+    const autre = await app.inject({ method: 'GET', url: '/api/i/sn-autre/salesnav/indicateurs' });
+    expect(autre.json()).toMatchObject({ jour: { demande_envoyee: 0 } });
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/i/inconnue/salesnav/indicateurs' })).statusCode,
+    ).toBe(404);
+  });
 });
