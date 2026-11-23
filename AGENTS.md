@@ -79,6 +79,17 @@ La configuration locale (chemins, URL, jetons) passe par des variables d'environ
 - Dossier principal : si des modifications non commitées que l'agent n'a pas faites y sont présentes, ne pas y travailler ni y changer de branche ; passer en worktree et prévenir Marc.
 - Fin de feature (après merge) : supprimer le worktree (`git worktree remove <chemin>`) et la branche locale, puis `git worktree prune`. Ne jamais supprimer un worktree qui contient des modifications non commitées.
 
+### Éviter les conflits et les problèmes de versions
+
+- Avant de commencer : `git worktree list`, puis `git diff --stat origin/main` dans chaque worktree ouvert. Si deux sessions toucheraient les mêmes fichiers, prévenir Marc et les faire l'une après l'autre.
+- Fichiers « chauds » (`drizzle/meta/_journal.json`, `src/db/metier-tables.ts`, `package.json`, `package-lock.json`) : une seule session à la fois y touche.
+- Branches courtes : découper en petites livraisons mergées vite.
+- Avant d'ouvrir la PR, et à nouveau avant de merger si un autre merge a eu lieu : `git fetch` puis `git rebase origin/main`, puis `npm run verify`. Un conflit non compris avec certitude : s'arrêter et prévenir Marc, ne pas deviner.
+- Migrations Drizzle : en cas de numéro déjà pris sur `main`, supprimer sa migration et son snapshot, rebaser, puis relancer `npm run db:generate`. Le contrôle `src/db/migrations-check.ts` (lancé par `npm test` et donc par la CI) refuse les numéros en double, les fichiers hors journal et les snapshots manquants.
+- Dépendances : ne pas lancer `npm update` ni changer le verrou sans demande de Marc. Conflit sur `package-lock.json` : le régénérer avec `npm install` après le rebase, jamais à la main.
+- Node : `.nvmrc` fait foi, pas d'autre version.
+- Merge seulement si la branche est à jour avec `main` et la CI verte sur ce résultat.
+
 ## Gestion de git (autonome)
 
 Marc n'est pas développeur : l'agent gère tout git seul, sans demander de confirmation.
