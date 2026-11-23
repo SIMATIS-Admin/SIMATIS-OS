@@ -49,6 +49,7 @@ import {
 import {
   salesnavActions,
   salesnavCampagnes,
+  salesnavEnvois,
   salesnavModeles,
   salesnavProspects,
   salesnavReglages,
@@ -117,6 +118,7 @@ export const METIER_TABLES = [
   prospectionSuiviFroid,
   salesnavActions,
   salesnavCampagnes,
+  salesnavEnvois,
   salesnavModeles,
   salesnavProspects,
   salesnavReglages,

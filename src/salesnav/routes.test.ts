@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestApp, type TestApp } from '../../test/database.js';
 import { buildApp } from '../app.js';
-import { createInstance } from '../instances/service.js';
+import { withInstance } from '../db/context.js';
+import { createInstance, getInstanceBySlug } from '../instances/service.js';
+import { modifierRoutine } from '../routines/service.js';
 import type { CampagneVue, ModeleVue } from './modeles.js';
 
 type Vue = {
@@ -261,5 +263,40 @@ describe('Routes des messages Sales Navigator', () => {
     expect(r.statusCode).toBe(200);
     const vide = await app.inject({ method: 'POST', url: `${base}/pipe/proposer` });
     expect(vide.json()).toMatchObject({ proposes: 0 });
+  });
+
+  it('met un envoi en file seulement quand la routine est active, un à la fois', async () => {
+    const ajout = await app.inject({
+      method: 'POST',
+      url: `${base}/pipe/prospects`,
+      payload: { lien: 'https://www.linkedin.com/in/envoi-fictif', nom: 'Dana Fictive' },
+    });
+    const { id } = ajout.json<{ id: string }>();
+    const envoyer = (note = 'Bonjour Dana.') =>
+      app.inject({
+        method: 'POST',
+        url: `${base}/pipe/prospects/${id}/envoyer`,
+        payload: { note },
+      });
+    // La routine « Envoi SalesNav » est créée en pause : rien n'est mis en file, tout est annulé.
+    const refus = await envoyer();
+    expect(refus.statusCode).toBe(409);
+    expect(refus.json<{ error: string }>().error).toMatch(/pause/);
+    const instance = await getInstanceBySlug(t.app.db, 'sn-routes');
+    await withInstance(t.app.db, instance!.id, (tx) =>
+      modifierRoutine(tx, 'salesnav', { actif: true }),
+    );
+    expect((await envoyer('')).statusCode).toBe(409);
+    const ok = await envoyer();
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ essai: true });
+    const second = await envoyer();
+    expect(second.statusCode).toBe(409);
+    const pipe = (await app.inject({ method: 'GET', url: `${base}/pipe` })).json<{
+      envois: { prospectId: string; statut: string }[];
+      essaiABlanc: boolean;
+    }>();
+    expect(pipe.essaiABlanc).toBe(true);
+    expect(pipe.envois.find((e) => e.prospectId === id)?.statut).toBe('en_attente');
   });
 });

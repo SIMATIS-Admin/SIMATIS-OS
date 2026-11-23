@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   fetchReglagesSalesnav: vi.fn(),
   enregistrerReglagesSalesnav: vi.fn(),
   enregistrerActionSalesnav: vi.fn(),
+  envoyerDemandeSalesnav: vi.fn(),
 }));
 vi.mock('../../api.js', () => api);
 vi.mock('../SalesnavMessages.js', () => ({
@@ -24,6 +25,8 @@ const reglages = (quotaJour = 8, pause = false): ReglagesSalesnav => ({
   quotaJour,
   quotaSemaine: quotaJour * 5,
   pause,
+  pauseRaison: null,
+  essaiABlanc: true,
   quotaMax: 25,
   recommande: 8,
   cible: 12,
@@ -61,6 +64,11 @@ const pipe = (
   },
   disponibles: 40,
   joursAvantRetrait: 21,
+  envois: [],
+  alerte: null,
+  pause: false,
+  pauseRaison: null,
+  essaiABlanc: true,
   cibles: ['Cible fictive'],
   prospects,
   ...extra,
@@ -159,7 +167,7 @@ describe('SalesnavRadar', () => {
     await monter(
       pipe([prospect('a', 'propose'), prospect('b', 'demande_envoyee'), prospect('c', 'connecte')]),
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Demande envoyée' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Déjà envoyée à la main' }));
     await waitFor(() =>
       expect(api.actionProspectSalesnav).toHaveBeenCalledWith('demo', 'a', 'demande'),
     );
@@ -197,10 +205,88 @@ describe('SalesnavRadar', () => {
     );
   });
 
+  const avecMessage = (extra: Partial<ProspectSalesnav> = {}) =>
+    prospect('a', 'propose', {
+      message: { etape: 'invitation', texte: 'Bonjour Alex.', manquantes: [], longueur: 13 },
+      ...extra,
+    });
+
+  it('confirme la note avant de lancer l’envoi par Chrome', async () => {
+    api.envoyerDemandeSalesnav.mockResolvedValue({ id: 'e1', essai: true });
+    await monter(pipe([avecMessage()]));
+    fireEvent.click(await screen.findByRole('button', { name: 'Envoyer la demande' }));
+    const note = await screen.findByLabelText('Note d’invitation');
+    expect((note as HTMLTextAreaElement).value).toBe('Bonjour Alex.');
+    expect(screen.getByText(/Essai à blanc : Chrome ouvre le profil/)).toBeTruthy();
+    fireEvent.change(note, { target: { value: 'Bonjour Alex, ravi.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lancer l’essai à blanc' }));
+    await waitFor(() =>
+      expect(api.envoyerDemandeSalesnav).toHaveBeenCalledWith('demo', 'a', 'Bonjour Alex, ravi.'),
+    );
+  });
+
+  it('bloque une note trop longue et affiche le refus du serveur', async () => {
+    api.envoyerDemandeSalesnav.mockRejectedValue(
+      new Error('Quota atteint : 8 demande(s) par jour.'),
+    );
+    await monter(pipe([avecMessage()], { essaiABlanc: false }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Envoyer la demande' }));
+    const note = await screen.findByLabelText('Note d’invitation');
+    fireEvent.change(note, { target: { value: 'x'.repeat(301) } });
+    const confirmer = screen.getByRole('button', { name: 'Confirmer et envoyer' });
+    expect((confirmer as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(note, { target: { value: 'Bonjour.' } });
+    fireEvent.click(confirmer);
+    expect(await screen.findByText(/Quota atteint/)).toBeTruthy();
+  });
+
+  it('montre l’envoi en cours et désactive le bouton, puis le résultat', async () => {
+    const envoi = (statut: 'en_cours' | 'echec', detail: string | null = null) => ({
+      id: 'e1',
+      prospectId: 'a',
+      statut,
+      essai: false,
+      detail,
+      note: 'Bonjour.',
+      creeLe: '2026-11-25T09:00:00Z',
+    });
+    await monter(pipe([avecMessage()], { envois: [envoi('en_cours')] }));
+    expect(await screen.findByText('Envoi en cours dans Chrome…')).toBeTruthy();
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Envoyer la demande' }).disabled,
+    ).toBe(true);
+    cleanup();
+    await monter(
+      pipe([avecMessage()], { envois: [envoi('echec', 'Le nom affiché ne correspond pas')] }),
+    );
+    expect(await screen.findByText('Le nom affiché ne correspond pas')).toBeTruthy();
+  });
+
+  it('affiche la pause automatique et l’alerte de taux d’acceptation', async () => {
+    await monter(
+      pipe([], {
+        pause: true,
+        pauseRaison: 'LinkedIn a affiché un avertissement pendant l’envoi.',
+        alerte: { taux: 0.1, echantillon: 30, message: 'Seulement 10 % de demandes acceptées.' },
+      }),
+    );
+    expect(await screen.findByText(/Canal en pause : LinkedIn a affiché/)).toBeTruthy();
+    expect(screen.getByText('Seulement 10 % de demandes acceptées.')).toBeTruthy();
+  });
+
+  it('bascule entre essai à blanc et envoi réel', async () => {
+    await monter();
+    api.enregistrerReglagesSalesnav.mockResolvedValue({ ...reglages(), essaiABlanc: false });
+    fireEvent.click(await screen.findByLabelText('Essai à blanc : aucune demande n’est envoyée'));
+    await waitFor(() =>
+      expect(api.enregistrerReglagesSalesnav).toHaveBeenCalledWith('demo', { essaiABlanc: false }),
+    );
+  });
+
   it('affiche le refus du quota', async () => {
     api.actionProspectSalesnav.mockRejectedValue(new Error('Quota atteint : 8 demandes par jour.'));
     await monter(pipe([prospect('a', 'propose')]));
-    fireEvent.click(await screen.findByRole('button', { name: 'Demande envoyée' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Déjà envoyée à la main' }));
     expect(await screen.findByText(/Quota atteint/)).toBeTruthy();
   });
 

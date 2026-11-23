@@ -3,7 +3,12 @@ import { baseVivante } from '../base-vivante/schema.js';
 import type { Executor } from '../db.js';
 import { currentInstance } from '../db/columns.js';
 import { enregistrerAction, indicateurs } from './actions.js';
-import { salesnavProspects, type ProspectSalesnav, type StatutProspectSalesnav } from './schema.js';
+import {
+  salesnavProspects,
+  type OrigineActionSalesnav,
+  type ProspectSalesnav,
+  type StatutProspectSalesnav,
+} from './schema.js';
 
 export class ProspectInvalide extends Error {}
 export class ProspectIntrouvable extends ProspectInvalide {}
@@ -186,10 +191,15 @@ export async function choisirCible(tx: Executor, id: string, cible: string | nul
     .where(eq(salesnavProspects.id, p.id));
 }
 
-export async function marquerDemandeEnvoyee(tx: Executor, id: string, maintenant = new Date()) {
+export async function marquerDemandeEnvoyee(
+  tx: Executor,
+  id: string,
+  maintenant = new Date(),
+  options: { origine?: OrigineActionSalesnav; forcer?: boolean } = {},
+) {
   const p = await exiger(tx, id);
   depuis(p, ['propose'], 'envoyer la demande');
-  await enregistrerAction(tx, { type: 'demande_envoyee' }, maintenant);
+  await enregistrerAction(tx, { type: 'demande_envoyee', ...options }, maintenant);
   await tx
     .update(salesnavProspects)
     .set({ statut: 'demande_envoyee', demandeLe: maintenant, updatedAt: maintenant })

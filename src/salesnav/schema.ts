@@ -70,6 +70,12 @@ export const salesnavReglages = pgTable(
     ...metierColumns(),
     quotaJour: integer('quota_jour').notNull().default(QUOTA_DEFAUT),
     pause: boolean('pause').notNull().default(false),
+    // Envoi par Chrome : tant que l'essai est actif, l'exécuteur ouvre le profil et décrit ce qu'il
+    // voit sans rien cliquer. Actif par défaut : on passe à l'envoi réel en connaissance de cause.
+    essaiABlanc: boolean('essai_a_blanc').notNull().default(true),
+    // Pause posée par l'OS (avertissement de LinkedIn) : elle dure jusqu'à `pauseJusqua`.
+    pauseRaison: text('pause_raison'),
+    pauseJusqua: timestamp('pause_jusqua', { withTimezone: true }),
   },
   (t) => [
     uniqueIndex('salesnav_reglages_instance_idx').on(t.instanceId),
@@ -79,6 +85,8 @@ export const salesnavReglages = pgTable(
 
 // Journal du canal : une ligne par demande de connexion ou message, envoyé ou reçu. C'est lui qui
 // alimente les compteurs de la sous-section SalesNav et la barre de l'état commercial.
+export const ORIGINES_ACTION_SALESNAV = ['manuel', 'chrome'] as const;
+export type OrigineActionSalesnav = (typeof ORIGINES_ACTION_SALESNAV)[number];
 export const TYPES_ACTION_SALESNAV = [
   'demande_envoyee',
   'demande_recue',
@@ -93,6 +101,8 @@ export const salesnavActions = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     ...metierColumns(),
     type: text('type', { enum: TYPES_ACTION_SALESNAV }).notNull(),
+    // Qui a fait le clic sur LinkedIn : le pilote lui-même ou l'exécuteur dans son Chrome.
+    origine: text('origine', { enum: ORIGINES_ACTION_SALESNAV }).notNull().default('manuel'),
     opportuniteId: uuid('opportunite_id').references(() => opportunites.id, {
       onDelete: 'set null',
     }),
@@ -153,6 +163,42 @@ export const salesnavProspects = pgTable(
   ],
 );
 export type ProspectSalesnav = typeof salesnavProspects.$inferSelect;
+
+// File d'envoi par Chrome : une demande de connexion validée par le pilote, que l'exécuteur
+// réalise dans son navigateur. Une seule peut être ouverte (en attente ou en cours) à la fois.
+// `essai` : l'exécuteur n'a rien cliqué, il a seulement décrit ce qu'il voyait.
+export const STATUTS_ENVOI_SALESNAV = [
+  'en_attente',
+  'en_cours',
+  'envoye',
+  'essai',
+  'echec',
+] as const;
+export type StatutEnvoiSalesnav = (typeof STATUTS_ENVOI_SALESNAV)[number];
+
+export const salesnavEnvois = pgTable(
+  'salesnav_envois',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    prospectId: uuid('prospect_id')
+      .notNull()
+      .references(() => salesnavProspects.id, { onDelete: 'cascade' }),
+    note: text('note').notNull(),
+    statut: text('statut', { enum: STATUTS_ENVOI_SALESNAV }).notNull().default('en_attente'),
+    essai: boolean('essai').notNull().default(true),
+    detail: text('detail'),
+    termineLe: timestamp('termine_le', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('salesnav_envois_ouvert_idx')
+      .on(t.instanceId)
+      .where(sql`statut in ('en_attente', 'en_cours')`),
+    index('salesnav_envois_prospect_idx').on(t.prospectId, t.createdAt),
+    instanceIsolation('salesnav_envois'),
+  ],
+);
+export type EnvoiSalesnav = typeof salesnavEnvois.$inferSelect;
 
 export type CampagneSalesnav = typeof salesnavCampagnes.$inferSelect;
 export type ModeleSalesnav = typeof salesnavModeles.$inferSelect;
