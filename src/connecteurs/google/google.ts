@@ -719,6 +719,8 @@ export type Fil = {
   automatique?: boolean;
 };
 
+const FILS_EN_PARALLELE = 8;
+
 // Recent inbox threads, each reduced to its last message (who wrote last decides "unanswered").
 export async function filsRecents(
   ctx: Pick<SyncCtx, 'secrets' | 'instance'>,
@@ -730,28 +732,37 @@ export async function filsRecents(
     'GET',
     `${GMAIL}/threads?${new URLSearchParams({ q: `in:inbox newer_than:${jours}d`, maxResults: '100' }).toString()}`,
   );
+  // Par lots de 8 : jusqu'à 100 fils lus un par un dépassaient le délai de l'outil de la routine.
+  const ids = (list.threads ?? []).map((t) => t.id);
   const out: Fil[] = [];
-  for (const { id } of list.threads ?? []) {
-    const t = await api.request<{
-      messages?: { snippet?: string; payload?: { headers?: Headers } }[];
-    }>(
-      'GET',
-      `${GMAIL}/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=List-Unsubscribe&metadataHeaders=Precedence&metadataHeaders=Auto-Submitted&metadataHeaders=X-Auto-Response-Suppress`,
+  for (let i = 0; i < ids.length; i += FILS_EN_PARALLELE) {
+    const lot = await Promise.all(
+      ids.slice(i, i + FILS_EN_PARALLELE).map(async (id) => ({
+        id,
+        t: await api.request<{
+          messages?: { snippet?: string; payload?: { headers?: Headers } }[];
+        }>(
+          'GET',
+          `${GMAIL}/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=List-Unsubscribe&metadataHeaders=Precedence&metadataHeaders=Auto-Submitted&metadataHeaders=X-Auto-Response-Suppress`,
+        ),
+      })),
     );
-    const dernier = t.messages?.at(-1);
-    if (!dernier) continue;
-    out.push({
-      threadId: id,
-      de: header(dernier.payload?.headers, 'From'),
-      date: header(dernier.payload?.headers, 'Date'),
-      objet: header(dernier.payload?.headers, 'Subject'),
-      extrait: dernier.snippet ?? '',
-      a: adressesDe(header(dernier.payload?.headers, 'To')),
-      automatique: estAutomatique(
-        dernier.payload?.headers ?? [],
-        header(dernier.payload?.headers, 'From'),
-      ),
-    });
+    for (const { id, t } of lot) {
+      const dernier = t.messages?.at(-1);
+      if (!dernier) continue;
+      out.push({
+        threadId: id,
+        de: header(dernier.payload?.headers, 'From'),
+        date: header(dernier.payload?.headers, 'Date'),
+        objet: header(dernier.payload?.headers, 'Subject'),
+        extrait: dernier.snippet ?? '',
+        a: adressesDe(header(dernier.payload?.headers, 'To')),
+        automatique: estAutomatique(
+          dernier.payload?.headers ?? [],
+          header(dernier.payload?.headers, 'From'),
+        ),
+      });
+    }
   }
   return out;
 }

@@ -103,6 +103,29 @@ describe('Google : lectures de la routine Inbox', () => {
     );
   });
 
+  it('reads many threads in parallel, bounded, keeping the order', async () => {
+    let enCours = 0;
+    let max = 0;
+    const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+    const fetch = async (url: string) => {
+      if (url.startsWith('https://oauth2.googleapis.com/token'))
+        return json({ access_token: 'at' });
+      if (url.includes('/threads?')) {
+        return json({ threads: Array.from({ length: 40 }, (_, i) => ({ id: `t${i}` })) });
+      }
+      const id = /threads\/(t\d+)/.exec(url)?.[1];
+      enCours += 1;
+      max = Math.max(max, enCours);
+      await new Promise((r) => setTimeout(r, 5));
+      enCours -= 1;
+      return json({ messages: [{ snippet: id, payload: { headers: [h('Subject', id ?? '')] } }] });
+    };
+    const fils = await filsRecents(ctx, 14, { fetch });
+    expect(fils.map((f) => f.threadId)).toEqual(Array.from({ length: 40 }, (_, i) => `t${i}`));
+    expect(max).toBeGreaterThan(1);
+    expect(max).toBeLessThanOrEqual(8);
+  });
+
   it('lists drafts with subject, recipient and date', async () => {
     const g = fakeGoogle();
     expect(await brouillons(ctx, g)).toEqual([
