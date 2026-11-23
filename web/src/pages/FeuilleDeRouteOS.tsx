@@ -3,14 +3,46 @@ import { ApiError, fetchCarteCerveau, operationCerveau } from '../api.js';
 import type { NoeudCerveau } from '../cerveau.js';
 import {
   NOTE_FEUILLE,
-  NOTE_STRUCTURE,
+  NOTE_ORGANIGRAMME,
   ajouterEtape,
   idéesOS,
+  lireOrganigramme,
   marquerPromue,
+  type EtatOrg,
+  type NoeudOrg,
 } from '../feuilleDeRouteOS.js';
 import { NoteCerveau } from './NoteCerveau.js';
 
 type Note = { contenu: string } | { erreur: string };
+
+const COULEUR_ETAT: Record<EtatOrg, string> = {
+  'en service': 'green',
+  'à essayer': 'amber',
+  partiel: 'blue',
+};
+
+function Noeud({ noeud }: { noeud: NoeudOrg }) {
+  const ligne = (
+    <>
+      <b>{noeud.nom}</b>
+      {noeud.etat && <span className={`badge ${COULEUR_ETAT[noeud.etat]}`}>{noeud.etat}</span>}
+      {noeud.description && <span className="cerveau-note"> {noeud.description}</span>}
+    </>
+  );
+  if (noeud.enfants.length === 0) return <li style={{ listStyle: 'none' }}>{ligne}</li>;
+  return (
+    <li style={{ listStyle: 'none' }}>
+      <details open>
+        <summary>{ligne}</summary>
+        <ul style={{ paddingLeft: 20 }}>
+          {noeud.enfants.map((n) => (
+            <Noeud key={n.nom} noeud={n} />
+          ))}
+        </ul>
+      </details>
+    </li>
+  );
+}
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -20,6 +52,7 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: boolean }) {
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [idees, setIdees] = useState<NoeudCerveau[]>([]);
+  const [onglet, setOnglet] = useState<'organigramme' | 'feuille'>('organigramme');
   const [edition, setEdition] = useState<string | null>(null);
   const [alerte, setAlerte] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
@@ -32,12 +65,12 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
         (r): Note => ({ contenu: r.contenu ?? '' }),
         (e: unknown): Note => ({ erreur: message(e) }),
       );
-    const [structure, feuille, carte] = await Promise.all([
-      lire(NOTE_STRUCTURE),
+    const [organigramme, feuille, carte] = await Promise.all([
+      lire(NOTE_ORGANIGRAMME),
       lire(NOTE_FEUILLE),
       fetchCarteCerveau(slug).catch(() => null),
     ]);
-    setNotes({ [NOTE_STRUCTURE]: structure, [NOTE_FEUILLE]: feuille });
+    setNotes({ [NOTE_ORGANIGRAMME]: organigramme, [NOTE_FEUILLE]: feuille });
     setIdees(carte ? idéesOS(carte.noeuds).filter((i) => !promues.current.has(i.id)) : []);
   }, [slug]);
 
@@ -117,8 +150,63 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
     );
   };
 
+  const organigramme = () => {
+    const note = notes[NOTE_ORGANIGRAMME];
+    const rubriques = note && 'contenu' in note ? lireOrganigramme(note.contenu) : [];
+    return (
+      <div className="panel">
+        <div className="panel-h">
+          <b>Ce que l’OS sait faire aujourd’hui</b>
+          <button className="btn" onClick={() => setEdition(NOTE_ORGANIGRAMME)} disabled={!note}>
+            Modifier
+          </button>
+        </div>
+        <div className="panel-b">
+          {!note ? (
+            'Chargement…'
+          ) : 'erreur' in note ? (
+            <div className="empty" role="alert">
+              {note.erreur}
+            </div>
+          ) : rubriques.length === 0 ? (
+            <span className="cerveau-note">Organigramme vide.</span>
+          ) : (
+            rubriques.map((r) => (
+              <section key={r.titre}>
+                <h3>{r.titre}</h3>
+                <ul style={{ paddingLeft: 0 }}>
+                  {r.noeuds.map((n) => (
+                    <Noeud key={n.nom} noeud={n} />
+                  ))}
+                </ul>
+              </section>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="stack">
+      <div role="tablist" className="g-onglets">
+        {(
+          [
+            ['organigramme', 'Organigramme'],
+            ['feuille', 'Feuille de route'],
+          ] as const
+        ).map(([id, l]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={onglet === id}
+            className={`chip ${onglet === id ? 'on' : ''}`}
+            onClick={() => setOnglet(id)}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
       {alerte && (
         <div className="empty" role="alert">
           {alerte}
@@ -132,27 +220,29 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
           onEnregistre={() => void charger()}
         />
       )}
-      {bloc('Prochaines étapes', NOTE_FEUILLE)}
-      <div className="panel">
-        <div className="panel-h">
-          <b>Idées pour l’OS à trier</b>
+      {onglet === 'organigramme' && organigramme()}
+      {onglet === 'feuille' && bloc('Prochaines étapes', NOTE_FEUILLE)}
+      {onglet === 'feuille' && (
+        <div className="panel">
+          <div className="panel-h">
+            <b>Idées pour l’OS à trier</b>
+          </div>
+          <div className="panel-b">
+            {idees.length === 0 ? (
+              <span className="cerveau-note">Aucune idée en attente.</span>
+            ) : (
+              idees.map((idee) => (
+                <div key={idee.id} className="cerveau-actions">
+                  <span>{idee.titre}</span>
+                  <button className="btn" disabled={occupe} onClick={() => void promouvoir(idee)}>
+                    Promouvoir en étape
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
-        <div className="panel-b">
-          {idees.length === 0 ? (
-            <span className="cerveau-note">Aucune idée en attente.</span>
-          ) : (
-            idees.map((idee) => (
-              <div key={idee.id} className="cerveau-actions">
-                <span>{idee.titre}</span>
-                <button className="btn" disabled={occupe} onClick={() => void promouvoir(idee)}>
-                  Promouvoir en étape
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-      {bloc('Structure de l’OS', NOTE_STRUCTURE)}
+      )}
     </div>
   );
 }
