@@ -4,6 +4,7 @@ import {
   fetchMasqueesRelance,
   fetchPipeline,
   fetchTaches,
+  updateTache,
   masquerRelance,
   masquerRelanceLot,
   type Pipeline,
@@ -55,7 +56,6 @@ const jourIso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const CLE_MANDATS = 'aideRelance.instances-masquees';
-const CLE_PLAFOND = 'aideRelance:plafond';
 const jourLong = (t: number) =>
   new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -74,12 +74,7 @@ export function AideRelance({ slug }: { slug: string }) {
     const v = lire<Nombre>('aideRelance:nb', 10);
     return CHOIX.includes(v) ? v : 10;
   });
-  // Après « Ventiler », la liste du jour se limite à ce qui reste pour aujourd'hui : sans cela, les
-  // actions étalées seraient aussitôt remplacées par les suivantes de la file.
-  const [plafond, setPlafond] = useState<number | null>(() => {
-    const v = lire<{ jour: string; n: number } | null>(CLE_PLAFOND, null);
-    return v && v.jour === jourIso(new Date()) ? v.n : null;
-  });
+  const [enVentilation, setEnVentilation] = useState(false);
   const [infoVentilation, setInfoVentilation] = useState('');
   const [deploye, setDeploye] = useState<boolean>(() => lire('aideRelance:deploye', false));
   const [filtre, setFiltre] = useState<'tout' | SourceAction>('tout');
@@ -149,8 +144,6 @@ export function AideRelance({ slug }: { slug: string }) {
   };
   const choisir = (n: Nombre) => {
     setNb(n);
-    setPlafond(null);
-    ecrire(CLE_PLAFOND, null);
     ecrire('aideRelance:nb', n);
   };
   const basculer = () => {
@@ -206,12 +199,7 @@ export function AideRelance({ slug }: { slug: string }) {
   const filtrees = file.filter(
     (a) => filtre === 'tout' || a.raisons.some((r) => r.source === filtre),
   );
-  const visibles =
-    plafond !== null
-      ? filtrees.slice(0, Math.min(plafond, nb === 'tout' ? Infinity : nb))
-      : nb === 'tout'
-        ? filtrees
-        : filtrees.slice(0, nb);
+  const visibles = nb === 'tout' ? filtrees : filtrees.slice(0, nb);
   const attente = filtrees.length - visibles.length;
   const compte = (s: SourceAction) =>
     file.filter((a) => a.raisons.some((r) => r.source === s)).length;
@@ -221,32 +209,63 @@ export function AideRelance({ slug }: { slug: string }) {
     .map((m) => ({ nom: m.nom, n: anciennes.filter((a) => a.mandat === m.slug).length }))
     .filter((m) => m.n > 0);
 
-  // Étale les actions choisies sur plusieurs jours ouvrés (5 par jour au plus). On ne touche ni aux
-  // tâches ni au CRM : les actions étalées sont reportées, comme avec « Reporter », et reviennent
-  // dans la liste à leur jour ; « Les remettre dans la liste » défait tout.
+  // Étale TOUTES les actions choisies sur les jours ouvrés suivants (5 par jour, rien pour
+  // aujourd'hui). L'action quitte la liste (report) et la date de ses tâches change : sans cela
+  // elles resteraient en retard dans l'Agenda. Les écritures vers HubSpot suivent les verrous
+  // habituels (simulation par défaut) ; seules les dates changent, rien n'est supprimé.
   const ventilerVisibles = async () => {
     const lot = ventiler(visibles.map((a) => a.id));
     if (lot.length === 0) {
-      setInfoVentilation('Pas assez d’actions pour les étaler.');
+      setInfoVentilation('Aucune action à étaler.');
       return;
     }
+    setEnVentilation(true);
+    setInfoVentilation('');
+    const jusquaDe = new Map(lot.map((x) => [x.id, x.jusqua]));
     const parJour = new Map<number, string[]>();
     for (const { id, jusqua } of lot) parJour.set(jusqua, [...(parJour.get(jusqua) ?? []), id]);
     try {
       for (const [jusqua, ids] of parJour) await masquerRelanceLot(slug, ids, jusqua);
     } catch {
       charger();
+      setEnVentilation(false);
       setInfoVentilation('La répartition a échoué. Réessayez.');
       return;
     }
     setMasquees((deja) => ({ ...deja, ...Object.fromEntries(lot.map((x) => [x.id, x.jusqua])) }));
-    const gardees = visibles.length - lot.length;
-    setPlafond(gardees);
-    ecrire(CLE_PLAFOND, { jour: jourIso(new Date()), n: gardees });
-    const dernier = Math.max(...lot.map((x) => x.jusqua));
-    setInfoVentilation(
-      `${gardees} action(s) pour aujourd'hui, ${lot.length} étalée(s) sur ${parJour.size} jour(s) ouvré(s) suivants, jusqu'à ${jourLong(dernier)}.`,
+    // Les dates des tâches, quelques-unes à la fois pour ne pas saturer le CRM.
+    const aDecaler = visibles.flatMap((a) =>
+      a.tacheIds.map((id) => ({
+        id,
+        espace: a.instance?.slug ?? slug,
+        echeance: new Date(jusquaDe.get(a.id) as number).toISOString(),
+      })),
     );
+    let echecs = 0;
+    let simulees = 0;
+    let suivante = 0;
+    const ouvrier = async () => {
+      while (suivante < aDecaler.length) {
+        const t = aDecaler[suivante++];
+        if (!t) return;
+        try {
+          const r = await updateTache(t.espace, t.id, { echeance: t.echeance });
+          if ('simulation' in r) simulees++;
+        } catch {
+          echecs++;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: 4 }, ouvrier));
+    setEnVentilation(false);
+    const dernier = Math.max(...lot.map((x) => x.jusqua));
+    const jours = parJour.size;
+    let info = `${lot.length} action(s) étalée(s) sur ${jours} jour(s) ouvré(s), jusqu'à ${jourLong(dernier)}.`;
+    if (simulees > 0)
+      info += ` Écritures réelles fermées : les dates de ${simulees} tâche(s) n'ont pas bougé dans l'Agenda.`;
+    if (echecs > 0) info += ` ${echecs} tâche(s) n'ont pas pu changer de date.`;
+    setInfoVentilation(info);
+    if (simulees === 0) charger();
   };
 
   const lancer = () =>
@@ -312,8 +331,8 @@ export function AideRelance({ slug }: { slug: string }) {
               type="button"
               className="aide-vent"
               aria-label="Ventiler les actions"
-              title="Étale les actions choisies sur plusieurs jours ouvrés, 5 par jour au plus. Rien n'est supprimé : « Les remettre dans la liste » défait tout."
-              disabled={visibles.length < 2}
+              title="Étale toutes les actions choisies sur les jours ouvrés suivants, 5 par jour, et décale la date de leurs tâches. Rien n'est supprimé."
+              disabled={visibles.length < 1 || enVentilation}
               onClick={() => void ventilerVisibles()}
             >
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">

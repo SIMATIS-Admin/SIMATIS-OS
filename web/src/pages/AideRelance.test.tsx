@@ -584,31 +584,33 @@ describe('AideRelance', () => {
       await screen.findByText('Retard Fictif');
     };
 
-    it('étale les actions choisies, 5 par jour au plus, et ne garde que la part du jour', async () => {
+    it('étale toutes les actions choisies, 5 par jour, à partir de demain, et décale leurs tâches', async () => {
       await ouvrir();
       expect(lignes()).toHaveLength(10);
       fireEvent.click(screen.getByRole('button', { name: 'Ventiler les actions' }));
-      await waitFor(() => expect(api.masquerRelanceLot).toHaveBeenCalled());
+      await waitFor(() => expect(api.updateTache).toHaveBeenCalled());
       const lots = api.masquerRelanceLot.mock.calls.map(([, ids]) => ids as string[]);
-      const total = lots.reduce((n, ids) => n + ids.length, 0);
-      expect(lots.every((ids) => ids.length <= 5)).toBe(true);
-      expect(total).toBe(6);
-      // Jamais de report dans le passé, ni en dehors des jours ouvrés.
+      expect(lots.map((ids) => ids.length)).toEqual([5, 5]);
       for (const appel of api.masquerRelanceLot.mock.calls) {
         const jusqua = appel[2] as number;
         expect(jusqua).toBeGreaterThan(Date.now());
         expect([0, 6]).not.toContain(new Date(jusqua).getDay());
       }
-      await waitFor(() => expect(lignes()).toHaveLength(4));
-      expect(screen.getByRole('status').textContent).toMatch(/4 action\(s\) pour aujourd'hui/);
+      // La tâche en retard de la première action change d'échéance : elle sort des retards.
+      expect(api.updateTache).toHaveBeenCalledWith('simatis', 't1', {
+        echeance: expect.stringMatching(/^\d{4}-/) as string,
+      });
+      expect(
+        Date.parse((api.updateTache.mock.calls[0]?.[2] as { echeance: string }).echeance),
+      ).toBeGreaterThan(Date.now());
+      expect(await screen.findByText(/10 action\(s\) étalée\(s\) sur 2 jour/)).toBeTruthy();
     });
 
-    it('revient au nombre choisi quand on change de nombre', async () => {
+    it("signale quand les écritures réelles sont fermées : les dates n'ont pas bougé", async () => {
+      api.updateTache.mockResolvedValue({ simulation: true, message: 'simulé' });
       await ouvrir();
       fireEvent.click(screen.getByRole('button', { name: 'Ventiler les actions' }));
-      await waitFor(() => expect(lignes()).toHaveLength(4));
-      fireEvent.click(screen.getByRole('button', { name: '5' }));
-      await waitFor(() => expect(lignes()).toHaveLength(5));
+      expect(await screen.findByText(/Écritures réelles fermées/)).toBeTruthy();
     });
 
     it('signale un échec sans rien cacher', async () => {
@@ -616,6 +618,7 @@ describe('AideRelance', () => {
       await ouvrir();
       fireEvent.click(screen.getByRole('button', { name: 'Ventiler les actions' }));
       expect(await screen.findByText(/La répartition a échoué/)).toBeTruthy();
+      expect(api.updateTache).not.toHaveBeenCalled();
       expect(lignes()).toHaveLength(10);
     });
   });
