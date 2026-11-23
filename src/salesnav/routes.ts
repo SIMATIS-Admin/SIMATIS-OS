@@ -17,6 +17,7 @@ import {
   sauverSurcharge,
   supprimerCampagne,
 } from './modeles.js';
+import { ActionInvalide, ActionRefusee, enregistrerAction, indicateurs } from './actions.js';
 import { lireReglages, ReglageInvalide, sauverReglages } from './reglages.js';
 import { ETAPES_SALESNAV } from './schema.js';
 
@@ -28,6 +29,11 @@ const reglagesSchema = z.object({
   quotaJour: z.number().optional(),
   pause: z.boolean().optional(),
 });
+const actionSchema = z.object({
+  type: z.string().max(40),
+  opportuniteId: z.uuid().nullable().optional(),
+  campagneId: z.uuid().nullable().optional(),
+});
 const variablesSchema = z.object({
   prenom: z.string().max(200).optional(),
   entreprise: z.string().max(200).optional(),
@@ -38,6 +44,8 @@ export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoute
 
   const erreur = (e: unknown, reply: FastifyReply) => {
     if (e instanceof CampagneIntrouvable) return reply.code(404).send({ error: e.message });
+    if (e instanceof ActionRefusee) return reply.code(409).send({ error: e.message });
+    if (e instanceof ActionInvalide) return reply.code(400).send({ error: e.message });
     if (e instanceof ModeleInvalide || e instanceof ReglageInvalide)
       return reply.code(400).send({ error: e.message });
     throw e;
@@ -69,6 +77,24 @@ export function registerSalesnavRoutes(app: FastifyInstance, deps: SalesnavRoute
       const p = reglagesSchema.safeParse(request.body);
       if (!p.success) return invalide(reply, 'Réglage invalide');
       return dansInstance(request.params.slug, reply, (tx) => sauverReglages(tx, p.data));
+    },
+  );
+
+  // Les compteurs du jour et de la semaine : sous-section SalesNav et barre de l'état commercial.
+  app.get<{ Params: { slug: string } }>('/api/i/:slug/salesnav/indicateurs', (request, reply) =>
+    dansInstance(request.params.slug, reply, (tx) => indicateurs(tx)),
+  );
+
+  app.post<{ Params: { slug: string }; Body: unknown }>(
+    '/api/i/:slug/salesnav/actions',
+    async (request, reply) => {
+      const p = actionSchema.safeParse(request.body);
+      if (!p.success) return invalide(reply, 'Action invalide');
+      const r = await dansInstance(request.params.slug, reply, async (tx) => {
+        await enregistrerAction(tx, p.data);
+        return indicateurs(tx);
+      });
+      return reply.sent ? undefined : reply.code(201).send(r);
     },
   );
 

@@ -44,6 +44,7 @@ export const REFERENCES: {
   { table: 'vma_tests', colonne: 'opportunite_id', kind: 'affaire' },
   { table: 'prospection_occurrences', colonne: 'contact_id', kind: 'contact' },
   { table: 'prospection_brouillons', colonne: 'contact_id', kind: 'contact' },
+  { table: 'salesnav_actions', colonne: 'opportunite_id', kind: 'affaire' },
   { table: 'diagnostic_projets', colonne: 'entreprise_id', kind: 'entreprise' },
   { table: 'diagnostic_projets', colonne: 'contact_id', kind: 'contact' },
   { table: 'diagnostic_projets', colonne: 'opportunite_id', kind: 'affaire' },

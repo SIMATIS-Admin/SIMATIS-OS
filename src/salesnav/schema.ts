@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { boolean, integer, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { opportunites } from '../crm/schema.js';
 import { instanceIsolation, metierColumns } from '../db/columns.js';
 
 // Canal Sales Navigator : les messages envoyés à la main (invitation, remerciement, relances).
@@ -63,6 +64,35 @@ export const salesnavReglages = pgTable(
   (t) => [
     uniqueIndex('salesnav_reglages_instance_idx').on(t.instanceId),
     instanceIsolation('salesnav_reglages'),
+  ],
+);
+
+// Journal du canal : une ligne par demande de connexion ou message, envoyé ou reçu. C'est lui qui
+// alimente les compteurs de la sous-section SalesNav et la barre de l'état commercial.
+export const TYPES_ACTION_SALESNAV = [
+  'demande_envoyee',
+  'demande_recue',
+  'message_envoye',
+  'reponse_recue',
+] as const;
+export type TypeActionSalesnav = (typeof TYPES_ACTION_SALESNAV)[number];
+
+export const salesnavActions = pgTable(
+  'salesnav_actions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...metierColumns(),
+    type: text('type', { enum: TYPES_ACTION_SALESNAV }).notNull(),
+    opportuniteId: uuid('opportunite_id').references(() => opportunites.id, {
+      onDelete: 'set null',
+    }),
+    campagneId: uuid('campagne_id').references(() => salesnavCampagnes.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [
+    index('salesnav_actions_instance_idx').on(t.instanceId, t.createdAt),
+    instanceIsolation('salesnav_actions'),
   ],
 );
 

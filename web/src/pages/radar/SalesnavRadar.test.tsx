@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ReglagesSalesnav } from '../../api.js';
+import type { IndicateursSalesnav, ReglagesSalesnav } from '../../api.js';
 
 const api = vi.hoisted(() => ({
+  fetchIndicateursSalesnav: vi.fn(),
+  enregistrerActionSalesnav: vi.fn(),
   fetchReglagesSalesnav: vi.fn(),
   enregistrerReglagesSalesnav: vi.fn(),
   patchFiche: vi.fn(),
@@ -24,6 +26,13 @@ const reglages = (quotaJour = 8, pause = false): ReglagesSalesnav => ({
   cible: 12,
   niveau: 'normal',
 });
+const indicateurs = (envoyees = 0): IndicateursSalesnav => ({
+  jour: { demande_envoyee: envoyees, demande_recue: 0, message_envoye: 0, reponse_recue: 0 },
+  semaine: { demande_envoyee: envoyees, demande_recue: 0, message_envoye: 0, reponse_recue: 0 },
+  quotaJour: 8,
+  restantAujourdhui: 8 - envoyees,
+  pause: false,
+});
 const affaire = (id: string, etape: number): AffaireSalesnav => ({
   id,
   titre: `Affaire ${id}`,
@@ -41,6 +50,7 @@ describe('SalesnavRadar', () => {
 
   const monter = async (affaires: AffaireSalesnav[] = [], r = reglages()) => {
     api.fetchReglagesSalesnav.mockResolvedValue(r);
+    api.fetchIndicateursSalesnav.mockResolvedValue(indicateurs());
     const onChange = vi.fn();
     const onRetour = vi.fn();
     render(
@@ -139,5 +149,67 @@ describe('SalesnavRadar', () => {
     expect(await screen.findByText(/n’a pas été mise à jour/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '← Retour au Radar' }));
     expect(onRetour).toHaveBeenCalled();
+  });
+
+  it("enregistre une demande envoyée et place l'opportunité à l'étape Contactées", async () => {
+    const { onChange } = await monter([affaire('a', 0)]);
+    api.enregistrerActionSalesnav.mockResolvedValue(indicateurs(1));
+    api.patchFiche.mockResolvedValue({});
+    fireEvent.click(screen.getByRole('button', { name: 'Demande envoyée à Affaire a' }));
+    await waitFor(() =>
+      expect(api.enregistrerActionSalesnav).toHaveBeenCalledWith('demo', {
+        type: 'demande_envoyee',
+        opportuniteId: 'a',
+      }),
+    );
+    await waitFor(() =>
+      expect(api.patchFiche).toHaveBeenCalledWith('demo', 'affaire', 'a', {
+        radarEtapeManuelle: 1,
+      }),
+    );
+    expect(onChange).toHaveBeenCalled();
+    expect(await screen.findByText('1 / 8 demandes aujourd’hui')).toBeTruthy();
+  });
+
+  it('ne fait pas reculer une opportunité qui a déjà répondu quand on note un message envoyé', async () => {
+    await monter([affaire('a', 3)]);
+    api.enregistrerActionSalesnav.mockResolvedValue(indicateurs());
+    fireEvent.click(screen.getByRole('button', { name: 'Message envoyé à Affaire a' }));
+    await waitFor(() => expect(api.enregistrerActionSalesnav).toHaveBeenCalled());
+    expect(api.patchFiche).not.toHaveBeenCalled();
+  });
+
+  it("place l'opportunité à Ont répondu quand une réponse est reçue", async () => {
+    await monter([affaire('a', 1)]);
+    api.enregistrerActionSalesnav.mockResolvedValue(indicateurs());
+    api.patchFiche.mockResolvedValue({});
+    fireEvent.click(screen.getByRole('button', { name: 'Réponse reçue de Affaire a' }));
+    await waitFor(() =>
+      expect(api.patchFiche).toHaveBeenCalledWith('demo', 'affaire', 'a', {
+        radarEtapeManuelle: 3,
+      }),
+    );
+  });
+
+  it('affiche le refus du quota sans toucher à l’opportunité', async () => {
+    await monter([affaire('a', 0)]);
+    api.enregistrerActionSalesnav.mockRejectedValue(
+      new Error('Quota atteint : 8 demandes par jour.'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Demande envoyée à Affaire a' }));
+    expect(await screen.findByText(/Quota atteint/)).toBeTruthy();
+    expect(api.patchFiche).not.toHaveBeenCalled();
+  });
+
+  it('enregistre une demande reçue sans opportunité', async () => {
+    await monter();
+    api.enregistrerActionSalesnav.mockResolvedValue(indicateurs());
+    fireEvent.click(screen.getByRole('button', { name: '+ Demande reçue' }));
+    await waitFor(() =>
+      expect(api.enregistrerActionSalesnav).toHaveBeenCalledWith('demo', {
+        type: 'demande_recue',
+        opportuniteId: null,
+      }),
+    );
   });
 });

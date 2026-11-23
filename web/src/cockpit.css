@@ -712,3 +712,51 @@
     margin: 4px 0 0;
   }
 }
+
+.cockpit-salesnav {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.35fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 11px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  color: inherit;
+  text-decoration: none;
+}
+.cockpit-salesnav:hover {
+  background: var(--surface-subtle);
+}
+.cockpit-salesnav > strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.cockpit-salesnav-details {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+.cockpit-salesnav-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline: 13px;
+}
+.cockpit-salesnav-details > div + div {
+  border-left: 1px solid var(--line-2);
+}
+.cockpit-salesnav-details dt {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.cockpit-salesnav-details dd {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+}
+.cockpit-salesnav-details small,
+.cockpit-salesnav-quota {
+  color: var(--ink-2);
+  font-size: 12px;
+}

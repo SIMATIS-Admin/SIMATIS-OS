@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchPipeline, type Pipeline } from '../api.js';
 import { Icon } from '../icons.js';
 import { etapeRadar } from '../radar.js';
+import { BarreSalesnav } from './BarreSalesnav.js';
 
 function Etat({ slug, data }: { slug: string; data: Pipeline }) {
   const etapesRadar = new Set(data.etapes.slice(0, 2).map((etape) => etape.id));
@@ -86,7 +87,10 @@ export function EtatCommercial({ slug }: { slug: string }) {
         <span>{erreur ? 'Données momentanément indisponibles' : 'Vue d’ensemble'}</span>
       </div>
       {data ? (
-        <Etat slug={slug} data={data} />
+        <>
+          <Etat slug={slug} data={data} />
+          <BarreSalesnav slug={slug} />
+        </>
       ) : (
         <div
           className={`cockpit-commercial-surface attente ${erreur ? 'erreur' : ''}`}

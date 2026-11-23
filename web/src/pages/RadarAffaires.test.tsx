@@ -270,19 +270,37 @@ it('ouvre la sous-section SalesNav depuis le quartier SalesNav du Radar', async 
                     modeles: [],
                     campagnes: [],
                   }
-                : url.endsWith('/salesnav/reglages')
+                : url.endsWith('/salesnav/indicateurs')
                   ? {
+                      jour: {
+                        demande_envoyee: 0,
+                        demande_recue: 0,
+                        message_envoye: 0,
+                        reponse_recue: 0,
+                      },
+                      semaine: {
+                        demande_envoyee: 0,
+                        demande_recue: 0,
+                        message_envoye: 0,
+                        reponse_recue: 0,
+                      },
                       quotaJour: 8,
-                      quotaSemaine: 40,
+                      restantAujourdhui: 8,
                       pause: false,
-                      quotaMax: 25,
-                      recommande: 8,
-                      cible: 12,
-                      niveau: 'normal',
                     }
-                  : url.endsWith('/rendez-vous')
-                    ? { etat: 'ok', rdv: [] }
-                    : { etat: 'termine' },
+                  : url.endsWith('/salesnav/reglages')
+                    ? {
+                        quotaJour: 8,
+                        quotaSemaine: 40,
+                        pause: false,
+                        quotaMax: 25,
+                        recommande: 8,
+                        cible: 12,
+                        niveau: 'normal',
+                      }
+                    : url.endsWith('/rendez-vous')
+                      ? { etat: 'ok', rdv: [] }
+                      : { etat: 'termine' },
           ),
         ),
       ),
