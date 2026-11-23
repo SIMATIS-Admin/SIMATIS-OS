@@ -200,6 +200,38 @@ describe('Tâches', () => {
     expect(reel).toMatchObject({ titre: 'Envoyer le compte rendu', canal: 'email', fait: false });
   });
 
+  it("décale la date d'une tâche HubSpot dans l'OS seul, sans appeler le CRM, même écritures fermées", async () => {
+    const id = await hubspotTache('402');
+    const avant = (
+      await t.owner.pool.query<{ echeance: Date | null }>(
+        'select echeance from taches where id = $1',
+        [id],
+      )
+    ).rows[0]?.echeance;
+    portal.calls.length = 0;
+    const vue = (await updateTache(
+      t.app.db,
+      a,
+      id,
+      { echeance: '2027-05-04T07:00:00.000Z', localSeul: true },
+      off(),
+    )) as TacheVue;
+    expect(vue.echeance).toBe('2027-05-04T07:00:00.000Z');
+    expect(portal.calls).toHaveLength(0);
+    const { rows } = await t.owner.pool.query<{ echeance_choisie: boolean }>(
+      'select echeance_choisie from taches where id = $1',
+      [id],
+    );
+    expect(rows[0]?.echeance_choisie).toBe(true);
+    // Les essais suivants lisent cette tâche à sa date d'origine.
+    await t.owner.pool.query(
+      'update taches set echeance = $2, echeance_choisie = false where id = $1',
+      [id, avant ?? null],
+    );
+    // Sans date, rien à décaler.
+    await expect(updateTache(t.app.db, a, id, { localSeul: true }, off())).rejects.toThrow();
+  });
+
   it('links a task to a person or a company chosen in the OS, and unlinks it', async () => {
     const { rows } = await t.owner.pool.query<{ id: string }>(
       "insert into entreprises (instance_id, nom) values ($1, 'Atelier fictif') returning id",

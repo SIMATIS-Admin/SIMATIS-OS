@@ -599,6 +599,7 @@ describe('AideRelance', () => {
       // La tâche en retard de la première action change d'échéance : elle sort des retards.
       expect(api.updateTache).toHaveBeenCalledWith('simatis', 't1', {
         echeance: expect.stringMatching(/^\d{4}-/) as string,
+        localSeul: true,
       });
       expect(
         Date.parse((api.updateTache.mock.calls[0]?.[2] as { echeance: string }).echeance),
@@ -606,11 +607,13 @@ describe('AideRelance', () => {
       expect(await screen.findByText(/10 action\(s\) étalée\(s\) sur 2 jour/)).toBeTruthy();
     });
 
-    it("signale quand les écritures réelles sont fermées : les dates n'ont pas bougé", async () => {
-      api.updateTache.mockResolvedValue({ simulation: true, message: 'simulé' });
+    it("décale les dates dans l'OS seul, jamais dans le CRM", async () => {
       await ouvrir();
       fireEvent.click(screen.getByRole('button', { name: 'Ventiler les actions' }));
-      expect(await screen.findByText(/Écritures réelles fermées/)).toBeTruthy();
+      await waitFor(() => expect(api.updateTache).toHaveBeenCalled());
+      for (const appel of api.updateTache.mock.calls) {
+        expect((appel[2] as { localSeul?: boolean }).localSeul).toBe(true);
+      }
     });
 
     it('signale un échec sans rien cacher', async () => {

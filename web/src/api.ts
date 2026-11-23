@@ -1030,6 +1030,8 @@ export type TacheSaisie = {
   contactId?: string | null;
   entrepriseId?: string | null;
   opportuniteId?: string | null;
+  // Date décalée dans l'OS seul, sans écriture dans le CRM.
+  localSeul?: boolean;
 };
 export type Options = { ensuite: boolean; claudeEngage: boolean; chatgptEngage: boolean };
 export const fetchOptions = () =>

@@ -259,19 +259,28 @@ export async function syncHubspot(ctx: SyncCtx, client: HubspotClient): Promise<
               sourceId: taches.sourceId,
               typeChoisi: taches.typeChoisi,
               lienChoisi: taches.lienChoisi,
+              echeanceChoisie: taches.echeanceChoisie,
             })
             .from(taches)
             .where(
               and(
                 eq(taches.instanceId, currentInstance),
                 inArray(taches.id, [...existing.values()]),
-                or(eq(taches.typeChoisi, true), eq(taches.lienChoisi, true)),
+                or(
+                  eq(taches.typeChoisi, true),
+                  eq(taches.lienChoisi, true),
+                  eq(taches.echeanceChoisie, true),
+                ),
               ),
             );
     const choisis = new Set(choix.filter((c) => c.typeChoisi).map((c) => c.sourceId));
     const liesDansOs = new Set(choix.filter((c) => c.lienChoisi).map((c) => c.sourceId));
+    const datesDansOs = new Set(choix.filter((c) => c.echeanceChoisie).map((c) => c.sourceId));
     for (const t of tasks) {
-      const { type, canal, ...valeurs } = mapTask(t);
+      const { type, canal, ...tout } = mapTask(t);
+      // Une date décalée dans l'OS (ventilation) l'emporte sur celle de HubSpot.
+      const { echeance, ...sansDate } = tout;
+      const valeurs = datesDansOs.has(t.id) ? sansDate : { ...sansDate, echeance };
       await upsert(
         ctx.tx,
         taches,

@@ -435,6 +435,21 @@ describe('HubSpot mirror', () => {
     );
   });
 
+  it("garde une date décalée dans l'OS : la synchro ne la réécrit pas", async () => {
+    await t.owner.pool.query(
+      "update taches set echeance = '2027-05-04T07:00:00Z', echeance_choisie = true where instance_id = $1 and source_id = '401'",
+      [a.id],
+    );
+    const tache = data.tasks[0];
+    if (tache) tache.properties.hs_lastmodifieddate = new Date(Date.now() + 600_000).toISOString();
+    await syncConnexion(t.app.db, a, 'crm', deps());
+    const { rows } = await t.owner.pool.query<{ echeance: Date }>(
+      "select echeance from taches where instance_id = $1 and source_id = '401'",
+      [a.id],
+    );
+    expect(rows[0]?.echeance.toISOString()).toBe('2027-05-04T07:00:00.000Z');
+  });
+
   it('keeps a type chosen and a time set in the OS, and reads the deals last activity date', async () => {
     await t.owner.pool.query(
       "update taches set type = 'reunion', canal = 'tache', type_choisi = true, avec_heure = true where instance_id = $1 and source_id = '401'",

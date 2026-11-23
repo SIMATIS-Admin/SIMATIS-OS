@@ -1,0 +1,1 @@
+ALTER TABLE "taches" ADD COLUMN "echeance_choisie" boolean DEFAULT false NOT NULL;

@@ -302,6 +302,7 @@ export async function syncCrmOs(ctx: SyncCtx, client: CrmOsClient): Promise<Sync
             sourceId: taches.sourceId,
             typeChoisi: taches.typeChoisi,
             lienChoisi: taches.lienChoisi,
+            echeanceChoisie: taches.echeanceChoisie,
           })
           .from(taches)
           .where(
@@ -310,13 +311,17 @@ export async function syncCrmOs(ctx: SyncCtx, client: CrmOsClient): Promise<Sync
       : [];
     const typesChoisis = new Set(choix.filter((c) => c.typeChoisi).map((c) => c.sourceId));
     const liensChoisis = new Set(choix.filter((c) => c.lienChoisi).map((c) => c.sourceId));
+    const datesChoisies = new Set(choix.filter((c) => c.echeanceChoisie).map((c) => c.sourceId));
     for (const f of lues) {
       const m = mapTache(f);
       if (!m) {
         ignore('Tâche', f);
         continue;
       }
-      const { type, canal, ...valeurs } = m;
+      const { type, canal, ...tout } = m;
+      // Une date décalée dans l'OS (ventilation) l'emporte sur celle du CRM copié.
+      const { echeance, ...sansDate } = tout;
+      const valeurs = datesChoisies.has(f.id) ? sansDate : { ...sansDate, echeance };
       await upsert(
         tx,
         taches,

@@ -504,6 +504,7 @@ export function registerApi(
       fait: z.boolean().optional(),
       contactId: z.uuid().nullable().optional(),
       entrepriseId: z.uuid().nullable().optional(),
+      localSeul: z.boolean().optional(),
     })
     .strict();
   const tacheErreur = (error: unknown, reply: FastifyReply) => {
