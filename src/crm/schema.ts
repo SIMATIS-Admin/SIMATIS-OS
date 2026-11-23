@@ -134,6 +134,8 @@ export const taches = pgTable(
     titre: text('titre').notNull(),
     canal: text('canal', { enum: ['email', 'appel', 'tache'] }).notNull(),
     echeance: timestamp('echeance', { withTimezone: true }),
+    // Date décalée dans l'OS seul (ventilation) : la synchro du CRM ne la réécrit plus.
+    echeanceChoisie: boolean('echeance_choisie').notNull().default(false),
     faitAt: timestamp('fait_at', { withTimezone: true }),
     prepare: boolean('prepare').notNull().default(false),
     notes: text('notes'),

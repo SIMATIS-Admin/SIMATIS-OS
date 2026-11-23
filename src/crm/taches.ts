@@ -337,6 +337,8 @@ export async function updateTache(
     // Person or company the task is about, chosen in the OS (null removes the link).
     contactId?: string | null;
     entrepriseId?: string | null;
+    // Décale la date dans l'OS seul, sans écrire dans le CRM (ventilation des relances).
+    localSeul?: boolean;
   } & ChampsActivite,
   deps: ConnexionDeps,
 ): Promise<TacheVue | SimulationTache | null> {
@@ -346,6 +348,16 @@ export async function updateTache(
       .from(taches)
       .where(and(eq(taches.instanceId, currentInstance), eq(taches.id, id)));
     if (!tache) return null;
+    if (patch.localSeul) {
+      // Seule la date change, et seulement ici : la synchro du CRM la laissera telle quelle.
+      if (!patch.echeance)
+        throw new TacheInvalide('Une date est nécessaire pour décaler la tâche.');
+      await tx
+        .update(taches)
+        .set({ echeance: new Date(patch.echeance), echeanceChoisie: true, updatedAt: new Date() })
+        .where(eq(taches.id, id));
+      return vue(tx, id);
+    }
     if (copieEnLectureSeule(tache.source)) throw new CrmIndisponible(MESSAGE_LECTURE_SEULE);
     const titre = patch.titre?.trim();
     await verifierLiens(tx, patch);

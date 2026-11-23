@@ -210,9 +210,8 @@ export function AideRelance({ slug }: { slug: string }) {
     .filter((m) => m.n > 0);
 
   // Étale TOUTES les actions choisies sur les jours ouvrés suivants (5 par jour, rien pour
-  // aujourd'hui). L'action quitte la liste (report) et la date de ses tâches change : sans cela
-  // elles resteraient en retard dans l'Agenda. Les écritures vers HubSpot suivent les verrous
-  // habituels (simulation par défaut) ; seules les dates changent, rien n'est supprimé.
+  // aujourd'hui). L'action quitte la liste (report) et la date de ses tâches change dans l'OS
+  // seul (jamais dans HubSpot) : sans cela elles resteraient en retard dans l'Agenda.
   const ventilerVisibles = async () => {
     const lot = ventiler(visibles.map((a) => a.id));
     if (lot.length === 0) {
@@ -242,15 +241,13 @@ export function AideRelance({ slug }: { slug: string }) {
       })),
     );
     let echecs = 0;
-    let simulees = 0;
     let suivante = 0;
     const ouvrier = async () => {
       while (suivante < aDecaler.length) {
         const t = aDecaler[suivante++];
         if (!t) return;
         try {
-          const r = await updateTache(t.espace, t.id, { echeance: t.echeance });
-          if ('simulation' in r) simulees++;
+          await updateTache(t.espace, t.id, { echeance: t.echeance, localSeul: true });
         } catch {
           echecs++;
         }
@@ -261,11 +258,9 @@ export function AideRelance({ slug }: { slug: string }) {
     const dernier = Math.max(...lot.map((x) => x.jusqua));
     const jours = parJour.size;
     let info = `${lot.length} action(s) étalée(s) sur ${jours} jour(s) ouvré(s), jusqu'à ${jourLong(dernier)}.`;
-    if (simulees > 0)
-      info += ` Écritures réelles fermées : les dates de ${simulees} tâche(s) n'ont pas bougé dans l'Agenda.`;
     if (echecs > 0) info += ` ${echecs} tâche(s) n'ont pas pu changer de date.`;
     setInfoVentilation(info);
-    if (simulees === 0) charger();
+    charger();
   };
 
   const lancer = () =>
@@ -331,7 +326,7 @@ export function AideRelance({ slug }: { slug: string }) {
               type="button"
               className="aide-vent"
               aria-label="Ventiler les actions"
-              title="Étale toutes les actions choisies sur les jours ouvrés suivants, 5 par jour, et décale la date de leurs tâches. Rien n'est supprimé."
+              title="Étale toutes les actions choisies sur les jours ouvrés suivants, 5 par jour, et décale la date de leurs tâches dans l'OS (HubSpot n'est pas touché). Rien n'est supprimé."
               disabled={visibles.length < 1 || enVentilation}
               onClick={() => void ventilerVisibles()}
             >
