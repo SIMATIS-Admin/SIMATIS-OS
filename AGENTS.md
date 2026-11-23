@@ -98,7 +98,7 @@ Marc n'est pas développeur : l'agent gère tout git seul, sans demander de conf
 - **Une nouvelle branche par feature** (`feature/nom-court`).
 - **Feature terminée** : l'agent ouvre une PR, fait lui-même la revue de code (corrige ce qu'il trouve), vérifie que la CI est verte, puis merge dans `main`. Marc n'a pas à relire.
 - **Marc est débutant** : à chaque fin de feature, expliquer simplement, étape par étape, comment tester l'app. L'agent s'occupe de tout le reste.
-- **Second cerveau à jour** : en fin de feature, mettre à jour dans le second cerveau `brain/outils/simatis-os-structure.md` (ce qui a changé dans la structure de l'OS) et `brain/outils/simatis-os-feuille-de-route.md` (étape faite, nouvelles étapes). Écrire dans le clone local du second cerveau (`SECOND_CERVEAU_DIR`), noter la modification dans `log.md`, puis la committer et la pousser sur le dépôt privé (voir « Second cerveau ») ; ne rien en copier dans ce dépôt.
+- **Second cerveau à jour** : en fin de feature, mettre à jour dans le second cerveau `brain/outils/simatis-os-organigramme.md` (**le schéma de l'OS** : ajouter ou modifier la fonction livrée au bon endroit, avec son état `en service`, `à essayer` ou `partiel`, en respectant le format décrit dans la note, car l'écran Feuille de route la lit), `brain/outils/simatis-os-feuille-de-route.md` (retirer l'étape faite, ajouter les nouvelles) et `brain/outils/simatis-os-structure.md` (journal détaillé de la livraison). Écrire dans le clone local du second cerveau (`SECOND_CERVEAU_DIR`), noter la modification dans `log.md`, puis la committer et la pousser sur le dépôt privé (voir « Second cerveau ») ; ne rien en copier dans ce dépôt.
 
 ### Garde-fou confidentialité (avant chaque commit, non négociable)
 

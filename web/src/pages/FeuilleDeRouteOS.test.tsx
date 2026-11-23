@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FeuilleDeRouteOS } from './FeuilleDeRouteOS.js';
 
 const FEUILLE = 'brain/outils/simatis-os-feuille-de-route.md';
-const STRUCTURE = 'brain/outils/simatis-os-structure.md';
+const ORGANIGRAMME = 'brain/outils/simatis-os-organigramme.md';
 const IDEE = 'brain/idees-en-vrac/2026-10-29_idee-fictive.md';
 const carte = {
   noeuds: [
@@ -51,7 +51,8 @@ const brancher = (reponse?: (op: Corps) => Response | undefined) => {
     if (surmesure) return Promise.resolve(surmesure);
     const contenus: Record<string, string> = {
       [FEUILLE]: '# Feuille fictive\n\n- fait — x',
-      [STRUCTURE]: '# Structure fictive',
+      [ORGANIGRAMME]:
+        '## Rubrique fictive\n- Module fictif [en service] — fait ceci\n  - Fonction fictive [à essayer]',
       [IDEE]: '---\nstatut: draft\nconcerne: os\n---\n\n# Idée fictive',
     };
     return Promise.resolve(json({ contenu: contenus[String(op.chemin)] ?? '', empreinte: 'e1' }));
@@ -64,11 +65,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const ouvrirFeuille = async () =>
+  fireEvent.click(await screen.findByRole('tab', { name: 'Feuille de route' }));
+
 describe('FeuilleDeRouteOS', () => {
-  it('affiche les deux notes et seulement les idées OS en attente', async () => {
+  it('affiche l’organigramme par défaut, en arbre avec les états', async () => {
     render(<FeuilleDeRouteOS slug="x" autorise />);
+    expect(await screen.findByText('Rubrique fictive')).toBeTruthy();
+    expect(screen.getByText('Module fictif')).toBeTruthy();
+    expect(screen.getByText('en service')).toBeTruthy();
+    expect(screen.getByText('Fonction fictive')).toBeTruthy();
+    expect(screen.getByText('à essayer')).toBeTruthy();
+    expect(screen.queryByText(/Feuille fictive/)).toBeNull();
+  });
+
+  it('affiche la feuille de route et seulement les idées OS en attente', async () => {
+    render(<FeuilleDeRouteOS slug="x" autorise />);
+    await ouvrirFeuille();
     expect(await screen.findByText(/Feuille fictive/)).toBeTruthy();
-    expect(await screen.findByText(/Structure fictive/)).toBeTruthy();
     expect(await screen.findByText('Idée fictive')).toBeTruthy();
     expect(screen.queryByText('Déjà promue')).toBeNull();
     expect(screen.queryByText('Autre sujet')).toBeNull();
@@ -76,15 +90,16 @@ describe('FeuilleDeRouteOS', () => {
 
   it('ouvre l’éditeur de la note puis le ferme', async () => {
     render(<FeuilleDeRouteOS slug="x" autorise />);
-    await screen.findByText(/Structure fictive/);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Modifier' })[1] as HTMLElement);
-    expect(await screen.findByLabelText(`Texte de ${STRUCTURE}`)).toBeTruthy();
+    await screen.findByText('Module fictif');
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier' }));
+    expect(await screen.findByLabelText(`Texte de ${ORGANIGRAMME}`)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
-    await waitFor(() => expect(screen.queryByLabelText(`Texte de ${STRUCTURE}`)).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText(`Texte de ${ORGANIGRAMME}`)).toBeNull());
   });
 
   it('promeut une idée : étape ajoutée puis idée marquée', async () => {
     render(<FeuilleDeRouteOS slug="x" autorise />);
+    await ouvrirFeuille();
     fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir en étape' }));
     await waitFor(() => expect(appels.filter((a) => a.type === 'ecrire')).toHaveLength(2));
     const [etape, idee] = appels.filter((a) => a.type === 'ecrire');
@@ -98,6 +113,7 @@ describe('FeuilleDeRouteOS', () => {
 
   it('retire l’idée de la liste dès la promotion, même si la carte est encore ancienne', async () => {
     render(<FeuilleDeRouteOS slug="x" autorise />);
+    await ouvrirFeuille();
     fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir en étape' }));
     await waitFor(() => expect(screen.queryByText('Idée fictive')).toBeNull());
   });
@@ -112,6 +128,7 @@ describe('FeuilleDeRouteOS', () => {
         : undefined,
     );
     render(<FeuilleDeRouteOS slug="x" autorise />);
+    await ouvrirFeuille();
     fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir en étape' }));
     await waitFor(() => expect(appels.filter((a) => a.type === 'ecrire')).toHaveLength(1));
     expect(appels.find((a) => a.type === 'ecrire')).toMatchObject({ chemin: IDEE });
@@ -122,6 +139,7 @@ describe('FeuilleDeRouteOS', () => {
       op.type === 'ecrire' ? json({ error: 'La note a été modifiée ailleurs.' }, 409) : undefined,
     );
     render(<FeuilleDeRouteOS slug="x" autorise />);
+    await ouvrirFeuille();
     fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir en étape' }));
     expect(await screen.findByText(/modifiée ailleurs/)).toBeTruthy();
     expect(appels.filter((a) => a.type === 'ecrire')).toHaveLength(1);
@@ -133,6 +151,7 @@ describe('FeuilleDeRouteOS', () => {
       op.type === 'ecrire' && op.chemin === IDEE ? json({ error: 'Disque plein' }, 400) : undefined,
     );
     render(<FeuilleDeRouteOS slug="x" autorise />);
+    await ouvrirFeuille();
     fireEvent.click(await screen.findByRole('button', { name: 'Promouvoir en étape' }));
     expect(
       await screen.findByText(/L’étape a été ajoutée, mais l’idée n’a pas pu être marquée/),
@@ -146,8 +165,9 @@ describe('FeuilleDeRouteOS', () => {
         : undefined,
     );
     render(<FeuilleDeRouteOS slug="x" autorise />);
+    expect(await screen.findByText('Module fictif')).toBeTruthy();
+    await ouvrirFeuille();
     expect(await screen.findByText('Note introuvable')).toBeTruthy();
-    expect(await screen.findByText(/Structure fictive/)).toBeTruthy();
   });
 
   it('n’appelle rien quand l’espace n’est pas autorisé', () => {
