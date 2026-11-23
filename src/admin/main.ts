@@ -14,6 +14,9 @@ const code = await runCommand(process.argv.slice(2), {
   db,
   out: (line) => console.log(line),
   secretsDir: process.env.SECRETS_DIR ?? './secrets/instances',
+  dossierSauvegarde: process.env.SECRETS_DIR
+    ? `${process.env.SECRETS_DIR}/../detachements`
+    : undefined,
   realWrites: process.env.REAL_WRITES === 'on',
   // google:connect: opens the consent page in the browser of this computer.
   openUrl: (url) => {

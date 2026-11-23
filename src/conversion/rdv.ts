@@ -721,7 +721,9 @@ export async function lierRdv(
     } else {
       await verifierCible(tx, kind, id);
       await ajouterLien(tx, rdvId, kind, id);
-      if (kind === 'affaire' && (await pipelineSource(tx)).source === 'natif') {
+      const pipeline = kind === 'affaire' ? await pipelineSource(tx) : null;
+      // Seulement avec les étapes natives : un pipeline propre à l'instance n'a pas de « qualification » fixe.
+      if (pipeline?.source === 'natif' && pipeline.etapes.some((e) => e.id === 'qualification')) {
         // La liaison et le passage de la même affaire en Qualification sont atomiques.
         const avantQualification = ETAPES_NATIVES.slice(
           0,
