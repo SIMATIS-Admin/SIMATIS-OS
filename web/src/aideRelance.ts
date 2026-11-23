@@ -356,10 +356,9 @@ export function chronologie(mails: Evenement[] | null, fiche: Evenement[]): Even
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
-// ---- Ventiler : étaler les actions choisies sur plusieurs jours ouvrés -------------------------
+// ---- Ventiler : étaler les actions choisies sur les jours ouvrés suivants ---------------------------
 
 export const PAR_JOUR_MAX = 5;
-export const JOURS_MIN = 3;
 
 // Le jour ouvré numéro `k` après `depuis` (le jour 0 est `depuis` lui-même), à 9 h. Samedi et
 // dimanche sont sautés : une action reportée un week-end réapparaîtrait sans que Marc travaille.
@@ -373,26 +372,27 @@ export function jourOuvre(depuis: Date, k: number): Date {
   return d;
 }
 
-// Répartit les actions, dans l'ordre reçu, au plus PAR_JOUR_MAX par jour et sur au moins JOURS_MIN
-// jours ouvrés, avec des paquets de taille presque égale (10 actions : 4, 3, 3). Le premier paquet
-// reste pour aujourd'hui ; on rend seulement les autres, avec le jour (à 9 h) où elles reviennent.
+// Répartit TOUTES les actions, dans l'ordre reçu, à partir du prochain jour ouvré : PAR_JOUR_MAX par
+// jour, le reste sur le dernier jour. Une action seule sur le dernier jour est évitée (5, 4, 2 plutôt
+// que 5, 5, 1) : Marc ne veut pas d'un jour pour une seule tâche. Rien ne reste pour aujourd'hui.
 export function ventiler(
   ids: string[],
   depuis: Date = new Date(),
 ): { id: string; jusqua: number }[] {
-  const jours = Math.min(ids.length, Math.max(JOURS_MIN, Math.ceil(ids.length / PAR_JOUR_MAX)));
-  if (jours <= 1) return [];
-  const base = Math.floor(ids.length / jours);
-  const reste = ids.length % jours;
+  const jours = Math.ceil(ids.length / PAR_JOUR_MAX);
+  const tailles = Array.from({ length: jours }, () => PAR_JOUR_MAX);
+  const reste = ids.length - PAR_JOUR_MAX * (jours - 1);
+  if (jours > 0) tailles[jours - 1] = reste;
+  if (jours > 1 && reste === 1) {
+    tailles[jours - 2] = PAR_JOUR_MAX - 1;
+    tailles[jours - 1] = 2;
+  }
   const resultat: { id: string; jusqua: number }[] = [];
   let debut = 0;
-  for (let j = 0; j < jours; j++) {
-    const taille = base + (j < reste ? 1 : 0);
-    if (j > 0) {
-      const jusqua = jourOuvre(depuis, j).getTime();
-      for (const id of ids.slice(debut, debut + taille)) resultat.push({ id, jusqua });
-    }
+  tailles.forEach((taille, j) => {
+    const jusqua = jourOuvre(depuis, j + 1).getTime();
+    for (const id of ids.slice(debut, debut + taille)) resultat.push({ id, jusqua });
     debut += taille;
-  }
+  });
   return resultat;
 }
