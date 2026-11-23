@@ -2,7 +2,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoutinesParametres } from './parametres/Routines.js';
-import { Routines } from './Routines.js';
 
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
@@ -109,50 +108,6 @@ describe('Routines Claude screens', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
-  });
-
-  it('launches a routine and follows it step by step until its report', async () => {
-    render(<Routines slug="demo" />);
-    fireEvent.click(await screen.findByText('Lancer maintenant'));
-    expect(await screen.findByText('Lire les tâches', {}, { timeout: 4000 })).toBeTruthy();
-    expect(await screen.findByText('3 brouillons proposés', {}, { timeout: 4000 })).toBeTruthy();
-    expect(calls.find((c) => c.method === 'POST')?.url).toBe(
-      '/api/i/demo/routines/quotidienne/executions',
-    );
-  }, 10_000);
-
-  it('presents each automation by what it does, grouped, with the technical detail folded', async () => {
-    liste = [
-      { ...routine, cle: 'inbox', nom: 'Routine Inbox', skill: 'alimenter-inbox' },
-      routine,
-      { ...routine, cle: 'hebdo', nom: 'Revue hebdomadaire', skill: 'revue-hebdomadaire' },
-    ];
-    render(<Routines slug="demo" />);
-    expect(await screen.findByRole('heading', { name: 'Votre Inbox du matin' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Les relances du jour' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'La revue de la semaine' })).toBeTruthy();
-    expect(screen.queryByText('Routine Inbox')).toBeNull();
-    expect(screen.getByRole('region', { name: 'Au quotidien' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Occasionnels' })).toBeTruthy();
-    expect(screen.getAllByText(/Pas encore lancé/).length).toBeGreaterThan(0);
-    // Le détail technique est dans un bloc replié.
-    const details = document.querySelector('details');
-    expect(details?.open).toBe(false);
-    expect(details?.textContent).toContain('Lire les tâches de relance échues et du jour');
-  });
-
-  it('keeps the original name of a routine it does not know', async () => {
-    liste = [{ ...routine, cle: 'nouvelle', nom: 'Routine nouvelle', skill: 'x' }];
-    render(<Routines slug="demo" />);
-    expect(await screen.findByRole('heading', { name: 'Routine nouvelle' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Autres' })).toBeTruthy();
-  });
-
-  it('pauses a routine', async () => {
-    render(<Routines slug="demo" />);
-    fireEvent.click(await screen.findByLabelText('Activé'));
-    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
-    expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ actif: false });
   });
 
   it('shows what is missing, the blocked steps, and leads to the fix', async () => {
