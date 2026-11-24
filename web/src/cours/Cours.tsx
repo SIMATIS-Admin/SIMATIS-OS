@@ -324,6 +324,18 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
   const documents = etat.documents;
   const fichierEdite = enHtmlFichier(etat.manifest, slide.html, m);
   const enHtml = etat.manifest.format === 'html';
+  const lancer =
+    etat.manifest.diagnosticProjet && m === modules.length - 1 && s === slides.length - 1 ? (
+      <button
+        className={`btn go cours-lancer${enHtml && slide.html ? ' sur-slide' : ''}`}
+        type="button"
+        aria-label="Lancer le diagnostic"
+        title="Lancer le diagnostic"
+        onClick={() => void lancerDiagnosticProjet(etat.manifest.diagnosticProjet!)}
+      >
+        ▶
+      </button>
+    ) : null;
   return (
     <div
       className={`cours${actif && barreMasquee ? ' barre-masquee' : ''}`}
@@ -338,21 +350,17 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
       }
     >
       <div className="cours-scene">
-        {etat.manifest.diagnosticProjet && m === modules.length - 1 && s === slides.length - 1 && (
-          <button
-            className="btn go cours-lancer"
-            type="button"
-            onClick={() => void lancerDiagnosticProjet(etat.manifest.diagnosticProjet!)}
-          >
-            Lancer le diagnostic ↗
-          </button>
-        )}
+        {!(enHtml && slide.html) && lancer}
         {enHtml && slide.html ? (
           <article
             className="cours-slide cours-slide-html"
             aria-label={`Slide ${s + 1} sur ${slides.length}`}
           >
-            <SlideHtml document={documents.get(slide.html) ?? ''} titre={slide.titre} />
+            <SlideHtml
+              document={documents.get(slide.html) ?? ''}
+              titre={slide.titre}
+              superposition={lancer}
+            />
           </article>
         ) : (
           <article

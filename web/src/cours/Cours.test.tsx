@@ -369,7 +369,12 @@ describe('Lecteur, support d’ouverture d’un projet de diagnostic', () => {
     await screen.findByRole('button', { name: 'Notes' });
     expect(screen.queryByRole('button', { name: /Lancer le diagnostic/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Slide suivante' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Lancer le diagnostic/ }));
+    const lancer = await screen.findByRole('button', { name: /Lancer le diagnostic/ });
+    // Un simple triangle de lecture, posé dans la slide à droite du titre.
+    expect(lancer.textContent).toBe('▶');
+    expect(lancer.classList.contains('sur-slide')).toBe(true);
+    expect(lancer.closest('.cours-html')).not.toBeNull();
+    fireEvent.click(lancer);
     await waitFor(() => expect(onglet.location.href).toBe('https://exemple.test/diag'));
     expect(api.lancerPassationDiag).toHaveBeenCalledWith('simatis', PROJET);
   });
