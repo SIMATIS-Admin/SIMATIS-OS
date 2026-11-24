@@ -43,6 +43,13 @@ describe('Statut des étapes du diagnostic', () => {
     expect(etats[1]).toEqual({ ok: true, libelle: 'Notes saisies à la main, profil Joggeur' });
   });
 
+  it('l étape 2 à faire renvoie au lancement du diagnostic, plus à l import du PDF', () => {
+    const etats = etatsEtapes(vide);
+    expect(etats[1]?.ok).toBe(false);
+    expect(etats[1]?.libelle).toMatch(/Lancer le diagnostic/);
+    expect(etats[1]?.libelle).not.toMatch(/PDF/);
+  });
+
   it('un PDF importé sans profil calculé n est pas OK', () => {
     const etats = etatsEtapes({ ...vide, pdfEntretienNom: 'outil.pdf' });
     expect(etats[1]?.ok).toBe(false);
