@@ -13,6 +13,7 @@ import {
   type TacheVue,
 } from '../api.js';
 import {
+  aTacheAgenda,
   brouillonPour,
   construireFile,
   dansMandats,
@@ -192,29 +193,14 @@ export function AideRelance({ slug }: { slug: string }) {
       slugCourant: slug,
     }).filter((a) => {
       const jusqua = masquees[a.id] ?? 0;
-      return dansMandats(a, mandatsMasques) && jusqua > maintenant && jusqua < POUR_TOUJOURS;
+      return (
+        dansMandats(a, mandatsMasques) &&
+        !aTacheAgenda(a) &&
+        jusqua > maintenant &&
+        jusqua < POUR_TOUJOURS
+      );
     });
   }, [donnees, masquees, mandatsMasques, slug]);
-  // Tâches d'actions reportées qui sont encore en retard ou du jour dans l'Agenda : un report fait
-  // avant que les dates puissent changer dans l'OS les a laissées là.
-  const aDecalerReportees = useMemo(() => {
-    if (!donnees) return [];
-    const vivantes = new Set([...donnees.enRetard, ...(donnees.duJour ?? [])].map((t) => t.id));
-    return reportees.flatMap((a) =>
-      a.tacheIds
-        .filter((id) => vivantes.has(id))
-        .map((id) => ({ id, espace: a.instance?.slug ?? slug, jusqua: masquees[a.id] ?? 0 })),
-    );
-  }, [donnees, reportees, masquees, slug]);
-  const decalerReportees = async () => {
-    setEnVentilation(true);
-    const echecs = await decalerTaches(aDecalerReportees);
-    setEnVentilation(false);
-    setInfoVentilation(
-      `${aDecalerReportees.length - echecs} tâche(s) décalée(s) à la date de report de leur action.${echecs > 0 ? ` ${echecs} n'ont pas pu changer de date.` : ''}`,
-    );
-    charger();
-  };
   const remettre = async () => {
     const ids = reportees.map((a) => a.id);
     try {
@@ -322,7 +308,16 @@ export function AideRelance({ slug }: { slug: string }) {
   const action = (a: ActionRelance) => ({
     prepare: brouillonPour(a, brouillons),
     onMasquer: (jours: number, pourToujours: boolean) => {
-      masquer(a.id, pourToujours ? POUR_TOUJOURS : dansJours(jours).getTime());
+      const jusqua = pourToujours ? POUR_TOUJOURS : dansJours(jours).getTime();
+      masquer(a.id, jusqua);
+      // Reporter une action décale aussi ses tâches dans l'Agenda (OS seul), sinon elles y resteraient
+      // en retard. Dans une séquence, la liste n'est relue qu'à la fin.
+      if (!pourToujours && a.tacheIds.length > 0)
+        void decalerTaches(
+          a.tacheIds.map((id) => ({ id, espace: a.instance?.slug ?? slug, jusqua })),
+        ).then(() => {
+          if (!sequence) charger();
+        });
       if (sequence) avancer({ reportees: 1 });
       else setOuverte(null);
     },
@@ -465,16 +460,6 @@ export function AideRelance({ slug }: { slug: string }) {
             {reportees.length} action(s) reportée(s), cachée(s) de cette liste jusqu'à leur date.
           </span>
           <span className="aide-reportees-actions">
-            {aDecalerReportees.length > 0 && (
-              <button
-                className="btn sm"
-                type="button"
-                disabled={enVentilation}
-                onClick={() => void decalerReportees()}
-              >
-                Décaler {aDecalerReportees.length} tâche(s) dans l'Agenda
-              </button>
-            )}
             <button className="btn sm" type="button" onClick={() => void remettre()}>
               Les remettre dans la liste
             </button>
