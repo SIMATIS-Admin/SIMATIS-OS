@@ -59,6 +59,8 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
   const [nom, setNom] = useState('');
   const [aEnvoyer, setAEnvoyer] = useState<ProspectSalesnav | null>(null);
   const [note, setNote] = useState('');
+  const [reglagesOuverts, setReglagesOuverts] = useState(false);
+  const [deplies, setDeplies] = useState<string[]>([]);
   const [ciblages, setCiblages] = useState<CiblageAtelier[]>([]);
 
   const charger = useCallback(async () => {
@@ -226,23 +228,35 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
         )}
         {p.message && (
           <div className="sr-message">
-            <p className="small">
+            <p className="small sr-message-titre">
               {p.message.etape === 'invitation' ? 'Note d’invitation' : 'Message à envoyer'}
+              <button
+                type="button"
+                className="btn ghost sm"
+                aria-label={`Copier le message pour ${p.nom}`}
+                onClick={() => void copier(p.message!.texte)}
+              >
+                Copier
+              </button>
             </p>
-            <p>{p.message.texte}</p>
+            <p className={deplies.includes(p.id) ? '' : 'sr-message-texte'}>{p.message.texte}</p>
+            {p.message.texte.length > 140 && (
+              <button
+                type="button"
+                className="sr-lien"
+                aria-expanded={deplies.includes(p.id)}
+                onClick={() =>
+                  setDeplies((d) => (d.includes(p.id) ? d.filter((x) => x !== p.id) : [...d, p.id]))
+                }
+              >
+                {deplies.includes(p.id) ? 'Réduire' : 'Voir tout'}
+              </button>
+            )}
             {p.message.manquantes.length > 0 && (
               <p className="small salesnav-erreur">
                 À compléter : {p.message.manquantes.join(', ')}.
               </p>
             )}
-            <button
-              type="button"
-              className="btn sm"
-              aria-label={`Copier le message pour ${p.nom}`}
-              onClick={() => void copier(p.message!.texte)}
-            >
-              Copier
-            </button>
           </div>
         )}
         {(p.statut === 'propose' || p.statut === 'connecte') && !p.message && (
@@ -254,9 +268,6 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
         <div className="sr-actions">
           {p.statut === 'propose' && (
             <>
-              <a className="btn sm" href={p.lienLinkedin} target="_blank" rel="noreferrer">
-                Ouvrir le profil
-              </a>
               <button
                 type="button"
                 className="btn sm primary"
@@ -265,15 +276,22 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
               >
                 Envoyer la demande
               </button>
+              <a className="btn ghost sm" href={p.lienLinkedin} target="_blank" rel="noreferrer">
+                Ouvrir le profil
+              </a>
               <button
                 type="button"
-                className="btn sm"
+                className="btn ghost sm"
                 disabled={enCours}
                 onClick={() => void agir(p, 'demande')}
               >
                 Déjà envoyée à la main
               </button>
-              <button type="button" className="btn sm" onClick={() => void agir(p, 'ecarter')}>
+              <button
+                type="button"
+                className="btn ghost sm"
+                onClick={() => void agir(p, 'ecarter')}
+              >
                 Écarter
               </button>
             </>
@@ -360,11 +378,39 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
         <button type="button" className="btn" onClick={onRetour}>
           ← Retour au Radar
         </button>
-        <h2>SalesNav</h2>
+        <div className="sr-titre">
+          <h2>
+            SalesNav{' '}
+            {pipe && (
+              <span
+                className={`chip fixe small ${pipe.essaiABlanc ? '' : 'on'}`}
+                title={
+                  pipe.essaiABlanc
+                    ? 'Aucune demande n’est envoyée : Chrome s’arrête avant le clic final.'
+                    : 'Les demandes sont réellement envoyées par Chrome.'
+                }
+              >
+                {pipe.essaiABlanc ? 'Mode essai' : 'Envoi réel'}
+              </span>
+            )}
+          </h2>
+          <span className="muted small">
+            {pipe ? `${pipe.disponibles} profils disponibles dans la Base des suspects` : ''}
+          </span>
+        </div>
         <span className="sr-entete-actions">
+          <button type="button" className="btn primary" onClick={() => void proposer()}>
+            Proposer des profils pour aujourd’hui
+          </button>
+          <button type="button" className="btn" onClick={() => setAjout((v) => !v)}>
+            Ajouter un profil
+          </button>
+          <button type="button" className="btn" onClick={() => setMessages(true)}>
+            Messages
+          </button>
           <button
             type="button"
-            className="btn"
+            className="btn ghost"
             onClick={() =>
               void executer(
                 () => enregistrerActionSalesnav(slug, { type: 'demande_recue' }),
@@ -373,12 +419,6 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
             }
           >
             + Demande reçue
-          </button>
-          <button type="button" className="btn" onClick={() => setAjout((v) => !v)}>
-            Ajouter un profil
-          </button>
-          <button type="button" className="btn" onClick={() => setMessages(true)}>
-            Messages
           </button>
         </span>
       </header>
@@ -425,59 +465,77 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
         </div>
       </div>
 
-      <div className="sr-quota">
-        <h3>Demandes par jour</h3>
-        <label>
-          <span className="sr-valeur">
-            {quota} par jour · {quota * 5} par semaine
+      <div className="sr-reglages">
+        <button
+          type="button"
+          className="sr-reglages-bouton"
+          aria-expanded={reglagesOuverts}
+          onClick={() => setReglagesOuverts((v) => !v)}
+        >
+          <strong>Réglages</strong>
+          <span className="muted small">
+            {reglages?.quotaJour ?? quota} demandes par jour
+            {pipe?.pause ? ' · en pause' : ''}
+            {pipe?.essaiABlanc ? ' · essai à blanc' : ''}
           </span>
-          <input
-            type="range"
-            aria-label="Demandes par jour"
-            min={0}
-            max={reglages?.quotaMax ?? 25}
-            step={1}
-            value={quota}
-            onChange={(e) => setQuota(Number(e.target.value))}
-          />
-        </label>
-        <p className="muted small">
-          Recommandé au départ : {reglages?.recommande ?? 8} par jour, puis {reglages?.cible ?? 12}{' '}
-          si le taux d’acceptation reste bon.
-        </p>
-        {AVERTISSEMENTS[niveau] && (
-          <p role="alert" className={`sr-alerte sr-${niveau}`}>
-            {AVERTISSEMENTS[niveau]}
-          </p>
+          <span aria-hidden="true">{reglagesOuverts ? '▾' : '▸'}</span>
+        </button>
+        {reglagesOuverts && (
+          <div className="sr-quota">
+            <h3>Demandes par jour</h3>
+            <label>
+              <span className="sr-valeur">
+                {quota} par jour · {quota * 5} par semaine
+              </span>
+              <input
+                type="range"
+                aria-label="Demandes par jour"
+                min={0}
+                max={reglages?.quotaMax ?? 25}
+                step={1}
+                value={quota}
+                onChange={(e) => setQuota(Number(e.target.value))}
+              />
+            </label>
+            <p className="muted small">
+              Recommandé au départ : {reglages?.recommande ?? 8} par jour, puis{' '}
+              {reglages?.cible ?? 12} si le taux d’acceptation reste bon.
+            </p>
+            {AVERTISSEMENTS[niveau] && (
+              <p role="alert" className={`sr-alerte sr-${niveau}`}>
+                {AVERTISSEMENTS[niveau]}
+              </p>
+            )}
+            <div className="sr-actions">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!reglages || quota === reglages.quotaJour}
+                onClick={() => void enregistrerReglages({ quotaJour: quota })}
+              >
+                Enregistrer le quota
+              </button>
+              <label className="sr-pause">
+                <input
+                  type="checkbox"
+                  checked={reglages?.pause ?? false}
+                  disabled={!reglages}
+                  onChange={(e) => void enregistrerReglages({ pause: e.target.checked })}
+                />
+                Mettre le canal en pause
+              </label>
+              <label className="sr-pause">
+                <input
+                  type="checkbox"
+                  checked={reglages?.essaiABlanc ?? true}
+                  disabled={!reglages}
+                  onChange={(e) => void enregistrerReglages({ essaiABlanc: e.target.checked })}
+                />
+                Essai à blanc : aucune demande n’est envoyée
+              </label>
+            </div>
+          </div>
         )}
-        <div className="sr-actions">
-          <button
-            type="button"
-            className="btn primary"
-            disabled={!reglages || quota === reglages.quotaJour}
-            onClick={() => void enregistrerReglages({ quotaJour: quota })}
-          >
-            Enregistrer le quota
-          </button>
-          <label className="sr-pause">
-            <input
-              type="checkbox"
-              checked={reglages?.pause ?? false}
-              disabled={!reglages}
-              onChange={(e) => void enregistrerReglages({ pause: e.target.checked })}
-            />
-            Mettre le canal en pause
-          </label>
-          <label className="sr-pause">
-            <input
-              type="checkbox"
-              checked={reglages?.essaiABlanc ?? true}
-              disabled={!reglages}
-              onChange={(e) => void enregistrerReglages({ essaiABlanc: e.target.checked })}
-            />
-            Essai à blanc : aucune demande n’est envoyée
-          </label>
-        </div>
       </div>
 
       {ajout && (
@@ -511,15 +569,6 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
           </button>
         </form>
       )}
-
-      <div className="sr-proposer">
-        <button type="button" className="btn primary" onClick={() => void proposer()}>
-          Proposer des profils pour aujourd’hui
-        </button>
-        <span className="muted small">
-          {pipe ? `${pipe.disponibles} disponibles dans la Base des suspects` : ''}
-        </span>
-      </div>
 
       {sansCible.length > 0 && options.length > 0 && (
         <div className="sr-lot-cible" role="group" aria-label="Cible du lot">
@@ -560,7 +609,11 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
         {COLONNES.map((c) => {
           const lignes = prospects.filter((p) => p.statut === c.statut);
           return (
-            <section key={c.statut} className="sr-colonne" aria-label={c.titre}>
+            <section
+              key={c.statut}
+              className={`sr-colonne ${lignes.length === 0 ? 'sr-colonne-vide' : ''}`}
+              aria-label={c.titre}
+            >
               <header>
                 <h3>
                   {c.titre} <span className="muted small">{lignes.length}</span>
@@ -568,7 +621,11 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
                 <span className="muted small">{c.aide}</span>
               </header>
               {lignes.length === 0 ? (
-                <p className="muted small">Personne pour le moment.</p>
+                <p className="muted small">
+                  {c.statut === 'propose'
+                    ? 'Cliquez sur « Proposer des profils » pour recevoir la sélection du jour.'
+                    : 'Personne pour le moment.'}
+                </p>
               ) : (
                 lignes.map(carte)
               )}

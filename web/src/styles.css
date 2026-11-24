@@ -9228,8 +9228,45 @@ button.recherche-carte:hover,
 }
 .sr-entete {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
+}
+.sr-titre {
+  display: flex;
+  flex-direction: column;
+}
+.sr-titre h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+/* Réglages (quota, pause, essai à blanc) : repliés, on les touche rarement. */
+.sr-reglages {
+  margin-top: 1rem;
+}
+.sr-reglages-bouton {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sr-reglages-bouton span[aria-hidden] {
+  margin-left: auto;
+}
+.sr-reglages-bouton:hover {
+  border-color: var(--navy);
+}
+.sr-reglages .sr-quota {
+  margin-top: 0.5rem;
 }
 .sr-quota,
 .sr-liste {
@@ -9323,6 +9360,7 @@ button.recherche-carte:hover,
 .sr-entete-actions {
   margin-left: auto;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 .sr-stats {
@@ -9343,16 +9381,23 @@ button.recherche-carte:hover,
   flex: 1 1 14rem;
 }
 .sr-colonnes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-top: 1rem;
   align-items: start;
 }
 .sr-colonne {
+  flex: 1 1 20rem;
   border: 1px solid var(--border, #d8dde6);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
+  background: var(--white);
+}
+.sr-colonne-vide {
+  flex: 0 1 12rem;
+  background: transparent;
+  border-style: dashed;
 }
 .sr-colonne > header {
   display: flex;
@@ -9361,6 +9406,9 @@ button.recherche-carte:hover,
 }
 .sr-colonne h3 {
   margin: 0;
+}
+.sr-prospect .sr-actions {
+  gap: 0.35rem;
 }
 .sr-prospect {
   border-top: 1px solid var(--border, #d8dde6);
@@ -9380,6 +9428,28 @@ button.recherche-carte:hover,
 }
 .sr-message p {
   margin: 0 0 0.3rem;
+}
+.sr-message-titre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+/* Trois lignes suffisent pour reconnaître le message ; « Voir tout » déplie le reste. */
+.sr-message-texte {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sr-lien {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--navy);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .sr-retirer {
   align-self: flex-start;
