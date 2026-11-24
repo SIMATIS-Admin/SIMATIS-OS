@@ -131,7 +131,7 @@ describe('SalesnavRadar', () => {
       await screen.findByRole('button', { name: 'Proposer des profils pour aujourd’hui' }),
     );
     expect(await screen.findByText(/7 profils proposés\. Il en manque 3/)).toBeTruthy();
-    expect(screen.getByText('40 disponibles dans la Base des suspects')).toBeTruthy();
+    expect(screen.getByText('40 profils disponibles dans la Base des suspects')).toBeTruthy();
   });
 
   it('affiche le message à envoyer, le copie, et signale ce qui manque', async () => {
@@ -278,6 +278,7 @@ describe('SalesnavRadar', () => {
   it('bascule entre essai à blanc et envoi réel', async () => {
     await monter();
     api.enregistrerReglagesSalesnav.mockResolvedValue({ ...reglages(), essaiABlanc: false });
+    fireEvent.click(await screen.findByRole('button', { name: /Réglages/ }));
     fireEvent.click(await screen.findByLabelText('Essai à blanc : aucune demande n’est envoyée'));
     await waitFor(() =>
       expect(api.enregistrerReglagesSalesnav).toHaveBeenCalledWith('demo', { essaiABlanc: false }),
@@ -300,6 +301,30 @@ describe('SalesnavRadar', () => {
     await waitFor(() =>
       expect(api.choisirCibleSalesnav).toHaveBeenCalledWith('demo', 'a', 'Cible fictive'),
     );
+  });
+
+  it('replie les réglages et résume le quota et le mode', async () => {
+    await monter(pipe());
+    const bouton = await screen.findByRole('button', { name: /Réglages/ });
+    expect(bouton.getAttribute('aria-expanded')).toBe('false');
+    expect(bouton.textContent).toContain('8 demandes par jour');
+    expect(bouton.textContent).toContain('essai à blanc');
+    expect(screen.queryByLabelText('Demandes par jour')).toBeNull();
+    expect(screen.getByText('Mode essai')).toBeTruthy();
+  });
+
+  it('plie un long message et le déplie à la demande', async () => {
+    const long = 'Bonjour, '.concat('un message très long pour la note. '.repeat(6));
+    await monter(
+      pipe([
+        prospect('a', 'propose', {
+          message: { etape: 'invitation', texte: long, manquantes: [], longueur: long.length },
+        }),
+      ]),
+    );
+    const voir = await screen.findByRole('button', { name: 'Voir tout' });
+    fireEvent.click(voir);
+    expect(screen.getByRole('button', { name: 'Réduire' })).toBeTruthy();
   });
 
   describe('cibles nommées', () => {
@@ -374,6 +399,7 @@ describe('SalesnavRadar', () => {
   it('règle le quota avec le curseur, avertit au-delà de 15 et met en pause', async () => {
     await monter();
     api.enregistrerReglagesSalesnav.mockResolvedValue(reglages(10));
+    fireEvent.click(await screen.findByRole('button', { name: /Réglages/ }));
     const curseur = await screen.findByLabelText('Demandes par jour');
     fireEvent.change(curseur, { target: { value: '16' } });
     expect(screen.getByRole('alert').textContent).toMatch(/Au-delà de 15 demandes/);
