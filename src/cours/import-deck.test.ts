@@ -81,6 +81,17 @@ describe('convertirDeck', () => {
     expect(await readFile(path.join(destination, 'img', 'logo.png'), 'utf8')).toBe('PNG1');
   });
 
+  it('note le projet de diagnostic dans le manifest quand on le donne', async () => {
+    const destination = path.join(racine, 'sortie-projet');
+    await convertirDeck(source, destination, {
+      diagnosticProjet: '3f1c9a52-7d0e-4b8a-9c11-2a6b5e8d4f70',
+    });
+    const m = lireManifest(
+      JSON.parse(await readFile(path.join(destination, 'manifest.json'), 'utf8')),
+    );
+    expect(m.diagnosticProjet).toBe('3f1c9a52-7d0e-4b8a-9c11-2a6b5e8d4f70');
+  });
+
   it('écrit un manifest que le lecteur comprend : parties, durées, polices', async () => {
     const destination = path.join(racine, 'sortie-manifest');
     await convertirDeck(source, destination);

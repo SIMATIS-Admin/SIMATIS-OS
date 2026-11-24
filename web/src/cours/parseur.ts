@@ -20,6 +20,9 @@ export type Manifest = {
   permanent: boolean;
   // Bouton propre au support dans la barre du lecteur (les slides n'exécutent aucun script).
   action: ActionSupport | null;
+  // Support d'ouverture d'un projet de diagnostic : sur la dernière slide, le lecteur propose de
+  // lancer ce diagnostic (les slides n'ont pas de lien actif, le cadre est isolé).
+  diagnosticProjet: string | null;
 };
 export const ACTIONS_SUPPORT = ['testeur-vma', 'console-diagnostic'] as const;
 export type ActionSupport = (typeof ACTIONS_SUPPORT)[number];
@@ -46,6 +49,7 @@ export type Module = {
   slides: SlideCours[];
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLIDE_HTML = /^slides\/[a-z0-9-]+\.html$/;
 
 export function lireManifest(brut: unknown): Manifest {
@@ -80,6 +84,7 @@ export function lireManifest(brut: unknown): Manifest {
     action: (ACTIONS_SUPPORT as readonly unknown[]).includes(m.action)
       ? (m.action as ActionSupport)
       : null,
+    diagnosticProjet: UUID.test(texte(m.diagnosticProjet)) ? texte(m.diagnosticProjet) : null,
     logo: /^img\/[A-Za-z0-9][A-Za-z0-9._-]*\.(png|jpe?g|webp|svg)$/i.test(logo) ? logo : null,
     couleur: couleur(m.couleur),
     accent: couleur(m.accent),

@@ -505,6 +505,25 @@ describe('Assistant de l étape', () => {
     api.fetchDecksCours.mockResolvedValue([]);
   });
 
+  it('propose de remplacer le support déjà dans le lecteur et renvoie le deck actuel', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({ supportStatut: 'pret', supportLien: 'https://claude.ai/artifact/DeckFictif01' }),
+    ]);
+    api.demandeSupportDiag.mockResolvedValue(projet({ supportStatut: 'pret' }));
+    api.fetchDecksCours.mockResolvedValue([
+      { id: 'introduction-atelier-fictif-nord', titre: 'Introduction', soustitre: '' },
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    const bouton = await screen.findByRole('button', { name: 'Remplacer dans le lecteur' });
+    expect(screen.queryByRole('button', { name: 'Envoyer au lecteur de l’OS' })).toBeNull();
+    fireEvent.click(bouton);
+    await waitFor(() =>
+      expect(api.demandeSupportDiag).toHaveBeenCalledWith('simatis', 'p1', 'envoyer'),
+    );
+    api.fetchDecksCours.mockResolvedValue([]);
+  });
+
   it('un support final n affiche plus le texte des diapositives et peut être rouvert', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
       projet({

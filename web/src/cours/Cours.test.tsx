@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   lireSourceCours: vi.fn(),
   enregistrerSourceCours: vi.fn(),
   ouvrirEspaceTesteurVma: vi.fn(),
+  lancerPassationDiag: vi.fn(),
   ouvrirConsoleDiagnostic: vi.fn(),
   urlFichierCours: (slug: string, deck: string, f: string) => `/api/i/${slug}/cours/${deck}/${f}`,
 }));
@@ -338,6 +339,39 @@ describe('Lecteur, présentation du diagnostic', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Console du diagnostic' }));
     await waitFor(() => expect(onglet.location.href).toBe('https://exemple.test/console'));
     expect(api.ouvrirConsoleDiagnostic).toHaveBeenCalledWith('simatis');
+  });
+});
+
+describe('Lecteur, support d’ouverture d’un projet de diagnostic', () => {
+  const PROJET = '3f1c9a52-7d0e-4b8a-9c11-2a6b5e8d4f70';
+  const OUVERTURE: Record<string, string> = {
+    'manifest.json': JSON.stringify({
+      titre: 'Introduction fictive',
+      format: 'html',
+      diagnosticProjet: PROJET,
+      parties: [{ titre: 'A', slides: ['slides/une.html', 'slides/fin.html'] }],
+    }),
+    'slides/une.html': '<section id="une"><h2>Première</h2></section>',
+    'slides/fin.html': '<section id="fin"><h2>Dernière</h2></section>',
+  };
+  beforeEach(() => {
+    api.fetchTexteCours.mockImplementation((_s: string, _d: string, f: string) =>
+      f in OUVERTURE ? Promise.resolve(OUVERTURE[f]) : Promise.reject(new Error('introuvable')),
+    );
+    location.hash = '#/simatis/cours/deck/introduction-fictive';
+  });
+
+  it('propose de lancer le diagnostic seulement sur la dernière slide', async () => {
+    const onglet = { location: { href: '' }, close: vi.fn() };
+    vi.spyOn(window, 'open').mockReturnValue(onglet as unknown as Window);
+    api.lancerPassationDiag.mockResolvedValue({ lien: 'https://exemple.test/diag', expireLe: '' });
+    render(<Cours slug="simatis" deck="introduction-fictive" />);
+    await screen.findByRole('button', { name: 'Notes' });
+    expect(screen.queryByRole('button', { name: /Lancer le diagnostic/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Slide suivante' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Lancer le diagnostic/ }));
+    await waitFor(() => expect(onglet.location.href).toBe('https://exemple.test/diag'));
+    expect(api.lancerPassationDiag).toHaveBeenCalledWith('simatis', PROJET);
   });
 });
 

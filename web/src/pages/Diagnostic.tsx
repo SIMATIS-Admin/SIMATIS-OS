@@ -752,54 +752,84 @@ function Support({
             quelques minutes. Sa réponse arrivera dans l’assistant.
           </div>
         )}
-        <div className="diag-actions">
-          {projet.supportLien && (
-            <a className="btn" href={projet.supportLien} target="_blank" rel="noreferrer">
-              Ouvrir le deck ↗
-            </a>
-          )}
-          {!!projet.supportTexte?.length && (
-            <a className="btn" href={`#/${slug}/diaporama/support/${projet.id}`}>
-              Présenter dans l’OS
-            </a>
-          )}
-          {!!projet.supportLien && statut !== 'preparation' && (
-            <button className="btn" disabled={occupe} onClick={() => void demander('envoyer')}>
-              Envoyer au lecteur de l’OS
-            </button>
-          )}
-          {introDansLeLecteur && (
-            <a className="btn go" href={`#/${slug}/cours/deck/${projet.supportIntroId}`}>
-              Présenter dans le lecteur
-            </a>
-          )}
-          {(statut === 'aucun' || statut === 'pret') && (
-            <button className="btn go" disabled={occupe} onClick={() => void demander('preparer')}>
-              {statut === 'aucun' ? 'Préparer le support' : 'Mettre à jour le deck'}
-            </button>
-          )}
-          {statut === 'pret' && (
-            <button className="btn" disabled={occupe} onClick={() => void demander('final')}>
-              Support final
-            </button>
+        <div className="diag-groupes">
+          <div className="diag-groupe">
+            <span className="diag-groupe-titre">Deck sur claude.ai</span>
+            <div className="diag-groupe-boutons">
+              {projet.supportLien && (
+                <a className="btn" href={projet.supportLien} target="_blank" rel="noreferrer">
+                  Ouvrir le deck ↗
+                </a>
+              )}
+              {(statut === 'aucun' || statut === 'pret') && (
+                <button
+                  className="btn go"
+                  disabled={occupe}
+                  onClick={() => void demander('preparer')}
+                >
+                  {statut === 'aucun' ? 'Préparer le support' : 'Mettre à jour le deck'}
+                </button>
+              )}
+              {statut === 'pret' && (
+                <button className="btn" disabled={occupe} onClick={() => void demander('final')}>
+                  Support final
+                </button>
+              )}
+              {statut === 'final' && (
+                <button className="btn" disabled={occupe} onClick={() => void demander('rouvrir')}>
+                  Modifier le support
+                </button>
+              )}
+            </div>
+          </div>
+          {(!!projet.supportLien || !!projet.supportTexte?.length || introDansLeLecteur) && (
+            <div className="diag-groupe">
+              <span className="diag-groupe-titre">Lecteur de l’OS</span>
+              <div className="diag-groupe-boutons">
+                {!!projet.supportLien && statut !== 'preparation' && (
+                  <button
+                    className="btn"
+                    disabled={occupe}
+                    title={
+                      introDansLeLecteur
+                        ? 'Recharge le deck de claude.ai tel qu’il est maintenant et remplace la version déjà dans le lecteur'
+                        : undefined
+                    }
+                    onClick={() => void demander('envoyer')}
+                  >
+                    {introDansLeLecteur
+                      ? 'Remplacer dans le lecteur'
+                      : 'Envoyer au lecteur de l’OS'}
+                  </button>
+                )}
+                {introDansLeLecteur && (
+                  <a className="btn go" href={`#/${slug}/cours/deck/${projet.supportIntroId}`}>
+                    Présenter dans le lecteur
+                  </a>
+                )}
+                {!!projet.supportTexte?.length && (
+                  <a className="btn" href={`#/${slug}/diaporama/support/${projet.id}`}>
+                    Présenter dans l’OS
+                  </a>
+                )}
+              </div>
+            </div>
           )}
           {statut === 'final' && (
-            <button
-              className="btn go"
-              onClick={() => void lancerDiagnostic(slug, projet.id, onErreur)}
-            >
-              Lancer le diagnostic
-            </button>
-          )}
-          {statut === 'final' && (
-            <button className="btn" disabled={occupe} onClick={() => void demander('rouvrir')}>
-              Modifier le support
-            </button>
-          )}
-          {statut === 'final' && (
-            <button className="btn" disabled={occupe} onClick={() => void capitaliser()}>
-              Capitaliser ce support
-            </button>
+            <div className="diag-groupe">
+              <span className="diag-groupe-titre">Diagnostic</span>
+              <div className="diag-groupe-boutons">
+                <button
+                  className="btn go"
+                  onClick={() => void lancerDiagnostic(slug, projet.id, onErreur)}
+                >
+                  Lancer le diagnostic
+                </button>
+                <button className="btn" disabled={occupe} onClick={() => void capitaliser()}>
+                  Capitaliser ce support
+                </button>
+              </div>
+            </div>
           )}
         </div>
         <label className="small">

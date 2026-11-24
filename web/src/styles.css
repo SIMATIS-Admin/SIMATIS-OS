@@ -3921,6 +3921,37 @@ label.btn.off {
   padding-top: 12px;
   border-top: 1px solid var(--line-2);
 }
+.diag-groupes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-2);
+}
+.diag-groupe {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+.diag-groupe-titre {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #6b7a90);
+}
+.diag-groupe-boutons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .diag-groupe {
+    grid-template-columns: 1fr;
+  }
+}
 .diag-logo {
   display: flex;
   align-items: center;

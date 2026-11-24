@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchDecksCours,
   fetchTexteCours,
+  lancerPassationDiag,
   ouvrirConsoleDiagnostic,
   ouvrirEspaceTesteurVma,
   supprimerSupportCours,
@@ -263,6 +264,19 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
     }
   };
 
+  // Support d'ouverture d'un projet : le diagnostic de ce projet, ouvert sur le site.
+  const lancerDiagnosticProjet = async (projet: string) => {
+    const onglet = window.open('', '_blank');
+    try {
+      const { lien } = await lancerPassationDiag(slug, projet);
+      if (onglet) onglet.location.href = lien;
+      else window.location.href = lien;
+    } catch (e) {
+      onglet?.close();
+      window.alert(e instanceof Error ? e.message : 'Diagnostic indisponible');
+    }
+  };
+
   // Archive : le support entier, une slide par page, dans la boîte d'impression du navigateur
   // (« Enregistrer au format PDF »). Le cadre n'exécute aucun script.
   const imprimer = (document_: string) => {
@@ -324,6 +338,15 @@ export function Cours({ slug, deck }: { slug: string; deck: string }) {
       }
     >
       <div className="cours-scene">
+        {etat.manifest.diagnosticProjet && m === modules.length - 1 && s === slides.length - 1 && (
+          <button
+            className="btn go cours-lancer"
+            type="button"
+            onClick={() => void lancerDiagnosticProjet(etat.manifest.diagnosticProjet!)}
+          >
+            Lancer le diagnostic ↗
+          </button>
+        )}
         {enHtml && slide.html ? (
           <article
             className="cours-slide cours-slide-html"
