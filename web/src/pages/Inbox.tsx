@@ -222,7 +222,8 @@ function Reglages({
   const [jour, setJour] = useState(s.echeance ? jourParis(new Date(s.echeance)) : '');
   return (
     <div className="inbox-reglages">
-      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span className="small muted">Priorité</span>
         <Jauge niveau={s.priorite} />
         <button
           className="btn sm"
