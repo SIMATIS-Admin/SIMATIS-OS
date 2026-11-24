@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PipeSalesnav, ProspectSalesnav, ReglagesSalesnav } from '../../api.js';
 
 const api = vi.hoisted(() => ({
+  fetchCiblages: vi.fn(),
   fetchPipeSalesnav: vi.fn(),
   proposerSalesnav: vi.fn(),
   ajouterProspectSalesnav: vi.fn(),
@@ -299,6 +300,56 @@ describe('SalesnavRadar', () => {
     await waitFor(() =>
       expect(api.choisirCibleSalesnav).toHaveBeenCalledWith('demo', 'a', 'Cible fictive'),
     );
+  });
+
+  describe('cibles nommées', () => {
+    const ciblages = [
+      { entreprise: 'Entreprise Fictive', code: 'ICP A', nom: 'Bureaux d’études' },
+      { entreprise: 'Entreprise Fictive', code: 'ICP B', nom: 'Cabinets d’avocats' },
+    ];
+
+    it('affiche le nom du segment à côté de la lettre dans la liste', async () => {
+      api.fetchCiblages.mockResolvedValue(ciblages);
+      await monter(pipe([prospect('a', 'propose', { cible: null })]));
+      const liste = await screen.findByLabelText('Cible de Personne a');
+      await waitFor(() =>
+        expect(within(liste).getByText('A · Bureaux d’études (sans message)')).toBeTruthy(),
+      );
+    });
+
+    it('applique la cible choisie à tous les profils proposés sans cible', async () => {
+      api.fetchCiblages.mockResolvedValue(ciblages);
+      api.choisirCibleSalesnav.mockResolvedValue({ ok: true });
+      await monter(
+        pipe([
+          prospect('a', 'propose', { cible: null }),
+          prospect('b', 'propose', { cible: null }),
+          prospect('c', 'propose', { cible: 'Cible fictive' }),
+        ]),
+      );
+      const groupe = await screen.findByRole('group', { name: 'Cible du lot' });
+      expect(within(groupe).getByText(/les 2 profils proposés/)).toBeTruthy();
+      fireEvent.click(await within(groupe).findByRole('button', { name: /Cabinets d’avocats/ }));
+      await waitFor(() => expect(api.choisirCibleSalesnav).toHaveBeenCalledTimes(2));
+      expect(api.choisirCibleSalesnav).toHaveBeenCalledWith(
+        'demo',
+        'a',
+        'Entreprise Fictive · ICP B',
+      );
+      expect(api.choisirCibleSalesnav).toHaveBeenCalledWith(
+        'demo',
+        'b',
+        'Entreprise Fictive · ICP B',
+      );
+      expect(await screen.findByText('Cible appliquée à 2 profils.')).toBeTruthy();
+    });
+
+    it('ne propose pas le choix du lot quand chaque profil a sa cible', async () => {
+      api.fetchCiblages.mockResolvedValue(ciblages);
+      await monter(pipe([prospect('a', 'propose')]));
+      await screen.findByLabelText('Cible de Personne a');
+      expect(screen.queryByRole('group', { name: 'Cible du lot' })).toBeNull();
+    });
   });
 
   it('ajoute un profil par son lien', async () => {

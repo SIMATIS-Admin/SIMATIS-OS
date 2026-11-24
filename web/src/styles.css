@@ -9393,3 +9393,61 @@ button.recherche-carte:hover,
   display: flex;
   flex-direction: column;
 }
+/* Choix de la cible d'un lot : un bouton par ICP, rangé par entreprise, avec sa lettre en repère. */
+.sr-lot-cible {
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-subtle, #f4f6fa);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.sr-lot-cible p {
+  margin: 0;
+}
+.sr-cibles-groupe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.sr-cibles-entreprise {
+  min-width: 6rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.sr-cible-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 18rem;
+  padding: 3px 12px 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--white);
+  font-size: 14px;
+  cursor: pointer;
+}
+.sr-cible-chip b {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--white);
+  font-size: 13px;
+}
+.sr-cible-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sr-cible-chip:hover,
+.sr-cible-chip:focus-visible {
+  border-color: var(--navy);
+}

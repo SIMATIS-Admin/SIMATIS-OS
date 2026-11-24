@@ -112,7 +112,7 @@ function Champ({
 // les campagnes qui peuvent remplacer un message pour leur lot seulement.
 export function SalesnavMessages({ slug }: { slug: string }) {
   const [vue, setVue] = useState<VueSalesnav | null>(null);
-  const [cibles, setCibles] = useState<string[]>([]);
+  const [cibles, setCibles] = useState<{ valeur: string; nom: string }[]>([]);
   const [cible, setCible] = useState('');
   const [nom, setNom] = useState('');
   const [campagneCible, setCampagneCible] = useState('');
@@ -134,7 +134,10 @@ export function SalesnavMessages({ slug }: { slug: string }) {
       (c) =>
         setCibles(
           Array.isArray(c)
-            ? c.map((x) => `${x.entreprise ? `${x.entreprise} · ` : ''}${x.code}`)
+            ? c.map((x) => ({
+                valeur: `${x.entreprise ? `${x.entreprise} · ` : ''}${x.code}`,
+                nom: x.nom,
+              }))
             : [],
         ),
       () => setCibles([]),
@@ -153,7 +156,9 @@ export function SalesnavMessages({ slug }: { slug: string }) {
     );
   }
 
-  const toutesCibles = [...new Set([...cibles, ...vue.modeles.map((m) => m.icp)])];
+  // Le nom du segment aide à reconnaître la lettre de l'ICP dans la liste de suggestions.
+  const nomsCibles = new Map(cibles.map((c) => [c.valeur, c.nom]));
+  const toutesCibles = [...new Set([...nomsCibles.keys(), ...vue.modeles.map((m) => m.icp)])];
   const texteModele = (icp: string, etape: EtapeSalesnav) =>
     vue.modeles.find((m) => m.icp === icp && m.etape === etape)?.texte ?? '';
   const cibleChoisie = cible.trim();
@@ -204,7 +209,7 @@ export function SalesnavMessages({ slug }: { slug: string }) {
         />
         <datalist id="salesnav-cibles">
           {toutesCibles.map((c) => (
-            <option key={c} value={c} />
+            <option key={c} value={c} label={nomsCibles.get(c)} />
           ))}
         </datalist>
       </label>

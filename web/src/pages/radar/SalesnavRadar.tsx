@@ -6,16 +6,18 @@ import {
   enregistrerActionSalesnav,
   enregistrerReglagesSalesnav,
   envoyerDemandeSalesnav,
+  fetchCiblages,
   fetchPipeSalesnav,
   fetchReglagesSalesnav,
   proposerSalesnav,
   type ActionProspectSalesnav,
+  type CiblageAtelier,
   type PipeSalesnav,
   type ProspectSalesnav,
   type ReglagesSalesnav,
   type StatutProspectSalesnav,
 } from '../../api.js';
-import { LIMITE_NOTE_SALESNAV } from './salesnav-constantes.js';
+import { LIMITE_NOTE_SALESNAV, grouperCibles, optionsCibles } from './salesnav-constantes.js';
 import { Fenetre } from '../Fenetre.js';
 import { SalesnavMessages } from '../SalesnavMessages.js';
 
@@ -28,6 +30,9 @@ const COLONNES: { statut: StatutProspectSalesnav; titre: string; aide: string }[
   { statut: 'a_repondu', titre: 'Ont répondu', aide: 'Opportunités du Radar' },
   { statut: 'sans_reponse', titre: 'Sans réponse', aide: 'À retirer' },
 ];
+
+// « ICP A » → « A » : la lettre sert de repère, le nom du segment dit de qui il s'agit.
+const lettre = (code: string) => code.replace(/^ICP\s+/i, '');
 
 const pct = (v: number | null) => (v === null ? '–' : `${String(v).replace('.', ',')} %`);
 
@@ -54,6 +59,7 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
   const [nom, setNom] = useState('');
   const [aEnvoyer, setAEnvoyer] = useState<ProspectSalesnav | null>(null);
   const [note, setNote] = useState('');
+  const [ciblages, setCiblages] = useState<CiblageAtelier[]>([]);
 
   const charger = useCallback(async () => {
     try {
@@ -73,6 +79,11 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
         setQuota(r.quotaJour);
       },
       (e: unknown) => actif && setErreur(message(e)),
+    );
+    // Les ICP de l'Atelier donnent un nom aux cibles ; sans eux, on garde les seules valeurs.
+    Promise.resolve(fetchCiblages(slug)).then(
+      (c) => actif && setCiblages(Array.isArray(c) ? c : []),
+      () => undefined,
     );
     return () => {
       actif = false;
@@ -158,8 +169,21 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
     }
   };
 
-  const niveau = quota > 20 ? 'danger' : quota > 15 ? 'attention' : 'normal';
   const prospects = pipe?.prospects ?? [];
+  const avecMessage = new Set(pipe?.cibles ?? []);
+  const options = optionsCibles(ciblages, [...avecMessage, ...prospects.map((p) => p.cible)]);
+  const groupes = grouperCibles(options);
+  const sansCible = prospects.filter((p) => p.statut === 'propose' && !p.cible);
+
+  const appliquerAuLot = (valeur: string) =>
+    executer(
+      async () => {
+        for (const p of sansCible) await choisirCibleSalesnav(slug, p.id, valeur);
+      },
+      `Cible appliquée à ${sansCible.length} profil${sansCible.length > 1 ? 's' : ''}.`,
+    );
+
+  const niveau = quota > 20 ? 'danger' : quota > 15 ? 'attention' : 'normal';
   const stats = pipe?.stats;
 
   const carte = (p: ProspectSalesnav) => {
@@ -187,10 +211,15 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
               }
             >
               <option value="">À choisir</option>
-              {(pipe?.cibles ?? []).map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+              {groupes.map(([groupe, liste]) => (
+                <optgroup key={groupe} label={groupe}>
+                  {liste.map((o) => (
+                    <option key={o.valeur} value={o.valeur}>
+                      {[lettre(o.code), o.nom].filter(Boolean).join(' · ')}
+                      {avecMessage.has(o.valeur) ? '' : ' (sans message)'}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>
@@ -491,6 +520,41 @@ export function SalesnavRadar({ slug, onRetour }: { slug: string; onRetour: () =
           {pipe ? `${pipe.disponibles} disponibles dans la Base des suspects` : ''}
         </span>
       </div>
+
+      {sansCible.length > 0 && options.length > 0 && (
+        <div className="sr-lot-cible" role="group" aria-label="Cible du lot">
+          <p>
+            <strong>
+              Quelle cible pour{' '}
+              {sansCible.length === 1
+                ? 'le profil proposé'
+                : `les ${sansCible.length} profils proposés`}{' '}
+              ?
+            </strong>{' '}
+            <span className="muted small">
+              Un clic l’applique à tous les profils sans cible ; vous pouvez la changer ensuite sur
+              chaque carte.
+            </span>
+          </p>
+          {groupes.map(([groupe, liste]) => (
+            <div key={groupe} className="sr-cibles-groupe">
+              <span className="sr-cibles-entreprise">{groupe}</span>
+              {liste.map((o) => (
+                <button
+                  key={o.valeur}
+                  type="button"
+                  className="sr-cible-chip"
+                  title={`${o.valeur}${o.nom ? ` — ${o.nom}` : ''}${avecMessage.has(o.valeur) ? '' : ' (pas encore de message)'}`}
+                  onClick={() => void appliquerAuLot(o.valeur)}
+                >
+                  <b>{lettre(o.code)}</b>
+                  <span>{o.nom || 'Cible'}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="sr-colonnes" aria-label="Pipe SalesNav">
         {COLONNES.map((c) => {
