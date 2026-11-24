@@ -38,7 +38,11 @@ export function etatsEtapes(p: EtatProjet): EtatEtape[] {
     resultat = { ok: true, libelle: `Notes saisies à la main, profil ${p.profil}` };
   else if (p.pdfEntretienNom)
     resultat = { ok: false, libelle: 'PDF importé, profil pas encore calculé' };
-  else resultat = { ok: false, libelle: 'Importer le PDF de l’outil ou saisir les notes' };
+  else
+    resultat = {
+      ok: false,
+      libelle: 'Lancer le diagnostic, les notes arrivent avec la passation du site',
+    };
 
   const revue: EtatEtape = {
     ok: p.revue?.statut === 'validée',
