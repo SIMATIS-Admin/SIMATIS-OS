@@ -37,6 +37,8 @@ const SANS_ETOILE = ['agenda', 'cockpit', 'rendez-vous'];
 const CLE_REDUITE = 'simatis.nav.reduite';
 // « Mon espace » replié d'un geste : toutes les rubriques disparaissent, Cockpit et raccourcis restent.
 const CLE_ESPACE = 'simatis.nav.espace-replie';
+// « Mes raccourcis » se replie comme Mon espace.
+const CLE_FAVORIS = 'simatis.nav.favoris-replie';
 const memoriser = (cle: string, valeur: string) => {
   try {
     localStorage.setItem(cle, valeur);
@@ -86,6 +88,12 @@ export function Sidebar({
   const basculerEspace = () => {
     setEspaceReplie(!espaceReplie);
     memoriser(CLE_ESPACE, espaceReplie ? '0' : '1');
+  };
+
+  const [favorisReplie, setFavorisReplie] = useState(() => lireDrapeau(CLE_FAVORIS));
+  const basculerFavoris = () => {
+    setFavorisReplie(!favorisReplie);
+    memoriser(CLE_FAVORIS, favorisReplie ? '0' : '1');
   };
 
   const actif = (it: NavItem) => view === it.id;
@@ -249,11 +257,19 @@ export function Sidebar({
         </div>
         {favItems.length > 0 && (
           <div className="nav-group favs">
-            <span>
+            <button
+              className="nav-espace-titre"
+              aria-expanded={!favorisReplie}
+              title={favorisReplie ? 'Déplier Mes raccourcis' : 'Replier Mes raccourcis'}
+              onClick={basculerFavoris}
+            >
               <Icon name="star" />
-              Mes raccourcis
-            </span>
-            {favItems.map((it, index) => link(it, true, index))}
+              <span className="lbl">Mes raccourcis</span>
+              <span className={`chev ${favorisReplie ? '' : 'open'}`}>
+                <Icon name="down" />
+              </span>
+            </button>
+            {!favorisReplie && favItems.map((it, index) => link(it, true, index))}
           </div>
         )}
         <button

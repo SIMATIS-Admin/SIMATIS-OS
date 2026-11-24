@@ -146,6 +146,21 @@ describe('Sidebar', () => {
     expect(dansEspace).toHaveLength(1);
   });
 
+  it('folds and unfolds « Mes raccourcis » like Mon espace, and remembers it', () => {
+    localStorage.removeItem('simatis.nav.favoris-replie');
+    renderSidebar(simatis, ['pipeline']);
+    const titre = screen.getByRole('button', { name: /Mes raccourcis/ });
+    expect(titre.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('.nav-group.favs a')).toBeTruthy();
+    fireEvent.click(titre);
+    expect(titre.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('.nav-group.favs a')).toBeNull();
+    expect(localStorage.getItem('simatis.nav.favoris-replie')).toBe('1');
+    fireEvent.click(titre);
+    expect(document.querySelector('.nav-group.favs a')).toBeTruthy();
+    localStorage.removeItem('simatis.nav.favoris-replie');
+  });
+
   it('hides Devis for a mandate, even when it is a favourite', () => {
     renderSidebar(mandat, ['devis']);
     expect(screen.queryByText('Devis')).toBeNull();
