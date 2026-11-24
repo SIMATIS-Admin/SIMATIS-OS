@@ -8001,14 +8001,58 @@ div.pb-ligne {
 }
 
 /* Réponse préparée par la routine, dans le détail d'une entrée de l'Inbox. */
+/* Détail d'une entrée : le titre prend toute la largeur, les badges passent dessous. */
+.inbox-detail .panel-h {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.inbox-detail .panel-h h2 {
+  flex: 1 1 100%;
+  margin: 0 0 2px;
+  font-size: 18px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.inbox-detail .meta-row {
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.inbox-reglages {
+  margin: 12px 0;
+}
+/* Le pied d'actions s'étend jusqu'aux bords du panneau. */
+.inbox-detail .panel-b {
+  display: flex;
+  flex-direction: column;
+}
+.inbox-detail .panel-b > .decision {
+  margin: 16px -18px -16px;
+}
+.reponse-preparee .decision {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+/* .alert est en ligne : on empile ici titre, objet, texte et actions. */
 .reponse-preparee {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   margin-bottom: 12px;
+}
+.reponse-preparee p {
+  margin: 0;
 }
 .reponse-texte {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font: inherit;
-  margin: 8px 0;
-  max-height: 240px;
+  margin: 4px 0;
+  padding: 10px 12px;
+  background: var(--white);
+  border-radius: var(--r-m);
+  max-height: 320px;
   overflow: auto;
 }
 
