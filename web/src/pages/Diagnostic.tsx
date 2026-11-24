@@ -105,7 +105,7 @@ const DIMENSIONS: [keyof Dimensions, string][] = [
 ];
 const SEUIL = 6;
 // Places du chat : moitié-moitié quand la conversation est l'outil de l'étape (1 et 5), sous le
-// rapport à l'étape 4, étroit à la revue (3) où le formulaire prime.
+// rapport à l'étape 4 ; pas de chat aux étapes 2 et 3.
 const MISE_EN_PAGE: Record<number, string> = { 1: 'moitie', 4: 'empile', 5: 'moitie' };
 const STATUTS_SUPPORT: Record<ProjetDiag['supportStatut'], string> = {
   aucun: 'Pas encore préparé',
@@ -464,7 +464,7 @@ export function ProjetVue({
           {projet.etape === 5 && <Restitution projet={projet} onSauver={sauver} />}
           <Pied projet={projet} onSauver={sauver} />
         </div>
-        {projet.etape !== 2 && projet.etape !== 4 && (
+        {projet.etape !== 2 && projet.etape !== 3 && projet.etape !== 4 && (
           <Assistant slug={slug} projet={projet} onChange={onChange} onErreur={onErreur} />
         )}
       </div>
