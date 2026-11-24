@@ -8,41 +8,11 @@ import {
   idéesOS,
   lireOrganigramme,
   marquerPromue,
-  type EtatOrg,
-  type NoeudOrg,
 } from '../feuilleDeRouteOS.js';
 import { NoteCerveau } from './NoteCerveau.js';
+import { OrganigrammeGraphique } from './OrganigrammeGraphique.js';
 
 type Note = { contenu: string } | { erreur: string };
-
-const COULEUR_ETAT: Record<EtatOrg, string> = {
-  'en service': 'green',
-  'à essayer': 'amber',
-  partiel: 'blue',
-};
-
-function Noeud({ noeud }: { noeud: NoeudOrg }) {
-  const ligne = (
-    <>
-      <b>{noeud.nom}</b>
-      {noeud.etat && <span className={`badge ${COULEUR_ETAT[noeud.etat]}`}>{noeud.etat}</span>}
-      {noeud.description && <span className="cerveau-note"> {noeud.description}</span>}
-    </>
-  );
-  if (noeud.enfants.length === 0) return <li style={{ listStyle: 'none' }}>{ligne}</li>;
-  return (
-    <li style={{ listStyle: 'none' }}>
-      <details open>
-        <summary>{ligne}</summary>
-        <ul style={{ paddingLeft: 20 }}>
-          {noeud.enfants.map((n) => (
-            <Noeud key={n.nom} noeud={n} />
-          ))}
-        </ul>
-      </details>
-    </li>
-  );
-}
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -171,16 +141,7 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
           ) : rubriques.length === 0 ? (
             <span className="cerveau-note">Organigramme vide.</span>
           ) : (
-            rubriques.map((r) => (
-              <section key={r.titre}>
-                <h3>{r.titre}</h3>
-                <ul style={{ paddingLeft: 0 }}>
-                  {r.noeuds.map((n) => (
-                    <Noeud key={n.nom} noeud={n} />
-                  ))}
-                </ul>
-              </section>
-            ))
+            <OrganigrammeGraphique rubriques={rubriques} />
           )}
         </div>
       </div>

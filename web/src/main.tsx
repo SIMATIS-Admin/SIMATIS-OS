@@ -7,6 +7,7 @@ import './diagnostics.css';
 import './interface.css';
 import './commercial.css';
 import './pages/endurance.css';
+import './organigramme.css';
 
 const root = document.getElementById('root');
 if (root) {

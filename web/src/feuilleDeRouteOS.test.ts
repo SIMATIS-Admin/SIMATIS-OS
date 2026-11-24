@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { NoeudCerveau } from './cerveau.js';
-import { ajouterEtape, idéesOS, lireOrganigramme, marquerPromue } from './feuilleDeRouteOS.js';
+import {
+  ajouterEtape,
+  compterOrganigramme,
+  disposerOrganigramme,
+  idéesOS,
+  lireOrganigramme,
+  marquerPromue,
+} from './feuilleDeRouteOS.js';
 
 const noeud = (id: string, extra: Partial<NoeudCerveau>): NoeudCerveau => ({
   id,
@@ -96,5 +103,30 @@ describe('lireOrganigramme', () => {
 
   it('rend une liste vide pour un texte sans rubrique', () => {
     expect(lireOrganigramme('# Titre\n- seul')).toEqual([]);
+  });
+});
+
+describe('disposerOrganigramme', () => {
+  const note = [
+    '## Détecter',
+    '- Radar [en service] — pipe',
+    '## Piloter l’activité',
+    '- Gestion [en service]',
+    '## Rubrique nouvelle',
+    '- Fonction X [à essayer] — nouvelle',
+    '  - Sous-fonction [partiel]',
+  ].join('\n');
+
+  it('place les rubriques connues et garde les inconnues à part', () => {
+    const d = disposerOrganigramme(lireOrganigramme(note));
+    expect(d.colonnes.map((c) => c.titre)).toEqual(['Détecter', 'Vendre', 'Piloter']);
+    expect(d.colonnes[0]?.noeuds.map((n) => n.nom)).toEqual(['Radar']);
+    expect(d.colonnes[1]?.noeuds).toEqual([]);
+    expect(d.colonnes[2]?.noeuds.map((n) => n.nom)).toEqual(['Gestion']);
+    expect(d.autres.map((r) => r.titre)).toEqual(['Rubrique nouvelle']);
+  });
+
+  it('compte les fonctions et sous-fonctions, et celles en service', () => {
+    expect(compterOrganigramme(lireOrganigramme(note))).toEqual({ total: 4, enService: 2 });
   });
 });
