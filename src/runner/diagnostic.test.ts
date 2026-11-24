@@ -782,7 +782,10 @@ describe('Production par le runner : modifications et deck', () => {
         '<section id="cover"><h1>Titre fictif</h1></section>',
       );
     };
-    const lancerEnvoi = async (preparer: ((dossierDeck: string) => Promise<void>) | null) => {
+    const lancerEnvoi = async (
+      preparer: ((dossierDeck: string) => Promise<void>) | null,
+      demande: 'restitution_support' | 'support_envoyer' = 'restitution_support',
+    ) => {
       const appels: { url: string; corps: string }[] = [];
       await tourDiagnostic({
         base: 'http://os.test',
@@ -798,7 +801,8 @@ describe('Production par le runner : modifications et deck', () => {
                       {
                         ...restitution,
                         nom: 'Entreprise Fictive',
-                        demande: 'restitution_support',
+                        demande,
+                        supportLien: 'https://claude.ai/artifact/IntroductionFictive01',
                         restitutionLien: 'https://claude.ai/artifact/RestitutionFictive01',
                       },
                     ]
@@ -841,6 +845,17 @@ describe('Production par le runner : modifications et deck', () => {
       ) as { titre: string; format: string };
       expect(manifest).toMatchObject({ titre: 'Deck fictif', format: 'html' });
       expect(appels.find((c) => c.url.endsWith('/fin'))?.corps ?? '').not.toContain('erreur');
+    });
+
+    it("l'introduction garde le projet dans son manifest, pas la restitution", async () => {
+      await lancerEnvoi(miniDeck, 'support_envoyer');
+      const lire = async (nom: string) =>
+        JSON.parse(await readFile(path.join(supports, nom, 'manifest.json'), 'utf8')) as {
+          diagnosticProjet?: string;
+        };
+      expect((await lire('introduction-entreprise-fictive')).diagnosticProjet).toBe(restitution.id);
+      await lancerEnvoi(miniDeck);
+      expect((await lire('restitution-entreprise-fictive')).diagnosticProjet).toBeUndefined();
     });
 
     it("signale au pilote un deck que Claude n'a pas pu récupérer", async () => {

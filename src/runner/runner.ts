@@ -1981,6 +1981,7 @@ export async function tourDiagnostic(opts: RunnerOptions): Promise<number> {
               dossierSupportsPoste(),
               idSupportDe(a.nom, a.demande === 'support_envoyer' ? 'introduction' : 'restitution'),
             ),
+            a.demande === 'support_envoyer' ? { diagnosticProjet: a.id } : {},
           );
         } catch (e) {
           erreur = `Le deck n'a pas pu être rangé dans le lecteur : ${e instanceof Error ? e.message : String(e)}`;
