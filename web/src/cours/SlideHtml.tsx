@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Une slide en HTML libre, affichée telle quelle à la taille de la zone : un cadre de 1920 × 1080
 // réduit à l'échelle. Le cadre est isolé (sandbox sans droits) : aucun script, aucun accès à l'OS.
-export function SlideHtml({ document: doc, titre }: { document: string; titre: string }) {
+export function SlideHtml({
+  document: doc,
+  titre,
+  superposition,
+}: {
+  document: string;
+  titre: string;
+  // Posé dans le repère 1920 × 1080 de la slide (l'iframe isolée ne se laisse pas mesurer).
+  superposition?: ReactNode;
+}) {
   const zone = useRef<HTMLDivElement>(null);
   const [echelle, setEchelle] = useState(0.5);
   useEffect(() => {
@@ -19,13 +28,14 @@ export function SlideHtml({ document: doc, titre }: { document: string; titre: s
   }, []);
   return (
     <div className="cours-html" ref={zone}>
-      <div style={{ width: 1920 * echelle, height: 1080 * echelle }}>
+      <div style={{ position: 'relative', width: 1920 * echelle, height: 1080 * echelle }}>
         <iframe
           title={titre}
           sandbox=""
           srcDoc={doc}
           style={{ width: 1920, height: 1080, transform: `scale(${echelle})` }}
         />
+        {superposition}
       </div>
     </div>
   );

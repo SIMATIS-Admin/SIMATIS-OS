@@ -30,6 +30,21 @@
   bottom: 20px;
   z-index: 2;
 }
+/* Triangle de lecture à droite du titre « Passons aux questions » (112 px, fin vers x = 1386 sur
+   la slide 1920 × 1080) ; il suit l'échelle de la slide. */
+.cours-lancer.sur-slide {
+  right: auto;
+  bottom: auto;
+  left: calc(1440 / 1920 * 100%);
+  top: calc(554 / 1080 * 100%);
+  transform: translateY(-50%);
+  width: 56px;
+  height: 56px;
+  padding: 0 0 0 4px;
+  border-radius: 50%;
+  font-size: 24px;
+  line-height: 1;
+}
 .cours-slide {
   flex: 1;
   min-width: 0;
