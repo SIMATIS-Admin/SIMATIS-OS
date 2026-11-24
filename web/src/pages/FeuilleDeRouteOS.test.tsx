@@ -69,13 +69,18 @@ const ouvrirFeuille = async () =>
   fireEvent.click(await screen.findByRole('tab', { name: 'Feuille de route' }));
 
 describe('FeuilleDeRouteOS', () => {
-  it('affiche l’organigramme par défaut, en arbre avec les états', async () => {
+  it('affiche l’organigramme en schéma : blocs, états, détail au clic', async () => {
     render(<FeuilleDeRouteOS slug="x" autorise />);
+    // Rubrique inconnue du schéma : gardée dans sa propre bande, rien ne disparaît.
     expect(await screen.findByText('Rubrique fictive')).toBeTruthy();
-    expect(screen.getByText('Module fictif')).toBeTruthy();
-    expect(screen.getByText('en service')).toBeTruthy();
-    expect(screen.getByText('Fonction fictive')).toBeTruthy();
-    expect(screen.getByText('à essayer')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Module fictif/ }));
+    const detail = screen.getByRole('region', { name: 'Détail : Module fictif' });
+    expect(detail.textContent).toContain('fait ceci');
+    expect(detail.textContent).toContain('en service');
+    fireEvent.click(screen.getByRole('button', { name: 'Fonction fictive' }));
+    expect(screen.getByRole('region', { name: 'Détail : Fonction fictive' }).textContent).toContain(
+      'à essayer',
+    );
     expect(screen.queryByText(/Feuille fictive/)).toBeNull();
   });
 

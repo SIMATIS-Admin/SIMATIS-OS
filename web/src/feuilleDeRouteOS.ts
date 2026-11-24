@@ -58,3 +58,45 @@ export function lireOrganigramme(texte: string): RubriqueOrg[] {
   }
   return rubriques;
 }
+
+export type DispositionOrg = {
+  journee: NoeudOrg[];
+  colonnes: { titre: string; noeuds: NoeudOrg[] }[];
+  base: NoeudOrg[];
+  socle: NoeudOrg[];
+  plus: NoeudOrg[];
+  // Rubriques ajoutées à la note et pas encore placées dans le schéma : rien ne doit disparaître.
+  autres: RubriqueOrg[];
+};
+
+const COLONNES = ['Détecter', 'Vendre', 'Piloter l’activité'];
+const ZONES = new Set(['Ma journée', 'Ma base', 'Socle et automatismes', 'Plus', ...COLONNES]);
+
+// Range les rubriques de la note dans les zones du schéma, par leur titre.
+export function disposerOrganigramme(rubriques: RubriqueOrg[]): DispositionOrg {
+  const de = (titre: string) => rubriques.find((r) => r.titre === titre)?.noeuds ?? [];
+  return {
+    journee: de('Ma journée'),
+    colonnes: COLONNES.map((titre) => ({
+      titre: titre.replace('Piloter l’activité', 'Piloter'),
+      noeuds: de(titre),
+    })),
+    base: de('Ma base'),
+    socle: de('Socle et automatismes'),
+    plus: de('Plus'),
+    autres: rubriques.filter((r) => !ZONES.has(r.titre)),
+  };
+}
+
+// Fonctions comptées, sous-fonctions comprises (les rubriques non placées aussi).
+export function compterOrganigramme(rubriques: RubriqueOrg[]) {
+  let total = 0;
+  let enService = 0;
+  const parcourir = (n: NoeudOrg) => {
+    total++;
+    if (n.etat === 'en service') enService++;
+    n.enfants.forEach(parcourir);
+  };
+  rubriques.forEach((r) => r.noeuds.forEach(parcourir));
+  return { total, enService };
+}
