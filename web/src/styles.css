@@ -404,14 +404,10 @@ a {
 .fav-top.on svg {
   fill: currentColor;
 }
-.nav-group.favs > span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.nav-group.favs .nav-espace-titre {
+  margin: 0 0 6px;
 }
-.nav-group.favs > span svg {
-  width: 13px;
-  height: 13px;
+.nav-group.favs .nav-espace-titre svg {
   fill: currentColor;
 }
 .nav-group.cockpit-fixe {

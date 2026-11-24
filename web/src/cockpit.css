@@ -28,10 +28,6 @@
   letter-spacing: 0.04em;
   padding-bottom: 10px;
 }
-.nav .favs {
-  border-top: 1px solid #315680;
-  padding-top: 18px;
-}
 .nav .fav:focus-visible,
 .nav a:focus-within .fav {
   opacity: 1;
