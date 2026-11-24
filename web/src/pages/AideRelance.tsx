@@ -56,6 +56,8 @@ const jourIso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const CLE_MANDATS = 'aideRelance.instances-masquees';
+// Le bandeau des actions reportées se ferme pour la journée : il revient le lendemain.
+const CLE_BANDEAU = 'aideRelance:bandeau-reportees-ferme';
 const jourLong = (t: number) =>
   new Date(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -82,6 +84,9 @@ export function AideRelance({ slug }: { slug: string }) {
   // tard apparaît donc tout de suite.
   const [mandatsMasques, setMandatsMasques] = useState<string[]>(() => lire(CLE_MANDATS, []));
   const [masquees, setMasquees] = useState<Masquees>({});
+  const [bandeauFerme, setBandeauFerme] = useState(
+    () => lire<string>(CLE_BANDEAU, '') === jourIso(new Date()),
+  );
   const [brouillons, setBrouillons] = useState<PropositionItem[]>([]);
   const [faites, setFaites] = useState(0);
   const [nettoyage, setNettoyage] = useState<{ erreur: boolean } | null>(null);
@@ -149,6 +154,10 @@ export function AideRelance({ slug }: { slug: string }) {
   const basculer = () => {
     setDeploye(!deploye);
     ecrire('aideRelance:deploye', !deploye);
+  };
+  const fermerBandeau = () => {
+    setBandeauFerme(true);
+    ecrire(CLE_BANDEAU, jourIso(new Date()));
   };
   const basculerMandat = (mandat: string) => {
     const suivants = mandatsMasques.includes(mandat)
@@ -450,7 +459,7 @@ export function AideRelance({ slug }: { slug: string }) {
           {infoVentilation}
         </p>
       )}
-      {reportees.length > 0 && (
+      {reportees.length > 0 && !bandeauFerme && (
         <div className="aide-reportees">
           <span>
             {reportees.length} action(s) reportée(s), cachée(s) de cette liste jusqu'à leur date.
@@ -468,6 +477,9 @@ export function AideRelance({ slug }: { slug: string }) {
             )}
             <button className="btn sm" type="button" onClick={() => void remettre()}>
               Les remettre dans la liste
+            </button>
+            <button className="btn sm" type="button" onClick={fermerBandeau}>
+              Masquer ce message
             </button>
           </span>
         </div>

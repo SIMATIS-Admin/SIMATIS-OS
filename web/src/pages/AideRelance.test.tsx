@@ -205,6 +205,21 @@ describe('AideRelance', () => {
     expect(await screen.findByText('Retard Fictif')).toBeTruthy();
   });
 
+  it('ferme le bandeau des actions reportées pour la journée sans rien remettre dans la liste', async () => {
+    localStorage.removeItem('aideRelance:bandeau-reportees-ferme');
+    api.fetchMasqueesRelance.mockResolvedValue({ 'ent:retard fictif': Date.now() + 86_400_000 });
+    render(<AideRelance slug="simatis" />);
+    await screen.findByText(/1 action\(s\) reportée\(s\)/);
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer ce message' }));
+    expect(screen.queryByText(/action\(s\) reportée\(s\)/)).toBeNull();
+    expect(api.masquerRelanceLot).not.toHaveBeenCalled();
+    cleanup();
+    render(<AideRelance slug="simatis" />);
+    await screen.findByRole('button', { name: /Lancer la séquence/ });
+    expect(screen.queryByText(/action\(s\) reportée\(s\)/)).toBeNull();
+    localStorage.removeItem('aideRelance:bandeau-reportees-ferme');
+  });
+
   it('n\u2019affiche rien quand aucune action n\u2019est reportée', async () => {
     render(<AideRelance slug="simatis" />);
     await screen.findByText('Retard Fictif');
