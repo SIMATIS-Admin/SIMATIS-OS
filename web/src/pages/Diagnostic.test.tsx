@@ -403,6 +403,22 @@ describe('Formulaire de revue saisi dans l OS', () => {
 });
 
 describe('Validation de la revue à l étape 3', () => {
+  it('ne propose pas d assistant Claude à la revue', async () => {
+    api.fetchProjetsDiag.mockResolvedValue([
+      projet({
+        etape: 3,
+        etapeMax: 3,
+        dims: { outils: 2.5, strategie: 5.3, polyvalence: 9.5 },
+        profil: 'Joggeur',
+        revue: { statut: 'brouillon', libre: 'Remarque fictive.' },
+      }),
+    ]);
+    render(<Diagnostic slug="simatis" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Atelier Fictif Nord/ }));
+    await screen.findByRole('button', { name: 'Valider la revue' });
+    expect(screen.queryByLabelText(/Assistant Claude/)).toBeNull();
+  });
+
   it('valider la revue l enregistre comme validée', async () => {
     api.fetchProjetsDiag.mockResolvedValue([
       projet({
@@ -424,13 +440,13 @@ describe('Validation de la revue à l étape 3', () => {
 
 describe('Assistant de l étape', () => {
   it('envoie un message et montre que Claude prépare sa réponse', async () => {
-    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 3 })]);
+    api.fetchProjetsDiag.mockResolvedValue([projet({ etape: 1 })]);
     api.envoyerMessageDiag.mockResolvedValue(
       projet({
-        etape: 3,
+        etape: 1,
         statutChat: 'attente_claude',
         conversation: [
-          { etape: 3, de: 'pilote', texte: 'Question fictive', at: '2026-10-19T08:00:00.000Z' },
+          { etape: 1, de: 'pilote', texte: 'Question fictive', at: '2026-10-19T08:00:00.000Z' },
         ],
       }),
     );
@@ -769,7 +785,6 @@ describe('Mise en page des étapes', () => {
 
   it.each([
     [1, 'moitie'],
-    [3, ''],
     [5, 'moitie'],
   ])('étape %i : classe « %s »', async (etape, classe) => {
     api.fetchProjetsDiag.mockResolvedValue([projet({ etape, etapeMax: etape })]);
