@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useState } from 'react';
 import {
   fetchCandidatsRdv,
   type CandidatRdv,
@@ -6,7 +6,7 @@ import {
   type LigneSuite,
   type SujetVue,
 } from '../../api.js';
-import { enLigne } from '../../cours/Markdown.js';
+import { CompteRenduRendu, normaliser } from './CompteRenduRendu.js';
 
 const quand = (iso: string | null) =>
   iso
@@ -18,48 +18,7 @@ const quand = (iso: string | null) =>
       })
     : '';
 
-// Un résumé arrivé sans retours à la ligne (« **Titre** - point - point ») est remis en titres et
-// listes pour l'affichage seulement : le texte envoyé à l'acquittement reste celui de Marc.
-export const normaliser = (texte: string): string =>
-  texte.includes('\n')
-    ? texte
-    : texte
-        .replace(/\s+(\*\*[^*\n]{1,60}\*\*)\s+-\s+/g, '\n\n$1\n- ')
-        .replace(/\s+-\s+(?=\S)/g, '\n- ');
-
-// Titres (#, **Titre** seul sur sa ligne), listes à puces et paragraphes ; rien n'est écrit en HTML brut.
-function CompteRenduRendu({ texte }: { texte: string }) {
-  const lignes = normaliser(texte).replace(/\r\n?/g, '\n').split('\n');
-  const blocs: ReactNode[] = [];
-  let puces: string[] = [];
-  const viderPuces = () => {
-    if (puces.length === 0) return;
-    const items = puces;
-    blocs.push(
-      <ul key={`ul-${blocs.length}`}>
-        {items.map((p, i) => (
-          <li key={i}>{enLigne(p)}</li>
-        ))}
-      </ul>,
-    );
-    puces = [];
-  };
-  for (const brute of lignes) {
-    const ligne = brute.trim();
-    const puce = /^[-*]\s+(.+)$/.exec(ligne);
-    if (puce) {
-      puces.push(puce[1]!);
-      continue;
-    }
-    viderPuces();
-    if (!ligne) continue;
-    const titre = /^#{1,4}\s+(.+)$/.exec(ligne) ?? /^\*\*([^*]+)\*\*$/.exec(ligne);
-    if (titre) blocs.push(<h4 key={blocs.length}>{enLigne(titre[1]!)}</h4>);
-    else blocs.push(<p key={blocs.length}>{enLigne(ligne)}</p>);
-  }
-  viderPuces();
-  return <div data-testid="compte-rendu-rendu">{blocs}</div>;
-}
+export { normaliser };
 
 // Le champ date-heure du navigateur travaille en heure locale, l'OS en UTC.
 const deuxChiffres = (n: number) => String(n).padStart(2, '0');
@@ -72,11 +31,6 @@ const versIso = (local: string) => new Date(local).toISOString();
 type Ligne<G extends LigneSuite['genre']> = Extract<LigneSuite, { genre: G }>;
 
 const NOUVEAU = '';
-const TITRE_ZONE = {
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-  margin: '12px 0 0',
-} as const;
 const LIGNE_CASE = { display: 'block' } as const;
 
 // Entrée « le rendez-vous et sa suite » : ce que l'OS a repéré, le compte rendu relu et corrigeable,
@@ -154,11 +108,9 @@ export function DossierRendezVous({
   };
 
   return (
-    <div className="stack" style={{ marginBottom: 12 }}>
-      <h3 className="small muted" style={TITRE_ZONE}>
-        Déjà fait
-      </h3>
-      <div className="stack">
+    <div className="stack dossier" style={{ marginBottom: 12 }}>
+      <h3 className="dossier-titre">Déjà fait</h3>
+      <div className="stack dossier-fait">
         {montrerListe ? (
           <>
             <label className="small muted" htmlFor={`dos-rdv-${s.id}`}>
@@ -220,9 +172,7 @@ export function DossierRendezVous({
         {diag?.existant ? <div>✔ Diagnostic déjà créé : {diag.existant.nom}</div> : null}
       </div>
 
-      <h3 className="small muted" style={TITRE_ZONE}>
-        Compte rendu
-      </h3>
+      <h3 className="dossier-titre">Compte rendu</h3>
       {edition ? (
         <textarea
           className="input"
@@ -240,9 +190,7 @@ export function DossierRendezVous({
         </button>
       </div>
 
-      <h3 className="small muted" style={TITRE_ZONE}>
-        À l’acquittement, l’OS va…
-      </h3>
+      <h3 className="dossier-titre">À l’acquittement, l’OS va…</h3>
       <Fragment>
         <label style={LIGNE_CASE}>
           <input type="checkbox" checked disabled readOnly /> Enregistrer le compte rendu sur le

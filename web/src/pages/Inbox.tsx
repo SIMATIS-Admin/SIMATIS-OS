@@ -504,7 +504,10 @@ function Detail({
             Arrivé le <b>{date(s.createdAt)}</b>
           </span>
         </div>
-        {s.resume && <p style={{ whiteSpace: 'pre-line' }}>{s.resume}</p>}
+        {/* Le dossier d'un rendez-vous reprend le résumé en entier : l'extrait tronqué ferait doublon. */}
+        {s.resume && !s.compteRenduPrepare?.dossier && (
+          <p style={{ whiteSpace: 'pre-line' }}>{s.resume}</p>
+        )}
         {s.statut === 'a_traiter' && s.reunion && (
           <AttributionReunion
             key={`reunion-${s.id}`}
@@ -1185,7 +1188,7 @@ export function Inbox({
             {SECTEURS.map(([k, libelle]) => (
               <button
                 key={k}
-                className={`chip ${secteur === k ? 'on' : ''} ${k === 'retard' && compteurs[k] ? 'alerte' : ''}`}
+                className={`chip ${secteur === k ? 'on' : ''} ${k === 'retard' && compteurs[k] ? 'alerte' : ''} ${compteurs[k] ? '' : 'vide'}`}
                 aria-pressed={secteur === k}
                 onClick={() => {
                   setSecteur(secteur === k ? null : k);
