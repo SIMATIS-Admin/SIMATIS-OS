@@ -154,6 +154,8 @@ describe('AideRelance', () => {
     expect(screen.getByRole('link', { name: /Ouvrir dans ma messagerie/ })).toBeTruthy();
 
     // Déjà envoyé de son côté : l'action est close et la première suite planifiée, sans écran de choix.
+    // La tâche étant faite, l'Agenda ne la renvoie plus à la relecture.
+    api.fetchTaches.mockResolvedValue({ enRetard: [] });
     fireEvent.click(screen.getByRole('button', { name: 'Mail envoyé' }));
 
     await waitFor(() =>
@@ -191,23 +193,25 @@ describe('AideRelance', () => {
   it('signale les actions reportées et les remet dans la liste d\u2019un clic', async () => {
     const demain = Date.now() + 86_400_000;
     api.fetchMasqueesRelance.mockResolvedValue({
-      'ent:retard fictif': demain,
+      'ent:societe fictive 12': demain,
       'ent:ecartee pour toujours': 8.64e15,
     });
     render(<AideRelance slug="simatis" />);
     expect(await screen.findByText(/1 action\(s\) reportée\(s\)/)).toBeTruthy();
-    expect(screen.queryByText('Retard Fictif')).toBeNull();
+    expect(screen.queryByText('Société fictive 12')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Les remettre dans la liste' }));
     await waitFor(() =>
-      expect(api.masquerRelanceLot).toHaveBeenCalledWith('simatis', ['ent:retard fictif'], 0),
+      expect(api.masquerRelanceLot).toHaveBeenCalledWith('simatis', ['ent:societe fictive 12'], 0),
     );
     await waitFor(() => expect(screen.queryByText(/action\(s\) reportée\(s\)/)).toBeNull());
-    expect(await screen.findByText('Retard Fictif')).toBeTruthy();
+    expect(await screen.findByText('Société fictive 12')).toBeTruthy();
   });
 
   it('ferme le bandeau des actions reportées pour la journée sans rien remettre dans la liste', async () => {
     localStorage.removeItem('aideRelance:bandeau-reportees-ferme');
-    api.fetchMasqueesRelance.mockResolvedValue({ 'ent:retard fictif': Date.now() + 86_400_000 });
+    api.fetchMasqueesRelance.mockResolvedValue({
+      'ent:societe fictive 12': Date.now() + 86_400_000,
+    });
     render(<AideRelance slug="simatis" />);
     await screen.findByText(/1 action\(s\) reportée\(s\)/);
     fireEvent.click(screen.getByRole('button', { name: 'Masquer ce message' }));
@@ -631,30 +635,26 @@ describe('AideRelance', () => {
       }
     });
 
-    it("décale dans l'Agenda les tâches des actions déjà reportées, à la date de leur report", async () => {
-      const report = Date.now() + 3 * 86_400_000;
-      api.fetchMasqueesRelance.mockResolvedValue({ 'ent:retard fictif': report });
-      render(<AideRelance slug="simatis" />);
-      const bouton = await screen.findByRole('button', {
-        name: "Décaler 1 tâche(s) dans l'Agenda",
+    it("garde dans la liste une action dont la tâche est dans l'Agenda malgré un report", async () => {
+      api.fetchMasqueesRelance.mockResolvedValue({
+        'ent:retard fictif': Date.now() + 3 * 86_400_000,
       });
-      fireEvent.click(bouton);
-      await waitFor(() =>
-        expect(api.updateTache).toHaveBeenCalledWith('simatis', 't1', {
-          echeance: new Date(report).toISOString(),
-          localSeul: true,
-        }),
-      );
-      expect(await screen.findByText(/1 tâche\(s\) décalée\(s\)/)).toBeTruthy();
+      render(<AideRelance slug="simatis" />);
+      expect(await screen.findByText('Retard Fictif')).toBeTruthy();
+      expect(screen.queryByText(/action\(s\) reportée\(s\)/)).toBeNull();
     });
 
-    it("n'offre pas de décalage quand aucune action reportée n'a de tâche en retard", async () => {
-      api.fetchMasqueesRelance.mockResolvedValue({
-        'ent:autre sans tache': Date.now() + 86_400_000,
-      });
+    it("« Demain » décale aussi la tâche dans l'Agenda, pour qu'elle en sorte", async () => {
       render(<AideRelance slug="simatis" />);
-      await screen.findByText('Retard Fictif');
-      expect(screen.queryByRole('button', { name: /Décaler \d+ tâche/ })).toBeNull();
+      fireEvent.click(await screen.findByRole('button', { name: /Retard Fictif/ }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Demain' }));
+      await waitFor(() =>
+        expect(api.updateTache).toHaveBeenCalledWith(
+          'simatis',
+          't1',
+          expect.objectContaining({ localSeul: true }),
+        ),
+      );
     });
 
     it('signale un échec sans rien cacher', async () => {

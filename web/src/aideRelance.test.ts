@@ -149,7 +149,7 @@ describe('construireFile', () => {
     expect(file.find((a) => a.entreprise === 'A contacter')?.canal).toBe('mail');
   });
 
-  it('propose un appel quand la tâche en retard est un appel, et ignore les tâches terminées ou génériques', () => {
+  it('propose un appel quand la tâche en retard est un appel, garde les tâches génériques et ignore les terminées', () => {
     const file = construireFile({
       maintenant,
       pipeline: pipeline([]),
@@ -169,10 +169,13 @@ describe('construireFile', () => {
         tache({ id: 't3', fait: true, entreprise: { id: 'g', nom: 'Terminée' } }),
       ],
     });
-    expect(file.map((a) => [a.entreprise, a.canal])).toEqual([['Appel Fictif', 'appel']]);
+    expect(file.map((a) => [a.entreprise, a.canal])).toEqual([
+      ['Appel Fictif', 'appel'],
+      ['Générique', 'mail'],
+    ]);
   });
 
-  it('fait entrer les tâches du jour, après les retards, sans les marquer en retard', () => {
+  it('fait entrer toutes les tâches du jour, après les retards, sans les marquer en retard', () => {
     const file = construireFile({
       maintenant,
       pipeline: pipeline([]),
@@ -183,11 +186,11 @@ describe('construireFile', () => {
         tache({ id: 'j3', fait: true, entreprise: { id: 'd', nom: 'Terminée' } }),
       ],
     });
-    expect(file.map((a) => a.entreprise)).toEqual(['Retard Fictif', 'Jour Fictif']);
+    expect(file.map((a) => a.entreprise)).toEqual(['Retard Fictif', 'Jour Fictif', 'Simple']);
     expect(file[1]?.raisons[0]).toMatchObject({ source: 'aujourdhui', jours: 0 });
   });
 
-  it("cache les actions reportées jusqu'à leur date et écarte celles écartées", () => {
+  it("garde les tâches de l'Agenda malgré un report et n'écarte que celles écartées", () => {
     const base = {
       maintenant,
       pipeline: pipeline([]),
@@ -204,7 +207,7 @@ describe('construireFile', () => {
         'ent:ecartee': POUR_TOUJOURS,
       },
     });
-    expect(file.map((a) => a.entreprise)).toEqual(['Visible']);
+    expect(file.map((a) => a.entreprise)).toEqual(['Reportée', 'Visible']);
     const demain = new Date(maintenant.getTime() + 2 * 86_400_000);
     expect(
       construireFile({

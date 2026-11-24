@@ -48,6 +48,10 @@ const cleDe = (entreprise: string | null, secours: string, mandat: string | null
   return mandat ? `${mandat}|${base}` : base;
 };
 
+// Action portée par une tâche encore en retard ou du jour dans l'Agenda.
+export const aTacheAgenda = (a: ActionRelance) =>
+  a.raisons.some((r) => r.source === 'retard' || r.source === 'aujourdhui');
+
 export function comparerTri(a: number[], b: number[]): number {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     const d = (a[i] ?? 0) - (b[i] ?? 0);
@@ -111,7 +115,8 @@ export function construireFile({
   };
 
   for (const t of [...enRetard, ...duJour]) {
-    if (t.fait || (t.canal !== 'email' && t.canal !== 'appel')) continue;
+    // Toute tâche de l'Agenda est une action à faire maintenant, quel que soit son type.
+    if (t.fait) continue;
     const nom = t.entreprise?.nom ?? t.opportunite?.titre ?? t.contact?.nom ?? t.titre;
     const autre = t.instance && t.instance.slug !== slugCourant ? t.instance : null;
     const cle = cleDe(t.entreprise?.nom ?? null, `tache:${t.id}`, autre?.slug ?? null);
@@ -190,8 +195,13 @@ export function construireFile({
   for (const a of parCle.values())
     a.ancienne = a.raisons.every((r) => r.source === 'retard' && (r.jours ?? 0) > RETARD_ANCIEN);
 
+  // Ce qui est dans l'Agenda (en retard ou du jour) reste dans la liste : un simple report n'y
+  // change rien tant que les tâches n'ont pas changé de date. Seul « Pas pertinent » les écarte.
   return [...parCle.values()]
-    .filter((a) => (masquees[a.id] ?? 0) <= maintenant.getTime())
+    .filter((a) => {
+      const jusqua = masquees[a.id] ?? 0;
+      return jusqua <= maintenant.getTime() || (aTacheAgenda(a) && jusqua < POUR_TOUJOURS);
+    })
     .sort((x, y) => comparerTri(x.tri, y.tri));
 }
 
