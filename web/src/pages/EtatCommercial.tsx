@@ -21,7 +21,9 @@ function Etat({ slug, data }: { slug: string; data: Pipeline }) {
   return (
     <div className="cockpit-commercial-surface">
       <a className="cockpit-commercial-indicateur radar" href={`#/${slug}/radar`}>
-        <strong>Radar</strong>
+        <strong>
+          <Icon name="radar" /> Radar
+        </strong>
         <dl className="cockpit-commercial-details">
           <div>
             <dt>{radar.length > 1 ? 'affaires actives' : 'affaire active'}</dt>
@@ -39,7 +41,9 @@ function Etat({ slug, data }: { slug: string; data: Pipeline }) {
         <Icon name="down" />
       </a>
       <a className="cockpit-commercial-indicateur pipeline" href={`#/${slug}/pipeline`}>
-        <strong>Pipeline</strong>
+        <strong>
+          <Icon name="kanban" /> Pipeline
+        </strong>
         <dl className="cockpit-commercial-details">
           <div>
             <dt>{pipeline.length > 1 ? 'affaires ouvertes' : 'affaire ouverte'}</dt>

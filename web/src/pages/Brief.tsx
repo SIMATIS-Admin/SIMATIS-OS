@@ -158,6 +158,9 @@ export function Brief({ slug, children }: { slug: string; children?: ReactNode }
         </p>
       )}
       <section className="brief-priorite" aria-label="Prochain rendez-vous">
+        <span className="brief-agenda-icone" aria-hidden="true">
+          <Icon name="cal" />
+        </span>
         <div>
           <p>{prochainTexte}</p>
           {prochain?.lieu && <span className="small muted">{prochain.lieu}</span>}
