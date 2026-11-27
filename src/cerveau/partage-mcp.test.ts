@@ -19,6 +19,9 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   if (method === 'initialize') return reply(id, { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'partage', version: '1' } });
   if (method === 'tools/list') return reply(id, { tools: [] });
   if (method === 'tools/call') {
+    if (params.name === 'muet') return;
+    if (params.name === 'panne') return process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message: 'panne' } }) + '\\n');
+    if (params.name === 'pid') return reply(id, { content: [{ type: 'text', text: String(process.pid) }] });
     if (params.name === 'echec') return reply(id, { content: [{ type: 'text', text: 'échec : dossier refusé' }], isError: true });
     return reply(id, { content: [{ type: 'text', text: params.name + ':' + JSON.stringify(params.arguments) + ':' + process.env.PARTAGE_AUTHOR }] });
   }
@@ -73,4 +76,23 @@ describe('connecterPartage', () => {
       await p.fermer();
     }
   });
+
+  it('un appel parti d’une connexion abandonnée ne fait pas perdre la suivante', async () => {
+    const script = path.join(dossier, 'faux.mjs');
+    await writeFile(script, FAUX_SERVEUR);
+    const p = connecterPartage({ command: process.execPath, args: [script], env: {} });
+    try {
+      const premier = await p.appeler('pid', {});
+      // En cours sur la première connexion quand un autre appel la fait abandonner.
+      const enCours = p.appeler('muet', {}).catch(() => 'coupé');
+      await expect(p.appeler('panne', {})).rejects.toThrow('panne');
+      const second = await p.appeler('pid', {});
+      expect(second).not.toBe(premier);
+      expect(await enCours).toBe('coupé');
+      // La seconde connexion est toujours celle utilisée : sinon son processus reste orphelin.
+      expect(await p.appeler('pid', {})).toBe(second);
+    } finally {
+      await p.fermer();
+    }
+  }, 20_000);
 });
