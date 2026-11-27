@@ -27,8 +27,21 @@ const carte: CarteCerveau = {
     { id: 'reference/offre.md', titre: 'Offre fictive', categorie: 'reference', statut: null },
   ],
   liens: [],
-  autresFichiers: 1,
-  fichiers: ['reference/guide.pdf'],
+  autresFichiers: 2,
+  fichiers: [
+    {
+      chemin: 'reference/guides/guide-fictif.pdf',
+      taille: '748.8 Ko',
+      modifie: '2026-10-13 17:42',
+      auteur: 'Christophe',
+    },
+    {
+      chemin: 'reference/logos/logo-fictif.png',
+      taille: '2.6 Ko',
+      modifie: '2026-11-10 11:23',
+      auteur: 'Christophe',
+    },
+  ],
   lienKdrive: 'https://kdrive.example/dossier',
   moi: 'marc',
   tronquee: false,
@@ -81,7 +94,7 @@ describe('PartageBoite', () => {
     expect(screen.getByRole('button', { name: /^Échanges\s*2/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^À répondre\s*1/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Documents\s*1/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^Fichiers\s*1/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Fichiers\s*2/ })).toBeTruthy();
     const fils = screen.getAllByTestId('fil');
     expect(fils[0]?.textContent).toContain('Test fictif');
     expect(fils[0]?.textContent).toContain('Sans réponse');
@@ -138,20 +151,80 @@ describe('PartageBoite', () => {
     await waitFor(() => expect(screen.getByLabelText('Texte de reference/offre.md')).toBeTruthy());
   });
 
-  it('les fichiers non texte renvoient vers le kDrive', async () => {
+  it('range les fichiers par dossier avec un nom lisible, la taille, l’auteur et la date', async () => {
     await ouvrirPartage();
     fireEvent.click(screen.getByRole('button', { name: /^Fichiers/ }));
-    expect(screen.getByText('reference/guide.pdf')).toBeTruthy();
-    const lien = screen.getByRole<HTMLAnchorElement>('link', { name: /kDrive/ });
-    expect(lien.href).toBe('https://kdrive.example/dossier');
-    expect(lien.rel).toContain('noopener');
+    expect(screen.getByRole('heading', { name: 'Référence › Guides' })).toBeTruthy();
+    const [guide] = screen.getAllByTestId('fichier');
+    expect(guide?.textContent).toContain('Guide fictif');
+    expect(guide?.textContent).toContain('748,8 Ko · Christophe · 13 oct. 2026');
+    expect(screen.getByRole('heading', { name: 'Sélectionnez un fichier' })).toBeTruthy();
+  });
+
+  it('filtre par type, par la recherche, et trie par date', async () => {
+    await ouvrirPartage();
+    fireEvent.click(screen.getByRole('button', { name: /^Fichiers/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Images\s*1/ }));
+    expect(screen.getAllByTestId('fichier')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /^Tous/ }));
+    fireEvent.change(screen.getByLabelText('Trier'), { target: { value: 'date' } });
+    expect(screen.getAllByTestId('fichier')[0]?.textContent).toContain('Logo fictif');
+    fireEvent.change(screen.getByLabelText('Chercher partout'), { target: { value: 'guide' } });
+    expect(screen.getAllByTestId('fichier')).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText('Chercher partout'), { target: { value: 'zzz' } });
+    expect(screen.getByText('Aucun fichier ne correspond.')).toBeTruthy();
+  });
+
+  it('affiche l’aperçu d’une image et permet de la télécharger comme fichier brut', async () => {
+    const blobs: Blob[] = [];
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, {
+        createObjectURL: (b: Blob) => `blob:${blobs.push(b)}`,
+        revokeObjectURL: () => undefined,
+      }),
+    );
+    faux(() => ({ base64: 'AQID' }));
+    await ouvrirPartage();
+    fireEvent.click(screen.getByRole('button', { name: /^Fichiers/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Logo fictif/ }));
+    const lecture = screen.getByLabelText('Lecture');
+    const image = await within(lecture).findByRole('img', { name: 'Logo fictif' });
+    expect(image.getAttribute('src')).toBe('blob:1');
+    const lien = within(lecture).getByRole('link', { name: 'Télécharger' });
+    expect(lien.getAttribute('download')).toBe('logo-fictif.png');
+    expect(lien.getAttribute('href')).toBe('blob:2');
+    expect(blobs.map((b) => b.type)).toEqual(['image/png', 'application/octet-stream']);
+    expect(within(lecture).getByRole<HTMLAnchorElement>('link', { name: /kDrive/ }).rel).toContain(
+      'noopener',
+    );
+    expect(appels.find((a) => a.corps?.type === 'telecharger')?.corps).toEqual({
+      espace: 'partage',
+      type: 'telecharger',
+      chemin: 'reference/logos/logo-fictif.png',
+    });
+  });
+
+  it('signale un fichier impossible à ouvrir et propose de réessayer', async () => {
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('cerveau/carte')
+          ? new Response(JSON.stringify(url.includes('partage') ? carte : null))
+          : new Response(JSON.stringify({ error: 'Exécuteur muet.' }), { status: 504 }),
+      ),
+    );
+    await ouvrirPartage();
+    fireEvent.click(screen.getByRole('button', { name: /^Fichiers/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Guide fictif/ }));
+    await screen.findByText(/Exécuteur muet/);
+    expect(screen.getByRole('button', { name: 'Réessayer' })).toBeTruthy();
   });
 
   it('une recherche filtre les titres, puis cherche dans le contenu et ouvre le résultat', async () => {
     faux(() => ({
       resultats: [
         { chemin: 'echanges/2026-10-29-1000-christophe-q.md', extraits: ['une ligne fictive'] },
-        { chemin: 'reference/guide.pdf', extraits: [] },
+        { chemin: 'reference/guides/guide-fictif.pdf', extraits: [] },
       ],
     }));
     await ouvrirPartage();
@@ -159,7 +232,6 @@ describe('PartageBoite', () => {
     expect(screen.getAllByTestId('fil')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Chercher dans le contenu' }));
     await screen.findByText('une ligne fictive');
-    expect(screen.getAllByRole('link', { name: /kDrive/ })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Relais fictif' }));
     await screen.findByLabelText('Votre réponse');
   });

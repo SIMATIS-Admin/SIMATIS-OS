@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ajouterDocumentPartage,
   cartePartage,
@@ -8,6 +11,7 @@ import {
   ecrirePartage,
   lirePartage,
   raisonLectureSeule,
+  telechargerPartage,
   type AppelerPartage,
 } from './partage.js';
 
@@ -209,7 +213,9 @@ describe('cartePartage', () => {
       '---\nde: marc\ndate: 2026-10-30T09:00:00+01:00\ntype: reponse\nsujet: "Re"\nen_reponse_a: 2026-10-29-1200-christophe-question.md\n---\n\nOui.\n',
     );
     const carte = await cartePartage(appeler, 'marc');
-    expect(carte.fichiers).toEqual(['reference/logo.png']);
+    expect(carte.fichiers).toEqual([
+      { chemin: 'reference/logo.png', taille: '1 Ko', modifie: 'hier', auteur: 'Marc' },
+    ]);
     expect(carte.moi).toBe('marc');
     const q = carte.noeuds.find((n) => n.id.endsWith('christophe-question.md'));
     expect(q).toMatchObject({ genre: 'question', auteur: 'christophe' });
@@ -252,5 +258,56 @@ describe('lireMessages', () => {
     expect(Object.keys(r)).toEqual(['echanges/2026-10-29-1200-christophe-question.md']);
     expect(r['echanges/2026-10-29-1200-christophe-question.md']).toContain('Corps.');
     expect(appels.filter((a) => a.args.chemin === 'echanges/absent.md')).toHaveLength(1);
+  });
+});
+
+describe('telechargerPartage', () => {
+  let racine: string;
+  beforeEach(async () => {
+    racine = await mkdtemp(path.join(tmpdir(), 'partage-test-'));
+  });
+  afterEach(() => rm(racine, { recursive: true, force: true }));
+
+  // Le vrai serveur enregistre un fichier non texte sur le poste et renvoie son chemin.
+  const serveur =
+    (local: string): AppelerPartage =>
+    async () => {
+      await mkdir(path.dirname(local), { recursive: true });
+      await writeFile(local, Buffer.from([1, 2, 3]));
+      return `[reference/logo.png · modifié le 29 oct. par Marc]\nFichier non textuel (3 o), enregistré ici : ${local}`;
+    };
+
+  it('rend les octets d’un fichier non texte et supprime la copie locale', async () => {
+    const local = path.join(racine, 'partage', 'reference', 'logo.png');
+    const r = await telechargerPartage(serveur(local), 'reference/logo.png');
+    expect(r).toEqual({ base64: 'AQID' });
+    await expect(access(local)).rejects.toThrow();
+  });
+
+  it('accepte un nom accentué composé autrement par le serveur', async () => {
+    const local = path.join(racine, 'partage', 'reference', 'é.png'.normalize('NFC'));
+    const r = await telechargerPartage(serveur(local), 'reference/é.png'.normalize('NFD'));
+    expect(r.base64).toBe('AQID');
+  });
+
+  it('refuse un chemin local qui ne correspond pas au fichier demandé', async () => {
+    const local = path.join(racine, 'ailleurs', 'secret.txt');
+    await expect(telechargerPartage(serveur(local), 'reference/logo.png')).rejects.toThrow(
+      /inattendu/,
+    );
+    await expect(access(local)).resolves.toBeUndefined();
+  });
+
+  it('rend le contenu d’un fichier texte, et refuse un contenu tronqué', async () => {
+    fichiers.set('reference/page.html', '<p>Fictif é</p>\n');
+    const r = await telechargerPartage(appeler, 'reference/page.html');
+    expect(Buffer.from(r.base64, 'base64').toString('utf8')).toBe('<p>Fictif é</p>\n');
+    fichiers.set('reference/long.csv', 'a\n\n[tronqué : 300000 caractères au total]');
+    await expect(telechargerPartage(appeler, 'reference/long.csv')).rejects.toThrow(/kDrive/);
+  });
+
+  it('refuse un chemin qui sort de l’espace', async () => {
+    await expect(telechargerPartage(appeler, '../x.png')).rejects.toThrow(/invalide/);
+    expect(appels).toHaveLength(0);
   });
 });

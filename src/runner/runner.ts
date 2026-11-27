@@ -366,7 +366,8 @@ export async function tourCerveau(opts: RunnerOptions): Promise<number> {
       erreur: err instanceof Error ? err.message : String(err),
     }));
     await api(`/api/runner/cerveau/operations/${id}`, resultat);
-    if (resultat.ok && operation.type !== 'lire') {
+    // Ouvrir un fichier ne change rien : relire toute la carte partagée retarderait la demande suivante.
+    if (resultat.ok && operation.type !== 'lire' && operation.type !== 'telecharger') {
       if (operation.espace === 'partage') await deposerCartePartage(api, partage);
       else await deposerCarte(api, cerveau ?? undefined);
     }

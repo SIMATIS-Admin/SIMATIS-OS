@@ -6,6 +6,7 @@ import { getInstanceBySlug } from '../instances/service.js';
 import { resolveToken } from '../mcp/tokens.js';
 import { estEchange, messagesRelayes, miroirVersRelais } from '../partenaires/echanges.js';
 import { demander, prendre, repondre, RunnerInjoignable } from './file.js';
+import { MAX_TELECHARGEMENT } from './partage.js';
 import { deposerCarte, lireCarte } from './store.js';
 
 const espaceSchema = z.enum(['simatis', 'partage']).optional();
@@ -29,7 +30,24 @@ const carteSchema = z.object({
     .max(10_000),
   liens: z.array(z.object({ de: z.string().max(500), vers: z.string().max(500) })).max(100_000),
   autresFichiers: z.number().int().min(0),
-  fichiers: z.array(z.string().max(500)).max(1000).optional(),
+  fichiers: z
+    .array(
+      z.union([
+        // Un exécuteur pas encore relancé n'envoie que le chemin.
+        z
+          .string()
+          .max(500)
+          .transform((chemin) => ({ chemin, taille: '', modifie: '', auteur: '' })),
+        z.object({
+          chemin: z.string().max(500),
+          taille: z.string().max(50),
+          modifie: z.string().max(50),
+          auteur: z.string().max(200),
+        }),
+      ]),
+    )
+    .max(1000)
+    .optional(),
   moi: z.string().max(50).optional(),
   tronquee: z.boolean(),
 });
@@ -69,7 +87,16 @@ const operationSchema = z.discriminatedUnion('type', [
     type: z.literal('lire_messages'),
     chemins: z.array(z.string().max(300)).min(1).max(50),
   }),
+  z.object({
+    espace: z.literal('partage'),
+    type: z.literal('telecharger'),
+    chemin: z.string().min(1).max(500),
+  }),
 ]);
+
+// Un fichier de 40 Mo en base64, avec de la marge pour l'enveloppe JSON.
+const MAX_BASE64 = Math.ceil(MAX_TELECHARGEMENT / 3) * 4;
+const DELAI_TELECHARGEMENT_MS = 150_000;
 
 const resultatSchema = z.union([
   z.object({
@@ -83,6 +110,7 @@ const resultatSchema = z.union([
       .max(200)
       .optional(),
     textes: z.record(z.string(), z.string().max(500_000)).optional(),
+    base64: z.string().max(MAX_BASE64).optional(),
   }),
   z.object({ ok: z.literal(false), erreur: z.string().max(1000), conflit: z.boolean().optional() }),
 ]);
@@ -160,7 +188,10 @@ export function registerCerveauRoutes(
       const refuse = await acces(request.params.slug, reply, parsed.data.espace === 'partage');
       if (refuse) return refuse;
       try {
-        const resultat = await demander(parsed.data);
+        const resultat = await demander(
+          parsed.data,
+          parsed.data.type === 'telecharger' ? DELAI_TELECHARGEMENT_MS : undefined,
+        );
         if (resultat.ok) {
           // Le fichier est déposé : le même message part par le relais. Un échec du relais ne défait
           // pas le dépôt (le message est dans echanges/), il est signalé à l'écran.
@@ -200,6 +231,7 @@ export function registerCerveauRoutes(
 
   app.post<{ Params: { id: string }; Body: unknown }>(
     '/api/runner/cerveau/operations/:id',
+    { bodyLimit: MAX_BASE64 + 100_000 },
     async (request, reply) => {
       if (!(await estRunner(request))) return refus(reply);
       const parsed = resultatSchema.safeParse(request.body);

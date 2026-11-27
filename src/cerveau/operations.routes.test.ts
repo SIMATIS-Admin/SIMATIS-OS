@@ -177,6 +177,19 @@ describe('Second cerveau : opérations (OS → runner → dossier)', () => {
     ).toBe(401);
   });
 
+  it('un fichier de l’espace partagé traverse la file, même au-delà d’un mégaoctet', async () => {
+    const gros = 'é'.repeat(900_000);
+    kdrive.set('reference/export.csv', gros);
+    const res = await demander('op-ok', {
+      espace: 'partage',
+      type: 'telecharger',
+      chemin: 'reference/export.csv',
+    });
+    expect(res.statusCode).toBe(200);
+    const { base64 } = res.json<{ base64: string }>();
+    expect(Buffer.from(base64, 'base64').toString('utf8')).toBe(gros);
+  });
+
   it('réserve les notes de la feuille de route à Mon activité', async () => {
     await mkdir(path.join(dossier, 'brain/outils'), { recursive: true });
     for (const nom of ['structure', 'feuille-de-route'])
