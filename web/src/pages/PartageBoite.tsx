@@ -4,6 +4,7 @@ import type { CarteCerveau, NoeudCerveau } from '../cerveau.js';
 import { Icon } from '../icons.js';
 import { documents, fils, majuscule, sansEntete, type Fil } from '../partage.js';
 import { CerveauEspace } from './Cerveau.js';
+import { ApercuFichier, ListeFichiers } from './FichiersPartages.js';
 import { IdeeCerveau, MessagePartage, NoteCerveau } from './NoteCerveau.js';
 
 type Rubrique = 'echanges' | 'a_repondre' | 'documents' | 'fichiers' | 'carte';
@@ -21,14 +22,6 @@ const quand = (n: NoeudCerveau) =>
     },
   );
 const erreurDe = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-function LienKdrive({ url }: { url: string | null | undefined }) {
-  return url ? (
-    <a href={url} target="_blank" rel="noopener noreferrer">
-      Ouvrir dans le kDrive
-    </a>
-  ) : null;
-}
 
 // Texte d'un message : **gras** et adresses cliquables, rien d'autre.
 function Texte({ texte }: { texte: string }) {
@@ -251,6 +244,8 @@ export function PartageBoite({ slug }: { slug: string }) {
   );
   const filChoisi = tous.find((f) => f.id === choix);
   const fichiers = carte.fichiers ?? [];
+  const fichierChoisi =
+    rubrique === 'fichiers' ? fichiers.find((f) => f.chemin === choix) : undefined;
 
   const aller = (r: Rubrique) => {
     setRubrique(r);
@@ -279,7 +274,7 @@ export function PartageBoite({ slug }: { slug: string }) {
     const fil = tous.find((f) => f.messages.some((m) => m.id === chemin));
     setResultats(null);
     setNouveau(false);
-    setRubrique(fil ? 'echanges' : 'documents');
+    setRubrique(fil ? 'echanges' : chemin.endsWith('.md') ? 'documents' : 'fichiers');
     setChoix(fil ? fil.id : chemin);
   };
 
@@ -387,13 +382,7 @@ export function PartageBoite({ slug }: { slug: string }) {
                 {resultats.length === 0 && <p className="cerveau-note">Aucun résultat.</p>}
                 {resultats.map((r) => (
                   <div key={r.chemin} className="pb-ligne">
-                    {r.chemin.endsWith('.md') ? (
-                      <button onClick={() => ouvrirResultat(r.chemin)}>{titreDe(r.chemin)}</button>
-                    ) : (
-                      <>
-                        <code>{r.chemin}</code> <LienKdrive url={carte.lienKdrive} />
-                      </>
-                    )}
+                    <button onClick={() => ouvrirResultat(r.chemin)}>{titreDe(r.chemin)}</button>
                     {r.extraits.slice(0, 3).map((x) => (
                       <span key={x} className="cerveau-note">
                         {x}
@@ -457,20 +446,15 @@ export function PartageBoite({ slug }: { slug: string }) {
                 ))}
               </>
             ) : (
-              <>
-                {fichiers.length === 0 && <p className="cerveau-note">Aucun autre fichier.</p>}
-                {fichiers.map((f) => (
-                  <div key={f} className="pb-ligne">
-                    <code>{f}</code> <LienKdrive url={carte.lienKdrive} />
-                  </div>
-                ))}
-                {fichiers.length > 0 && !carte.lienKdrive && (
-                  <p className="cerveau-note">
-                    Pour ouvrir ces fichiers depuis l’OS, ajoutez le lien du dossier kDrive dans
-                    .env (PARTAGE_KDRIVE_URL).
-                  </p>
-                )}
-              </>
+              <ListeFichiers
+                fichiers={fichiers}
+                requete={requete}
+                choix={choix}
+                onChoisir={(chemin) => {
+                  setNouveau(false);
+                  setChoix(chemin);
+                }}
+              />
             )}
           </section>
 
@@ -503,16 +487,33 @@ export function PartageBoite({ slug }: { slug: string }) {
                 onFerme={() => setChoix(null)}
                 onEnregistre={recharger}
               />
+            ) : fichierChoisi ? (
+              <ApercuFichier
+                key={fichierChoisi.chemin}
+                slug={slug}
+                fichier={fichierChoisi}
+                lienKdrive={carte.lienKdrive}
+                onRetour={() => setChoix(null)}
+              />
             ) : (
               <div className="pb-vide">
                 <span className="pb-vide-icone" aria-hidden="true">
-                  <Icon name="mail" />
+                  <Icon name={rubrique === 'fichiers' ? 'file' : 'mail'} />
                 </span>
-                <h2>Sélectionnez un échange</h2>
-                <p>Choisissez une conversation ou un document pour l’afficher ici.</p>
-                <span className="pb-vide-aide">
-                  La lecture et la réponse restent dans cet espace.
-                </span>
+                {rubrique === 'fichiers' ? (
+                  <>
+                    <h2>Sélectionnez un fichier</h2>
+                    <p>Son aperçu s’affiche ici, avec un bouton pour le télécharger.</p>
+                  </>
+                ) : (
+                  <>
+                    <h2>Sélectionnez un échange</h2>
+                    <p>Choisissez une conversation ou un document pour l’afficher ici.</p>
+                    <span className="pb-vide-aide">
+                      La lecture et la réponse restent dans cet espace.
+                    </span>
+                  </>
+                )}
               </div>
             )}
           </section>

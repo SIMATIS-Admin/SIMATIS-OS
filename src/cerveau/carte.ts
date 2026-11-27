@@ -17,13 +17,15 @@ export type Noeud = {
   reponseA?: string | null | undefined;
 };
 export type Lien = { de: string; vers: string };
+// Taille, date et auteur tels que les donne le serveur « partage ».
+export type FichierPartage = { chemin: string; taille: string; modifie: string; auteur: string };
 export type Carte = {
   noeuds: Noeud[];
   liens: Lien[];
   // Fichiers qui ne sont pas des notes Markdown (pièces jointes, présentations) : comptés seulement.
   autresFichiers: number;
-  // Chemins de ces fichiers pour l'espace partagé, afin de les lister avec un lien vers le kDrive.
-  fichiers?: string[];
+  // Ces fichiers, détaillés pour l'espace partagé seulement, afin de les lister et de les ouvrir.
+  fichiers?: FichierPartage[];
   // Espace partagé : qui consulte (marc), pour distinguer ses messages de ceux de l'autre.
   moi?: string;
   tronquee: boolean;
@@ -76,7 +78,7 @@ const titreDe = (texte: string, id: string) => {
 // Carte à partir de notes déjà lues : le dossier du Drive et l'espace partagé s'y ramènent.
 export function carteDepuisNotes(
   toutes: { id: string; texte: string }[],
-  options: { max?: number; autresFichiers?: number; fichiers?: string[] } = {},
+  options: { max?: number; autresFichiers?: number; fichiers?: FichierPartage[] } = {},
 ): Carte {
   const max = options.max ?? MAX_NOTES;
   const notes = toutes.slice(0, max);

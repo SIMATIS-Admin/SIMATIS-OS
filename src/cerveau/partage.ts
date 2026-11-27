@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
-import { carteDepuisNotes, type Carte } from './carte.js';
+import { readFile, rm, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { carteDepuisNotes, type Carte, type FichierPartage } from './carte.js';
 import { ErreurCerveau } from './fichiers.js';
 
 // Espace partagé AlpesIA × Simatis (un dossier kDrive commun à Christophe et Marc). Il se lit et
@@ -136,19 +138,56 @@ export async function deposerMessage(appeler: AppelerPartage, m: Message) {
   return { ...(chemin ? { chemin } : {}) };
 }
 
-// Chemins listés par lister_partage (« - chemin · taille · date · auteur »).
-export async function listerPartage(appeler: AppelerPartage) {
+// Lignes de lister_partage : « - chemin · taille · date · auteur », parfois suivi d'une alerte.
+export async function listerPartage(appeler: AppelerPartage): Promise<FichierPartage[]> {
   const texte = await appeler('lister_partage', {});
   return texte
     .split('\n')
     .filter((l) => l.startsWith('- '))
-    .map((l) => l.slice(2).split(' · ')[0] as string);
+    .map((l) => {
+      const [chemin = '', taille = '', modifie = '', auteur = ''] = l.slice(2).split(' · ');
+      return { chemin, taille, modifie, auteur };
+    });
+}
+
+// Au-delà, le fichier ne traverse plus la file de l'exécuteur : il s'ouvre dans le kDrive.
+export const MAX_TELECHARGEMENT = 40 * 1024 * 1024;
+
+// Octets d'un fichier de l'espace, pour l'aperçu et le téléchargement. Le serveur « partage » rend un
+// texte en clair ; il enregistre tout autre fichier sur ce poste, copie qu'on efface après lecture.
+export async function telechargerPartage(appeler: AppelerPartage, chemin: string) {
+  const parties = chemin.split('/');
+  if (parties.some((p) => p === '' || p === '.' || p === '..' || p.includes('\\')))
+    throw new ErreurCerveau('Chemin de fichier invalide.');
+  const texte = await appeler('lire_partage', { chemin }).catch((e: unknown) => {
+    throw echec(e);
+  });
+  const trop = () =>
+    new ErreurCerveau('Fichier trop lourd pour être ouvert ici : ouvrez-le dans le kDrive.');
+  const local = /^\[[^\n]*\]\nFichier non textuel [^\n]*enregistré ici : (.+)$/.exec(texte)?.[1];
+  if (local) {
+    // On ne lit (et n'efface) que la copie du fichier demandé, jamais un chemin quelconque.
+    const attendu = path.sep + path.join('partage', ...parties);
+    // Les accents d'un nom venu d'un Mac peuvent être composés autrement de part et d'autre.
+    if (!path.normalize(local).normalize('NFC').endsWith(attendu.normalize('NFC')))
+      throw new ErreurCerveau('Emplacement inattendu renvoyé par le serveur « partage ».');
+    try {
+      if ((await stat(local)).size > MAX_TELECHARGEMENT) throw trop();
+      return { base64: (await readFile(local)).toString('base64') };
+    } finally {
+      await rm(local, { force: true });
+    }
+  }
+  if (!texte.startsWith('[')) throw new ErreurCerveau('Fichier illisible.');
+  const contenu = texte.replace(/^\[[^\n]*\]\n\n?/, '');
+  if (/\n\n\[tronqué : \d+ caractères au total\]$/.test(contenu)) throw trop();
+  return { base64: Buffer.from(contenu).toString('base64') };
 }
 
 // Carte de l'espace partagé : un nœud par note Markdown, les liens se lisent dans les textes.
 export async function cartePartage(appeler: AppelerPartage, auteur: string): Promise<Carte> {
   const fichiers = await listerPartage(appeler);
-  const md = fichiers.filter((f) => f.endsWith('.md'));
+  const md = fichiers.map((f) => f.chemin).filter((c) => c.endsWith('.md'));
   const lus: { id: string; texte: string }[] = [];
   const file = [...md.slice(0, MAX_NOTES)];
   // Quatre lectures à la fois : l'API kDrive limite le débit.
@@ -161,7 +200,7 @@ export async function cartePartage(appeler: AppelerPartage, auteur: string): Pro
     }),
   );
   lus.sort((a, b) => a.id.localeCompare(b.id));
-  const autres = fichiers.filter((f) => !f.endsWith('.md'));
+  const autres = fichiers.filter((f) => !f.chemin.endsWith('.md'));
   const carte = carteDepuisNotes(lus, {
     autresFichiers: autres.length,
     fichiers: autres.slice(0, MAX_FICHIERS),

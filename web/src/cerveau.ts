@@ -11,11 +11,12 @@ export type NoeudCerveau = {
   // Texte d'un message reçu par le relais, sans fichier dans le kDrive pour le lire.
   texte?: string | null;
 };
+export type FichierPartage = { chemin: string; taille: string; modifie: string; auteur: string };
 export type CarteCerveau = {
   noeuds: NoeudCerveau[];
   liens: { de: string; vers: string }[];
   autresFichiers: number;
-  fichiers?: string[];
+  fichiers?: FichierPartage[];
   moi?: string;
   // Lien du dossier de l'espace partagé sur le kDrive (espace Alpes IA seulement).
   lienKdrive?: string | null;

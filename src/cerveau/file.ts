@@ -7,6 +7,7 @@ import {
   deposerMessage,
   ecrirePartage,
   lirePartage,
+  telechargerPartage,
   type AppelerPartage,
   type ResultatRecherche,
 } from './partage.js';
@@ -32,7 +33,8 @@ export type Operation =
     }
   | { espace: 'partage'; type: 'actualiser' }
   | { espace: 'partage'; type: 'chercher'; requete: string }
-  | { espace: 'partage'; type: 'lire_messages'; chemins: string[] };
+  | { espace: 'partage'; type: 'lire_messages'; chemins: string[] }
+  | { espace: 'partage'; type: 'telecharger'; chemin: string };
 
 export type Resultat =
   | {
@@ -43,6 +45,7 @@ export type Resultat =
       lectureSeule?: string | null;
       resultats?: ResultatRecherche[];
       textes?: Record<string, string>;
+      base64?: string;
     }
   | { ok: false; erreur: string; conflit?: boolean };
 
@@ -157,6 +160,8 @@ async function executerPartage(op: Operation, partage: Partage | null): Promise<
       return { ok: true };
     case 'lire_messages':
       return { ok: true, textes: await lireMessages(appeler, op.chemins, auteur) };
+    case 'telecharger':
+      return { ok: true, chemin: op.chemin, ...(await telechargerPartage(appeler, op.chemin)) };
     case 'chercher':
       return { ok: true, resultats: await chercherPartage(appeler, op.requete) };
   }
