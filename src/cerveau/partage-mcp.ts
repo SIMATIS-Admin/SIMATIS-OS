@@ -49,20 +49,26 @@ export function connecterPartage(config: ConfigPartage) {
   };
 
   const appeler: AppelerPartage = async (outil, args) => {
-    client ??= ouvrir();
+    const courante = (client ??= ouvrir());
+    // Plusieurs appels partagent la connexion : l'échec tardif de l'un d'eux ne doit pas oublier
+    // celle qu'un autre vient d'ouvrir, dont le processus ne serait alors jamais arrêté.
+    const abandonner = () => {
+      if (client !== courante) return false;
+      client = null;
+      return true;
+    };
     let c: Client;
     try {
-      c = await client;
+      c = await courante;
     } catch (e) {
-      client = null;
+      abandonner();
       throw e;
     }
     let res;
     try {
       res = await c.callTool({ name: outil, arguments: args });
     } catch (e) {
-      client = null;
-      void c.close().catch(() => undefined);
+      if (abandonner()) void c.close().catch(() => undefined);
       throw e;
     }
     const texte = ((res.content as { type: string; text?: string }[] | undefined) ?? [])
