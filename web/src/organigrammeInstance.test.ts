@@ -138,9 +138,9 @@ describe('sources', () => {
 
   it('ne dit pas « branché » quand seul un module ou une routine est activé', () => {
     for (const id of ['siteweb', 'cerveau', 'publiques'])
-      expect(source(id, instance(), ETAT_INCONNU)?.etat).toBe('actif');
+      expect(source(id, instance(), ETAT_INCONNU)?.etat).toBe('active');
     const e = etat({ routines: [{ cle: 'inbox', actif: true }] as EtatInstance['routines'] });
-    expect(source('reunions', instance(), e)?.etat).toBe('actif');
+    expect(source('reunions', instance(), e)?.etat).toBe('active');
   });
 
   it('adapte les sources au type d’instance et aux modules', () => {

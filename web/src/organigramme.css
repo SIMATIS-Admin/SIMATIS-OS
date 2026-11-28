@@ -143,7 +143,7 @@
 .og-source i {
   background: #9aa6b8;
 }
-.og-source.actif i,
+.og-source.active i,
 .og-source.branche i {
   background: #2f8f5b;
 }
@@ -507,7 +507,7 @@
 .og-etat.source {
   background: #6b7a90;
 }
-.og-etat.source.actif,
+.og-etat.source.active,
 .og-etat.source.branche {
   background: #2f8f5b;
 }
