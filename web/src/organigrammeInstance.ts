@@ -83,11 +83,11 @@ export const libelleVue = (vue: string) =>
   allItems().find((i) => i.id === vue)?.label ??
   vue;
 
-export type EtatSource = 'branche' | 'actif' | 'erreur' | 'absent' | 'inconnu' | 'indisponible';
+export type EtatSource = 'branche' | 'active' | 'erreur' | 'absent' | 'inconnu' | 'indisponible';
 export const LIBELLE_SOURCE: Record<EtatSource, string> = {
   branche: 'branché',
   // Module ou routine activés : aucune connexion n’est vérifiée.
-  actif: 'activé',
+  active: 'activé',
   erreur: 'en erreur',
   absent: 'non branché',
   inconnu: 'non vérifié',
@@ -142,7 +142,7 @@ export function sources(instance: InstanceSummary, etat: EtatInstance): Source[]
     !etat.routines
       ? 'inconnu'
       : etat.routines.some((r) => cles.includes(r.cle) && r.actif)
-        ? 'actif'
+        ? 'active'
         : 'absent';
 
   return [
@@ -183,7 +183,7 @@ export function sources(instance: InstanceSummary, etat: EtatInstance): Source[]
     {
       id: 'publiques',
       nom: 'Données publiques',
-      etat: 'actif',
+      etat: 'active',
       moyen: 'Annuaire des entreprises et annonces du BODACC, en lecture.',
       alimente: 'Recherches, signaux, Base des suspects',
       vue: 'recherches',
@@ -209,7 +209,7 @@ export function sources(instance: InstanceSummary, etat: EtatInstance): Source[]
     {
       id: 'siteweb',
       nom: 'Site web',
-      etat: a('site-web') ? 'actif' : 'indisponible',
+      etat: a('site-web') ? 'active' : 'indisponible',
       moyen: 'Formulaire de contact relevé par l’OS, audience Google Analytics en lecture.',
       alimente: 'Inbox, Site web',
       vue: a('site-web') ? 'siteweb' : null,
@@ -217,7 +217,7 @@ export function sources(instance: InstanceSummary, etat: EtatInstance): Source[]
     {
       id: 'cerveau',
       nom: 'Second cerveau',
-      etat: a('cerveau') ? 'actif' : 'indisponible',
+      etat: a('cerveau') ? 'active' : 'indisponible',
       moyen: propre
         ? 'Notes privées (dépôt privé et Drive), lues et complétées par l’OS et les routines.'
         : 'Espace partagé uniquement : documents et messages échangés avec le partenaire.',

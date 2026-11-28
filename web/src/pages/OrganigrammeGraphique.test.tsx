@@ -109,6 +109,14 @@ describe('OrganigrammeGraphique', () => {
     expect(screen.queryByRole('button', { name: /Gmail.*branché/ })).toBeNull();
   });
 
+  it('ne marque comme sélectionnée aucune source avant un clic', () => {
+    monter();
+    const source = screen.getByRole('button', { name: /Données publiques/ });
+    expect(source.classList.contains('actif')).toBe(false);
+    fireEvent.click(source);
+    expect(source.classList.contains('actif')).toBe(true);
+  });
+
   it('détaille le moteur et reste lisible quand une lecture échoue', async () => {
     monter();
     fireEvent.click(await screen.findByRole('button', { name: /Double verrou.*fermé/ }));
