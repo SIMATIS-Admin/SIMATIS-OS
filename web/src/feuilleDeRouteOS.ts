@@ -29,6 +29,9 @@ export type RubriqueOrg = { titre: string; noeuds: NoeudOrg[] };
 
 const LIGNE = /^( *)- (.*?)(?: \[(en service|à essayer|partiel)\])?(?: — (.*))?$/;
 
+// La note s'écrit à la main ou par un agent : les deux apostrophes désignent le même nom.
+const typo = (texte: string) => texte.replaceAll("'", '’');
+
 // Lit la note de l'organigramme : un `##` par rubrique, puis une liste à puces indentée de deux
 // espaces par niveau (`- Nom [état] — description`). Tout le reste (introduction, lignes vides) est ignoré.
 export function lireOrganigramme(texte: string): RubriqueOrg[] {
@@ -37,7 +40,7 @@ export function lireOrganigramme(texte: string): RubriqueOrg[] {
   for (const ligne of texte.split('\n')) {
     const titre = /^## (.+?)\s*$/.exec(ligne);
     if (titre) {
-      rubriques.push({ titre: titre[1] as string, noeuds: [] });
+      rubriques.push({ titre: typo(titre[1] as string), noeuds: [] });
       pile = [];
       continue;
     }
@@ -45,7 +48,7 @@ export function lireOrganigramme(texte: string): RubriqueOrg[] {
     const m = rubrique && LIGNE.exec(ligne);
     if (!rubrique || !m) continue;
     const noeud: NoeudOrg = {
-      nom: (m[2] as string).trim(),
+      nom: typo((m[2] as string).trim()),
       etat: (m[3] as EtatOrg | undefined) ?? null,
       description: m[4]?.trim() ?? '',
       enfants: [],

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, fetchCarteCerveau, operationCerveau } from '../api.js';
 import type { NoeudCerveau } from '../cerveau.js';
+import type { InstanceSummary } from '../nav.js';
 import {
   NOTE_FEUILLE,
   NOTE_ORGANIGRAMME,
@@ -19,7 +20,15 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 // Réservé à « Mon activité » : la structure de l'OS et ses prochaines étapes, tenues dans le second
 // cerveau (le Drive reste la référence). `autorise` vient de l'instance courante ; le serveur refuse
 // de toute façon les autres instances.
-export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: boolean }) {
+export function FeuilleDeRouteOS({
+  slug,
+  autorise,
+  instances,
+}: {
+  slug: string;
+  autorise: boolean;
+  instances: InstanceSummary[];
+}) {
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [idees, setIdees] = useState<NoeudCerveau[]>([]);
   const [onglet, setOnglet] = useState<'organigramme' | 'feuille'>('organigramme');
@@ -141,7 +150,7 @@ export function FeuilleDeRouteOS({ slug, autorise }: { slug: string; autorise: b
           ) : rubriques.length === 0 ? (
             <span className="cerveau-note">Organigramme vide.</span>
           ) : (
-            <OrganigrammeGraphique rubriques={rubriques} />
+            <OrganigrammeGraphique rubriques={rubriques} instances={instances} slug={slug} />
           )}
         </div>
       </div>

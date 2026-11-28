@@ -126,6 +126,14 @@ describe('disposerOrganigramme', () => {
     expect(d.autres.map((r) => r.titre)).toEqual(['Rubrique nouvelle']);
   });
 
+  it('accepte l’apostrophe droite dans les titres et les noms', () => {
+    const d = disposerOrganigramme(
+      lireOrganigramme("## Piloter l'activité\n- Feuille de route de l'OS [à essayer]"),
+    );
+    expect(d.colonnes[2]?.noeuds.map((n) => n.nom)).toEqual(['Feuille de route de l’OS']);
+    expect(d.autres).toEqual([]);
+  });
+
   it('compte les fonctions et sous-fonctions, et celles en service', () => {
     expect(compterOrganigramme(lireOrganigramme(note))).toEqual({ total: 4, enService: 2 });
   });
