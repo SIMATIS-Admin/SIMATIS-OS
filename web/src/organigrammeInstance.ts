@@ -83,9 +83,11 @@ export const libelleVue = (vue: string) =>
   allItems().find((i) => i.id === vue)?.label ??
   vue;
 
-export type EtatSource = 'branche' | 'erreur' | 'absent' | 'inconnu' | 'indisponible';
+export type EtatSource = 'branche' | 'actif' | 'erreur' | 'absent' | 'inconnu' | 'indisponible';
 export const LIBELLE_SOURCE: Record<EtatSource, string> = {
   branche: 'branché',
+  // Module ou routine activés : aucune connexion n’est vérifiée.
+  actif: 'activé',
   erreur: 'en erreur',
   absent: 'non branché',
   inconnu: 'non vérifié',
@@ -140,7 +142,7 @@ export function sources(instance: InstanceSummary, etat: EtatInstance): Source[]
     !etat.routines
       ? 'inconnu'
       : etat.routines.some((r) => cles.includes(r.cle) && r.actif)
-        ? 'branche'
+        ? 'actif'
         : 'absent';
 
   return [
@@ -181,7 +183,7 @@ export function sources(instance: InstanceSummary, etat: EtatInstance): Source[]
     {
       id: 'publiques',
       nom: 'Données publiques',
-      etat: 'branche',
+      etat: 'actif',
       moyen: 'Annuaire des entreprises et annonces du BODACC, en lecture.',
       alimente: 'Recherches, signaux, Base des suspects',
       vue: 'recherches',
@@ -207,7 +209,7 @@ export function sources(instance: InstanceSummary, etat: EtatInstance): Source[]
     {
       id: 'siteweb',
       nom: 'Site web',
-      etat: a('site-web') ? 'branche' : 'indisponible',
+      etat: a('site-web') ? 'actif' : 'indisponible',
       moyen: 'Formulaire de contact relevé par l’OS, audience Google Analytics en lecture.',
       alimente: 'Inbox, Site web',
       vue: a('site-web') ? 'siteweb' : null,
@@ -215,7 +217,7 @@ export function sources(instance: InstanceSummary, etat: EtatInstance): Source[]
     {
       id: 'cerveau',
       nom: 'Second cerveau',
-      etat: a('cerveau') ? 'branche' : 'indisponible',
+      etat: a('cerveau') ? 'actif' : 'indisponible',
       moyen: propre
         ? 'Notes privées (dépôt privé et Drive), lues et complétées par l’OS et les routines.'
         : 'Espace partagé uniquement : documents et messages échangés avec le partenaire.',
@@ -234,7 +236,7 @@ export type EtapeMoteur = {
 };
 
 // La chaîne qui va d'un déclenchement à une écriture dans un outil externe.
-export function moteur(etat: EtatInstance): EtapeMoteur[] {
+export function moteur(etat: EtatInstance, instance: InstanceSummary): EtapeMoteur[] {
   const { routines, executeur, connexions } = etat;
   const actives = routines?.filter((r) => r.actif) ?? [];
   return [
@@ -243,7 +245,9 @@ export function moteur(etat: EtatInstance): EtapeMoteur[] {
       nom: 'Routines',
       mention: routines ? `${actives.length} sur ${routines.length} actives` : null,
       texte:
-        'Tâches confiées à Claude, à heure fixe, sur événement ou à la demande.' +
+        (instance.type === 'prospect'
+          ? 'Tâches confiées à Claude ; dans une démo, elles ne tournent qu’à la demande.'
+          : 'Tâches confiées à Claude, à heure fixe, sur événement ou à la demande.') +
         (actives.length ? ` Actives ici : ${actives.map((r) => r.nom).join(', ')}.` : ''),
       vue: 'parametres',
     },

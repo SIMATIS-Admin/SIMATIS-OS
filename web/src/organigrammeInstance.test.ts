@@ -136,6 +136,13 @@ describe('sources', () => {
     expect(source('messagerie', mandat(), ETAT_INCONNU)?.etat).toBe('inconnu');
   });
 
+  it('ne dit pas « branché » quand seul un module ou une routine est activé', () => {
+    for (const id of ['siteweb', 'cerveau', 'publiques'])
+      expect(source(id, instance(), ETAT_INCONNU)?.etat).toBe('actif');
+    const e = etat({ routines: [{ cle: 'inbox', actif: true }] as EtatInstance['routines'] });
+    expect(source('reunions', instance(), e)?.etat).toBe('actif');
+  });
+
   it('adapte les sources au type d’instance et aux modules', () => {
     const ids = (i: InstanceSummary) =>
       sources(i, ETAT_INCONNU)
@@ -162,6 +169,7 @@ describe('moteur', () => {
         ] as EtatInstance['routines'],
         executeur: { actif: false, poste: null, vuLe: null },
       }),
+      instance(),
     );
     expect(etapes.map((e) => e.id)).toEqual([
       'routines',
@@ -177,8 +185,15 @@ describe('moteur', () => {
     expect(etapes[4]?.mention).toBe('ouvert');
   });
 
+  it('précise qu’une démo ne lance ses routines qu’à la demande', () => {
+    const [routines] = moteur(ETAT_INCONNU, instance({ type: 'prospect' }));
+    expect(routines?.texte).toContain('à la demande');
+  });
+
   it('annonce des écritures simulées quand le verrou est fermé', () => {
-    const verrou = moteur(etat({ connexions: connexions([]) })).find((e) => e.id === 'verrou');
+    const verrou = moteur(etat({ connexions: connexions([]) }), instance()).find(
+      (e) => e.id === 'verrou',
+    );
     expect(verrou?.mention).toBe('fermé : écritures simulées');
   });
 });

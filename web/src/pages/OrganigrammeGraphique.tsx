@@ -191,7 +191,7 @@ export function OrganigrammeGraphique({
   const instance = instances.find((i) => i.slug === affichee) ?? instances[0]!;
   const etat = useEtatInstance(instance.slug);
   const entrees = sources(instance, etat);
-  const etapes = moteur(etat);
+  const etapes = moteur(etat, instance);
   const liens = relais(instance, etat);
   const ouvrir = (vue: string) => {
     location.hash = `#/${instance.slug}/${vue}`;
