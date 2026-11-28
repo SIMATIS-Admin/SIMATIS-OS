@@ -19,6 +19,7 @@
   z-index: 0;
 }
 .og-bande,
+.og-espace,
 .og-cols,
 .og-bas,
 .og-detail,
@@ -28,6 +29,18 @@
 }
 .og-espace {
   height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.og-espace span {
+  background: #f3f6f9;
+  border-radius: 8px;
+  padding: 0 8px;
+  color: #2f7a6c;
+  font-size: 11.5px;
+  font-weight: 600;
 }
 .og-bande {
   border-radius: 14px;
@@ -47,6 +60,9 @@
 }
 .og-sources {
   background: #dbe8f6;
+}
+.og-bande:hover {
+  z-index: 2;
 }
 .og-sources .og-cap {
   color: #0c376b;
@@ -84,13 +100,163 @@
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 14px;
 }
-.og-source {
+.og-source,
+.og-etape,
+.og-instance {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   background: #fff;
+  color: #12253f;
   border: 1px solid #b9c7d9;
+  border-radius: 16px;
+  padding: 4px 12px;
+  font: 600 13px/1.4 var(--f-body);
+  cursor: pointer;
+}
+.og-source:hover,
+.og-etape:hover,
+.og-instance:hover {
+  box-shadow: 0 0 0 2px #41a594;
+  z-index: 3;
+}
+.og-source.actif,
+.og-etape.actif {
+  box-shadow: 0 0 0 2px #0c376b;
+}
+.og-source small,
+.og-etape small {
+  color: #4a5b72;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.og-source i,
+.og-instance i {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.og-source i {
+  background: #9aa6b8;
+}
+.og-source.actif i,
+.og-source.branche i {
+  background: #2f8f5b;
+}
+.og-source.erreur {
+  border-color: #b3362b;
+}
+.og-source.erreur i {
+  background: #b3362b;
+}
+.og-source.erreur small {
+  color: #9b2c22;
+  font-weight: 700;
+}
+.og-source.absent,
+.og-source.indisponible {
+  background: #eef1f5;
+  border-style: dashed;
+  color: #55647a;
+}
+.og-source.inconnu i {
+  background: #fff;
+  border: 2px solid #9aa6b8;
+  box-sizing: border-box;
+}
+.og-instances {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #d3dce8;
+}
+.og-instances .og-cap {
+  margin-bottom: 6px;
+  color: #4a5b72;
+}
+.og-instance.on {
+  background: #0c376b;
+  border-color: #0c376b;
+  color: #fff;
+}
+.og-moteur {
+  background: #12365f;
+}
+.og-moteur .og-cap {
+  color: #bfeee4;
+}
+.og-chaine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.og-chaine li {
+  position: relative;
+  display: flex;
+}
+.og-chaine li + li::before {
+  content: '→';
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #7fd6c4;
+  font-size: 16px;
+}
+.og-chaine .og-etape {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  border-radius: 10px;
+}
+.og-relais {
+  background: #e4def5;
+}
+.og-relais .og-cap {
+  color: #3b2f7a;
+}
+.og-relais .og-rang {
+  align-items: center;
+}
+.og-pastille {
+  background: #fff;
+  border: 1px solid #c6bce8;
   border-radius: 16px;
   padding: 4px 12px;
   font-size: 13px;
   font-weight: 600;
+}
+.og-pastille.vide {
+  border-style: dashed;
+  color: #55647a;
+  font-weight: 500;
+}
+.og-aller {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 8px 16px;
+  border-radius: 9px;
+  background: #0c376b;
+  color: #fff;
+  font: 600 14px var(--f-body);
+  cursor: pointer;
+}
+.og-aller:hover {
+  background: #2f8a79;
 }
 .og-legende {
   display: flex;
@@ -124,21 +290,21 @@
 .og-legende i.partiel {
   background: #9aa6b8;
 }
+.og-legende i.hors {
+  background: #fff;
+  border: 1px dashed #8794a8;
+}
 
 .og-bloc {
-  all: unset;
   box-sizing: border-box;
   position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
   background: #fff;
   color: #12253f;
   border: 1px solid #d3dce8;
   border-left: 5px solid #2f8f5b;
   border-radius: 9px;
-  padding: 7px 11px;
-  cursor: pointer;
   font: 600 13.5px/1.25 var(--f-body);
   transition:
     transform 0.12s,
@@ -149,6 +315,25 @@
 }
 .og-bloc.partiel {
   border-left-color: #9aa6b8;
+}
+.og-nom {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+.og-nom small {
+  background: #e8ecf7;
+  color: #2c3a78;
+  border-radius: 8px;
+  padding: 0 7px;
+  font-size: 10.5px;
+  line-height: 17px;
+  white-space: nowrap;
 }
 .og-bloc svg {
   width: 17px;
@@ -165,6 +350,33 @@
   font: 500 11px/18px var(--f-num);
   font-style: normal;
 }
+.og-ouvrir {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  margin: 3px 3px 3px 0;
+  border-radius: 6px;
+  background: #e4f5f1;
+  color: #0a5c4f;
+  font-size: 15px;
+  cursor: pointer;
+}
+.og-ouvrir:hover {
+  background: #2f8a79;
+  color: #fff;
+}
+/* Absente de l'instance affichée : visible et explicable, mais estompée. */
+.og-bloc.hors {
+  background: #eef1f5;
+  border-left-color: #c3ccd8;
+  border-style: dashed dashed dashed solid;
+}
+.og-bloc.hors .og-nom {
+  opacity: 0.55;
+}
 .og-bloc:hover {
   transform: translateY(-1px);
   box-shadow:
@@ -172,7 +384,12 @@
     0 4px 10px rgba(12, 55, 107, 0.15);
   z-index: 3;
 }
-.og-bloc:focus-visible {
+.og-nom:focus-visible,
+.og-ouvrir:focus-visible,
+.og-source:focus-visible,
+.og-etape:focus-visible,
+.og-instance:focus-visible,
+.og-aller:focus-visible {
   outline: 2px solid #0c376b;
   outline-offset: 2px;
 }
@@ -180,7 +397,7 @@
   box-shadow: 0 0 0 2px #0c376b;
 }
 /* Bulle d'aide au survol : la description de la note. */
-.og-bloc[data-tip]:hover::after {
+.og [data-tip]:hover::after {
   content: attr(data-tip);
   position: absolute;
   left: 0;
@@ -192,6 +409,7 @@
   border-radius: 8px;
   padding: 8px 11px;
   font: 500 12.5px/1.4 var(--f-body);
+  text-align: left;
   z-index: 5;
   pointer-events: none;
 }
@@ -285,6 +503,16 @@
 }
 .og-etat.partiel {
   background: #6b7a90;
+}
+.og-etat.source {
+  background: #6b7a90;
+}
+.og-etat.source.actif,
+.og-etat.source.branche {
+  background: #2f8f5b;
+}
+.og-etat.source.erreur {
+  background: #b3362b;
 }
 
 @media (max-width: 900px) {

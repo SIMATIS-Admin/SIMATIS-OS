@@ -354,6 +354,7 @@ export function App() {
             key={current.slug}
             slug={current.slug}
             autorise={current.type === 'propre' && current.modules.includes('cerveau')}
+            instances={instances}
           />
         );
       case 'parametres':
